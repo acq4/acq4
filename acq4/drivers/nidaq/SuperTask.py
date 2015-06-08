@@ -238,6 +238,7 @@ class SuperTask:
         
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses trigSource by default.
+            print k
             maxrate = self.tasks[k].GetSampClkMaxRate()
             if rate > maxrate:
                 raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))

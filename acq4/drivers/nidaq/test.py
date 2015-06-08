@@ -432,8 +432,6 @@ def countPhotonTaskTest():
     tPulses = n.createTask()
     tPulses.CreateCOPulseChanFreq("Dev1/ctr1","",n.Val_Hz,n.Val_Low,0.0,10000.,0.50)
     tPulses.CfgImplicitTiming(n.Val_ContSamps,1000)
-    #DAQmxErrChk (DAQmxCreateCOPulseChanFreq(taskHandle,"Dev1/ctr0","",DAQmx_Val_Hz,DAQmx_Val_Low,0.0,1.00,0.50));
-    #DAQmxErrChk (DAQmxCfgImplicitTiming(taskHandle,DAQmx_Val_ContSamps,1000));
     
     tCount = n.createTask()
     tCount.CreateCICountEdgesChan("/Dev1/ctr0", "", n.Val_Rising, 0, n.Val_CountUp)
@@ -451,6 +449,51 @@ def countPhotonTaskTest():
     return counts
 
 ########################################################################
+def countPhotonTaskAnalogOutputTest():
+    #    Note: An external sample clock must be used. Counters do not
+    #          have an internal sample clock available. You can use the
+    #          Gen Dig Pulse Train-Continuous example to generate a pulse
+    #          train on another counter and connect it to the Sample
+    #          Clock Source you are using in this example.
+    
+    task = n.createTask()
+    task.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., n.Val_Volts, None)
+    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    #tPulses = n.createTask()
+    #tPulses.CreateCOPulseChanFreq("Dev1/ctr1","",n.Val_Hz,n.Val_Low,0.0,10000.,0.50)
+    #tPulses.CfgImplicitTiming(n.Val_ContSamps,1000)
+    
+    tCount = n.createTask()
+    tCount.CreateCICountEdgesChan("/Dev1/ctr0", "", n.Val_Rising, 0, n.Val_CountUp)
+    tCount.CfgSampClkTiming("/Dev1/ao/SampleClock", 10000., n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    data = np.zeros((1000,), dtype=np.float64)
+    data[200:400] = 5.0
+    data[600:800] = 5.0
+    task.write(data)
+    #task.start()
+    
+    #task.stop()
+    
+    #tPulses.start()
+    tCount.start()
+    task.start()
+    time.sleep(0.2)
+    counts = tCount.read()
+    #t.ReadCounterU32(n.Val_Auto,10.0,data,1000,data2,None)
+    #counts = t.read()
+    
+    #tPulses.stop()
+    tCount.stop()
+    task.stop()
+
+    return counts
+
+    
+    
+    
+    
+########################################################################
 
 #data = finiteReadTest()
 #outputTest()
@@ -462,5 +505,6 @@ def countPhotonTaskTest():
 #data = superTaskTest()
 #analogSuperTaskTest()
 #data = analogSyncAcrossDevices()
-dd = countPhotonTaskTest()
+#dd = countPhotonTaskTest()
+dd = countPhotonTaskAnalogOutputTest()
 
