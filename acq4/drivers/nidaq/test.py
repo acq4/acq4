@@ -27,7 +27,8 @@ print "devices: %s" % n.listDevices()
 
 for i in range(len(n.listDevices())):
     dev = n.listDevices()[i]
-
+    
+    print dev, " Product Category : ", n.GetDevProductCategory(dev)
     print "\nAnalog Channels:"
     print "  AI: ", n.listAIChannels(dev)
     print "  AO: ", n.listAOChannels(dev)
@@ -120,6 +121,9 @@ def syncAIOTest():
     task1.CfgSampClkTiming(None , 100000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
     #task1.CfgDigEdgeStartTrig("/Dev1/ao/SampleClock",n.Val_Rising)
     #task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    
+    res = n.GetDevProductType("Dev1")
+    print res
     
     task2 = n.createTask()
     task2.CreateAOVoltageChan("/Dev2/ao0", "", -10., 10., n.Val_Volts, None)
@@ -219,26 +223,26 @@ st = n.createSuperTask()
 def superTaskTest():
     print "::::::::::::::::::  SuperTask  Test  :::::::::::::::::::::"
 
-    st.addChannel('/Dev1/ai8', 'ai')
-    st.addChannel('/Dev1/ai9', 'ai')
+    st.addChannel('/Dev1/ai0', 'ai')
+    st.addChannel('/Dev1/ai1', 'ai')
     st.addChannel('/Dev1/ao0', 'ao')
     st.addChannel('/Dev1/ao1', 'ao')
     st.addChannel('/Dev1/port0/line2', 'di')
     st.addChannel('/Dev1/port0/line3', 'di')
-    st.addChannel('/Dev1/port0/line4', 'do')
-    st.addChannel('/Dev1/port0/line5', 'do')
+    st.addChannel('/Dev1/port0/line0', 'do')
+    st.addChannel('/Dev1/port0/line1', 'do')
 
-    ao = zeros((2, 1000))
+    ao = np.zeros((2, 1000))
     ao[0, 200:300] = 1.0
     ao[1, 400:500] = 2.0
     st.setWaveform('/Dev1/ao0', ao[0])
     st.setWaveform('/Dev1/ao1', ao[1])
 
-    do = zeros((2, 1000), dtype=uint32)
+    do = np.zeros((2, 1000), dtype=np.uint32)
     do[0, 600:700] = 15
     do[1, 700:800] = 15
-    st.setWaveform('/Dev1/port0/line4', do[0])
-    st.setWaveform('/Dev1/port0/line5', do[1])
+    st.setWaveform('/Dev1/port0/line0', do[0])
+    st.setWaveform('/Dev1/port0/line1', do[1])
 
     st.configureClocks(rate=10000, nPts=1000)
     
@@ -268,19 +272,20 @@ def analogSuperTaskTest():
     st.addChannel('/Dev2/ai1', 'ai', n.Val_RSE)
     st.addChannel('/Dev1/ao0', 'ao', n.Val_PseudoDiff)
     st.addChannel('/Dev2/ao1', 'ao', n.Val_RSE)
-
-    ao = np.zeros((2, 1000))
-    ao[0, 200:300] = 1.0
-    ao[1, 400:500] = 2.0
-    st.setWaveform('/Dev1/ao0', ao[0])
-    st.setWaveform('/Dev2/ao1', ao[1])
+    
+    ao2 = np.zeros(1000)
+    ao1 = np.zeros(1000)
+    ao2[200:300] = 1.0
+    ao1[200:300] = 2.0
+    st.setWaveform('/Dev1/ao0', ao1)
+    st.setWaveform('/Dev2/ao1', ao2)
     #print 'here'
     st.configureClocks(rate=10000., nPts=1000)
     
     #st.setTrigger('/Dev1/PFI5')
-    
-    print '11'
+    #print '11'
     data = st.run()
+    #print '12'
     print "waiting for trigger.."
     
     for k in data:
@@ -503,8 +508,8 @@ def countPhotonTaskAnalogOutputTest():
 #syncADTest()
 #triggerTest()
 #data = superTaskTest()
-#analogSuperTaskTest()
+dd = analogSuperTaskTest()
 #data = analogSyncAcrossDevices()
 #dd = countPhotonTaskTest()
-dd = countPhotonTaskAnalogOutputTest()
+#dd = countPhotonTaskAnalogOutputTest()
 
