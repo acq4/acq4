@@ -196,6 +196,8 @@ class SuperTask:
             print 'Multiple NIDAQ devices are involved in the current task. Make sure the cards are connected by a RTSI cable and the RTSI cable is registered in NI MAX.'
             multiDevice = True
             #raise Exception("Multiple DAQ devices not yet supported.")
+        else:
+            multiDevice = False
         taskDevs = {}
         taskKeys = {}
         #for i in range(len(keys)):
