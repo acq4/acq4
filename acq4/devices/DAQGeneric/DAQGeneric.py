@@ -25,6 +25,7 @@ class DataMapping:
         self.device = device
         self.scale = {}
         self.offset = {}
+        self.chantype = {}
         if chans is None:
             chans = device.listChannels()
         if type(chans) in [str, unicode]:
@@ -32,6 +33,7 @@ class DataMapping:
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
             self.offset[ch] = device.getChanOffset(ch)
+            self.chantype[ch] = device.getChanType(ch)
             
     def mapToDaq(self, chan, data):
         scale = self.scale[chan]
@@ -39,9 +41,15 @@ class DataMapping:
         return (data*scale) - offset
         
     def mapFromDaq(self, chan, data):
-        scale = self.scale[chan]
-        offset = self.offset[chan]
-        return (data + offset) * scale
+        print 'Mapping chan : ', self.device, chan, self.scale, self.offset, self.chantype
+        if 'ci' in self.chantype[chan]:
+            print 'differentiated'
+            return np.diff(np.hstack((0,data)))
+        else:
+            print 'scaled'
+            scale = self.scale[chan]
+            offset = self.offset[chan]
+            return (data + offset) * scale
             
 
 class ChannelHandle(object):
@@ -243,7 +251,13 @@ class DAQGeneric(Device):
             ## Offset defaults to 0.0
             ## - can be overridden in configuration
             return self._DGConfig[chan].get('offset', 0.0)
-
+        
+    def getChanType(self, chan):
+        with self._DGLock:
+            ## Offset defaults to 0.0
+            ## - can be overridden in configuration
+            return self._DGConfig[chan]['type']
+        
     def getChanUnits(self, ch):
         with self._DGLock:
             if 'units' in self._DGConfig[ch]:
@@ -335,7 +349,7 @@ class DAQGenericTask(DeviceTask):
                 continue
             
             ## Input channels are only used if the command has record: True
-            if chConf['type'] in ['ai', 'di']:
+            if chConf['type'] in ['ai', 'di', 'ci']:
                 #if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
                 if not self._DAQCmd[ch].get('record', False):
                     #print "    ignoring channel", ch, "recording disabled"
@@ -382,7 +396,9 @@ class DAQGenericTask(DeviceTask):
             elif chConf['type'] == 'di':
                 daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
-                
+            elif chConf['type'] == 'ci':
+                daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
+                self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on    
         
         
     def getChanUnits(self, chan):
@@ -427,7 +443,7 @@ class DAQGenericTask(DeviceTask):
         result = {}
         for ch in self.bufferedChannels:
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
-            result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert
+            result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert/differentiate
             result[ch]['units'] = self.getChanUnits(ch)
         
         if len(result) > 0:

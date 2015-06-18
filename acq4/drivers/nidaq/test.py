@@ -494,7 +494,32 @@ def countPhotonTaskAnalogOutputTest():
 
     return counts
 
-    
+########################################################################
+st = n.createSuperTask()
+def superTaskCountTest():
+    print "::::::::::::::::::  SuperTask  Test  :::::::::::::::::::::"
+
+    st.addChannel('/Dev1/ctr0','ci')
+   
+    st.addChannel('/Dev1/ao0', 'ao')
+
+    ao = np.zeros((1000,), dtype=np.float64)
+    ao[1:3] = 5.0
+    ao[5:7] = 5.0
+    ao[10:12] = 5.0
+
+    st.setWaveform('/Dev1/ao0', ao)
+
+    st.configureClocks(rate=1000, nPts=1000)
+
+    data = st.run()
+    for k in data:
+        if k[1] in ["ai","di","ci"]:
+            print "****Input****", k
+        else:
+            print "****Output****", k
+        print data[k]['data']
+    return data
     
     
     
@@ -508,8 +533,9 @@ def countPhotonTaskAnalogOutputTest():
 #syncADTest()
 #triggerTest()
 #data = superTaskTest()
-dd = analogSuperTaskTest()
+# dd = analogSuperTaskTest()
 #data = analogSyncAcrossDevices()
 #dd = countPhotonTaskTest()
 #dd = countPhotonTaskAnalogOutputTest()
+dd = superTaskCountTest()
 

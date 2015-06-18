@@ -76,10 +76,18 @@ class SuperTask:
                 mode = self.daq.Val_Cfg_Default
             elif typ in ['di', 'do']:
                 mode = self.daq.Val_ChanPerLine
+            elif typ == 'ci':
+                mode = self.daq.Val_Rising
+            elif typ == 'co':
+                mode = self.daq.Val_Low
         elif isinstance(mode, basestring):
             # decide which modes are allowed for this channel
             if typ == 'ai':
                 allowed = ['RSE', 'NRSE', 'Diff', 'PseudoDiff', 'Cfg_Default']
+            elif typ =='ci':
+                allowed = ['Rising','Falling']
+            elif typ == 'co':
+                allowed = ['Low','High']
             elif typ in ['di', 'do']:
                 allowed = ['ChanPerLine', 'ChanForAllLines']
             else:
@@ -110,6 +118,19 @@ class SuperTask:
         elif typ == 'do':
             #print 'CreateDOChan(%s, "", %s)' % (chan, str(mode))
             task.CreateDOChan(chan, "", mode, **kargs)
+        elif typ=='ci':
+            #print 'CreateCICountEdgesChan(%s, "", %s,0,Val_CountUp)' % (chan, str(mode))
+            task.CreateCICountEdgesChan(chan, "", mode, 0, self.daq.Val_CountUp)
+        elif typ =='co':
+            freq=0
+            PWM=0
+            for key, value in kargs.iteritems():
+                if value<1 and value >0:
+                    PWM = value
+                else:           
+                    freq = value
+            #print 'CreateCOPulseChanFreq(%s, "", Val_Hz, %s,0.0,%s,%s)' % (chan,str(mode),freq,PWM)
+            task.CreateCOPulseChanFreq(chan,"",self.daq.Val_Hz,mode,0.0,freq,PWM)
         else:
             raise Exception("Don't know how to create channel type %s" % typ)
         self.taskInfo[taskKey]['chans'].append(chan)
@@ -243,13 +264,15 @@ class SuperTask:
         ## Configure common trigger for all tasks
         trig = '/%s/%s/StartTrigger' % (dev, trigSource)
         #print trig
+        clk = '/%s/%s/SampleClock' % (dev, trigSource)
         
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses trigSource by default.
-            maxrate = self.tasks[k].GetSampClkMaxRate()
-            print k, maxrate
-            if rate > maxrate:
-                raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
+            if k[1] not in ['ci','co']:
+                maxrate = self.tasks[k].GetSampClkMaxRate()
+                print k, maxrate
+                if rate > maxrate:
+                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
             #if k[0] == 'Dev1':
             #    rate = 100000
             #    nPts = 10000
@@ -257,11 +280,13 @@ class SuperTask:
             #    rate = 10000
             #    nPts = 1000
             if k != key:
-                print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
-                self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
-                self.tasks[k].CfgDigEdgeStartTrig(trig, self.daq.Val_Rising)
-                
-                #self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+                if k[1] in ['ci','co']:
+                    print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                    self.tasks[k].CfgSampClkTiming(clk, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+                else:
+                    print "%s CfgSampClkTiming(None, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
+                    self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
+                    self.tasks[k].CfgDigEdgeStartTrig(trig, self.daq.Val_Rising)
             else:
                 print "TrigSource %s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming(None, rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)

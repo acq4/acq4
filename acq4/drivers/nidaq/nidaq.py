@@ -386,10 +386,10 @@ class Task:
         return self._taskType
 
     def isInputTask(self):
-        return self.taskType() in [LIB.Val_AI, LIB.Val_DI]
+        return self.taskType() in [LIB.Val_AI, LIB.Val_DI, LIB.Val_CI]
 
     def isOutputTask(self):
-        return self.taskType() in [LIB.Val_AO, LIB.Val_DO]
+        return self.taskType() in [LIB.Val_AO, LIB.Val_DO, LIB.Val_CO]
 
     def channels(self):
         return [self.absChannelName(n) for n in self.GetTaskChannels().split(', ')]
