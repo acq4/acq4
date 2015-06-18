@@ -192,7 +192,9 @@ class SuperTask:
         #pdb.set_trace()
         ## Make sure we're only using 1 DAQ device (not sure how to tie 2 together yet)
         ndevs = len(set([k[0] for k in keys]))
-        #if ndevs > 1:
+        if ndevs > 1:
+            print 'Multiple NIDAQ devices are involved in the current task. Make sure the cards are connected by a RTSI cable and the RTSI cable is registered in NI MAX.'
+            multiDevice = True
             #raise Exception("Multiple DAQ devices not yet supported.")
         taskDevs = {}
         taskKeys = {}
@@ -207,11 +209,11 @@ class SuperTask:
             
         for k,t in self.tasks.items():
             dev = t.channels()[0].lstrip('/').split('/')[0]
-            print dev, k, t.taskType()
+            print dev #, k, t.taskType()
             taskDevs[t.taskType()] = dev
             taskKeys[t.taskType()] = k
+            #print dev, k
         
-        print self.daq.Val_AO
         if self.daq.Val_AO in taskDevs:  ## Try ao first since E-series devices don't seem to work the other way around..
             trigSource = 'ao' # '/Dev1/ao/SampleClock'
             dev = taskDevs[self.daq.Val_AO]
@@ -270,24 +272,25 @@ class SuperTask:
         #elif dev == 'Dev2':
         #    masterTimeBase = self.tasks[key].GetSampClkTimebaseSrc()
         #    masterclkRate  = self.tasks[key].GetSampClkTimebaseRate()
-        masterclkRate = 20e6
-        masterTimeBase = 'RTSI7'
-        newDeviceFamilies = [self.daq.Val_MSeriesDAQ, self.daq.Val_XSeriesDAQ] 
-        oldDeviceFamilies = [self.daq.Val_ESeriesDAQ, self.daq.Val_SSeriesDAQ, self.daq.Val_BSeriesDAQ, self.daq.Val_AOSeries]
-        print "MasterTimeBase, MasterClkRate : ", masterTimeBase, masterclkRate
-        self.daq.ConnectTerms('/Dev1/20MHzTimebase','/Dev1/'+masterTimeBase,self.daq.Val_DoNotInvertPolarity)
-        
-        for k in self.tasks:
-            #print k
-            deviceFamily = self.daq.GetDevProductCategory(k[0])
-            if (deviceFamily in newDeviceFamilies):
-                #print 'new ', deviceFamily
-                self.tasks[k].SetSampClkTimebaseSrc(masterTimeBase)
-                self.tasks[k].SetSampClkTimebaseRate(masterclkRate)
-            elif (deviceFamily in oldDeviceFamilies):
-                #print 'old ', deviceFamily
-                self.tasks[k].SetMasterTimebaseSrc(masterTimeBase)
-                self.tasks[k].SetMasterTimebaseRate(masterclkRate)
+        if multiDevice:
+            masterclkRate = 20e6
+            masterTimeBase = 'RTSI7'
+            newDeviceFamilies = [self.daq.Val_MSeriesDAQ, self.daq.Val_XSeriesDAQ] 
+            oldDeviceFamilies = [self.daq.Val_ESeriesDAQ, self.daq.Val_SSeriesDAQ, self.daq.Val_BSeriesDAQ, self.daq.Val_AOSeries]
+            print "MasterTimeBase, MasterClkRate : ", masterTimeBase, masterclkRate
+            self.daq.ConnectTerms('/Dev1/20MHzTimebase','/Dev1/'+masterTimeBase,self.daq.Val_DoNotInvertPolarity)
+            
+            for k in self.tasks:
+                #print k
+                deviceFamily = self.daq.GetDevProductCategory(k[0])
+                if (deviceFamily in newDeviceFamilies):
+                    #print 'new ', deviceFamily
+                    self.tasks[k].SetSampClkTimebaseSrc(masterTimeBase)
+                    self.tasks[k].SetSampClkTimebaseRate(masterclkRate)
+                elif (deviceFamily in oldDeviceFamilies):
+                    #print 'old ', deviceFamily
+                    self.tasks[k].SetMasterTimebaseSrc(masterTimeBase)
+                    self.tasks[k].SetMasterTimebaseRate(masterclkRate)
                 
         
     def setTrigger(self, trig):
