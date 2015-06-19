@@ -41,12 +41,12 @@ class DataMapping:
         return (data*scale) - offset
         
     def mapFromDaq(self, chan, data):
-        print 'Mapping chan : ', self.device, chan, self.scale, self.offset, self.chantype
+        #print 'Mapping chan : ', self.device, chan, self.scale, self.offset, self.chantype
         if 'ci' in self.chantype[chan]:
-            print 'differentiated'
+            #print 'differentiated'
             return np.diff(np.hstack((0,data)))
         else:
-            print 'scaled'
+            #print 'scaled'
             scale = self.scale[chan]
             offset = self.offset[chan]
             return (data + offset) * scale

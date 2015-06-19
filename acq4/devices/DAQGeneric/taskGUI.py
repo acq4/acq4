@@ -59,7 +59,7 @@ class DAQGenericTaskGui(TaskGui):
         if conf['type'] in ['ao', 'do']:
             w = OutputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
             w.sigSequenceChanged.connect(self.sequenceChanged)
-        elif conf['type'] in ['ai', 'di']:
+        elif conf['type'] in ['ai', 'di','ci']:
             w = InputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
         else:
             raise Exception("Unrecognized device type '%s'" % conf['type'])
