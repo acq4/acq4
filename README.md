@@ -7,16 +7,15 @@ Copyright 2013 Luke Campagnola, University of North Carolina at Chapel Hill
 
 <http://www.acq4.org>
 
-Maintainer
-----------
-
-  * Luke Campagnola   ('luke.campagnola@%s.com' % 'gmail')
 
 Contributors
 ------------
 
+  * Luke Campagnola   ('luke.campagnola@%s.com' % 'gmail')
   * Megan Kratz
   * Paul Manis
+  * Antonin Blot
+  * Michael Graupner
 
 Requirements
 ------------

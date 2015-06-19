@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/devices/AxoPatch200/devGuiTemplate.ui'
+# Form implementation generated from reading ui file 'devGuiTemplate.ui'
 #
-# Created: Tue Dec 24 01:49:06 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Tue May 12 17:53:27 2015
+#      by: PyQt4 UI code generator 4.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -28,16 +28,11 @@ class Ui_devGui(object):
         devGui.setObjectName(_fromUtf8("devGui"))
         devGui.resize(126, 88)
         self.gridLayout = QtGui.QGridLayout(devGui)
-        self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(3)
+        self.gridLayout.setMargin(0)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.modeCombo = QtGui.QComboBox(devGui)
         self.modeCombo.setObjectName(_fromUtf8("modeCombo"))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
         self.gridLayout.addWidget(self.modeCombo, 0, 0, 1, 2)
         self.label = QtGui.QLabel(devGui)
         self.label.setObjectName(_fromUtf8("label"))
@@ -59,11 +54,6 @@ class Ui_devGui(object):
 
     def retranslateUi(self, devGui):
         devGui.setWindowTitle(_translate("devGui", "Form", None))
-        self.modeCombo.setItemText(0, _translate("devGui", "V-Clamp", None))
-        self.modeCombo.setItemText(1, _translate("devGui", "I=0", None))
-        self.modeCombo.setItemText(2, _translate("devGui", "I-Clamp Normal", None))
-        self.modeCombo.setItemText(3, _translate("devGui", "I-Clamp Fast", None))
-        self.modeCombo.setItemText(4, _translate("devGui", "Track", None))
         self.label.setText(_translate("devGui", "VC Holding", None))
         self.label_2.setText(_translate("devGui", "IC Holding", None))
 

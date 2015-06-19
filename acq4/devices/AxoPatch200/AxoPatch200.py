@@ -12,29 +12,16 @@ from collections import OrderedDict
 from acq4.util.debug import printExc
 from devGuiTemplate import *
 
-# telegraph voltage/output translation from the Axopatch 200 amplifier
-mode_tel = np.array([6, 4, 3, 2, 1])
-#mode_char = ['V', 'T', '0', 'I', 'F']
-modeNames = OrderedDict([(0, 'V-Clamp'), (2, 'I=0'), (4, 'I-Clamp Fast'), (3, 'I-Clamp Normal'), (1, 'Track'), ])
-ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I=0':'ic', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
-modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
 
-# Axopatch gain telegraph
-# telegraph should not read below 2 V in CC mode
-gain_tel = np.array([0.5,  1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
-gain_vm  = np.array([0.5,  0.5, 0.5, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
-gain_im  = np.array([0.05, 0.1, 0.2, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
-
-# Axopatch LPF telegraph
-lpf_tel = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
-lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 100.0])
 
         #GainChannel: 'DAQ', '/Dev1/ai14'
         #LPFchannel: 'DAQ', '/Dev1/ai15'
         #VCommand: 'DAQ', '/Dev1/ao0'
         #ScaledSignal: 'DAQ', '/Dev1/ai5'
+
+
 class AP200DataMapping(DataMapping):
-    def __init__(self, dev, chans=None, mode=None):
+    def __init__(self, dev, ivModes, chans=None, mode=None):
         ## mode can be provided:
         ##   - during __init__
         ##   - explicitly when calling map functions
@@ -42,6 +29,7 @@ class AP200DataMapping(DataMapping):
         
         self.dev = dev
         self.mode = mode
+        self.ivModes = ivModes
         self.gainSwitch = self.dev.getGainSwitchValue()
         
     def setMode(self, mode):
@@ -58,8 +46,8 @@ class AP200DataMapping(DataMapping):
         if chan != 'command':
             return self.dev.interpretGainSwitchValue(switch, mode)
         else:
-            global ivModes
-            ivMode = ivModes[mode]
+            #global ivModes
+            ivMode = self.ivModes[mode]
             if ivMode == 'vc':
                 return 50.0 # in VC mode, sensitivity is 20mV/V; scale is 1/20e-3 = 50
             else:
@@ -86,7 +74,7 @@ class AxoPatch200(DAQGeneric):
     sigModeChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-
+		
         # Generate config to use for DAQ 
         daqConfig = {}
         
@@ -126,6 +114,42 @@ class AxoPatch200(DAQGeneric):
         else:
             self.hasSecondaryChannel = False
         
+        self.version = config.get('version', '200B')
+
+        # Axopatch gain telegraph
+        # telegraph should not read below 2 V in CC mode
+        self.gain_tel = np.array([0.5,  1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
+        self.gain_vm  = np.array([0.5,  0.5, 0.5, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
+        self.gain_im  = np.array([0.05, 0.1, 0.2, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
+
+        # Axopatch Lowpass Bessel Filter
+        self.lpf_tel = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
+        self.lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 50.0])
+
+        if self.version == '200':
+            # telegraph voltage/output translation from the Axopatch 200 amplifier
+            self.mode_tel = np.array([6, 4, 2])
+            self.modeNames = OrderedDict([(0, 'V-Clamp'), (1, 'Track'), (2, 'I-Clamp')])
+            self.ivModes = {'V-Clamp':'vc', 'Track':'ic', 'I-Clamp':'ic', 'vc':'vc', 'ic':'ic'}
+            self.modeAliases = {'ic': 'I-Clamp', 'i=0': 'Track', 'vc': 'V-Clamp'}
+
+        elif self.version == '200A':
+            # telegraph voltage/output translation from the Axopatch 200 amplifier
+            self.mode_tel = np.array([6, 4, 2, 1])
+            self.modeNames = OrderedDict([(0, 'V-Clamp'), (1, 'Track'), (2, 'I-Clamp Normal'), (3, 'I-Clamp Fast'),  ])
+            self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
+            self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'Track', 'vc': 'V-Clamp'}
+
+        elif self.version == '200B':
+            # telegraph voltage/output translation from the Axopatch 200 amplifier
+            self.mode_tel = np.array([6, 4, 3, 2, 1])
+            self.modeNames = OrderedDict([(0, 'V-Clamp'), (2, 'I=0'), (4, 'I-Clamp Fast'), (3, 'I-Clamp Normal'), (1, 'Track'), ])
+            self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I=0':'ic', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
+            self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
+            self.lpf_freq[-1] = 100.0  # 200B's highest LPF value is 100kHz instead of 50.
+        else:
+            raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % version)
+
         self.holding = {
             'vc': config.get('vcHolding', -0.05),
             'ic': config.get('icHolding', 0.0)
@@ -161,30 +185,30 @@ class AxoPatch200(DAQGeneric):
         return AxoPatch200Task(self, cmd, parentTask)
         
     def taskInterface(self, taskRunner):
-        return AxoPatchTaskGui(self, taskRunner)
+        return AxoPatchTaskGui(self, taskRunner, self.ivModes)
         
     def deviceInterface(self, win):
         return AxoPatchDevGui(self)
     
     def getMapping(self, chans=None, mode=None):
-        return AP200DataMapping(self, chans, mode)
+        return AP200DataMapping(self, self.ivModes, chans, mode )
         
         
     def setHolding(self, mode=None, value=None, force=False):
         #print "setHolding", mode, value
-        global ivModes
+        #global ivModes
         with self.devLock:
             currentMode = self.getMode()
             if mode is None:
                 mode = currentMode
-            ivMode = ivModes[mode]  ## determine vc/ic
+            ivMode = self.ivModes[mode]  ## determine vc/ic
                 
             if value is None:
                 value = self.holding[ivMode]
             else:
                 self.holding[ivMode] = value
             
-            if ivMode == ivModes[currentMode] or force:
+            if ivMode == self.ivModes[currentMode] or force:
                 mapping = self.getMapping(mode=mode)
                 ## override the scale since getChanScale won't necessarily give the correct value
                 ## (we may be about to switch modes)
@@ -197,31 +221,31 @@ class AxoPatch200(DAQGeneric):
             self.setHolding(value=value)
         
     def getHolding(self, mode=None):
-        global ivModes
+        #global ivModes
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
-            ivMode = ivModes[mode]  ## determine vc/ic
+            ivMode = self.ivModes[mode]  ## determine vc/ic
             return self.holding[ivMode]
         
     def listModes(self):
-        global modeNames
-        return modeNames.values()
+        #global modeNames
+        return self.modeNames.values()
         
     def setMode(self, mode):
         """Set the mode of the AxoPatch (by requesting user intervention). Takes care of switching holding levels in I=0 mode if needed."""
-        global modeAliases
+        #global modeAliases
         startMode = self.getMode()
-        if mode in modeAliases:
-            mode = modeAliases[mode]
+        if mode in self.modeAliases:
+            mode = self.modeAliases[mode]
         if startMode == mode:
             return
         
-        startIvMode = ivModes[startMode]
-        ivMode = ivModes[mode]
+        startIvMode = self.ivModes[startMode]
+        ivMode = self.ivModes[mode]
         if (startIvMode == 'vc' and ivMode == 'ic') or (startIvMode == 'ic' and ivMode == 'vc'):
             ## switch to I=0 first
-            self.requestModeSwitch('I=0')
+            self.requestModeSwitch(self.modeAliases['i=0'])
             
         self.setHolding(ivMode, force=True)  ## we're in I=0 mode now, so it's ok to force the holding value.
         
@@ -231,7 +255,7 @@ class AxoPatch200(DAQGeneric):
         
     def requestModeSwitch(self, mode):
         """Pop up a dialog asking the user to switch the amplifier mode, wait for change. This function is thread-safe."""
-        global modeNames
+        #global modeNames
         with self.modeLock:
             self.mdCanceled = False
         app = QtGui.QApplication.instance()
@@ -288,21 +312,21 @@ class AxoPatch200(DAQGeneric):
         #print "getMode"
         with self.devLock:
             #print "  got lock"
-            global mode_tel, modeNames
+            #global mode_tel, modeNames
             m = self.readChannel('ModeChannel', raw=True)
-            #print "  read value"
+            #print "  read value", m
             if m is None:
                 return None
-            mode = modeNames[np.argmin(np.abs(mode_tel-m))]
+            mode = self.modeNames[np.argmin(np.abs(self.mode_tel-m))]
             return mode
     
     def getLPF(self):
         with self.devLock:
-            global lpf_tel, lpf_freq
+            #global lpf_tel, lpf_freq
             f = self.readChannel('LPFChannel')
             if f is None:
                 return None
-            return lpf_freq[np.argmin(np.abs(lpf_tel-f))]
+            return self.lpf_freq[np.argmin(np.abs(self.lpf_tel-f))]
         
     def getGain(self):
         with self.devLock:
@@ -315,29 +339,29 @@ class AxoPatch200(DAQGeneric):
     def interpretGainSwitchValue(self, val, mode):
         ## convert a gain-switch-position integer (as returned from getGainSwitchValue)
         ## into an actual gain value
-            global gain_vm, gain_im, ivModes
+            #global gain_vm, gain_im, ivModes
             if val is None:
                 return None
-            if ivModes[mode] == 'vc':
-                return gain_vm[val]
+            if self.ivModes[mode] == 'vc':
+                return self.gain_vm[val]
             else:
-                return gain_im[val]
+                return self.gain_im[val]
         
         
     def getGainSwitchValue(self):
         ## return the integer value corresponding to the current position of the output gain switch
-        global gain_tel
+        #global gain_tel
         g = self.readChannel('GainChannel', raw=True)
         if g is None:
             return None
-        return np.argmin(np.abs(gain_tel-g))
+        return np.argmin(np.abs(self.gain_tel-g))
     
     def getCmdGain(self, mode=None):
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
-            global ivModes
-            ivMode = ivModes[mode]
+            #global ivModes
+            ivMode = self.ivModes[mode]
             if ivMode == 'vc':
                 return 50.0 # in VC mode, sensitivity is 20mV/V; scale is 1/20e-3 = 50
             else:
@@ -353,8 +377,8 @@ class AxoPatch200(DAQGeneric):
             #raise Exception("No scale for channel %s" % chan)
         
     def getChanUnits(self, chan):
-        global ivModes
-        iv = ivModes[self.getMode()]
+        #global ivModes
+        iv = self.ivModes[self.getMode()]
         if iv == 'vc':
             units = ['V', 'A']
         else:
@@ -379,7 +403,7 @@ class AxoPatch200(DAQGeneric):
         
     def reconfigureSecondaryChannel(self, mode):
         ## Secondary channel changes depending on which mode we're in.
-        if ivModes[mode] == 'vc':
+        if self.ivModes[mode] == 'vc':
             if 'SecondaryVCSignal' in self.config:
                 self.reconfigureChannel('secondary', self.config['SecondaryVCSignal'])
         else:
@@ -444,9 +468,10 @@ class AxoPatch200Task(DAQGenericTask):
 
     
 class AxoPatchTaskGui(DAQGenericTaskGui):
-    def __init__(self, dev, taskRunner):
+    def __init__(self, dev, taskRunner, ivModes):
         DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
         
+        self.ivModes = ivModes
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
         self.setLayout(self.layout)
@@ -525,8 +550,8 @@ class AxoPatchTaskGui(DAQGenericTaskGui):
         return task
         
     def modeChanged(self):
-        global ivModes
-        ivm = ivModes[self.getMode()]
+        #global ivModes
+        ivm = self.ivModes[self.getMode()]
         w = self.cmdWidget
         
         if ivm == 'vc':
@@ -568,6 +593,8 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.setupUi(self)
         self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
+        for name in dev.modeNames.values():
+            self.ui.modeCombo.addItem(name)
         self.updateStatus()
         
         self.ui.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
@@ -577,12 +604,13 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.dev.sigModeChanged.connect(self.devModeChanged)
         
     def updateStatus(self):
-        global modeNames
+        #global modeNames
         mode = self.dev.getMode()
         if mode is None:
             return
         vcHold = self.dev.getHolding('vc')
         icHold = self.dev.getHolding('ic')
+        
         self.ui.modeCombo.setCurrentIndex(self.ui.modeCombo.findText(mode))
         self.ui.vcHoldingSpin.setValue(vcHold)
         self.ui.icHoldingSpin.setValue(icHold)
