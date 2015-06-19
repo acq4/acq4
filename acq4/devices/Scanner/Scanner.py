@@ -49,7 +49,7 @@ class Scanner(Device, OptomechDevice):
         with self.lock:
             self.currentCommand = vals
             if self.getShutterOpen():
-                self._setVoltage([v0, v1])
+                self._setVoltage(vals)
             else:
                 logMsg("Virtual shutter closed, not setting mirror position.", msgType='warning')
 
