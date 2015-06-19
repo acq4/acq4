@@ -114,41 +114,43 @@ class AxoPatch200(DAQGeneric):
         else:
             self.hasSecondaryChannel = False
         
-        if 'AxoPatchVersion' in config :
-            self.lpf_tel = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
-            if config['AxoPatchVersion'] == '200A':
-                # telegraph voltage/output translation from the Axopatch 200 amplifier
-                self.mode_tel = np.array([6, 4, 2, 1])
-                self.modeNames = OrderedDict([(0, 'V-Clamp'), (1, 'Track'), (2, 'I-Clamp Normal'), (3, 'I-Clamp Fast'),  ])
-                self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
-                self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'Track', 'vc': 'V-Clamp'}
-                self.requiredSwitchMode = 'Track'
-                self.gain_tel = np.array([2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
-                self.gain_vm  = np.array([0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
-                self.gain_im  = np.array([0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
+        self.version = config.get('version', '200B')
 
-                # Axopatch Lowpass Bessel Filter
-                self.lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 50.0])
+        self.lpf_tel = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
+        if self.version == '200':
+            raise NotImplementedError("Still working on this.")
 
-            elif config['AxoPatchVersion'] == '200B':
-                # telegraph voltage/output translation from the Axopatch 200 amplifier
-                self.mode_tel = np.array([6, 4, 3, 2, 1])
-                self.modeNames = OrderedDict([(0, 'V-Clamp'), (2, 'I=0'), (4, 'I-Clamp Fast'), (3, 'I-Clamp Normal'), (1, 'Track'), ])
-                self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I=0':'ic', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
-                self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
-                self.requiredSwitchMode = 'I=0'
-                # Axopatch gain telegraph
-                # telegraph should not read below 2 V in CC mode
-                self.gain_tel = np.array([0.5,  1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
-                self.gain_vm  = np.array([0.5,  0.5, 0.5, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
-                self.gain_im  = np.array([0.05, 0.1, 0.2, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
+        elif self.version == '200A':
+            # telegraph voltage/output translation from the Axopatch 200 amplifier
+            self.mode_tel = np.array([6, 4, 2, 1])
+            self.modeNames = OrderedDict([(0, 'V-Clamp'), (1, 'Track'), (2, 'I-Clamp Normal'), (3, 'I-Clamp Fast'),  ])
+            self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
+            self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'Track', 'vc': 'V-Clamp'}
+            self.requiredSwitchMode = 'Track'
+            self.gain_tel = np.array([2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
+            self.gain_vm  = np.array([0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
+            self.gain_im  = np.array([0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
 
-                # Axopatch Lowpass Bessel Filter
-                self.lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 100.0])
-            else:
-                raise Exception("AxoPatch200: AxoPatchVersion must be '200A' or 200B'")
+            # Axopatch Lowpass Bessel Filter
+            self.lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 50.0])
+
+        elif self.version == '200B':
+            # telegraph voltage/output translation from the Axopatch 200 amplifier
+            self.mode_tel = np.array([6, 4, 3, 2, 1])
+            self.modeNames = OrderedDict([(0, 'V-Clamp'), (2, 'I=0'), (4, 'I-Clamp Fast'), (3, 'I-Clamp Normal'), (1, 'Track'), ])
+            self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I=0':'ic', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
+            self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
+            self.requiredSwitchMode = 'I=0'
+            # Axopatch gain telegraph
+            # telegraph should not read below 2 V in CC mode
+            self.gain_tel = np.array([0.5,  1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
+            self.gain_vm  = np.array([0.5,  0.5, 0.5, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
+            self.gain_im  = np.array([0.05, 0.1, 0.2, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
+
+            # Axopatch Lowpass Bessel Filter
+            self.lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 100.0])
         else:
-            raise Exception("AxoPatch200: Version of the AxoPatch amplifier must be specified.")
+            raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % version)
 
         self.holding = {
             'vc': config.get('vcHolding', -0.05),
@@ -188,7 +190,7 @@ class AxoPatch200(DAQGeneric):
         return AxoPatchTaskGui(self, taskRunner, self.ivModes)
         
     def deviceInterface(self, win):
-        return AxoPatchDevGui(self,self.config['AxoPatchVersion'])
+        return AxoPatchDevGui(self)
     
     def getMapping(self, chans=None, mode=None):
         return AP200DataMapping(self, self.ivModes, chans, mode )
@@ -586,19 +588,19 @@ class AxoPatchTaskGui(DAQGenericTaskGui):
 
         
 class AxoPatchDevGui(QtGui.QWidget):
-    def __init__(self, dev,AxoPatchVersion):
+    def __init__(self, dev):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.ui = Ui_devGui()
         self.ui.setupUi(self)
         self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
-        if AxoPatchVersion == '200A':
+        if dev.version == '200A':
             self.ui.modeCombo.addItem("V-Clamp")
             self.ui.modeCombo.addItem("Track")
             self.ui.modeCombo.addItem("I-Clamp Normal")
             self.ui.modeCombo.addItem("I-Clamp Fast")
-        elif AxoPatchVersion == '200B':
+        elif dev.version == '200B':
             self.ui.modeCombo.addItem("V-Clamp")
             self.ui.modeCombo.addItem("I=0")
             self.ui.modeCombo.addItem("I-Clamp Normal")
