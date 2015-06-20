@@ -6,6 +6,7 @@ from acq4.util.debug import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import sys
 
+
 class NiDAQTask(TaskGui):
     
     sigChanged = QtCore.Signal(object)
@@ -48,7 +49,6 @@ class NiDAQTask(TaskGui):
             (self.ui.butterworthBidirCheck, 'butterworthBidirectional'),
         ])
         
-        self.ui.rateSpin.valueChanged.connect(self.rateChanged)
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
         self.taskRunner.sigTaskChanged.connect(self.taskChanged)
@@ -127,15 +127,15 @@ class NiDAQTask(TaskGui):
         self.ui.rateSpin.setValue(rate)
         self.ignoreRate = False
         
-    def rateChanged(self):
-        self.rate = self.ui.rateSpin.value()
-        self.updateNPts()
-        # self.sigChanged.emit(self.currentState())
-        
-    def stateChanged(self):
+    def stateChanged(self, name=None, val=None):
+        if name == 'rate':
+            self.rate = self.ui.rateSpin.value()
+            self.updateNPts()
+            
         if self._block_update:
             return
-        self.sigChanged.emit(self.currentState())
+        state = self.currentState()
+        self.sigChanged.emit(state)
         
     def taskChanged(self, n, v):
         if n == 'duration':
