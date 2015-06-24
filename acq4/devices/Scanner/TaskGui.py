@@ -278,18 +278,23 @@ class ScannerTaskGui(TaskGui):
             return None
         return mod
         
+
     def saveState(self, saveItems=False):
         state = self.stateGroup.state()
         if saveItems:
             state['items'] = [param.item.saveState() for param in self.positionCtrlGroup.children()]
+        if self.ui.enableScanProgCheck.isChecked():
+            state['program'] = self.scanProgram.saveState()
         return state
-        
+                
     def restoreState(self, state):
         self.stateGroup.setState(state)
         if 'items' in state:
             for itemState in state['items']:
                 typ = itemState['type']
                 self.addItem(typ, itemState)
+        if 'program' in state:
+            self.scanProgram.restoreState(state['program'])
     
     def storeConfiguration(self):
         state = self.saveState(saveItems=True)
