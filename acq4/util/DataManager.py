@@ -349,14 +349,14 @@ class FileHandle(QtCore.QObject):
             parent = self.parent()
             fn1 = self.name()
             oldName = self.shortName()
+            if parent.isManaged():
+                parent.forget(oldName)
             if self.isFile():
                 os.remove(fn1)
             else:
                 shutil.rmtree(fn1)
             self.manager._handleChanged(self, 'deleted', fn1)
             self.path = None
-            if parent.isManaged():
-                parent.forget(oldName)
             self.emitChanged('deleted', fn1)
             parent._childChanged()
         
@@ -403,7 +403,7 @@ class FileHandle(QtCore.QObject):
         self.sigDelayedChange.emit(self, changes)
     
     def hasChildren(self):
-        self.checkExists()
+        # self.checkExists()
         return False
     
     def _parentMoved(self, oldDir, newDir):
@@ -887,7 +887,7 @@ class DirHandle(FileHandle):
         #print "DirHandle: forget", fileName
         with self.lock:
             if not self.isManaged(fileName):
-                raise Exception("Can not forget %s, not managed" % fileName)
+                return
             index = self._readIndex(lock=False)
             if fileName in index:
                 try:

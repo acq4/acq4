@@ -245,6 +245,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
+        scroll = self.verticalScrollBar().value()
         handle = self.handle(root)
         files = handle.ls(sortMode=self.sortMode)
         handles = [handle[f] for f in files]
@@ -265,6 +266,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
                 root.insertChild(i, item)
                 item.recallExpand()
             i += 1
+        self.verticalScrollBar().setValue(scroll)
 
     def itemParent(self,  item):
         """Return the parent of an item (since item.parent can not be trusted). Note: damn silly."""
