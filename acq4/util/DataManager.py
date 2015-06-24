@@ -41,14 +41,18 @@ def getDataManager():
         raise Exception('No DataManger created yet!')
     return inst
 
+
 def getHandle(fileName):
     return getDataManager().getHandle(fileName)
+
 
 def getDirHandle(fileName, create=False):
     return getDataManager().getDirHandle(fileName, create=create)
 
+
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
+
 
 def cleanup():
     """
@@ -93,8 +97,6 @@ class DataManager(QtCore.QObject):
         If the file does not exist, a handle will still be returned, but is not guaranteed to have the correct type.
         """
         fn = os.path.abspath(fileName)
-        #if not os.path.exists(fn):
-            #raise Exception("File '%s' does not exist." % fn)
         if os.path.isdir(fn) or (not os.path.exists(fn) and fn.endswith(os.path.sep)):
             return self.getDirHandle(fileName)
         else:
@@ -118,7 +120,6 @@ class DataManager(QtCore.QObject):
             handle.moveToThread(app.thread())
         ## No signals; handles should explicitly inform the manager of changes
         #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
-        
         
     def _handleChanged(self, handle, change, *args):
         with self.lock:
@@ -147,17 +148,16 @@ class DataManager(QtCore.QObject):
                     self._delCache(path)
 
     def _getTree(self, parent):
-        """Return the entire list of cached handles which are children or grandchildren of this handle"""
+        """Return the entire list of cached handles that are children or grandchildren of this handle"""
         
         ## If handle has no children, then there is no need to search for its tree.
         tree = [parent]
         ph = self._getCache(parent)
         prefix = os.path.normcase(os.path.join(parent, ''))
         
-        if ph.hasChildren():
-            for h in self.cache:
-                if h[:len(prefix)] == prefix:
-                    tree.append(h)
+        for h in self.cache:
+            if h[:len(prefix)] == prefix:
+                tree.append(h)
         return tree
 
     def _getCache(self, name):

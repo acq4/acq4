@@ -43,13 +43,19 @@ def test_datamanager():
     dw.rebuildChildren(item)
     assert item.childCount() == 1
 
+    # test _getTree
+    d3 = rh.mkdir('subdir3')
+    assert d3.name() not in dm.dm._getTree(d1.name())
+    assert d2.name() in dm.dm._getTree(d1.name())
+
     # rename subdir from tree widget
     item.setText(0, 'subdir_renamed')
     assert d1.shortName() == 'subdir_renamed'
 
     # delete subdir
     d1.delete()
-    assert dw.topLevelItemCount() == 0
+    dw.rebuildTree()
+    assert dw.topLevelItemCount() == 1
 
 
 
