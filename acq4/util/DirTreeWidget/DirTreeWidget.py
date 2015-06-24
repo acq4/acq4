@@ -15,7 +15,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
     def __init__(self, parent=None, baseDirHandle=None, checkState=None, allowMove=True, allowRename=True, sortMode='date'):
         QtGui.QTreeWidget.__init__(self, parent)
-        self.baseDir = baseDirHandle
+        self.baseDir = None
         self.checkState = checkState
         self.allowMove = allowMove
         self.allowRename = allowRename
@@ -29,6 +29,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
+
+        if baseDirHandle is not None:
+            self.setBaseDirHandle(baseDirHandle)
 
     def __del__(self):
         try:
@@ -245,6 +248,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
+        scroll = self.verticalScrollBar().value()
         handle = self.handle(root)
         files = handle.ls(sortMode=self.sortMode)
         handles = [handle[f] for f in files]
@@ -265,6 +269,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
                 root.insertChild(i, item)
                 item.recallExpand()
             i += 1
+        self.verticalScrollBar().setValue(scroll)
 
     def itemParent(self,  item):
         """Return the parent of an item (since item.parent can not be trusted). Note: damn silly."""
@@ -372,10 +377,8 @@ class DirTreeWidget(QtGui.QTreeWidget):
             #printExc("Move failed:")
 
     def contextMenuEvent(self, ev):
-        print "menu:", ev.pos()
         item = self.itemAt(ev.pos())
         if item is None:
-            print "no item"
             return
         self.menu = QtGui.QMenu(self)
         act = self.menu.addAction('refresh', self.refreshClicked)
