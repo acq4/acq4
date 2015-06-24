@@ -183,15 +183,23 @@ class RectScanControl(QtCore.QObject):
         self.params.updateSystem()
         
     def saveState(self):
-        task = {'name': self.params.name(), 'active': self.isActive(), 
-                'scanInfo': self.params.saveState(), 'roi': self.roi.saveState()}
+        task = {'name': self.params.name(), 
+                'active': self.isActive(), 
+                'roi': self.roi.saveState(),
+                'scanInfo': self.params.saveState(),
+                }
         return task
     
     def restoreState(self, state):
         state = state.copy()
-        self.params.setName(state['name'])
-        self.params.setValue(state['active'])
-        self.params.restoreState(state['scanInfo'])
+        try:
+            self.params.sigTreeStateChanged.disconnect(self.paramsChanged)            
+            self.params.setName(state['name'])
+            self.params.setValue(state['active'])
+            self.params.restoreState(state['scanInfo'])
+        finally:
+            self.params.sigTreeStateChanged.connect(self.paramsChanged)
+
         self.roi.setState(state['roi'])
 
 
@@ -952,18 +960,23 @@ class RectScanParameter(pTypes.SimpleParameter):
             param.blockSignals(False)
 
     def saveState(self):
-        state = {}
-        for param in self:
-            if 'f' in self.system._vars[param.name()][3]:
-                state[param.name()] = param.value(), param['fixed']
-        return state
+        return self.system.saveState()
     
     def restoreState(self, state):
+        self.system.restoreState(state)
+
         try:
             self.sigTreeStateChanged.disconnect(self.updateSystem)
-            for k,v in state.items():
-                self[k] = v[0]
-                self[k, 'fixed'] = v[1]
+            for k, v in state.items():
+                if v[1] == 'fixed':
+                    try:
+                        param = self.child(k)
+                    except KeyError:
+                        continue
+                    param.setValue(v[0])
+                    param['fixed'] = True
         finally:
             self.sigTreeStateChanged.connect(self.updateSystem)
-        self.updateSystem()
+
+        self.updateAllParams()
+
