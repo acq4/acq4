@@ -77,8 +77,8 @@ class ImagingModule(AnalysisModule):
         if det is not None:
             detectors['detector'] = det['value']
         # current format:
-        dets = state['children'].pop('detectors', {})
-        for name, data in dets.get('children', {}).items():
+        dets = state['children'].get('detectors', {}).pop('children', {})
+        for name, data in dets.items():
             detectors[name] = data['value']
 
         self.params.restoreState(state, removeChildren=False)
