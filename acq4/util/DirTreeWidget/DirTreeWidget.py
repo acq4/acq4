@@ -15,7 +15,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
     def __init__(self, parent=None, baseDirHandle=None, checkState=None, allowMove=True, allowRename=True, sortMode='date'):
         QtGui.QTreeWidget.__init__(self, parent)
-        self.baseDir = baseDirHandle
+        self.baseDir = None
         self.checkState = checkState
         self.allowMove = allowMove
         self.allowRename = allowRename
@@ -29,6 +29,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
 
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
+
+        if baseDirHandle is not None:
+            self.setBaseDirHandle(baseDirHandle)
 
     def __del__(self):
         try:
@@ -374,10 +377,8 @@ class DirTreeWidget(QtGui.QTreeWidget):
             #printExc("Move failed:")
 
     def contextMenuEvent(self, ev):
-        print "menu:", ev.pos()
         item = self.itemAt(ev.pos())
         if item is None:
-            print "no item"
             return
         self.menu = QtGui.QMenu(self)
         act = self.menu.addAction('refresh', self.refreshClicked)
