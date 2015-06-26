@@ -33,7 +33,6 @@ class SutterMP285(Device, OptomechDevice):
         if isinstance(self.port, basestring) and self.port.lower()[:3] == 'com':
             self.port = int(self.port[3:]) - 1
         
-        self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
         self.baud = config.get('baud', 9600)   ## 9600 is probably factory default
         self.pos = [0, 0, 0]
         self.limits = [
