@@ -397,7 +397,9 @@ class Task(DeviceTask):
             else:
                 printExc("Unknown denoise method '%s'" % str(method))
 
-                
+        if res['info']['type'] in ['ci']:
+            data = diff(hstack((0,data)))
+        
         res['data'] = data
         res['info']['numPts'] = data.shape[0]
                 

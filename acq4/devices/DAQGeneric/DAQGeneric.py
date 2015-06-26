@@ -25,7 +25,6 @@ class DataMapping:
         self.device = device
         self.scale = {}
         self.offset = {}
-        self.chantype = {}
         if chans is None:
             chans = device.listChannels()
         if type(chans) in [str, unicode]:
@@ -33,7 +32,6 @@ class DataMapping:
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
             self.offset[ch] = device.getChanOffset(ch)
-            self.chantype[ch] = device.getChanType(ch)
             
     def mapToDaq(self, chan, data):
         scale = self.scale[chan]
@@ -41,15 +39,9 @@ class DataMapping:
         return (data*scale) - offset
         
     def mapFromDaq(self, chan, data):
-        #print 'Mapping chan : ', self.device, chan, self.scale, self.offset, self.chantype
-        if 'ci' in self.chantype[chan]:
-            #print 'differentiated'
-            return np.diff(np.hstack((0,data)))
-        else:
-            #print 'scaled'
-            scale = self.scale[chan]
-            offset = self.offset[chan]
-            return (data + offset) * scale
+        scale = self.scale[chan]
+        offset = self.offset[chan]
+        return (data + offset) * scale
             
 
 class ChannelHandle(object):
