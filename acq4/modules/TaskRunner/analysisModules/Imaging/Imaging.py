@@ -226,7 +226,7 @@ class ImagingModule(AnalysisModule):
                 self.img.setVisible(True)
                 sd = self.pr.getDevice(self.params['scanner'])
                 camMod = sd.cameraModule().window()
-                camMod.addItem(self.img)
+                camMod.addItem(self.img, z=1000)
                 self.img.setImage(imageData.mean(axis=0))
                 self.img.setTransform(tr)
             else:
