@@ -8,7 +8,6 @@ import acq4.util.ptime as ptime  ## platform-independent precision timing
 import acq4.util.debug as debug
 import acq4.util.clibrary as clibrary
 import ctypes
-import SuperTask
 
 dtypes = {  ## for converting numpy dtypes to nidaq type strings
     '<f8': 'F64',
@@ -150,6 +149,7 @@ class _NIDAQ:
         return Task(self, name)
 
     def createSuperTask(self):
+        from . import SuperTask
         return SuperTask.SuperTask(self)
     
     def interpretMode(self, mode):
