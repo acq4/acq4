@@ -259,7 +259,7 @@ class AxoPatch200(DAQGeneric):
         with self.modeLock:
             self.mdCanceled = False
         app = QtGui.QApplication.instance()
-        msg = 'Please set AxoPatch mode switch to %s' % mode
+        msg = 'Please set %s mode switch to %s' % (self.name(), mode)
 
         self.sigShowModeDialog.emit(msg)
         

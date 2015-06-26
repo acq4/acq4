@@ -37,8 +37,6 @@ Documentation
 
 http://www.acq4.org/documentation
 
-Please note that the documentation is currently under heavy development.
-
 
 Support
 -------
