@@ -146,8 +146,8 @@ class _NIDAQ:
     def __del__(self):
         self.__class__.NIDAQ_CREATED = False
 
-    def createTask(self):
-        return Task(self)
+    def createTask(self, name=""):
+        return Task(self, name)
 
     def createSuperTask(self):
         return SuperTask.SuperTask(self)

@@ -5,7 +5,9 @@ from numpy import *
 #import cheader
 import acq4.util.ptime as ptime  ## platform-independent precision timing
 from collections import OrderedDict
+from .nidaq import NIDAQError
 #import debug
+
 
 class SuperTask:
     """Class for creating and encapsulating multiple synchronous tasks. Holds and assembles arrays for writing to each task as well as per-channel meta data."""
@@ -201,9 +203,15 @@ class SuperTask:
 
         for k in self.tasks:
             ## TODO: this must be skipped for the task which uses clkSource by default.
-            maxrate = self.tasks[k].GetSampClkMaxRate()
-            if rate > maxrate:
-                raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
+            try:
+                maxrate = self.tasks[k].GetSampClkMaxRate()
+            except NIDAQError as exc:
+                if exc.errCode == -200452:
+                    # Task does not support GetSampClkMaxRate
+                    pass
+            else:
+                if rate > maxrate:
+                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
             if k[1] != clkSource:
                 #print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)
