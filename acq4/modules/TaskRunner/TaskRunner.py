@@ -491,7 +491,7 @@ class TaskRunner(Module):
     
             ## Load sequence parameter state (must be done after docks have loaded)
             self.ui.sequenceParamList.loadState(prot.conf['params'])
-            self.updateSeqParams('task')
+            self.updateSeqParams('protocol')
             prof.mark('load seq params')
             
             ## Configure dock positions
