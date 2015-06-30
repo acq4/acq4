@@ -150,13 +150,13 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
     
     def insert(self, new, pos=None, neighbor=None):
         if self.topContainer is not None:
+            # Adding new top-level container; addContainer() should
+            # take care of giving the old top container a new home.
             self.topContainer.containerChanged(None)
         self.layout.addWidget(new)
         self.topContainer = new
-        #print self, "set top:", new
         new._container = self
         self.raiseOverlay()
-        #print "Insert top:", new
         
     def count(self):
         if self.topContainer is None:
@@ -214,7 +214,6 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             for i in range(obj.count()):
                 childs.append(self.childState(obj.widget(i)))
             return (obj.type(), childs, obj.saveState())
-        
         
     def restoreState(self, state, missing='error'):
         """
@@ -338,11 +337,15 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         DockDrop.dropEvent(self, *args)
 
 
-class TempAreaWindow(QtGui.QMainWindow):
+class TempAreaWindow(QtGui.QWidget):
     def __init__(self, area, **kwargs):
-        QtGui.QMainWindow.__init__(self, **kwargs)
-        self.setCentralWidget(area)
+        QtGui.QWidget.__init__(self, **kwargs)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.dockarea = area
+        self.layout.addWidget(area)
 
-    def closeEvent(self, *args, **kwargs):
-        self.centralWidget().clear()
-        QtGui.QMainWindow.closeEvent(self, *args, **kwargs)
+    def closeEvent(self, *args):
+        self.dockarea.clear()
+        QtGui.QWidget.closeEvent(self, *args)

@@ -58,6 +58,7 @@ class Container(object):
         if self.count() == 1:  ## if there is one item, give it to the parent container (unless this is the top)
             if self is self.area.topContainer:
                 return
+
             self.container().insert(self.widget(0), 'before', self)
         #print "apoptose:", self
         self.close()
@@ -91,7 +92,6 @@ class Container(object):
     def updateStretch(self):
         ###Set the stretch values for this container to reflect its contents
         pass
-        
         
     def stretch(self):
         """Return the stretch factors for this container"""
