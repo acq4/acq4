@@ -757,7 +757,9 @@ class TaskRunner(Module):
         params = params.copy()
         for p in plist:
             for subp in p[3]:
-                params[subp] = params[p[:2]]
+                if p[:2] in params:
+                    params[subp] = params[p[:2]]
+        
         self.sigTaskStarted.emit(params)
     
     def handleFrame(self, frame):
