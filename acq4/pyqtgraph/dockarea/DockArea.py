@@ -336,6 +336,26 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
     def dropEvent(self, *args):
         DockDrop.dropEvent(self, *args)
 
+    def printState(self, state=None):
+        # for debugging
+        if state is None:
+            state = self.saveState()
+        print("=== Main dock area ===")
+        self._printAreaState(state['main'])
+        print("=== Floating dock areas ===")
+        for float in state['float']:
+            self._printAreaState(float)
+
+    def _printAreaState(self, area, indent=0):
+        if area[0] == 'dock':
+            print("  " * indent + area[0] + " " + str(area[1:]))
+            return
+        else:
+            print("  " * indent + area[0])
+            for ch in area[1]:
+                self._printAreaState(ch, indent+1)
+
+
 
 class TempAreaWindow(QtGui.QWidget):
     def __init__(self, area, **kwargs):

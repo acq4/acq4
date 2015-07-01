@@ -119,6 +119,10 @@ class CameraWindow(QtGui.QMainWindow):
             ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
             self.restoreState(ws)
         if 'docks' in uiState:
+            print("BEFORE RELOAD:")
+            self.cw.printState()
+            print("STATE TO LOAD:")
+            self.cw.printState(uiState['docks'])
             self.cw.restoreState(uiState['docks'], missing='ignore')
         
         # done with UI
