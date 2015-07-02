@@ -2,6 +2,7 @@
 
 import pytest
 import pyqtgraph as pg
+from collections import OrderedDict
 pg.mkQApp()
 
 import pyqtgraph.dockarea as da
@@ -105,7 +106,53 @@ def test_dockarea():
     a3.restoreState(state)
 
 
+    # test a more complex restore
+    a4 = da.DockArea()
+    state1 = {'float': [], 'main': 
+        ('horizontal', [
+            ('vertical', [
+                ('horizontal', [
+                    ('tab', [
+                        ('dock', u'Microscope', {}), 
+                        ('dock', u'Camera', {}), 
+                        ('dock', u'Manipulator2', {}), 
+                        ('dock', u'Manipulator1', {})
+                        ], {'index': 1}), 
+                    ('vertical', [
+                        ('dock', 'View', {}), 
+                        ('horizontal', [
+                            ('dock', 'ROI Plot', {}), 
+                            ('dock', 'Image Sequencer', {})
+                            ], {'sizes': [184, 363]})
+                        ], {'sizes': [355, 120]})
+                    ], {'sizes': [9, 552]})
+                ], {'sizes': [480]}), 
+            ('dock', 'Depth', {})
+            ], {'sizes': [566, 69]})
+        }
 
+    state2 = OrderedDict([(u'float', []), (u'main', 
+        ('horizontal', [
+            ('vertical', [
+                ('horizontal', [
+                    ('dock', u'Camera', {}), 
+                    ('vertical', [
+                        ('dock', 'View', {}), 
+                        ('horizontal', [
+                            ('dock', 'ROI Plot', {}), 
+                            ('dock', 'Image Sequencer', {})
+                            ], {'sizes': [492, 485]})
+                        ], {'sizes': [936, 0]})
+                    ], {'sizes': [172, 982]})
+                ], {'sizes': [941]}), 
+            ('vertical', [
+                ('dock', 'Depth', {}), 
+                ('dock', u'Manipulator1', {}), 
+                ('dock', u'Microscope', {})
+                ], {'sizes': [681, 225, 25]})
+            ], {'sizes': [1159, 116]}))])
 
+    a4.restoreState(state1, missing='create')
+    a4.restoreState(state2, missing='ignore')
 
 
