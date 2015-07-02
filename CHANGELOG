@@ -28,7 +28,8 @@ acq4-0.9.3 (unreleased)
         Fixed issues with Scanner grid controls in TaskRunner
         Fixed issues with MultiClamp starting with wrong state in TaskRunner
         Cleaned up MultiClamp manager UI
-        Fixed NiDAQ reporting incorrect sample rate in task runner 
+        Fixed NiDAQ reporting incorrect sample rate in task runner
+        Fixed problems with DockArea not restoring its state correctly
     Maintenance:
         Performance improvements for 2p imaging and stage input
         util.database now uses built-in sqlite3 module instead of QtSql
