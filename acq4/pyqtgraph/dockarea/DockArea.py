@@ -106,7 +106,6 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         #print "request insert", dock, insertPos, neighbor
         old = dock.container()
         container.insert(dock, insertPos, neighbor)
-        dock.area = self
         self.docks[dock.name()] = dock
         if old is not None:
             old.apoptose()
@@ -154,8 +153,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             # take care of giving the old top container a new home.
             self.topContainer.containerChanged(None)
         self.layout.addWidget(new)
+        new.containerChanged(self)
         self.topContainer = new
-        new._container = self
         self.raiseOverlay()
         
     def count(self):
@@ -282,6 +281,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         if typ != 'dock':
             for o in contents:
                 self.buildFromState(o, docks, obj, depth+1, missing=missing)
+            # remove this container if possible. (there are valid situations when a restore will
+            # generate empty containers, such as when using missing='ignore')
             obj.apoptose(propagate=False)
             obj.restoreState(state)  ## this has to be done later?     
 
@@ -309,14 +310,15 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
                 d.update(d2)
         return (c, d)
 
-    def apoptose(self):
+    def apoptose(self, propagate=True):
+        # remove top container if possible, close this area if it is temporary.
         #print "apoptose area:", self.temporary, self.topContainer, self.topContainer.count()
-        if self.topContainer.count() == 0:
+        if self.topContainer is None or self.topContainer.count() == 0:
             self.topContainer = None
             if self.temporary:
                 self.home.removeTempArea(self)
                 #self.close()
-
+                
     def clear(self):
         docks = self.findAll()[1]
         for dock in docks.values():
@@ -336,15 +338,17 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
     def dropEvent(self, *args):
         DockDrop.dropEvent(self, *args)
 
-    def printState(self, state=None):
+    def printState(self, state=None, name='Main'):
         # for debugging
         if state is None:
             state = self.saveState()
-        print("=== Main dock area ===")
-        self._printAreaState(state['main'])
-        print("=== Floating dock areas ===")
-        for float in state['float']:
-            self._printAreaState(float)
+        print("=== %s dock area ===" % name)
+        if state['main'] is None:
+            print("   (empty)")
+        else:
+            self._printAreaState(state['main'])
+        for i, float in enumerate(state['float']):
+            self.printState(float[0], name='float %d' % i)
 
     def _printAreaState(self, area, indent=0):
         if area[0] == 'dock':

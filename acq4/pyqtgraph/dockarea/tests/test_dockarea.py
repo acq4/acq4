@@ -49,6 +49,7 @@ def test_dockarea():
     assert d4.container() is d3.container()
     assert d3.container().container() is d2.container().container()
     assert d4.area is a
+    a.printState()
 
     # layout now looks like:
     #    vcontainer
@@ -68,11 +69,12 @@ def test_dockarea():
 
     # test restore with ignore missing
     a2.restoreState(state, missing='ignore')
-    assert a2.topContainer.count() == 0
+    assert a2.topContainer is None
 
     # test restore with auto-create
     a2.restoreState(state, missing='create')
     assert a2.saveState() == state
+    a2.printState()
 
     # double-check that state actually matches the output of saveState()
     c1 = a2.topContainer
@@ -104,6 +106,7 @@ def test_dockarea():
         a3docks.append(dock)
         a3.addDock(dock, 'left')
     a3.restoreState(state)
+    a3.printState()
 
 
     # test a more complex restore
@@ -113,46 +116,69 @@ def test_dockarea():
             ('vertical', [
                 ('horizontal', [
                     ('tab', [
-                        ('dock', u'Microscope', {}), 
-                        ('dock', u'Camera', {}), 
-                        ('dock', u'Manipulator2', {}), 
-                        ('dock', u'Manipulator1', {})
+                        ('dock', 'dock1', {}), 
+                        ('dock', 'dock2', {}), 
+                        ('dock', 'dock3', {}), 
+                        ('dock', 'dock4', {})
                         ], {'index': 1}), 
                     ('vertical', [
-                        ('dock', 'View', {}), 
+                        ('dock', 'dock5', {}), 
                         ('horizontal', [
-                            ('dock', 'ROI Plot', {}), 
-                            ('dock', 'Image Sequencer', {})
+                            ('dock', 'dock6', {}), 
+                            ('dock', 'dock7', {})
                             ], {'sizes': [184, 363]})
                         ], {'sizes': [355, 120]})
                     ], {'sizes': [9, 552]})
                 ], {'sizes': [480]}), 
-            ('dock', 'Depth', {})
+            ('dock', 'dock8', {})
             ], {'sizes': [566, 69]})
         }
 
-    state2 = OrderedDict([(u'float', []), (u'main', 
+    state2 = {'float': [], 'main': 
         ('horizontal', [
             ('vertical', [
                 ('horizontal', [
-                    ('dock', u'Camera', {}), 
+                    ('dock', 'dock2', {}), 
                     ('vertical', [
-                        ('dock', 'View', {}), 
+                        ('dock', 'dock5', {}), 
                         ('horizontal', [
-                            ('dock', 'ROI Plot', {}), 
-                            ('dock', 'Image Sequencer', {})
+                            ('dock', 'dock6', {}), 
+                            ('dock', 'dock7', {})
                             ], {'sizes': [492, 485]})
                         ], {'sizes': [936, 0]})
                     ], {'sizes': [172, 982]})
                 ], {'sizes': [941]}), 
             ('vertical', [
-                ('dock', 'Depth', {}), 
-                ('dock', u'Manipulator1', {}), 
-                ('dock', u'Microscope', {})
+                ('dock', 'dock8', {}), 
+                ('dock', 'dock4', {}), 
+                ('dock', 'dock1', {})
                 ], {'sizes': [681, 225, 25]})
-            ], {'sizes': [1159, 116]}))])
+            ], {'sizes': [1159, 116]})}
 
     a4.restoreState(state1, missing='create')
     a4.restoreState(state2, missing='ignore')
+    a4.printState()
+
+    c, d = a4.findAll()
+    assert d['dock3'].area is not a4
+    assert d['dock1'].container() is d['dock4'].container() is d['dock8'].container()
+    assert d['dock6'].container() is d['dock7'].container()
+    assert a4 is d['dock2'].area is d['dock2'].container().container().container()
+    assert a4 is d['dock5'].area is d['dock5'].container().container().container().container()
+
+    # States should be the same with two exceptions:
+    #   dock3 is in a float because it does not appear in state2
+    #   a superfluous vertical splitter in state2 has been removed
+    state4 = a4.saveState()
+    state4['main'][1][0] = state4['main'][1][0][1][0]
+    assert clean_state(state4['main']) == clean_state(state2['main'])
 
 
+def clean_state(state):
+    # return state dict with sizes removed
+    ch = [clean_state(x) for x in state[1]] if isinstance(state[1], list) else state[1]
+    state = (state[0], ch, {})
+
+
+if __name__ == '__main__':
+    test_dockarea()
