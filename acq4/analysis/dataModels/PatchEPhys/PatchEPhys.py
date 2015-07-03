@@ -696,8 +696,8 @@ class GetClamps():
             return None
         self.RSeriesUncomp = 0.
         if self.amplifierSettings['WCCompValid']:
-            if self.amplfierSettings['WCEnabled'] and self.amplifierSettings['CompEnabled']:
-                self.RSeriesUncomp= self.amplfierSettings['WCResistance'] * (1.0 - self.amplifierSettings['CompCorrection'] / 100.)
+            if self.amplifierSettings['WCEnabled'] and self.amplifierSettings['CompEnabled']:
+                self.RSeriesUncomp= self.amplifierSettings['WCResistance'] * (1.0 - self.amplifierSettings['CompCorrection'] / 100.)
             else:
                 self.RSeriesUncomp = 0.
 

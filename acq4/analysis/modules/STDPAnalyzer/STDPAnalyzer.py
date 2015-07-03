@@ -147,15 +147,21 @@ class STDPAnalyzer(AnalysisModule):
         with pg.ProgressDialog("Loading data..", 0, n) as dlg:
             for f in files:
                 arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object)])
+                maxi = -1
                 for i, protoDir in enumerate(f.ls()):
-                    data = self.dataModel.getClampFile(f[protoDir]).read()
+                    df = self.dataModel.getClampFile(f[protoDir])
+                    if df is None:
+                        print 'Error in reading data file %s' % f.name()
+                        break
+                    data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
                     arr[i]['timestamp'] = timestamp
                     arr[i]['data'] = data
+                    maxi += 1  # keep track of successfully read traces
                     dlg += 1
                     if dlg.wasCanceled():
                         return
-                self.traces = np.concatenate((self.traces, arr))
+                self.traces = np.concatenate((self.traces, arr[:maxi]))  # only concatenate successfully read traces
                 self.lastAverageState = {}
                 self.files.append(f)
         #print "   ", len(self.traces)
@@ -191,19 +197,25 @@ class STDPAnalyzer(AnalysisModule):
         self.clearTracesPlot()
 
         if not self.ctrl.averageCheck.isChecked():
-            data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)*(self.traces['timestamp'] < rgn[1]+self.expStart)]['data']
+            data = self.traces[(self.traces['timestamp'] > 
+                rgn[0]+self.expStart)*(self.traces['timestamp'] < 
+                rgn[1]+self.expStart)]['data']
             timeKey = 'timestamp'
             dataKey='data'
             for i, d in enumerate(data):
                 self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
-        if self.ctrl.averageCheck.isChecked():
-            data = self.averagedTraces[(self.averagedTraces['avgTimeStamp'] > rgn[0]+self.expStart)*(self.averagedTraces['avgTimeStamp'] < rgn[1]+self.expStart)]
+        #if self.ctrl.averageCheck.isChecked():
+        else:
+            data = self.averagedTraces[(self.averagedTraces['avgTimeStamp'] >
+                 rgn[0]+self.expStart)*(self.averagedTraces['avgTimeStamp'] <
+                 rgn[1]+self.expStart)]
             displayOrig = self.ctrl.displayTracesCheck.isChecked()
             timeKey = 'avgTimeStamp'
             dataKey='avgData'
             #print "   len(data):", len(data)
             for i, d in enumerate(data['avgData']):
+#                print i, dir(d)
                 self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
                 if displayOrig:
                     #print "   origTimes:", data['origTimes'] , type(data['origTimes']), type(data['origTimes'][0])
@@ -215,9 +227,13 @@ class STDPAnalyzer(AnalysisModule):
                         self.plots.tracesPlot.plot(orig['primary'], pen=pg.intColor(i, len(data), alpha=30))
 
         if self.analysisResults is not None:
-            timestep = data[dataKey][0].axisValues('Time')[1]-data[dataKey][0].axisValues('Time')[0]
+            datatime = data[dataKey][0].axisValues('Time')
+            print datatime
+            timestep = datatime[1]-datatime[0]
             for i, time in enumerate(data[timeKey]):
                 slopeTime = self.analysisResults[self.analysisResults['time'] == time]['highSlopeLocation']
+#                print slopeTime
+#                print timestep
                 slopeInd = int(slopeTime/timestep)
                 self.plots.tracesPlot.plot([slopeTime], [data[i][dataKey]['primary'][slopeInd]], pen=None, symbol='o', symbolPen=None, symbolBrush=pg.intColor(i, len(data)))
 
@@ -487,27 +503,48 @@ class STDPAnalyzer(AnalysisModule):
                                                             ])
 
         self.analysisResults['time'] = times
-
+        # print "analysisReusults['time']: ", self.analysisResults['time']
+        # print len(self.analysisResults['time'])
         if self.ctrl.baselineCheck.isChecked():
             self.measureBaseline(traces)
-            self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'], pen=None, symbol='o', symbolPen=None)
-
+            self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'],
+                pen=None, symbol='o', symbolPen=None)
+        postwin = [20., 40.]  # minutes after start for measuring amplitude
         if self.ctrl.pspCheck.isChecked():
             self.measurePSP(traces)
             if self.ctrl.measureModeCombo.currentText() == 'Slope (max)':
-                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'], pen=None, symbol='o', symbolPen=None)
-                base, basetime = (self.analysisResults['pspSlope'][:5].mean(), self.analysisResults['time'][:5].mean()-self.expStart)
-                postStart = self.analysisResults['time'][5]
-                postRgn = (np.argwhere(self.analysisResults['time'] > postStart+60*20.)[0], np.argwhere(self.analysisResults['time']< postStart+60*40.)[-1])
-                post, postTime = (self.analysisResults['pspSlope'][postRgn[0]:postRgn[1]].mean(), self.analysisResults['time'][postRgn[0]:postRgn[1]].mean()-self.expStart)
+                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'],
+                    pen=None, symbol='o', symbolPen=None)
+                basepts = self.analysisResults['time'].shape[0]-1
+                
+                base, basetime = (self.analysisResults['pspSlope'][:basepts].mean(),
+                    self.analysisResults['time'][:basepts].mean()-self.expStart)
+                postStart = self.analysisResults['time'][0]
+                pr1 = np.argwhere(self.analysisResults['time'] >= postStart+60*postwin[0])
+                pr2 = np.argwhere(self.analysisResults['time'] <= postStart+60*postwin[1])
+                try:
+                    x = pr1[0] # no points inside 
+                except:
+                    print self.analysisResults['time']
+                    print 'starttime: ', postStart
+                    msg = 'Recording is shorter than needed for analysis window\n'
+                    msg += 'Max rec time: %8.3f sec, window starts at %8.3f sec' % (np.max
+                        (self.analysisResults['time']), 60.*postwin[0])
+                    raise ValueError(msg)
+                    return
+                postRgn = (pr1[0], pr2[-1])
+                post, postTime = (self.analysisResults['pspSlope'][postRgn[0]:postRgn[1]].mean(),
+                    self.analysisResults['time'][postRgn[0]:postRgn[1]].mean()-self.expStart)
                 self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
                 self.plots.plasticityPlot.setLabel('left', "Slope")
             elif self.ctrl.measureModeCombo.currentText() == 'Amplitude (max)':
-                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'], pen=None, symbol='o', symbolPen=None)
+                self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'],
+                    pen=None, symbol='o', symbolPen=None)
                 self.plots.plasticityPlot.setLabel('left', "Amplitude")
         if self.ctrl.healthCheck.isChecked():
             self.measureHealth(traces)
-            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'], pen=None, symbol='o', symbolPen=None)
+            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'],
+                pen=None, symbol='o', symbolPen=None)
 
         self.updateTracesPlot()
 
@@ -565,7 +602,7 @@ class STDPAnalyzer(AnalysisModule):
                 baseline = data['primary'][:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
             peakPosition = np.argwhere(data['primary'] == data['primary'].max())[0]
             avgPeak = data['primary'][peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
-            print "avgPeak:", avgPeak
+#            print "avgPeak:", avgPeak
             self.analysisResults[i]['pspAmplitude'] = avgPeak
             #raise Exception('Stop!')
 
