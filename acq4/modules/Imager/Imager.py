@@ -24,6 +24,7 @@
 import time
 import copy
 import pprint
+import os
 from PyQt4 import QtGui, QtCore
 import numpy as np
 from collections import OrderedDict
@@ -31,7 +32,7 @@ from collections import OrderedDict
 from acq4.modules.Module import Module
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.dockarea
-import acq4.Manager
+import acq4.Manager as Manager
 import acq4.util.InterfaceCombo as InterfaceCombo
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program import ScanProgram
@@ -233,7 +234,6 @@ class Imager(Module):
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
         self.win.show()
         self.win.setWindowTitle('Multiphoton Imager V 1.01')
-        self.win.resize(500, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
         self.w1.setOrientation(QtCore.Qt.Horizontal)
@@ -272,7 +272,17 @@ class Imager(Module):
         self.dockarea.addDock(scanDock, 'bottom', recDock)
         self.dockarea.addDock(bgDock, 'bottom', dispDock)
 
-
+        self.stateFile = os.path.join('modules', name+'_ui.cfg')
+        uiState = Manager.getManager().readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.win.setGeometry(geom)
+        else:
+            self.win.resize(500, 900)
+        if 'window' in uiState:
+            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            self.win.restoreState(ws)
+        
         # TODO: resurrect this for situations when the camera module can't be used
         # self.view = ImagerView()
         # self.w1.addWidget(self.view)   # add the view to the right of w1     
@@ -285,9 +295,7 @@ class Imager(Module):
         self.currentRoi = None
         self.ignoreRoiChange = False
         self.lastFrame = None
-
-        self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
-
+        
         self.scanVoltageCache = None  # cached scan protocol computed by generateScanProtocol
         
         self.objectiveROImap = {} # this is a dict that we will populate with the name
@@ -306,8 +314,8 @@ class Imager(Module):
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         self.laserDev = self.manager.getDevice(config['laser'])
         self.scannerDev = self.manager.getDevice(config['scanner'])
-
-
+        
+        
         self.imagingThread = ImagingThread(self.laserDev, self.scannerDev)
         self.imagingThread.sigNewFrame.connect(self.newFrame)
         self.imagingThread.sigVideoStopped.connect(self.videoStopped)
@@ -316,7 +324,8 @@ class Imager(Module):
         # connect user interface to camera module
         self.camModInterface = ImagerCamModInterface(self, self.cameraModule)
         self.cameraModule.window().addInterface(self.name, self.camModInterface)
-
+        
+        
         # find first scope device that is parent of scanner
         dev = self.scannerDev
         while dev is not None and not isinstance(dev, Microscope):
@@ -341,7 +350,12 @@ class Imager(Module):
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
         self.imagingCtrl.sigStartVideoClicked.connect(self.startVideoClicked)
         self.imagingCtrl.sigStopVideoClicked.connect(self.stopVideoClicked)
+        
+        fS = config.get('defaultFieldSize', 63.0*120e-6)
+        objScale = self.scannerDev.parentDevice().getObjective().scale().x()
 
+        self.fieldSize = fS/objScale #63.0*120e-6 # field size for 63x, will be scaled for others
+        
         # Add custom imaging modes
         for mode in FrameModes:
             self.imagingCtrl.addFrameButton(mode)
@@ -430,7 +444,7 @@ class Imager(Module):
         self.param.child('Image Control', 'Decomb', 'Auto').sigActivated.connect(self.autoDecomb)
 
         self.manager.sigAbortAll.connect(self.abortTask)
-
+        self.cameraModule.window().centerView()
         self.updateImagingProtocol()
 
 
@@ -448,6 +462,9 @@ class Imager(Module):
         #     if self.tileRoi.scene() is not None:
         #         self.tileRoi.scene().removeItem(self.tileRoi)
         #     self.tileRoi = None
+        geom = self.win.geometry()
+        uiState = {'window': str(self.win.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        Manager.getManager().writeConfigFile(uiState, self.stateFile)
         self.camModInterface.quit()
         self.imagingCtrl.quit()
         self.imageItem = None
@@ -904,6 +921,29 @@ class Imager(Module):
         ## New image is displayed; update image transform
         self.imageItem.setTransform(frame.globalTransform().as2D())
 
+    def getBoundary(self):
+        """
+        Return bounding rect of this imaging device in global coordinates
+        """
+        globalCoords=True
+        #print slf.fieldSize
+        cpos = self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
+        csize = self.scannerDev.mapToGlobal((self.fieldSize, self.fieldSize))
+        objScale = self.scannerDev.parentDevice().getObjective().scale().x()
+        
+        cpos  = tuple(i/objScale for i in cpos)
+        csize = tuple(j/objScale for j in csize)
+        
+        cpos = tuple(i-j/2. for i,j in zip(cpos,csize))
+
+        bounds = QtGui.QPainterPath()
+        bounds.addRect(QtCore.QRectF(cpos[0], cpos[1], *csize))
+        if globalCoords:
+            return (pg.SRTTransform(self.scannerDev.globalTransform()).map(bounds))
+        else:
+            return bounds
+
+
     # def PMT_Run(self):
     #     """
     #     This routine handles special cases where we want multiple frames to be
@@ -1053,6 +1093,7 @@ class ImagerCamModInterface(CameraModuleInterface):
 
     def graphicsItems(self):
         gitems = [self.getImageItem()] + list(self.imager.objectiveROImap.values())
+        print 'gitems', gitems
         return gitems
 
     def takeImage(self, closeShutter=True):
@@ -1063,6 +1104,12 @@ class ImagerCamModInterface(CameraModuleInterface):
 
     def newFrame(self, frame):
         self.sigNewFrame.emit(self, frame)
+    
+    def boundingRect(self):
+        """
+        Return bounding rect of this imaging device in global coordinates
+        """
+        return self.imager.getBoundary().boundingRect()
 
 
 class ImagingFrame(imaging.Frame):
