@@ -189,12 +189,17 @@ class CameraWindow(QtGui.QMainWindow):
         self.depthDock.show()
         return self.depthPlot
 
-    def centerView(self):
+    def centerView(self,exclusive=None):
         if len(self.interfaces) == 0:
             return
         bounds = None
-        for iface in self.interfaces.values():
-            br = iface.boundingRect()
+        for k,v in self.interfaces.items():
+            if exclusive is None:
+                br = v.boundingRect()
+            elif exclusive==k:
+                br = v.boundingRect()
+            else:
+                br = None
             if br is None:
                 continue
             if bounds is None:

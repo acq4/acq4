@@ -371,6 +371,10 @@ class Imager(Module):
         self.ui.restoreROI.clicked.connect(self.restoreROI)
         self.ui.saveROI.clicked.connect(self.saveROI)
         self.ui.Align_to_Camera.clicked.connect(self.reAlign)
+        self.ui.zoomSingleBox.valueChanged.connect(self.zoomRoi)
+        self.ui.zoomTenthBox.valueChanged.connect(self.zoomRoi)
+        
+        self.singleFlip = False
 
         self.scanProgram = ScanProgram()
         self.scanProgram.addComponent('rect')
@@ -599,6 +603,7 @@ class Imager(Module):
         w, h = state['size']
         rparam = self.scanProgram.components[0].ctrlParameter()
         param = self.param.child('Scan Control')
+        self.updateParams()
         rows = int(param['Image Width'] * h / w)
         if param['Image Height'] != rows:
             # update image height; this will cause acq thread protocol to be updated
@@ -636,8 +641,30 @@ class Imager(Module):
 
     def reAlign(self):
         self.objectiveUpdate(reset=True) # try this... 
+        self.ui.zoomSingleBox.setValue(0)
+        self.ui.zoomTenthBox.setValue(0)
         self.roiChanged()
-
+        self.cameraModule.window().centerView()
+    def zoomRoi(self):
+        zoomS = self.ui.zoomSingleBox.value()
+        if self.singleFlip:
+            self.singleFlip = False
+            self.ui.zoomSingleBox.setValue((zoomS+1))
+        zoomT = self.ui.zoomTenthBox.value()
+        if zoomT == 10:
+            self.singleFlip=True
+            self.ui.zoomTenthBox.setValue(0)
+        zoom = zoomS + zoomT/10.
+        cpos = self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
+        csize = self.scannerDev.mapToGlobal((self.fieldSize, self.fieldSize))
+        width  = csize[0]/zoom # width is x in M
+        height = csize[1]/zoom
+        csize = pg.Point(width, height)
+        cpos = cpos - csize/2.
+        self.currentRoi.setSize([width, height])
+        self.currentRoi.setPos(cpos)
+        #self.roiChanged()
+        self.cameraModule.window().centerView(exclusive='Imager')
     # def setTilesROI(self, roiColor = 'r'):
     #     # the initial ROI will be larger than the current field and centered.
     #     if self.tileRoi is not None and self.tileRoiVisible:
@@ -927,15 +954,15 @@ class Imager(Module):
         """
         globalCoords=True
         #print slf.fieldSize
-        cpos = self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
-        csize = self.scannerDev.mapToGlobal((self.fieldSize, self.fieldSize))
+        state = self.currentRoi.getState()
+        cpos = state['pos']
+        csize = state['size']
+        
         objScale = self.scannerDev.parentDevice().getObjective().scale().x()
         
         cpos  = tuple(i/objScale for i in cpos)
         csize = tuple(j/objScale for j in csize)
         
-        cpos = tuple(i-j/2. for i,j in zip(cpos,csize))
-
         bounds = QtGui.QPainterPath()
         bounds.addRect(QtCore.QRectF(cpos[0], cpos[1], *csize))
         if globalCoords:
