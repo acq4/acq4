@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
-#from ctypes import *
-import time #sys, re, types, ctypes, os, time
+import time
 from numpy import *
-#import cheader
 import acq4.util.ptime as ptime  ## platform-independent precision timing
 from collections import OrderedDict
-from .nidaq import NIDAQError
-#import debug
+from .base import NIDAQError
 
 
 class SuperTask:
