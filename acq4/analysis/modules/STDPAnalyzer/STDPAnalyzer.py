@@ -55,8 +55,8 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.plasticityPlot.setLabel('left', 'Slope')
         # self.plots.plasticityPlot.setTitle('Plasticity')
         # self.plots.RMP_plot.setTitle('Resting Membrane Potential')
-        self.plots.RMP_plot.setLabel('left', 'Voltage')
-        self.plots.RI_plot.setLabel('left', 'Resistance')
+        self.plots.RMP_plot.setLabel('left', 'Vm (mV)')
+        self.plots.RI_plot.setLabel('left', 'Rin (Mohm)')
         # self.plots.RI_plot.setTitle('Input Resistance')
 
         for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
@@ -179,13 +179,13 @@ class STDPAnalyzer(AnalysisModule):
 
         if self.ctrl.averageCheck.isChecked():
             #print "updateExptPlot", len(self.traces), len(self.averagedTraces)
-            self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o', alpha=50)
-            self.plots.exptPlot.plot(x=self.averagedTraces['avgTimeStamp']-self.expStart, y=[2]*len(self.averagedTraces), pen=None, symbol='o', symbolBrush=(255,0,0))
+            self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o', symbolSize=6, alpha=50)
+            self.plots.exptPlot.plot(x=self.averagedTraces['avgTimeStamp']-self.expStart, y=[2]*len(self.averagedTraces), pen=None, symbol='o', symbolSize=6, symbolBrush=(255,0,0))
         else:
-            self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o')
+            self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o', symbolSize=6)
 
         if self.ctrl.excludeAPsCheck.isChecked():
-            self.plots.exptPlot.plot(x=self.excludedTraces['timestamp']-self.expStart, y=[1]*len(self.excludedTraces), pen=None, symbol='o', symbolBrush=(255,100,100))
+            self.plots.exptPlot.plot(x=self.excludedTraces['timestamp']-self.expStart, y=[1]*len(self.excludedTraces), pen=None, symbol='o', symbolSize=6, symbolBrush=(255,100,100))
 
     def clearTracesPlot(self):
         self.plots.tracesPlot.clear()
@@ -226,9 +226,8 @@ class STDPAnalyzer(AnalysisModule):
                         #print sample.infoCopy()
                         self.plots.tracesPlot.plot(orig['primary'], pen=pg.intColor(i, len(data), alpha=30))
 
-        if self.analysisResults is not None:
+        if self.analysisResults is not None and len(data[dataKey] > 0):
             datatime = data[dataKey][0].axisValues('Time')
-            print datatime
             timestep = datatime[1]-datatime[0]
             for i, time in enumerate(data[timeKey]):
                 slopeTime = self.analysisResults[self.analysisResults['time'] == time]['highSlopeLocation']
@@ -505,16 +504,23 @@ class STDPAnalyzer(AnalysisModule):
         self.analysisResults['time'] = times
         # print "analysisReusults['time']: ", self.analysisResults['time']
         # print len(self.analysisResults['time'])
+        symsize = 5.0
+        
+        if self.ctrl.healthCheck.isChecked():
+            self.measureHealth(traces)
+            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'],
+                pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
+
         if self.ctrl.baselineCheck.isChecked():
             self.measureBaseline(traces)
             self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'],
-                pen=None, symbol='o', symbolPen=None)
+                pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
         postwin = [20., 40.]  # minutes after start for measuring amplitude
         if self.ctrl.pspCheck.isChecked():
             self.measurePSP(traces)
             if self.ctrl.measureModeCombo.currentText() == 'Slope (max)':
                 self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'],
-                    pen=None, symbol='o', symbolPen=None)
+                    pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
                 basepts = self.analysisResults['time'].shape[0]-1
                 
                 base, basetime = (self.analysisResults['pspSlope'][:basepts].mean(),
@@ -536,16 +542,11 @@ class STDPAnalyzer(AnalysisModule):
                 post, postTime = (self.analysisResults['pspSlope'][postRgn[0]:postRgn[1]].mean(),
                     self.analysisResults['time'][postRgn[0]:postRgn[1]].mean()-self.expStart)
                 self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
-                self.plots.plasticityPlot.setLabel('left', "Slope")
+                self.plots.plasticityPlot.setLabel('left', "EPSP Slope (mV/ms)")
             elif self.ctrl.measureModeCombo.currentText() == 'Amplitude (max)':
                 self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'],
-                    pen=None, symbol='o', symbolPen=None)
-                self.plots.plasticityPlot.setLabel('left', "Amplitude")
-        if self.ctrl.healthCheck.isChecked():
-            self.measureHealth(traces)
-            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'],
-                pen=None, symbol='o', symbolPen=None)
-
+                    pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
+                self.plots.plasticityPlot.setLabel('left', "EPSP Amplitude (mV)")
         self.updateTracesPlot()
 
     def measureBaseline(self, traces):
