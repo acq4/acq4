@@ -32,59 +32,34 @@ class TDTTask(DeviceTask):
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.lastPulseTime = None
+        self.cmd = cmd
 
     def configure(self):
-        self.circuit = DSPCircuit('C:\Users\Experimenters\Desktop\ABR_Code\FreqStaircase3.rcx', 'RP2')
-        assert self.circuit.is_connected
+        for key, val in self.cmd.items():
+            if key.startswith('PA5.'):
+                index = int(key[4:])
+                self.amplifier = Dispatch('PA5.x')
+                self.amplifier.ConnectPA5('USB', index)
+                self.amplifier.SetAtten(val['attenuation'])
 
-        #Set relevant timing values
-        tdur = 50
-        tipi = 200
-        nreps = 1
+            elif key.startswith('RP2.'):
+                index = int(key[4:])
+                self.circuit = DSPCircuit(val['circuit'], 'RP2')
+                assert self.circuit.is_connected
 
-        fmin=0.1
-        fstep=0.25
-        fmax = fstep*10
-        flist=np.arange(fmin,fmax,fstep)
-        if flist[9]<fmax:
-            flist=np.append(flist,fmax)
-        freqs=1000*2**flist
-        
+                for tagName, tagVal in val['tags'].items():
+                    self.circuit.set_tag(tagName, tagVal)
 
-        npip=len(freqs)
-        print('npip = ', npip)
-        schtime=npip*(tdur + tipi)
-        print('schtime = ', schtime)
-        cyctime=schtime + (tdur+tipi)*npip
-        print('cyctime = ', cyctime)
 
-        print(freqs)
-        #direction=input('please enter "up" or "down":')
-        #Set the tag values
-        #If ascending tone pips:  Set Basefreq to fmin, Stepsize to fstep and Maxfreq to fmax
-        #If descending tone pips:  Set Basefreq to fmax, Stepsize to -fstep and MaxFreq to fmin
-        direction = 'down'
-        if direction=='up':
-            self.circuit.set_tag('BaseFreq', fmin)
-            self.circuit.set_tag('StepSize', fstep)
-            self.circuit.set_tag('MaxFreq', fmax)
-        elif direction=='down':
-            self.circuit.set_tag('BaseFreq', fmax)
-            self.circuit.set_tag('StepSize', -1*fstep)
-            self.circuit.set_tag('MaxFreq', fmax)
-        else:
-            DSPError()
-        
-    #   circuit.set_tag('SchmittTime', schtime)
-        self.circuit.set_tag('PipDuration', tdur)
-    #circuit.set_tag('InterPipTime', tipi)
-        self.circuit.set_tag('NPip', npip)
-    #   circuit.set_tag('Reps', nreps)
-    #   circuit.set_tag('CycleTime',cyctime)
 
-        self.amplifier = Dispatch('PA5.x')
-        self.amplifier.ConnectPA5('USB',1)
-        self.amplifier.SetAtten(50)
+        # self.circuit = DSPCircuit('C:\Users\Experimenters\Desktop\ABR_Code\FreqStaircase3.rcx', 'RP2')
+
+
+
+
+
+
+
 
     def start(self):
         self.circuit.start()

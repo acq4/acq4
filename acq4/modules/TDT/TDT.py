@@ -24,9 +24,9 @@ class TDT(Module):
                 {'name': 'MinimumFrequency', 'type': 'float', 'value': 4000, 'suffix': 'Hz',
                  'siPrefix': True, 'step': 10e2, 'limits': [1000, 200000]},
                 
-                {'name': 'FreqStep', 'type': 'float', 'value': 2.5, 'step': 10e-3, 'limits': [1e-3, 100e-3]},
+                {'name': 'FreqStep', 'type': 'float', 'value': 2**0.25, 'step': 0.1, 'limits': [1, 10]},
                 
-                {'name': 'NumberOfSteps', 'type': 'int', 'value': 10, 'limits': [1, None]},
+                {'name': 'NumberOfPips', 'type': 'int', 'value': 10, 'limits': [1, None]},
 
             ])
         self.ptree = parametertree.ParameterTree()
@@ -50,19 +50,79 @@ class TDT(Module):
         
         # Get all the basic parameters we need for this task
         minfreq = self.params['MinimumFrequency']
-        fstep = self.params['FreqStep']
-        numsteps = self.params['NumberOfSteps']
+        fratio = self.params['FreqStep']
+        numpips = self.params['NumberOfPips']
         # rate = 50e3
         # samples = int(duration * rate)
         
         # # Make stimulus waveform with a pulse in the middle
         # stim = np.zeros(samples, dtype='float32')
         # stim[samples//3:2*samples//3] = amp
+
+        #Set relevant timing values
+        tdur = 50
+        # tipi = 200
+        # nreps = 1
+
+        # fmin=0.1
+        # fstep=0.25
+        # fmax = fstep*10
+        # flist=np.arange(fmin,fmax,fstep)
+        # if flist[9]<fmax:
+        #     flist=np.append(flist,fmax)
+        # freqs=1000*2**flist
+        
+
+        # npip=len(freqs)
+        # print('npip = ', npip)
+        # schtime=npip*(tdur + tipi)
+        # print('schtime = ', schtime)
+        # cyctime=schtime + (tdur+tipi)*npip
+        # print('cyctime = ', cyctime)
+
+        # print(freqs)
+        #direction=input('please enter "up" or "down":')
+        #Set the tag values
+        #If ascending tone pips:  Set Basefreq to fmin, Stepsize to fstep and Maxfreq to fmax
+        #If descending tone pips:  Set Basefreq to fmax, Stepsize to -fstep and MaxFreq to fmin
+
+        # circuit calculates frequencies as 1000 * 2^(base + step*i)
+        base = np.log2(minfreq/1000.)
+        fstep = np.log2(fratio)
+        fmax = (base + fstep * (numpips-1))
+
+        freqs = 1000 * 2**(base + fstep * np.arange(numpips))
+        print("Expected frequencies: ", freqs)
+
+        direction = 'up'
+        if direction=='up':
+            tags = {
+            'BaseFreq': base, 
+            'StepSize': fstep,
+            'MaxFreq': fmax,
+            'PipDuration': tdur,
+            'NPip': numpips,
+            }
+        elif direction=='down':
+            tags = {
+            'BaseFreq': fmax, 
+            'StepSize': -1*fstep,
+            'MaxFreq': base,  
+            'PipDuration': tdur,
+            'NPip': numpips,
+            }
+        else:
+            raise ValueError("direction must be 'up' or 'down'.")
+  
         
         cmd = {
             'protocol': {'duration': 0, 'store': False},
             # 'DAQ':      {'rate': rate, 'numPts': samples},
-            'TDTDevice':{}
+            'TDTDevice': {
+
+                'RP2.1': {'circuit': 'C:\Users\Experimenters\Desktop\ABR_Code\FreqStaircase3.rcx', 'tags': tags},
+                'PA5.1': {'attenuation': 50}
+            }
         }
         
         manager = Manager.getManager()
@@ -73,7 +133,7 @@ class TDT(Module):
         # Wait until task completes and process Qt events to keep the GUI
         # responsive during that time 
         while not task.isDone():
-            print("not done yet")
+            print("not done yet", task.tasks['TDTDevice'].circuit.get_tag('freqout'))
             QtGui.QApplication.processEvents()
             time.sleep(0.05)
 
