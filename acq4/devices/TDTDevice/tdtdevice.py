@@ -3,7 +3,7 @@ from acq4.util.debug import *
 from tdt import *    
 from acq4.devices.Device import *
 import time, traceback, sys
-from taskGUI import *
+#from taskGUI import *
 #from numpy import byte
 import numpy
 #from scipy.signal import resample, bessel, lfilter
@@ -25,7 +25,7 @@ class TDTDevice(Device):
         ## make local copy of device handle
     	print "TDT activated!"
         
-    def createTask(self, cmd, parentTask):]
+    def createTask(self, cmd, parentTask):
         return TDTTask(self, cmd, parentTask)
         
 class TDTTask(DeviceTask):
