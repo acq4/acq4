@@ -5,14 +5,14 @@ from acq4.devices.Device import *
 import time, traceback, sys
 #from taskGUI import *
 #from numpy import byte
-import numpy
+import numpy as np
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal, scipy.ndimage
 import acq4.util.advancedTypes as advancedTypes
 from acq4.util.debug import *
 import acq4.util.Mutex as Mutex
 from acq4.pyqtgraph import ptime
-
+from win32com.client import Dispatch
 
 class TDTDevice(Device):
     """
@@ -35,7 +35,7 @@ class TDTTask(DeviceTask):
 
     def configure(self):
         self.circuit = DSPCircuit('C:\Users\Experimenters\Desktop\ABR_Code\FreqStaircase3.rcx', 'RP2')
-        assert circuit.is_connected
+        assert self.circuit.is_connected
 
         #Set relevant timing values
         tdur = 50
@@ -59,51 +59,53 @@ class TDTTask(DeviceTask):
         print('cyctime = ', cyctime)
 
         print(freqs)
-        direction=input('please enter "up" or "down":')
+        #direction=input('please enter "up" or "down":')
         #Set the tag values
         #If ascending tone pips:  Set Basefreq to fmin, Stepsize to fstep and Maxfreq to fmax
         #If descending tone pips:  Set Basefreq to fmax, Stepsize to -fstep and MaxFreq to fmin
+        direction = 'down'
         if direction=='up':
-            circuit.set_tag('BaseFreq', fmin)
-            circuit.set_tag('StepSize', fstep)
-            circuit.set_tag('MaxFreq', fmax)
+            self.circuit.set_tag('BaseFreq', fmin)
+            self.circuit.set_tag('StepSize', fstep)
+            self.circuit.set_tag('MaxFreq', fmax)
         elif direction=='down':
-            circuit.set_tag('BaseFreq', fmax)
-            circuit.set_tag('StepSize', -1*fstep)
-            circuit.set_tag('MaxFreq', fmax)
+            self.circuit.set_tag('BaseFreq', fmax)
+            self.circuit.set_tag('StepSize', -1*fstep)
+            self.circuit.set_tag('MaxFreq', fmax)
         else:
             DSPError()
         
     #   circuit.set_tag('SchmittTime', schtime)
-        circuit.set_tag('PipDuration', tdur)
+        self.circuit.set_tag('PipDuration', tdur)
     #circuit.set_tag('InterPipTime', tipi)
-        circuit.set_tag('NPip', npip)
+        self.circuit.set_tag('NPip', npip)
     #   circuit.set_tag('Reps', nreps)
     #   circuit.set_tag('CycleTime',cyctime)
 
-        amplifier = Dispatch('PA5.x')
-        amplifier.ConnectPA5('USB',1)
-        amplifier.SetAtten(50)
+        self.amplifier = Dispatch('PA5.x')
+        self.amplifier.ConnectPA5('USB',1)
+        self.amplifier.SetAtten(50)
 
     def start(self):
-        circuit.start()
+        self.circuit.start()
 
-        circuit.trigger(1,mode='pulse')
+        self.circuit.trigger(1,mode='pulse')
         self.starttime = ptime.time()
 
 
     def isDone(self):
-        if not self.lastPulseTime is None:
-            pulseread = circuit.get_tag('Pulses')
+        if self.lastPulseTime is None:
+            pulseread = self.circuit.get_tag('Pulses')
+            print(pulseread)
             if pulseread == 1:
                 self.lastPulseTime = ptime.time()
             return False
         else:
             return ptime.time() > self.lastPulseTime + 0.1
 
-    def stop(self):
-        circuit.stop()
-        amplifier.SetAtten(120)
+    def stop(self, abort=False):
+        self.circuit.stop()
+        self.amplifier.SetAtten(120)
 
         # elapsed=0
         # PC=0
