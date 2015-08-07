@@ -94,7 +94,7 @@ class TDT(Module):
         freqs = 1000 * 2**(base + fstep * np.arange(numpips))
         print("Expected frequencies: ", freqs)
 
-        direction = 'up'
+        direction = self.params['Direction']
         if direction=='up':
             tags = {
             'BaseFreq': base, 
@@ -107,7 +107,7 @@ class TDT(Module):
             tags = {
             'BaseFreq': fmax, 
             'StepSize': -1*fstep,
-            'MaxFreq': base,  
+            'MaxFreq': fmax,  
             'PipDuration': tdur,
             'NPip': numpips,
             }
