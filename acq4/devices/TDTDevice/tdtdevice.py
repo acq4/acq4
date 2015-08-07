@@ -69,14 +69,16 @@ class TDTTask(DeviceTask):
 
 
     def isDone(self):
-        if self.lastPulseTime is None:
-            pulseread = self.circuit.get_tag('Pulses')
-            print(pulseread)
-            if pulseread == 1:
-                self.lastPulseTime = ptime.time()
-            return False
-        else:
-            return ptime.time() > self.lastPulseTime + 0.1
+        #return not self.circuit.is_running()
+        return bool(self.circuit.get_tag('Pulses'))
+        # if self.lastPulseTime is None:
+        #     pulseread = self.circuit.get_tag('Pulses')
+        #     print(pulseread)
+        #     if pulseread == 1:
+        #         self.lastPulseTime = ptime.time()
+        #     return False
+        # else:
+        #     return ptime.time() > self.lastPulseTime + 0.1
 
     def stop(self, abort=False):
         self.circuit.stop()
