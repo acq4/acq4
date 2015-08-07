@@ -27,7 +27,7 @@ class TDT(Module):
                 {'name': 'FreqStep', 'type': 'float', 'value': 2**0.25, 'step': 0.1, 'limits': [1, 10]},
                 
                 {'name': 'NumberOfPips', 'type': 'int', 'value': 10, 'limits': [1, None]},
-
+                {'name': 'Direction', 'type': 'list', 'values': ['up', 'down']}
             ])
         self.ptree = parametertree.ParameterTree()
         self.ptree.setParameters(self.params)
