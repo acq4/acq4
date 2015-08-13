@@ -7,7 +7,7 @@ import acq4.pyqtgraph as pg
 import numpy as np
 from acq4.util.functions import measureResistance
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
-
+import STDPFileLoader
 
 class STDPAnalyzer(AnalysisModule):
 
@@ -31,6 +31,10 @@ class STDPAnalyzer(AnalysisModule):
         self.plots = STDPPlotsTemplate.Ui_Form()
         self.plots.setupUi(self.plotsWidget)
 
+        self.pairingPlot = pg.PlotWidget()
+
+        self.fileLoader = STDPFileLoader.STDPFileLoader(self.dataManager(), host=self, showFileTree=True)
+
 
         # ### Plots accessible through self.plots - defined above:
         #     exptPlot - displays the time when traces were recorded. Used to choose which traces are displayed in tracesPlot
@@ -38,12 +42,14 @@ class STDPAnalyzer(AnalysisModule):
         #     plasticityPlot - displays a measure of synaptic plasticity over the course of the experimetn
         #     RMP_plot - displays the resting membrane potential (or holding current) over the course of the Experiment
         #     RI_plot - displays the input resistance over the course of the experiment
+        #     HoldingPlot -- displays the amount of slow holding current used over the course of the experiment
 
         self._elements_ = OrderedDict([
-            ('File Loader', {'type':'fileInput', 'host':self, 'showFileTree':True, 'size': (100, 100)}),
+            ('File Loader', {'type':'ctrl', 'object': self.fileLoader, 'size': (100, 100)}),
             ('Control Panel', {'type':'ctrl', 'object': self.ctrlWidget, 'pos':('below', 'File Loader'),'size': (100, 400)}),
             ('Database', {'type':'ctrl', 'object': self.dbGui, 'pos':('below', 'Control Panel'), 'size':(100,100)}),
-            ('Plots', {'type': 'ctrl', 'object': self.plotsWidget, 'pos': ('right', 'File Loader'), 'size': (400, 700)})
+            ('EPSP Plots', {'type': 'ctrl', 'object': self.plotsWidget, 'pos': ('right', 'File Loader'), 'size': (400, 700)}),
+            ('Pairing Plots', {'type': 'ctrl', 'object': self.pairingPlot, 'pos':('below', 'EPSP Plots')})
         ])
         self.initializeElements()
            
@@ -60,7 +66,8 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.holdingPlot.setLabel('left', "Holding Current")
         # self.plots.RI_plot.setTitle('Input Resistance')
 
-        for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot, self.plots.holdingPlot]:
+        for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot,
+                 self.plots.RMP_plot, self.plots.RI_plot, self.plots.holdingPlot]:
             p.setLabel('bottom', 'Time')
 
         ## Set up measurement regions in plots
@@ -77,6 +84,11 @@ class STDPAnalyzer(AnalysisModule):
 
         self.healthRgn = pg.LinearRegionItem(brush=(0,0,150,50))
         self.plots.tracesPlot.addItem(self.healthRgn)
+
+        self.pspLine = pg.InfiniteLine(pos=0.055, pen='b', movable=True)
+        self.pairingPlot.addItem(self.pspLine)
+        self.spikeLine = pg.InfiniteLine(pos=0.065, pen='r', movable=True)
+        self.pairingPlot.addItem(self.spikeLine)
 
         ### Connect control panel
         self.averageCtrl = pg.WidgetGroup(self.ctrl.traceDisplayGroup) ##TODO: save state when we save data
@@ -132,7 +144,7 @@ class STDPAnalyzer(AnalysisModule):
 
 
 
-    def loadFileRequested(self, files):
+    def loadEPSPFileRequested(self, files):
         """Called by FileLoader when the load file button is clicked, once for each selected file.
                 files - a list of the file currently selected in FileLoader
         """
@@ -169,6 +181,35 @@ class STDPAnalyzer(AnalysisModule):
         #print "   ", len(self.traces)
         self.updateExptPlot()
         self.updateTracesPlot()
+        return True
+
+    def loadPairingFileRequested(self, files):
+        if files is None:
+            return
+
+        n = len(files[0].ls()) 
+
+        with pg.ProgressDialog("Loading data..", 0, n) as dlg:
+            for f in files:
+                arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object)])
+                maxi = -1
+                for i, protoDir in enumerate(f.ls()):
+                    df = self.dataModel.getClampFile(f[protoDir])
+                    if df is None:
+                        print 'Error in reading data file %s' % f.name()
+                        break
+                    data = df.read()
+                    timestamp = data.infoCopy()[-1]['startTime']
+                    arr[i]['timestamp'] = timestamp
+                    arr[i]['data'] = data
+                    maxi += 1  # keep track of successfully read traces
+                    dlg += 1
+                    if dlg.wasCanceled():
+                        return
+                self.pairingTraces = arr[:maxi]
+                self.files.append(f)
+
+        self.updatePairingPlot()
         return True
 
     def updateExptPlot(self):
@@ -238,8 +279,19 @@ class STDPAnalyzer(AnalysisModule):
                 slopeInd = int(slopeTime/timestep)
                 self.plots.tracesPlot.plot([slopeTime], [data[i][dataKey]['primary'][slopeInd]], pen=None, symbol='o', symbolPen=None, symbolBrush=pg.intColor(i, len(data)))
 
+    def updatePairingPlot(self):
+        self.pairingPlot.clear()
+        avgTrace = self.pairingTraces[0]['data']['primary']-self.pairingTraces[0]['data']['primary'] ## get an empty array with the same structure as the data
+        avgN = 0
+        for i, trace in enumerate(self.pairingTraces):
+            self.pairingPlot.plot(trace['data']['primary'])
+            avgTrace += trace['data']['primary']
+            avgN += 1
 
+        self.pairingPlot.plot(avgTrace/avgN, pen={'color':'r', 'width':2})
 
+        self.pairingPlot.addItem(self.pspLine)
+        self.pairingPlot.addItem(self.spikeLine)
 
     def resetAveragedTraces(self, n=0):
         ## only define the array in one place (here)
@@ -554,6 +606,7 @@ class STDPAnalyzer(AnalysisModule):
                 #self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
                 self.plots.plasticityPlot.plot(x=basetime, y=[base]*2, pen='r')
                 self.plots.plasticityPlot.plot(x=postTime, y=[post]*2, pen='r')
+                self.plasticity = post/base
                 self.plots.plasticityPlot.setLabel('left', "EPSP Slope (mV/ms)")
             elif self.ctrl.measureModeCombo.currentText() == 'Amplitude (max)':
                 self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'],
@@ -753,7 +806,7 @@ class STDPAnalyzer(AnalysisModule):
         plot.plot(x=timeValues[0.045/rate:0.085/rate], y=baseAvg[0.045/rate:0.085/rate], pen='b')
         plot.plot(x=timeValues[0.045/rate:0.085/rate], y=postAvg[0.045/rate:0.085/rate], pen='r')
 
-        l.addItem(plot, row=1, col=0, rowspan=5)
+        l.addItem(plot, row=1, col=0)
 
         ### add label about drugs, info, etc...
         try:
@@ -774,7 +827,7 @@ class STDPAnalyzer(AnalysisModule):
             i += 50
         
 
-        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Notes: %s" % (antagonist, agonist, notes)
+        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Notes: %s <br/><br/> Plasticity: %g %%" % (antagonist, agonist, notes, self.plasticity)
         l.addLabel(text=info, row=1, col=1)
 
         return view
