@@ -57,9 +57,10 @@ class STDPAnalyzer(AnalysisModule):
         # self.plots.RMP_plot.setTitle('Resting Membrane Potential')
         self.plots.RMP_plot.setLabel('left', 'Vm (mV)')
         self.plots.RI_plot.setLabel('left', 'Rin (Mohm)')
+        self.plots.holdingPlot.setLabel('left', "Holding Current")
         # self.plots.RI_plot.setTitle('Input Resistance')
 
-        for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
+        for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot, self.plots.holdingPlot]:
             p.setLabel('bottom', 'Time')
 
         ## Set up measurement regions in plots
@@ -499,7 +500,8 @@ class STDPAnalyzer(AnalysisModule):
                                                             ('slopeFitOffset', float),
                                                             ('highSlopeLocation', float),
                                                             ('pspAmplitude', float),
-                                                            ('InputResistance', float)
+                                                            ('InputResistance', float),
+                                                            ('HoldingCurrent',float)
                                                             ])
 
         self.analysisResults['time'] = times
@@ -516,17 +518,24 @@ class STDPAnalyzer(AnalysisModule):
             self.measureBaseline(traces)
             self.plots.RMP_plot.plot(x=times-self.expStart, y=self.analysisResults['RMP'],
                 pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
+
+        self.measureCurrent(traces)
+        self.plots.holdingPlot.plot(x=times-self.expStart, y=self.analysisResults['HoldingCurrent'],
+            pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
+
         postwin = [20., 40.]  # minutes after start for measuring amplitude
+        #postwin = [27., 47.] ## Accounted for below in postStart --minutes after start (of pre-pairing baseline) for measuring post-pairing amplitude. assumes baseline + pairing takes 7 minutes
         if self.ctrl.pspCheck.isChecked():
             self.measurePSP(traces)
             if self.ctrl.measureModeCombo.currentText() == 'Slope (max)':
                 self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspSlope'],
                     pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
-                basepts = self.analysisResults['time'].shape[0]-1
+                #basepts = self.analysisResults['time'].shape[0]-1 ## Paul, why did you choose this?
+                basepts = 5 ## there should be 5 traces in the baseline
                 
                 base, basetime = (self.analysisResults['pspSlope'][:basepts].mean(),
-                    self.analysisResults['time'][:basepts].mean()-self.expStart)
-                postStart = self.analysisResults['time'][0]
+                    [self.analysisResults['time'][:basepts][0]-self.expStart, self.analysisResults['time'][:basepts][-1]-self.expStart])
+                postStart = self.analysisResults['time'][0]+ 7*60 ## baseline and pairing take up 7 minutes from the start of the experiment
                 pr1 = np.argwhere(self.analysisResults['time'] >= postStart+60*postwin[0])
                 pr2 = np.argwhere(self.analysisResults['time'] <= postStart+60*postwin[1])
                 try:
@@ -541,8 +550,10 @@ class STDPAnalyzer(AnalysisModule):
                     return
                 postRgn = (pr1[0], pr2[-1])
                 post, postTime = (self.analysisResults['pspSlope'][postRgn[0]:postRgn[1]].mean(),
-                    self.analysisResults['time'][postRgn[0]:postRgn[1]].mean()-self.expStart)
-                self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
+                    [self.analysisResults['time'][postRgn[0]][0]-self.expStart, self.analysisResults['time'][postRgn[1]][0]-self.expStart])
+                #self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
+                self.plots.plasticityPlot.plot(x=basetime, y=[base]*2, pen='r')
+                self.plots.plasticityPlot.plot(x=postTime, y=[post]*2, pen='r')
                 self.plots.plasticityPlot.setLabel('left', "EPSP Slope (mV/ms)")
             elif self.ctrl.measureModeCombo.currentText() == 'Amplitude (max)':
                 self.plots.plasticityPlot.plot(x=times-self.expStart, y=self.analysisResults['pspAmplitude'],
@@ -559,6 +570,10 @@ class STDPAnalyzer(AnalysisModule):
         for i, trace in enumerate(traces):
             data = trace['primary']['Time':rgn[0]:rgn[1]]
             self.analysisResults[i]['RMP'] = data.mean()
+
+    def measureCurrent(self, traces):
+        for i, trace in enumerate(traces):
+            self.analysisResults[i]['HoldingCurrent'] = trace['secondary'].mean()
 
     def measurePSP(self, traces):
         rgn = self.pspRgn.getRegion()

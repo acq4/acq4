@@ -65,6 +65,7 @@
        </sizepolicy>
       </property>
      </widget>
+     <widget class="PlotWidget" name="holdingPlot" native="true"/>
     </widget>
    </item>
   </layout>

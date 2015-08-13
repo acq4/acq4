@@ -2,8 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/analysis/modules/STDPAnalyzer/STDPPlotsTemplate.ui'
 #
-# Created: Thu Apr 30 13:31:49 2015
-#      by: PyQt4 UI code generator 4.11.1
+# Created by: PyQt4 UI code generator 4.11.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -28,8 +27,8 @@ class Ui_Form(object):
         Form.setObjectName(_fromUtf8("Form"))
         Form.resize(545, 664)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
-        self.verticalLayout.setSpacing(1)
         self.verticalLayout.setMargin(3)
+        self.verticalLayout.setSpacing(1)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.splitter = QtGui.QSplitter(Form)
         self.splitter.setOrientation(QtCore.Qt.Vertical)
@@ -69,6 +68,8 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.RI_plot.sizePolicy().hasHeightForWidth())
         self.RI_plot.setSizePolicy(sizePolicy)
         self.RI_plot.setObjectName(_fromUtf8("RI_plot"))
+        self.holdingPlot = PlotWidget(self.splitter)
+        self.holdingPlot.setObjectName(_fromUtf8("holdingPlot"))
         self.verticalLayout.addWidget(self.splitter)
 
         self.retranslateUi(Form)
