@@ -2,8 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/analysis/modules/STDPAnalyzer/STDPControlTemplate.ui'
 #
-# Created: Tue May 19 09:00:06 2015
-#      by: PyQt4 UI code generator 4.11.1
+# Created by: PyQt4 UI code generator 4.11.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -82,7 +81,7 @@ class Ui_Form(object):
         self.gridLayout_3.addItem(spacerItem2, 1, 2, 1, 1)
         self.gridLayout_7.addWidget(self.traceDisplayGroup, 0, 0, 1, 1)
         spacerItem3 = QtGui.QSpacerItem(337, 47, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout_7.addItem(spacerItem3, 3, 0, 1, 1)
+        self.gridLayout_7.addItem(spacerItem3, 4, 0, 1, 1)
         self.analysisGroup = QtGui.QGroupBox(Form)
         self.analysisGroup.setObjectName(_fromUtf8("analysisGroup"))
         self.gridLayout_4 = QtGui.QGridLayout(self.analysisGroup)
@@ -197,6 +196,9 @@ class Ui_Form(object):
         self.storeToDBBtn = QtGui.QPushButton(Form)
         self.storeToDBBtn.setObjectName(_fromUtf8("storeToDBBtn"))
         self.gridLayout_7.addWidget(self.storeToDBBtn, 2, 0, 1, 1)
+        self.createSummaryBtn = QtGui.QPushButton(Form)
+        self.createSummaryBtn.setObjectName(_fromUtf8("createSummaryBtn"))
+        self.gridLayout_7.addWidget(self.createSummaryBtn, 3, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -224,6 +226,7 @@ class Ui_Form(object):
         self.label_5.setText(_translate("Form", "Start:", None))
         self.analyzeBtn.setText(_translate("Form", "Analyze!", None))
         self.storeToDBBtn.setText(_translate("Form", "Store to Database", None))
+        self.createSummaryBtn.setText(_translate("Form", "Create Summary Sheet", None))
 
-from acq4.pyqtgraph.widgets.SpinBox import SpinBox
 from acq4.pyqtgraph.widgets.ComboBox import ComboBox
+from acq4.pyqtgraph.widgets.SpinBox import SpinBox

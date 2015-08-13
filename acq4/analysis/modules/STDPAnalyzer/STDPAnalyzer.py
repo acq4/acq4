@@ -108,6 +108,7 @@ class STDPAnalyzer(AnalysisModule):
 
         self.ctrl.analyzeBtn.clicked.connect(self.analyze)
         self.ctrl.storeToDBBtn.clicked.connect(self.storeToDB)
+        self.ctrl.createSummaryBtn.clicked.connect(self.summarySheetRequested)
 
         self.baselineRgn.setRegion((0,0.05))
         self.pspRgn.setRegion((0.052,0.067))
@@ -197,9 +198,9 @@ class STDPAnalyzer(AnalysisModule):
         self.clearTracesPlot()
 
         if not self.ctrl.averageCheck.isChecked():
-            data = self.traces[(self.traces['timestamp'] > 
-                rgn[0]+self.expStart)*(self.traces['timestamp'] < 
-                rgn[1]+self.expStart)]['data']
+            data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)
+                              *(self.traces['timestamp'] < rgn[1]+self.expStart)
+                              ]['data']
             timeKey = 'timestamp'
             dataKey='data'
             for i, d in enumerate(data):
@@ -207,9 +208,9 @@ class STDPAnalyzer(AnalysisModule):
 
         #if self.ctrl.averageCheck.isChecked():
         else:
-            data = self.averagedTraces[(self.averagedTraces['avgTimeStamp'] >
-                 rgn[0]+self.expStart)*(self.averagedTraces['avgTimeStamp'] <
-                 rgn[1]+self.expStart)]
+            data = self.averagedTraces[
+                    (self.averagedTraces['avgTimeStamp'] > rgn[0]+self.expStart)
+                   *(self.averagedTraces['avgTimeStamp'] < rgn[1]+self.expStart)]
             displayOrig = self.ctrl.displayTracesCheck.isChecked()
             timeKey = 'avgTimeStamp'
             dataKey='avgData'
@@ -690,6 +691,83 @@ class STDPAnalyzer(AnalysisModule):
             db.delete(table, where={'CellDir': data['CellDir'][0]})
         
         db.insert(table, data)
+
+    def summarySheetRequested(self):
+        self.summaryView = self.createSummarySheet()
+        self.summaryView.show()
+
+    def createSummarySheet(self):
+        view = pg.GraphicsView()
+        l = pg.GraphicsLayout(border=(100,100,100))
+        view.setCentralItem(l)
+        cell = self.dataModel.getParent(self.files[0], 'Cell')
+
+        if self.dbGui.getDb() is not None:
+            cellName = cell.name(relativeTo=self.dbGui.getDb().baseDir())
+        else:
+            raise Exception('No database loaded.')
+        l.addLabel(text=cellName, bold=True, colspan=2, size='14pt')
+
+        ### Add average PSP traces
+        APmask = np.zeros(len(self.traces), dtype=bool)
+        for i, trace in enumerate(self.traces):
+            APmask[i] = self.checkForAP(trace['data'], (0, 0.25))
+        includedTraces = self.traces[~APmask]
+
+        baseTraceSum = np.zeros(len(self.traces[0]['data']['primary']))
+        baseTraceNumber = 0
+
+        postTraceSum = np.zeros(len(self.traces[0]['data']['primary']))
+        postTraceNumber = 0
+
+        for trace in includedTraces:
+            time = trace['timestamp'] - self.expStart
+            if time < 310:
+                baseTraceSum += trace['data']['primary']
+                baseTraceNumber += 1
+            elif time > 27*60 and time < 47*60: ## 20-40 minutes post-pairing
+                postTraceSum += trace['data']['primary']
+                postTraceNumber += 1
+
+        baseAvg = baseTraceSum/float(baseTraceNumber)
+        postAvg = postTraceSum/float(postTraceNumber)
+        timeValues = self.traces[0]['data']['primary'].axisValues('Time')
+        rate = timeValues[1] - timeValues[0]
+
+        plot = pg.PlotItem()
+        plot.plot(x=timeValues[0.045/rate:0.085/rate], y=baseAvg[0.045/rate:0.085/rate], pen='b')
+        plot.plot(x=timeValues[0.045/rate:0.085/rate], y=postAvg[0.045/rate:0.085/rate], pen='r')
+
+        l.addItem(plot, row=1, col=0, rowspan=5)
+
+        ### add label about drugs, info, etc...
+        try:
+            agonist = cell.info()['agonist_code']
+        except KeyError:
+            agonist = "No info"
+
+        try:
+            antagonist = cell.info()['antagonist_code']
+        except KeyError:
+            antagonist = "No info"
+
+        preNotes = cell.info()['notes']
+        i=50
+        notes=''
+        while i< len(preNotes)+50:
+            notes += preNotes[i-50:i]+"<br />"
+            i += 50
+        
+
+        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Notes: %s" % (antagonist, agonist, notes)
+        l.addLabel(text=info, row=1, col=1)
+
+        return view
+
+
+        
+
+
 
 
 
