@@ -288,7 +288,8 @@ class STDPAnalyzer(AnalysisModule):
             avgTrace += trace['data']['primary']
             avgN += 1
 
-        self.pairingPlot.plot(avgTrace/avgN, pen={'color':'r', 'width':2})
+        self.avgPairingTrace = avgTrace/avgN
+        self.pairingPlot.plot(self.avgPairingTrace, pen={'color':'r', 'width':2})
 
         self.pairingPlot.addItem(self.pspLine)
         self.pairingPlot.addItem(self.spikeLine)
@@ -766,6 +767,8 @@ class STDPAnalyzer(AnalysisModule):
 
     def createSummarySheet(self):
         view = pg.GraphicsView()
+        #view.setBackground((255,255,255,255))
+        #view.setForegroundBrush(pg.mkBrush((0,0,0,255)))
         l = pg.GraphicsLayout(border=(100,100,100))
         view.setCentralItem(l)
         cell = self.dataModel.getParent(self.files[0], 'Cell')
@@ -806,29 +809,49 @@ class STDPAnalyzer(AnalysisModule):
         plot.plot(x=timeValues[0.045/rate:0.085/rate], y=baseAvg[0.045/rate:0.085/rate], pen='b')
         plot.plot(x=timeValues[0.045/rate:0.085/rate], y=postAvg[0.045/rate:0.085/rate], pen='r')
 
-        l.addItem(plot, row=1, col=0)
+        l.addItem(plot, row=2, col=0, rowspan=2)
 
         ### add label about drugs, info, etc...
-        try:
-            agonist = cell.info()['agonist_code']
-        except KeyError:
-            agonist = "No info"
+        agonist = cell.info().get('agonist_code', 'No info')
+        antagonist = cell.info().get('antagonist_code', 'No info')
 
-        try:
-            antagonist = cell.info()['antagonist_code']
-        except KeyError:
-            antagonist = "No info"
-
-        preNotes = cell.info()['notes']
-        i=50
+        preNotes = cell.info().get('notes', '')
+        i=80
         notes=''
-        while i< len(preNotes)+50:
-            notes += preNotes[i-50:i]+"<br />"
-            i += 50
+        while i< len(preNotes)+80:
+            notes += preNotes[i-80:i]+"<br />     "
+            i += 80
+        
+        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Notes: %s <br/><br/> Plasticity: %g %%" % (antagonist, agonist, notes, self.plasticity)
+        l.addLabel(text=info, row=1, col=0, colspan=2)
+
+        pairingPlot = pg.PlotItem()
+        pairingPlot.plot(self.avgPairingTrace['Time':0.05:0.15])
+        l.addItem(pairingPlot, row=2, col=1, rowspan=2)
         
 
-        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Notes: %s <br/><br/> Plasticity: %g %%" % (antagonist, agonist, notes, self.plasticity)
-        l.addLabel(text=info, row=1, col=1)
+        
+        plasticityPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['pspSlope'],
+            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+        l.addItem(plasticityPlot, row=4, col=0, colspan=2)
+       
+        rmpPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['RMP'],
+            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+        l.addItem(rmpPlot, row=5, col=0, colspan=2)
+
+        riPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['InputResistance'],
+            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+        l.addItem(riPlot, row=6, col=0, colspan=2)
+
+        holdingPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['HoldingCurrent'],
+            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+        l.addItem(holdingPlot, row=7, col=0, colspan=2)
+
+        plasticityPlot.setLabel('left', 'PSP Slope')
+        rmpPlot.setLabel('left', 'RMP')
+        riPlot.setLabel('left', 'Ri')
+        holdingPlot.setLabel('left', 'Holding Current')
+
 
         return view
 
