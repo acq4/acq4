@@ -106,7 +106,6 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         #print "request insert", dock, insertPos, neighbor
         old = dock.container()
         container.insert(dock, insertPos, neighbor)
-        dock.area = self
         self.docks[dock.name()] = dock
         if old is not None:
             old.apoptose()
@@ -150,13 +149,13 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
     
     def insert(self, new, pos=None, neighbor=None):
         if self.topContainer is not None:
+            # Adding new top-level container; addContainer() should
+            # take care of giving the old top container a new home.
             self.topContainer.containerChanged(None)
         self.layout.addWidget(new)
+        new.containerChanged(self)
         self.topContainer = new
-        #print self, "set top:", new
-        new._container = self
         self.raiseOverlay()
-        #print "Insert top:", new
         
     def count(self):
         if self.topContainer is None:
@@ -214,7 +213,6 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             for i in range(obj.count()):
                 childs.append(self.childState(obj.widget(i)))
             return (obj.type(), childs, obj.saveState())
-        
         
     def restoreState(self, state, missing='error'):
         """
@@ -283,6 +281,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         if typ != 'dock':
             for o in contents:
                 self.buildFromState(o, docks, obj, depth+1, missing=missing)
+            # remove this container if possible. (there are valid situations when a restore will
+            # generate empty containers, such as when using missing='ignore')
             obj.apoptose(propagate=False)
             obj.restoreState(state)  ## this has to be done later?     
 
@@ -310,14 +310,15 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
                 d.update(d2)
         return (c, d)
 
-    def apoptose(self):
+    def apoptose(self, propagate=True):
+        # remove top container if possible, close this area if it is temporary.
         #print "apoptose area:", self.temporary, self.topContainer, self.topContainer.count()
-        if self.topContainer.count() == 0:
+        if self.topContainer is None or self.topContainer.count() == 0:
             self.topContainer = None
             if self.temporary:
                 self.home.removeTempArea(self)
                 #self.close()
-
+                
     def clear(self):
         docks = self.findAll()[1]
         for dock in docks.values():
@@ -337,12 +338,38 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
     def dropEvent(self, *args):
         DockDrop.dropEvent(self, *args)
 
+    def printState(self, state=None, name='Main'):
+        # for debugging
+        if state is None:
+            state = self.saveState()
+        print("=== %s dock area ===" % name)
+        if state['main'] is None:
+            print("   (empty)")
+        else:
+            self._printAreaState(state['main'])
+        for i, float in enumerate(state['float']):
+            self.printState(float[0], name='float %d' % i)
 
-class TempAreaWindow(QtGui.QMainWindow):
+    def _printAreaState(self, area, indent=0):
+        if area[0] == 'dock':
+            print("  " * indent + area[0] + " " + str(area[1:]))
+            return
+        else:
+            print("  " * indent + area[0])
+            for ch in area[1]:
+                self._printAreaState(ch, indent+1)
+
+
+
+class TempAreaWindow(QtGui.QWidget):
     def __init__(self, area, **kwargs):
-        QtGui.QMainWindow.__init__(self, **kwargs)
-        self.setCentralWidget(area)
+        QtGui.QWidget.__init__(self, **kwargs)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.dockarea = area
+        self.layout.addWidget(area)
 
-    def closeEvent(self, *args, **kwargs):
-        self.centralWidget().clear()
-        QtGui.QMainWindow.closeEvent(self, *args, **kwargs)
+    def closeEvent(self, *args):
+        self.dockarea.clear()
+        QtGui.QWidget.closeEvent(self, *args)

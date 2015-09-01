@@ -180,7 +180,7 @@ class Coherent(object):
             
             time.sleep(0.01)
             if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s, %s)" % (repr(s)))
+                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)))
 
 
 

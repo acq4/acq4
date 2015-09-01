@@ -31,17 +31,12 @@ class Window(QtGui.QMainWindow):
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
-            #print "set geometry", geom
-
         
     def closeEvent(self, ev):
         geom = self.geometry()
         uiState = {'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         getManager().writeConfigFile(uiState, self.stateFile)
-        
         self.pr.quit()
-        #ev.ignore()
-        #sip.delete(self)
 
 class Loader(DirTreeWidget.DirTreeLoader):
     def __init__(self, host, baseDir):
@@ -59,7 +54,6 @@ class Loader(DirTreeWidget.DirTreeLoader):
     def save(self, handle):
         self.host.saveTask(handle)
         return True
-        
         
         
 class TaskRunner(Module):
@@ -87,9 +81,6 @@ class TaskRunner(Module):
         g = self.win.geometry()
         self.ui.setupUi(self.win)
         self.win.setGeometry(g)
-        
-        #self.logBtn = LogButton("Log")
-        #self.win.statusBar().addPermanentWidget(self.logBtn)
         self.win.setStatusBar(StatusBar())
         
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
@@ -147,9 +138,7 @@ class TaskRunner(Module):
         self.ui.sequenceParamList.itemChanged.connect(self.updateSeqReport)
         self.ui.analysisList.itemClicked.connect(self.analysisItemClicked)
         
-        
     def protoGroupChanged(self, param, value):
-        #self.emit(QtCore.SIGNAL('taskChanged'), param, value)
         self.sigTaskChanged.emit(param, value)
         if param == 'repetitions':
             self.updateSeqParams()
@@ -201,9 +190,7 @@ class TaskRunner(Module):
                 self.devListItems[d].setData(32, d)
             self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(0,0,0)))
             
-            
         ## Add all devices that are referenced by the task but do not exist
-        
         for d in protList:
             if d not in self.devListItems:
                 self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
@@ -225,47 +212,7 @@ class TaskRunner(Module):
         else:
             self.currentTask.addDevice(name)
         self.updateDeviceDocks([name])
-            
-    #def deviceItemChanged(self, item):
-        #newName = str(item.text())
-        #oldName = str(item.data(32).toString())
-        #if newName == oldName:
-            #return
-        
-        ### If the new name does exist:
-          ### If the types are compatible, rename and update the new dock
-          ### If the types are incompatible, reject the rename
-          
-          
-        #if newName in self.devListItems:
-            ### Destroy old dock if needed
-            #if newName in self.currentTask.enabledDevices():
-                #self.devListItems[newName].setCheckState(QtCore.Qt.Unchecked)
-                #self.updateDeviceDocks()
-            ### remove from list
-            #self.ui.deviceList.takeItem(self.devListItems[newName])
-          
-        ### if the new name doesn't exist, just accept the rename and update the device list
-            
-        #item.setData(32, QtCore.QVariant(newName))
-        #self.devListItems[newName] = item
-        #del self.devListItems[oldName]
-        #self.currentTask.renameDevice(oldName, newName)
-        #self.updateDeviceList()
-        
-        ### If the new name is an existing device, load and configure its dock
-        #if newName in self.manager.listDevices():
-            #self.updateDeviceDocks()
-        
-        ### Configure docks
-        #if newName in self.docks:
-            #self.docks[newName].widget().restoreState(self.currentTask.conf['devices'][newName])
-            
-            ### Configure dock positions
-            #if 'winState' in self.currentTask.conf:
-                #self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(self.currentTask.conf['winState']))
-            
-        
+
     def analysisItemClicked(self, item):
         name = str(item.text())
         if item.checkState() == QtCore.Qt.Checked:
@@ -321,19 +268,6 @@ class TaskRunner(Module):
         if change == 'renamed' or change == 'moved':
             self.currentTask.fileName = handle.name()
             
-    #def fileRenamed(self, fn1, fn2):
-        #"""Update the current task state to follow a file that has been moved or renamed"""
-        #if fn1 == self.currentTask.fileName:
-            #self.currentTask.fileName = fn2
-            #pn = fn2.replace(self.taskList.baseDir, '')
-            #self.ui.currentTaskLabel.setText(pn)
-            #return
-        #if os.path.isdir(fn2) and fn1 in self.currentTask.fileName:
-            #self.currentTask.fileName = self.currentTask.fileName.replace(fn1, fn2)
-            #pn = self.currentTask.fileName.replace(self.taskList.baseDir, '')
-            #self.ui.currentTaskLabel.setText(pn)
-            #return
-            
     def updateSeqParams(self, dev='protocol'):
         """Update the list of available sequence parameters."""
         if dev == 'protocol':
@@ -360,7 +294,6 @@ class TaskRunner(Module):
             self.ui.seqTimeLabel.setText('0')
             tot = 0
         else:
-            #ps = [str(i.text(2)) for i in items]
             psi = [len(i[2]) for i in items]
             ps = map(str, psi)
             tot = reduce(lambda x,y: x*y, psi)
@@ -384,9 +317,6 @@ class TaskRunner(Module):
         self.docks[dev].show()
         self.docks[dev].widget().enable()
         self.updateSeqParams(dev)
-        #items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
-        #for i in items:
-            #i.setHidden(False)
         
     def updateDeviceDocks(self, devNames=None):
         """Create/unhide new docks if they are needed and hide old docks if they are not.
@@ -445,7 +375,6 @@ class TaskRunner(Module):
                     dock.widget().sigSequenceChanged.connect(self.updateSeqParams)
                     self.updateSeqParams(d)
         
-        
     def clearDocks(self):
         for d in self.docks:
             try:
@@ -458,7 +387,6 @@ class TaskRunner(Module):
                     self.firstDock = None
                 self.win.removeDockWidget(self.docks[d])
                 self.docks[d].close()
-                #sip.delete(self.docks[d])
             except:
                 printExc("Error while closing dock '%s':" % d)
         self.docks = {}
@@ -471,26 +399,12 @@ class TaskRunner(Module):
         ## now's a good time to free up some memory.
         QtGui.QApplication.instance().processEvents()
         gc.collect()
-                
-        
+    
     def quit(self):
         self.stopSequence()
         self.stopSingle()
         self.clearDocks()
         Module.quit(self)
-
-    #def protParamsChanged(self):
-        #self.currentTask.conf = self.protoStateGroup.state()
-        ##self.currentTask.conf['duration'] = self.ui.protoDurationSpin.value()
-        ##self.currentTask.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
-        ##self.currentTask.conf['cycleTime'] = self.ui.seqCycleTimeSpin.value()
-        ##self.currentIsModified(True)
-        
-    #def currentIsModified(self, v):
-        ### Inform the module whether the current task is modified from its stored state
-        #self.currentTask.modified = v
-        #if (not v) or (self.currentTask.fileName is not None):
-            #self.ui.saveTaskBtn.setEnabled(v)
         
     def newTask(self):
         self.stopSequence()
@@ -512,46 +426,12 @@ class TaskRunner(Module):
             'repetitions': 0
         })
         
-        #self.currentTask.conf = self.protoStateGroup.state()
-        
         ## Clear extra devices in dev list
         self.updateDeviceList()
         
-        #self.updateProtParams()
-        
         ## Clear sequence parameters, disable sequence dock
         self.updateSeqParams()
-        
-        #self.ui.currentTaskLabel.setText('[ new ]')
-        
-        #self.ui.saveTaskBtn.setEnabled(False)
-        #self.currentIsModified(False)
-        
-        
-    
-    #def updateProtParams(self, prot=None):
-        #if prot is None:
-            #prot = self.currentTask
-            
-        #self.protoStateGroup.setState(prot.conf)
-        ##self.ui.protoDurationSpin.setValue(prot.conf['duration'])
-        ##if 'cycleTime' in prot.conf:
-            ##self.ui.seqCycleTimeSpin.setValue(prot.conf['cycleTime'])
-        ##if prot.conf['continuous']:
-            ##self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Checked)
-        ##else:
-            ##self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Unchecked)
-    
-    #def getSelectedFileName(self):
-        #"""Return the file name of the selected task"""
-        #sel = list(self.ui.taskList.selectedIndexes())
-        #if len(sel) == 1:
-            #index = sel[0]
-        #else:
-            #raise Exception("Can not load--%d items selected" % len(sel))
-        #return self.taskList.getFileName(index)
-    
-    #def loadTask(self, index=None):
+
     def loadTask(self, handle):
         prof = Profiler('TaskRunner.loadTask', disabled=True)
         try:
@@ -560,15 +440,7 @@ class TaskRunner(Module):
             self.stopSingle()
             
             prof.mark('stopped')
-            ## Determine selected item
-            #if index is None:
-                #sel = list(self.ui.taskList.selectedIndexes())
-                #if len(sel) == 1:
-                    #index = sel[0]
-                #else:
-                    #raise Exception("Can not load--%d items selected" % len(sel))
-                
-            #fn = self.taskList.getFileName(index)
+
             fn = handle.name()
             
             ## Remove all docks
@@ -585,7 +457,6 @@ class TaskRunner(Module):
             
             ## Update task parameters
             self.protoStateGroup.setState(prot.conf['conf'])
-            #self.updateProtParams(prot)
             prof.mark('set state')
             
             ## update dev list
@@ -595,10 +466,8 @@ class TaskRunner(Module):
             ## Update sequence parameters, dis/enable sequence dock
             
             ## Create new docks
-            
             self.updateDeviceDocks()
             prof.mark('update docks')
-            
             
             ## Configure docks
             for d in prot.devices:
@@ -619,11 +488,10 @@ class TaskRunner(Module):
                         prof.mark('configured dock: ' + k)
                     except:
                         printExc("Error while loading analysis dock:")
-                        
     
             ## Load sequence parameter state (must be done after docks have loaded)
             self.ui.sequenceParamList.loadState(prot.conf['params'])
-            self.updateSeqParams('task')
+            self.updateSeqParams('protocol')
             prof.mark('load seq params')
             
             ## Configure dock positions
@@ -633,12 +501,6 @@ class TaskRunner(Module):
                 
             prof.mark('position docks')
             
-                
-                
-            #pn = fn.replace(self.taskList.baseDir, '')
-            #self.ui.currentTaskLabel.setText(pn)
-            #self.ui.saveTaskBtn.setEnabled(True)
-            #self.currentIsModified(False)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
             prof.finish()
@@ -663,11 +525,6 @@ class TaskRunner(Module):
             
         # good time to collect garbage
         gc.collect()
-        #print "RunSingle"
-        #if self.taskThread.isRunning():
-            #import traceback
-            #traceback.print_stack()
-            #print "Task already running."
 
         self.lastProtoTime = ptime.time()
         ## Disable all start buttons
@@ -723,11 +580,7 @@ class TaskRunner(Module):
         ## Find all top-level items in the sequence parameter list
         try:
             ## make sure all devices are reporting their correct sequence lists
-            
-            
             items = self.ui.sequenceParamList.listParams()
-            #for i in self.ui.sequenceParamList.topLevelItems:
-                #items.append(i)
             ## Generate parameter space
             params = OrderedDict()
             paramInds = OrderedDict()
@@ -760,16 +613,11 @@ class TaskRunner(Module):
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
             with pg.ProgressDialog("Generating task commands..", 0, pLen) as progressDlg:
-                #progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
                 self.lastQtProcessTime = ptime.time()
                 prot = runSequence(lambda p: self.generateTask(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
-                #progressDlg.setValue(pLen)
             if dh is not None:
                 dh.flushSignals()  ## do this now rather than later when task is running
             
-            #print "==========Sequence Task=============="
-            #print prot
-            #self.emit(QtCore.SIGNAL('taskSequenceStarted'), {})
             self.sigTaskSequenceStarted.emit({})
             logMsg('Started %s task sequence of length %i' %(self.currentTask.name(),pLen), importance=6)
             #print 'PR task positions:
@@ -782,16 +630,6 @@ class TaskRunner(Module):
         
     def generateTask(self, dh, params=None, progressDlg=None):
         #prof = Profiler("Generate Task: %s" % str(params))
-        ## params should be in the form {(dev, param): value, ...}
-        ## Generate executable conf from task object
-        #prot = {'protocol': {
-            #'duration': self.currentTask.conf['duration'], 
-            #'storeData': store,
-            #'mode': 'single',
-            #'name': self.currentTask.fileName,
-            #'cycleTime': self.currentTask.conf['cycleTime'], 
-        #}}
-        #print "generate:", params
         ## Never put {} in the function signature
         if params is None:
             params = {}
@@ -858,7 +696,6 @@ class TaskRunner(Module):
         """
         conf = self.saveState()
         del conf['windowState']
-        #del conf['params']
         conf['params'] = self.ui.sequenceParamList.listParams()
         
         devs = {}
@@ -867,10 +704,6 @@ class TaskRunner(Module):
             if self.currentTask.deviceEnabled(d):
                 devs[d] = self.docks[d].widget().describe(params=params)
         
-        ## Remove unused devices before writing
-        #rem = [d for d in devs if not self.deviceEnabled(d)]
-        #for d in rem:
-            #del devs[d]
         desc = {'protocol': conf, 'devices': devs}  #, 'winState': self.winState}
 
         if params is not None:
@@ -884,7 +717,6 @@ class TaskRunner(Module):
             b.setEnabled(v)
             
     def taskThreadStopped(self):
-        #self.emit(QtCore.SIGNAL('taskFinished'))
         self.sigTaskFinished.emit()
         if not self.loopEnabled:   ## what if we quit due to error?
             self.enableStartBtns(True)
@@ -893,7 +725,6 @@ class TaskRunner(Module):
         self.enableStartBtns(True)
             
     def taskThreadPaused(self):
-        #self.emit(QtCore.SIGNAL('taskPaused'))
         self.sigTaskPaused.emit()
            
     def stopSingle(self):
@@ -920,9 +751,16 @@ class TaskRunner(Module):
             nums = []
         cur += ',  '.join(nums)
         self.ui.seqCurrentLabel.setText(cur)
-        #self.emit(QtCore.SIGNAL('taskStarted'), params)
-        self.sigTaskStarted.emit(params)
+
+        # check for co-sequenced parameters and re-insert here.
+        # (the task runner thread does not know about these)
+        params = params.copy()
+        for p in plist:
+            for subp in p[3]:
+                if p[:2] in params:
+                    params[subp] = params[p[:2]]
         
+        self.sigTaskStarted.emit(params)
     
     def handleFrame(self, frame):
         
@@ -937,8 +775,7 @@ class TaskRunner(Module):
                     prof.mark('finished %s' % d)
             except:
                 printExc("Error while handling result from device '%s'" % d)
-                
-        #self.emit(QtCore.SIGNAL('newFrame'), frame)
+        
         self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
                 
@@ -951,7 +788,6 @@ class TaskRunner(Module):
         
         # good time to collect garbage
         gc.collect()
-        
             
     def loop(self):
         """Run one iteration when in loop mode"""
@@ -970,7 +806,6 @@ class TaskRunner(Module):
         
         ## store window state
         ws = str(self.win.saveState().toPercentEncoding())
-        #self.winState = ws
         
         ## store parameter order/state
         params = self.ui.sequenceParamList.saveState()
@@ -1000,31 +835,18 @@ class Task:
             if 'winState' in conf:
                 self.conf['windowState'] = conf['winState']
             self.conf['windowState'] = QtCore.QByteArray.fromPercentEncoding(self.conf['windowState'])
-                
-            #self.params = conf['params']
+            
             self.devices = conf['devices']
-            #self.winState = conf['winState']
             self.enabled = self.devices.keys()
         else:
             self.fileName = None
-            #self.conf = {
-                #'devices': {}, 
-                #'duration': 0.2, 
-                #'continuous': False, 
-                #'cycleTime': 0.0
-            #}
             self.enabled = []
             self.conf = {}
             self.devices = {}
             self.winState = None
 
-    
     def deviceEnabled(self, dev):
         return dev in self.enabled
-        
-        
-    #def updateFromUi(self):
-        
         
     def write(self, fileName=None):
         ## Write this task to a file. Called by TaskRunner.saveTask()
@@ -1048,15 +870,10 @@ class Task:
         
         self.conf = self.ui.saveState()
         
-        ## store window state
-        #ws = str(self.ui.win.saveState().toPercentEncoding())
-        #self.winState = ws
-        
         ## store individual dock states
         for d in self.ui.docks:
             if self.deviceEnabled(d):
                 self.devices[d] = self.ui.docks[d].widget().saveState()
-        #self.updateFromUi()
         
         conf = self.conf.copy()
         devs = self.devices.copy()
@@ -1065,9 +882,7 @@ class Task:
         rem = [d for d in devs if not self.deviceEnabled(d)]
         for d in rem:
             del devs[d]
-        return {'protocol': conf, 'devices': devs}  #, 'winState': self.winState}
-
-        
+        return {'protocol': conf, 'devices': devs}
     
     def enabledDevices(self):
         return self.enabled[:]
@@ -1115,24 +930,15 @@ class TaskThread(Thread):
         self._systrace = None
                 
     def startTask(self, task, paramSpace=None):
-        #print "TaskThread:startTask", self.lock.depth(), self.lock
         with self.lock:
-            #print "TaskThread:startTask got lock", self.lock.depth(), "    tracebacks follow:\n==========="
-            #print "\n\n".join(self.lock.traceback())
-            #print "======================"
             self._systrace = sys.gettrace()
             while self.isRunning():
-                #l.unlock()
                 raise Exception("Already running another task")
             self.task = task
             self.paramSpace = paramSpace
             self.lastRunTime = None
-            #l.unlock()
-            #print "TaskThread:startTask starting..", self.lock.depth()
-            self.start() ### causes self.run() to be called from somewhere in C code
-            #name = '' if task.fileName is None else task.fileName
+            self.start() ### causes self.run() to be called from new thread
             logMsg("Task started.", importance=1)
-            #print "TaskThread:startTask started", self.lock.depth()
     
     def pause(self, pause):
         with self.lock:
@@ -1143,11 +949,8 @@ class TaskThread(Thread):
         sys.settrace(self._systrace)
 
         self.objs = None
-        #print "TaskThread:run()"
         try:
-            #print "TaskThread:run   waiting for lock..", self.lock.depth()
             with self.lock:
-                #print "TaskThread:run   got lock."
                 self.stopThread = False
                 self.abortThread = False
             
@@ -1158,27 +961,18 @@ class TaskThread(Thread):
                     if e.args[0] != 'stop':
                         raise
             else:
-                #runner = SequenceRunner(self.paramSpace, self.paramSpace.keys())
-                #runner.setEndFuncs([]*len(self.paramSpace) + [self.checkStop])
-                #result = runner.start(self.runOnce)
-                    
                 runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys())
             
         except:
             self.task = None  ## free up this memory
             self.paramSpace = None
             printExc("Error in task thread, exiting.")
-            #self.emit(QtCore.SIGNAL('exitFromError'))
             self.sigExitFromError.emit()
-        #finally:
-            #self.emit(QtCore.SIGNAL("taskFinished()"))
-        #print "TaskThread:run() finished"
                     
     def runOnce(self, params=None):
         # good time to collect garbage
         gc.collect()
         
-        #print "TaskThread:runOnce"
         prof = Profiler("TaskRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()
         if params is None:
@@ -1186,26 +980,20 @@ class TaskThread(Thread):
         
         ## Select correct command to execute
         cmd = self.task
-        #print "Sequence array:", cmd.shape, cmd.infoCopy()
         if params is not None:
             for p in params:
-                #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
                 cmd = cmd[p: params[p]]
         prof.mark('select command')        
-        #print "Task:", cmd
                 
         ## Wait before starting if we've already run too recently
-        #print "sleep until next run time..", ptime.time(), self.lastRunTime, cmd['protocol']['cycleTime']
         while (self.lastRunTime is not None) and (ptime.time() < self.lastRunTime + cmd['protocol']['cycleTime']):
             with self.lock:
                 if self.abortThread or self.stopThread:
                     #print "Task run aborted by user"
                     return
             time.sleep(1e-3)
-        #print "slept until", ptime.time()
         prof.mark('sleep')
         
-        # If paused, hang here for a bit.
         emitSig = True
         while True:
             with self.lock:
@@ -1221,7 +1009,6 @@ class TaskThread(Thread):
         
         prof.mark('pause')
         
-        #print "BEFORE:\n", cmd
         if type(cmd) is not dict:
             print "========= TaskRunner.runOnce cmd: =================="
             print cmd
@@ -1229,13 +1016,11 @@ class TaskThread(Thread):
             print "Params:", params
             print "==========================="
             raise Exception("TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
-            
         
         task = self.dm.createTask(cmd)
         prof.mark('create task')
         
         self.lastRunTime = ptime.time()
-        #self.emit(QtCore.SIGNAL('taskStarted'), params)
         
         try:
             with self.lock:
@@ -1286,7 +1071,6 @@ class TaskThread(Thread):
         finally:
             with self.lock:
                 self._currentTask = None
-        #print "\nAFTER:\n", cmd
         prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
@@ -1294,7 +1078,6 @@ class TaskThread(Thread):
         prof.mark('emit newFrame')
         if self.stopThread:
             raise Exception('stop', result)
-        #print "Total run time: %gms" % ((ptime.time() - startTime) * 1000 )
         
         ## Give everyone else a chance to catch up
         QtCore.QThread.yieldCurrentThread()
@@ -1305,7 +1088,6 @@ class TaskThread(Thread):
         with self.lock:
             if self.stopThread:
                 raise Exception('stop')
-        
         
     def stop(self, block=False):
         with self.lock:

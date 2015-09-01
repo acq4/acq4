@@ -77,7 +77,7 @@ class ScanProgram:
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)
         if self.canvas is not None:
             for item in component.graphicsItems():
-                self.canvas.addItem(item, None, [1, 1], 1000)
+                self.canvas.addItem(item, None, [1, 1], 10000)
         self.components.append(component)
         return component
 

@@ -245,25 +245,12 @@ class OutputChannelGui(DaqChannelGui):
         if not self.stateGroup.state()['displayCheck']:
             return
         if self.currentPlot is not None:
-            #print "======================== DATCH %s ===========================" % self.currentPlot
-            #import gc
-            #print "REF BEFORE:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in gc.get_referrers(self.currentPlot)[:10]])
             self.plot.removeItem(self.currentPlot)
-            #self.currentPlot.detach()
-        
-            #refs = gc.get_referrers(self.currentPlot)[:10]
-            #print "REF AFTER:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in refs])
-            #refs = gc.get_referrers(refs[1])[:10]
-            #print "REF2 AFTER:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in refs])
-        #a = empty((107)); a = empty((7)); a = empty((10007))
         
         cur = self.getSingleWave(params)
-        #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         if cur is not None:
             self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
             self.currentPlot.setZValue(100)
-            #print "==cur===", cur.min(), cur.max()
-            #print params
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         plot = self.plot.plot(y=data, x=self.timeVals, pen=QtGui.QPen(color))
