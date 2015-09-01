@@ -3,6 +3,7 @@ A simple example module.
 """
 import time
 import numpy as np
+import tdt
 from PyQt4 import QtCore, QtGui
 
 from ..Module import Module
@@ -53,10 +54,10 @@ class TDT(Module):
         self.win.show()
         
     def start(self):
-        # The task will control a patch clamp to generate a voltage clamp 
-        # pulse and record the membrane current
+        # Thia task will control the TDT is generate a series of tone pips
         self.startBtn.setText('Stop')
-        
+  
+
         # Get all the basic parameters we need for this task
         minfreq = self.params['MinimumFrequency']
         fratio = self.params['FreqStep']
@@ -74,6 +75,7 @@ class TDT(Module):
         #Set relevant timing values
         tdur = 50.
         interpip = self.params['InterPipTime']
+        print('interpiptime:', interpip)
         # tipi = 200
         # nreps = 1
 
@@ -133,15 +135,15 @@ class TDT(Module):
         else:
             raise ValueError("direction must be 'up' or 'down'.")
   
-        totalduration = nreps * (cycletime + numpips*(tdur+interpip)) * 1e-3
+        totalduration = (nreps) * (cycletime + numpips*(tdur+interpip)) * 1e-3
         print ('Total duration: {0:12.3f}'.format(totalduration))
 
         cmd = {
             'protocol': {'duration': totalduration, 'store': False},
             # 'DAQ':      {'rate': rate, 'numPts': samples},
             'TDTDevice': {
-
-                'RP2.1': {'circuit': 'C:\\Users\\Experimenters\\acq4\\acq4\\modules\\TDT\\FreqStaircase.rcx', 'tags': tags},
+            #    'RP2.1': {'circuit': 'C:\\Users\\Experimenters\\Desktop\\ABR_Code\\FreqStaircase2.rcx', 'tags': tags},
+                'RP2.1': {'circuit': 'C:\\Users\\Experimenters\\acq4\\acq4\\modules\\TDT\\FreqStaircaseTessa.rcx', 'tags': tags},
                 'PA5.1': {'attenuation': attenuation}
             }
         }

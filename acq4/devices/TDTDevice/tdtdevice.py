@@ -14,6 +14,12 @@ import acq4.util.Mutex as Mutex
 from acq4.pyqtgraph import ptime
 from win32com.client import Dispatch
 
+# For reference: TDT RP2.1 sample rates:
+# 0 = 6K, 1 = 12K, 2 = 25k, 3 = 50k, 4 = 100k, 5 = 200k, > 5 is not defined.
+# samp_cof_flag =4; % 4 is for 100 kHz
+# samp_flist = [6103.5256125, 122107.03125, 24414.0625, 48828.125, ...
+#    97656.25, 195312.5];
+
 class TDTDevice(Device):
     """
     Config options:
@@ -44,7 +50,7 @@ class TDTTask(DeviceTask):
 
             elif key.startswith('RP2.'):
                 index = int(key[4:])
-                self.circuit = DSPCircuit(val['circuit'], 'RP2')
+                self.circuit = DSPCircuit(val['circuit'], 'RP2', fs=4)  # run at 100 kHz (200 maybe not working?)
                 assert self.circuit.is_connected
 
                 for tagName, tagVal in val['tags'].items():
