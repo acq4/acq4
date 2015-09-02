@@ -8,7 +8,7 @@ This file defines several waveform-generating functions meant to be
 called from within a StimGenerator widget.
 """
 
-import numpy
+import numpy as np
 
 ## Checking functions
 def isNum(x):
@@ -39,7 +39,7 @@ def pulse(params, times, widths, values, base=0.0):
     if not isList(values):
         values = [values] * len(times)
         
-    d = numpy.empty(nPts)
+    d = np.empty(nPts)
     d[:] = base
     for i in range(len(times)):
         t1 = int(times[i] * rate)
@@ -59,7 +59,7 @@ def steps(params, times, values, base=0.0):
     if not isList(values):
         raise Exception('values argument must be a list')
     
-    d = numpy.empty(nPts)
+    d = np.empty(nPts)
     d[:] = base
     for i in range(1, len(times)):
         t1 = int(times[i-1] * rate)
@@ -92,7 +92,7 @@ def sineWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, bas
         raise Exception("Stop argument must be a number")
     
     ## initialize array
-    d = numpy.empty(nPts)
+    d = np.empty(nPts)
     d[:] = base
     
     ## Define start and end points
@@ -113,12 +113,13 @@ def sineWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, bas
     if cycleTime < 10:
         params['message'] += 'Warning: Period is less than 10 samples\n'
     
-    #d[start:stop] = numpy.fromfunction(lambda i: amplitude * numpy.sin(phase * 2.0 * numpy.pi + i * 2.0 * numpy.pi / (period * rate)), (stop-start,))
-    d[start:stop] = amplitude * numpy.sin(phase * 2.0 * numpy.pi + numpy.arange(stop-start) * 2.0 * numpy.pi / (period * rate))
+    #d[start:stop] = np.fromfunction(lambda i: amplitude * np.sin(phase * 2.0 * np.pi + i * 2.0 * np.pi / (period * rate)), (stop-start,))
+    d[start:stop] = amplitude * np.sin(phase * 2.0 * np.pi + np.arange(stop-start) * 2.0 * np.pi / (period * rate))
     return d
     
 def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, stop=None, base=0.0):
     rate = params['rate']
+    print "rate:", rate
     nPts = params['nPts']
     params['message'] = ""
 
@@ -136,10 +137,6 @@ def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, st
     if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
     
-    ## initialize array
-    d = numpy.empty(nPts)
-    d[:] = base
-    
     ## Define start and end points
     if start is None:
         start = 0
@@ -154,30 +151,43 @@ def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, st
         params['message'] += "WARNING: Function is longer than generated waveform\n"    
         stop = nPts-1
     
-    pulseWidth = int(duty * period * rate)
+    cycleLen = int(period * rate)
+    pulseLen = int(duty * period * rate)
     phase = (phase % 1.0) - 1.0
     pulseShift = int(phase * period * rate)
     
-    cycleTime = int(period * rate)
-    if cycleTime < 10:
-        params['message'] += 'Warning: Period is less than 10 samples\n'
-    if cycleTime < 1:
-        return numpy.zeros(nPts)
-        
-    nCycles = 2 + int((stop-start) / float(period*rate))
-    for i in range(nCycles):
-        ptr = start + int(i*period*rate)
-        a = ptr + pulseShift
-        if a > stop:
-            break
-        b = a + pulseWidth
-        a = max(a, start)
-        b = min(b, stop)
-        if a >= b:
-            continue
-        d[a:b] = amplitude
+    if not params.get('test', False):
+        if cycleLen <= 1:
+            raise Exception('Period (%d) is less than 2 samples.' % cycleLen)
+        if pulseLen < 1:
+            raise Exception('Duty cycle (%d) is less than 1 sample.' % pulseLen)
+        if cycleLen < 10:
+            params['message'] += 'Warning: Period (%d) is less than 10 samples\n' % cycleLen
+        elif pulseLen < 10:
+            params['message'] += 'Warning: Duty cycle (%d) is less than 10 samples\n' % pulseLen
+
+    ## initialize array
+    d = np.empty(nPts)
+    d[:] = base
     
+    mask = ((np.arange(nPts) - pulseShift) % cycleLen) < pulseLen
+    d[mask] = amplitude
     return d
+    
+    # nCycles = 2 + int((stop-start) / float(period*rate))
+    # for i in range(nCycles):
+    #     ptr = start + int(i*period*rate)
+    #     a = ptr + pulseShift
+    #     if a > stop:
+    #         break
+    #     b = a + pulseWidth
+    #     a = max(a, start)
+    #     b = min(b, stop)
+    #     if a >= b:
+    #         continue
+    #     d[a:b] = amplitude
+
+    
     
 def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0):
     rate = params['rate']
@@ -198,7 +208,7 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
     
     
     ## initialize array
-    d = numpy.empty(nPts)
+    d = np.empty(nPts)
     d[:] = base
     
     ## Define start and end points
@@ -221,10 +231,10 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
     if cycleTime < 10:
         params['message'] += 'Warning: Period is less than 10 samples\n'
     if cycleTime < 1:
-        return numpy.zeros(nPts)
+        return np.zeros(nPts)
     
-    #d[start:stop] = amplitude * numpy.fromfunction(lambda t: (phase + t/float(rate*period)) % 1.0, (stop-start,))
-    d[start:stop] = amplitude * ((phase + numpy.arange(stop-start)/float(rate*period)) % 1.0)
+    #d[start:stop] = amplitude * np.fromfunction(lambda t: (phase + t/float(rate*period)) % 1.0, (stop-start,))
+    d[start:stop] = amplitude * ((phase + np.arange(stop-start)/float(rate*period)) % 1.0)
     return d
 
     
@@ -234,9 +244,9 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     params['message'] = ""
 
     ## Check all arguments 
-    if type(values) not in [list, tuple, numpy.ndarray]or len(values) < 1:
+    if type(values) not in [list, tuple, np.ndarray]or len(values) < 1:
         raise Exception("Values argument must be a list or array")
-    values = numpy.array(values)
+    values = np.array(values)
     if values.ndim != 1:
         raise Exception("Values argument must be 1-dimensional array")
         
@@ -251,7 +261,7 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     
     
     ## initialize array
-    d = numpy.empty(nPts)
+    d = np.empty(nPts)
     d[:] = base
     
     ## Define start and end points
@@ -272,10 +282,10 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     if cycleTime < 10:
         params['message'] += 'Warning: Period is less than 10 samples\n'
     if cycleTime < 1:
-        return numpy.zeros(nPts)
+        return np.zeros(nPts)
 
-    #saw = numpy.fromfunction(lambda t: len(values) * ((phase + t/float(rate*period)) % 1.0), (stop-start,))
-    saw = len(values) * ((phase + numpy.arange(stop-start)/float(rate*period)) % 1.0)
+    #saw = np.fromfunction(lambda t: len(values) * ((phase + t/float(rate*period)) % 1.0), (stop-start,))
+    saw = len(values) * ((phase + np.arange(stop-start)/float(rate*period)) % 1.0)
     d[start:stop] = values[saw.astype(int).clip(0, len(values)-1)]
     #d[start:stop] = saw
     return d
@@ -296,7 +306,7 @@ def noise(params, mean, sigma, start=0.0, stop=None):
     
     
     ## initialize array
-    d = numpy.zeros(nPts)
+    d = np.zeros(nPts)
     
     ## Define start and end points
     if start is None:
@@ -312,5 +322,54 @@ def noise(params, mean, sigma, start=0.0, stop=None):
         params['message'] += "WARNING: Function is longer than generated waveform\n"    
         stop = nPts-1
 
-    d[start:stop] = numpy.random.normal(size=stop-start, loc=mean, scale=sigma)
+    d[start:stop] = np.random.normal(size=stop-start, loc=mean, scale=sigma)
     return d
+
+def tonePip(params, freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0):
+    rate = params['rate']
+    nPts = params['nPts']
+    params['message'] = ""
+    us=1e-6
+    ## Check all arguments 
+    if not isNum(freq):
+        raise Exception("Frequency argument must be a number")
+    if not isNum(risfall):
+        raise Exception("RisFall argument must be a number")
+    if not isNumOrNone(start):
+        raise Exception("Start argument must be a number")
+    if not isNumOrNone(stop):
+        raise Exception("Stop argument must be a number")
+    amplitude=np.pi/2
+    d=linramp=amplitude+sawWave(risfall*us,amplitude,0,0,risfall*us)    
+    # linramp=np.pi/2+sawWave(risfall*us,np.pi/2,0,0,risfall*us)+pulse(risfall*us,(stop-risfall)*us,np.pi/2)-sawWave(risfall*us,np.pi/2,0,(stop-risfall)*us,stop*us)
+    # cos2gat=np.cos(linramp)**2
+    # d=cos2gat*sineWave(1/freq)
+
+    #np.cos(1.5707963+sawWave(0.0025,1.5707963,0,0,0.0025)+pulse(0.0025,0.0475,1.5707963)-sawWave(0.0025,1.5707963,0,0.0475,0.05))**2*sineWave(0.002)
+    #np.cos(1.5707963+sawWave(0.2,1.5707963,0,0,0.2)+pulse(0.2,1.8,1.5707963)-sawWave(0.2,1.5707963,0,1.8,2))**2*sineWave(.002)
+
+    # ## initialize array
+        # d = np.empty(nPts)
+        # d[:] = base
+        
+        # ## Define start and end points
+        # if start is None:
+        #     start = 0
+        # else:
+        #     start = int(start * rate)
+        # if stop is None:
+        #     stop = nPts-1
+        # else:
+        #     stop = int(stop * rate)
+            
+        # if stop > nPts-1:
+        #     params['message'] += "WARNING: Function is longer than generated waveform\n"    
+        #     stop = nPts-1
+            
+        # cycleTime = int(period * rate)
+        # if cycleTime < 10:
+        #     params['message'] += 'Warning: Period is less than 10 samples\n'
+        
+        # #d[start:stop] = np.fromfunction(lambda i: amplitude * np.sin(phase * 2.0 * np.pi + i * 2.0 * np.pi / (period * rate)), (stop-start,))
+        # d[start:stop] = amplitude * np.sin(phase * 2.0 * np.pi + np.arange(stop-start) * 2.0 * np.pi / (period * rate))
+        # return d
