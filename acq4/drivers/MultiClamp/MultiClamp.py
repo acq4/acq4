@@ -1,16 +1,11 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
 import ctypes
-import struct, os, threading
+import struct, os, threading, platform, atexit
 from acq4.util.clibrary import *
 from MultiClampTelegraph import *
 from acq4.util.debug import *
 
-
-#import atexit
-#def test():
-    #print "EXIT"
-#atexit.register(test)
 
 __all__ = ['MultiClamp', 'axlib', 'wmlib']
 
@@ -26,6 +21,8 @@ axonDefs = CParser(
     #verbose=True
 )
 
+if platform.architecture()[0] != '32bit':
+    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
 axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
 
 
@@ -208,9 +205,8 @@ class MultiClamp:
         
         self.telegraph = MultiClampTelegraph(self.chanDesc, self.telegraphMessage)
         MultiClamp.INSTANCE = self
-    
-    def __del__(self):
-        self.quit()
+
+        atexit.register(self.quit)
     
     def quit(self):
         ## do other things to shut down driver?
