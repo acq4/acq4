@@ -20,13 +20,14 @@ class MultiClamp(Device):
 
     # remote process used to connect to commander from 32-bit python
     proc = None
-    
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
         self.lock = Mutex(Mutex.Recursive)
         self.index = None
         self.devRackGui = None
+        self.mc = None
         
         self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
         self.lastState = {}
@@ -49,9 +50,9 @@ class MultiClamp(Device):
             if MultiClamp.proc is False:
                 raise Exception("Already connected to multiclamp locally; cannot connect via remote process at the same time.")
             if MultiClamp.proc is None:
-                MultiClamp.proc = multiprocess.Process(executable=executable, copySysPath=False, debug=True)
+                MultiClamp.proc = multiprocess.Process(executable=executable, copySysPath=False)
                 try:
-                    self.proc.mc_mod = self.proc._import('acq4.drivers.MultiClamp.MultiClamp')
+                    self.proc.mc_mod = self.proc._import('acq4.drivers.MultiClamp')
                     self.proc.mc_mod._setProxyOptions(deferGetattr=False)
                 except:
                     MultiClamp.proc.close()
@@ -66,7 +67,7 @@ class MultiClamp(Device):
                 MultiClamp.proc = False
 
             try:
-                from acq4.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
+                from acq4.drivers.MultiClamp import MultiClamp as MultiClampDriver
             except RuntimeError as exc:
                 if "32-bit" in exc.message:
                     raise Exception("MultiClamp commander does not support access by 64-bit processes. To circumvent this problem, "
@@ -79,7 +80,7 @@ class MultiClamp(Device):
         # get a handle to our specific multiclamp channel
         try:
             if executable is not None:
-                self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync=False))
+                self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
             else:
                 self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
             
@@ -125,9 +126,8 @@ class MultiClamp(Device):
         return chans
 
     def quit(self):
-        mc = MultiClampDriver.instance()
-        if mc is not None:
-            mc.quit()
+        if self.mc is not None:
+            self.mc.mc.quit()
 
     def mcUpdate(self, state=None, mode=None):
         """MC state (or internal holding state) has changed, handle the update."""
