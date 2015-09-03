@@ -17,6 +17,7 @@ acq4-0.9.3 (unreleased)
             Uses services provided by scanner to provide raster scanning, which makes the behavior more consistent 
             with task runner.
             Shares image display code and user interface with cameras to make imaging consistent across device types
+        MultiClamp can be used with 64-bit Python (by remote connection to a separate 32-bit Python)
         Support for Thorlabs MFC-1 focus controller using ROE-200 unused z-axis
         Added export option to ImageView
         Added new online analysis module for photostimulation (replaces old Uncaging module)
