@@ -49,8 +49,14 @@ class MultiClamp(Device):
             if MultiClamp.proc is False:
                 raise Exception("Already connected to multiclamp locally; cannot connect via remote process at the same time.")
             if MultiClamp.proc is None:
-                MultiClamp.proc = multiprocess.Process(executable=executable, copySysPath=False)
-                self.proc.mc_mod = self.proc._import('acq4.drivers.MultiClamp.MultiClamp')
+                MultiClamp.proc = multiprocess.Process(executable=executable, copySysPath=False, debug=True)
+                try:
+                    self.proc.mc_mod = self.proc._import('acq4.drivers.MultiClamp.MultiClamp')
+                    self.proc.mc_mod._setProxyOptions(deferGetattr=False)
+                except:
+                    MultiClamp.proc.close()
+                    MultiClamp.proc = None
+                    raise
             mc = self.proc.mc_mod.MultiClamp.instance()
         else:
             if MultiClamp.proc not in (None, False):
@@ -105,7 +111,7 @@ class MultiClamp(Device):
 
         except Exception as ex1:
             try:
-                self.mc.quit()
+                mc.quit()
             except:
                 pass
             raise ex1
