@@ -228,10 +228,11 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
         #params['message'] += "Warning: period is less than 10 samples\n"
         
     cycleTime = int(period * rate)
-    if cycleTime < 10:
-        params['message'] += 'Warning: Period is less than 10 samples\n'
-    if cycleTime < 1:
-        return np.zeros(nPts)
+    if not params.get('test', False):
+        if cycleTime < 10:
+            params['message'] += 'Warning: Period is less than 10 samples\n'
+        if cycleTime < 1:
+            raise Exception('Period (%d) is less than 1 sample.' % cycleTime)
     
     #d[start:stop] = amplitude * np.fromfunction(lambda t: (phase + t/float(rate*period)) % 1.0, (stop-start,))
     d[start:stop] = amplitude * ((phase + np.arange(stop-start)/float(rate*period)) % 1.0)
@@ -330,9 +331,9 @@ def tonePip(params, freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0)
     nPts = params['nPts']
     params['message'] = ""
     us=1e-6
-    ## Check all arguments 
-    if not isNum(freq):
-        raise Exception("Frequency argument must be a number")
+    ## Check all arguments
+    if not isNum(freq) or freq <= 0:
+        raise Exception("Frequency argument must be a number > 0") 
     if not isNum(risfall):
         raise Exception("RisFall argument must be a number")
     if not isNumOrNone(start):
@@ -340,7 +341,10 @@ def tonePip(params, freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0)
     if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
     amplitude=np.pi/2
-    d=linramp=amplitude+sawWave(risfall*us,amplitude,0,0,risfall*us)    
+    d=amplitude+sawWave(params,risfall*us,amplitude,0,0,risfall*us)
+    #+pulse(params,risfall*us,(stop-risfall)*us,amplitude)
+    #d=np.cos(amplitude+sawWave(params,risfall*us,amplitude,0,0,risfall*us)+pulse(risfall*us,(stop-risfall)*us,amplitude)-sawWave(params,risfall*us,amplitude,0,(stop-risfall)*us,stop*us))**2*sineWave(float(1/freq))
+    return d
     # linramp=np.pi/2+sawWave(risfall*us,np.pi/2,0,0,risfall*us)+pulse(risfall*us,(stop-risfall)*us,np.pi/2)-sawWave(risfall*us,np.pi/2,0,(stop-risfall)*us,stop*us)
     # cos2gat=np.cos(linramp)**2
     # d=cos2gat*sineWave(1/freq)
