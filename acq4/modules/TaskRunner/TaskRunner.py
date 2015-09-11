@@ -551,21 +551,20 @@ class TaskRunner(Module):
             
             ## Generate executable conf from task object
             prot = self.generateTask(dh)
-            #print prot
-            self.sigTaskSequenceStarted.emit({})
-            #print "runSingle: Starting taskThread.."
-            self.taskThread.startTask(prot)
-            #print "runSingle: taskThreadStarted"
-        except:
+            try:
+                self.sigTaskSequenceStarted.emit({})
+                self.taskThread.startTask(prot)
+            except:
+                raise HelpfulException("Error occurred while starting task")
+        except Exception as err:
             exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
             #print "Error starting task. "
-            raise HelpfulException("Error occurred while starting task", exc=exc)      
+            raise
    
     def runSequenceClicked(self):
         self.runSequence(store=True)
-        
    
     def testSequence(self):
         self.runSequence(store=False)
@@ -659,23 +658,25 @@ class TaskRunner(Module):
         
         for d in self.currentTask.devices:
             if self.currentTask.deviceEnabled(d):
-                ## select out just the parameters needed for this device
-                p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
-                ## Ask the device to generate its task command
-                if d not in self.docks:
-                    raise HelpfulException("The device '%s' currently has no dock loaded." % d,
-                                           reasons=[
-                                               "This device name does not exist in the system's configuration",
-                                               "There was an error when creating the device at program startup",
-                                               ],
-                                           tags={},
-                                           importance=8,
+                try:
+                    ## select out just the parameters needed for this device
+                    p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
+                    ## Ask the device to generate its task command
+                    if d not in self.docks:
+                        raise HelpfulException("The device '%s' currently has no dock loaded." % d,
+                                            reasons=[
+                                                "This device name does not exist in the system's configuration",
+                                                "There was an error when creating the device at program startup",
+                                                ],
+                                            tags={},
+                                            importance=8,
 
-                                           docSections=['userGuide/modules/TaskRunner/loadingNonexistentDevices']
-                                           )
-                prot[d] = self.docks[d].widget().generateTask(p)
-                #prof.mark("get task from %s" % d)
-        #print prot['protocol']['storageDir'].name()
+                                            docSections=['userGuide/modules/TaskRunner/loadingNonexistentDevices']
+                                            )
+                    prot[d] = self.docks[d].widget().generateTask(p)
+                    #prof.mark("get task from %s" % d)
+                except:
+                    raise HelpfulException("Error occurred while generating task for device %s." % d)
         
         if progressDlg is not None:
             progressDlg.setValue(progressDlg.value()+1)
