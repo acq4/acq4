@@ -10,7 +10,7 @@ entering python code used to generate waveforms. Functions available
 for evaluation are provided in waveforms.py.
 """
 
-import sys, types, re
+import sys, types, re, traceback, functools
 import numpy as np
 from PyQt4 import QtCore, QtGui
 from collections import OrderedDict
@@ -34,9 +34,10 @@ class StimGenerator(QtGui.QWidget):
     
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
-        #self.timeScale = 1.0
-        #self.scale = 1.0
         self.offset = 0.0
+        self.rate = None
+        self.nPts = None
+        
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.functionText.setFontFamily('Courier')
@@ -49,8 +50,6 @@ class StimGenerator(QtGui.QWidget):
         self.pSpace = None    ## cached sequence parameter space
         
         self.cache = {}       ## cached waveforms
-        self.cacheRate = None
-        self.cacheNPts = None
 
         
         
@@ -104,34 +103,24 @@ class StimGenerator(QtGui.QWidget):
     def widgetGroupInterface(self):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
 
-    #def setTimeScale(self, s):
-        #"""Set the scale factor for X axis. See setScale for description."""
-        #if self.timeScale != s:
-            #self.timeScale = s
-            #self.clearCache()
-            #self.autoUpdate()
-
-    #def setScale(self, s):
-        #"""Set the scale factor to be applied to all generated data.
-        #This allows, for example, to write waveform functions with values
-        #in units of mV and have the resulting data come out in units of V.
-           #pulse(10, 10, 100) => gives pulse 100 units tall, but a scale
-                                 #factor of 1e-3 converts it to 0.1 units
-        #This should become obsolete--instead we would write the function like
-           #pulse(10*ms, 10*ms, 100*mV)
-        #This is more verbose but far less ambiguous.
-        #"""
-        #if self.scale != s:
-            #self.scale = s
-            #self.clearCache()
-            #self.autoUpdate()
-
     def setOffset(self, o):
         """Set the offset to be added to all generated data.
         This allows, for example, writing a pulse waveform such that 0 is 
         always assumed to mean the current holding value."""
         if self.offset != o:
             self.offset = o
+            self.clearCache()
+            self.autoUpdate()
+
+    def setRate(self, rate):
+        if self.rate != rate:
+            self.rate = rate
+            self.clearCache()
+            self.autoUpdate()
+            
+    def setNPts(self, nPts):
+        if self.nPts != nPts:
+            self.nPts = nPts
             self.clearCache()
             self.autoUpdate()
             
@@ -273,13 +262,28 @@ class StimGenerator(QtGui.QWidget):
         except:
             self.setError("Error in parameter list:\n" + str(sys.exc_info()[1]))
             return False
+        
         try:
-            self.getSingle(1, 1, params={'test': True})
+            fnstr = self.functionString()
+            compile(fnstr.replace('\n', ''), 'generator string', 'eval')
             self.setError()
-            return True
         except:
-            self.setError("Error in function:\n" + str(sys.exc_info()[1]))
-            return False
+            try:
+                compile(fnstr, 'generator string', 'exec')
+                self.setError()
+            except Exception as err:
+                self.setError(str(err))
+                return False
+        
+        # don't execute the code until the user requests it
+        #try:
+            #self.getSingle(params={'TEST': True})
+            #self.setError()
+        #except:
+            #self.setError("Error in function:\n" + str(sys.exc_info()[1]))
+            #return False
+            
+        return True
     
     def saveState(self):
         """ Return a dict structure with the state of the widget """
@@ -323,19 +327,20 @@ class StimGenerator(QtGui.QWidget):
             self.sigFunctionChanged.emit()
 
     def paramSpace(self):
-        """Return an ordered dict describing the parameter space"""
-        ## return looks like:
-        ## {
-        ##   'param1': (singleVal, [sequence]),
-        ##   'param2': (singleVal, [sequence]),
-        ##   ...
-        ## }
+        """Return an ordered dict describing the parameter space
+        return looks like::
+        
+            {
+                'param1': (singleVal, [sequence]),
+                'param2': (singleVal, [sequence]),
+                ...
+            }
+        """
         
         if self.pSpace is None:
             #self.pSpace = seqListParse(self.paramString()) # get the sequence(s) and the targets
             self.pSpace = self.seqParams.compile()
         return self.pSpace
-
 
     def listSequences(self):
         """ return an ordered dict of the sequence parameter names and values in the same order as that
@@ -360,46 +365,39 @@ class StimGenerator(QtGui.QWidget):
         if msg is None or msg == '':
             self.ui.errorText.setText('')
             self.ui.errorBtn.setStyleSheet('')
-            #self.ui.errorBtn.hide()
         else:
             self.ui.errorText.setText(msg)
             self.ui.errorBtn.setStyleSheet('QToolButton {border: 2px solid #F00; border-radius: 3px}')
-            #self.ui.errorBtn.show()
         self.updateWidgets()
-            
         
-    def getSingle(self, rate, nPts, params=None):
+    def getSingle(self, rate=None, nPts=None, params=None):
         """
         Return a single generated waveform (possibly cached) with the given sample rate
-        number of samples, and sequence parameters.        
+        number of samples, and sequence parameters.
         """
+        if rate is not None:
+            self.setRate(rate)
+        if nPts is not None:
+            self.setNPts(nPts)
+        rate = self.rate
+        nPts = self.nPts
+        
         if params is None:
             params = {}
-            
-        if self.cacheRate != rate or self.cacheNPts != nPts:
-            self.clearCache()
             
         paramKey = tuple(params.items())
         if paramKey in self.cache:
             return self.cache[paramKey]
             
-        self.cacheRate = rate
-        self.cacheNPts = nPts
-            
-        ## create namespace with generator functions. 
-        ##   - iterates over all functions provided in waveforms module
-        ##   - wrap each function to automatically provide rate and nPts arguments
-        ns = {}
-        #arg = {'rate': rate * self.timeScale, 'nPts': nPts}
-        arg = {'rate': rate, 'nPts': nPts}
-        ns.update(arg)  ## copy rate and nPts to eval namespace
-        for i in dir(waveforms):
-            obj = getattr(waveforms, i)
-            if type(obj) is types.FunctionType:
-                ns[i] = self.makeWaveFunction(i, arg)
+        # create namespace with generator functions. 
+        ns = {'np': np}
+        kwargs = {'rate': self.rate, 'nPts': self.nPts, 'warnings': []}
+        # copy in all waveform functions with some keyword arguments filled in
+        for name,fn in waveforms.allFunctions().items():
+            ns[name] = functools.partial(fn, **kwargs)
         
-        ## add current sequence parameter values into namespace
-        seq = self.paramSpace() # -- this is where the Laser bug was happening -- seq becomes 'Pulse_sum', but params was {'power.Pulse_sum': x}, so the default value is always used instead (fixed by removing 'power.' before the params are sent to stimGenerator, but perhaps there is a better place to fix this)
+        # add current sequence parameter values into namespace
+        seq = self.paramSpace()
         for k in seq:
             if k in params:  ## select correct value from sequence list
                 try:
@@ -410,20 +408,15 @@ class StimGenerator(QtGui.QWidget):
             else:  ## just use single value
                 ns[k] = float(seq[k][0])
 
-        ## add units into namespace
+        # add units into namespace
         ns.update(units.allUnits)
         
-        ## add extra parameters to namespace
+        # add extra parameters to namespace
         ns.update(self.extraParams)
 
-        ## evaluate and return
+        # evaluate and return
         fn = self.functionString()
         
-        ## build global namespace with numpy imported
-        #gns = {}
-        ns['np'] = np
-        
-        #print "function: '%s'" % fn
         if fn.strip() == '':
             ret = np.zeros(nPts)
         else:
@@ -433,39 +426,34 @@ class StimGenerator(QtGui.QWidget):
                 try:
                     run = "\noutput=fn()\n"
                     code = "def fn():\n" + "\n".join(["    "+l for l in fn.split('\n')]) + run
-                    #print "--- Code: ---"
-                    #print code
-                    #print "-------------"
                     lns = {}
                     exec(code, ns, lns)
                     ret = lns['output']
                 except SyntaxError as err:
                     err.lineno -= 1
                     raise err
-                
+            except Exception as err:
+                tb = traceback.extract_tb(sys.exc_info()[2])[1:]
+                if len(tb) == 1:
+                    self.setError("Error in function line %d:\n" % tb[0][1] + str(err))
+                else:
+                    stack = traceback.format_list(tb)
+                    self.setError("Error in function:\n" + ''.join(stack) + '\n' + str(err))
+                raise
             
         if isinstance(ret, ndarray):
-            #ret *= self.scale
             ret += self.offset
-            #print "===eval===", ret.min(), ret.max(), self.scale
         elif ret is not None:
             raise TypeError("Function must return ndarray or None.")
         
-        if 'message' in arg:
-            self.setError(arg['message'])
+        warn = np.unique(kwargs['warnings'])
+        if len(warn) > 0:
+            self.setError('Warning%s:\n' % ('' if len(warn) == 1 else 's') + '\n'.join(warn))
         else:
             self.setError()
             
         self.cache[paramKey] = ret
         return ret
-        
-    def makeWaveFunction(self, name, arg):
-        ## Creates a copy of a wave function (such as steps or pulses) with the first parameter filled in
-        ## Must be in its own function so that obj is properly scoped to the lambda function.
-        obj = getattr(waveforms, name)
-        return lambda *args, **kwargs: obj(arg, *args, **kwargs)
-        
-
 
 
 ## Old sequence parsing functions for backward compatibility:

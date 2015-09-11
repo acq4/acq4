@@ -198,7 +198,7 @@ class OutputChannelGui(DaqChannelGui):
         if state['holdingCheck']:
             prot['holding'] = state['holdingSpin']
         if state['functionCheck']:
-            prot['command'] = self.getSingleWave(params)
+            prot['command'] = self.getSingleWave(params, raiseExc=True)
             
         return prot
     
@@ -256,13 +256,18 @@ class OutputChannelGui(DaqChannelGui):
         plot = self.plot.plot(y=data, x=self.timeVals, pen=QtGui.QPen(color))
         return plot
 
-    def getSingleWave(self, params=None):
+    def getSingleWave(self, params=None, raiseExc=False):
         state = self.stateGroup.state()
         h = self.getHoldingValue()
         if h is not None:
             self.ui.waveGeneratorWidget.setOffset(h)
         
-        wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        try:
+            wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        except:
+            if raiseExc:
+                raise
+            return None
         
         return wave
         
