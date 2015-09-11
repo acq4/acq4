@@ -221,7 +221,7 @@ class MultiClampTaskGui(TaskGui):
             task['secondaryGain'] = state['secondaryGainSpin']
         if mode != 'I=0':
             ## Must scale command to V or A before sending to task system.
-            wave = self.getSingleWave(params)
+            wave = self.getSingleWave(params, raiseExc=True)
             if wave is not None:
                 task['command'] = wave
             if state['holdingCheck']:
@@ -229,15 +229,18 @@ class MultiClampTaskGui(TaskGui):
         #print "Task:", task
         return task
     
-    def getSingleWave(self, params=None):
+    def getSingleWave(self, params=None, raiseExc=False):
         state = self.stateGroup.state()
         h = state['holdingSpin']
         self.ui.waveGeneratorWidget.setOffset(h)
         ## waveGenerator generates values in V or A
-        wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
-        
-        if wave is None:
+        try:
+            wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        except:
+            if raiseExc:
+                raise
             return None
+        
         return wave
         
         
