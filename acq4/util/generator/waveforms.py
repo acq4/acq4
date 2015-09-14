@@ -337,7 +337,7 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
     nPts = kwds['nPts']
     warnings = kwds['warnings']
     
-    us=1e-6
+    ms=1e-3
     ## Check all arguments
     if not isNum(freq) or freq <= 0:
         raise Exception("Frequency argument must be a number > 0") 
@@ -348,9 +348,15 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
     if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
     amplitude=np.pi/2
-    d=amplitude+sawWave(risfall*us,amplitude,0,0,risfall*us, **kwds)
-    #+pulse(params,risfall*us,(stop-risfall)*us,amplitude)
-    #d=np.cos(amplitude+sawWave(params,risfall*us,amplitude,0,0,risfall*us)+pulse(risfall*us,(stop-risfall)*us,amplitude)-sawWave(params,risfall*us,amplitude,0,(stop-risfall)*us,stop*us))**2*sineWave(float(1/freq))
+    linramp=amplitude+sawWave(risfall*ms,amplitude,0,0,risfall*ms, 0, **kwds)+pulse(risfall*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds)
+#    d=linramp
+    cos2gat=(np.cos(linramp))**2
+    d=cos2gat
+#    d=cos2gat*sineWave(float(1/freq),1,0,0,stop*ms,0, **kwds)
+    per=1/freq
+#    d=sineWave(per,1,0,0,stop,0, **kwds)
+    #sineWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds)
+#    d=np.cos(amplitude+sawWave(risfall*ms,amplitude,0,0,risfall*ms, 0, **kwds)+pulse(risfall*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds))**2*sineWave(float(1/freq), **kwds)
     return d
     # linramp=np.pi/2+sawWave(risfall*us,np.pi/2,0,0,risfall*us)+pulse(risfall*us,(stop-risfall)*us,np.pi/2)-sawWave(risfall*us,np.pi/2,0,(stop-risfall)*us,stop*us)
     # cos2gat=np.cos(linramp)**2
