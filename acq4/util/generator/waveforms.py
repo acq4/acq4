@@ -355,7 +355,7 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
     d=cos2gat*sineWave(per,1,0,start*ms,stop*ms,0, **kwds)
     return d
     
-def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 200, **kwds):
+def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 200, direction= "up", **kwds):
     rate = kwds['rate']
     nPts = kwds['nPts']
     warnings = kwds['warnings']
@@ -369,7 +369,20 @@ def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 200, **kwds):
         raise Exception("tdur argument must be a number")
     if not isNumOrNone(tipi):
         raise Exception("tipi argument must be a number")
+    posDirection=['up', 'down']
+    if direction not in posDirection:
+        raise Exception("direction must be up or down")
 
+    if direction == posDirection[0]:
+        dirconst = 0.25
+    else:
+        dirconst = -0.25
     
-        
+    freqs = startfreq * 2**(dirconst * np.arange(npip))
+    d = 0
+    icount = 0
+    for curfreq in freqs:
+        d = d+tonePip(freqs[icount],2.5,(icount)*250,250*icount+50,0, **kwds)
+        icount = icount+1
+    return d
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
