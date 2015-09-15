@@ -352,8 +352,24 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
     cos2gat=(np.cos(linramp))**2
     d=cos2gat
     per=float(1/freq)
-    d=cos2gat*sineWave(per,1,0,0,stop*ms,0, **kwds)
+    d=cos2gat*sineWave(per,1,0,start*ms,stop*ms,0, **kwds)
     return d
+    
+def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 200, **kwds):
+    rate = kwds['rate']
+    nPts = kwds['nPts']
+    warnings = kwds['warnings']
+
+## Check all arguments
+    if not isNum(startfreq) or startfreq <= 0:
+        raise Exception("Frequency argument must be a number > 0") 
+    if not isNum(npip):
+        raise Exception("npip argument must be a number")
+    if not isNumOrNone(tdur):
+        raise Exception("tdur argument must be a number")
+    if not isNumOrNone(tipi):
+        raise Exception("tipi argument must be a number")
+
     
         
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
