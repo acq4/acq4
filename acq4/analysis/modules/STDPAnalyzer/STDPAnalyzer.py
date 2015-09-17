@@ -58,17 +58,17 @@ class STDPAnalyzer(AnalysisModule):
         # self.plots.exptPlot.setTitle('Experiment Timecourse')
         # self.plots.tracesPlot.setLabel('left', "Voltage") ### TODO: check whether traces are in VC or IC
         # self.plots.tracesPlot.setTitle("Data")
-        self.plots.plasticityPlot.setLabel('left', 'Slope')
+        self.plots.plasticityPlot.setLabel('left', 'Slope', units='V/s')
         # self.plots.plasticityPlot.setTitle('Plasticity')
         # self.plots.RMP_plot.setTitle('Resting Membrane Potential')
-        self.plots.RMP_plot.setLabel('left', 'Vm (mV)')
-        self.plots.RI_plot.setLabel('left', 'Rin (Mohm)')
-        self.plots.holdingPlot.setLabel('left', "Holding Current")
+        self.plots.RMP_plot.setLabel('left', text='RMP', units='V')
+        self.plots.RI_plot.setLabel('left', text='Input R', units='Ohm')
+        self.plots.holdingPlot.setLabel('left', "Holding Current", units='A')
         # self.plots.RI_plot.setTitle('Input Resistance')
 
         for p in [self.plots.exptPlot, self.plots.tracesPlot, self.plots.plasticityPlot,
                  self.plots.RMP_plot, self.plots.RI_plot, self.plots.holdingPlot]:
-            p.setLabel('bottom', 'Time')
+            p.setLabel('bottom', 'Time', units='s')
 
         ## Set up measurement regions in plots
         self.traceSelectRgn = pg.LinearRegionItem()
@@ -765,11 +765,11 @@ class STDPAnalyzer(AnalysisModule):
         self.summaryView = self.createSummarySheet()
         self.summaryView.show()
 
-    def createSummarySheet(self):
+    def createSummarySheet(self, showPlasticity=True):
         view = pg.GraphicsView()
         #view.setBackground((255,255,255,255))
         #view.setForegroundBrush(pg.mkBrush((0,0,0,255)))
-        l = pg.GraphicsLayout(border=(100,100,100))
+        l = pg.GraphicsLayout()
         view.setCentralItem(l)
         cell = self.dataModel.getParent(self.files[0], 'Cell')
 
@@ -777,7 +777,7 @@ class STDPAnalyzer(AnalysisModule):
             cellName = cell.name(relativeTo=self.dbGui.getDb().baseDir())
         else:
             raise Exception('No database loaded.')
-        l.addLabel(text=cellName, bold=True, colspan=2, size='14pt')
+        l.addLabel(text=cellName, bold=True, colspan=3, size='14pt')
 
         ### Add average PSP traces
         APmask = np.zeros(len(self.traces), dtype=bool)
@@ -805,47 +805,56 @@ class STDPAnalyzer(AnalysisModule):
         timeValues = self.traces[0]['data']['primary'].axisValues('Time')
         rate = timeValues[1] - timeValues[0]
 
-        plot = pg.PlotItem()
-        plot.plot(x=timeValues[0.045/rate:0.085/rate], y=baseAvg[0.045/rate:0.085/rate], pen='b')
-        plot.plot(x=timeValues[0.045/rate:0.085/rate], y=postAvg[0.045/rate:0.085/rate], pen='r')
-
-        l.addItem(plot, row=2, col=0, rowspan=2)
+        plot = pg.PlotItem(title='Average PSPs', labels={'left': 'V', 'bottom':'time'})
+        plot.addLegend()
+        plot.plot(x=timeValues[0.045/rate:0.085/rate], y=baseAvg[0.045/rate:0.085/rate], pen='b', name='Baseline')
+        if showPlasticity:
+            plot.plot(x=timeValues[0.045/rate:0.085/rate], y=postAvg[0.045/rate:0.085/rate], pen='r', name='Post-pairing')
+        
+        l.addItem(plot, row=1, col=0, rowspan=2)
 
         ### add label about drugs, info, etc...
         agonist = cell.info().get('agonist_code', 'No info')
         antagonist = cell.info().get('antagonist_code', 'No info')
 
         preNotes = cell.info().get('notes', '')
-        i=80
+        i=50
         notes=''
-        while i< len(preNotes)+80:
-            notes += preNotes[i-80:i]+"<br />     "
-            i += 80
+        while i< len(preNotes)+50:
+            notes += preNotes[i-50:i]+"<br />     "
+            i += 50
+
+        if showPlasticity:
+            plasticity='%g %%' % (self.plasticity * 100.)
+        else:
+            plasticity="Not shown"
         
-        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Notes: %s <br/><br/> Plasticity: %g %%" % (antagonist, agonist, notes, self.plasticity)
-        l.addLabel(text=info, row=1, col=0, colspan=2)
+        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Plasticity: %s" % (antagonist, agonist, plasticity)
+        l.addLabel(text=info, row=1, col=2)
+        l.addLabel(text='Notes: %s'%notes, row=2, col=2)
 
         pairingPlot = pg.PlotItem()
         pairingPlot.plot(self.avgPairingTrace['Time':0.05:0.15])
-        l.addItem(pairingPlot, row=2, col=1, rowspan=2)
+        l.addItem(pairingPlot, row=1, col=1, rowspan=2)
         
 
         
         plasticityPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['pspSlope'],
             pen=None, symbol='o', symbolSize=5, symbolPen=None)
-        l.addItem(plasticityPlot, row=4, col=0, colspan=2)
+        if showPlasticity:
+            l.addItem(plasticityPlot, row=4, col=0, colspan=3)
        
         rmpPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['RMP'],
             pen=None, symbol='o', symbolSize=5, symbolPen=None)
-        l.addItem(rmpPlot, row=5, col=0, colspan=2)
+        l.addItem(rmpPlot, row=5, col=0, colspan=3)
 
         riPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['InputResistance'],
             pen=None, symbol='o', symbolSize=5, symbolPen=None)
-        l.addItem(riPlot, row=6, col=0, colspan=2)
+        l.addItem(riPlot, row=6, col=0, colspan=3)
 
         holdingPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['HoldingCurrent'],
             pen=None, symbol='o', symbolSize=5, symbolPen=None)
-        l.addItem(holdingPlot, row=7, col=0, colspan=2)
+        l.addItem(holdingPlot, row=7, col=0, colspan=3)
 
         plasticityPlot.setLabel('left', 'PSP Slope')
         rmpPlot.setLabel('left', 'RMP')
