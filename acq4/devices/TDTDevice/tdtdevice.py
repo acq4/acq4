@@ -2,7 +2,7 @@
 from acq4.util.debug import *
 from tdt import *    
 from acq4.devices.Device import *
-import time, traceback, sys
+import time, traceback, sys, threading
 #from taskGUI import *
 #from numpy import byte
 import numpy as np
@@ -13,6 +13,8 @@ from acq4.util.debug import *
 import acq4.util.Mutex as Mutex
 from acq4.pyqtgraph import ptime
 from win32com.client import Dispatch
+import pythoncom
+from .TDTtaskGUI import TDTTaskGui
 
 # For reference: TDT RP2.1 sample rates:
 # 0 = 6K, 1 = 12K, 2 = 25k, 3 = 50k, 4 = 100k, 5 = 200k, > 5 is not defined.
@@ -25,6 +27,8 @@ class TDTDevice(Device):
     Config options:
         defaultAIMode: 'mode'  # mode to use for ai channels by default ('rse', 'nrse', or 'diff')
     """
+    threads = {}
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
@@ -33,86 +37,65 @@ class TDTDevice(Device):
         
     def createTask(self, cmd, parentTask):
         return TDTTask(self, cmd, parentTask)
-        
+
+    def taskInterface(self, task):
+        """Return a widget with a UI to put in the task rack"""
+        return TDTTaskGui(self, task)        
+
+    def initThread(self):
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            # main thread is already initialized
+            return 
+        tid = threading.current_thread()
+        if tid not in self.threads:
+            pythoncom.CoInitialize()
+            self.threads[tid] = None
+
+
 class TDTTask(DeviceTask):
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
+        dev.initThread()  # make sure COM is initialized for the current thread
         self.lastPulseTime = None
         self.cmd = cmd
+        self.circuits = {}
+        self.attens = {}
 
     def configure(self):
         for key, val in self.cmd.items():
             if key.startswith('PA5.'):
                 index = int(key[4:])
-                self.amplifier = Dispatch('PA5.x')
-                self.amplifier.ConnectPA5('USB', index)
-                self.amplifier.SetAtten(val['attenuation'])
+                att = Dispatch('PA5.x')
+                att.ConnectPA5('USB', index)
+                att.SetAtten(val['attenuation'])
+                self.attens[key] = att
 
             elif key.startswith('RP2.'):
                 index = int(key[4:])
-                self.circuit = DSPCircuit(val['circuit'], 'RP2', fs=4)  # run at 100 kHz (200 maybe not working?)
-                assert self.circuit.is_connected
-
+                circuit = DSPCircuit(val['circuit'], 'RP2', fs=4)  # run at 100 kHz (200 maybe not working?)
+                assert circuit.is_connected
                 for tagName, tagVal in val['tags'].items():
-                    self.circuit.set_tag(tagName, tagVal)
-
-
+                    circuit.set_tag(tagName, tagVal)
+                self.circuits[key] = circuit
 
         # self.circuit = DSPCircuit('C:\Users\Experimenters\Desktop\ABR_Code\FreqStaircase3.rcx', 'RP2')
 
-
-
-
-
-
-
-
     def start(self):
-        self.circuit.start()
-
-        self.circuit.trigger(1,mode='pulse')
+        for circuit in self.circuits.values():
+            circuit.start()
+            circuit.trigger(1, mode='pulse')
         self.starttime = ptime.time()
 
-
     def isDone(self):
-        #return not self.circuit.is_running()
-        return bool(self.circuit.get_tag('Pulses'))
-        # if self.lastPulseTime is None:
-        #     pulseread = self.circuit.get_tag('Pulses')
-        #     print(pulseread)
-        #     if pulseread == 1:
-        #         self.lastPulseTime = ptime.time()
-        #     return False
-        # else:
-        #     return ptime.time() > self.lastPulseTime + 0.1
+        if len(self.circuits) == 1:
+            # TODO: need some standard way of asking whether a circuit has finished..
+            return bool(self.circuit.get_tag('Pulses'))
+        else:
+            return True
 
     def stop(self, abort=False):
-        self.circuit.stop()
-        self.amplifier.SetAtten(120)
-
-        # elapsed=0
-        # PC=0
-        # while elapsed<(cyctime*nreps)/1000.0 and PC<=freqs[-1]:
-        #     PC=circuit.get_tag('freqout')
-        #     elapsed=time.time()-starttime
-        #     Pulseread=circuit.get_tag('Pulses')
-        #     if Pulseread==1:
-        #         #print(Pulseread)
-        #         #print(PC)
-        #         time.sleep(0.1)
-        #         circuit.stop()
-        #         amplifier.SetAtten(120)
-        #         break
-                # print(elapsed)
-
-        # for i in range(5):
-        #   PC=circuit.get_tag('freqout')
-        #   print(PC)
-        #   time.sleep(1)
-        # #time.sleep(5)
-    #   circuit.stop()
-    
-        ## get DAQ device
-        #daq = self.devm.getDevice(...)
-        
-
+        for circuit in self.circuits.values():
+            circuit.stop()
+        for att in self.attens.values():
+            att.SetAtten(120)
