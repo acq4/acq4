@@ -36,6 +36,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
+        self.pitch = config.get('pitch', 27)
         
         self._limits = [(None, None), (None, None), (None, None)]
 
@@ -47,7 +48,7 @@ class Stage(Device, OptomechDevice):
 
     def quit(self):
         self.stop()
-    
+
     def capabilities(self):
         """Return a structure describing the capabilities of this device::
         

@@ -25,34 +25,31 @@ class PatchStar(SerialDevice):
         self.port = port
         SerialDevice.__init__(self, port=self.port, baudrate=9600)
 
-    def getFirmwareVersion(self):
+    def send(self, msg):
         with self.lock:
-            self.write('DATE\r')
-            return self.readUntil('\r').partition(' ')[2].partition('\t')[0]
+            self.write(msg + '\r')
+            return self.readUntil('\r')
+
+    def getFirmwareVersion(self):
+            return self.send('DATE').partition(' ')[2].partition('\t')[0]
 
     def getPos(self):
         """Get current manipulator position reported by controller (in micrometers).
         """
         with self.lock:
             ## request position
-            self.write('POS\r')
-            packet = self.readUntil('\r')
+            packet = self.send('POS')
             return [int(x) for x in packet.split('\t')]
 
     def getSpeed(self):
         """Return the manipulator's maximum speed in micrometers per second.
         """
-        with self.lock:
-            self.write('TOP\r')
-            return int(self.readUntil('\r'))
+        return self.send('TOP')
 
     def setSpeed(self, speed):
         """Set the maximum move speed in micrometers per second.
         """
-        with self.lock:
-            speed = int(speed)
-            self.write('TOP %d\r' % speed)
-            self.readUntil('\r')
+        return self.send('TOP %d' % int(speed))
 
     def moveTo(self, pos, speed=None):
         """Set the position of the manipulator.
@@ -78,7 +75,6 @@ class PatchStar(SerialDevice):
             else:
                 self.setSpeed(speed)
 
-
             # Send move command
             self.write(b'ABS %d %d %d\r' % tuple(pos))
             self.readUntil('\r')
@@ -86,19 +82,12 @@ class PatchStar(SerialDevice):
     def stop(self):
         """Stop moving the manipulator.
         """
-        with self.lock:
-            self.write('STOP\r')
-            self.readUntil('\r')
+        self.send('STOP')
 
     def isMoving(self):
         """Return True if the manipulator is moving.
         """
-        with self.lock:
-            self.write('S\r')
-            return int(self.readUntil('\r')) != 0
+        return int(self.send('S')) != 0
 
     def reset(self):
-        with self.lock:
-            self.write('RESET\r')
-            self.readUntil('\r')
-
+        self.send('RESET')
