@@ -6,7 +6,7 @@ class StimParamSet(GroupParameter):
     ## top-level parameter in the simple stim generator tree
     def __init__(self):
         GroupParameter.__init__(self, name='Stimuli', type='group',
-                           addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
+                           addText='Add Stimulus..', addList=['Pulse', 'Pulse Train', 'Use laser-mask'])
         self.meta = {}
         
     def addNew(self, type):
@@ -16,6 +16,8 @@ class StimParamSet(GroupParameter):
                 ch = self.addChild(PulseParameter())
             elif type == 'Pulse Train':
                 ch = self.addChild(PulseTrainParameter())
+            elif type == 'Use laser-mask':
+                ch = self.addChild(LaserMaskParameter())
             else:
                 raise Exception('Unknown type %s' % type)
             
@@ -64,6 +66,8 @@ class StimParamSet(GroupParameter):
                     ch = PulseParameter(name=k)
                 elif state[k]['type'] == 'pulseTrain':
                     ch = PulseTrainParameter(name=k)
+                elif state[k]['type'] == 'laserMask':
+                    ch = LaserMaskParameter(name=k)
                 self.addChild(ch)
                 ch.setState(state[k])
         
@@ -314,4 +318,89 @@ class PulseTrainParameter(PulseParameter):
             del state['interpulse_length']
         return PulseParameter.setState(self, state)
     
+class LaserMaskParameter(GroupParameter):
+    def __init__(self, **kargs):
+        if 'name' not in kargs:
+            kargs['name'] = 'LaserMask'
+            kargs['autoIncrementName'] = True
+        if 'type' not in kargs:
+            kargs['type'] = 'laserMask'
+        kargs['strictNaming'] = True
+        GroupParameter.__init__(self, removable=True, renamable=True,
+            children=[
+                SeqParameter(**{'name': 'device', 'type': 'str', 'axis': 'x', 'value': 'Scanner',}),
+                SeqParameter(**{'name': 'pCellVoltage', 'type': 'float', 'axis': 'x', 'value': 0.1}),
+            ], **kargs)
+            
+        self.param('device').sigValueChanged.connect(self.devChanged)
+        self.param('pCellVoltage').sigValueChanged.connect(self.voltChanged)
         
+    def devChanged(self):
+        self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
+
+    def voltChanged(self):
+        self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
+
+    def sumChanged(self):
+        if self['sum', 'affect'] == 'length':
+            sign = 1 if self['length'] >= 0 else -1
+            if self['amplitude'] == 0:
+                self.param('length').setValue(0, blockSignal=self.lenChanged)
+            else:
+                self.param('length').setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
+        else:
+            sign = 1 if self['amplitude'] >= 0 else -1
+            if self['length'] == 0:
+                self.param('amplitude').setValue(0, blockSignal=self.ampChanged)
+            else:
+                self.param('amplitude').setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
+
+    def varName(self):
+        name = self.name()
+        name.replace(' ', '_')
+        return name
+
+    def preCompile(self):
+        ## prepare data for compile
+        seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()] 
+        (start, startSeq) = seqParams[0]
+        (length, lenSeq) = seqParams[1]
+        (amp, ampSeq) = seqParams[2]
+        seq = {name:seq for name, seq in seqParams if seq is not None}
+
+        ## If sequence is specified over sum, interpret that a bit differently.
+        (sumName, sumSeq) = self.param('sum').compile()
+        if sumSeq is not None:
+            if self.sum['affect'] == 'length':
+                if not self.param('length').writable():
+                    raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
+                if lenSeq is not None:
+                    raise Exception("%s: Can not sequence over length and sum simultaneously." % self.name())
+                length = "%s / (%s)" % (sumName, amp)
+            else:
+                if not self.param('amplitude').writable():
+                    raise Exception("%s: Can not sequence over amplitude; it is a read-only parameter." % self.name())
+                if ampSeq is not None:
+                    raise Exception("%s: Can not sequence over amplitude and sum simultaneously." % self.name())
+                amp = "%s / (%s)" % (sumName, length)
+            seq[sumName] = sumSeq
+        
+        return start, length, amp, seq
+    
+    def compile(self):
+        dev, pCellVoltage = self.preCompile()
+        fnStr = "laserMask(%s, %s)" % (dev, pCellVoltage)
+        return fnStr, seq
+        
+    def setState(self, state):
+        for k, v in state.iteritems():
+            if k == 'type':
+                continue
+            self.param(k).setState(v)
+        
+    def getState(self):
+        state = collections.OrderedDict()
+        for ch in self:
+            state[ch.name()] = ch.getState()
+        state['type'] = self.opts['type']
+        return state        

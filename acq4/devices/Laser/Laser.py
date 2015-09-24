@@ -535,9 +535,7 @@ class Laser(DAQGeneric, OptomechDevice):
     def getPCellWaveform(self, powerCmd, cmd):
         ### return a waveform of pCell voltages to give the power in powerCmd
         if self.hasPCell:
-            print cmd
-            print 'powercmd: ',powerCmd
-            print np.amax(powerCmd)
+            print 'getPCellWaveform: ', cmd, powerCmd, np.amax(powerCmd), np.sum(powerCmd)/np.amax(powerCmd)
             return powerCmd
         else:
             raise Exception("Support for pockel cells is not yet implemented.")
