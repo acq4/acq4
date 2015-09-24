@@ -314,3 +314,23 @@ def noise(params, mean, sigma, start=0.0, stop=None):
 
     d[start:stop] = numpy.random.normal(size=stop-start, loc=mean, scale=sigma)
     return d
+
+_global_data = {}
+def setDataSource(name, data):
+    """Assign a global array or callable to be used by other generators.
+    """
+    if data is None:
+        del _global_data[name]
+    else:
+        _global_data[name] = data
+
+def getArray(params, name):
+    if name not in _global_data:
+        raise Exception("No data source named '%s'. Options are: %s" % (name, str(list(_global_data.keys()))))
+    
+    data = _global_data[name]
+    if isinstance(data, numpy.ndarray):
+        return data
+    else:
+        return data()
+

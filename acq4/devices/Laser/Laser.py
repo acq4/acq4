@@ -534,19 +534,18 @@ class Laser(DAQGeneric, OptomechDevice):
         
     def getPCellWaveform(self, powerCmd, cmd):
         ### return a waveform of pCell voltages to give the power in powerCmd
-        return
-        #if self.hasPCell:
-            #print cmd
-            #print 'powercmd: ',powerCmd
-            #print np.amax(powerCmd)
-            
-            #raise Exception("Support for pockel cells is not yet implemented.")
-    
+        if self.hasPCell:
+            print cmd
+            print 'powercmd: ',powerCmd
+            print np.amax(powerCmd)
+            return powerCmd
+        else:
+            raise Exception("Support for pockel cells is not yet implemented.")
+        return 
 
     def getChannelCmds(self, cmd, rate):
         ### cmd is a dict and can contain 'powerWaveform' or 'switchWaveform' keys with the array as a value
-        
-        
+
         if 'switchWaveform' in cmd:
             cmdWaveform = cmd['switchWaveform']
             vals = np.unique(cmd['switchWaveform'])
