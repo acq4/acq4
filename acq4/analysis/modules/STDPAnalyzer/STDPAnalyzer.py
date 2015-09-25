@@ -94,6 +94,8 @@ class STDPAnalyzer(AnalysisModule):
         self.averageCtrl = pg.WidgetGroup(self.ctrl.traceDisplayGroup) ##TODO: save state when we save data
         self.ctrl.averageTimeSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=60, step=1)
         self.ctrl.averageNumberSpin.setOpts(step=1, dec=True)
+        self.ctrl.startExcludeAPsSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=0, step=1, minstep=0.001)
+        self.ctrl.endExcludeAPsSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=0.25, step=1, minstep=0.001)
         self.averageCtrl.sigChanged.connect(self.averageCtrlChanged)
 
         self.analysisCtrl = pg.WidgetGroup(self.ctrl.analysisGroup)
@@ -309,6 +311,7 @@ class STDPAnalyzer(AnalysisModule):
             self.updateExptPlot()
             self.updateTracesPlot()
             return
+            
         if not self.needNewAverage(): ## if the parameters for averaging didn't change, we don't need to do anything
             self.updateTracesPlot()
             return
@@ -322,6 +325,12 @@ class STDPAnalyzer(AnalysisModule):
         excludeAPs = self.ctrl.excludeAPsCheck.isChecked()
         if not excludeAPs == self.lastAverageState.get('excludeAPs', None):
             return True
+
+        if excludeAPs:
+            start = self.ctrl.startExcludeAPsSpin.value()
+            end = self.ctrl.endExcludeAPsSpin.value()
+            if not ((start == self.lastAverageState.get('startExcludeAPsTime', None)) and (end == self.lastAverageState.get('endExcludeAPsTime', None))):
+                return True
 
         if self.ctrl.averageTimeRadio.isChecked():
             method = 'time'
@@ -346,6 +355,9 @@ class STDPAnalyzer(AnalysisModule):
     def getNewAverages(self):
 
         excludeAPs = self.ctrl.excludeAPsCheck.isChecked()
+        start = self.ctrl.startExcludeAPsSpin.value()
+        end = self.ctrl.endExcludeAPsSpin.value()
+
 
         if self.ctrl.averageTimeRadio.isChecked():
             method = 'time'
@@ -358,7 +370,7 @@ class STDPAnalyzer(AnalysisModule):
         else:
             raise Exception("Unable to average traces. Please make sure an averaging method is selected.")
 
-        self.lastAverageState = {'method': method, 'value': value, 'excludeAPs':excludeAPs}
+        self.lastAverageState = {'method': method, 'value': value, 'excludeAPs':excludeAPs, 'startExcludeAPsTime':start, 'endExcludeAPsTime':end}
         #print "finished getNewAverages"
 
     def checkForAP(self, trace, timeWindow):
@@ -384,9 +396,10 @@ class STDPAnalyzer(AnalysisModule):
         # print "      time:", time
         if excludeAPs:
             #print '   excluding APs:'
+            timeWindow = (self.ctrl.startExcludeAPsSpin.value(), self.ctrl.endExcludeAPsSpin.value())
             APmask = np.zeros(len(self.traces), dtype=bool)
             for i, trace in enumerate(self.traces):
-                APmask[i] = self.checkForAP(trace['data'], (0, 0.25))
+                APmask[i] = self.checkForAP(trace['data'], timeWindow)
             self.excludedTraces = self.traces[APmask]
             includedTraces = self.traces[~APmask]
         else:
