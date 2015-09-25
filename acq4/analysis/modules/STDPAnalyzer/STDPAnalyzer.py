@@ -145,7 +145,7 @@ class STDPAnalyzer(AnalysisModule):
 
 
     def loadEPSPFileRequested(self, files):
-        """Called by FileLoader when the load file button is clicked, once for each selected file.
+        """Called by FileLoader when the load EPSP file button is clicked, once for each selected file.
                 files - a list of the file currently selected in FileLoader
         """
         #print "loadFileRequested"
@@ -184,6 +184,9 @@ class STDPAnalyzer(AnalysisModule):
         return True
 
     def loadPairingFileRequested(self, files):
+        """Called by FileLoader when the load pairing file button is clicked, once for each selected file.
+                files - a list of the file currently selected in FileLoader
+        """
         if files is None:
             return
 
@@ -213,6 +216,9 @@ class STDPAnalyzer(AnalysisModule):
         return True
 
     def updateExptPlot(self):
+        """Update the experiment plots with markers for the the timestamps of 
+        all loaded EPSP traces, and averages (if selected in the UI)."""
+
         if len(self.traces) == 0:
             return
 
@@ -236,9 +242,13 @@ class STDPAnalyzer(AnalysisModule):
             self.plots.tracesPlot.addItem(item)
 
     def updateTracesPlot(self):
+        """Update the Trace display plot to show the traces corresponding to
+         the timestamps selected by the region in the experiment plot."""
+
         rgn = self.traceSelectRgn.getRegion()
         self.clearTracesPlot()
 
+        ### plot all the traces with timestamps within the selected region (according to self.traceSelectRgn)
         if not self.ctrl.averageCheck.isChecked():
             data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)
                               *(self.traces['timestamp'] < rgn[1]+self.expStart)
@@ -248,7 +258,7 @@ class STDPAnalyzer(AnalysisModule):
             for i, d in enumerate(data):
                 self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
-        #if self.ctrl.averageCheck.isChecked():
+        ### plot only the average traces with timestamps within the selected region
         else:
             data = self.averagedTraces[
                     (self.averagedTraces['avgTimeStamp'] > rgn[0]+self.expStart)
@@ -256,26 +266,22 @@ class STDPAnalyzer(AnalysisModule):
             displayOrig = self.ctrl.displayTracesCheck.isChecked()
             timeKey = 'avgTimeStamp'
             dataKey='avgData'
-            #print "   len(data):", len(data)
+
             for i, d in enumerate(data['avgData']):
-#                print i, dir(d)
                 self.plots.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
+
+                ### also display the original traces if selected in the UI
                 if displayOrig:
-                    #print "   origTimes:", data['origTimes'] , type(data['origTimes']), type(data['origTimes'][0])
                     for t in data['origTimes'][i]:
                         orig = self.traces[self.traces['timestamp']==t]['data'][0]
-                        #sample = self.traces[0]['data']
-                        #print orig.infoCopy()
-                        #print sample.infoCopy()
                         self.plots.tracesPlot.plot(orig['primary'], pen=pg.intColor(i, len(data), alpha=30))
 
+        ### If analysis has been done, mark the location on each trace where the highest slope was found
         if self.analysisResults is not None and len(data[dataKey] > 0):
             datatime = data[dataKey][0].axisValues('Time')
             timestep = datatime[1]-datatime[0]
             for i, time in enumerate(data[timeKey]):
                 slopeTime = self.analysisResults[self.analysisResults['time'] == time]['highSlopeLocation']
-#                print slopeTime
-#                print timestep
                 slopeInd = int(slopeTime/timestep)
                 self.plots.tracesPlot.plot([slopeTime], [data[i][dataKey]['primary'][slopeInd]], pen=None, symbol='o', symbolPen=None, symbolBrush=pg.intColor(i, len(data)))
 
