@@ -729,9 +729,9 @@ class EventStatisticsAnalyzer:
             stats = [s[0].getStats(s[1]) for s in site['data']['sites']]   ## pre-recorded stats for all sub-sites in this map site
             if 'ZScore' in stats[0].keys():
                 site['data']['ZScore'] = np.median([s['ZScore'] for s in stats])
-                site['data']['SpontZScore'] = np.median([s['SpontZScore'] for s in stats])
+                #site['data']['SpontZScore'] = np.median([s['SpontZScore'] for s in stats])
                 postScores['ZScore'].append(site['data']['ZScore'])
-                preScores['SpontZScore'].append(site['data']['SpontZScore'])
+                #preScores['SpontZScore'].append(site['data']['SpontZScore'])
             if 'directFitPeak' in stats[0].keys():
                 site['data']['DirectPeak'] = np.median([s['directFitPeak'] for s in stats])
             if 'fitAmplitude_PostRegion_sum' in stats[0].keys():
