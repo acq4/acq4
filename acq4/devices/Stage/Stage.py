@@ -36,6 +36,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
+        self.pitch = config.get('pitch', 27)
         
         self._limits = [(None, None), (None, None), (None, None)]
 
@@ -47,7 +48,7 @@ class Stage(Device, OptomechDevice):
 
     def quit(self):
         self.stop()
-    
+
     def capabilities(self):
         """Return a structure describing the capabilities of this device::
         
@@ -268,7 +269,7 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError()
 
     def updateProgressDialog(self):
-        done = self._progressDialog.mf.percentDone()
+        done = int(self._progressDialog.mf.percentDone())
         self._progressDialog.setValue(done)
         if done == 100:
             self._progressTimer.stop()
@@ -310,6 +311,7 @@ class MoveFuture(object):
     """Used to track the progress of a requested move operation.
     """
     def __init__(self, dev, pos, speed):
+        self.startTime = pg.ptime.time()
         self.dev = dev
         self.speed = speed
         self.targetPos = pos
@@ -322,10 +324,16 @@ class MoveFuture(object):
         the percent complete. Devices that do not provide position updates while 
         moving should reimplement this method.
         """
+        if self.isDone():
+            return 100
         s = np.array(self.startPos)
         t = np.array(self.targetPos)
         p = np.array(self.dev.getPosition())
-        return 100 * ((p - s) / (t - s)).mean()
+        d1 = ((p - s)**2).sum()**0.5
+        d2 = ((t - s)**2).sum()**0.5
+        if d2 == 0:
+            return 100
+        return 100 * d1 / d2
 
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.

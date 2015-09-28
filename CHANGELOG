@@ -11,6 +11,7 @@ acq4-0.9.3 (unreleased)
         Timelapse + z-stack in camera module
         Motorized focus control interface in camera module
         Support for tracking and controlling micromanipulators from camera module
+        Support for Scientifica PatchStar manipulators
         Spiral scanning for single-cell photostimulation
         Panic button: ESC key global shortcut closes shutters, stops stage/manipulator, aborts all tasks, etc.
         Overhaul of 2p Imager module:
