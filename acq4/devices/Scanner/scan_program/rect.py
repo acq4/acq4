@@ -21,6 +21,7 @@ class RectScanComponent(ScanProgramComponent):
     def __init__(self, scanProgram=None):
         ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
+        self.ctrl.sigStateChanged.connect(self.changed)
         
     def samplingChanged(self):
         self.ctrl.update()
@@ -170,6 +171,8 @@ class RectScanControl(QtCore.QObject):
         finally:
             if reconnect:
                 self.params.sigTreeStateChanged.connect(self.paramsChanged)
+                
+        self.sigStateChanged.emit(self)
     
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost

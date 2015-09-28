@@ -83,8 +83,9 @@ class ScannerTaskGui(TaskGui):
         
         self.scanProgram = ScanProgram()
         self.scanProgram.setDevices(scanner=self.dev)
+        self.scanProgram.sigProgramChanged.connect(self.scanProgramChanged)
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
-        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
+        generator.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
 
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
@@ -157,6 +158,10 @@ class ScannerTaskGui(TaskGui):
     def enableScanProgToggled(self, b):
         self.ui.scanProgramGroup.setVisible(b)
         self.updateVisibility()
+
+    def scanProgramChanged(self, prog, comp):
+        # reset laser mask source just to kick any generators that may depend on this key
+        generator.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
 
     def showPosCtrls(self, b):
         self.updateVisibility()
@@ -560,7 +565,7 @@ class ScannerTaskGui(TaskGui):
             s.removeItem(self.testTarget)
             s.removeItem(self.spotMarker)
         self.scanProgram.close()
-        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', None)
+        generator.setDataSource(self.dev.name() + '_laserMask', None)
 
 
 class TargetPoint(pg.EllipseROI):
