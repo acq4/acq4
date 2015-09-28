@@ -1,1 +1,1 @@
-from MultiClamp import *
+from multiclamp import *

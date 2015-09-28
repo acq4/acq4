@@ -60,9 +60,10 @@ class Manipulator(Device, OptomechDevice):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
-        self.pitch = config['pitch'] * np.pi / 180.
         self._stageOrientation = {'angle': 0, 'inverty': False}
-        assert isinstance(self.parentDevice(), Stage)
+        parent = self.parentDevice()
+        assert isinstance(parent, Stage)
+        self.pitch = parent.pitch * np.pi / 180.
 
         cal = self.readConfigFile('calibration')
         if cal != {}:
