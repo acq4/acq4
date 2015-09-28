@@ -578,6 +578,10 @@ class DataSources(QtCore.QObject):
         else:
             return data()
         
+    def keys(self):
+        """All data keys available in this instance.
+        """
+        return self.data.keys()
 
 
 DATA_SOURCES = DataSources()
