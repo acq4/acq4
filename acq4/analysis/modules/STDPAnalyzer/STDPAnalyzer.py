@@ -311,7 +311,7 @@ class STDPAnalyzer(AnalysisModule):
             self.updateExptPlot()
             self.updateTracesPlot()
             return
-            
+
         if not self.needNewAverage(): ## if the parameters for averaging didn't change, we don't need to do anything
             self.updateTracesPlot()
             return
@@ -836,12 +836,12 @@ class STDPAnalyzer(AnalysisModule):
         agonist = cell.info().get('agonist_code', 'No info')
         antagonist = cell.info().get('antagonist_code', 'No info')
 
-        preNotes = cell.info().get('notes', '')
-        i=50
+        preNotes = 'Notes: ' + cell.info().get('notes', '')
+        i=30
         notes=''
-        while i< len(preNotes)+50:
-            notes += preNotes[i-50:i]+"<br />     "
-            i += 50
+        while i< len(preNotes)+30:
+            notes += preNotes[i-30:i]+"<br />     "
+            i += 30
 
         if showPlasticity:
             plasticity='%g %%' % (self.plasticity * 100.)
@@ -850,35 +850,35 @@ class STDPAnalyzer(AnalysisModule):
         
         info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Plasticity: %s" % (antagonist, agonist, plasticity)
         l.addLabel(text=info, row=1, col=2)
-        l.addLabel(text='Notes: %s'%notes, row=2, col=2)
+        l.addLabel(text=notes, row=2, col=2)
 
         pairingPlot = pg.PlotItem()
-        pairingPlot.plot(self.avgPairingTrace['Time':0.05:0.15])
+        pairingPlot.plot(timeValues[0.05/rate:0.15/rate], self.avgPairingTrace['Time':0.05:0.15])
         l.addItem(pairingPlot, row=1, col=1, rowspan=2)
         
 
         
         plasticityPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['pspSlope'],
-            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+            pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         if showPlasticity:
             l.addItem(plasticityPlot, row=4, col=0, colspan=3)
        
         rmpPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['RMP'],
-            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+            pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         l.addItem(rmpPlot, row=5, col=0, colspan=3)
 
         riPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['InputResistance'],
-            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+            pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         l.addItem(riPlot, row=6, col=0, colspan=3)
 
         holdingPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['HoldingCurrent'],
-            pen=None, symbol='o', symbolSize=5, symbolPen=None)
+            pen=None, symbol='o', symbolSize=5, symbolBrush='w' )
         l.addItem(holdingPlot, row=7, col=0, colspan=3)
 
         plasticityPlot.setLabel('left', 'PSP Slope')
-        rmpPlot.setLabel('left', 'RMP')
-        riPlot.setLabel('left', 'Ri')
-        holdingPlot.setLabel('left', 'Holding Current')
+        rmpPlot.setLabel('left', 'RMP', units='V')
+        riPlot.setLabel('left', 'Ri', units='Ohm')
+        holdingPlot.setLabel('left', 'Holding Current', units='A')
 
 
         return view
