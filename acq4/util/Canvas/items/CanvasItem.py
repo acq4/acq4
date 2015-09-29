@@ -19,7 +19,7 @@ class CanvasItem(OrigCanvasItem):
             if self.opts['name'] is None:
                 self.opts['name'] = self.opts['handle'].shortName()
         
-    def handle(self):
+    def getHandle(self):
         """Return the file handle for this item, if any exists."""
         return self.opts['handle']
     
@@ -37,7 +37,7 @@ class CanvasItem(OrigCanvasItem):
         If fh is specified, store data to that file handle.
         Otherwise, use self.handle if it is set."""
         if fh is None:
-            fh = self.handle()
+            fh = self.getHandle()
         if fh is None:
             raise Exception("Can not store transform--no file handle for this item.", 1)
         trans = self.saveTransform()
