@@ -2342,7 +2342,7 @@ def measureResistance(data, mode):
     pulseAmp = pulse['command'].mean() - base['command'].mean()
 
     if mode == 'IC':
-        inputResistance = pulseAmp/(pulseEnd['primary'].mean() - base['primary'].mean())
+        inputResistance = (pulseEnd['primary'].mean() - base['primary'].mean())/pulseAmp
         seriesResistance = None
 
     elif mode == 'VC':
@@ -2350,8 +2350,8 @@ def measureResistance(data, mode):
             RsPeak = data['primary'].min()
         else:
             RsPeak = data['primary'].max()
-        seriesResistance = pulseAmp/(RsPeak-base['primary'].mean())
-        inputResistance = pulseAmp/(pulseEnd['primary'].mean() - base['primary'].mean())
+        seriesResistance = (RsPeak-base['primary'].mean())/pulseAmp
+        inputResistance = (pulseEnd['primary'].mean() - base['primary'].mean())/pulseAmp
 
     else:
         raise Exception("Not sure how to interpret mode: %s. Please use either 'VC' or 'IC'. " %str(mode))
