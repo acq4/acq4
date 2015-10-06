@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from acq4.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from acq4.devices.Device import *
 from acq4.Manager import logMsg
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex
+from acq4.pyqtgraph import multiprocess
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
@@ -17,28 +17,72 @@ class MultiClamp(Device):
     
     sigStateChanged = QtCore.Signal(object)
     sigHoldingChanged = QtCore.Signal(object, object)  # self, mode
-    
+
+    # remote process used to connect to commander from 32-bit python
+    proc = None
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
         self.lock = Mutex(Mutex.Recursive)
         self.index = None
         self.devRackGui = None
+        self.mc = None
         
         self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
         self.lastState = {}
         self.lastMode = None
         self._switchingToMode = None
 
+        # default holding state
+        self.holding = {
+            'VC': -50e-3,
+            'IC': 0.0,
+            'I=0': 0.0
+        }
+
+        # Get a handle to the multiclamp driver object, whether that is hosted locally or in a remote process.
+        executable = self.config.get('pythonExecutable', None)
+        if executable is not None:
+            # Run a remote python process to connect to the MC commander. 
+            # This is used on 64-bit systems where the MC connection must be run with 
+            # 32-bit python.
+            if MultiClamp.proc is False:
+                raise Exception("Already connected to multiclamp locally; cannot connect via remote process at the same time.")
+            if MultiClamp.proc is None:
+                MultiClamp.proc = multiprocess.Process(executable=executable, copySysPath=False)
+                try:
+                    self.proc.mc_mod = self.proc._import('acq4.drivers.MultiClamp')
+                    self.proc.mc_mod._setProxyOptions(deferGetattr=False)
+                except:
+                    MultiClamp.proc.close()
+                    MultiClamp.proc = None
+                    raise
+            mc = self.proc.mc_mod.MultiClamp.instance()
+        else:
+            if MultiClamp.proc not in (None, False):
+                raise Exception("Already connected to multiclamp via remote process; cannot connect locally at the same time.")
+            else:
+                # don't allow remote process to be used for other channels.
+                MultiClamp.proc = False
+
+            try:
+                from acq4.drivers.MultiClamp import MultiClamp as MultiClampDriver
+            except RuntimeError as exc:
+                if "32-bit" in exc.message:
+                    raise Exception("MultiClamp commander does not support access by 64-bit processes. To circumvent this problem, "
+                                    "Use the 'pythonExecutable' device configuration option to connect via a 32-bit python instead.")
+                else:
+                    raise
+            mc = MultiClampDriver.instance()
+
+
+        # get a handle to our specific multiclamp channel
         try:
-            # default holding state
-            self.holding = {
-                'VC': -50e-3,
-                'IC': 0.0,
-                'I=0': 0.0
-            }
-                
-            self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'], self.mcUpdate)
+            if executable is not None:
+                self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
+            else:
+                self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
             
             ## wait for first update..
             c = 0
@@ -66,14 +110,12 @@ class MultiClamp(Device):
                     self.mc.setParams(defaults[mode])
             self.setMode('I=0')  ## safest mode to leave clamp in
 
-        except:
+        except Exception as ex1:
             try:
-                mc = MultiClampDriver.instance()
-                if mc is not None:
-                    mc.quit()
+                mc.quit()
             except:
                 pass
-            raise
+            raise ex1
         
         dm.declareInterface(name, ['clamp'], self)
 
@@ -84,9 +126,8 @@ class MultiClamp(Device):
         return chans
 
     def quit(self):
-        mc = MultiClampDriver.instance()
-        if mc is not None:
-            mc.quit()
+        if self.mc is not None:
+            self.mc.mc.quit()
 
     def mcUpdate(self, state=None, mode=None):
         """MC state (or internal holding state) has changed, handle the update."""

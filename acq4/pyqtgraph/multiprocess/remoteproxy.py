@@ -414,7 +414,7 @@ class RemoteEventHandler(object):
             if opts is None:
                 opts = {}
             
-            assert callSync in ['off', 'sync', 'async'], 'callSync must be one of "off", "sync", or "async"'
+            assert callSync in ['off', 'sync', 'async'], 'callSync must be one of "off", "sync", or "async" (got %r)' % callSync
             if reqId is None:
                 if callSync != 'off': ## requested return value; use the next available request ID
                     reqId = self.nextRequestId
