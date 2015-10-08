@@ -348,12 +348,13 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
     if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
     amplitude=np.pi/2
-    linramp=amplitude+sawWave(risfall*ms,amplitude,0,0,risfall*ms, 0, **kwds)+pulse(risfall*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds)
+    linramp=amplitude+sawWave(risfall*ms,amplitude,0,start*ms,(start+risfall)*ms, 0, **kwds)+pulse((start+risfall)*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds)
     cos2gat=(np.cos(linramp))**2
     d=cos2gat
     per=float(1/freq)
     d=cos2gat*sineWave(per,1,0,start*ms,stop*ms,0, **kwds)
     return d
+#def sawWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds):    
     
 # def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 200, direction= 'up', **kwds):  #tfr 09/28/2015
 def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 400, direction= 'up', **kwds):
