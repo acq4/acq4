@@ -169,7 +169,6 @@ class LaserTaskGui(DAQGenericTaskGui):
         wave = self.powerWidget.getSingleWave(params)
         rawCmds = self.getChannelCmds(wave, rate)
         #rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
-        
         ### structure task in DAQGeneric-compatible way
         cmd = {}
         for k in rawCmds:
@@ -178,15 +177,19 @@ class LaserTaskGui(DAQGenericTaskGui):
             
         cmd['powerWaveform'] = wave  ## just to allow the device task to store this data
         cmd['ignorePowerWaveform'] = True
-        return  cmd
+        return cmd
     
     def getChannelCmds(self, powerWave, rate):
         key = id(powerWave)
-        if key in self.cache:
-            rawCmds = self.cache[key]
-        else:
-            rawCmds = self.dev.getChannelCmds({'powerWaveform':powerWave}, rate) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
-            self.cache[key] = rawCmds
+        # force update of rawCmds
+        #if key in self.cache:
+        #    rawCmds = self.cache[key]
+        #else:
+        rawCmds = self.dev.getChannelCmds({'powerWaveform':powerWave}, rate) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
+        if self.ui.releaseAfterSequence.isChecked():
+            print 'shutter set to 1.'
+            rawCmds['shutter'][:] = 1.
+        self.cache[key] = rawCmds
         return rawCmds
         
     

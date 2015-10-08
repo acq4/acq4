@@ -85,13 +85,10 @@ class ScannerTaskGui(TaskGui):
         self.scanProgram.setDevices(scanner=self.dev)
         self.scanProgram.sigProgramChanged.connect(self.scanProgramChanged)
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
-<<<<<<< HEAD
-        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
+        # Head generator.waveforms.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
         
-=======
         generator.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
 
->>>>>>> luke/scanner-laser-control
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
         self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])

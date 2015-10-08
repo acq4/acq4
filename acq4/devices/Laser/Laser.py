@@ -744,7 +744,7 @@ class LaserTask(DAQGenericTask):
         ### set up shutter, qSwitch and pCell -- self.cmd['daqProtocol'] points to the command structure that the DAQGeneric will use, don't set self.cmd['daqProtocol'] equal to something else!
         if 'shutter' in self.cmd:
             self.cmd['daqProtocol']['shutter'] = self.cmd['shutter']
-            self.cmd['daqProtocol']['shutter']['command'][-1] = 0
+            #    self.cmd['daqProtocol']['shutter']['command'][-1] = 0
         elif 'shutterMode' in self.cmd:
             if self.cmd['shutterMode'] is 'auto':
                 if 'shutter' in calcCmds:
