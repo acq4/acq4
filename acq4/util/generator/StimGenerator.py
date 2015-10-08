@@ -89,6 +89,8 @@ class StimGenerator(QtGui.QWidget):
         self.ui.advancedBtn.toggled.connect(self.updateWidgets)
         self.ui.forceAdvancedBtn.clicked.connect(self.forceAdvancedClicked)
         self.ui.forceSimpleBtn.clicked.connect(self.forceSimpleClicked)
+        
+        DATA_SOURCES.sigSourceChanged.connect(self.dataSourceChanged)
 
     def setEvalNames(self, **kargs):
         """Make variables accessible for use by evaluated functions."""
@@ -397,6 +399,10 @@ class StimGenerator(QtGui.QWidget):
             obj = getattr(waveforms, i)
             if type(obj) is types.FunctionType:
                 ns[i] = self.makeWaveFunction(i, arg)
+                
+        # Add global data sources
+        ns['globalData'] = DATA_SOURCES
+        ns['getArray'] = DATA_SOURCES.getArray
         
         ## add current sequence parameter values into namespace
         seq = self.paramSpace() # -- this is where the Laser bug was happening -- seq becomes 'Pulse_sum', but params was {'power.Pulse_sum': x}, so the default value is always used instead (fixed by removing 'power.' before the params are sent to stimGenerator, but perhaps there is a better place to fix this)
@@ -465,7 +471,11 @@ class StimGenerator(QtGui.QWidget):
         obj = getattr(waveforms, name)
         return lambda *args, **kwargs: obj(arg, *args, **kwargs)
         
-
+    def dataSourceChanged(self, name):
+        self.clearCache()
+        if self.test():
+            self.autoUpdate()
+        self.sigStateChanged.emit()
 
 
 ## Old sequence parsing functions for backward compatibility:
@@ -536,3 +546,47 @@ def seqParse(seqStr):
         'log spacing': 'l' in opts, 'randomize': 'r' in opts
     }
     #return (name, single, seq)
+
+
+class DataSources(QtCore.QObject):
+    
+    sigSourceChanged = QtCore.Signal(object)  # name
+    
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.data = {}
+        
+    def setDataSource(self, name, data):
+        """Assign a global array or callable to be used by other generators.
+        """
+        if data is None:
+            del self.data[name]
+        else:
+            self.data[name] = data
+
+        self.sigSourceChanged.emit(name)
+
+    def __getitem__(self, name):
+        if name not in self.data:
+            raise Exception("No data source named '%s'. Options are: %s" % (name, str(list(self.data.keys()))))
+        return self.data[name]
+
+    def getArray(self, name):
+        data = self[name]
+        if isinstance(data, np.ndarray):
+            return data
+        else:
+            return data()
+        
+    def keys(self):
+        """All data keys available in this instance.
+        """
+        return self.data.keys()
+
+
+DATA_SOURCES = DataSources()
+
+def setDataSource(name, data):
+    """Set a global data source that may be used from inside function generators.
+    """
+    return DATA_SOURCES.setDataSource(name, data)

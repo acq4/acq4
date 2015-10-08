@@ -2,7 +2,7 @@ from PyQt4 import QtGui, QtCore
 import weakref
 
 
-class ScanProgramComponent(object):
+class ScanProgramComponent(QtCore.QObject):
     """
     Base class for all components that make up a scan program.
     
@@ -17,9 +17,12 @@ class ScanProgramComponent(object):
     
     """
     
+    sigChanged = QtCore.Signal(object)  # self
+    
     type = None  # String identifying the type of this scan component.
                  
     def __init__(self, scanProgram):
+        QtCore.QObject.__init__(self)
         self._laser = None
         self.params = None
         self.program = weakref.ref(scanProgram)
@@ -45,6 +48,10 @@ class ScanProgramComponent(object):
         changed.
         """
         pass
+
+    def changed(self):
+        # Called when the output of this component has changed
+        self.sigChanged.emit(self)
         
     def isActive(self):
         """Return True if this component is currently active.
