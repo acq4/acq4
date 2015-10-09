@@ -206,7 +206,7 @@ class LaserTaskGui(DAQGenericTaskGui):
         #else:
         rawCmds = self.dev.getChannelCmds({'powerWaveform':powerWave}, rate) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         if self.ui.releaseAfterSequence.isChecked():
-            print 'shutter set to 1.'
+            #print 'shutter set to 1.'
             rawCmds['shutter'][:] = 1.
             #self.dev.setChanHolding('shutter',False)
         self.cache[key] = rawCmds

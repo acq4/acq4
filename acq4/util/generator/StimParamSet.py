@@ -1,6 +1,8 @@
 from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 import acq4.pyqtgraph as pg
 import collections
+import StimGenerator as stimGenerator
+import numpy as np
 
 class StimParamSet(GroupParameter):
     ## top-level parameter in the simple stim generator tree
@@ -236,6 +238,7 @@ class PulseParameter(GroupParameter):
     def preCompile(self):
         ## prepare data for compile
         seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()] 
+        print seqParams
         (start, startSeq) = seqParams[0]
         (length, lenSeq) = seqParams[1]
         (amp, ampSeq) = seqParams[2]
@@ -262,6 +265,7 @@ class PulseParameter(GroupParameter):
     
     def compile(self):
         start, length, amp, seq = self.preCompile()
+        print 'pulseparam:',start, length, amp, seq
         fnStr = "pulse(%s, %s, %s)" % (start, length, amp)
         return fnStr, seq
         
@@ -326,34 +330,28 @@ class LaserMaskParameter(GroupParameter):
         if 'type' not in kargs:
             kargs['type'] = 'laserMask'
         kargs['strictNaming'] = True
+        
+        dataSources = stimGenerator.DATA_SOURCES.keys()
+        laserMaskSources = []
+        for ds in dataSources:
+            if '_laserMask' in ds:
+                laserMaskSources.append(ds.replace('_laserMask',''))
+        print laserMaskSources
+        
         GroupParameter.__init__(self, removable=True, renamable=True,
             children=[
-                SeqParameter(**{'name': 'device', 'type': 'str', 'axis': 'x', 'value': 'Scanner',}),
-                SeqParameter(**{'name': 'pCellVoltage', 'type': 'float', 'axis': 'x', 'value': 0.1}),
+                {'name': 'device', 'type': 'list', 'value': laserMaskSources[0] , 'values' : laserMaskSources},
+                {'name': 'pCellVoltage', 'type': 'float','axis': 'xyz', 'value': 0.1},
             ], **kargs)
             
         self.param('device').sigValueChanged.connect(self.devChanged)
         self.param('pCellVoltage').sigValueChanged.connect(self.voltChanged)
         
     def devChanged(self):
-        self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
+        print "new device"
 
     def voltChanged(self):
-        self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
-
-    def sumChanged(self):
-        if self['sum', 'affect'] == 'length':
-            sign = 1 if self['length'] >= 0 else -1
-            if self['amplitude'] == 0:
-                self.param('length').setValue(0, blockSignal=self.lenChanged)
-            else:
-                self.param('length').setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
-        else:
-            sign = 1 if self['amplitude'] >= 0 else -1
-            if self['length'] == 0:
-                self.param('amplitude').setValue(0, blockSignal=self.ampChanged)
-            else:
-                self.param('amplitude').setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
+        print "new voltage"
 
     def varName(self):
         name = self.name()
@@ -362,34 +360,19 @@ class LaserMaskParameter(GroupParameter):
 
     def preCompile(self):
         ## prepare data for compile
-        seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()] 
-        (start, startSeq) = seqParams[0]
-        (length, lenSeq) = seqParams[1]
-        (amp, ampSeq) = seqParams[2]
-        seq = {name:seq for name, seq in seqParams if seq is not None}
-
-        ## If sequence is specified over sum, interpret that a bit differently.
-        (sumName, sumSeq) = self.param('sum').compile()
-        if sumSeq is not None:
-            if self.sum['affect'] == 'length':
-                if not self.param('length').writable():
-                    raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
-                if lenSeq is not None:
-                    raise Exception("%s: Can not sequence over length and sum simultaneously." % self.name())
-                length = "%s / (%s)" % (sumName, amp)
-            else:
-                if not self.param('amplitude').writable():
-                    raise Exception("%s: Can not sequence over amplitude; it is a read-only parameter." % self.name())
-                if ampSeq is not None:
-                    raise Exception("%s: Can not sequence over amplitude and sum simultaneously." % self.name())
-                amp = "%s / (%s)" % (sumName, length)
-            seq[sumName] = sumSeq
+        wave = stimGenerator.DATA_SOURCES.getArray(self['device']+'_laserMask')
+        print wave, type(wave), sum(wave)
         
+        (start, startSeq) = (np.where(wave), None)
+        (length, lenSeq) = (sum(wave),None)
+        (amp, ampSeq) = (self['pCellVoltage'], None)
+        seq = {}
+
         return start, length, amp, seq
     
     def compile(self):
-        dev, pCellVoltage = self.preCompile()
-        fnStr = "laserMask(%s, %s)" % (dev, pCellVoltage)
+        start, length, amp, seq = self.preCompile()
+        fnStr = "pulse(%s, %s, %s)" % (start, length, amp)
         return fnStr, seq
         
     def setState(self, state):
