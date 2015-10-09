@@ -177,8 +177,27 @@ class LaserTaskGui(DAQGenericTaskGui):
             
         cmd['powerWaveform'] = wave  ## just to allow the device task to store this data
         cmd['ignorePowerWaveform'] = True
+        #print cmd
         return cmd
-    
+
+    def taskStarted(self):
+        print 'task started'
+    def taskSequenceStarted(self):
+        if self.ui.releaseAfterSequence.isChecked():
+            self.dev.openShutter()
+        #if self.ui.releaseAfterSequence.isChecked():
+        #self.dev.setChanHolding('shutter',False)
+        print 'task sequence started'
+    def taskFinished(self):
+        if self.ui.releaseAfterSequence.isChecked():
+            #self.dev.setChanHolding('shutter',False)
+            self.dev.closeShutter()
+        print 'task finished'
+    def taskSequenceFinished(self):
+        print 'task sequence finished'
+    def taskPaused(self):
+        print 'task paused'
+        
     def getChannelCmds(self, powerWave, rate):
         key = id(powerWave)
         # force update of rawCmds
@@ -189,6 +208,7 @@ class LaserTaskGui(DAQGenericTaskGui):
         if self.ui.releaseAfterSequence.isChecked():
             print 'shutter set to 1.'
             rawCmds['shutter'][:] = 1.
+            #self.dev.setChanHolding('shutter',False)
         self.cache[key] = rawCmds
         return rawCmds
         

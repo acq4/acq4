@@ -145,6 +145,7 @@ class DAQGeneric(Device):
             a voltage on the physical DAQ channel. If *mapping* is None, then it will use self.getMapping(*channel*)
             to determine the correct mapping.
         """
+        #print "set holding", channel, level
         prof = Profiler(disabled=True)
         with self._DGLock:
             prof('lock')
@@ -413,9 +414,14 @@ class DAQGenericTask(DeviceTask):
             prof('stop %s' % ch)
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:
+                print 'holding',ch
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
                 prof('set holding %s' % ch)
             elif self.dev.isOutput(ch):  ## return all output channels to holding value
+                #print 'reset',ch, abort
+                #if ch=='shutter':
+                #    pass
+                #else:
                 self.dev.setChanHolding(ch)
                 prof('reset to holding %s' % ch)
         
