@@ -866,22 +866,26 @@ class STDPAnalyzer(AnalysisModule):
         plasticityPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['pspSlope'],
             pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         plasticityPlot.setYRange(0, 4)
+        plasticityPlot.setXRange(-50, 3200)
         if showPlasticity:
             l.addItem(plasticityPlot, row=4, col=0, colspan=3)
        
         rmpPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['RMP'],
             pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         rmpPlot.setYRange(-0.080, -0.030)
+        rmpPlot.setXRange(-50, 3200)
         l.addItem(rmpPlot, row=5, col=0, colspan=3)
 
         riPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['InputResistance'],
             pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         riPlot.setYRange(0, 300e6)
+        riPlot.setXRange(-50, 3200)
         l.addItem(riPlot, row=6, col=0, colspan=3)
 
         holdingPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['HoldingCurrent'],
             pen=None, symbol='o', symbolSize=5, symbolBrush='w' )
-        holdingPlot.setYRange(-400e-12, 0)
+        holdingPlot.setYRange(-400e-12, 50e-12)
+        holdingPlot.setXRange(-50, 3200)
         l.addItem(holdingPlot, row=7, col=0, colspan=3)
 
         plasticityPlot.setLabel('left', 'PSP Slope')
