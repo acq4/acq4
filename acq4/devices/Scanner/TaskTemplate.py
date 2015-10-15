@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'TaskTemplate.ui'
+# Form implementation generated from reading ui file '.\TaskTemplate.ui'
 #
-# Created: Sun Feb 22 09:54:16 2015
+# Created: Thu Oct 15 16:01:18 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -45,7 +45,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.cameraCombo, 0, 1, 1, 1)
         self.loadConfigBtn = QtGui.QPushButton(Form)
         self.loadConfigBtn.setObjectName(_fromUtf8("loadConfigBtn"))
-        self.gridLayout.addWidget(self.loadConfigBtn, 6, 0, 1, 2)
+        self.gridLayout.addWidget(self.loadConfigBtn, 7, 0, 1, 2)
         self.label = QtGui.QLabel(Form)
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
@@ -67,7 +67,10 @@ class Ui_Form(object):
         self.enableScanProgCheck.setObjectName(_fromUtf8("enableScanProgCheck"))
         self.gridLayout.addWidget(self.enableScanProgCheck, 4, 0, 1, 2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem, 5, 0, 1, 1)
+        self.gridLayout.addItem(spacerItem, 6, 0, 1, 1)
+        self.recenterScanProgramsBtn = QtGui.QPushButton(Form)
+        self.recenterScanProgramsBtn.setObjectName(_fromUtf8("recenterScanProgramsBtn"))
+        self.gridLayout.addWidget(self.recenterScanProgramsBtn, 5, 0, 1, 2)
         self.gridLayout_4.addLayout(self.gridLayout, 0, 0, 2, 1)
         self.positionCtrlGroup = QtGui.QGroupBox(Form)
         self.positionCtrlGroup.setCheckable(False)
@@ -84,8 +87,8 @@ class Ui_Form(object):
         self.spotDisplayGroup = GroupBox(self.positionCtrlGroup)
         self.spotDisplayGroup.setObjectName(_fromUtf8("spotDisplayGroup"))
         self.gridLayout_2 = QtGui.QGridLayout(self.spotDisplayGroup)
-        self.gridLayout_2.setMargin(3)
         self.gridLayout_2.setSpacing(0)
+        self.gridLayout_2.setMargin(3)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
         self.sizeFromCalibrationRadio = QtGui.QRadioButton(self.spotDisplayGroup)
         self.sizeFromCalibrationRadio.setChecked(True)
@@ -114,8 +117,8 @@ class Ui_Form(object):
         self.spotSequenceGroup.setSizePolicy(sizePolicy)
         self.spotSequenceGroup.setObjectName(_fromUtf8("spotSequenceGroup"))
         self.gridLayout_3 = QtGui.QGridLayout(self.spotSequenceGroup)
-        self.gridLayout_3.setMargin(3)
         self.gridLayout_3.setSpacing(3)
+        self.gridLayout_3.setMargin(3)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.minTimeSpin = SpinBox(self.spotSequenceGroup)
         self.minTimeSpin.setSuffix(_fromUtf8(""))
@@ -206,6 +209,7 @@ class Ui_Form(object):
         self.simulateShutterCheck.setText(_translate("Form", "Simulate Shutter", None))
         self.enablePosCtrlCheck.setText(_translate("Form", "Enable position controls", None))
         self.enableScanProgCheck.setText(_translate("Form", "Enable scan programs", None))
+        self.recenterScanProgramsBtn.setText(_translate("Form", "Re-center scan program(s)", None))
         self.positionCtrlGroup.setTitle(_translate("Form", "Position Controls", None))
         self.showPosCtrlCheck.setToolTip(_translate("Form", "Hide all items from view.", None))
         self.showPosCtrlCheck.setText(_translate("Form", "Show position controls", None))

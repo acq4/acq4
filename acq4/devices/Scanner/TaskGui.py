@@ -122,6 +122,7 @@ class ScannerTaskGui(TaskGui):
         self.ui.enableScanProgCheck.toggled.connect(self.enableScanProgToggled)
         self.ui.showLastSpotCheck.toggled.connect(self.showLastSpotToggled)
         self.ui.programPreviewSlider.valueChanged.connect(self.previewRateChanged)
+        self.ui.reCenterScanProgramsBtn.clicked.connect(self.reCenterScanPrograms)
         
         self.dev.sigGlobalSubdeviceChanged.connect(self.opticStateChanged)
         
@@ -303,6 +304,11 @@ class ScannerTaskGui(TaskGui):
     def loadConfiguration(self):
         state = self.dev.readConfigFile('lastConfig')
         self.restoreState(state)
+        
+    def reCenterScanPrograms(self):
+        pos = self.getViewBox().viewRect().center() 
+        print 'pos :',pos
+        print 'state : ',state
         
     def listSequence(self):
         #items = self.activeItems()
