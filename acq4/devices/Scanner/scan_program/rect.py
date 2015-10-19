@@ -55,6 +55,8 @@ class RectScanComponent(ScanProgramComponent):
         rs = self.ctrl.params.system
         rs.writeScanMask(mask)
         return mask
+    def reCenterComponent(self,newPos):
+        rs = self.ctrl.reCenter(newPos)
         
     def laserMask(self):
         mask = np.zeros(self.program().numSamples, dtype=bool)
@@ -129,6 +131,12 @@ class RectScanControl(QtCore.QObject):
 
     def isActive(self):
         return self.params.value()
+    
+    def reCenter(self,newPos=None):
+        state = self.roi.getState()
+        w, h = state['size']
+        self.roi.setPos(pos=[newPos[0]-w/2.,newPos[1]-h/2.])
+        self.update()
  
     # def setVisible(self, vis):
     #     if vis:
@@ -181,7 +189,7 @@ class RectScanControl(QtCore.QObject):
         self.params.system.p1 = pg.Point(self.roi.mapToView(pg.Point(w,h)))  # rop-right
         self.params.system.p2 = pg.Point(self.roi.mapToView(pg.Point(0,0)))  # bottom-left
         self.params.updateSystem()
-        
+    
     def saveState(self):
         task = {'name': self.params.name(), 
                 'active': self.isActive(), 

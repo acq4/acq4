@@ -12,6 +12,7 @@ from acq4.util.debug import Profiler
 from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+from acq4.util import generator
 
 from TaskTemplate import Ui_Form
 from .scan_program import ScanProgram, ScanProgramPreview
@@ -83,7 +84,8 @@ class ScannerTaskGui(TaskGui):
         self.scanProgram = ScanProgram()
         self.scanProgram.setDevices(scanner=self.dev)
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
-
+        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
+        
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
         self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
@@ -306,9 +308,9 @@ class ScannerTaskGui(TaskGui):
         self.restoreState(state)
         
     def reCenterScanPrograms(self):
-        pos = self.getViewBox().viewRect().center() 
-        print 'pos :',pos
-        print 'state : ',state
+        dev = self.dev.getFocusDevice()
+        newPos = dev.globalPosition()
+        self.scanProgram.reCenterComponent([newPos[0],newPos[1]])
         
     def listSequence(self):
         #items = self.activeItems()
@@ -564,7 +566,7 @@ class ScannerTaskGui(TaskGui):
             s.removeItem(self.testTarget)
             s.removeItem(self.spotMarker)
         self.scanProgram.close()
-
+        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', None)
 
 class TargetPoint(pg.EllipseROI):
     

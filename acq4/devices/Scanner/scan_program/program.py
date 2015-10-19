@@ -121,7 +121,13 @@ class ScanProgram:
             self.scanner = scanner
         if laser is not None:
             self.laser = laser
-        
+         
+    def reCenterComponent(self,newPos):
+        for component in self.components:
+            if component.isActive():
+                print "component",component
+                component.reCenterComponent(newPos)
+                
     def setSampling(self, rate, samples, downsample):
         """Set the sampling properties used by all components in the program:
         sample rate, number of samples, and downsampling factor.
@@ -219,7 +225,10 @@ class ScanProgram:
             if not component.isActive():
                 continue
             mask |= component.scanMask()
-
+            # disable inactivation of laser during overscan
+            (start,stop) = (np.where(mask==True)[0][0],np.where(mask==True)[0][-1])
+            print start, stop
+            mask[start:stop] = True
         return mask
 
     def close(self):

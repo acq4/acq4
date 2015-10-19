@@ -90,7 +90,13 @@ class ScanProgramComponent(object):
         drives the scan mirrors.
         """
         raise NotImplementedError()
-
+    
+    def reCenterComponent(self,newPos):
+        """Return a boolean array indicating regions where this component 
+        drives the scan mirrors.
+        """
+        pass
+    
     def laserMask(self):
         """Return boolean array indicating regions where this component intends
         the laser to be active. 
