@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file '.\TaskTemplate.ui'
 #
-# Created: Thu Oct 15 16:01:18 2015
+# Created: Mon Oct 19 15:33:32 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -68,9 +68,9 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.enableScanProgCheck, 4, 0, 1, 2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem, 6, 0, 1, 1)
-        self.recenterScanProgramsBtn = QtGui.QPushButton(Form)
-        self.recenterScanProgramsBtn.setObjectName(_fromUtf8("recenterScanProgramsBtn"))
-        self.gridLayout.addWidget(self.recenterScanProgramsBtn, 5, 0, 1, 2)
+        self.reCenterScanProgramsBtn = QtGui.QPushButton(Form)
+        self.reCenterScanProgramsBtn.setObjectName(_fromUtf8("reCenterScanProgramsBtn"))
+        self.gridLayout.addWidget(self.reCenterScanProgramsBtn, 5, 0, 1, 2)
         self.gridLayout_4.addLayout(self.gridLayout, 0, 0, 2, 1)
         self.positionCtrlGroup = QtGui.QGroupBox(Form)
         self.positionCtrlGroup.setCheckable(False)
@@ -209,7 +209,7 @@ class Ui_Form(object):
         self.simulateShutterCheck.setText(_translate("Form", "Simulate Shutter", None))
         self.enablePosCtrlCheck.setText(_translate("Form", "Enable position controls", None))
         self.enableScanProgCheck.setText(_translate("Form", "Enable scan programs", None))
-        self.recenterScanProgramsBtn.setText(_translate("Form", "Re-center scan program(s)", None))
+        self.reCenterScanProgramsBtn.setText(_translate("Form", "Re-center scan program(s)", None))
         self.positionCtrlGroup.setTitle(_translate("Form", "Position Controls", None))
         self.showPosCtrlCheck.setToolTip(_translate("Form", "Hide all items from view.", None))
         self.showPosCtrlCheck.setText(_translate("Form", "Show position controls", None))
