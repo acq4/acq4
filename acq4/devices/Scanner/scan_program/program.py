@@ -125,7 +125,6 @@ class ScanProgram:
     def reCenterComponent(self,newPos):
         for component in self.components:
             if component.isActive():
-                print "component",component
                 component.reCenterComponent(newPos)
                 
     def setSampling(self, rate, samples, downsample):
