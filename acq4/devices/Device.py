@@ -276,6 +276,8 @@ class TaskGui(QtGui.QWidget):
             self.taskRunner.sigTaskSequenceStarted.connect(self.taskSequenceStarted) ## called at the beginning of a task/sequence
             self.taskRunner.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all task runs
             self.taskRunner.sigTaskFinished.connect(self.taskFinished) ## called at the end of a task/sequence
+            self.taskRunner.sigNewFrame.connect(self.newFrame) ## emitted at the end of each individual taskFinished
+            self.taskRunner.sigSequenceAborted.connect(self.sequenceAborted) ## emitted at the abortion of sequence
             self._PGConnected = True
         
     def disable(self):
@@ -290,6 +292,14 @@ class TaskGui(QtGui.QWidget):
                 pass
             try:
                 self.taskRunner.sigTaskFinished.disconnect(self.taskFinished)
+            except TypeError:
+                pass
+            try:
+                self.taskRunner.sigNewFrame.disconnect(self.newFrame)
+            except TypeError:
+                pass
+            try:
+                self.taskRunner.sigSequenceAborted.disconnect(self.sequenceAborted)
             except TypeError:
                 pass
             self._PGConnected = False
@@ -339,6 +349,14 @@ class TaskGui(QtGui.QWidget):
         
     def taskFinished(self):
         """Automatically invoked after a task or sequence has finished"""
+        pass
+    
+    def newFrame(self):
+        """Automatically invoked at the end of each individual taskFinished"""
+        pass
+    
+    def sequenceAborted(self):
+        """Automatically invoked at the abortion of sequence"""
         pass
 
     def quit(self):

@@ -14,6 +14,7 @@ class LaserTaskGui(DAQGenericTaskGui):
         
         self.ui = taskTemplate.Ui_Form()
         
+        self.taskR = taskRunner
         
         self.cache = {}
         
@@ -180,24 +181,19 @@ class LaserTaskGui(DAQGenericTaskGui):
         #print cmd
         return cmd
 
-    def taskStarted(self):
-        print 'task started'
+    def sequenceAborted(self):
+        #print 'sequence aborted'
+        if self.ui.releaseAfterSequence.isChecked():
+            self.dev.closeShutter()
     def taskSequenceStarted(self):
+        #print 'task sequence started'
         if self.ui.releaseAfterSequence.isChecked():
             self.dev.openShutter()
-        #if self.ui.releaseAfterSequence.isChecked():
-        #self.dev.setChanHolding('shutter',False)
-        print 'task sequence started'
     def taskFinished(self):
-        if self.ui.releaseAfterSequence.isChecked():
-            #self.dev.setChanHolding('shutter',False)
+        #print 'task finished'
+        if not self.taskR.loopEnabled:
             self.dev.closeShutter()
-        print 'task finished'
-    def taskSequenceFinished(self):
-        print 'task sequence finished'
-    def taskPaused(self):
-        print 'task paused'
-        
+
     def getChannelCmds(self, powerWave, rate):
         key = id(powerWave)
         # force update of rawCmds

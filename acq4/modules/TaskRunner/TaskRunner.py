@@ -64,6 +64,7 @@ class TaskRunner(Module):
     sigTaskSequenceStarted = QtCore.Signal(object)  ## called whenever single task OR task sequence has started
     sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY task, including within sequences
     sigTaskChanged = QtCore.Signal(object, object)
+    sigSequenceAborted = QtCore.Signal()  ## emitted at the abortion of sequence
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
@@ -132,6 +133,7 @@ class TaskRunner(Module):
         self.taskThread.sigNewFrame.connect(self.handleFrame)
         self.taskThread.sigPaused.connect(self.taskThreadPaused)
         self.taskThread.sigTaskStarted.connect(self.taskStarted)
+        self.taskThread.sigSequenceAborted.connect(self.stopSequence)
         self.taskThread.sigExitFromError.connect(self.taskErrored)
         self.protoStateGroup.sigChanged.connect(self.protoGroupChanged)
         self.win.show()
@@ -734,6 +736,7 @@ class TaskRunner(Module):
         self.ui.pauseSequenceBtn.setChecked(False)
         
     def stopSequence(self):
+        self.sigSequenceAborted.emit()
         self.loopEnabled = False
         if self.taskThread.isRunning():
             self.taskThread.stop()
@@ -917,6 +920,7 @@ class TaskThread(Thread):
     sigNewFrame = QtCore.Signal(object)
     sigExitFromError = QtCore.Signal()
     sigTaskStarted = QtCore.Signal(object)
+    sigSequenceAborted = QtCore.Signal()
     
     def __init__(self, ui):
         Thread.__init__(self)
@@ -1097,6 +1101,7 @@ class TaskThread(Thread):
                 raise Exception("Timed out while waiting for thread exit!")
             
     def abort(self):
+        self.sigSequenceAborted.emit()
         with self.lock:
             if self._currentTask is not None:
                 # bad idea -- task.stop() is not thread-safe; must ask the task thread to stop.
