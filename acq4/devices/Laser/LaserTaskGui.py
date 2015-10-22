@@ -3,6 +3,7 @@ from acq4.pyqtgraph import PlotWidget
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
 from acq4.pyqtgraph.functions import siFormat
+from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import taskTemplate
 from acq4.util.HelpfulException import HelpfulException
 
@@ -88,6 +89,10 @@ class LaserTaskGui(DAQGenericTaskGui):
         self.dev.sigOutputPowerChanged.connect(self.laserPowerChanged)
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         
+        self.stateGroup = WidgetGroup([
+            (self.splitter1, 'splitter1'),
+            (self.plotSplitter,'plotSplitter'),
+        ])
         
         self.dev.outputPower()
         
