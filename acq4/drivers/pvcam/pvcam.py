@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
-import sys, numpy, time, re, os
+import sys, numpy, time, re, os, platform
 from acq4.util.clibrary import *
 from collections import OrderedDict
 from acq4.util.debug import backtrace
@@ -19,7 +19,11 @@ headerFiles = [
     os.path.join(modDir, "pvcam.h")
 ]
 HEADERS = CParser(headerFiles, cache=os.path.join(modDir, 'pvcam_headers.cache'), copyFrom=winDefs())
-LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
+
+if platform.architecture()[0] == '64bit':
+    LIB = CLibrary(windll.Pvcam64, HEADERS, prefix='pl_')
+else:
+    LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 
 
 ### Default configuration parameters. 
