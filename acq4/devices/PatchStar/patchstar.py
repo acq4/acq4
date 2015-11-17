@@ -27,20 +27,21 @@ class PatchStar(Stage):
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
         self.getPosition(refresh=True)
-        self.setUserSpeed(3e-3)
 
-        # Set scaling for each axis
-        self.dev.send('UUX 6.4')
-        self.dev.send('UUY 6.4')
-        self.dev.send('UUZ 6.4')
+        self.setUserSpeed(config.get('maxSpeed', 1e-3))
+
+        # Read scale factors for each axis
+        self._axisScale = tuple([self.dev.getAxisScale(i) for i in (0, 1, 2)])
 
         # makes 1 roe turn == 1 second movement for any speed
-        self.dev.send('JS 200')
+        if 'controllerSpeed' in config:
+            self.dev.send('JS %d' % config['controllerSpeed'])
 
         # Set approach angle
+        # approach = self.dev.send('APPROACH')
         self.dev.send('ANGLE %f' % self.pitch)
-        self.dev.send('APPROACH 0')
-
+        # self.dev.send('APPROACH %s' % approach)  # reset approach bit; setting angle enables it
+    
         # thread for polling position changes
         self.monitor = MonitorThread(self)
         self.monitor.start()

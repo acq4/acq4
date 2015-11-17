@@ -28,7 +28,13 @@ class PatchStar(SerialDevice):
     def send(self, msg):
         with self.lock:
             self.write(msg + '\r')
-            return self.readUntil('\r')
+            result = self.readUntil('\r')[:-1]
+            if result.startswith('E,'):
+                errno = int(result.strip()[2:])
+                exc = RuntimeError("Received error %d from Scientifica controller (request: %r)" % (errno, msg))
+                exc.errno = errno
+                raise exc
+            return result
 
     def getFirmwareVersion(self):
             return self.send('DATE').partition(' ')[2].partition('\t')[0]
@@ -41,15 +47,124 @@ class PatchStar(SerialDevice):
             packet = self.send('POS')
             return [int(x) for x in packet.split('\t')]
 
-    def getSpeed(self):
-        """Return the manipulator's maximum speed in micrometers per second.
-        """
-        return self.send('TOP')
 
-    def setSpeed(self, speed):
-        """Set the maximum move speed in micrometers per second.
+    _param_commands = {
+        'maxSpeed': ('TOP', 'TOP %f', float),
+        'minSpeed': ('FIRST', 'FIRST %f', float),
+        'accel': ('ACC', 'ACC %f', float),
+        'joyAccel': ('JACC', 'JACC %f', float),
+        'joyFastScale': ('JSPEED', 'JSPEED %f', float),
+        'joySlowScale': ('JSSPEED', 'JSSPEED %f', float),
+        'joyDirectionX': ('JDX ?', 'JDX %d', bool),
+        'joyDirectionY': ('JDY ?', 'JDY %d', bool),
+        'joyDirectionZ': ('JDZ ?', 'JDZ %d', bool),
+        'approachAngle': ('ANGLE', 'ANGLE %f', float),
+        'approachMode': ('APPROACH', 'APPROACH %d', bool),
+    }
+
+    def getParam(self, name):
+        """Return a configuration parameter from the manipulator.
+
+        These parameters are used to configure the speed, acceleration, and direction of the device under
+        various conditions.
+
+        Parameters
+        ----------
+        name : str
+            Must be one of:
+
+            * maxSpeed: Maximum speed for stage movement under both programmatic and manual control.
+              This value is equal to `max_speed (um/sec) * 2 * userScale[axis]`. Must be between 1000
+              and 50,000.
+            * minSpeed: Initial speed for stage movement under both programmatic and manual control.
+              This value is equal to `max_speed (um/sec) * 2 * userScale[axis]`. Must be between 1000
+              and 50,000.
+            * accel: Acceleration for stage movement under both programmatic and manual control.
+              This value is equal to `accel (um^2/sec) * userScale[axis] / 250`. Must be between
+              10 and 1,000.
+            * joyFastScale: Speed scaling used when a manual input device is used in fast mode. Must
+              be between 1 and 250.
+            * joySlowScale: Speed scaling used when a manual input device is used in slow mode. Must
+              be between 1 and 50.
+            * joyAccel: Acceleration used at start and end of manually controlled movements. See `accel`
+              for details.
+            * joyDirectionX,Y,Z: Boolean values indicating whether manual input is reversed on any axis.
+            * approachAngle: The angle at which the manipulator should move when in approach mode.
+              Note: setting this value can also affect `approachMode`.
+            * approachMode: Boolean indicating whether the manipulator is in approach mode. This can be
+              set programmatically or by toggling the approach switch on the input device (but to
+              prevent user confusion, setting this value programmatically is discouraged).
         """
-        return self.send('TOP %d' % int(speed))
+        cmd, _, typ = self._param_commands[name]
+        return typ(self.send(cmd))
+
+    @staticmethod
+    def boolToInt(v):
+        v = bool(v)
+        return 0 if v is False else 1
+
+    def setParam(self, name, val):
+        """Set a configuration parameter on the manipulator.
+
+        These parameters are used to configure the speed, acceleration, and direction of the device under
+        various conditions.
+
+        See `getParam` for parameter descriptions.
+        """
+        _, cmd, typ = self._param_commands[name]
+        if typ is bool:
+            typ = self.boolToInt
+        return self.send(cmd % typ(val))
+
+    def getLimits(self):
+        """Return the status of the device's limit switches.
+
+        Format is `[(x_low, x_high), (y_low, y_high), (z_low, z_high)]`, where all values are bool.
+        """
+        lim = int(self.send('limits'))
+        return [(lim&1>0, lim&2>0), (lim&4>0, lim&8>0), (lim&16>0, lim&32>0)]
+
+    def getType(self):
+        """Return a string indicating the type of the device, or the type's numerical value
+        if it is unknown.
+        """
+        types = {
+            '1': 'linear', '2': 'ums', '3': 'mmtp', '4': 'slicemaster', '5': 'patchstar',
+            '6': 'mmsp', '7': 'mmsp_z', '1.05': 'patchstar', '1.08': 'microstar', '1.09': 'ums', '1.10': 'imtp',
+            '1.11': 'slice_scope', '1.12': 'condenser', '1.13': 'mmbp', '1.14': 'ivm_manipulator'
+        }
+        typ = self.send('type')
+        return types.get(typ, typ)
+
+    def getDescription(self):
+        """Return this device's description string.
+        """
+        return self.send('desc')
+
+    def setDescription(self, desc):
+        """Set this device's description string.
+        """
+        return self.send('desc %s' % desc)
+
+    def getAxisScale(self, axis):
+        """Return the scale factor that the device uses when calculating distance,
+        speed, and acceleration along a single axis.
+
+        The *axis* argument must be 0, 1, or 2 indicating the axis to be queried.
+
+        These values are normally configured such that position values have units of 1/10th micrometer,
+        and generally should not be changed. They may also be negative to reverse the stage direction
+        under both manual and programmatic control.
+
+        Typical values:
+
+        * PatchStar: 6.4, 6.4, 6.4
+        * Microstar: 6.4, 6.4, 6.4
+        * SliceScope: 4.03, 4.03, 6.4
+        * Condenser: 4.03, 4.03, 6.4
+        """
+        cmd = ['UUX', 'UUY', 'UUZ'][axis]
+        return float(self.send(cmd))
 
     def moveTo(self, pos, speed=None):
         """Set the position of the manipulator.
