@@ -11,7 +11,8 @@ ps = PatchStar(sys.argv[1])
 
 print("Device type:  %s  Description:  %s" % (ps.getType(), ps.getDescription()))
 print("Firmware version: %r" % ps.getFirmwareVersion())
-print("Max speed: %r um/sec" % (ps.getParam('maxSpeed') / (2. * ps.getAxisScale(0))))
+print("Position: %r" % ps.getPos())
+print("Max speed: %r um/sec" % ps.getSpeed())
 print("Min speed: %r um/sec" % (ps.getParam('minSpeed') / (2. * ps.getAxisScale(0))))
 print("Acceleration: %r um^2/sec" % (ps.getParam('maxSpeed') * 250. / ps.getAxisScale(0)))
 

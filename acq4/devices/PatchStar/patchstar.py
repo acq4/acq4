@@ -17,7 +17,7 @@ class PatchStar(Stage):
     """
     def __init__(self, man, config, name):
         self.port = config.pop('port')
-        self.scale = config.pop('scale', (1e-7, 1e-7, 1e-7))
+        self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         self.dev = PatchStarDriver(self.port)
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
@@ -28,20 +28,25 @@ class PatchStar(Stage):
         self._lastPos = None
         self.getPosition(refresh=True)
 
-        self.setUserSpeed(config.get('maxSpeed', 1e-3))
-
-        # Read scale factors for each axis
-        self._axisScale = tuple([self.dev.getAxisScale(i) for i in (0, 1, 2)])
-
-        # makes 1 roe turn == 1 second movement for any speed
-        if 'controllerSpeed' in config:
-            self.dev.send('JS %d' % config['controllerSpeed'])
-
         # Set approach angle
         # approach = self.dev.send('APPROACH')
         self.dev.send('ANGLE %f' % self.pitch)
         # self.dev.send('APPROACH %s' % approach)  # reset approach bit; setting angle enables it
-    
+
+        # set any extra parameters specified in the config
+        params = config.get('params', {})
+        for param, val in params.items():
+            if param == 'currents':
+                assert len(val) == 2
+                self.dev.setCurrents(*val)
+            elif param == 'axisScale':
+                assert len(val) == 3
+                for i, x in enumerate(val):
+                    self.dev.setAxisScale(i, x)
+            else:
+                self.dev.setParam(param, val)
+        self.setUserSpeed(params.pop('userSpeed', self.dev.getSpeed() * self.scale[0]))
+
         # thread for polling position changes
         self.monitor = MonitorThread(self)
         self.monitor.start()
@@ -67,7 +72,10 @@ class PatchStar(Stage):
             self._lastMove = None
 
     def setUserSpeed(self, v):
-        """Set the speed of the rotary controller (m/turn).
+        """Set the maximum speed of the stage (m/sec) when under manual control.
+
+        The stage's maximum speed is reset to this value when it is not under
+        programmed control.
         """
         self.userSpeed = v
         self.dev.setSpeed(v / self.scale[0])
@@ -245,18 +253,8 @@ class PatchStarGUI(StageInterface):
         self.psGroup.setLayout(self.psLayout)
         self.speedLabel = QtGui.QLabel('Speed')
         self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
-        self.revXBtn = QtGui.QPushButton('Reverse X')
-        self.revYBtn = QtGui.QPushButton('Reverse Y')
-        self.revZBtn = QtGui.QPushButton('Reverse Z')
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)
-        self.psLayout.addWidget(self.revXBtn, 1, 1)
-        self.psLayout.addWidget(self.revYBtn, 2, 1)
-        self.psLayout.addWidget(self.revZBtn, 3, 1)
-
-        self.revXBtn.clicked.connect(lambda: self.dev.dev.send('JDX'))
-        self.revYBtn.clicked.connect(lambda: self.dev.dev.send('JDY'))
-        self.revZBtn.clicked.connect(lambda: self.dev.dev.send('JDZ'))
 
         self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
