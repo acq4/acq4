@@ -245,6 +245,10 @@ class PatchStarGUI(StageInterface):
         StageInterface.__init__(self, dev, win)
 
         # Insert patchstar-specific controls into GUI
+        self.zeroBtn = QtGui.QPushButton('Zero position')
+        self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
+        self.nextRow += 1
+
         self.psGroup = QtGui.QGroupBox('PatchStar Rotary Controller')
         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
         self.nextRow += 1
@@ -256,5 +260,6 @@ class PatchStarGUI(StageInterface):
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)
 
+        self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
         self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
