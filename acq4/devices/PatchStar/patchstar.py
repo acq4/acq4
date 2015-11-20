@@ -210,7 +210,8 @@ class PatchStarMoveFuture(MoveFuture):
             return 0
         # did we reach target?
         pos = self.dev._getPosition()
-        if ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5 < 1e-6:
+        dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
+        if dif < 2.5e-6:
             # reached target
             self._finished = True
             return 1
@@ -218,7 +219,7 @@ class PatchStarMoveFuture(MoveFuture):
             # missed
             self._finished = True
             self._interrupted = True
-            self._errorMsg = "Move did not complete."
+            self._errorMsg = "Move did not complete (target=%s, position=%s, dif=%s)." % (self.targetPos, pos, dif)
             return -1
 
     def _stopped(self):
