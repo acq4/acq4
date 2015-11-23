@@ -55,6 +55,7 @@ class RectScanComponent(ScanProgramComponent):
         rs = self.ctrl.params.system
         rs.writeScanMask(mask)
         return mask
+    
     def reCenterComponent(self,newPos):
         rs = self.ctrl.reCenter(newPos)
         
