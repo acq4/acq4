@@ -9,31 +9,6 @@ from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from .cameraModTemplate import Ui_Form as CamModTemplate
 
-"""
-Todo:
-
-- movement planning:
-    - only move diagonally when within 50um of surface
-    - limited movement on x/z plane when near objective / recording chamber
-- home button
-- standby / target buttons
-- custom setpoint?
-- automatic find: 
-    - focus up 500um
-    - bring electrode to pre-set location
-    - advance slowly along diagonal until tip is detected
-    - auto set center
-    - move electrode to standby position
-    - back to original focus
-
-- show/hide markers
-- set center button text should change to "click electrode tip" during setting
-- better error reporting when moves are interrupted
-
-"""
-
-
-
 
 class Manipulator(Device, OptomechDevice):
     """Represents a manipulator controlling an electrode.
@@ -102,7 +77,11 @@ class Manipulator(Device, OptomechDevice):
         cal['transform'] = pg.SRTTransform3D(tr)
         self.writeConfigFile(cal, 'calibration')
 
-    def goOut(self, speed='fast'):
+    def getYawAngle(self):
+        """Return the yaw (azimuthal angle) of the electrode around the Z-axis.
+        """
+
+    def goHome(self, speed='fast'):
         """Extract pipette tip diagonally, then move manipulator far away from the objective.
 
         This method currently makes several assumptions:
@@ -146,14 +125,20 @@ class Manipulator(Device, OptomechDevice):
 
         self._movePath(path)
 
-    def goIn(self, speed='fast'):
+    def goSearch(self, speed='fast'):
         """Focus the microscope 2mm above the surface, then move the electrode 
         tip to 500um below the focal point of the microscope. 
 
-        This position is used for bringing in new electrodes.
+        This position is used when searching for new electrodes.
         """
+        # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
-        scope.setFocusDepth(scope.getSurfaceDepth() + 2e-3).wait()
+        searchDepth = scope.getSurfaceDepth() + 2e-3
+        if scope.getFocusDepth() < searchDepth:
+            scope.setFocusDepth(searchDepth).wait()
+
+        # Here's where we want the pipette tip in global coordinates:
+        #   500 um below center of scope focus
         globalTarget = scope.mapToGlobal([0, 0, -500e-6])
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
@@ -164,7 +149,7 @@ class Manipulator(Device, OptomechDevice):
         # local vector pointing in direction of electrode tip
         evec = np.array([1., 0., -np.tan(self.pitch)])
         evec /= np.linalg.norm(evec)
-        waypoint = localTarget - evec * 15e-3
+        waypoint = localTarget - evec * 7e-3
 
         path = [
             (self.mapToGlobal(waypoint), speed, False),
@@ -172,11 +157,36 @@ class Manipulator(Device, OptomechDevice):
         ]
         self._movePath(path)
 
-    def goStandby(self, target, speed):
+    def goApproach(self, target, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
-        self._movePath(self._standbyPath(target, speed))
+        self._movePath(self._approachPath(target, speed))
+
+    def goIdle(self, speed='fast'):
+        """Move the electrode tip to the outer edge of the recording chamber, 1mm above the sample surface.
+
+        NOTE: this method assumes that (0, 0) in global coordinates represents the center of the recording
+        chamber.
+        """
+        scope = self.scopeDevice()
+        surface = scope.getSurfaceDepth()
+        if surface is None:
+            raise Exception("Surface depth has not been set.")
+
+        # we want to land 1 mm above sample surface
+        idleDepth = surface + 1e-3
+
+        # If the tip is below idle depth, bring it up along the axis of the electrode.
+        pos = self.globalPosition()
+        if pos[2] < idleDepth:
+            self.advance(idleDepth, speed)
+
+        # From here, move directly to idle position
+        angle = self._stageOrientation['angle'] * np.pi / 180
+        ds = 7e-3  # move to 7 mm from center
+        globalIdlePos = -ds * np.cos(angle), ds * np.sin(angle), idleDepth
+        self._moveToGlobal(globalIdlePos, speed)
 
     def _movePath(self, path):
         # move along a path defined in global coordinates. 
@@ -194,9 +204,9 @@ class Manipulator(Device, OptomechDevice):
         for pos, speed, linear in path2:
             self._moveToGlobal(pos, speed, linear=linear).wait(updates=True)
     
-    def _standbyPath(self, target, speed):
-        # Return steps (in global coords) needed to move to standby position
-        stbyDepth = self.standbyDepth()
+    def _approachPath(self, target, speed):
+        # Return steps (in global coords) needed to move to approach position
+        stbyDepth = self.approachDepth()
         pos = self.globalPosition()
 
         # steps are in global coordinates.
@@ -217,7 +227,7 @@ class Manipulator(Device, OptomechDevice):
         # target in local coordinates
         ltarget = self.mapFromGlobal(target)
 
-        # compute standby position
+        # compute approach position
         dz2 = stbyDepth - target[2]
         dx2 = -dz2 / np.tan(self.pitch)
         stby = ltarget + np.array([dx2, 0., dz2])
@@ -239,12 +249,12 @@ class Manipulator(Device, OptomechDevice):
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
             return
-        path = self._standbyPath(target, speed)
+        path = self._approachPath(target, speed)
         path.append([target, 100e-6, True])
         self._movePath(path)
 
-    def standbyDepth(self):
-        """Return the global depth where the electrode should move in standby mode.
+    def approachDepth(self):
+        """Return the global depth where the electrode should move to when starting approach mode.
 
         This is defined as the sample surface + 100um.
         """
@@ -325,11 +335,12 @@ class ManipulatorCamModInterface(CameraModuleInterface):
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
-        self.ui.outBtn.clicked.connect(self.outClicked)
-        self.ui.inBtn.clicked.connect(self.inClicked)
+        self.ui.homeBtn.clicked.connect(self.homeClicked)
+        self.ui.searchBtn.clicked.connect(self.searchClicked)
+        self.ui.idleBtn.clicked.connect(self.idleClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
-        self.ui.standbyBtn.clicked.connect(self.standbyClicked)
+        self.ui.approachBtn.clicked.connect(self.approachClicked)
         self.target.sigDragged.connect(self.targetDragged)
 
         self.transformChanged()
@@ -353,7 +364,7 @@ class ManipulatorCamModInterface(CameraModuleInterface):
             self.target.setVisible(True)
             self.depthTarget.setVisible(True)
             self.ui.targetBtn.setEnabled(True)
-            self.ui.standbyBtn.setEnabled(True)
+            self.ui.approachBtn.setEnabled(True)
             self.ui.setTargetBtn.setChecked(False)
             pos = self.mod().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
@@ -432,11 +443,14 @@ class ManipulatorCamModInterface(CameraModuleInterface):
             if scene is not None:
                 scene.removeItem(item)
 
-    def outClicked(self):
-        self.getDevice().goOut(self.selectedSpeed())
+    def homeClicked(self):
+        self.getDevice().goHome(self.selectedSpeed())
 
-    def inClicked(self):
-        self.getDevice().goIn(self.selectedSpeed())
+    def searchClicked(self):
+        self.getDevice().goSearch(self.selectedSpeed())
+
+    def idleClicked(self):
+        self.getDevice().goIdle(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:
@@ -449,8 +463,8 @@ class ManipulatorCamModInterface(CameraModuleInterface):
     def targetClicked(self):
         self.getDevice().goTarget(self._targetPos, self.selectedSpeed())
 
-    def standbyClicked(self):
-        self.getDevice().goStandby(self._targetPos, self.selectedSpeed())
+    def approachClicked(self):
+        self.getDevice().goApproach(self._targetPos, self.selectedSpeed())
 
 
 class Target(pg.GraphicsObject):

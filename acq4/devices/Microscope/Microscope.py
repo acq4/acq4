@@ -413,13 +413,19 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.surfaceLine = self.plot.addLine(y=sd, pen='g')
         self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
+        # Note: this is placed here because there is currently no better place.
+        # Ideally, the sample orientation, height, and anatomical identity would be contained 
+        # in a Sample or Slice object elsewhere..
         self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
-        self.movableFocusLine.sigDragged.connect(self.focusDragged)
+
+        # only works with devices that can change their waypoint while in motion
+        # self.movableFocusLine.sigDragged.connect(self.focusDragged)
+        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusDragged)
 
         self.transformChanged()
 
@@ -450,7 +456,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
         prof('5')
         dif = tpos[2] - fpos[2]
         prof('6')
-        self.movableFocusLine.setValue(focus + dif)
+        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
+            self.movableFocusLine.setValue(focus + dif)
         prof('7')
 
     def focusDragged(self):
