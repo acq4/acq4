@@ -645,6 +645,7 @@ class Imager(Module):
         self.ui.zoomTenthBox.setValue(0)
         self.roiChanged()
         self.cameraModule.window().centerView()
+        
     def zoomRoi(self):
         zoomS = self.ui.zoomSingleBox.value()
         if self.singleFlip:

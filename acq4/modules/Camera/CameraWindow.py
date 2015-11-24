@@ -190,6 +190,9 @@ class CameraWindow(QtGui.QMainWindow):
         return self.depthPlot
 
     def centerView(self,exclusive=None):
+        """ choses a field of view including the bounding boxes of all imaging devices/modules 
+            - the exclusive option allows to zoom in on one of the bounding boxes in particular,
+              the field of view will only encompass the [exclusive] roi as a result """
         if len(self.interfaces) == 0:
             return
         bounds = None
