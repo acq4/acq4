@@ -209,20 +209,19 @@ class ScannerTaskGui(TaskGui):
             for i in self.items.values():
                 active = (i.opticState == opticState)
                 i.parameters().setValue(active)
-                    
+                
+            self.updateSpotSizes()
 
     def laserDevChanged(self):
         ## called when laser device combo is changed
         ## need to update spot size
         self.updateSpotSizes()
         self.scanProgram.setDevices(laser=self.ui.laserCombo.getSelectedObj())
-
         
     def sizeSpinEdited(self):
         self.ui.sizeCustomRadio.setChecked(True)
         self.updateSpotSizes()
         
-      
     def updateSpotSizes(self):
         try:
             size, display = self.pointSize()
