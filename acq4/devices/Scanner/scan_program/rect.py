@@ -21,6 +21,7 @@ class RectScanComponent(ScanProgramComponent):
     def __init__(self, scanProgram=None):
         ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
+        self.ctrl.sigStateChanged.connect(self.changed)
         
     def samplingChanged(self):
         self.ctrl.update()
@@ -137,6 +138,7 @@ class RectScanControl(QtCore.QObject):
         state = self.roi.getState()
         w, h = state['size']
         self.roi.setPos(pos=[newPos[0]-w/2.,newPos[1]-h/2.])
+        #print 'ROI newPos', [newPos[0]-w/2.,newPos[1]-h/2.]
         self.update()
  
     # def setVisible(self, vis):
@@ -179,6 +181,8 @@ class RectScanControl(QtCore.QObject):
         finally:
             if reconnect:
                 self.params.sigTreeStateChanged.connect(self.paramsChanged)
+                
+        self.sigStateChanged.emit(self)
     
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost
@@ -291,6 +295,7 @@ class RectScan(SystemSolver):
             ('pixelHeight', [None, float, None, 'nfr']),
             ('pixelAspectRatio', [None, float, None, 'nf']),
             ('bidirectional', [None, bool, None, 'f']),
+            ('followStage', [None, bool, None, 'f']),
             ('sampleRate', [None, float, None, 'f']),  # Sample rate of DAQ used to drive scan mirrors and record from PMT
             ('downsample', [None, int, None, 'f']),    # Downsampling used by DAQ (recorded data is downsampled by this factor)
             ('frameDuration', [None, float, None, 'nfr']),
@@ -859,6 +864,7 @@ class RectScanParameter(pTypes.SimpleParameter):
             dict(name='imageCols', type='int', value=500, limits=[1, None]),
             dict(name='minOverscan', type='float', value=30.e-6, suffix='s', siPrefix=True, bounds=[0., 1.], step=0.1, dec=True, minStep=1e-7),
             dict(name='bidirectional', type='bool', value=True),
+            dict(name='followStage', type='bool', value=False),
             dict(name='pixelWidth', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelHeight', type='float', value=4e-7, suffix='m', siPrefix=True, bounds=[1e-9, None], step=0.05, dec=True),
             dict(name='pixelAspectRatio', type='float', value=1, bounds=[1e-3, 1e3], step=0.5, dec=True),

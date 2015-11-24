@@ -24,7 +24,7 @@ for cType in ['step', 'line', 'rect', 'loop', 'ellipse', 'spiral']:
 
 
 
-class ScanProgram:
+class ScanProgram(QtCore.QObject):
     """
     ScanProgram encapsulates one or more laser scanning operations that are
     executed in sequence. 
@@ -43,7 +43,12 @@ class ScanProgram:
     the COMPONENTS global variable, which may be used to install new component
     types at runtime.
     """
+    
+    sigProgramChanged = QtCore.Signal(object, object)  # self, component
+    
     def __init__(self):
+        QtCore.QObject.__init__(self)
+        
         self.components = []
         
         self.canvas = None  # used to display graphical controls for components
@@ -79,13 +84,19 @@ class ScanProgram:
             for item in component.graphicsItems():
                 self.canvas.addItem(item, None, [1, 1], 10000)
         self.components.append(component)
+        component.sigChanged.connect(self.componentChanged)
+        
         return component
 
     def removeComponent(self, component):
         """Remove a component from this program.
         """
         self.components.remove(component)
+        component.sigChanged.disconnect(self.componentChanged)
         self.clearGraphicsItems(component)
+        
+    def componentChanged(self, component):
+        self.sigProgramChanged.emit(self, component)
         
     def ctrlParameter(self):
         """Return the control Parameter for this scan program. 
@@ -126,7 +137,11 @@ class ScanProgram:
         for component in self.components:
             if component.isActive():
                 component.reCenterComponent(newPos)
-                
+    
+    def getComponentParameter(self):
+        for component in self.components:
+            return component.ctrlParameter()
+    
     def setSampling(self, rate, samples, downsample):
         """Set the sampling properties used by all components in the program:
         sample rate, number of samples, and downsampling factor.

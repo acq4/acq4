@@ -83,9 +83,12 @@ class ScannerTaskGui(TaskGui):
         
         self.scanProgram = ScanProgram()
         self.scanProgram.setDevices(scanner=self.dev)
+        self.scanProgram.sigProgramChanged.connect(self.scanProgramChanged)
         self.ui.programTree.setParameters(self.scanProgram.ctrlParameter(), showTop=False)
-        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
+        # Head generator.waveforms.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
         
+        generator.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
+
         ## Set up SpinBoxes
         self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
         self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
@@ -161,6 +164,10 @@ class ScannerTaskGui(TaskGui):
     def enableScanProgToggled(self, b):
         self.ui.scanProgramGroup.setVisible(b)
         self.updateVisibility()
+
+    def scanProgramChanged(self, prog, comp):
+        # reset laser mask source just to kick any generators that may depend on this key
+        generator.setDataSource(self.dev.name() + '_laserMask', self.scanProgram.generateLaserMask)
 
     def showPosCtrls(self, b):
         self.updateVisibility()
@@ -314,11 +321,19 @@ class ScannerTaskGui(TaskGui):
         newPos = self.focusDev.globalPosition()
         self.scanProgram.reCenterComponent([newPos[0],newPos[1]])
     
-    def positionChanged(self):
-        params = self.scanProgram.ctrlParameter()
-        print 'position change', params
-        
-    
+    def positionChanged(self,newPos):
+        params = self.scanProgram.getComponentParameter()
+        if not params.param('followStage').value():
+            oldCenter = [params.system.p2[0]+params.system.width/2.,params.system.p2[1]+params.system.height/2.]
+            #print 'old center ', oldCenter
+            newCenter = list(oldCenter)
+            for i in range(2):
+                newCenter[i] = oldCenter[i] - newPos['rel'][i]
+            #print 'new center ', newCenter
+            self.scanProgram.reCenterComponent([newCenter[0],newCenter[1]])
+            #print 'position change', params.system.p1, params.system.p2, params.system.width, params.system.height #sampleRate
+            #print 'position new',newPos
+
     def listSequence(self):
         #items = self.activeItems()
         targets = self.getTargetList()
@@ -573,7 +588,9 @@ class ScannerTaskGui(TaskGui):
             s.removeItem(self.testTarget)
             s.removeItem(self.spotMarker)
         self.scanProgram.close()
-        generator.waveforms.setDataSource(self.dev.name() + '_laserMask', None)
+        # Head generator.waveforms.setDataSource(self.dev.name() + '_laserMask', None)
+        generator.setDataSource(self.dev.name() + '_laserMask', None)
+
 
 class TargetPoint(pg.EllipseROI):
     
