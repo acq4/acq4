@@ -24,7 +24,7 @@ for cType in ['step', 'line', 'rect', 'loop', 'ellipse', 'spiral']:
 
 
 
-class ScanProgram(QtCore.QObject):
+class ScanProgram:
     """
     ScanProgram encapsulates one or more laser scanning operations that are
     executed in sequence. 
@@ -43,12 +43,7 @@ class ScanProgram(QtCore.QObject):
     the COMPONENTS global variable, which may be used to install new component
     types at runtime.
     """
-    
-    sigProgramChanged = QtCore.Signal(object, object)  # self, component
-    
     def __init__(self):
-        QtCore.QObject.__init__(self)
-        
         self.components = []
         
         self.canvas = None  # used to display graphical controls for components
@@ -84,19 +79,13 @@ class ScanProgram(QtCore.QObject):
             for item in component.graphicsItems():
                 self.canvas.addItem(item, None, [1, 1], 10000)
         self.components.append(component)
-        component.sigChanged.connect(self.componentChanged)
-        
         return component
 
     def removeComponent(self, component):
         """Remove a component from this program.
         """
         self.components.remove(component)
-        component.sigChanged.disconnect(self.componentChanged)
         self.clearGraphicsItems(component)
-        
-    def componentChanged(self, component):
-        self.sigProgramChanged.emit(self, component)
         
     def ctrlParameter(self):
         """Return the control Parameter for this scan program. 
@@ -239,10 +228,7 @@ class ScanProgram(QtCore.QObject):
             if not component.isActive():
                 continue
             mask |= component.scanMask()
-            # disable inactivation of laser during overscan
-            (start,stop) = (np.where(mask==True)[0][0],np.where(mask==True)[0][-1])
-            print start, stop
-            mask[start:stop] = True
+            
         return mask
 
     def close(self):
