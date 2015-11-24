@@ -20,7 +20,6 @@ class PVCam(Camera):
         self.lastIndex = None
         self.lastFrameTime = None
         self.stopOk = False
-        
     
     def setupCamera(self):
         self.pvc = PVCDriver
@@ -90,7 +89,15 @@ class PVCam(Camera):
                 time.sleep(1.0)
             self.cam.stop()
             self.acqBuffer = None
-        
+
+    def noFrameWarning(self, time):
+        # 2015.11: discovered that simply opening connections to multiple USB-serial devices on the same hub as the 
+        # camera can cause it to fail to return frames, even if there is no data being sent to/from the serial devices.
+        # 
+        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+        print "This can be caused by insufficient USB bandwidth; try moving the camera to its own exclusive USB hub."
+        print "Alternatively, reduce the bandwidth requirements of the camera by increasing the binning or decreasing the ROI size."
+
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
         

@@ -200,7 +200,10 @@ class Camera(DAQGeneric, OptomechDevice):
         may be preparing to synchronize with the camera's exposure signal."""
         raise Exception("Function must be reimplemented in subclass.")
 
-    
+    def noFrameWarning(self, time):
+        # display a warning message that no camera frames have arrived.
+        # This method is only here to allow PVCam to dispaly some useful information.
+        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
     
     def pushState(self, name=None):
         #print "Camera: pushState", name
@@ -857,7 +860,7 @@ class AcquireThread(Thread):
                     diff = ptime.time()-lastFrameTime
                     if diff > (10 + exposure):
                         if mode == 'Normal':
-                            print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+                            self.dev.noFrameWarning(diff)
                             break
                         else:
                             pass  ## do not exit loop if there is a possibility we are waiting for a trigger
