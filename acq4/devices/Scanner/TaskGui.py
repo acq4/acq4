@@ -319,7 +319,7 @@ class ScannerTaskGui(TaskGui):
             #print 'old center ', oldCenter
             newCenter = list(oldCenter)
             for i in range(2):
-                newCenter[i] = oldCenter[i] - newPos['rel'][i]
+                newCenter[i] = oldCenter[i] - - self.focusDev.scale[i]*newPos['rel'][i]
             #print 'new center ', newCenter
             self.scanProgram.reCenterComponent([newCenter[0],newCenter[1]])
             #print 'position change', params.system.p1, params.system.p2, params.system.width, params.system.height #sampleRate
