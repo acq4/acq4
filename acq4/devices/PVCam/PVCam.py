@@ -37,7 +37,6 @@ class PVCam(Camera):
                 raise Exception('Can not find pvcam camera "%s". Options are: %s' % (str(self.camConfig['serial']), str(cams)))
         print "Selected camera:", cams[ind]
         self.cam = self.pvc.getCamera(cams[ind])
-        
     
     def start(self, block=True):
         #print "PVCam: start"
@@ -89,6 +88,10 @@ class PVCam(Camera):
                 time.sleep(1.0)
             self.cam.stop()
             self.acqBuffer = None
+
+    def _acquireFrames(self, n=1):
+        assert not self.isRunning(), "Camera must be stopped before calling acquireFrames."
+        return self.cam.acquire(n)
 
     def noFrameWarning(self, time):
         # 2015.11: discovered that simply opening connections to multiple USB-serial devices on the same hub as the 

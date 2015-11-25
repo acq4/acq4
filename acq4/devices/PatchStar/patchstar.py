@@ -176,7 +176,7 @@ class PatchStarMoveFuture(MoveFuture):
         self._interrupted = False
         self._errorMSg = None
         self._finished = False
-        pos = (np.array(pos) / np.array(self.dev.scale)).astype(int)
+        pos = np.array(pos) / np.array(self.dev.scale)
         if speed == 'fast':
             speed = 1e-3
         elif speed == 'slow':

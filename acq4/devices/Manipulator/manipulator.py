@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 import numpy as np
 
+from acq4.Manager import getManager
 import acq4.pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -95,7 +96,11 @@ class Manipulator(Device, OptomechDevice):
 
     def getYawAngle(self):
         """Return the yaw (azimuthal angle) of the electrode around the Z-axis.
+
+        Value is returned in degrees such that an angle of 0 indicate the tip points along the positive x axis,
+        and 90 points along the positive y axis.
         """
+        return self._stageOrientation['angle']
 
     def goHome(self, speed='fast'):
         """Extract pipette tip diagonally, then move manipulator far away from the objective.
@@ -199,7 +204,7 @@ class Manipulator(Device, OptomechDevice):
             self.advance(idleDepth, speed)
 
         # From here, move directly to idle position
-        angle = self._stageOrientation['angle'] * np.pi / 180
+        angle = self.getYawAngle() * np.pi / 180
         ds = self._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
         self._moveToGlobal(globalIdlePos, speed)
@@ -610,4 +615,149 @@ class Axis(pg.ROI):
         # p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
         p.scale(w, h)
         p.drawPath(self._path)
+
+
+class AccuracyTester(object):
+    def __init__(self, manipulator):
+        self.dev = manipulator
+        man = getManager()
+        self.camera = man.getDevice('Camera')
+
+    def takeFrame(self, padding=40e-6):
+        """Acquire one frame from the imaging device.
+        """
+        return self.camera.acquireFrames(1)
+
+    def getTipImageArea(self, frame, padding):
+        """Generate coordinates needed to clip a camera frame to include just the
+        tip of the pipette and some padding.
+
+        Return a tuple (minImgPos, maxImgPos, tipRelPos), where the first two
+        items are (x,y) coordinate pairs giving the corners of the image region to 
+        be extracted, and tipRelPos is the subpixel location of the pipette tip
+        within this region.
+        """
+        img = frame.data()[0]
+
+        # determine bounding rectangle that we would like to acquire from the tip
+        tipPos = self.dev.globalPosition()
+        tipPos = np.array([tipPos[0], tipPos[1]])
+        angle = self.dev.getYawAngle() * np.pi / 180.
+        da = 10 * np.pi / 180  # half-angle of the tip
+        tipLen = 30e-6  # how far back to image along the tip
+        pxw = frame.info()['pixelSize'][0]
+        # compute back points of a triangle that circumscribes the tip
+        backPos1 = np.array([-tipLen * np.cos(angle+da), -tipLen * np.sin(angle+da)])
+        backPos2 = np.array([-tipLen * np.cos(angle-da), -tipLen * np.sin(angle-da)])
+
+        # convert to image coordinates
+        tr = frame.globalTransform().inverted()[0]
+        originImgPos = tr.map(pg.Vector([0, 0]))
+        backImgPos1 = tr.map(pg.Vector(backPos1)) - originImgPos
+        backImgPos2 = tr.map(pg.Vector(backPos2)) - originImgPos
+        backImgPos1 = np.array([backImgPos1.x(), backImgPos1.y()])
+        backImgPos2 = np.array([backImgPos2.x(), backImgPos2.y()])
+
+        # Pixel positions of bounding corners in the image relative to tip, including padding.
+        # Note this is all calculated without actual tip position; this ensures the image
+        # size is constant even as the tip moves.
+        allPos = np.vstack([[0, 0], backImgPos1, backImgPos2]).astype('int')
+        padding = int(padding / pxw)
+        minRelPos = allPos.min(axis=0) - padding
+        maxRelPos = allPos.max(axis=0) + padding
+
+        # Get absolute pixel position of tip within image
+        tipImgPos = tr.map(pg.Vector(tipPos))
+        tipImgPos = np.array([tipImgPos.x(), tipImgPos.y()])
+        tipImgPx = tipImgPos.astype('int')
+
+        # clip bounding coordinates
+        minRelPos = [np.clip(minRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
+                     np.clip(minRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
+        maxRelPos = [np.clip(maxRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
+                     np.clip(maxRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
+
+        # absolute image coordinates of bounding rect
+        minImgPos = tipImgPx + minRelPos
+        maxImgPos = tipImgPx + maxRelPos
+
+        if np.any(maxImgPos - minImgPos < 1):
+            raise RuntimeError("No part of tip overlaps with camera frame.")
+
+        # subpixel location of tip within image
+        tipRelPos = tipImgPos - tipImgPx - minRelPos
+
+        return minImgPos, maxImgPos, tipRelPos
+
+    def takeTipImage(self, padding=50e-6):
+        """Acquire an image of the pipette tip plus some padding.
+
+        Return a tuple (image, tipPosition).
+        """
+        frame = self.takeFrame()
+
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
+
+        # clipped image region
+        subimg = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+
+        return subimg, tipRelPos
+
+    def takeReferenceFrames(self, zRange=40e-6, zStep=2e-6):
+        import skimage.feature
+        centerFrame = self.takeFrame()
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=5e-6)
+        center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+
+        nFrames = (int(zRange / zStep) // 2) * 2
+        pos = self.dev.globalPosition()
+        zStart = pos[2] + zStep * (nFrames // 2)
+        frames = []
+        corr = []
+        with pg.ProgressDialog('Acquiring reference frames...', 0, nFrames) as dlg:
+            for i in range(nFrames):
+                pos[2] = zStart - zStep * i
+                self.dev._moveToGlobal(pos, 'slow').wait()
+                frame = self.takeFrame()
+                img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+                frames.append(img)
+                corr.append(skimage.feature.match_template(img, center)[0,0])
+                dlg += 1
+                if dlg.wasCanceled():
+                    return
+
+        maxInd = np.argmax(corr)
+
+        self.reference = {
+            'frames': np.dstack(frames).transpose((2, 0, 1)),
+            'zStep': zStep,
+            'centerInd': maxInd,
+            'centerPos': pos,
+        }
+
+    def measureError(self, padding=50e-6):
+        import skimage.feature
+        frame = self.takeFrame()
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
+        img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+
+        cc = [skimage.feature.match_template(img, t) for t in self.reference['frames']]
+
+        return subimg, tipRelPos
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

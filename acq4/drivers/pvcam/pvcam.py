@@ -629,7 +629,7 @@ class _CameraClass:
                 raise Exception("Readout failed: " + self.pvcam.error())
             time.sleep(exposure * 0.5)
         self.mode = 0
-        return self.buf
+        return self.buf.transpose((0, 2, 1))
 
     def _parseExposure(self, exp):
         ## This function should make use of PARAM_EXP_RES, but it doesn't seem to work on Q57!
