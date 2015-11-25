@@ -30,12 +30,28 @@ class Manipulator(Device, OptomechDevice):
                 |\\
                 | \\
                -z   \ - electrode tip
+
+
+    Configuration options:
+
+    * searchHeight: the distance to focus above the sample surface when searching for pipette tips
+    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning 
+      a diagonal approach
+    * idleHeight: the distance to bring the pipette tip above the sample surface when in idle position
+    * idleDistance: the distance from the global origin from which the pipette top should be placed
+      in idle mode
     """
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
         self._stageOrientation = {'angle': 0, 'inverty': False}
+        self._opts = {
+            'searchHeight': config.get('searchHeight', 2e-3),
+            'approachHeight': config.get('approachHeight', 100e-6),
+            'idleHeight': config.get('idleHeight', 1e-3),
+            'idleDistance': config.get('searchHeight', 7e-3),
+        }
         parent = self.parentDevice()
         assert isinstance(parent, Stage)
         self.pitch = parent.pitch * np.pi / 180.
@@ -133,7 +149,7 @@ class Manipulator(Device, OptomechDevice):
         """
         # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
-        searchDepth = scope.getSurfaceDepth() + 2e-3
+        searchDepth = scope.getSurfaceDepth() + self._opts['searchHeight']
         if scope.getFocusDepth() < searchDepth:
             scope.setFocusDepth(searchDepth).wait()
 
@@ -142,14 +158,14 @@ class Manipulator(Device, OptomechDevice):
         globalTarget = scope.mapToGlobal([0, 0, -500e-6])
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
-            raise Exception('"In" position should only be used when electrode is far from objective.')
+            raise Exception('"Search" position should only be used when electrode is far from objective.')
 
         # compute intermediate position
         localTarget = self.mapFromGlobal(globalTarget)
         # local vector pointing in direction of electrode tip
         evec = np.array([1., 0., -np.tan(self.pitch)])
         evec /= np.linalg.norm(evec)
-        waypoint = localTarget - evec * 7e-3
+        waypoint = localTarget - evec * self._opts['idleDistance']
 
         path = [
             (self.mapToGlobal(waypoint), speed, False),
@@ -175,7 +191,7 @@ class Manipulator(Device, OptomechDevice):
             raise Exception("Surface depth has not been set.")
 
         # we want to land 1 mm above sample surface
-        idleDepth = surface + 1e-3
+        idleDepth = surface + self._opts['idleHeight']
 
         # If the tip is below idle depth, bring it up along the axis of the electrode.
         pos = self.globalPosition()
@@ -184,8 +200,8 @@ class Manipulator(Device, OptomechDevice):
 
         # From here, move directly to idle position
         angle = self._stageOrientation['angle'] * np.pi / 180
-        ds = 7e-3  # move to 7 mm from center
-        globalIdlePos = -ds * np.cos(angle), ds * np.sin(angle), idleDepth
+        ds = self._opts['idleDistance']  # move to 7 mm from center
+        globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
         self._moveToGlobal(globalIdlePos, speed)
 
     def _movePath(self, path):
@@ -262,7 +278,7 @@ class Manipulator(Device, OptomechDevice):
         surface = scope.getSurfaceDepth()
         if surface is None:
             raise Exception("Surface depth has not been set.")
-        return surface + 100e-6
+        return surface + self._opts['approachHeight']
 
     def advance(self, depth, speed):
         """Move the electrode along its axis until it reaches the specified
