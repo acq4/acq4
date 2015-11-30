@@ -711,28 +711,65 @@ class AccuracyTester(object):
         return subimg, tipRelPos
 
     def takeReferenceFrames(self, zRange=40e-6, zStep=2e-6):
-        import skimage.feature
+        """Collect a series of images of the pipette tip at various focal depths.
+
+        The collected images are used as reference templates for determining the most likely location 
+        and focal depth of the tip after the calibration is no longer valid.
+
+        The tip is first moved in the +z direction by half of *zRange*, and then stepped in the -z 
+        direction by *zStep* until the entire *zRange* is covered. Images of the pipette tip are acquired
+        and stored at each step.
+
+        This method assumes that the tip is in focus near the center of the camera frame, and that its
+        position is well-calibrated. Ideally, the illumination is flat and the area surrounding the tip
+        is free of any artifacts.
+
+        Images are filtered using `self.filterImage` before they are stored.
+        """
+        # Take an initial frame with the tip in focus.
         centerFrame = self.takeFrame()
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=5e-6)
         center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+        center = self.filterImage(center)
 
+        # Decide how many frames to collect and at what z depths
         nFrames = (int(zRange / zStep) // 2) * 2
         pos = self.dev.globalPosition()
         zStart = pos[2] + zStep * (nFrames // 2)
         frames = []
         corr = []
-        with pg.ProgressDialog('Acquiring reference frames...', 0, nFrames) as dlg:
-            for i in range(nFrames):
-                pos[2] = zStart - zStep * i
-                self.dev._moveToGlobal(pos, 'slow').wait()
-                frame = self.takeFrame()
-                img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-                frames.append(img)
-                corr.append(skimage.feature.match_template(img, center)[0,0])
-                dlg += 1
-                if dlg.wasCanceled():
-                    return
 
+        # Set initial focus above start point to reduce hysteresis in focus mechanism
+        scope = self.dev.scopeDevice()
+        scope.setFocusDepth(zStart + 10e-6)
+
+        # Stop camera if it is currently running
+        restart = False
+        if self.camera.isRunning():
+            restart = True
+            self.camera.stop()
+
+        try:
+            with pg.ProgressDialog('Acquiring reference frames...', 0, nFrames) as dlg:
+                # Acquire multiple frames at different depths
+                for i in range(nFrames):
+                    #pos[2] = zStart - zStep * i
+                    # self.dev._moveToGlobal(pos, 'slow').wait()
+                    scope.setFocusDepth(zStart - zStep * i).wait()
+                    frame = self.camera.acquireFrames(1)
+                    img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+                    img = self.filterImage(img)
+                    frames.append(img)
+                    corr.append(self.matchTemplate(img, center)[1])
+                    dlg += 1
+                    if dlg.wasCanceled():
+                        return
+        finally:
+            # restart camera if it was running
+            if restart:
+                self.camera.start()
+
+        # find the index of the frame that most closely matches the initial, tip-focused frame
         maxInd = np.argmax(corr)
 
         self.reference = {
@@ -742,21 +779,26 @@ class AccuracyTester(object):
             'centerPos': tipRelPos,
         }
 
-    def measureTipPosition(self, padding=50e-6):
+    def measureTipPosition(self, padding=50e-6, threshold=0.7):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
+
+        If the strength of the match is less than *threshold*, then raise RuntimeError.
         """
-        import skimage.feature
         frame = self.takeFrame()
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
         img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+        img = self.filterImage(img)
 
-        cc = [skimage.feature.match_template(img, t) for t in self.reference['frames']]
-        maxcc = [c.max() for c in cc]
-        maxInd = np.argmax(maxcc)
-        zErr = (self.reference['centerInd'] - maxInd) * self.reference['zStep']
+        match = [self.matchTemplate(img, t) for t in self.reference['frames']]
+        pg.plot([m[1] for m in match])
+        maxInd = np.argmax([m[1] for m in match])
+        if match[maxInd][1] < threshold:
+            raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (match[maxInd][1], threshold))
 
-        offset = np.unravel_index(cc[maxInd].argmax(), cc[maxInd].shape)
+        zErr = (maxInd - self.reference['centerInd']) * self.reference['zStep']
+
+        offset = match[maxInd][0]
         tipImgPos = (minImgPos[0] + offset[0] + self.reference['centerPos'][0], 
                      minImgPos[1] + offset[1] + self.reference['centerPos'][1])
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
@@ -770,25 +812,35 @@ class AccuracyTester(object):
         measuredTipPos = self.measureTipPosition(padding)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
-    def autoCalibrate(self, padding=50e-6):
+    def autoCalibrate(self, padding=50e-6, threshold=0.7):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
         """
-        tipPos = self.measureTipPosition(padding)
+        tipPos = self.measureTipPosition(padding, threshold)
         localError = self.dev.mapFromGlobal(tipPos)
         tr = self.dev.deviceTransform()
         tr.translate(pg.Vector(localError))
         self.dev.setDeviceTransform(tr)
 
+    def filterImage(self, img):
+        """Return a filtered version of an image to be used in template matching.
 
+        Currently, no filtering is applied.
+        """
+        # Sobel should reduce background artifacts, but it also seems to increase the noise in the signal
+        # itself--two images with slightly different focus can have a very bad match.
+        # import skimage.feature
+        # return skimage.filter.sobel(img)
 
+        return img
 
+    def matchTemplate(self, img, template):
+        """Match a template to image data.
 
-
-
-
-
-
-
-
-
-
+        Return the (x, y) pixel offset of the template and a value indicating the strength of the match.
+        """
+        import skimage.feature
+        cc = skimage.feature.match_template(img, template)
+        ind = np.argmax(cc)
+        pos = np.unravel_index(ind, cc.shape)
+        val = cc[pos[0], pos[1]]
+        return pos, val
