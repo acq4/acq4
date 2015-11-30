@@ -403,6 +403,7 @@ class ManipulatorCamModInterface(CameraModuleInterface):
         self.setTargetPos(self.target.pos(), z)
 
     def transformChanged(self):
+        # manipulator's global transform has changed; update the center arrow and orientation axis
         dev = self.getDevice()
         pos = dev.mapToGlobal([0, 0, 0])
         x = dev.mapToGlobal([1, 0, 0])
@@ -426,7 +427,6 @@ class ManipulatorCamModInterface(CameraModuleInterface):
             self.calibrateAxis.setPos(pos[:2])
             self.calibrateAxis.setAngle(angle)
             ys = self.calibrateAxis.size()[1]
-
 
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
@@ -626,7 +626,14 @@ class AccuracyTester(object):
     def takeFrame(self, padding=40e-6):
         """Acquire one frame from the imaging device.
         """
-        return self.camera.acquireFrames(1)
+        restart = False
+        if self.camera.isRunning():
+            restart = True
+            self.camera.stop()
+        frame = self.camera.acquireFrames(1)
+        if restart:
+            self.camera.start()
+        return frame
 
     def getTipImageArea(self, frame, padding):
         """Generate coordinates needed to clip a camera frame to include just the
@@ -732,21 +739,45 @@ class AccuracyTester(object):
             'frames': np.dstack(frames).transpose((2, 0, 1)),
             'zStep': zStep,
             'centerInd': maxInd,
-            'centerPos': pos,
+            'centerPos': tipRelPos,
         }
 
-    def measureError(self, padding=50e-6):
+    def measureTipPosition(self, padding=50e-6):
+        """Find the pipette tip location by template matching within a region surrounding the
+        expected tip position.
+        """
         import skimage.feature
         frame = self.takeFrame()
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
         img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
 
         cc = [skimage.feature.match_template(img, t) for t in self.reference['frames']]
+        maxcc = [c.max() for c in cc]
+        maxInd = np.argmax(maxcc)
+        zErr = (self.reference['centerInd'] - maxInd) * self.reference['zStep']
 
-        return subimg, tipRelPos
+        offset = np.unravel_index(cc[maxInd].argmax(), cc[maxInd].shape)
+        tipImgPos = (minImgPos[0] + offset[0] + self.reference['centerPos'][0], 
+                     minImgPos[1] + offset[1] + self.reference['centerPos'][1])
+        tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
+        return tipPos.x(), tipPos.y(), tipPos.z() + zErr
 
+    def measureError(self, padding=50e-6):
+        """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
+        measured (actual) tip position.
+        """
+        expectedTipPos = self.dev.globalPosition()
+        measuredTipPos = self.measureTipPosition(padding)
+        return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
-
+    def autoCalibrate(self, padding=50e-6):
+        """Automatically calibrate the pipette tip position using template matching on a single camera frame.
+        """
+        tipPos = self.measureTipPosition(padding)
+        localError = self.dev.mapFromGlobal(tipPos)
+        tr = self.dev.deviceTransform()
+        tr.translate(pg.Vector(localError))
+        self.dev.setDeviceTransform(tr)
 
 
 
