@@ -660,8 +660,8 @@ class Imager(Module):
         zoom = zoomS + zoomT/10.
         state = self.currentRoi.getState()
         cpos = state['pos'] +  state['size']/2. #self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
-        width  = self.defaultROIsize/zoom # width is x in M
-        height = self.defaultROIsize/zoom
+        width  = self.defaultROIsize[0]/zoom # width is x in M
+        height = self.defaultROIsize[1]/zoom
         csize = pg.Point(width, height)
         cpos = cpos - csize/2.
         self.currentRoi.setSize([width, height])
