@@ -76,6 +76,10 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
 
+        self.plasticityRgn = pg.LinearRegionItem(movable=False)
+        self.plasticityRgn.setRegion([27*60, 47*60])
+        self.plots.exptPlot.addItem(self.plasticityRgn)
+
         self.baselineRgn = pg.LinearRegionItem(brush=(0,150,0,50))
         self.plots.tracesPlot.addItem(self.baselineRgn)
         
