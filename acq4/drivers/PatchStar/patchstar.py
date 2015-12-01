@@ -38,7 +38,7 @@ class PatchStar(SerialDevice):
             return result
 
     def getFirmwareVersion(self):
-            return self.send('DATE').partition(' ')[2].partition('\t')[0]
+        return self.send('DATE').partition(' ')[2].partition('\t')[0]
 
     def getType(self):
         """Return a string indicating the type of the device, or the type's numerical value

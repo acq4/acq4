@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
+
 from PyQt4 import QtCore, QtGui
 import numpy as np
 
@@ -622,6 +624,7 @@ class AccuracyTester(object):
         self.dev = manipulator
         man = getManager()
         self.camera = man.getDevice('Camera')
+        self.reference = self.dev.readConfigFile('ref_frames')
 
     def takeFrame(self, padding=40e-6):
         """Acquire one frame from the imaging device.
@@ -760,7 +763,7 @@ class AccuracyTester(object):
                     img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
                     img = self.filterImage(img)
                     frames.append(img)
-                    corr.append(self.matchTemplate(img, center)[1])
+                    corr.append(self._matchTemplateSingle(img, center)[1])
                     dlg += 1
                     if dlg.wasCanceled():
                         return
@@ -772,26 +775,36 @@ class AccuracyTester(object):
         # find the index of the frame that most closely matches the initial, tip-focused frame
         maxInd = np.argmax(corr)
 
+        # stack all frames into a 3D array
+        frames = np.dstack(frames).transpose((2, 0, 1))
+
+        # generate downsampled frame versions
+        # (for now we generate these on the fly..)
+        # ds = [frames] + [pg.downsample(pg.downsample(frames, n, axis=1), n, axis=2) for n in [2, 4, 8]]
+
         self.reference = {
-            'frames': np.dstack(frames).transpose((2, 0, 1)),
+            'frames': frames,
             'zStep': zStep,
             'centerInd': maxInd,
             'centerPos': tipRelPos,
+            # 'downsampledFrames' = ds,
         }
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7):
+        self.dev.writeConfigFile(self.reference, 'ref_frames')
+
+    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
         If the strength of the match is less than *threshold*, then raise RuntimeError.
         """
-        frame = self.takeFrame()
+        if frame is None:
+            frame = self.takeFrame()
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
         img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
         img = self.filterImage(img)
 
         match = [self.matchTemplate(img, t) for t in self.reference['frames']]
-        pg.plot([m[1] for m in match])
         maxInd = np.argmax([m[1] for m in match])
         if match[maxInd][1] < threshold:
             raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (match[maxInd][1], threshold))
@@ -804,12 +817,12 @@ class AccuracyTester(object):
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
         return tipPos.x(), tipPos.y(), tipPos.z() + zErr
 
-    def measureError(self, padding=50e-6):
+    def measureError(self, padding=50e-6, threshold=0.7, frame=None):
         """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
         measured (actual) tip position.
         """
         expectedTipPos = self.dev.globalPosition()
-        measuredTipPos = self.measureTipPosition(padding)
+        measuredTipPos = self.measureTipPosition(padding, threshold, frame)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
     def autoCalibrate(self, padding=50e-6, threshold=0.7):
@@ -833,14 +846,107 @@ class AccuracyTester(object):
 
         return img
 
-    def matchTemplate(self, img, template):
+    def matchTemplate(self, img, template, dsVals=(8, 1)):
         """Match a template to image data.
 
         Return the (x, y) pixel offset of the template and a value indicating the strength of the match.
+
+        For efficiency, the input images are downsampled and matched at low resolution before
+        iteratively re-matching at higher resolutions. The *dsVals* argument lists the downsampling values
+        that will be used, in order. Each value in this list must be an integer multiple of
+        the value that follows it.
         """
+        # Recursively match at increasing image resolution
+
+        imgDs = [pg.downsample(pg.downsample(img, n, axis=0), n, axis=1) for n in dsVals]
+        tmpDs = [pg.downsample(pg.downsample(template, n, axis=0), n, axis=1) for n in dsVals]
+        offset = np.array([0, 0])
+        for i, ds in enumerate(dsVals):
+            pos, val = self._matchTemplateSingle(imgDs[i], tmpDs[i])
+            pos = np.array(pos)
+            if i == len(dsVals) - 1:
+                offset += pos
+                # [pg.image(imgDs[j], title=str(j)) for j in range(len(dsVals))]
+                return offset, val
+            else:
+                scale = ds // dsVals[i+1]
+                assert scale == ds / dsVals[i+1], "dsVals must satisfy constraint: dsVals[i] == dsVals[i+1] * int(x)"
+                offset *= scale
+                offset += np.clip(((pos-1) * scale), 0, imgDs[i+1].shape)
+                end = offset + np.array(tmpDs[i+1].shape) + 3
+                end = np.clip(end, 0, imgDs[i+1].shape)
+                imgDs[i+1] = imgDs[i+1][offset[0]:end[0], offset[1]:end[1]]
+
+    def _matchTemplateSingle(self, img, template):
         import skimage.feature
+        if img.shape[0] < template.shape[0] or img.shape[1] < template.shape[1]:
+            raise ValueError("Image must be larger than template.  %s %s" % (img.shape, template.shape))
         cc = skimage.feature.match_template(img, template)
         ind = np.argmax(cc)
         pos = np.unravel_index(ind, cc.shape)
         val = cc[pos[0], pos[1]]
         return pos, val
+
+    def mapErrors(self, width, step, padding=20e-6, threshold=0.5, show=False):
+        start = np.array(self.dev.globalPosition())
+        n = int(width/step) + 1
+        inds = np.mgrid[0:n, 0:n].reshape((2, n*n)).transpose()
+        order = np.arange(n*n)
+        np.random.shuffle(order)
+
+        err = np.zeros((n, n, 3))
+
+        # loop over all points in random order, and such that we do heavy computation while
+        # pipette is moving.
+        images = []
+        with pg.ProgressDialog("Acquiring error map...", 0, len(order)) as dlg:
+            for i in range(len(order)+1):
+                if i > 0:
+                    last_pos = pos
+                if i < len(order):
+                    ind = inds[order[i]]
+                    pos = start.copy()
+                    pos[:2] += step * ind
+                    fut = self.dev._moveToGlobal(pos, 'fast')
+                if i > 0:
+                    ind = inds[order[i-1]]
+
+                    if show:
+                        img = frame.data()[0]
+                        p1 = frame.globalTransform().inverted()[0].map(pg.Vector(last_pos))
+                        img[p1.x(), p1.y()] += 10000
+                        images.append(img)
+                        # pg.image(img, title=str(ind) + ' ' + str(p1))
+
+                    err[tuple(ind)] = self.measureError(padding=padding, threshold=threshold, frame=frame)
+                    dlg += 1
+                fut.wait()
+                frame = self.takeFrame()
+
+                if dlg.wasCanceled():
+                    return None
+
+        self.dev._moveToGlobal(start, 'fast')
+
+
+        if show:
+            pg.image(np.dstack(images).transpose(2, 0, 1))
+
+        return err
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
