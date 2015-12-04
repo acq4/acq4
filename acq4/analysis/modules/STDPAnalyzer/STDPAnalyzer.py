@@ -226,6 +226,7 @@ class STDPAnalyzer(AnalysisModule):
         """Update the experiment plots with markers for the the timestamps of 
         all loaded EPSP traces, and averages (if selected in the UI)."""
 
+
         if len(self.traces) == 0:
             return
 
@@ -461,9 +462,9 @@ class STDPAnalyzer(AnalysisModule):
         while t < len(includedTraces):
             traces = includedTraces[i*number:i*number+number]
 
-            x = traces[0]['data']['primary']
+            x = traces[0]['data']
             for t2 in traces[1:]:
-                x += t2['data']['primary']
+                x += t2['data']
             x /= float(len(traces))
 
             self.averagedTraces[i]['avgTimeStamp'] = traces['timestamp'].mean()
@@ -471,6 +472,8 @@ class STDPAnalyzer(AnalysisModule):
             self.averagedTraces[i]['origTimes'] = list(traces['timestamp'])
             t += len(traces)
             i += 1
+
+        self.averagedTraces = self.averagedTraces[self.averagedTraces['avgTimeStamp'] != 0] ## clean up any left over zeros from pauses in data collection
 
     def regionDisplayToggled(self):
         if self.ctrl.baselineCheck.isChecked():
