@@ -155,14 +155,10 @@ class STDPAnalyzer(AnalysisModule):
         """Called by FileLoader when the load EPSP file button is clicked, once for each selected file.
                 files - a list of the file currently selected in FileLoader
         """
-        #print "loadFileRequested"
+        
         if files is None:
             return
 
-        # n = 0
-        # for f in files:
-        #     n += len(f.ls())
-        # print "   ", n
         n = len(files[0].ls()) 
 
         with pg.ProgressDialog("Loading data..", 0, n) as dlg:
@@ -185,7 +181,7 @@ class STDPAnalyzer(AnalysisModule):
                 self.traces = np.concatenate((self.traces, arr[:maxi]))  # only concatenate successfully read traces
                 self.lastAverageState = {}
                 self.files.append(f)
-        #print "   ", len(self.traces)
+        
         self.updateExptPlot()
         self.updateTracesPlot()
         return True
@@ -235,7 +231,6 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.exptPlot.addItem(self.traceSelectRgn)
 
         if self.ctrl.averageCheck.isChecked():
-            #print "updateExptPlot", len(self.traces), len(self.averagedTraces)
             self.plots.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o', symbolSize=6, alpha=50)
             self.plots.exptPlot.plot(x=self.averagedTraces['avgTimeStamp']-self.expStart, y=[2]*len(self.averagedTraces), pen=None, symbol='o', symbolSize=6, symbolBrush=(255,0,0))
         else:
@@ -359,11 +354,9 @@ class STDPAnalyzer(AnalysisModule):
 
 
     def getNewAverages(self):
-
         excludeAPs = self.ctrl.excludeAPsCheck.isChecked()
         start = self.ctrl.startExcludeAPsSpin.value()
         end = self.ctrl.endExcludeAPsSpin.value()
-
 
         if self.ctrl.averageTimeRadio.isChecked():
             method = 'time'
@@ -377,45 +370,37 @@ class STDPAnalyzer(AnalysisModule):
             raise Exception("Unable to average traces. Please make sure an averaging method is selected.")
 
         self.lastAverageState = {'method': method, 'value': value, 'excludeAPs':excludeAPs, 'startExcludeAPsTime':start, 'endExcludeAPsTime':end}
-        #print "finished getNewAverages"
+        
 
     def checkForAP(self, trace, timeWindow):
         """Return True if there is an action potential present in the trace in the given timeWindow (tuple of start, stop)."""
-        # print 'checkforAP called.'
+
         data = trace['primary']['Time':timeWindow[0]:timeWindow[1]]
         if data.max() > -0.02:
             return True
         else:
             return False
 
+    def excludeAPs(self):
+        timeWindow = (self.ctrl.startExcludeAPsSpin.value(), self.ctrl.endExcludeAPsSpin.value())
+        APmask = np.zeros(len(self.traces), dtype=bool)
+        for i, trace in enumerate(self.traces):
+            APmask[i] = self.checkForAP(trace['data'], timeWindow)
+        self.excludedTraces = self.traces[APmask]
+        return self.traces[~APmask]
+
     def averageByTime(self, time, excludeAPs=False):
-        # print "averageByTime called."
-        
-        # k = 0 ## how many excluded traces we have
         n = int((self.traces['timestamp'].max() - self.expStart)/time) + ((self.traces['timestamp'].max() - self.expStart) % time > 0) ### weird solution for rounding up
         self.resetAveragedTraces(n)
-        #print "   computed numbers, reset average array. "
-        # print "      n:", n
-        # print "      timestamp.max():", self.traces['timestamp'].max()
-        # print "      expStart:", self.expStart
-        # print "      timestamp.min():", self.traces['timestamp'].min()
-        # print "      time:", time
+
         if excludeAPs:
-            #print '   excluding APs:'
-            timeWindow = (self.ctrl.startExcludeAPsSpin.value(), self.ctrl.endExcludeAPsSpin.value())
-            APmask = np.zeros(len(self.traces), dtype=bool)
-            for i, trace in enumerate(self.traces):
-                APmask[i] = self.checkForAP(trace['data'], timeWindow)
-            self.excludedTraces = self.traces[APmask]
-            includedTraces = self.traces[~APmask]
+            includedTraces = self.excludeAPs()
         else:
             includedTraces = self.traces
 
-        #print "   averaging traces:"
         t = 0 ## how many traces we've gone through
         i = 0 ## how many timesteps we've gone through
         while t < len(includedTraces):
-            #raise Exception("Stop!")
             traces = includedTraces[(includedTraces['timestamp'] >= self.expStart+time*i)*(includedTraces['timestamp'] < self.expStart+time*i+time)]
             if len(traces) > 1:
                 x = traces[0]['data']
@@ -426,21 +411,16 @@ class STDPAnalyzer(AnalysisModule):
                 x = traces[0]['data']
             else:
                 i += 1
-                #print t, len(includedTraces), len(traces)
                 continue
-            #print "   averaged set ", i
+
             self.averagedTraces[i]['avgTimeStamp'] = traces['timestamp'].mean()
             self.averagedTraces[i]['avgData'] = x
             self.averagedTraces[i]['origTimes'] = list(traces['timestamp'])
-            #print "   assigned values for set", i
+            
             t += len(traces)
             i += 1
-            #print t, len(includedTraces)
 
-            #print (len(self.averagedTraces[self.averagedTraces['avgTimeStamp'] <= self.expStart]))
         self.averagedTraces = self.averagedTraces[self.averagedTraces['avgTimeStamp'] != 0] ## clean up any left over zeros from pauses in data collection
-        #self.excludedTraces = self.excludedTraces[self.excludedTraces['timestamp'] != 0]
-        #print "  finished averaging"
 
 
     def averageByNumber(self, number, excludeAPs=False):
@@ -448,12 +428,7 @@ class STDPAnalyzer(AnalysisModule):
         self.resetAveragedTraces(n)
 
         if excludeAPs:
-            #print '   excluding APs:'
-            APmask = np.zeros(len(self.traces), dtype=bool)
-            for i, trace in enumerate(self.traces):
-                APmask[i] = self.checkForAP(trace['data'], (0, 0.25))
-            self.excludedTraces = self.traces[APmask]
-            includedTraces = self.traces[~APmask]
+            includedTraces = self.excludeAPs()
         else:
             includedTraces = self.traces
 
@@ -585,8 +560,7 @@ class STDPAnalyzer(AnalysisModule):
                                                             ])
 
         self.analysisResults['time'] = times
-        # print "analysisReusults['time']: ", self.analysisResults['time']
-        # print len(self.analysisResults['time'])
+        
         symsize = 5.0
         
         if self.ctrl.healthCheck.isChecked():
@@ -631,7 +605,6 @@ class STDPAnalyzer(AnalysisModule):
                 postRgn = (pr1[0], pr2[-1])
                 post, postTime = (self.analysisResults['pspSlope'][postRgn[0]:postRgn[1]].mean(),
                     [self.analysisResults['time'][postRgn[0]][0]-self.expStart, self.analysisResults['time'][postRgn[1]][0]-self.expStart])
-                #self.plots.plasticityPlot.plot(x=[basetime, postTime], y=[base, post], pen=None, symbolBrush='r')
                 self.plots.plasticityPlot.plot(x=basetime, y=[base]*2, pen='r')
                 self.plots.plasticityPlot.plot(x=postTime, y=[post]*2, pen='r')
                 self.plasticity = post/base
@@ -644,10 +617,6 @@ class STDPAnalyzer(AnalysisModule):
 
     def measureBaseline(self, traces):
         rgn = self.baselineRgn.getRegion()
-        #print "MeasureBaseline:"
-        #print "   ", traces[0].shape
-
-
         for i, trace in enumerate(traces):
             data = trace['primary']['Time':rgn[0]:rgn[1]]
             self.analysisResults[i]['RMP'] = data.mean()
@@ -677,7 +646,7 @@ class STDPAnalyzer(AnalysisModule):
             t = region
             slope = 0
             highest=None
-            #raise Exception("stop!")
+           
             while t < len(data['primary']):
                 data2 = data['Time':t-region:t]['primary']
                 s = np.polyfit(np.arange(len(data2))*timestep, data2, 1)
@@ -700,9 +669,8 @@ class STDPAnalyzer(AnalysisModule):
                 baseline = data['primary'][:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
             peakPosition = np.argwhere(data['primary'] == data['primary'].max())[0]
             avgPeak = data['primary'][peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
-#            print "avgPeak:", avgPeak
+
             self.analysisResults[i]['pspAmplitude'] = avgPeak
-            #raise Exception('Stop!')
 
     def measureHealth(self, traces):
         rgn = self.healthRgn.getRegion()
@@ -719,7 +687,7 @@ class STDPAnalyzer(AnalysisModule):
         db = self.dbGui.getDb()
         if db is None:
             raise Exception("No database loaded.")
-        #identity = self.dbIdentity
+        
         table = self.dbGui.getTableName(self.dbIdentity+'.trials')
 
         trialFields = OrderedDict([
@@ -798,10 +766,9 @@ class STDPAnalyzer(AnalysisModule):
 
     def createSummarySheet(self, showPlasticity=True):
         view = pg.GraphicsView()
-        #view.setBackground((255,255,255,255))
-        #view.setForegroundBrush(pg.mkBrush((0,0,0,255)))
         l = pg.GraphicsLayout()
         view.setCentralItem(l)
+        
         cell = self.dataModel.getParent(self.files[0], 'Cell')
 
         if self.dbGui.getDb() is not None:
