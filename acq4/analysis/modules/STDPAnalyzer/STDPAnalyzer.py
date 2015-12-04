@@ -96,6 +96,7 @@ class STDPAnalyzer(AnalysisModule):
 
         ### Connect control panel
         self.averageCtrl = pg.WidgetGroup(self.ctrl.traceDisplayGroup) ##TODO: save state when we save data
+        self.ctrl.averageCheck.setChecked(True)
         self.ctrl.averageTimeSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=60, step=1)
         self.ctrl.averageNumberSpin.setOpts(step=1, dec=True)
         self.ctrl.startExcludeAPsSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=0, step=1, minstep=0.001)
@@ -182,6 +183,8 @@ class STDPAnalyzer(AnalysisModule):
                 self.lastAverageState = {}
                 self.files.append(f)
         
+        self.expStart = self.traces['timestamp'].min()
+        self.averageCtrlChanged()
         self.updateExptPlot()
         self.updateTracesPlot()
         return True
@@ -226,7 +229,6 @@ class STDPAnalyzer(AnalysisModule):
         if len(self.traces) == 0:
             return
 
-        self.expStart = self.traces['timestamp'].min()
         self.plots.exptPlot.clear()
         self.plots.exptPlot.addItem(self.traceSelectRgn)
 
@@ -315,6 +317,7 @@ class STDPAnalyzer(AnalysisModule):
 
         if not self.needNewAverage(): ## if the parameters for averaging didn't change, we don't need to do anything
             self.updateTracesPlot()
+            self.updateExptPlot()
             return
 
         self.getNewAverages()
@@ -768,7 +771,7 @@ class STDPAnalyzer(AnalysisModule):
         view = pg.GraphicsView()
         l = pg.GraphicsLayout()
         view.setCentralItem(l)
-        
+
         cell = self.dataModel.getParent(self.files[0], 'Cell')
 
         if self.dbGui.getDb() is not None:
