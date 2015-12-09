@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
 
+import pickle
 from PyQt4 import QtCore, QtGui
 import numpy as np
 
-from acq4.Manager import getManager
 import acq4.pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from .cameraModTemplate import Ui_Form as CamModTemplate
+from .tracker import PipetteTracker
 
 
 class Manipulator(Device, OptomechDevice):
@@ -63,6 +64,8 @@ class Manipulator(Device, OptomechDevice):
         if cal != {}:
             self.setStageOrientation(cal['angle'], cal['inverty'])
             self.setDeviceTransform(cal['transform'])
+
+        self.tracker = PipetteTracker(self)
 
     def scopeDevice(self):
         return self._scopeDev
@@ -235,6 +238,7 @@ class Manipulator(Device, OptomechDevice):
         # steps are in global coordinates.
         path = []
 
+        # If tip is below the surface, then first pull out slowly along pipette axis
         if pos[2] < stbyDepth:
             dz = stbyDepth - pos[2]
             dx = -dz / np.tan(self.pitch)
@@ -250,12 +254,12 @@ class Manipulator(Device, OptomechDevice):
         # target in local coordinates
         ltarget = self.mapFromGlobal(target)
 
-        # compute approach position
-        dz2 = stbyDepth - target[2]
+        # compute approach position (axis aligned to target, at standby depth or higher)
+        dz2 = max(0, stbyDepth - target[2])
         dx2 = -dz2 / np.tan(self.pitch)
         stby = ltarget + np.array([dx2, 0., dz2])
 
-        # compute intermediate position
+        # compute intermediate position (point along approach axis that is closest to the current position)
         targetToTip = last - ltarget
         targetToStby = stby - ltarget
         targetToStby /= np.linalg.norm(targetToStby)
@@ -617,336 +621,5 @@ class Axis(pg.ROI):
         # p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
         p.scale(w, h)
         p.drawPath(self._path)
-
-
-class AccuracyTester(object):
-    def __init__(self, manipulator):
-        self.dev = manipulator
-        man = getManager()
-        self.camera = man.getDevice('Camera')
-        self.reference = self.dev.readConfigFile('ref_frames')
-
-    def takeFrame(self, padding=40e-6):
-        """Acquire one frame from the imaging device.
-        """
-        restart = False
-        if self.camera.isRunning():
-            restart = True
-            self.camera.stop()
-        frame = self.camera.acquireFrames(1)
-        if restart:
-            self.camera.start()
-        return frame
-
-    def getTipImageArea(self, frame, padding):
-        """Generate coordinates needed to clip a camera frame to include just the
-        tip of the pipette and some padding.
-
-        Return a tuple (minImgPos, maxImgPos, tipRelPos), where the first two
-        items are (x,y) coordinate pairs giving the corners of the image region to 
-        be extracted, and tipRelPos is the subpixel location of the pipette tip
-        within this region.
-        """
-        img = frame.data()[0]
-
-        # determine bounding rectangle that we would like to acquire from the tip
-        tipPos = self.dev.globalPosition()
-        tipPos = np.array([tipPos[0], tipPos[1]])
-        angle = self.dev.getYawAngle() * np.pi / 180.
-        da = 10 * np.pi / 180  # half-angle of the tip
-        tipLen = 30e-6  # how far back to image along the tip
-        pxw = frame.info()['pixelSize'][0]
-        # compute back points of a triangle that circumscribes the tip
-        backPos1 = np.array([-tipLen * np.cos(angle+da), -tipLen * np.sin(angle+da)])
-        backPos2 = np.array([-tipLen * np.cos(angle-da), -tipLen * np.sin(angle-da)])
-
-        # convert to image coordinates
-        tr = frame.globalTransform().inverted()[0]
-        originImgPos = tr.map(pg.Vector([0, 0]))
-        backImgPos1 = tr.map(pg.Vector(backPos1)) - originImgPos
-        backImgPos2 = tr.map(pg.Vector(backPos2)) - originImgPos
-        backImgPos1 = np.array([backImgPos1.x(), backImgPos1.y()])
-        backImgPos2 = np.array([backImgPos2.x(), backImgPos2.y()])
-
-        # Pixel positions of bounding corners in the image relative to tip, including padding.
-        # Note this is all calculated without actual tip position; this ensures the image
-        # size is constant even as the tip moves.
-        allPos = np.vstack([[0, 0], backImgPos1, backImgPos2]).astype('int')
-        padding = int(padding / pxw)
-        minRelPos = allPos.min(axis=0) - padding
-        maxRelPos = allPos.max(axis=0) + padding
-
-        # Get absolute pixel position of tip within image
-        tipImgPos = tr.map(pg.Vector(tipPos))
-        tipImgPos = np.array([tipImgPos.x(), tipImgPos.y()])
-        tipImgPx = tipImgPos.astype('int')
-
-        # clip bounding coordinates
-        minRelPos = [np.clip(minRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
-                     np.clip(minRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
-        maxRelPos = [np.clip(maxRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
-                     np.clip(maxRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
-
-        # absolute image coordinates of bounding rect
-        minImgPos = tipImgPx + minRelPos
-        maxImgPos = tipImgPx + maxRelPos
-
-        if np.any(maxImgPos - minImgPos < 1):
-            raise RuntimeError("No part of tip overlaps with camera frame.")
-
-        # subpixel location of tip within image
-        tipRelPos = tipImgPos - tipImgPx - minRelPos
-
-        return minImgPos, maxImgPos, tipRelPos
-
-    def takeTipImage(self, padding=50e-6):
-        """Acquire an image of the pipette tip plus some padding.
-
-        Return a tuple (image, tipPosition).
-        """
-        frame = self.takeFrame()
-
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
-
-        # clipped image region
-        subimg = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-
-        return subimg, tipRelPos
-
-    def takeReferenceFrames(self, zRange=40e-6, zStep=2e-6):
-        """Collect a series of images of the pipette tip at various focal depths.
-
-        The collected images are used as reference templates for determining the most likely location 
-        and focal depth of the tip after the calibration is no longer valid.
-
-        The tip is first moved in the +z direction by half of *zRange*, and then stepped in the -z 
-        direction by *zStep* until the entire *zRange* is covered. Images of the pipette tip are acquired
-        and stored at each step.
-
-        This method assumes that the tip is in focus near the center of the camera frame, and that its
-        position is well-calibrated. Ideally, the illumination is flat and the area surrounding the tip
-        is free of any artifacts.
-
-        Images are filtered using `self.filterImage` before they are stored.
-        """
-        # Take an initial frame with the tip in focus.
-        centerFrame = self.takeFrame()
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=5e-6)
-        center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-        center = self.filterImage(center)
-
-        # Decide how many frames to collect and at what z depths
-        nFrames = (int(zRange / zStep) // 2) * 2
-        pos = self.dev.globalPosition()
-        zStart = pos[2] + zStep * (nFrames // 2)
-        frames = []
-        corr = []
-
-        # Set initial focus above start point to reduce hysteresis in focus mechanism
-        scope = self.dev.scopeDevice()
-        scope.setFocusDepth(zStart + 10e-6)
-
-        # Stop camera if it is currently running
-        restart = False
-        if self.camera.isRunning():
-            restart = True
-            self.camera.stop()
-
-        try:
-            with pg.ProgressDialog('Acquiring reference frames...', 0, nFrames) as dlg:
-                # Acquire multiple frames at different depths
-                for i in range(nFrames):
-                    #pos[2] = zStart - zStep * i
-                    # self.dev._moveToGlobal(pos, 'slow').wait()
-                    scope.setFocusDepth(zStart - zStep * i).wait()
-                    frame = self.camera.acquireFrames(1)
-                    img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-                    img = self.filterImage(img)
-                    frames.append(img)
-                    corr.append(self._matchTemplateSingle(img, center)[1])
-                    dlg += 1
-                    if dlg.wasCanceled():
-                        return
-        finally:
-            # restart camera if it was running
-            if restart:
-                self.camera.start()
-
-        # find the index of the frame that most closely matches the initial, tip-focused frame
-        maxInd = np.argmax(corr)
-
-        # stack all frames into a 3D array
-        frames = np.dstack(frames).transpose((2, 0, 1))
-
-        # generate downsampled frame versions
-        # (for now we generate these on the fly..)
-        # ds = [frames] + [pg.downsample(pg.downsample(frames, n, axis=1), n, axis=2) for n in [2, 4, 8]]
-
-        self.reference = {
-            'frames': frames,
-            'zStep': zStep,
-            'centerInd': maxInd,
-            'centerPos': tipRelPos,
-            # 'downsampledFrames' = ds,
-        }
-
-        self.dev.writeConfigFile(self.reference, 'ref_frames')
-
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None):
-        """Find the pipette tip location by template matching within a region surrounding the
-        expected tip position.
-
-        If the strength of the match is less than *threshold*, then raise RuntimeError.
-        """
-        if frame is None:
-            frame = self.takeFrame()
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
-        img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-        img = self.filterImage(img)
-
-        match = [self.matchTemplate(img, t) for t in self.reference['frames']]
-        maxInd = np.argmax([m[1] for m in match])
-        if match[maxInd][1] < threshold:
-            raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (match[maxInd][1], threshold))
-
-        zErr = (maxInd - self.reference['centerInd']) * self.reference['zStep']
-
-        offset = match[maxInd][0]
-        tipImgPos = (minImgPos[0] + offset[0] + self.reference['centerPos'][0], 
-                     minImgPos[1] + offset[1] + self.reference['centerPos'][1])
-        tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
-        return tipPos.x(), tipPos.y(), tipPos.z() + zErr
-
-    def measureError(self, padding=50e-6, threshold=0.7, frame=None):
-        """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
-        measured (actual) tip position.
-        """
-        expectedTipPos = self.dev.globalPosition()
-        measuredTipPos = self.measureTipPosition(padding, threshold, frame)
-        return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
-
-    def autoCalibrate(self, padding=50e-6, threshold=0.7):
-        """Automatically calibrate the pipette tip position using template matching on a single camera frame.
-        """
-        tipPos = self.measureTipPosition(padding, threshold)
-        localError = self.dev.mapFromGlobal(tipPos)
-        tr = self.dev.deviceTransform()
-        tr.translate(pg.Vector(localError))
-        self.dev.setDeviceTransform(tr)
-
-    def filterImage(self, img):
-        """Return a filtered version of an image to be used in template matching.
-
-        Currently, no filtering is applied.
-        """
-        # Sobel should reduce background artifacts, but it also seems to increase the noise in the signal
-        # itself--two images with slightly different focus can have a very bad match.
-        # import skimage.feature
-        # return skimage.filter.sobel(img)
-
-        return img
-
-    def matchTemplate(self, img, template, dsVals=(8, 1)):
-        """Match a template to image data.
-
-        Return the (x, y) pixel offset of the template and a value indicating the strength of the match.
-
-        For efficiency, the input images are downsampled and matched at low resolution before
-        iteratively re-matching at higher resolutions. The *dsVals* argument lists the downsampling values
-        that will be used, in order. Each value in this list must be an integer multiple of
-        the value that follows it.
-        """
-        # Recursively match at increasing image resolution
-
-        imgDs = [pg.downsample(pg.downsample(img, n, axis=0), n, axis=1) for n in dsVals]
-        tmpDs = [pg.downsample(pg.downsample(template, n, axis=0), n, axis=1) for n in dsVals]
-        offset = np.array([0, 0])
-        for i, ds in enumerate(dsVals):
-            pos, val = self._matchTemplateSingle(imgDs[i], tmpDs[i])
-            pos = np.array(pos)
-            if i == len(dsVals) - 1:
-                offset += pos
-                # [pg.image(imgDs[j], title=str(j)) for j in range(len(dsVals))]
-                return offset, val
-            else:
-                scale = ds // dsVals[i+1]
-                assert scale == ds / dsVals[i+1], "dsVals must satisfy constraint: dsVals[i] == dsVals[i+1] * int(x)"
-                offset *= scale
-                offset += np.clip(((pos-1) * scale), 0, imgDs[i+1].shape)
-                end = offset + np.array(tmpDs[i+1].shape) + 3
-                end = np.clip(end, 0, imgDs[i+1].shape)
-                imgDs[i+1] = imgDs[i+1][offset[0]:end[0], offset[1]:end[1]]
-
-    def _matchTemplateSingle(self, img, template):
-        import skimage.feature
-        if img.shape[0] < template.shape[0] or img.shape[1] < template.shape[1]:
-            raise ValueError("Image must be larger than template.  %s %s" % (img.shape, template.shape))
-        cc = skimage.feature.match_template(img, template)
-        ind = np.argmax(cc)
-        pos = np.unravel_index(ind, cc.shape)
-        val = cc[pos[0], pos[1]]
-        return pos, val
-
-    def mapErrors(self, width, step, padding=20e-6, threshold=0.5, show=False):
-        start = np.array(self.dev.globalPosition())
-        n = int(width/step) + 1
-        inds = np.mgrid[0:n, 0:n].reshape((2, n*n)).transpose()
-        order = np.arange(n*n)
-        np.random.shuffle(order)
-
-        err = np.zeros((n, n, 3))
-
-        # loop over all points in random order, and such that we do heavy computation while
-        # pipette is moving.
-        images = []
-        with pg.ProgressDialog("Acquiring error map...", 0, len(order)) as dlg:
-            for i in range(len(order)+1):
-                if i > 0:
-                    last_pos = pos
-                if i < len(order):
-                    ind = inds[order[i]]
-                    pos = start.copy()
-                    pos[:2] += step * ind
-                    fut = self.dev._moveToGlobal(pos, 'fast')
-                if i > 0:
-                    ind = inds[order[i-1]]
-
-                    if show:
-                        img = frame.data()[0]
-                        p1 = frame.globalTransform().inverted()[0].map(pg.Vector(last_pos))
-                        img[p1.x(), p1.y()] += 10000
-                        images.append(img)
-                        # pg.image(img, title=str(ind) + ' ' + str(p1))
-
-                    err[tuple(ind)] = self.measureError(padding=padding, threshold=threshold, frame=frame)
-                    dlg += 1
-                fut.wait()
-                frame = self.takeFrame()
-
-                if dlg.wasCanceled():
-                    return None
-
-        self.dev._moveToGlobal(start, 'fast')
-
-
-        if show:
-            pg.image(np.dstack(images).transpose(2, 0, 1))
-
-        return err
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

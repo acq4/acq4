@@ -29,8 +29,9 @@ class PatchStar(Stage):
         self.getPosition(refresh=True)
 
         # Set approach angle
+        # Disabled--this toggles the approach bit and we can't reconfigure it from here :(
         # approach = self.dev.send('APPROACH')
-        self.dev.send('ANGLE %f' % self.pitch)
+        # self.dev.send('ANGLE %f' % self.pitch)
         # self.dev.send('APPROACH %s' % approach)  # reset approach bit; setting angle enables it
 
         # set any extra parameters specified in the config

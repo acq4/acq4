@@ -41,6 +41,12 @@ class Device(QtCore.QObject):
         """
         return os.path.join('devices', self.name() + '_config')
 
+    def configFileName(self, filename):
+        """Return the full path to a config file for this device.
+        """
+        filename = os.path.join(self.configPath(), filename)
+        return self.dm.configFileName(filename)
+
     def readConfigFile(self, filename):
         """Read a config file from this device's configuration directory.
         """

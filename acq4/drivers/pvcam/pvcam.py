@@ -6,6 +6,7 @@ from collections import OrderedDict
 from acq4.util.debug import backtrace
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
+import atexit
 
 __all__ = ['PVCam']
 
@@ -126,6 +127,8 @@ class _PVCamClass:
         for p in externalParams:
             self.paramTable[p] = self.paramFromString(p)
 
+        atexit.register(self.quit)
+
     def reloadDriver(self):
         #if self.pvcam.pl_pvcam_uninit() < 1:
             #raise Exception("Could not un-initialize pvcam library (pl_pvcam_init): %s" % self.error())
@@ -177,9 +180,6 @@ class _PVCamClass:
         err = create_string_buffer('\0'*LIB.ERROR_MSG_LEN)
         LIB.error_message(erno, err)
         return "%d: %s" % (erno, err.value)
-
-    def __del__(self):
-        self.quit()
 
     def quit(self):
         for c in self.cams:
