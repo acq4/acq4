@@ -10,6 +10,7 @@ import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 
+
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
@@ -167,7 +168,9 @@ class PVCam(Camera):
         
     def quit(self):
         Camera.quit(self)
-        self.pvc.quit()
+        time.sleep(2)
+        self.cam.close()
+        #self.pvc.quit()
         
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""

@@ -1,5 +1,7 @@
-import numpy as np
 import pickle
+import time
+import numpy as np
+import scipy.optimize
 
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
@@ -239,7 +241,7 @@ class PipetteTracker(object):
         img = self.filterImage(img)
 
         # resample acquired image to match template pixel size
-        pxr = frame.info()['pixelSize'] / self.reference['pixelSize']
+        pxr = frame.info()['pixelSize'][0] / self.reference['pixelSize'][0]
         if pxr != 1.0:
             import scipy.ndimage
             img = scipy.ndimage.zoom(img, pxr)
@@ -337,12 +339,14 @@ class PipetteTracker(object):
         val = cc[pos[0], pos[1]]
         return pos, val
 
-    def mapErrors(self, nSteps=(2, 2, 2), stepSize=(100e-6, 100e-6, 300e-6),  padding=20e-6, threshold=0.4, speed='slow', show=False):
+    def mapErrors(self, nSteps=(5, 5, 7), stepSize=(50e-6, 50e-6, 50e-6),  padding=60e-6,
+                  threshold=0.4, speed='slow', show=False, intermediateDist=60e-6):
         """Move pipette tip randomly to locations in a grid and measure the position error
         at each location.
 
         All tip locations must be within the field of view.
         """
+        startTime = time.time()
         start = np.array(self.dev.globalPosition())
         npts = nSteps[0] * nSteps[1] * nSteps[2]
         inds = np.mgrid[0:nSteps[0], 0:nSteps[1], 0:nSteps[2]].reshape((3, npts)).transpose()
@@ -352,6 +356,17 @@ class PipetteTracker(object):
         err = np.zeros(nSteps + (3,))
 
         stepSize = np.array(stepSize)
+
+        if show:
+            imv = pg.image()
+            mark1 = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(-5, -5, 10, 10))
+            mark1.setBrush(pg.mkBrush(255, 255, 0, 100))
+            mark1.setZValue(100)
+            imv.addItem(mark1)
+            mark2 = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(-5, -5, 10, 10))
+            mark2.setBrush(pg.mkBrush(255, 0, 0, 100))
+            mark2.setZValue(100)
+            imv.addItem(mark2)
 
         # loop over all points in random order, and such that we do heavy computation while
         # pipette is moving.
@@ -368,7 +383,7 @@ class PipetteTracker(object):
 
                         # Jump to position + a random 20um offset to avoid hysteresis
                         offset = np.random.normal(size=3)
-                        offset *= 20e-6 / (offset**2).sum()**0.5
+                        offset *= intermediateDist / (offset**2).sum()**0.5
                         offsets.append(offset)
 
                         mfut = self.dev._moveToGlobal(pos + offset, speed)
@@ -376,17 +391,17 @@ class PipetteTracker(object):
                     if i > 0:
                         ind = inds[order[i-1]]
 
-                        if show:
-                            img = frame.data()[0]
-                            p1 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos))
-                            if show:
-                                img[p1.x(), p1.y()] += 10000
-                                images.append(img)
-                            # pg.image(img, title=str(ind) + ' ' + str(p1))
                         print("Frame: %d %s" % (i-1, lastPos))
                         err[tuple(ind)] = self.measureError(padding=padding, threshold=threshold, frame=frame, pos=lastPos)
                         print("    error: %s" % err[tuple(ind)])
                         dlg += 1
+
+                        if show:
+                            imv.setImage(frame.data()[0])
+                            p1 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos))
+                            p2 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos + err[tuple(ind)]))
+                            mark1.setPos(p1.x(), p1.y())
+                            mark2.setPos(p2.x(), p2.y())
 
                     # wait for previous moves to complete
                     mfut.wait(updates=True)
@@ -403,9 +418,6 @@ class PipetteTracker(object):
             self.dev._moveToGlobal(start, 'fast')
             self.dev.scopeDevice().setFocusDepth(start[2], 'fast')
 
-            if show:
-                pg.image(np.dstack(images).transpose(2, 0, 1))
-
         self.errorMap = {
             'err': err,
             'nSteps': nSteps,
@@ -413,8 +425,62 @@ class PipetteTracker(object):
             'order': order,
             'inds': inds,
             'offsets': offsets,
+            'time': time.time() - startTime,
         }
 
-        np.save(open('%s_error_map.np' % self.name(), 'wb'), self.errorMap)
+        filename = self.dev.configFileName('error_map.np')
+        np.save(open(filename, 'wb'), self.errorMap)
 
         return self.errorMap
+
+    def showErrorAnalysis(self):
+        if not hasattr(self, 'errorMap'):
+            filename = self.dev.configFileName('error_map.np')
+            self.errorMap = np.load(open(filename, 'rb'))
+
+        err = self.errorMap
+        imx = pg.image(err['err'][..., 0].transpose(1, 0, 2), title='X error')
+        imy = pg.image(err['err'][..., 1], title='Y error')
+        imz = pg.image(err['err'][..., 2], title='Z error')
+
+        # get N,3 array of offset values used to randomize hysteresis
+        off = np.vstack(err['offsets'])
+        sh = err['err'].shape
+
+        # Get N,3 array of measured position errors
+        errf = err['err'].reshape(sh[0]*sh[1]*sh[2], 3)[err['order']]
+
+        # display drift and hysteresis plots
+        win = pg.GraphicsWindow()
+        driftPlot = win.addPlot(row=0, col=0, rowSpan=1, colSpan=3, title="Pipette Drift",
+                                labels={'left': ('Position error', 'm'), 'bottom': ('Time', 's')})
+        driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 0], pen='r')
+        driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 1], pen='g')
+        driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 2], pen='b')
+
+        xhplot = win.addPlot(row=1, col=0, title='X Hysteresis',
+                             labels={'left': ('Position error', 'm'), 'bottom': ('Last pipette movement', 'm')})
+        xhplot.plot(-off[:, 0], errf[:, 0], pen=None, symbol='o')
+
+        yhplot = win.addPlot(row=1, col=1, title='Y Hysteresis',
+                             labels={'left': ('Position error', 'm'), 'bottom': ('Last pipette movement', 'm')})
+        yhplot.plot(-off[:, 1], errf[:, 1], pen=None, symbol='o')
+
+        zhplot = win.addPlot(row=1, col=2, title='Z Hysteresis',
+                             labels={'left': ('Position error', 'm'), 'bottom': ('Last pipette movement', 'm')})
+        zhplot.plot(-off[:, 2], errf[:, 2], pen=None, symbol='o')
+
+        # Print best fit for manipulator axes
+        expPos = err['inds'] * err['stepSize']
+        measPos = expPos + off
+        guess = np.array([[1, 0, 0, 0],
+                          [0, 1, 0, 0],
+                          [0, 0, 1, 0]], dtype='float')
+        def errFn(v):
+            return ((measPos - np.dot(expPos, v.reshape(3,4))[:,:3])**2).sum()
+
+        fit = scipy.optimize.minimize(errFn, guess)
+        print("Pipette position transform:", fit)
+
+        self.errorMapAnalysis = (imx, imy, imz, win)
+
