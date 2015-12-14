@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>209</width>
-    <height>164</height>
+    <height>211</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,20 +32,34 @@
       <property name="spacing">
        <number>3</number>
       </property>
-      <item row="0" column="0">
-       <widget class="QPushButton" name="setCenterBtn">
+      <item row="2" column="0">
+       <widget class="QPushButton" name="autoCalibrateBtn">
         <property name="text">
-         <string>Set center</string>
+         <string>Auto calibrate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QPushButton" name="getRefBtn">
+        <property name="text">
+         <string>Get ref. frames</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="2">
+       <widget class="QPushButton" name="setOrientationBtn">
+        <property name="text">
+         <string>Set orientation</string>
         </property>
         <property name="checkable">
          <bool>true</bool>
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
-       <widget class="QPushButton" name="setOrientationBtn">
+      <item row="0" column="0" colspan="2">
+       <widget class="QPushButton" name="setCenterBtn">
         <property name="text">
-         <string>Set orientation</string>
+         <string>Set center</string>
         </property>
         <property name="checkable">
          <bool>true</bool>

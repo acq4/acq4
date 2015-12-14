@@ -14,13 +14,14 @@ from .cameraModTemplate import Ui_Form as CamModTemplate
 from .tracker import PipetteTracker
 
 
-class Manipulator(Device, OptomechDevice):
-    """Represents a manipulator controlling an electrode.
+class Pipette(Device, OptomechDevice):
+    """Represents a pipette or electrode attached to a motorized manipulator.
 
     This device provides a camera module interface for driving a motorized electrode holder:
 
-    * Visually direct electrode via camera module
-    * Automatically align electrode for diagonal approach to cells
+    * Visually direct pipette tip via camera module
+    * Automatically align pipette tip for diagonal approach to cells
+    * Automatically calibrate pipette tip position (via Tracker)
 
     This device must be configured with a Stage as its parent.
 
@@ -78,7 +79,7 @@ class Manipulator(Device, OptomechDevice):
         return None
 
     def cameraModuleInterface(self, mod):
-        return ManipulatorCamModInterface(self, mod)
+        return PipetteCamModInterface(self, mod)
 
     def setStageOrientation(self, angle, inverty):
         tr = pg.SRTTransform3D(self.parentDevice().baseTransform())
@@ -108,7 +109,7 @@ class Manipulator(Device, OptomechDevice):
         return self._stageOrientation['angle']
 
     def goHome(self, speed='fast'):
-        """Extract pipette tip diagonally, then move manipulator far away from the objective.
+        """Extract pipette tip diagonally, then move pipette far away from the objective.
 
         This method currently makes several assumptions:
 
@@ -326,8 +327,8 @@ class Manipulator(Device, OptomechDevice):
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
 
-class ManipulatorCamModInterface(CameraModuleInterface):
-    """Implements user interface for manipulator.
+class PipetteCamModInterface(CameraModuleInterface):
+    """Implements user interface for Pipette.
     """
     canImage = False
 
@@ -371,6 +372,8 @@ class ManipulatorCamModInterface(CameraModuleInterface):
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
         self.ui.approachBtn.clicked.connect(self.approachClicked)
+        self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
+        self.ui.getRefBtn.clicked.connect(self.getRefFramesClicked)
         self.target.sigDragged.connect(self.targetDragged)
 
         self.transformChanged()
@@ -496,6 +499,12 @@ class ManipulatorCamModInterface(CameraModuleInterface):
     def approachClicked(self):
         self.getDevice().goApproach(self._targetPos, self.selectedSpeed())
 
+    def autoCalibrateClicked(self):
+        self.getDevice().tracker.autoCalibrate()
+
+    def getRefFramesClicked(self):
+        self.getDevice().tracker.takeReferenceFrames()
+
 
 class Target(pg.GraphicsObject):
     sigDragged = QtCore.Signal(object)
@@ -552,7 +561,7 @@ class Target(pg.GraphicsObject):
 
 
 class Axis(pg.ROI):
-    """Used for calibrating manipulator position and orientation.
+    """Used for calibrating pipette position and orientation.
     """
     def __init__(self, pos, angle, inverty):
         arrow = pg.makeArrowPath(headLen=20, tipAngle=30, tailLen=60, tailWidth=2).translated(-84, 0)

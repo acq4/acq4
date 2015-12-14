@@ -15,8 +15,8 @@ class PipetteTracker(object):
     a stack of reference images collected with `takeReferenceFrames()`. 
 
     """
-    def __init__(self, manipulator):
-        self.dev = manipulator
+    def __init__(self, pipette):
+        self.dev = pipette
         fileName = self.dev.configFileName('ref_frames.pk')
         try:
             self.reference = pickle.load(open(fileName, 'rb'))
@@ -45,9 +45,11 @@ class PipetteTracker(object):
             imager = man.getDevice('Camera')
         return imager
 
-    def getTipImageArea(self, frame, padding, pos=None):
+    def getTipImageArea(self, frame, padding, pos=None, tipLength=None):
         """Generate coordinates needed to clip a camera frame to include just the
         tip of the pipette and some padding.
+
+        By default, images will include the tip of the pipette to a length of 100 pixels.
 
         Return a tuple (minImgPos, maxImgPos, tipRelPos), where the first two
         items are (x,y) coordinate pairs giving the corners of the image region to 
@@ -55,6 +57,9 @@ class PipetteTracker(object):
         within this region.
         """
         img = frame.data()[0]
+
+        if tipLength is None:
+            tipLength = self.suggestTipLength(frame)
 
         # determine bounding rectangle that we would like to acquire from the tip
         if pos is not None:
@@ -64,11 +69,10 @@ class PipetteTracker(object):
         tipPos = np.array([tipPos[0], tipPos[1]])
         angle = self.dev.getYawAngle() * np.pi / 180.
         da = 10 * np.pi / 180  # half-angle of the tip
-        tipLen = 30e-6  # how far back to image along the tip
         pxw = frame.info()['pixelSize'][0]
         # compute back points of a triangle that circumscribes the tip
-        backPos1 = np.array([-tipLen * np.cos(angle+da), -tipLen * np.sin(angle+da)])
-        backPos2 = np.array([-tipLen * np.cos(angle-da), -tipLen * np.sin(angle-da)])
+        backPos1 = np.array([-tipLength * np.cos(angle+da), -tipLength * np.sin(angle+da)])
+        backPos2 = np.array([-tipLength * np.cos(angle-da), -tipLength * np.sin(angle-da)])
 
         # convert to image coordinates
         tr = frame.globalTransform().inverted()[0]
@@ -123,7 +127,12 @@ class PipetteTracker(object):
 
         return subimg, tipRelPos
 
-    def takeReferenceFrames(self, zRange=40e-6, zStep=2e-6, imager=None, average=8):
+    def suggestTipLength(self, frame):
+        # return a suggested tip length to image, given the image resolution
+        # currently just returns the length of 100 pixels in the frame
+        return frame.info()['pixelSize'][0] * 100
+
+    def takeReferenceFrames(self, zRange=40e-6, zStep=2e-6, imager=None, average=8, tipLength=None):
         """Collect a series of images of the pipette tip at various focal depths.
 
         The collected images are used as reference templates for determining the most likely location 
@@ -143,7 +152,11 @@ class PipetteTracker(object):
 
         # Take an initial frame with the tip in focus.
         centerFrame = self.takeFrame()
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=5e-6)
+
+        if tipLength is None:
+            tipLength = self.suggestTipLength(centerFrame)
+
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=5e-6, tipLength=tipLength)
         center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
         center = self.filterImage(center)
 
@@ -218,13 +231,14 @@ class PipetteTracker(object):
             'centerInd': maxInd,
             'centerPos': tipRelPos,
             'pixelSize': frame.info()['pixelSize'],
+            'tipLength': tipLength,
             # 'downsampledFrames' = ds,
         }
 
         # Store with pickle because configfile does not support arrays
         pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None):
+    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
@@ -236,7 +250,12 @@ class PipetteTracker(object):
         # Grab one frame (if it is not already supplied) and crop it to the region around the pipette tip.
         if frame is None:
             frame = self.takeFrame()
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos)
+
+        if tipLength is None:
+            # select a tip length similar to template images
+            tipLength = self.reference['tipLength']
+
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
         img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
         img = self.filterImage(img)
 
@@ -257,8 +276,8 @@ class PipetteTracker(object):
 
         # measure xy position
         offset = match[maxInd][0]
-        tipImgPos = (minImgPos[0] + offset[0] + self.reference['centerPos'][0], 
-                     minImgPos[1] + offset[1] + self.reference['centerPos'][1])
+        tipImgPos = (minImgPos[0] + (offset[0] + self.reference['centerPos'][0]) / pxr, 
+                     minImgPos[1] + (offset[1] + self.reference['centerPos'][1]) / pxr)
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr), match[maxInd][1]
 
@@ -277,7 +296,7 @@ class PipetteTracker(object):
     def autoCalibrate(self, padding=50e-6, threshold=0.7):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
 
-        Return the normnalized cross-correlation value of the template match.
+        Return the normalized cross-correlation value of the template match.
         """
         tipPos, corr = self.measureTipPosition(padding, threshold)
         localError = self.dev.mapFromGlobal(tipPos)

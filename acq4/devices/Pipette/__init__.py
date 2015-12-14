@@ -1,1 +1,1 @@
-from manipulator import Manipulator
+from pipette import Pipette
