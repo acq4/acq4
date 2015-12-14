@@ -1,5 +1,5 @@
 """
-Driver for communicating with Scientifica PatchStar by serial interface.
+Driver for communicating with Scientifica motorized devices by serial interface.
 """
 from __future__ import division
 import serial, struct, time, collections
@@ -9,13 +9,32 @@ from acq4.util.Mutex import RecursiveMutex as RLock
 from ..SerialDevice import SerialDevice, TimeoutError, DataError
 
 
-class PatchStar(SerialDevice):
+# Data provided by Scientifica
+_device_types = """
+Device Type,Drive Current,Holding Current,UUX,UUY,UUZ,MODE,CARD TYPE
+IMMTP,200,100,-5.12,-5.12,-5.12,0,1.01
+MMTP,200,100,-5.12,-5.12,-5.12,0,1.03
+Slicemaster,200,100,-5.12,-5.12,-5.12,0,1.04
+Patchstar,230,175,-6.4,-6.4,-6.4,1,1.05
+MMSP,230,175,-6.4,-6.4,-6.4,1,1.06
+MMSP+Z,230,175,-6.4,-6.4,-6.4,1,1.07
+Microstar,230,220,-6.4,-6.4,-6.4,0,1.08
+UMS2,200,125,-4.03,-4.03,-5.12,0,1.09
+Slicescope,200,125,-4.03,-4.03,-6.4,0,1.11
+Condenser,200,125,-4.03,-4.03,-6.4,0,1.12
+MMBP,200,125,-4.03,-4.03,-6.4,0,1.13
+IVM,230,175,-6.4,-6.4,-6.4,0,1.14
+IVM Mini,230,175,-6.4,-6.4,-6.4,0,1.14
+"""
+
+
+class Scientifica(SerialDevice):
     """
-    Provides interface to a PatchStar manipulator.
+    Provides interface to a Scientifica manipulator.
 
     Example::
 
-        dev = PatchStar('com4')
+        dev = Scientifica('com4')
         print dev.getPos()
         dev.moveTo([10e-3, 0, 0], 'fast')
     """

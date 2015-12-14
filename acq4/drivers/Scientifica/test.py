@@ -1,13 +1,13 @@
 import sys, os, time
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from acq4.drivers.PatchStar import PatchStar
+from acq4.drivers.Scientifica import Scientifica
 
 if len(sys.argv) < 2:
 	print("Usage: test.py com4")
 	sys.exit(-1)
 
-ps = PatchStar(sys.argv[1])
+ps = Scientifica(sys.argv[1])
 
 print("Device type:  %s  Description:  %s" % (ps.getType(), ps.getDescription()))
 print("Firmware version: %r" % ps.getFirmwareVersion())

@@ -3,22 +3,24 @@ import time
 import numpy as np
 from PyQt4 import QtGui, QtCore
 from ..Stage import Stage, MoveFuture, StageInterface
-from acq4.drivers.PatchStar import PatchStar as PatchStarDriver
+from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime, SpinBox
 
 
-class PatchStar(Stage):
+class Scientifica(Stage):
     """
-    A Scientifica PatchStar manipulator.
+    A Scientifica motorized device.
+
+    This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
 
         port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
     """
     def __init__(self, man, config, name):
         self.port = config.pop('port')
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
-        self.dev = PatchStarDriver(self.port)
+        self.dev = ScientificaDriver(self.port)
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
 
@@ -114,11 +116,11 @@ class PatchStar(Stage):
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             pos = self._toAbsolutePosition(abs, rel)
-            self._lastMove = PatchStarMoveFuture(self, pos, speed, self.userSpeed)
+            self._lastMove = ScientificaMoveFuture(self, pos, speed, self.userSpeed)
             return self._lastMove
 
     def deviceInterface(self, win):
-        return PatchStarGUI(self, win)
+        return ScientificaGUI(self, win)
 
 
 class MonitorThread(Thread):
@@ -165,12 +167,12 @@ class MonitorThread(Thread):
 
                 time.sleep(interval)
             except:
-                debug.printExc('Error in PatchStar monitor thread:')
+                debug.printExc('Error in Scientifica monitor thread:')
                 time.sleep(maxInterval)
                 
 
-class PatchStarMoveFuture(MoveFuture):
-    """Provides access to a move-in-progress on a PatchStar manipulator.
+class ScientificaMoveFuture(MoveFuture):
+    """Provides access to a move-in-progress on a Scientifica manipulator.
     """
     def __init__(self, dev, pos, speed, userSpeed):
         MoveFuture.__init__(self, dev, pos, speed)
@@ -242,16 +244,16 @@ class PatchStarMoveFuture(MoveFuture):
 
 
 
-class PatchStarGUI(StageInterface):
+class ScientificaGUI(StageInterface):
     def __init__(self, dev, win):
         StageInterface.__init__(self, dev, win)
 
-        # Insert patchstar-specific controls into GUI
+        # Insert Scientifica-specific controls into GUI
         self.zeroBtn = QtGui.QPushButton('Zero position')
         self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
         self.nextRow += 1
 
-        self.psGroup = QtGui.QGroupBox('PatchStar Rotary Controller')
+        self.psGroup = QtGui.QGroupBox('Rotary Controller')
         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
         self.nextRow += 1
 

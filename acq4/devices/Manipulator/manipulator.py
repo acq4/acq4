@@ -159,7 +159,10 @@ class Manipulator(Device, OptomechDevice):
         """
         # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
-        searchDepth = scope.getSurfaceDepth() + self._opts['searchHeight']
+        surfaceDepth = scope.getSurfaceDepth()
+        if surfaceDepth is None:
+            raise Exception("Cannot determine search position; surface depth is not defined.")
+        searchDepth = surfaceDepth + self._opts['searchHeight']
         if scope.getFocusDepth() < searchDepth:
             scope.setFocusDepth(searchDepth).wait()
 

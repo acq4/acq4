@@ -1,1 +1,1 @@
-from patchstar import PatchStar
+from scientifica import Scientifica
