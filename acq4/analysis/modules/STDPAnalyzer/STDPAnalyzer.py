@@ -718,7 +718,7 @@ class STDPAnalyzer(AnalysisModule):
             else:
                 baseline = data['primary'][:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
             peakPosition = np.argwhere(data['primary'] == data['primary'].max())[0]
-            avgPeak = data['primary'][peakPosition-int(ptsToAvg/2):peakPosition+int(ptsToAvg/2)].mean() - baseline
+            avgPeak = data['primary'][peakPosition-int(5/2):peakPosition+int(5/2)].mean() - baseline
 
             self.analysisResults[i]['pspAmplitude'] = avgPeak
 
@@ -731,6 +731,10 @@ class STDPAnalyzer(AnalysisModule):
             self.analysisResults[i]['InputResistance'] = inputResistance
 
     def storeToDB(self):
+        self.storeTrialsToDB()
+        self.storeCellInfoToDB()
+
+    def storeTrialsToDB(self):
         if len(self.analysisResults) == 0:
             self.analyze()
 
@@ -805,6 +809,42 @@ class STDPAnalyzer(AnalysisModule):
             db.delete(table, where={'CellDir': data['CellDir'][0]})
         
         db.insert(table, data)
+
+    def storeCellInfoToDB(self):
+        db = self.dbGui.getDb()
+        if db is None:
+            raise Exception("No database loaded.")
+        
+        table = self.dbGui.getTableName(self.dbIdentity+'.cell')
+
+        cellFields = OrderedDict([
+            ('CellDir', 'directory:Cell'),
+            ('plasticity', 'real'),
+            ('pspTime', 'real'),
+            ('firstSpikeTime', 'real'),
+            ('pairingInterval', 'real'),
+            ('bath_drug', 'text'),
+            ('challenge_drug', 'text')
+            ])
+
+        db.checkTable(table, owner=self.dbIdentity+'.cell', columns=cellFields, create=True, addUnknownColumns=True, indexes=[['CellDir']])
+
+        cell = self.dataModel.getParent(self.files[0], 'Cell')
+        record = {}
+        record['CellDir'] = cell
+        record['plasticity'] = self.plasticity
+        record['pspTime'] = self.ctrl.pspStartTimeSpin.value()
+        record['firstSpikeTime'] = self.ctrl.spikePeakSpin.value()
+        record['pairingInterval'] = record['firstSpikeTime'] - record['pspTime']
+        record['bath_drug'] = cell.info().get('antagonist_code', '')
+        record['challenge_drug'] = cell.info().get('agonist_code', '')
+
+        old = db.select(table, where={'CellDir':cell}, toArray=True)
+        if old is not None: ## only do deleting if there is already data stored for this cell
+            db.delete(table, where={'CellDir': cell})
+
+        db.insert(table, record)
+
 
     def summarySheetRequested(self):
         self.summaryView = self.createSummarySheet()
