@@ -143,7 +143,7 @@ class STDPAnalyzer(AnalysisModule):
         self.healthRgn.setRegion((0.24,0.34))
 
         #self.ctrl.measureAvgSpin.setOpts(step=1, dec=True)
-        self.ctrl.measureModeCombo.addItems(['Slope (max)', 'Amplitude (max)'])
+        self.ctrl.measureModeCombo.addItems(['Slope (max)'])
 
         ### Set up internal information storage
         self.traces = np.array([], dtype=[('timestamp', float), ('data', object)]) 
