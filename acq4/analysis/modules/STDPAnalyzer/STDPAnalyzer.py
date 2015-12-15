@@ -93,6 +93,12 @@ class STDPAnalyzer(AnalysisModule):
         self.pairingPlot.addItem(self.pspLine)
         self.spikeLine = pg.InfiniteLine(pos=0.065, pen='r', movable=True)
         self.pairingPlot.addItem(self.spikeLine)
+        self.ctrl.pspStartTimeSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=0.055, step=0.1)
+        self.ctrl.spikePeakSpin.setOpts(suffix='s', siPrefix=True, dec=True, value=0.065, step=0.1)
+        self.pspLine.sigPositionChanged.connect(self.pspLineChanged)
+        self.spikeLine.sigPositionChanged.connect(self.spikeLineChanged)
+        self.ctrl.pspStartTimeSpin.valueChanged.connect(self.pspStartSpinChanged)
+        self.ctrl.spikePeakSpin.valueChanged.connect(self.spikePeakSpinChanged)
 
         ### Connect control panel
         self.averageCtrl = pg.WidgetGroup(self.ctrl.traceDisplayGroup) ##TODO: save state when we save data
@@ -135,7 +141,7 @@ class STDPAnalyzer(AnalysisModule):
         self.pspRgn.setRegion((0.052,0.067))
         self.healthRgn.setRegion((0.24,0.34))
 
-        self.ctrl.measureAvgSpin.setOpts(step=1, dec=True)
+        #self.ctrl.measureAvgSpin.setOpts(step=1, dec=True)
         self.ctrl.measureModeCombo.addItems(['Slope (max)', 'Amplitude (max)'])
 
         ### Set up internal information storage
@@ -541,6 +547,47 @@ class STDPAnalyzer(AnalysisModule):
         finally:
             self.healthRgn.blockSignals(False)
 
+
+    def pspLineChanged(self):
+        try:
+            self.ctrl.pspStartTimeSpin.blockSignals(True)
+            pos = self.pspLine.value()
+            self.ctrl.pspStartTimeSpin.setValue(pos)
+        except:
+            raise
+        finally:
+            self.ctrl.pspStartTimeSpin.blockSignals(False)
+
+    def pspStartSpinChanged(self):
+        try:
+            self.pspLine.blockSignals(True)
+            value = self.ctrl.pspStartTimeSpin.value()
+            self.pspLine.setPos(value)
+        except:
+            raise
+        finally:
+            self.pspLine.blockSignals(False)
+
+    def spikeLineChanged(self):
+        try:
+            self.ctrl.spikePeakSpin.blockSignals(True)
+            pos = self.spikeLine.value()
+            self.ctrl.spikePeakSpin.setValue(pos)
+        except:
+            raise
+        finally:
+            self.ctrl.spikePeakSpin.blockSignals(False)
+
+    def spikePeakSpinChanged(self):
+        try:
+            self.spikeLine.blockSignals(True)
+            value = self.ctrl.spikePeakSpin.value()
+            self.spikeLine.setPos(value)
+        except:
+            raise
+        finally:
+            self.spikeLine.blockSignals(False)
+
     def analyze(self):
         for p in [self.plots.plasticityPlot, self.plots.RMP_plot, self.plots.RI_plot]:
             p.clear()
@@ -631,7 +678,7 @@ class STDPAnalyzer(AnalysisModule):
     def measurePSP(self, traces):
         rgn = self.pspRgn.getRegion()
         timestep = traces[0].axisValues('Time')[1] - traces[0].axisValues('Time')[0]
-        ptsToAvg = self.ctrl.measureAvgSpin.value()
+        #ptsToAvg = self.ctrl.measureAvgSpin.value()
 
         for i, trace in enumerate(traces):
             data = trace['Time':rgn[0]:rgn[1]]

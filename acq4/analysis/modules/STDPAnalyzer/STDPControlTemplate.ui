@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>362</width>
+    <width>426</width>
     <height>751</height>
    </rect>
   </property>
@@ -255,7 +255,7 @@
    <item row="1" column="0">
     <widget class="QGroupBox" name="analysisGroup">
      <property name="title">
-      <string>Analysis</string>
+      <string>PSP Analysis</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_4">
       <property name="margin">
@@ -384,28 +384,8 @@
           </property>
          </widget>
         </item>
-        <item row="3" column="0" colspan="2">
-         <widget class="QCheckBox" name="pointsToAvgCheck">
-          <property name="text">
-           <string>Points to average:</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
         <item row="2" column="1" colspan="2">
          <widget class="ComboBox" name="measureModeCombo"/>
-        </item>
-        <item row="3" column="2">
-         <widget class="SpinBox" name="measureAvgSpin">
-          <property name="decimals">
-           <number>0</number>
-          </property>
-          <property name="value">
-           <double>5.000000000000000</double>
-          </property>
-         </widget>
         </item>
        </layout>
       </item>
@@ -623,6 +603,47 @@
          </size>
         </property>
        </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Conditioning Analysis</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_9">
+      <property name="margin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>1</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_13">
+        <property name="text">
+         <string>PSP Start time:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_14">
+        <property name="text">
+         <string>First Spike peak:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="SpinBox" name="pspStartTimeSpin"/>
+      </item>
+      <item row="1" column="1">
+       <widget class="SpinBox" name="spikePeakSpin"/>
       </item>
      </layout>
     </widget>
