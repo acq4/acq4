@@ -136,6 +136,7 @@ class STDPAnalyzer(AnalysisModule):
         self.ctrl.storeToDBBtn.clicked.connect(self.storeToDB)
         self.ctrl.createSummaryBtn.clicked.connect(self.summarySheetRequested)
         self.ctrl.createBlindSummaryBtn.clicked.connect(self.blindSummarySheetRequested)
+        self.ctrl.defaultRgnBtn.clicked.connect(self.defaultBtnClicked)
 
         self.baselineRgn.setRegion((0,0.05))
         self.pspRgn.setRegion((0.052,0.067))
@@ -459,6 +460,10 @@ class STDPAnalyzer(AnalysisModule):
 
         self.averagedTraces = self.averagedTraces[self.averagedTraces['avgTimeStamp'] != 0] ## clean up any left over zeros from pauses in data collection
 
+    def defaultBtnClicked(self):
+        self.ctrl.plasticityRgnStartSpin.setValue(27.0)
+        self.ctrl.plasticityRgnEndSpin.setValue(47.0)
+
     def regionDisplayToggled(self):
         if self.ctrl.baselineCheck.isChecked():
             self.baselineRgn.show()
@@ -627,7 +632,8 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.holdingPlot.plot(x=times-self.expStart, y=self.analysisResults['HoldingCurrent'],
             pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
 
-        postwin = [20., 40.]  # minutes after start for measuring amplitude
+        postwin = [self.ctrl.plasticityRgnStartSpin.value(), self.ctrl.plasticityRgnEndSpin.value()]
+        #postwin = [20., 40.]  # minutes after start for measuring amplitude
         #postwin = [27., 47.] ## Accounted for below in postStart --minutes after start (of pre-pairing baseline) for measuring post-pairing amplitude. assumes baseline + pairing takes 7 minutes
         if self.ctrl.pspCheck.isChecked():
             self.measurePSP(traces)
@@ -639,9 +645,9 @@ class STDPAnalyzer(AnalysisModule):
                 
                 base, basetime = (self.analysisResults['pspSlope'][:basepts].mean(),
                     [self.analysisResults['time'][:basepts][0]-self.expStart, self.analysisResults['time'][:basepts][-1]-self.expStart])
-                postStart = self.analysisResults['time'][0]+ 7*60 ## baseline and pairing take up 7 minutes from the start of the experiment
-                pr1 = np.argwhere(self.analysisResults['time'] >= postStart+60*postwin[0])
-                pr2 = np.argwhere(self.analysisResults['time'] <= postStart+60*postwin[1])
+                #postStart = self.analysisResults['time'][0]+ 7*60 ## baseline and pairing take up 7 minutes from the start of the experiment
+                pr1 = np.argwhere(self.analysisResults['time'] >= 60*postwin[0]+self.expStart)
+                pr2 = np.argwhere(self.analysisResults['time'] <= 60*postwin[1]+self.expStart)
                 try:
                     x = pr1[0] # no points inside 
                 except:
@@ -824,7 +830,7 @@ class STDPAnalyzer(AnalysisModule):
             ('firstSpikeTime', 'real'),
             ('pairingInterval', 'real'),
             ('bath_drug', 'text'),
-            ('challenge_drug', 'text')
+            ('challenge_drug', 'text'),
             ])
 
         db.checkTable(table, owner=self.dbIdentity+'.cell', columns=cellFields, create=True, addUnknownColumns=True, indexes=[['CellDir']])
