@@ -916,8 +916,10 @@ class STDPAnalyzer(AnalysisModule):
             plasticity='%g %%' % (self.plasticity * 100.)
         else:
             plasticity="Not shown"
+
+        interval = self.ctrl.spikePeakSpin.value() - self.ctrl.pspStartTimeSpin.value()
         
-        info = "Antagonist: %s <br /> Agonist: %s <br /><br /> Plasticity: %s" % (antagonist, agonist, plasticity)
+        info = "Antagonist: %s <br /> Agonist: %s <br /><br />Pairing Interval: %f<br /><br /> Plasticity: %s" % (antagonist, agonist, interval, plasticity)
         l.addLabel(text=info, row=1, col=2)
         l.addLabel(text=notes, row=2, col=2)
 
