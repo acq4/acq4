@@ -1,7 +1,7 @@
 import pickle
 import time
 import numpy as np
-import scipy.optimize
+import scipy.optimize, scipy.ndimage
 
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
@@ -262,7 +262,6 @@ class PipetteTracker(object):
         # resample acquired image to match template pixel size
         pxr = frame.info()['pixelSize'][0] / self.reference['pixelSize'][0]
         if pxr != 1.0:
-            import scipy.ndimage
             img = scipy.ndimage.zoom(img, pxr)
 
         # run template match against all template frames, find the frame with the strongest match
@@ -348,12 +347,21 @@ class PipetteTracker(object):
                 end = np.clip(end, 0, imgDs[i+1].shape)
                 imgDs[i+1] = imgDs[i+1][offset[0]:end[0], offset[1]:end[1]]
 
-    def _matchTemplateSingle(self, img, template):
+    def _matchTemplateSingle(self, img, template, show=False, unsharp=3):
         import skimage.feature
         if img.shape[0] < template.shape[0] or img.shape[1] < template.shape[1]:
             raise ValueError("Image must be larger than template.  %s %s" % (img.shape, template.shape))
         cc = skimage.feature.match_template(img, template)
-        ind = np.argmax(cc)
+        # high-pass filter; we're looking for a fairly sharp peak.
+        if unsharp is not False:
+            cc_filt = cc - scipy.ndimage.gaussian_filter(cc, (unsharp, unsharp))
+        else:
+            cc_filt = cc
+
+        if show:
+            pg.image(cc)
+
+        ind = np.argmax(cc_filt)
         pos = np.unravel_index(ind, cc.shape)
         val = cc[pos[0], pos[1]]
         return pos, val
