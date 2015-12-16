@@ -37,7 +37,7 @@ class PipetteTracker(object):
             imager.start()
         return frame
 
-    def _getImager(self, imager):
+    def _getImager(self, imager=None):
         if imager is None:
             imager = 'Camera'
         if isinstance(imager, str):
@@ -56,7 +56,9 @@ class PipetteTracker(object):
         be extracted, and tipRelPos is the subpixel location of the pipette tip
         within this region.
         """
-        img = frame.data()[0]
+        img = frame.data()
+        if img.ndim == 3:
+            img = img[0]
 
         if tipLength is None:
             tipLength = self.suggestTipLength(frame)
@@ -201,9 +203,9 @@ class PipetteTracker(object):
 
                     if j == 0:
                         # move tip out-of-frame to collect background images
-                        self.dev._moveToLocal([-60e-6, 0, 0], 'slow').wait()
+                        self.dev._moveToLocal([-tipLength*3, 0, 0], 'slow').wait()
                     else:
-                        self.dev._moveToLocal([60e-6, 0, 0], 'slow')
+                        self.dev._moveToLocal([tipLength*3, 0, 0], 'slow')
 
         finally:
             # restart camera if it was running
@@ -238,7 +240,7 @@ class PipetteTracker(object):
         # Store with pickle because configfile does not support arrays
         pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None):
+    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None, show=False):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
@@ -256,7 +258,10 @@ class PipetteTracker(object):
             tipLength = self.reference['tipLength']
 
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
-        img = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+        img = frame.data()
+        if img.ndim == 3:
+            img = img[0]
+        img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
         img = self.filterImage(img)
 
         # resample acquired image to match template pixel size
@@ -266,6 +271,12 @@ class PipetteTracker(object):
 
         # run template match against all template frames, find the frame with the strongest match
         match = [self.matchTemplate(img, t) for t in self.reference['frames']]
+
+        if show:
+            pg.plot([m[0][0] for m in match], title='x match vs z')
+            pg.plot([m[0][1] for m in match], title='y match vs z')
+            pg.plot([m[1] for m in match], title='match correlation vs z')
+
         maxInd = np.argmax([m[1] for m in match])
         if match[maxInd][1] < threshold:
             raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (match[maxInd][1], threshold))
@@ -292,17 +303,19 @@ class PipetteTracker(object):
         measuredTipPos, corr = self.measureTipPosition(padding, threshold, frame, pos=pos)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
-    def autoCalibrate(self, padding=50e-6, threshold=0.7):
+    def autoCalibrate(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
 
-        Return the normalized cross-correlation value of the template match.
+        Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
+
+        All keyword arguments are passed to `measureTipPosition()`.
         """
-        tipPos, corr = self.measureTipPosition(padding, threshold)
+        tipPos, corr = self.measureTipPosition(**kwds)
         localError = self.dev.mapFromGlobal(tipPos)
         tr = self.dev.deviceTransform()
         tr.translate(pg.Vector(localError))
         self.dev.setDeviceTransform(tr)
-        return corr
+        return localError, corr
 
     def filterImage(self, img):
         """Return a filtered version of an image to be used in template matching.
@@ -511,3 +524,61 @@ class PipetteTracker(object):
 
         self.errorMapAnalysis = (imx, imy, imz, win)
 
+
+
+class DriftMonitor(pg.QtGui.QWidget):
+    def __init__(self, trackers):
+        self.trackers = trackers
+        self.nextFrame = None
+
+        pg.QtGui.QWidget.__init__(self)
+        self.timer = pg.QtCore.QTimer()
+        self.timer.timeout.connect(self.update)
+
+        self.layout = pg.QtGui.QGridLayout()
+        self.setLayout(self.layout)
+
+        self.plot = pg.PlotWidget(labels={'left': ('Position error', 'm'), 'bottom': ('Time', 's')})
+        self.plot.addLegend()
+        self.layout.addWidget(self.plot, 0, 0)
+
+        self.lines = [self.plot.plot(pen=(i, len(trackers)), name=trackers[i].dev.name()) for i in range(len(trackers))]
+        self.errors = [[] for i in range(len(trackers))]
+        self.cumulative = np.zeros((len(trackers), 3))
+        self.times = []
+
+        self.timer.start(2000)
+        trackers[0]._getImager().sigNewFrame.connect(self.newFrame)
+        self.show()
+
+    def newFrame(self, frame):
+        self.nextFrame = frame
+
+    def update(self):
+        try:
+            if self.nextFrame is None:
+                return
+            frame = self.nextFrame
+            self.nextFrame = None
+
+            self.times.append(time.time())
+            x = np.array(self.times)
+            x -= x[0]
+
+            for i, t in enumerate(self.trackers):
+                try:
+                    err, corr = t.autoCalibrate(frame=frame, padding=50e-6)
+                    err = np.array(err)
+                    self.cumulative[i] += err
+                    err = (self.cumulative[i]**2).sum()**0.5
+                except RuntimeError:
+                    err = np.nan
+                self.errors[i].append(err)
+                self.lines[i].setData(x, self.errors[i])
+        except Exception:
+            self.timer.stop()
+            raise
+
+    def closeEvent(self, event):
+        self.timer.stop()
+        return pg.QtGui.QWidget.closeEvent(self, event)
