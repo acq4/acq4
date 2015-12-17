@@ -490,9 +490,20 @@ class PipetteTracker(object):
         # Get N,3 array of measured position errors
         errf = err['err'].reshape(sh[0]*sh[1]*sh[2], 3)[err['order']]
 
-        # display drift and hysteresis plots
+        # Display histogram of errors
         win = pg.GraphicsWindow()
-        driftPlot = win.addPlot(row=0, col=0, rowSpan=1, colSpan=3, title="Pipette Drift",
+        errPlot = win.addPlot(row=0, col=0, title="Error Histogram", labels={'bottom': ('Position error', 'm')})
+        absErr = (errf**2).sum(axis=1)**0.5
+        # subtract out slow drift
+        absErr -= scipy.ndimage.gaussian_filter(absErr, 5)
+        errPlot.plot(absErr)
+
+        hist = np.histogram(absErr, bins=50)
+        errPlot.plot(hist[1], hist[0], stepMode=True)
+
+
+        # display drift and hysteresis plots
+        driftPlot = win.addPlot(row=0, col=1, rowSpan=1, colSpan=2, title="Pipette Drift",
                                 labels={'left': ('Position error', 'm'), 'bottom': ('Time', 's')})
         driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 0], pen='r')
         driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 1], pen='g')
