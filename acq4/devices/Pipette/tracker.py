@@ -476,7 +476,7 @@ class PipetteTracker(object):
     def showErrorAnalysis(self):
         if not hasattr(self, 'errorMap'):
             filename = self.dev.configFileName('error_map.np')
-            self.errorMap = np.load(open(filename, 'rb'))
+            self.errorMap = np.load(open(filename, 'rb'))[np.newaxis][0]
 
         err = self.errorMap
         imx = pg.image(err['err'][..., 0].transpose(1, 0, 2), title='X error')
@@ -496,14 +496,12 @@ class PipetteTracker(object):
         absErr = (errf**2).sum(axis=1)**0.5
         # subtract out slow drift
         absErr -= scipy.ndimage.gaussian_filter(absErr, 5)
-        errPlot.plot(absErr)
-
+        # errPlot.plot(absErr)
         hist = np.histogram(absErr, bins=50)
         errPlot.plot(hist[1], hist[0], stepMode=True)
 
-
         # display drift and hysteresis plots
-        driftPlot = win.addPlot(row=0, col=1, rowSpan=1, colSpan=2, title="Pipette Drift",
+        driftPlot = win.addPlot(row=0, col=1, rowspan=1, colspan=2, title="Pipette Drift",
                                 labels={'left': ('Position error', 'm'), 'bottom': ('Time', 's')})
         driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 0], pen='r')
         driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 1], pen='g')
