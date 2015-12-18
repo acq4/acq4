@@ -491,7 +491,7 @@ class PipetteTracker(object):
         errf = err['err'].reshape(sh[0]*sh[1]*sh[2], 3)[err['order']]
 
         # Display histogram of errors
-        win = pg.GraphicsWindow()
+        win = pg.GraphicsWindow(title="%s error" % self.dev.name())
         # subtract out slow drift
         normErr = errf - scipy.ndimage.gaussian_filter(errf, (20, 0))
         # calculate magnitude of error
