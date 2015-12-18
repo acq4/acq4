@@ -492,11 +492,13 @@ class PipetteTracker(object):
 
         # Display histogram of errors
         win = pg.GraphicsWindow()
-        errPlot = win.addPlot(row=0, col=0, title="Error Histogram", labels={'bottom': ('Position error', 'm')})
-        absErr = (errf**2).sum(axis=1)**0.5
         # subtract out slow drift
-        absErr -= scipy.ndimage.gaussian_filter(absErr, 5)
+        normErr = errf - scipy.ndimage.gaussian_filter(errf, (20, 0))
+        # calculate magnitude of error
+        absErr = (normErr**2).sum(axis=1)**0.5
         # errPlot.plot(absErr)
+        title = "Error Histogram (mean=%s)" % pg.siFormat(absErr.mean(), suffix='m')
+        errPlot = win.addPlot(row=0, col=0, title=title, labels={'bottom': ('Position error', 'm')})
         hist = np.histogram(absErr, bins=50)
         errPlot.plot(hist[1], hist[0], stepMode=True)
 
