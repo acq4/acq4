@@ -21,7 +21,7 @@ class PipetteTracker(object):
         try:
             self.reference = pickle.load(open(fileName, 'rb'))
         except Exception:
-            self.reference = None
+            self.reference = {}
 
     def takeFrame(self, imager=None, padding=40e-6):
         """Acquire one frame from an imaging device.
@@ -134,15 +134,14 @@ class PipetteTracker(object):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()['pixelSize'][0] * 100
 
-    def takeReferenceFrames(self, zRange=40e-6, zStep=2e-6, imager=None, average=8, tipLength=None):
+    def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=8, tipLength=None):
         """Collect a series of images of the pipette tip at various focal depths.
 
         The collected images are used as reference templates for determining the most likely location 
         and focal depth of the tip after the calibration is no longer valid.
 
-        The tip is first moved in the +z direction by half of *zRange*, and then stepped in the -z 
-        direction by *zStep* until the entire *zRange* is covered. Images of the pipette tip are acquired
-        and stored at each step.
+        The focus first is moved in +z by half of *zRange*, then stepped downward by *zStep* until the
+        entire *zRange* is covered. Images of the pipette tip are acquired and stored at each step.
 
         This method assumes that the tip is in focus near the center of the camera frame, and that its
         position is well-calibrated. Ideally, the illumination is flat and the area surrounding the tip
@@ -158,7 +157,13 @@ class PipetteTracker(object):
         if tipLength is None:
             tipLength = self.suggestTipLength(centerFrame)
 
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=5e-6, tipLength=tipLength)
+        if zRange is None:
+            zRange = tipLength*1.5
+        if zStep is None:
+            zStep = zRange / 30.
+
+
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength*0.15, tipLength=tipLength)
         center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
         center = self.filterImage(center)
 
@@ -169,6 +174,8 @@ class PipetteTracker(object):
         frames = []
         bg_frames = []
         corr = []
+
+        print("Collecting %d frames of %0.2fum tip length at %0.2fum resolution." % (nFrames, tipLength*1e6, zStep*1e6))
 
         # Stop camera if it is currently running
         restart = False
@@ -227,7 +234,8 @@ class PipetteTracker(object):
         # (for now we generate these on the fly..)
         # ds = [frames] + [pg.downsample(pg.downsample(frames, n, axis=1), n, axis=2) for n in [2, 4, 8]]
 
-        self.reference = {
+        key = imager.getDeviceStateKey()
+        self.reference[key] = {
             'frames': frames - bg_frames,
             'zStep': zStep,
             'centerInd': maxInd,
@@ -253,9 +261,12 @@ class PipetteTracker(object):
         if frame is None:
             frame = self.takeFrame()
 
+        # load up template images
+        reference = self._getReference()
+
         if tipLength is None:
             # select a tip length similar to template images
-            tipLength = self.reference['tipLength']
+            tipLength = reference['tipLength']
 
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
         img = frame.data()
@@ -265,12 +276,12 @@ class PipetteTracker(object):
         img = self.filterImage(img)
 
         # resample acquired image to match template pixel size
-        pxr = frame.info()['pixelSize'][0] / self.reference['pixelSize'][0]
+        pxr = frame.info()['pixelSize'][0] / reference['pixelSize'][0]
         if pxr != 1.0:
             img = scipy.ndimage.zoom(img, pxr)
 
         # run template match against all template frames, find the frame with the strongest match
-        match = [self.matchTemplate(img, t) for t in self.reference['frames']]
+        match = [self.matchTemplate(img, t) for t in reference['frames']]
 
         if show:
             pg.plot([m[0][0] for m in match], title='x match vs z')
@@ -282,12 +293,12 @@ class PipetteTracker(object):
             raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (match[maxInd][1], threshold))
 
         # measure z error
-        zErr = (maxInd - self.reference['centerInd']) * self.reference['zStep']
+        zErr = (maxInd - reference['centerInd']) * reference['zStep']
 
         # measure xy position
         offset = match[maxInd][0]
-        tipImgPos = (minImgPos[0] + (offset[0] + self.reference['centerPos'][0]) / pxr, 
-                     minImgPos[1] + (offset[1] + self.reference['centerPos'][1]) / pxr)
+        tipImgPos = (minImgPos[0] + (offset[0] + reference['centerPos'][0]) / pxr, 
+                     minImgPos[1] + (offset[1] + reference['centerPos'][1]) / pxr)
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr), match[maxInd][1]
 
@@ -303,6 +314,13 @@ class PipetteTracker(object):
         measuredTipPos, corr = self.measureTipPosition(padding, threshold, frame, pos=pos)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
+    def _getReference(self):
+        key = self._getImager().getDeviceStateKey()
+        try:
+            return self.reference[key]
+        except KeyError:
+            raise Exception("No reference frames found for this pipette / objective combination.")
+
     def autoCalibrate(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
 
@@ -310,7 +328,17 @@ class PipetteTracker(object):
 
         All keyword arguments are passed to `measureTipPosition()`.
         """
-        tipPos, corr = self.measureTipPosition(**kwds)
+        # If no image padding is given, then use the template tip length as a first guess
+        if 'padding' not in kwds:
+            ref = self._getReference()
+            kwds['padding'] = ref['tipLength']
+
+        try:
+            tipPos, corr = self.measureTipPosition(**kwds)
+        except RuntimeError:
+            kwds['padding'] *= 2
+            tipPos, corr = self.measureTipPosition(**kwds)
+
         localError = self.dev.mapFromGlobal(tipPos)
         tr = self.dev.deviceTransform()
         tr.translate(pg.Vector(localError))
@@ -326,7 +354,7 @@ class PipetteTracker(object):
         # itself--two images with slightly different focus can have a very bad match.
         # import skimage.feature
         # return skimage.filter.sobel(img)
-
+        img = scipy.ndimage.morphological_gradient(img, size=(3, 3))
         return img
 
     def matchTemplate(self, img, template, dsVals=(4, 2, 1)):

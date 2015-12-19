@@ -55,7 +55,7 @@ class Pipette(Device, OptomechDevice):
             'searchHeight': config.get('searchHeight', 2e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
-            'idleDistance': config.get('searchHeight', 7e-3),
+            'idleDistance': config.get('idleDistance', 7e-3),
         }
         parent = self.parentDevice()
         assert isinstance(parent, Stage)
@@ -216,6 +216,7 @@ class Pipette(Device, OptomechDevice):
         angle = self.getYawAngle() * np.pi / 180
         ds = self._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
+        print(angle, ds, globalIdlePos, idleDepth)
         self._moveToGlobal(globalIdlePos, speed)
 
     def _movePath(self, path):
