@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
+
+import pickle
 from PyQt4 import QtCore, QtGui
 import numpy as np
 
@@ -8,40 +11,17 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from .cameraModTemplate import Ui_Form as CamModTemplate
-
-"""
-Todo:
-
-- movement planning:
-    - only move diagonally when within 50um of surface
-    - limited movement on x/z plane when near objective / recording chamber
-- home button
-- standby / target buttons
-- custom setpoint?
-- automatic find: 
-    - focus up 500um
-    - bring electrode to pre-set location
-    - advance slowly along diagonal until tip is detected
-    - auto set center
-    - move electrode to standby position
-    - back to original focus
-
-- show/hide markers
-- set center button text should change to "click electrode tip" during setting
-- better error reporting when moves are interrupted
-
-"""
+from .tracker import PipetteTracker
 
 
-
-
-class Manipulator(Device, OptomechDevice):
-    """Represents a manipulator controlling an electrode.
+class Pipette(Device, OptomechDevice):
+    """Represents a pipette or electrode attached to a motorized manipulator.
 
     This device provides a camera module interface for driving a motorized electrode holder:
 
-    * Visually direct electrode via camera module
-    * Automatically align electrode for diagonal approach to cells
+    * Visually direct pipette tip via camera module
+    * Automatically align pipette tip for diagonal approach to cells
+    * Automatically calibrate pipette tip position (via Tracker)
 
     This device must be configured with a Stage as its parent.
 
@@ -55,12 +35,28 @@ class Manipulator(Device, OptomechDevice):
                 |\\
                 | \\
                -z   \ - electrode tip
+
+
+    Configuration options:
+
+    * searchHeight: the distance to focus above the sample surface when searching for pipette tips
+    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning 
+      a diagonal approach
+    * idleHeight: the distance to bring the pipette tip above the sample surface when in idle position
+    * idleDistance: the distance from the global origin from which the pipette top should be placed
+      in idle mode
     """
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
         self._stageOrientation = {'angle': 0, 'inverty': False}
+        self._opts = {
+            'searchHeight': config.get('searchHeight', 2e-3),
+            'approachHeight': config.get('approachHeight', 100e-6),
+            'idleHeight': config.get('idleHeight', 1e-3),
+            'idleDistance': config.get('idleDistance', 7e-3),
+        }
         parent = self.parentDevice()
         assert isinstance(parent, Stage)
         self.pitch = parent.pitch * np.pi / 180.
@@ -69,6 +65,8 @@ class Manipulator(Device, OptomechDevice):
         if cal != {}:
             self.setStageOrientation(cal['angle'], cal['inverty'])
             self.setDeviceTransform(cal['transform'])
+
+        self.tracker = PipetteTracker(self)
 
     def scopeDevice(self):
         return self._scopeDev
@@ -81,7 +79,7 @@ class Manipulator(Device, OptomechDevice):
         return None
 
     def cameraModuleInterface(self, mod):
-        return ManipulatorCamModInterface(self, mod)
+        return PipetteCamModInterface(self, mod)
 
     def setStageOrientation(self, angle, inverty):
         tr = pg.SRTTransform3D(self.parentDevice().baseTransform())
@@ -102,8 +100,16 @@ class Manipulator(Device, OptomechDevice):
         cal['transform'] = pg.SRTTransform3D(tr)
         self.writeConfigFile(cal, 'calibration')
 
-    def goOut(self, speed='fast'):
-        """Extract pipette tip diagonally, then move manipulator far away from the objective.
+    def getYawAngle(self):
+        """Return the yaw (azimuthal angle) of the electrode around the Z-axis.
+
+        Value is returned in degrees such that an angle of 0 indicate the tip points along the positive x axis,
+        and 90 points along the positive y axis.
+        """
+        return self._stageOrientation['angle']
+
+    def goHome(self, speed='fast'):
+        """Extract pipette tip diagonally, then move pipette far away from the objective.
 
         This method currently makes several assumptions:
 
@@ -146,25 +152,34 @@ class Manipulator(Device, OptomechDevice):
 
         self._movePath(path)
 
-    def goIn(self, speed='fast'):
+    def goSearch(self, speed='fast'):
         """Focus the microscope 2mm above the surface, then move the electrode 
         tip to 500um below the focal point of the microscope. 
 
-        This position is used for bringing in new electrodes.
+        This position is used when searching for new electrodes.
         """
+        # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
-        scope.setFocusDepth(scope.getSurfaceDepth() + 2e-3).wait()
+        surfaceDepth = scope.getSurfaceDepth()
+        if surfaceDepth is None:
+            raise Exception("Cannot determine search position; surface depth is not defined.")
+        searchDepth = surfaceDepth + self._opts['searchHeight']
+        if scope.getFocusDepth() < searchDepth:
+            scope.setFocusDepth(searchDepth).wait()
+
+        # Here's where we want the pipette tip in global coordinates:
+        #   500 um below center of scope focus
         globalTarget = scope.mapToGlobal([0, 0, -500e-6])
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
-            raise Exception('"In" position should only be used when electrode is far from objective.')
+            raise Exception('"Search" position should only be used when electrode is far from objective.')
 
         # compute intermediate position
         localTarget = self.mapFromGlobal(globalTarget)
         # local vector pointing in direction of electrode tip
         evec = np.array([1., 0., -np.tan(self.pitch)])
         evec /= np.linalg.norm(evec)
-        waypoint = localTarget - evec * 15e-3
+        waypoint = localTarget - evec * self._opts['idleDistance']
 
         path = [
             (self.mapToGlobal(waypoint), speed, False),
@@ -172,11 +187,37 @@ class Manipulator(Device, OptomechDevice):
         ]
         self._movePath(path)
 
-    def goStandby(self, target, speed):
+    def goApproach(self, target, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
-        self._movePath(self._standbyPath(target, speed))
+        self._movePath(self._approachPath(target, speed))
+
+    def goIdle(self, speed='fast'):
+        """Move the electrode tip to the outer edge of the recording chamber, 1mm above the sample surface.
+
+        NOTE: this method assumes that (0, 0) in global coordinates represents the center of the recording
+        chamber.
+        """
+        scope = self.scopeDevice()
+        surface = scope.getSurfaceDepth()
+        if surface is None:
+            raise Exception("Surface depth has not been set.")
+
+        # we want to land 1 mm above sample surface
+        idleDepth = surface + self._opts['idleHeight']
+
+        # If the tip is below idle depth, bring it up along the axis of the electrode.
+        pos = self.globalPosition()
+        if pos[2] < idleDepth:
+            self.advance(idleDepth, speed)
+
+        # From here, move directly to idle position
+        angle = self.getYawAngle() * np.pi / 180
+        ds = self._opts['idleDistance']  # move to 7 mm from center
+        globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
+        print(angle, ds, globalIdlePos, idleDepth)
+        self._moveToGlobal(globalIdlePos, speed)
 
     def _movePath(self, path):
         # move along a path defined in global coordinates. 
@@ -194,14 +235,15 @@ class Manipulator(Device, OptomechDevice):
         for pos, speed, linear in path2:
             self._moveToGlobal(pos, speed, linear=linear).wait(updates=True)
     
-    def _standbyPath(self, target, speed):
-        # Return steps (in global coords) needed to move to standby position
-        stbyDepth = self.standbyDepth()
+    def _approachPath(self, target, speed):
+        # Return steps (in global coords) needed to move to approach position
+        stbyDepth = self.approachDepth()
         pos = self.globalPosition()
 
         # steps are in global coordinates.
         path = []
 
+        # If tip is below the surface, then first pull out slowly along pipette axis
         if pos[2] < stbyDepth:
             dz = stbyDepth - pos[2]
             dx = -dz / np.tan(self.pitch)
@@ -217,12 +259,12 @@ class Manipulator(Device, OptomechDevice):
         # target in local coordinates
         ltarget = self.mapFromGlobal(target)
 
-        # compute standby position
-        dz2 = stbyDepth - target[2]
+        # compute approach position (axis aligned to target, at standby depth or higher)
+        dz2 = max(0, stbyDepth - target[2])
         dx2 = -dz2 / np.tan(self.pitch)
         stby = ltarget + np.array([dx2, 0., dz2])
 
-        # compute intermediate position
+        # compute intermediate position (point along approach axis that is closest to the current position)
         targetToTip = last - ltarget
         targetToStby = stby - ltarget
         targetToStby /= np.linalg.norm(targetToStby)
@@ -239,12 +281,12 @@ class Manipulator(Device, OptomechDevice):
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
             return
-        path = self._standbyPath(target, speed)
+        path = self._approachPath(target, speed)
         path.append([target, 100e-6, True])
         self._movePath(path)
 
-    def standbyDepth(self):
-        """Return the global depth where the electrode should move in standby mode.
+    def approachDepth(self):
+        """Return the global depth where the electrode should move to when starting approach mode.
 
         This is defined as the sample surface + 100um.
         """
@@ -252,7 +294,7 @@ class Manipulator(Device, OptomechDevice):
         surface = scope.getSurfaceDepth()
         if surface is None:
             raise Exception("Surface depth has not been set.")
-        return surface + 100e-6
+        return surface + self._opts['approachHeight']
 
     def advance(self, depth, speed):
         """Move the electrode along its axis until it reaches the specified
@@ -286,8 +328,8 @@ class Manipulator(Device, OptomechDevice):
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
 
-class ManipulatorCamModInterface(CameraModuleInterface):
-    """Implements user interface for manipulator.
+class PipetteCamModInterface(CameraModuleInterface):
+    """Implements user interface for Pipette.
     """
     canImage = False
 
@@ -325,11 +367,14 @@ class ManipulatorCamModInterface(CameraModuleInterface):
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
-        self.ui.outBtn.clicked.connect(self.outClicked)
-        self.ui.inBtn.clicked.connect(self.inClicked)
+        self.ui.homeBtn.clicked.connect(self.homeClicked)
+        self.ui.searchBtn.clicked.connect(self.searchClicked)
+        self.ui.idleBtn.clicked.connect(self.idleClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
-        self.ui.standbyBtn.clicked.connect(self.standbyClicked)
+        self.ui.approachBtn.clicked.connect(self.approachClicked)
+        self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
+        self.ui.getRefBtn.clicked.connect(self.getRefFramesClicked)
         self.target.sigDragged.connect(self.targetDragged)
 
         self.transformChanged()
@@ -353,7 +398,7 @@ class ManipulatorCamModInterface(CameraModuleInterface):
             self.target.setVisible(True)
             self.depthTarget.setVisible(True)
             self.ui.targetBtn.setEnabled(True)
-            self.ui.standbyBtn.setEnabled(True)
+            self.ui.approachBtn.setEnabled(True)
             self.ui.setTargetBtn.setChecked(False)
             pos = self.mod().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
@@ -371,6 +416,7 @@ class ManipulatorCamModInterface(CameraModuleInterface):
         self.setTargetPos(self.target.pos(), z)
 
     def transformChanged(self):
+        # manipulator's global transform has changed; update the center arrow and orientation axis
         dev = self.getDevice()
         pos = dev.mapToGlobal([0, 0, 0])
         x = dev.mapToGlobal([1, 0, 0])
@@ -394,7 +440,6 @@ class ManipulatorCamModInterface(CameraModuleInterface):
             self.calibrateAxis.setPos(pos[:2])
             self.calibrateAxis.setAngle(angle)
             ys = self.calibrateAxis.size()[1]
-
 
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
@@ -432,11 +477,14 @@ class ManipulatorCamModInterface(CameraModuleInterface):
             if scene is not None:
                 scene.removeItem(item)
 
-    def outClicked(self):
-        self.getDevice().goOut(self.selectedSpeed())
+    def homeClicked(self):
+        self.getDevice().goHome(self.selectedSpeed())
 
-    def inClicked(self):
-        self.getDevice().goIn(self.selectedSpeed())
+    def searchClicked(self):
+        self.getDevice().goSearch(self.selectedSpeed())
+
+    def idleClicked(self):
+        self.getDevice().goIdle(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:
@@ -449,8 +497,14 @@ class ManipulatorCamModInterface(CameraModuleInterface):
     def targetClicked(self):
         self.getDevice().goTarget(self._targetPos, self.selectedSpeed())
 
-    def standbyClicked(self):
-        self.getDevice().goStandby(self._targetPos, self.selectedSpeed())
+    def approachClicked(self):
+        self.getDevice().goApproach(self._targetPos, self.selectedSpeed())
+
+    def autoCalibrateClicked(self):
+        self.getDevice().tracker.autoCalibrate()
+
+    def getRefFramesClicked(self):
+        self.getDevice().tracker.takeReferenceFrames()
 
 
 class Target(pg.GraphicsObject):
@@ -508,7 +562,7 @@ class Target(pg.GraphicsObject):
 
 
 class Axis(pg.ROI):
-    """Used for calibrating manipulator position and orientation.
+    """Used for calibrating pipette position and orientation.
     """
     def __init__(self, pos, angle, inverty):
         arrow = pg.makeArrowPath(headLen=20, tipAngle=30, tailLen=60, tailWidth=2).translated(-84, 0)
@@ -580,4 +634,5 @@ class Axis(pg.ROI):
         # p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
         p.scale(w, h)
         p.drawPath(self._path)
+
 
