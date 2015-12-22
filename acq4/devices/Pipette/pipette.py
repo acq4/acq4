@@ -6,6 +6,7 @@ from PyQt4 import QtCore, QtGui
 import numpy as np
 
 import acq4.pyqtgraph as pg
+from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
@@ -355,6 +356,22 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.target.setZValue(5000)
         mod.addItem(self.target)
         self.target.setVisible(False)
+
+        # decide how / whether to add a label for the target
+        basename = dev.name().rstrip('0123456789')
+        showLabel = False
+        if basename != dev.name():
+            # If this device looks like "Name00" and another device has the same
+            # prefix, then we will label all targets with their device numbers.
+            for devname in getManager().listDevices():
+                if devname.startswith(basename):
+                    showLabel = True
+                    break
+        if showLabel:
+            num = dev.name()[len(basename):]
+            self.target.setLabel(num)
+            self.target.setLabelAngle(dev.getYawAngle())
+
         self.depthTarget = Target(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
@@ -432,6 +449,8 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.centerArrow.setStyle(angle=180-angle)
         # self.depthLine.setValue(pos[2])
         self.depthArrow.setPos(0, pos[2])
+
+        self.target.setLabelAngle(dev.getYawAngle())
 
         if self.ui.setOrientationBtn.isChecked():
             return
@@ -514,13 +533,23 @@ class Target(pg.GraphicsObject):
         pg.GraphicsObject.__init__(self)
         self.movable = movable
         self.moving = False
+        self.label = None
+        self.labelAngle = 0
+
+    def setLabel(self, label):
+        self.label = label
+        self.update()
+
+    def setLabelAngle(self, angle):
+        self.labelAngle = angle
+        self.update()
 
     def boundingRect(self):
         w = self.pixelLength(pg.Point(1, 0))
         if w is None:
             return QtCore.QRectF()
-        w *= 5
-        h = 5 * self.pixelLength(pg.Point(0, 1))
+        w *= 25
+        h = 25 * self.pixelLength(pg.Point(0, 1))
         r = QtCore.QRectF(-w*2, -h*2, w*4, h*4)
         return r
 
@@ -529,14 +558,22 @@ class Target(pg.GraphicsObject):
 
     def paint(self, p, *args):
         p.setRenderHint(p.Antialiasing)
-        w = 5 * self.pixelLength(pg.Point(1, 0))
-        h = 5 * self.pixelLength(pg.Point(0, 1))
+        px = self.pixelLength(pg.Point(1, 0))
+        py = self.pixelLength(pg.Point(0, 1))
+        w = 5 * px
+        h = 5 * py
         r = QtCore.QRectF(-w, -h, w*2, h*2)
         p.setPen(pg.mkPen('y'))
         p.setBrush(pg.mkBrush(0, 0, 255, 100))
         p.drawEllipse(r)
         p.drawLine(pg.Point(-w*2, 0), pg.Point(w*2, 0))
         p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
+
+        if self.label is not None:
+            angle = self.labelAngle * np.pi / 180.
+            pos = p.transform().map(QtCore.QPointF(0, 0)) + 15 * QtCore.QPointF(np.cos(angle), -np.sin(angle))
+            p.resetTransform()
+            p.drawText(QtCore.QRectF(pos.x()-10, pos.y()-10, 20, 20), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, self.label)
 
     def mouseDragEvent(self, ev):
         if not self.movable:
