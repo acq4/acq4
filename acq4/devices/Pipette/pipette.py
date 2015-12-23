@@ -166,7 +166,7 @@ class Pipette(Device, OptomechDevice):
             raise Exception("Cannot determine search position; surface depth is not defined.")
         searchDepth = surfaceDepth + self._opts['searchHeight']
         if scope.getFocusDepth() < searchDepth:
-            scope.setFocusDepth(searchDepth).wait()
+            scope.setFocusDepth(searchDepth).wait(updates=True)
 
         # Here's where we want the pipette tip in global coordinates:
         #   500 um below center of scope focus
