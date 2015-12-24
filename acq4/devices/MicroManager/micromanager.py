@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, with_statement
 import re
+from collections import OrderedDict
 from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
 import time, sys, traceback
@@ -60,7 +61,7 @@ class MicroManager(Camera):
 
         import pprint
         self._readAllParams()
-        pprint.pprint(self.listParams())
+        pprint.pprint(dict(self.listParams()))
         
     def startCamera(self):
         with self.camLock:
@@ -108,8 +109,11 @@ class MicroManager(Camera):
         self.mmc.unloadDevice(self.camName)
 
     def _readAllParams(self):
+        # these are parameters expected for all cameras
+        defaultParams = ['exposure', 'binningX', 'binningY', 'regionX', 'regionY', 'regionW', 'regionH', 'triggerMode', 'bitDepth']
+
         with self.camLock:
-            params = {}
+            params = OrderedDict([(n, None) for n in defaultParams])
 
             properties = self.mmc.getDevicePropertyNames(self.camName)
             for prop in properties:
@@ -135,7 +139,7 @@ class MicroManager(Camera):
                     params['binningY'] = ([int(v[1]) for v in vals], not readonly, True, [])
                     continue
                 elif prop == 'Trigger':
-                    prop = 'trigger'
+                    prop = 'triggerMode'
                     vals = [{'NORMAL': 'Normal', 'START': 'TriggerStart'}[v] for v in vals]
                 elif prop == 'PixelType':
                     prop = 'bitDepth'
@@ -168,6 +172,8 @@ class MicroManager(Camera):
         return dict([(p, self._allParams[p]) for p in params])
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        # umanager will refuse to set params while camera is running,
+        # so autoRestart doesn't make sense in this context
         if self.isRunning():
             restart = True
             self.stop()
@@ -176,34 +182,31 @@ class MicroManager(Camera):
 
         newVals = {}
         for k,v in params.items():
-            self.setParam(k, v)
-            newVals[k] = self.getParam(k)
-        restart = False   # assume umanager does this for us?
+            self._setParam(k, v, autoCorrect=autoCorrect)
+            if k == 'binning':
+                newVals['binningX'], newVals['binningY'] = self.getParam(k)
+            elif k == 'region':
+                newVals['regionX'], newVals['regionY'], newVals['regionW'], newVals['regionH'] = self.getParam(k)
+            else:
+                newVals[k] = self.getParam(k)
         self.sigParamsChanged.emit(newVals)
 
         if restart:
             self.start()
 
-        return (newVals, restart)
+        needRestart = False
+        return (newVals, needRestart)
 
-    def getParams(self, params=None):
-        if params is None:
-            params = self.listParams().keys()
-        return dict([(p, self.getParam(p)) for p in params])
+    def setParam(self, param, value, autoCorrect=True, autoRestart=True):
+        return self.setParams({param: value}, autoCorrect=autoCorrect, autoRestart=autoRestart)
 
-    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        if self.isRunning():
-            restart = True
-            self.stop()
-        else:
-            restart = False
-
+    def _setParam(self, param, value, autoCorrect=True):
         if param == 'region':
             b = self.getParam('binning')
             value = (value[0]//b[0], value[1]//b[1], value[2]//b[0], value[3]//b[1])
             self.mmc.setCameraDevice(self.camName)
             self.mmc.setROI(*value)
-            return 
+            return
 
         if param.startswith('region'):
             rgn = list(self.mmc.getROI(self.camName))
@@ -218,7 +221,7 @@ class MicroManager(Camera):
                 rgn[3] = value // b
             self.mmc.setCameraDevice(self.camName)
             self.mmc.setROI(*rgn)
-            return 
+            return
 
         if param == 'binningX':
             y = self.getParam('binningY')
@@ -245,8 +248,10 @@ class MicroManager(Camera):
         with self.camLock:
             self.mmc.setProperty(self.camName, str(param), str(value))
 
-        if restart:
-            self.start()
+    def getParams(self, params=None):
+        if params is None:
+            params = self.listParams().keys()
+        return dict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):
         if param == 'sensorSize':
@@ -280,7 +285,7 @@ class MicroManager(Camera):
             except ValueError:
                 pass
 
-        if param == 'binningX':
+        if param == 'binningY':
             return int(val.split('x')[1])
         elif param == 'binningX':
             return int(val.split('x')[0])
