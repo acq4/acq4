@@ -59,9 +59,9 @@ class MicroManager(Camera):
         self.mmc.loadDevice(self.camName, adapterName, deviceName)
         self.mmc.initializeDevice(self.camName)
 
-        import pprint
         self._readAllParams()
-        pprint.pprint(dict(self.listParams()))
+        # import pprint
+        # pprint.pprint(dict(self.listParams()))
         
     def startCamera(self):
         with self.camLock:
@@ -75,7 +75,7 @@ class MicroManager(Camera):
     def _acquireFrames(self, n=1):
         assert n == 1, "MMC only supports single-frame or continuous acquisition (requested %d frames)" % n
         self.mmc.snapImage()
-        return self.mmc.getImage()
+        return self.mmc.getImage().T[np.newaxis, ...]
 
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
@@ -96,7 +96,7 @@ class MicroManager(Camera):
                 frame = {}
                 frame['time'] = self.lastFrameTime + (dt * (i+1))
                 frame['id'] = self.frameId
-                frame['data'] = self.mmc.popNextImage()
+                frame['data'] = self.mmc.popNextImage().T
                 frames.append(frame)
                 self.frameId += 1
                 
@@ -202,41 +202,38 @@ class MicroManager(Camera):
 
     def _setParam(self, param, value, autoCorrect=True):
         if param == 'region':
-            b = self.getParam('binning')
-            value = (value[0]//b[0], value[1]//b[1], value[2]//b[0], value[3]//b[1])
+            value = (value[0], value[1], value[2], value[3])
             self.mmc.setCameraDevice(self.camName)
             self.mmc.setROI(*value)
             return
 
         if param.startswith('region'):
             rgn = list(self.mmc.getROI(self.camName))
-            b = self.getParam('binningX')
             if param[-1] == 'X':
-                rgn[0] = value // b
+                rgn[0] = value
             elif param[-1] == 'Y':
-                rgn[1] = value // b
+                rgn[1] = value
             elif param[-1] == 'W':
-                rgn[2] = value // b
+                rgn[2] = value
             elif param[-1] == 'H':
-                rgn[3] = value // b
+                rgn[3] = value
             self.mmc.setCameraDevice(self.camName)
             self.mmc.setROI(*rgn)
             return
 
-        if param == 'binningX':
-            y = self.getParam('binningY')
-            value = (value, y)
-            param = 'binning'
-        elif param == 'binningY':
-            x = self.getParam('binningX')
-            value = (x, value)
-            param = 'binning'
-
-        if param == 'binning':
+        if param.startswith('binning'):
+            if param == 'binningX':
+                y = self.getParam('binningY')
+                value = (value, y)
+                param = 'binning'
+            elif param == 'binningY':
+                x = self.getParam('binningX')
+                value = (x, value)
+                param = 'binning'
             value = '%dx%d' % value
             param = 'Binning'
 
-        if param == 'exposure':
+        elif param == 'exposure':
             # s to ms
             value = value * 1e3
             param = 'Exposure'
@@ -258,8 +255,6 @@ class MicroManager(Camera):
             return self._sensorSize
         elif param.startswith('region'):
             rgn = self.mmc.getROI(self.camName)
-            b = self.getParam('binning')
-            rgn = (rgn[0]*b[0], rgn[1]*b[1], rgn[2]*b[0], rgn[3]*b[1])
             if param == 'region':
                 return rgn
             i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)
