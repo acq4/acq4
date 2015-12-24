@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from __future__ import with_statement
+from __future__ import division, with_statement
+import re
 from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
 import time, sys, traceback
@@ -13,7 +14,14 @@ try:
     import MMCorePy
     HAVE_MM = True
 except ImportError:
-    HAVE_MM = False
+    try:
+        # MM does not install itself to standard path..
+        sys.path.append('C:\\Program Files\\Micro-Manager-1.4')
+        import MMCorePy
+        sys.path.pop()
+        HAVE_MM = True
+    except ImportError:
+        HAVE_MM = False
 
 
 class MicroManager(Camera):
@@ -24,30 +32,36 @@ class MicroManager(Camera):
     * mmAdapterName
     * mmDeviceName
     """
-    def __init__(self, *args, **kargs):
+    def __init__(self, manager, config, name):
         assert HAVE_MM, "MicroManager module (MMCorePy) is not importable."
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
-        Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
+        self._config = config
+        Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
         self.lastIndex = None
         self.lastFrameTime = None
     
     def setupCamera(self):
+        self.camName = str(self.name())
         self.mmc = MMCorePy.CMMCore()
 
         # sanity check for MM adapter and device name
-        adapterName = self.config['mmAdapterName']
+        adapterName = self._config['mmAdapterName']
         allAdapters = self.mmc.getDeviceAdapterNames()
         if adapterName not in allAdapters:
             raise ValueError("Adapter name '%s' is not valid. Options are: %s" % (adapterName, allAdapters))
-        deviceName = self.config['mmDeviceName']
+        deviceName = self._config['mmDeviceName']
         allDevices = self.mmc.getAvailableDevices(adapterName)
         if deviceName not in allDevices:
             raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (deviceName, adapterName, allDevices))
 
-        self.mmc.loadDevice(self.name(), adapterName, deviceName)
-        self.mmc.initializeDevice(self.name())
+        self.mmc.loadDevice(self.camName, adapterName, deviceName)
+        self.mmc.initializeDevice(self.camName)
+
+        import pprint
+        self._readAllParams()
+        pprint.pprint(self.listParams())
         
     def startCamera(self):
         with self.camLock:
@@ -95,58 +109,174 @@ class MicroManager(Camera):
         return frames
         
     def quit(self):
-        mmc.stopSequenceAcquisition()
-        mmc.unloadDevice(self.name())
+        self.mmc.stopSequenceAcquisition()
+        self.mmc.unloadDevice(self.camName)
+
+    def _readAllParams(self):
+        with self.camLock:
+            params = {}
+
+            properties = self.mmc.getDevicePropertyNames(self.camName)
+            for prop in properties:
+                vals = self.mmc.getAllowedPropertyValues(self.camName, prop)
+                if vals == ():
+                    if self.mmc.hasPropertyLimits(self.camName, prop):
+                        vals = (
+                            self.mmc.getPropertyLowerLimit(self.camName, prop),
+                            self.mmc.getPropertyUpperLimit(self.camName, prop),
+                        )
+                else:
+                    vals = list(vals)
+                readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
+                
+                # translate standard properties to the names / formats that we expect
+                if prop == 'Exposure':
+                    prop = 'exposure'
+                    # convert ms to s
+                    vals = tuple([v * 1e-3 for v in vals])
+                elif prop == 'Binning':
+                    vals = [v.split('x') for v in vals]
+                    params['binningX'] = ([int(v[0]) for v in vals], not readonly, True, [])
+                    params['binningY'] = ([int(v[1]) for v in vals], not readonly, True, [])
+                    continue
+                elif prop == 'Trigger':
+                    prop = 'trigger'
+                    vals = [{'NORMAL': 'Normal', 'START': 'TriggerStart'}[v] for v in vals]
+                elif prop == 'PixelType':
+                    prop = 'bitDepth'
+                    vals = [int(bd.rstrip('bit')) for bd in vals]
+
+                params[prop] = (vals, not readonly, True, [])
+
+            # Reset ROI to full frame so we know the native resolution
+            self.mmc.setCameraDevice(self.camName)
+            self.mmc.setProperty(self.camName, 'Binning', '1x1')
+            self.mmc.clearROI()
+            rgn = self.mmc.getROI(self.camName)
+            self._sensorSize = rgn[2:]
+
+            params.update({
+                'regionX': [(0, rgn[2]-1, 1), True, True, []],
+                'regionY': [(0, rgn[3]-1, 1), True, True, []],
+                'regionW': [(1, rgn[2], 1), True, True, []],
+                'regionH': [(1, rgn[3], 1), True, True, []],
+            })
+
+        self._allParams = params
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
-        with self.camLock:
-            properties = self.mmc.getDevicePropertyNames(self.name())
-            vals = [self.mmc.getDevicePropertyValues(self.name(), prop) for prop in properties]
-            readonly = [self.mmc.isPropertyReadOnly(self.name(), prop) for prop in properties]
-            # make sure device names are coerced into our standard names:
-            params = {
-                'triggerMode': (value, writable, readable, deps),
-                'exposure': (value, writable, readable, deps),
-                'binningX': (value, writable, readable, deps),
-                'binningY': (value, writable, readable, deps),
-                'regionX': (value, writable, readable, deps),
-                'regionY': (value, writable, readable, deps),
-                'regionW': (value, writable, readable, deps),
-                'regionH': (value, writable, readable, deps),
-            }
-
-        
+        if params is None:
+            return self._allParams.copy()
+        if isinstance(params, basestring):
+            return self._allParams[params]
+        return dict([(p, self._allParams[p]) for p in params])
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
-        #print "PVCam: setParams", params
-        with self.camLock:
-            if 'ringSize' in params:
-                self.ringSize = params['ringSize']
-            newVals, restart = self.cam.setParams(params, autoCorrect=autoCorrect)
-        #restart = True  ## pretty much _always_ need a restart with these cameras.
-        
-        if autoRestart and restart:
-            self.restart()
-        
-        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        newVals = {}
+        for k,v in params.items():
+            self.setParam(k, v)
+            newVals[k] = self.getParam(k)
+        restart = False   # assume umanager does this for us?
         self.sigParamsChanged.emit(newVals)
         return (newVals, restart)
 
     def getParams(self, params=None):
         if params is None:
             params = self.listParams().keys()
-        with self.camLock:
-            pass
+        return dict([(p, self.getParam(p)) for p in params])
 
     def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        if param == 'region':
+            b = self.getParam('binning')
+            value = (value[0]//b[0], value[1]//b[1], value[2]//b[0], value[3]//b[1])
+            self.mmc.setCameraDevice(self.camName)
+            self.mmc.setROI(*value)
+            return 
+
+        if param.startswith('region'):
+            rgn = list(self.mmc.getROI(self.camName))
+            b = self.getParam('binningX')
+            if param[-1] == 'X':
+                rgn[0] = value // b
+            elif param[-1] == 'Y':
+                rgn[1] = value // b
+            elif param[-1] == 'W':
+                rgn[2] = value // b
+            elif param[-1] == 'H':
+                rgn[3] = value // b
+            self.mmc.setCameraDevice(self.camName)
+            self.mmc.setROI(*rgn)
+            return 
+
+        if param == 'binningX':
+            y = self.getParam('binningY')
+            value = (value, y)
+            param = 'binning'
+        elif param == 'binningY':
+            x = self.getParam('binningX')
+            value = (x, value)
+            param = 'binning'
+
+        if param == 'binning':
+            value = '%dx%d' % value
+            param = 'Binning'
+
+        if param == 'exposure':
+            # s to ms
+            value = value * 1e3
+            param = 'Exposure'
+
+        elif param == 'triggerMode':
+            value = {'Normal': 'NORMAL', 'TriggerStart': 'START'}[value]
+            param = 'Trigger'
+
         with self.camLock:
-            if param == 'exposure':
-                self.mmc.setExposure(exposure)  # scaling?
-            else:
-                self.mmc.setProperty(self.name(), param, value)
+            self.mmc.setProperty(self.camName, str(param), str(value))
 
     def getParam(self, param):
+        if param == 'sensorSize':
+            return self._sensorSize
+        elif param.startswith('region'):
+            rgn = self.mmc.getROI(self.camName)
+            b = self.getParam('binning')
+            rgn = tuple(rgn[0]*b[0], rgn[1]*b[1], rgn[2]*b[0], rgn[3]*b[1])
+            if param == 'region':
+                return rgn
+            i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)
+            return rgn[i]
+
+        paramTrans = {
+            'exposure': 'Exposure',
+            'binning': 'Binning',
+            'binningX': 'Binning',
+            'binningY': 'Binning',
+            'triggerMode': 'Trigger',
+            'bitDepth': 'PixelType',
+        }.get(param, param)
         with self.camLock:
-            return self.mmc.getProperty(self.name(), name)
+            val = self.mmc.getProperty(self.camName, str(paramTrans))
+
+        # coerce to int or float if possible
+        try:
+            val = int(val)
+        except ValueError:
+            try:
+                val = float(val)
+            except ValueError:
+                pass
+
+        if param == 'binningX':
+            return int(val.split('x')[1])
+        elif param == 'binningX':
+            return int(val.split('x')[0])
+        elif param == 'binning':
+            return tuple([int(b) for b in val.split('x')])
+        elif param == 'exposure':
+            # ms to s
+            val = val * 1e-3
+        elif param == 'bitDepth':
+            return int(val.rstrip('bit'))
+
+        return val
 
