@@ -39,7 +39,6 @@ class MicroManager(Camera):
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
-        self.lastIndex = None
         self.lastFrameTime = None
     
     def setupCamera(self):
@@ -81,7 +80,7 @@ class MicroManager(Camera):
         """Return a list of all frames acquired since the last call to newFrames."""
         
         with self.camLock:
-            nFrames = mmc.getRemainingImageCount()
+            nFrames = self.mmc.getRemainingImageCount()
             if nFrames == 0:
                 return []
 
@@ -89,23 +88,19 @@ class MicroManager(Camera):
         if self.lastFrameTime is None:
             self.lastFrameTime = now
         
-        ## Determine how many new frames have arrived since last check
-    
         dt = (now - self.lastFrameTime) / nFrames
         frames = []
         with self.camLock:
             for i in range(nFrames):
-                fInd = (i+self.lastIndex+1) % self.ringSize
                 frame = {}
                 frame['time'] = self.lastFrameTime + (dt * (i+1))
                 frame['id'] = self.frameId
-                frame['data'] = self.mmc.popNextFrame()
+                frame['data'] = self.mmc.popNextImage()
                 frames.append(frame)
                 self.frameId += 1
                 
         self.lastFrame = frame
         self.lastFrameTime = now
-        self.lastIndex = index
         return frames
         
     def quit(self):
@@ -173,12 +168,22 @@ class MicroManager(Camera):
         return dict([(p, self._allParams[p]) for p in params])
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        if self.isRunning():
+            restart = True
+            self.stop()
+        else:
+            restart = False
+
         newVals = {}
         for k,v in params.items():
             self.setParam(k, v)
             newVals[k] = self.getParam(k)
         restart = False   # assume umanager does this for us?
         self.sigParamsChanged.emit(newVals)
+
+        if restart:
+            self.start()
+
         return (newVals, restart)
 
     def getParams(self, params=None):
@@ -187,6 +192,12 @@ class MicroManager(Camera):
         return dict([(p, self.getParam(p)) for p in params])
 
     def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        if self.isRunning():
+            restart = True
+            self.stop()
+        else:
+            restart = False
+
         if param == 'region':
             b = self.getParam('binning')
             value = (value[0]//b[0], value[1]//b[1], value[2]//b[0], value[3]//b[1])
@@ -234,13 +245,16 @@ class MicroManager(Camera):
         with self.camLock:
             self.mmc.setProperty(self.camName, str(param), str(value))
 
+        if restart:
+            self.start()
+
     def getParam(self, param):
         if param == 'sensorSize':
             return self._sensorSize
         elif param.startswith('region'):
             rgn = self.mmc.getROI(self.camName)
             b = self.getParam('binning')
-            rgn = tuple(rgn[0]*b[0], rgn[1]*b[1], rgn[2]*b[0], rgn[3]*b[1])
+            rgn = (rgn[0]*b[0], rgn[1]*b[1], rgn[2]*b[0], rgn[3]*b[1])
             if param == 'region':
                 return rgn
             i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)
