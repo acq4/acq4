@@ -355,9 +355,10 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
     d=cos2gat*sineWave(per,1,0,start*ms,stop*ms,0, **kwds)
     return d
 #def sawWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds):    
-    
+#np.cos(1.570796+sawWave(2.5e-3,1.570796,0,.250,.250+2.5e-3,0)+pulse(.250+2.5e-3,497.5e-3,1.570796)-sawWave(2.5e-3,1.570796,0,497.5e-3,500e-3))**2*sineWave(1/4000.0,1,0,.250,.500,0)
+
 # def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 200, direction= 'up', **kwds):  #tfr 09/28/2015
-def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 400, direction= 'up', **kwds):
+def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 400, octspace = 0.5, reps=1, direction= 'up', **kwds):
     rate = kwds['rate']
     nPts = kwds['nPts']
     warnings = kwds['warnings']
@@ -371,21 +372,26 @@ def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 400, direction= 'up',
         raise Exception("tdur argument must be a number")
     if not isNumOrNone(tipi):
         raise Exception("tipi argument must be a number")
+    if not isNumOrNone(tipi):
+        raise Exception("octspace argument must be a number between 0 and 1")
     posDirection=['up', 'down']
     if direction not in posDirection:
         raise Exception("direction must be up or down")
 
     if direction == posDirection[0]:
-        dirconst = 0.25
+        dirconst = octspace
     else:
-        dirconst = -0.25
-    
-    freqs = startfreq * 2**(dirconst * np.arange(npip))
-    d = 0
-    icount = 0
-    for curfreq in freqs:
-        #d = d+tonePip(freqs[icount],2.5,(icount)*250,250*icount+50,0, **kwds) #tropp 09/28/2015
-        d = d+tonePip(freqs[icount],2.5,(icount)*(tdur+tipi),(tdur+tipi)*icount+tdur,0, **kwds)
-        icount = icount+1
+        dirconst = -1 * octspace
+    d=0
+    totalrep=npip*(tdur+tipi)
+    for repcount in np.arange(reps):
+        freqs = startfreq * 2**(dirconst * np.arange(npip))
+        
+
+        for icount in np.arange(npip):
+            #d = d+tonePip(freqs[icount],2.5,(icount)*250,250*icount+50,0, **kwds) #tropp 09/28/2015
+            print 'start', (icount)*(tdur+tipi)+repcount*totalrep
+            print 'stop',(tdur+tipi)*icount+tdur+repcount*totalrep
+            d = d+tonePip(freqs[icount],2.5,(icount)*(tdur+tipi)+repcount*totalrep,(tdur+tipi)*icount+tdur+repcount*totalrep,0, **kwds)
     return d
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
