@@ -12,7 +12,6 @@ class Device(QtCore.QObject):
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
-        #self.config = config
         self._name = name
     
     def name(self):
