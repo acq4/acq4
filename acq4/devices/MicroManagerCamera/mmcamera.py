@@ -11,18 +11,6 @@ import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 
-try:
-    import MMCorePy
-    HAVE_MM = True
-except ImportError:
-    try:
-        # MM does not install itself to standard path..
-        sys.path.append('C:\\Program Files\\Micro-Manager-1.4')
-        import MMCorePy
-        sys.path.pop()
-        HAVE_MM = True
-    except ImportError:
-        HAVE_MM = False
 
 
 class MicroManagerCamera(Camera):
@@ -34,7 +22,22 @@ class MicroManagerCamera(Camera):
     * mmDeviceName
     """
     def __init__(self, manager, config, name):
-        assert HAVE_MM, "MicroManager module (MMCorePy) is not importable."
+        try:
+            import MMCorePy
+        except ImportError:
+            if sys.platform != 'win32':
+                raise
+            # MM does not install itself to standard path. User should take care of this,
+            # but we can make a guess..
+            sys.path.append('C:\\Program Files\\Micro-Manager-1.4')
+            try:
+                import MMCorePy
+            finally:
+                sys.path.pop()
+
+        self.camName = str(name)  # we will use this name as the handle to the MM camera
+        self.mmc = MMCorePy.CMMCore()
+
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
         self._config = config
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
@@ -43,9 +46,6 @@ class MicroManagerCamera(Camera):
         self.lastFrameTime = None
     
     def setupCamera(self):
-        self.camName = str(self.name())
-        self.mmc = MMCorePy.CMMCore()
-
         # sanity check for MM adapter and device name
         adapterName = self._config['mmAdapterName']
         allAdapters = self.mmc.getDeviceAdapterNames()
