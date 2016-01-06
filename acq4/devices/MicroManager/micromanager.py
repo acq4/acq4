@@ -73,9 +73,18 @@ class MicroManager(Camera):
             self.acqBuffer = None
 
     def _acquireFrames(self, n=1):
-        assert n == 1, "MMC only supports single-frame or continuous acquisition (requested %d frames)" % n
-        self.mmc.snapImage()
-        return self.mmc.getImage().T[np.newaxis, ...]
+        self.mmc.setCameraDevice(self.camName)
+        self.mmc.startSequenceAcquisition(n, 0, True)
+        frames = []
+        for i in range(n):
+            start = time.time()
+            while self.mmc.getRemainingImageCount() == 0:
+                time.sleep(0.005)
+                if time.time() - start > 10.0:
+                    raise Exception("Timed out waiting for camera frame.")
+            frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+        self.mmc.stopSequenceAcquisition()
+        return np.concatenate(frames, axis=0)
 
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
