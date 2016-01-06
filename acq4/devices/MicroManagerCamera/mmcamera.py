@@ -25,7 +25,7 @@ except ImportError:
         HAVE_MM = False
 
 
-class MicroManager(Camera):
+class MicroManagerCamera(Camera):
     """Camera device that uses MicroManager to provide imaging.
 
     Configuration keys:
