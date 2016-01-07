@@ -718,15 +718,15 @@ class STDPAnalyzer(AnalysisModule):
 
 
 
-            # Measure PSP Amplitude
-            if self.analysisResults['RMP'][i] != 0:
-                baseline = self.analysisResults['RMP'][i]
-            else:
-                baseline = data['primary'][:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
-            peakPosition = np.argwhere(data['primary'] == data['primary'].max())[0]
-            avgPeak = data['primary'][peakPosition-int(5/2):peakPosition+int(5/2)].mean() - baseline
+            # # Measure PSP Amplitude
+            # if self.analysisResults['RMP'][i] != 0:
+            #     baseline = self.analysisResults['RMP'][i]
+            # else:
+            #     baseline = data['primary'][:5].mean() ## if we don't have a baseline measurement, just use the first 5 points
+            # peakPosition = np.argwhere(data['primary'] == data['primary'].max())[0]
+            # avgPeak = data['primary'][peakPosition-int(5/2):peakPosition+int(5/2)].mean() - baseline
 
-            self.analysisResults[i]['pspAmplitude'] = avgPeak
+            # self.analysisResults[i]['pspAmplitude'] = avgPeak
 
     def measureHealth(self, traces):
         rgn = self.healthRgn.getRegion()
