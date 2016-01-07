@@ -11,6 +11,10 @@ import STDPFileLoader
 
 class STDPAnalyzer(AnalysisModule):
 
+    """This module analyzes features (such as stimulated PSPs, action potentials
+    or responses to pulses) of repeated traces over time. It was originally 
+    designed to analyze Spike-Timing Dependent Plasticity data."""
+
     dbIdentity = "STDPAnalyzer"
 
     def __init__(self, host):
