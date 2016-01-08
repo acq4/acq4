@@ -382,7 +382,8 @@ class RulerROI(pg.LineSegmentROI):
 
     def boundingRect(self):
         r = pg.LineSegmentROI.boundingRect(self)
-        return r
+        pxw = 50 * self.pixelLength(pg.Point([1, 0]))
+        return r.adjusted(-50, -50, 50, 50)
 
 
 class ROIPlotter(QtGui.QWidget):
@@ -402,12 +403,18 @@ class ROIPlotter(QtGui.QWidget):
         self.roiLayout.setSpacing(0)
         self.roiLayout.setContentsMargins(0,0,0,0)
         self.setLayout(self.roiLayout)
+
+        # rect
         rectPath = QtGui.QPainterPath()
         rectPath.addRect(0, 0, 1, 1)
         self.rectBtn = pg.PathButton(path=rectPath)
+
+        # ellipse
         ellPath = QtGui.QPainterPath()
         ellPath.addEllipse(0, 0, 1, 1)
         self.ellipseBtn = pg.PathButton(path=ellPath)
+
+        # polygon
         polyPath = QtGui.QPainterPath()
         polyPath.moveTo(0,0)
         polyPath.lineTo(2,3)
@@ -416,16 +423,26 @@ class ROIPlotter(QtGui.QWidget):
         polyPath.lineTo(2, -2)
         polyPath.lineTo(0,0)
         self.polygonBtn = pg.PathButton(path=polyPath)
+
+        # ruler
         polyPath = QtGui.QPainterPath()
-        polyPath.moveTo(0,0)
-        polyPath.lineTo(2,3)
-        polyPath.lineTo(3,1)
-        polyPath.lineTo(5,0)
-        self.polylineBtn = pg.PathButton(path=polyPath)
+        polyPath.moveTo(0, 0)
+        polyPath.lineTo(3, -2)
+        polyPath.moveTo(0, 0)
+        polyPath.lineTo(3, 0)
+        polyPath.moveTo(1, 0)
+        polyPath.arcTo(-1, -1, 2, 2, 0, 33.69)
+        for i in range(5):
+            x = i * 3./4.
+            y = x * -2./3.
+            polyPath.moveTo(x, y)
+            polyPath.lineTo(x-0.2, y-0.3)
+        self.rulerBtn = pg.PathButton(path=polyPath)
+
         self.roiLayout.addWidget(self.rectBtn, 0, 0)
         self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
         self.roiLayout.addWidget(self.polygonBtn, 1, 0)
-        self.roiLayout.addWidget(self.polylineBtn, 1, 1)
+        self.roiLayout.addWidget(self.rulerBtn, 1, 1)
         self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
         self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
         self.roiPlotCheck = QtGui.QCheckBox('Plot')
@@ -437,7 +454,7 @@ class ROIPlotter(QtGui.QWidget):
         self.rectBtn.clicked.connect(lambda: self.addROI('rect'))
         self.ellipseBtn.clicked.connect(lambda: self.addROI('ellipse'))
         self.polygonBtn.clicked.connect(lambda: self.addROI('polygon'))
-        self.polylineBtn.clicked.connect(lambda: self.addROI('ruler'))
+        self.rulerBtn.clicked.connect(lambda: self.addROI('ruler'))
 
     def addROI(self, roiType):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
