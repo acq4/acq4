@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'cameraModTemplate.ui'
 #
-# Created: Mon Dec 14 13:00:22 2015
+# Created: Tue Jan 12 10:44:49 2016
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -39,18 +39,21 @@ class Ui_Form(object):
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.autoCalibrateBtn = QtGui.QPushButton(self.groupBox)
         self.autoCalibrateBtn.setObjectName(_fromUtf8("autoCalibrateBtn"))
-        self.gridLayout.addWidget(self.autoCalibrateBtn, 2, 0, 1, 1)
+        self.gridLayout.addWidget(self.autoCalibrateBtn, 3, 0, 1, 1)
         self.getRefBtn = QtGui.QPushButton(self.groupBox)
         self.getRefBtn.setObjectName(_fromUtf8("getRefBtn"))
-        self.gridLayout.addWidget(self.getRefBtn, 2, 1, 1, 1)
-        self.setOrientationBtn = QtGui.QPushButton(self.groupBox)
-        self.setOrientationBtn.setCheckable(True)
-        self.setOrientationBtn.setObjectName(_fromUtf8("setOrientationBtn"))
-        self.gridLayout.addWidget(self.setOrientationBtn, 1, 0, 1, 2)
+        self.gridLayout.addWidget(self.getRefBtn, 3, 1, 1, 1)
         self.setCenterBtn = QtGui.QPushButton(self.groupBox)
         self.setCenterBtn.setCheckable(True)
         self.setCenterBtn.setObjectName(_fromUtf8("setCenterBtn"))
-        self.gridLayout.addWidget(self.setCenterBtn, 0, 0, 1, 2)
+        self.gridLayout.addWidget(self.setCenterBtn, 2, 0, 1, 1)
+        self.setOrientationBtn = QtGui.QPushButton(self.groupBox)
+        self.setOrientationBtn.setCheckable(True)
+        self.setOrientationBtn.setObjectName(_fromUtf8("setOrientationBtn"))
+        self.gridLayout.addWidget(self.setOrientationBtn, 2, 1, 1, 1)
+        self.recalibrateNearTargetBtn = QtGui.QPushButton(self.groupBox)
+        self.recalibrateNearTargetBtn.setObjectName(_fromUtf8("recalibrateNearTargetBtn"))
+        self.gridLayout.addWidget(self.recalibrateNearTargetBtn, 4, 0, 1, 2)
         self.gridLayout_3.addWidget(self.groupBox, 1, 0, 1, 1)
         self.groupBox_2 = QtGui.QGroupBox(Form)
         self.groupBox_2.setObjectName(_fromUtf8("groupBox_2"))
@@ -103,8 +106,9 @@ class Ui_Form(object):
         self.groupBox.setTitle(_translate("Form", "Calibration", None))
         self.autoCalibrateBtn.setText(_translate("Form", "Auto calibrate", None))
         self.getRefBtn.setText(_translate("Form", "Get ref. frames", None))
-        self.setOrientationBtn.setText(_translate("Form", "Set orientation", None))
         self.setCenterBtn.setText(_translate("Form", "Set center", None))
+        self.setOrientationBtn.setText(_translate("Form", "Set orientation", None))
+        self.recalibrateNearTargetBtn.setText(_translate("Form", "Recalibrate near target", None))
         self.groupBox_2.setTitle(_translate("Form", "Set points", None))
         self.homeBtn.setText(_translate("Form", "Home", None))
         self.searchBtn.setText(_translate("Form", "Search", None))
