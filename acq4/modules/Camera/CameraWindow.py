@@ -359,6 +359,32 @@ class PlotROI(pg.ROI):
         pg.ROI.__init__(self, pos, size=size, removable=True)
         self.addScaleHandle([1, 1], [0, 0])
 
+class RulerROI(pg.LineSegmentROI):
+    def paint(self, p, *args):
+        pg.LineSegmentROI.paint(self, p, *args)
+        h1 = self.handles[0]['item'].pos()
+        h2 = self.handles[1]['item'].pos()
+        p1 = p.transform().map(h1)
+        p2 = p.transform().map(h2)
+
+        vec = pg.Point(h2) - pg.Point(h1)
+        length = vec.length()
+        angle = vec.angle(pg.Point(1, 0))
+
+        pvec = p2 - p1
+        pvecT = pg.Point(pvec.y(), -pvec.x())
+        pos = 0.5 * (p1 + p2) + pvecT * 40 / pvecT.length()
+
+        p.resetTransform()
+
+        txt = pg.siFormat(length, suffix='m') + '\n%0.1f deg' % angle
+        p.drawText(QtCore.QRectF(pos.x()-50, pos.y()-50, 100, 100), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, txt)
+
+    def boundingRect(self):
+        r = pg.LineSegmentROI.boundingRect(self)
+        pxw = 50 * self.pixelLength(pg.Point([1, 0]))
+        return r.adjusted(-50, -50, 50, 50)
+
 
 class ROIPlotter(QtGui.QWidget):
     # ROI plot ctrls
@@ -377,12 +403,18 @@ class ROIPlotter(QtGui.QWidget):
         self.roiLayout.setSpacing(0)
         self.roiLayout.setContentsMargins(0,0,0,0)
         self.setLayout(self.roiLayout)
+
+        # rect
         rectPath = QtGui.QPainterPath()
         rectPath.addRect(0, 0, 1, 1)
         self.rectBtn = pg.PathButton(path=rectPath)
+
+        # ellipse
         ellPath = QtGui.QPainterPath()
         ellPath.addEllipse(0, 0, 1, 1)
         self.ellipseBtn = pg.PathButton(path=ellPath)
+
+        # polygon
         polyPath = QtGui.QPainterPath()
         polyPath.moveTo(0,0)
         polyPath.lineTo(2,3)
@@ -391,16 +423,26 @@ class ROIPlotter(QtGui.QWidget):
         polyPath.lineTo(2, -2)
         polyPath.lineTo(0,0)
         self.polygonBtn = pg.PathButton(path=polyPath)
+
+        # ruler
         polyPath = QtGui.QPainterPath()
-        polyPath.moveTo(0,0)
-        polyPath.lineTo(2,3)
-        polyPath.lineTo(3,1)
-        polyPath.lineTo(5,0)
-        self.polylineBtn = pg.PathButton(path=polyPath)
+        polyPath.moveTo(0, 0)
+        polyPath.lineTo(3, -2)
+        polyPath.moveTo(0, 0)
+        polyPath.lineTo(3, 0)
+        polyPath.moveTo(1, 0)
+        polyPath.arcTo(-1, -1, 2, 2, 0, 33.69)
+        for i in range(5):
+            x = i * 3./4.
+            y = x * -2./3.
+            polyPath.moveTo(x, y)
+            polyPath.lineTo(x-0.2, y-0.3)
+        self.rulerBtn = pg.PathButton(path=polyPath)
+
         self.roiLayout.addWidget(self.rectBtn, 0, 0)
         self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
         self.roiLayout.addWidget(self.polygonBtn, 1, 0)
-        self.roiLayout.addWidget(self.polylineBtn, 1, 1)
+        self.roiLayout.addWidget(self.rulerBtn, 1, 1)
         self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
         self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
         self.roiPlotCheck = QtGui.QCheckBox('Plot')
@@ -409,14 +451,29 @@ class ROIPlotter(QtGui.QWidget):
         self.roiPlot = pg.PlotWidget()
         self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
 
-        self.rectBtn.clicked.connect(self.addROI)
+        self.rectBtn.clicked.connect(lambda: self.addROI('rect'))
+        self.ellipseBtn.clicked.connect(lambda: self.addROI('ellipse'))
+        self.polygonBtn.clicked.connect(lambda: self.addROI('polygon'))
+        self.rulerBtn.clicked.connect(lambda: self.addROI('ruler'))
 
-    def addROI(self):
+    def addROI(self, roiType):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
         center = self.view.viewRect().center()
         #print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
         size = [x*50 for x in self.view.viewPixelSize()]
-        roi = PlotROI(center, size)
+        if roiType == 'rect':
+            roi = PlotROI(center, size)
+        elif roiType == 'ellipse':
+            roi = pg.EllipseROI(center, size, removable=True)
+        elif roiType == 'polygon':
+            pts = [center, center+pg.Point(0, size[1]), center+pg.Point(size[0], 0)]
+            roi = pg.PolyLineROI(pts, closed=True, removable=True)
+        elif roiType == 'ruler':
+            pts = [center, center+pg.Point(size[0], size[1])]
+            roi = RulerROI(pts, removable=True)
+        else:
+            raise ValueError("Invalid ROI type %s" % roiType)
+
         roi.setZValue(40000)
         roi.setPen(pen)
         self.view.addItem(roi)
@@ -471,6 +528,8 @@ class ROIPlotter(QtGui.QWidget):
             self.lastPlotTime = now
             
         for r in self.ROIs:
+            if isinstance(r['roi'], RulerROI):
+                continue
             d = r['roi'].getArrayRegion(frame.data(), imageItem, axes=(0,1))
             prof.mark('get array rgn')
             if d is None:
