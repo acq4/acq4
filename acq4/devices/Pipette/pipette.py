@@ -40,12 +40,19 @@ class Pipette(Device, OptomechDevice):
 
     Configuration options:
 
-    * searchHeight: the distance to focus above the sample surface when searching for pipette tips
+    * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
+      should be about 1-2mm, emough to avoid collisions between the pipette tip and the sample during search.
+      Default is 2 mm.
+    * searchTipHeight: the distance above the sample surface to bring the (putative) pipette tip position
+      when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
+      than *searchHeight* to avoid collisions between the tip and the objective during search.
+      Default is 1.5 mm.
     * approachHeight: the distance to bring the pipette tip above the sample surface when beginning 
-      a diagonal approach
+      a diagonal approach. Default is 100 um.
     * idleHeight: the distance to bring the pipette tip above the sample surface when in idle position
-    * idleDistance: the distance from the global origin from which the pipette top should be placed
-      in idle mode
+      Default is 1 mm.
+    * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
+      in idle mode. Default is 7 mm.
     """
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -54,6 +61,7 @@ class Pipette(Device, OptomechDevice):
         self._stageOrientation = {'angle': 0, 'inverty': False}
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
+            'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
@@ -169,8 +177,7 @@ class Pipette(Device, OptomechDevice):
             scope.setFocusDepth(searchDepth).wait(updates=True)
 
         # Here's where we want the pipette tip in global coordinates:
-        #   500 um below center of scope focus
-        globalTarget = scope.mapToGlobal([0, 0, -500e-6])
+        globalTarget = scope.mapToGlobal([0, 0, self._opts['searchTipHeight'] - self._opts['searchHeight']])
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
             raise Exception('"Search" position should only be used when electrode is far from objective.')
@@ -328,21 +335,11 @@ class Pipette(Device, OptomechDevice):
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
-    def recalibrateNearTarget(self, target, speed):
-        """Automatically recalibrate the pipette to maximize its accuracy when approaching its target.
+    def goAboveTarget(self, target, speed):
+        """Move the pipette tip to be centered over the target in x/y, and 100 um above
+        the sample surface in z. 
 
-        This method is provided for manipulators that lack high accuracy over long distance moves. It
-        performs the following operations in order:
-
-        1. Move the pipette tip to a location that is just above the sample surface and centered over 
-           its target. The pipette must already be calibrated for this to work, and it is assumed that
-           the manipulator is at least accurate enough that the pipette tip will be close enough to
-           its waypoint to be automatically recalibrated.
-        2. Move the stage and focus to the same point.
-        3. Auto-recalibrate the pipette. This requires a stack of template images to have been
-           previously acquired.
-        4. Move the pipette to the waypoint again, correcting for any previous error.
-        5. Auto-recalibrate once more.
+        This position is used to recalibrate the pipette immediately before going to approach.
         """
         # will recalibrate 50 um above surface
         scope = self.scopeDevice()
@@ -360,11 +357,8 @@ class Pipette(Device, OptomechDevice):
         pfut = self._moveToGlobal(waypoint1, speed)
         sfut = scope.setGlobalPosition(waypoint2)
         pfut.wait(updates=True)
-        self._moveToGlobal(waypoint2, speed)
+        self._moveToGlobal(waypoint2, 'slow').wait(updates=True)
         sfut.wait(updates=True)
-        self.tracker.autoCalibrate()
-        self._moveToGlobal(waypoint2, speed).wait(updates=True)
-        self.tracker.autoCalibrate()
 
 
 class PipetteCamModInterface(CameraModuleInterface):
@@ -430,7 +424,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.approachBtn.clicked.connect(self.approachClicked)
         self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
         self.ui.getRefBtn.clicked.connect(self.getRefFramesClicked)
-        self.ui.recalibrateNearTargetBtn.clicked.connect(self.recalibrateNearTarget)
+        self.ui.aboveTargetBtn.clicked.connect(self.aboveTargetClicked)
         self.target.sigDragged.connect(self.targetDragged)
 
         self.transformChanged()
@@ -564,10 +558,10 @@ class PipetteCamModInterface(CameraModuleInterface):
     def getRefFramesClicked(self):
         self.getDevice().tracker.takeReferenceFrames()
 
-    def recalibrateNearTarget(self):
+    def aboveTargetClicked(self):
         if self._targetPos is None:
             raise Exception("No target selected for %s" % self.getDevice().name())
-        self.getDevice().recalibrateNearTarget(self._targetPos, self.selectedSpeed())        
+        self.getDevice().goAboveTarget(self._targetPos, self.selectedSpeed())        
 
 
 class Target(pg.GraphicsObject):

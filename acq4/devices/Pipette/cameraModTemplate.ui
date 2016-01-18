@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>209</width>
-    <height>211</height>
+    <height>188</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,6 +32,16 @@
       <property name="spacing">
        <number>3</number>
       </property>
+      <item row="2" column="0">
+       <widget class="QPushButton" name="setCenterBtn">
+        <property name="text">
+         <string>Set center</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
       <item row="3" column="0">
        <widget class="QPushButton" name="autoCalibrateBtn">
         <property name="text">
@@ -46,16 +56,6 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
-       <widget class="QPushButton" name="setCenterBtn">
-        <property name="text">
-         <string>Set center</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
       <item row="2" column="1">
        <widget class="QPushButton" name="setOrientationBtn">
         <property name="text">
@@ -63,13 +63,6 @@
         </property>
         <property name="checkable">
          <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0" colspan="2">
-       <widget class="QPushButton" name="recalibrateNearTargetBtn">
-        <property name="text">
-         <string>Recalibrate near target</string>
         </property>
        </widget>
       </item>
@@ -92,6 +85,37 @@
        <widget class="QPushButton" name="homeBtn">
         <property name="text">
          <string>Home</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="3">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QRadioButton" name="slowRadio">
+          <property name="text">
+           <string>slow</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QRadioButton" name="fastRadio">
+          <property name="text">
+           <string>fast</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="6" column="0">
+       <widget class="QPushButton" name="setTargetBtn">
+        <property name="text">
+         <string>Set Target</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
@@ -121,28 +145,7 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="0" colspan="3">
-       <layout class="QHBoxLayout" name="horizontalLayout">
-        <item>
-         <widget class="QRadioButton" name="slowRadio">
-          <property name="text">
-           <string>slow</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QRadioButton" name="fastRadio">
-          <property name="text">
-           <string>fast</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item row="6" column="2">
+      <item row="7" column="2">
        <widget class="QPushButton" name="targetBtn">
         <property name="enabled">
          <bool>false</bool>
@@ -158,7 +161,14 @@
         </property>
        </widget>
       </item>
-      <item row="6" column="1">
+      <item row="6" column="1" colspan="2">
+       <widget class="QPushButton" name="aboveTargetBtn">
+        <property name="text">
+         <string>Above Target</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
        <widget class="QPushButton" name="approachBtn">
         <property name="enabled">
          <bool>false</bool>
@@ -171,16 +181,6 @@
         </property>
         <property name="text">
          <string>Approach</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="0">
-       <widget class="QPushButton" name="setTargetBtn">
-        <property name="text">
-         <string>Set Target</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
         </property>
        </widget>
       </item>
