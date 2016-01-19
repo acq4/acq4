@@ -868,13 +868,13 @@ class AcquireThread(Thread):
                 self.dev.stopCamera()
             #prof.mark('      camera stop:')
         except:
+            printExc("Error starting camera acquisition:")
             try:
                 with self.camLock:
                     #self.cam.stop()
                     self.dev.stopCamera()
             except:
                 pass
-            printExc("Error starting camera acquisition:")
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
         finally:
             pass
