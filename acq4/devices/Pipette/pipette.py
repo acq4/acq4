@@ -328,6 +328,44 @@ class Pipette(Device, OptomechDevice):
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
+    def recalibrateNearTarget(self, target, speed):
+        """Automatically recalibrate the pipette to maximize its accuracy when approaching its target.
+
+        This method is provided for manipulators that lack high accuracy over long distance moves. It
+        performs the following operations in order:
+
+        1. Move the pipette tip to a location that is just above the sample surface and centered over 
+           its target. The pipette must already be calibrated for this to work, and it is assumed that
+           the manipulator is at least accurate enough that the pipette tip will be close enough to
+           its waypoint to be automatically recalibrated.
+        2. Move the stage and focus to the same point.
+        3. Auto-recalibrate the pipette. This requires a stack of template images to have been
+           previously acquired.
+        4. Move the pipette to the waypoint again, correcting for any previous error.
+        5. Auto-recalibrate once more.
+        """
+        # will recalibrate 50 um above surface
+        scope = self.scopeDevice()
+        surfaceDepth = scope.getSurfaceDepth()
+        waypoint2 = np.array(target)
+        waypoint2[2] = surfaceDepth + 50e-6
+
+        # Need to arrive at this point via approach angle to correct for hysteresis
+        lwp = self.mapFromGlobal(waypoint2)
+        dz = 100e-6
+        lwp[2] += dz
+        lwp[0] -= dz / np.tan(self.pitch)
+        waypoint1 = self.mapToGlobal(lwp)
+
+        pfut = self._moveToGlobal(waypoint1, speed)
+        sfut = scope.setGlobalPosition(waypoint2)
+        pfut.wait(updates=True)
+        self._moveToGlobal(waypoint2, speed)
+        sfut.wait(updates=True)
+        self.tracker.autoCalibrate()
+        self._moveToGlobal(waypoint2, speed).wait(updates=True)
+        self.tracker.autoCalibrate()
+
 
 class PipetteCamModInterface(CameraModuleInterface):
     """Implements user interface for Pipette.
@@ -392,6 +430,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.approachBtn.clicked.connect(self.approachClicked)
         self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
         self.ui.getRefBtn.clicked.connect(self.getRefFramesClicked)
+        self.ui.recalibrateNearTargetBtn.clicked.connect(self.recalibrateNearTarget)
         self.target.sigDragged.connect(self.targetDragged)
 
         self.transformChanged()
@@ -426,7 +465,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         if z is None:
             z = self._targetPos[2]
         self.depthTarget.setPos(0, z)
-        self._targetPos = [pos.x(), pos.y(), z]
+        self._targetPos = (pos.x(), pos.y(), z)
 
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()
@@ -524,6 +563,11 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def getRefFramesClicked(self):
         self.getDevice().tracker.takeReferenceFrames()
+
+    def recalibrateNearTarget(self):
+        if self._targetPos is None:
+            raise Exception("No target selected for %s" % self.getDevice().name())
+        self.getDevice().recalibrateNearTarget(self._targetPos, self.selectedSpeed())        
 
 
 class Target(pg.GraphicsObject):

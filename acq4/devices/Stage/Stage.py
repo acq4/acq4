@@ -21,6 +21,7 @@ class Stage(Device, OptomechDevice):
 
     sigPositionChanged = QtCore.Signal(object)
     sigLimitsChanged = QtCore.Signal(object)
+    sigSwitchChanged = QtCore.Signal(object, object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -37,6 +38,13 @@ class Stage(Device, OptomechDevice):
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
         self.pitch = config.get('pitch', 27)
+
+        # used to emit signal when position passes a threshold
+        self.switches = {}
+        self.switchThresholds = {}
+        for name, spec in config.get('switches', {}).items():
+            self.switches[name] = None
+            self.switchThresholds[name] = spec
         
         self._limits = [(None, None), (None, None), (None, None)]
 
@@ -92,6 +100,52 @@ class Stage(Device, OptomechDevice):
             self._invStageTransform.translate(*[-x for x in self.pos])
             self._updateTransform()
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
+
+        self.checkSwitchChange(self.pos)
+
+    def checkSwitchChange(self, pos):
+        # position has changed. If user requested switch notifications, then we
+        # need to see if any thresholds were passed here and emit a signal.
+        with self.lock:
+            pos = self.pos[:]
+
+        changes = {}
+        for name, value in self.switches.items():
+            thresh = self.switchThresholds[name]
+            on = []
+            for ax, levels in enumerate(thresh):
+                # check each axis
+                if levels is None:
+                    continue
+                start, end = levels
+                if end > start:
+                    if pos[ax] > end:
+                        on.append(True)
+                    elif pos[ax] < start:
+                        on.append(False)
+                else:
+                    if pos[ax] < end:
+                        on.append(True)
+                    elif pos[ax] > start:
+                        on.append(False)
+
+            if len(on) == 0:
+                # no axes are in unambiguous on/off position
+                continue
+
+            if all(on) and value != 1:
+                self.switches[name] = 1
+                changes[name] = 1
+            elif not any(on) and value != 0:
+                self.switches[name] = 0
+                changes[name] = 0
+
+        if len(changes) > 0:
+            self.sigSwitchChanged.emit(self, changes)
+
+    def getSwitch(self, name):
+        with self.lock:
+            return self.switches[name]
 
     def baseTransform(self):
         """Return the base transform for this Stage.
