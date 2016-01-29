@@ -38,6 +38,8 @@ class Stage(Device, OptomechDevice):
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
         self.pitch = config.get('pitch', 27)
+        self.setFastSpeed(config.get('fastSpeed', 1e-3))
+        self.setSlowSpeed(config.get('slowSpeed', 10e-6))
 
         # used to emit signal when position passes a threshold
         self.switches = {}
@@ -70,6 +72,25 @@ class Stage(Device, OptomechDevice):
         """
         # todo: add other capability flags like resolution, speed, closed-loop, etc?
         raise NotImplementedError
+
+    def setFastSpeed(self, v):
+        """Set the maximum speed of the stage (m/sec) when under programmed control.
+        """
+        self.fastSpeed = v
+
+    def setSlowSpeed(self, v):
+        """Set the slow speed of the stage (m/sec) when under programmed control.
+
+        This speed is used when it is necessary to minimize vibration or maximize movement accuracy.
+        """
+        self.slowSpeed = v
+
+    def _interpretSpeed(self, speed):
+        if speed == 'fast':
+            speed = self.fastSpeed
+        elif speed == 'slow':
+            speed = self.slowSpeed
+        return speed
 
     def stageTransform(self):
         """Return the transform that maps from the local coordinate system to

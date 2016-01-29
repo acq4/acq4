@@ -48,8 +48,9 @@ class Scientifica(Stage):
                     self.dev.setAxisScale(i, x)
             else:
                 self.dev.setParam(param, val)
-        self.setUserSpeed(params.pop('userSpeed', self.dev.getSpeed() * self.scale[0]))
 
+        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * self.scale[0]))
+        
         # thread for polling position changes
         self.monitor = MonitorThread(self)
         self.monitor.start()
@@ -116,6 +117,8 @@ class Scientifica(Stage):
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             pos = self._toAbsolutePosition(abs, rel)
+            speed = self._interpretSpeed(speed)
+
             self._lastMove = ScientificaMoveFuture(self, pos, speed, self.userSpeed)
             return self._lastMove
 
@@ -180,10 +183,6 @@ class ScientificaMoveFuture(MoveFuture):
         self._errorMSg = None
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
-        if speed == 'fast':
-            speed = 1e-3
-        elif speed == 'slow':
-            speed = 1e-6
         with self.dev.dev.lock:
             self.dev.dev.moveTo(pos, speed / self.dev.scale[0])
             # reset to user speed immediately after starting move
