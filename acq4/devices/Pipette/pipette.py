@@ -70,12 +70,15 @@ class Pipette(Device, OptomechDevice):
         assert isinstance(parent, Stage)
         self.pitch = parent.pitch * np.pi / 180.
 
+        self.target = None
+
         cal = self.readConfigFile('calibration')
         if cal != {}:
             self.setStageOrientation(cal['angle'], cal['inverty'])
             self.setDeviceTransform(cal['transform'])
 
         self.tracker = PipetteTracker(self)
+        deviceManager.declareInterface(name, ['pipette'], self)
 
     def scopeDevice(self):
         return self._scopeDev
@@ -195,10 +198,11 @@ class Pipette(Device, OptomechDevice):
         ]
         self._movePath(path)
 
-    def goApproach(self, target, speed):
+    def goApproach(self, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
+        target = self.targetPosition()
         self._movePath(self._approachPath(target, speed))
 
     def goIdle(self, speed='fast'):
@@ -285,7 +289,8 @@ class Pipette(Device, OptomechDevice):
 
         return path
 
-    def goTarget(self, target, speed):
+    def goTarget(self, speed):
+        target = self.targetPosition()
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
             return
@@ -335,12 +340,14 @@ class Pipette(Device, OptomechDevice):
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
-    def goAboveTarget(self, target, speed):
+    def goAboveTarget(self, speed):
         """Move the pipette tip to be centered over the target in x/y, and 100 um above
         the sample surface in z. 
 
         This position is used to recalibrate the pipette immediately before going to approach.
         """
+        target = self.targetPosition()
+
         # will recalibrate 50 um above surface
         scope = self.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
@@ -359,6 +366,30 @@ class Pipette(Device, OptomechDevice):
         pfut.wait(updates=True)
         self._moveToGlobal(waypoint2, 'slow').wait(updates=True)
         sfut.wait(updates=True)
+
+    def advanceTowardTarget(self, distance, speed='slow'):
+        target = self.targetPosition()
+        pos = self.globalPosition()
+        dif = target - pos
+        unit = dif / (dif**2).sum()**0.5
+        waypoint = pos + distance * unit
+        return self._moveToGlobal(waypoint, speed, linear=True)
+
+    def retract(self, distance, speed='slow'):
+        """Retract the pipette a specified distance along its axis.
+        """
+        pos = self.globalPosition()
+        dz = distance * np.sin(self.pitch)
+        dx = -distance * np.cos(self.pitch)
+        return self._moveToLocal([dx, 0, dz], speed, linear=True)
+
+    def setTarget(self, target):
+        self.target = np.array(target)
+
+    def targetPosition(self):
+        if self.target is None:
+            raise Exception("No target defined for %s" % self.name())
+        return self.target
 
 
 class PipetteCamModInterface(CameraModuleInterface):
@@ -459,7 +490,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         if z is None:
             z = self._targetPos[2]
         self.depthTarget.setPos(0, z)
-        self._targetPos = (pos.x(), pos.y(), z)
+        self.dev().setTarget((pos.x(), pos.y(), z))
 
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()
@@ -547,10 +578,10 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.ui.setTargetBtn.setChecked(False)
 
     def targetClicked(self):
-        self.getDevice().goTarget(self._targetPos, self.selectedSpeed())
+        self.getDevice().goTarget(self.selectedSpeed())
 
     def approachClicked(self):
-        self.getDevice().goApproach(self._targetPos, self.selectedSpeed())
+        self.getDevice().goApproach(self.selectedSpeed())
 
     def autoCalibrateClicked(self):
         self.getDevice().tracker.autoCalibrate()
@@ -559,9 +590,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.getDevice().tracker.takeReferenceFrames()
 
     def aboveTargetClicked(self):
-        if self._targetPos is None:
-            raise Exception("No target selected for %s" % self.getDevice().name())
-        self.getDevice().goAboveTarget(self._targetPos, self.selectedSpeed())        
+        self.getDevice().goAboveTarget(self.selectedSpeed())        
 
 
 class Target(pg.GraphicsObject):
