@@ -577,13 +577,22 @@ class DriftMonitor(pg.QtGui.QWidget):
         self.layout = pg.QtGui.QGridLayout()
         self.setLayout(self.layout)
 
-        self.plot = pg.PlotWidget(labels={'left': ('Position error', 'm'), 'bottom': ('Time', 's')})
-        self.plot.addLegend()
-        self.layout.addWidget(self.plot, 0, 0)
+        self.gv = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.gv, 0, 0)
 
-        self.lines = [self.plot.plot(pen=(i, len(trackers)), name=trackers[i].dev.name()) for i in range(len(trackers))]
-        self.errors = [[] for i in range(len(trackers))]
-        self.cumulative = np.zeros((len(trackers), 3))
+        self.plot = self.gv.addPlot(labels={'left': ('Drift distance', 'm'), 'bottom': ('Time', 's')})
+        self.plot.addLegend()
+        self.xplot = self.gv.addPlot(labels={'left': ('X position', 'm')}, row=1, col=0)
+        self.yplot = self.gv.addPlot(labels={'left': ('Y position', 'm')}, row=2, col=0)
+        self.zplot = self.gv.addPlot(labels={'left': ('Z position', 'm'), 'bottom': ('Time', 's')}, row=3, col=0)
+        for plt in [self.xplot, self.yplot, self.zplot]:
+            plt.setYRange(-10e-6, 10e-6)
+
+        self.pens = [(i, len(trackers)) for i in range(len(trackers))]
+        self.lines = [self.plot.plot(pen=self.pens[i], name=trackers[i].dev.name()) for i in range(len(trackers))]
+        # self.errors = [[] for i in range(len(trackers))]
+        # self.cumulative = np.zeros((len(trackers), 3))
+        self.positions = []
         self.times = []
 
         self.timer.start(2000)
@@ -604,16 +613,28 @@ class DriftMonitor(pg.QtGui.QWidget):
             x = np.array(self.times)
             x -= x[0]
 
+            pos = []
             for i, t in enumerate(self.trackers):
                 try:
                     err, corr = t.autoCalibrate(frame=frame, padding=50e-6)
-                    err = np.array(err)
-                    self.cumulative[i] += err
-                    err = (self.cumulative[i]**2).sum()**0.5
+                    # err = np.array(err)
+                    # self.cumulative[i] += err
+                    # err = (self.cumulative[i]**2).sum()**0.5
+                    pos.append(t.dev.globalPosition())
                 except RuntimeError:
-                    err = np.nan
-                self.errors[i].append(err)
-                self.lines[i].setData(x, self.errors[i])
+                    pos.append([np.nan]*3)
+                # self.errors[i].append(err)
+            self.positions.append(pos)
+            pos = np.array(self.positions)
+            pos -= pos[0]
+            err = (pos**2).sum(axis=2)**0.5
+            for i, t in enumerate(self.trackers):
+                self.lines[i].setData(x, err[:, i])
+            for ax, plt in enumerate([self.xplot, self.yplot, self.zplot]):
+                plt.clear()
+                for i, t in enumerate(self.trackers):
+                    plt.plot(x, pos[:, i, ax], pen=self.pens[i])
+
         except Exception:
             self.timer.stop()
             raise
