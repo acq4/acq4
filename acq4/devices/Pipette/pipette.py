@@ -162,7 +162,7 @@ class Pipette(Device, OptomechDevice):
                 # (endPosGlobal, speed, False),
             ]
 
-        self._movePath(path)
+        return self._movePath(path)
 
     def goSearch(self, speed='fast'):
         """Focus the microscope 2mm above the surface, then move the electrode 
@@ -196,14 +196,14 @@ class Pipette(Device, OptomechDevice):
             (self.mapToGlobal(waypoint), speed, False),
             (globalTarget, speed, True),
         ]
-        self._movePath(path)
+        return self._movePath(path)
 
     def goApproach(self, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
         target = self.targetPosition()
-        self._movePath(self._approachPath(target, speed))
+        return self._movePath(self._approachPath(target, speed))
 
     def goIdle(self, speed='fast'):
         """Move the electrode tip to the outer edge of the recording chamber, 1mm above the sample surface.
@@ -234,6 +234,7 @@ class Pipette(Device, OptomechDevice):
     def _movePath(self, path):
         # move along a path defined in global coordinates. 
         # Format is [(pos, speed, linear), ...]
+        # returns the movefuture of the last move.
 
         # Simplify path if possible
         pos = self.globalPosition()
@@ -244,8 +245,12 @@ class Pipette(Device, OptomechDevice):
                 path2.append(step)
             pos = pos2
 
+        fut = None
         for pos, speed, linear in path2:
-            self._moveToGlobal(pos, speed, linear=linear).wait(updates=True)
+            if fut is not None:
+                fut.wait(updates=True)
+            fut =self._moveToGlobal(pos, speed, linear=linear)
+        return fut
     
     def _approachPath(self, target, speed):
         # Return steps (in global coords) needed to move to approach position
@@ -296,7 +301,7 @@ class Pipette(Device, OptomechDevice):
             return
         path = self._approachPath(target, speed)
         path.append([target, 100e-6, True])
-        self._movePath(path)
+        return self._movePath(path)
 
     def approachDepth(self):
         """Return the global depth where the electrode should move to when starting approach mode.
