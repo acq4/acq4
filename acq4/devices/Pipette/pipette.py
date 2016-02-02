@@ -393,7 +393,7 @@ class Pipette(Device, OptomechDevice):
 
     def targetPosition(self):
         if self.target is None:
-            raise Exception("No target defined for %s" % self.name())
+            raise RuntimeError("No target defined for %s" % self.name())
         return self.target
 
 
@@ -450,6 +450,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
         mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
@@ -500,6 +501,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()
         self.setTargetPos(self.target.pos(), z)
+        self.target.setRelativeDepth(0)
 
     def transformChanged(self):
         # manipulator's global transform has changed; update the center arrow and orientation axis
@@ -528,6 +530,14 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.calibrateAxis.setPos(pos[:2])
             self.calibrateAxis.setAngle(angle)
             ys = self.calibrateAxis.size()[1]
+
+    def focusChanged(self):
+        try:
+            tdepth = self.dev().targetPosition()[2]
+        except RuntimeError:
+            return
+        fdepth = self.dev().scopeDevice().getFocusDepth()
+        self.target.setRelativeDepth(fdepth - tdepth)
 
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
@@ -607,6 +617,7 @@ class Target(pg.GraphicsObject):
         self.moving = False
         self.label = None
         self.labelAngle = 0
+        self.color = (255, 255, 0)
 
     def setLabel(self, label):
         self.label = label
@@ -614,6 +625,12 @@ class Target(pg.GraphicsObject):
 
     def setLabelAngle(self, angle):
         self.labelAngle = angle
+        self.update()
+
+    def setRelativeDepth(self, depth):
+        # adjust the apparent depth of the target
+        dist = depth * 255 / 100e-6
+        self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
         self.update()
 
     def boundingRect(self):
@@ -635,7 +652,7 @@ class Target(pg.GraphicsObject):
         w = 5 * px
         h = 5 * py
         r = QtCore.QRectF(-w, -h, w*2, h*2)
-        p.setPen(pg.mkPen('y'))
+        p.setPen(pg.mkPen(self.color))
         p.setBrush(pg.mkBrush(0, 0, 255, 100))
         p.drawEllipse(r)
         p.drawLine(pg.Point(-w*2, 0), pg.Point(w*2, 0))
