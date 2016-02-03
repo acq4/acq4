@@ -332,12 +332,33 @@ def noise(mean, sigma, start=0.0, stop=None, **kwds):
     d[start:stop] = np.random.normal(size=stop-start, loc=mean, scale=sigma)
     return d
 
+def cos2gat(risfall=10.0, start=0.0, stop=500.0, **kwds):
+    rate = kwds['rate']
+    nPts = kwds['nPts']
+    warnings = kwds['warnings']
+    
+    #ms=1e-3
+    ## Check all arguments
+    if not isNum(risfall):
+        raise Exception("RisFall argument must be a number")
+    if not isNumOrNone(start):
+        raise Exception("Start argument must be a number")
+    if not isNumOrNone(stop):
+        raise Exception("Stop argument must be a number")
+
+    amplitude=np.pi/2
+    linramp=amplitude+sawWave(risfall,amplitude,0,start,(start+risfall), 0, **kwds)+pulse((start+risfall),(stop-risfall),amplitude, **kwds)-sawWave(risfall,amplitude,0,(stop-risfall),stop, **kwds)
+    cos2gat=(np.cos(linramp))**2
+    d=cos2gat
+
+    return d
+
 def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds):
     rate = kwds['rate']
     nPts = kwds['nPts']
     warnings = kwds['warnings']
     
-    ms=1e-3
+    #ms=1e-3
     ## Check all arguments
     if not isNum(freq) or freq <= 0:
         raise Exception("Frequency argument must be a number > 0") 
@@ -347,12 +368,12 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
         raise Exception("Start argument must be a number")
     if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
-    amplitude=np.pi/2
-    linramp=amplitude+sawWave(risfall*ms,amplitude,0,start*ms,(start+risfall)*ms, 0, **kwds)+pulse((start+risfall)*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds)
-    cos2gat=(np.cos(linramp))**2
-    d=cos2gat
+    # amplitude=np.pi/2
+    # linramp=amplitude+sawWave(risfall*ms,amplitude,0,start*ms,(start+risfall)*ms, 0, **kwds)+pulse((start+risfall)*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds)
+    # cos2gat=(np.cos(linramp))**2
+    # d=cos2gat
     per=float(1/freq)
-    d=cos2gat*sineWave(per,1,0,start*ms,stop*ms,0, **kwds)
+    d=cos2gat(risfall,start, stop, **kwds)*sineWave(per,1,0,start,stop,0, **kwds)
     return d
 #def sawWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds):    
 #np.cos(1.570796+sawWave(2.5e-3,1.570796,0,.250,.250+2.5e-3,0)+pulse(.250+2.5e-3,497.5e-3,1.570796)-sawWave(2.5e-3,1.570796,0,497.5e-3,500e-3))**2*sineWave(1/4000.0,1,0,.250,.500,0)
@@ -390,8 +411,71 @@ def soundstim(startfreq= 1000.0, npip= 11, tdur= 50, tipi= 400, octspace = 0.5, 
 
         for icount in np.arange(npip):
             #d = d+tonePip(freqs[icount],2.5,(icount)*250,250*icount+50,0, **kwds) #tropp 09/28/2015
+            print 'icount', icount
+            print 'repcount', repcount
             print 'start', (icount)*(tdur+tipi)+repcount*totalrep
             print 'stop',(tdur+tipi)*icount+tdur+repcount*totalrep
-            d = d+tonePip(freqs[icount],2.5,(icount)*(tdur+tipi)+repcount*totalrep,(tdur+tipi)*icount+tdur+repcount*totalrep,0, **kwds)
+            print 'freqs', freqs
+            d = d+tonePip(freqs[icount],2.5e-3,(icount)*(tdur+tipi)+repcount*totalrep,(tdur+tipi)*icount+tdur+repcount*totalrep,0, **kwds)
     return d
+
+def noisestim(risfall=10.0, npip=11, tdur= 50, tipi = 50, reps = 1, **kwds):
+    rate = kwds['rate']
+    nPts = kwds['nPts']
+    warnings = kwds['warnings']
+
+## Check all arguments
+    if not isNum(npip):
+        raise Exception("npip argument must be a number")
+    if not isNumOrNone(tdur):
+        raise Exception("tdur argument must be a number")
+    if not isNumOrNone(risfall):
+        raise Exception("risfall argument must be a number")
+    if not isNumOrNone(tipi):
+        raise Exception("octspace argument must be a number between 0 and 1")
+    
+    d=0
+    totalrep=npip*(tdur+tipi)
+    # for icount in np.arange(npip):
+    #     d = d+noise(0,1,(icount)*(tdur+tipi),(tdur+tipi)*icount+tdur,**kwds)
+    # return d
+    for repcount in np.arange(reps):
+        for icount in np.arange(npip):
+            start=(icount)*(tdur+tipi)+repcount*totalrep
+            stop=(tdur+tipi)*icount+tdur+repcount*totalrep
+            d = d+cos2gat(risfall,start,stop, **kwds)*noise(0,1,start,stop,**kwds)
+    return d
+#     amplitude = np.random_sample([nPts])
+#     d = tonePip(1000.0, 10.0, 0.0, 500.0, 0.0)
+#     dd = amplitude*d
+#     return dd
+
+def sineAM(fC=16000.0, fM=10.0, risfall=2e-3, tdur=200e-3, tipi=150e-3, nstim=20, **kwds):
+    rate = kwds['rate']
+    nPts = kwds['nPts']
+    warnings = kwds['warnings']
+
+## Check all arguments
+    if not isNum(nstim):
+        raise Exception("npip argument must be a number")
+    if not isNumOrNone(tdur):
+        raise Exception("tdur argument must be a number")
+    if not isNumOrNone(risfall):
+        raise Exception("risfall argument must be a number")
+    if not isNumOrNone(tipi):
+        raise Exception("octspace argument must be a number between 0 and 1")
+    
+    # def sineWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds): 
+    # def cos2gat(risfall=10.0, start=0.0, stop=500.0, **kwds):   
+    d=0
+    for icount in np.arange(nstim):
+        perM=float(1/fM)
+        perC=float(1/fC)
+        start=(icount)*(tdur+tipi)
+        stop=(tdur+tipi)*icount+tdur
+        sineC=sineWave(perC,1,0,start,stop,0, **kwds)
+        sineM=1+0.7*sineWave(perM,1,0,start,stop,0, **kwds)
+        d=d+cos2gat(risfall,start,stop, **kwds)*(sineC)*(sineM)
+    return d
+
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
