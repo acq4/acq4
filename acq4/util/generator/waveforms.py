@@ -8,7 +8,7 @@ This file defines several waveform-generating functions meant to be
 called from within a StimGenerator widget.
 """
 import numpy as np
-
+from scipy import signal
 
 def allFunctions():
     """Return all registered waveform generation functions.
@@ -329,7 +329,7 @@ def noise(mean, sigma, start=0.0, stop=None, **kwds):
         warnings.append("WARNING: Function is longer than generated waveform\n")
         stop = nPts-1
 
-    d[start:stop] = 0.1*np.random.normal(size=stop-start, loc=mean, scale=sigma)    
+    d[start:stop] = np.random.normal(size=stop-start, loc=mean, scale=sigma)    
     # d[start:stop] = np.random.normal(size=stop-start, loc=mean, scale=sigma)
     return d
 
@@ -479,9 +479,94 @@ def sineAM(fC=16000.0, fM=10.0, risfall=2e-3, tdur=200e-3, tipi=150e-3, nstim=20
         d=d+cos2gat(risfall,start,stop, **kwds)*(sineC)*(sineM)
     return d
 
-def narrowbandNoise(fC, bandwidth):
+# def soundstimAM(fM=10, startfreq= 1000.0, npip= 11, tdur= 50, tipi= 400, octspace = 0.5, reps=1, direction= 'up', **kwds):
+#     rate = kwds['rate']
+#     nPts = kwds['nPts']
+#     warnings = kwds['warnings']
 
+# ## Check all arguments
+#     if not isNum(startfreq) or startfreq <= 0:
+#         raise Exception("Frequency argument must be a number > 0") 
+#     if not isNum(npip):
+#         raise Exception("npip argument must be a number")
+#     if not isNumOrNone(tdur):
+#         raise Exception("tdur argument must be a number")
+#     if not isNumOrNone(tipi):
+#         raise Exception("tipi argument must be a number")
+#     if not isNumOrNone(tipi):
+#         raise Exception("octspace argument must be a number between 0 and 1")
+#     posDirection=['up', 'down']
+#     if direction not in posDirection:
+#         raise Exception("direction must be up or down")
+
+#     if direction == posDirection[0]:
+#         dirconst = octspace
+#     else:
+#         dirconst = -1 * octspace
+#     d=0
+#     totalrep=npip*(tdur+tipi)
+#     for repcount in np.arange(reps):
+#         freqs = startfreq * 2**(dirconst * np.arange(npip))
+        
+
+#         for icount in np.arange(npip):
+#             #d = d+tonePip(freqs[icount],2.5,(icount)*250,250*icount+50,0, **kwds) #tropp 09/28/2015
+#             print 'icount', icount
+#             print 'repcount', repcount
+#             print 'start', (icount)*(tdur+tipi)+repcount*totalrep
+#             print 'stop',(tdur+tipi)*icount+tdur+repcount*totalrep
+#             print 'freqs', freqs
+#             d = d+sineAM(freqs[icount],fM, 2.5e-3,tdur,tipi,1, **kwds)
+#             # def sineAM(fC=16000.0, fM=10.0, risfall=2e-3, tdur=200e-3, tipi=150e-3, nstim=20, **kwds
+#     return d
+
+def narrowbandNoise(fC, bandwidth, start=0.0, stop=None, **kwds):
+    rate = kwds['rate']
+    nPts = kwds['nPts']
+    warnings = kwds['warnings']
+    #print 'sample rate', rate
+    w = 0
+    nyq = float(rate/2)
+    low = (fC-(bandwidth/2.0))/nyq
+    high = (fC+(bandwidth/2.0))/nyq
+    BW = [low,high]
+    b, a = signal.butter(4,BW,'band', False, output='ba')
+    BBN = noise(0, 1, start, stop, **kwds)
+    #print 'filter creation complete'
+    if BBN.ndim == 1:
+        sm = np.mean(BBN)
+        w = signal.lfilter(b,a,BBN-sm)
+        #print 'filtering complete'
+        w = w + sm
+    b, a = signal.ellip(4,0.1, 120, BW, 'bandpass', False, output='ba')
+    sm = np.mean(w)
+    w = signal.lfilter(b,a,w-sm)
+    
+    w = w + sm
+    return w
+
+def NBNStim(fC=16000.0, bandwidth=4000.0, risfall=2.5-3, tdur=200e-3, tipi=150e-3, nstim=20, **kwds): 
+    rate = kwds['rate']
+    nPts = kwds['nPts']
+    warnings = kwds['warnings']
+
+## Check all arguments
+    if not isNum(nstim):
+        raise Exception("npip argument must be a number")
+    if not isNumOrNone(tdur):
+        raise Exception("tdur argument must be a number")
+    if not isNumOrNone(risfall):
+        raise Exception("risfall argument must be a number")
+    if not isNumOrNone(tipi):
+        raise Exception("octspace argument must be a number between 0 and 1")
+    
+    # def sineWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds): 
+    # def cos2gat(risfall=10.0, start=0.0, stop=500.0, **kwds):   
     d=0
-    return d
-
+    for icount in np.arange(nstim):
+        start=(icount)*(tdur+tipi)
+        stop=(tdur+tipi)*icount+tdur
+        NBN = narrowbandNoise(fC, bandwidth, start, stop, **kwds)
+        d=d+cos2gat(risfall,start,stop, **kwds)*NBN
+    return d   
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
