@@ -2326,7 +2326,10 @@ def find(data, val, op='==', arrayOp='all', axis=0, useWeave=True):
         #pass
 
 def measureResistance(data, mode):
-    """Return a tuple of the (inputResistance, seriesResistance) for the given data."""
+    """Return a tuple of the (inputResistance, seriesResistance) for the given data.
+    Arguments:
+        data      A metaarray with a Time axis and 'primary' and 'command' channels, with a square step in the command channel.
+        mode      Either 'IC' for current clamp or 'VC' for voltage clamp. If mode is 'IC' seriesResistance will be None."""
     cmd = data['command']
 
     pulseStart = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[0][0]]
