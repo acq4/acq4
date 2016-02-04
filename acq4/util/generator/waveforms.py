@@ -329,7 +329,8 @@ def noise(mean, sigma, start=0.0, stop=None, **kwds):
         warnings.append("WARNING: Function is longer than generated waveform\n")
         stop = nPts-1
 
-    d[start:stop] = np.random.normal(size=stop-start, loc=mean, scale=sigma)
+    d[start:stop] = 0.1*np.random.normal(size=stop-start, loc=mean, scale=sigma)    
+    # d[start:stop] = np.random.normal(size=stop-start, loc=mean, scale=sigma)
     return d
 
 def cos2gat(risfall=10.0, start=0.0, stop=500.0, **kwds):
@@ -476,6 +477,11 @@ def sineAM(fC=16000.0, fM=10.0, risfall=2e-3, tdur=200e-3, tipi=150e-3, nstim=20
         sineC=sineWave(perC,1,0,start,stop,0, **kwds)
         sineM=1+0.7*sineWave(perM,1,0,start,stop,0, **kwds)
         d=d+cos2gat(risfall,start,stop, **kwds)*(sineC)*(sineM)
+    return d
+
+def narrowbandNoise(fC, bandwidth):
+
+    d=0
     return d
 
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
