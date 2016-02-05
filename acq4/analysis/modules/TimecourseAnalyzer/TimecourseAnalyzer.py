@@ -23,13 +23,14 @@ class TimecourseAnalyzer(AnalysisModule):
             ('AnalysisRegionControl', {'type':'parameterTree', 'pos':('above', 'Database'),'size': (100, 400)}),
             ('File Loader', {'type':'fileInput', 'size': (100, 100), 'pos':('above', 'AnalysisRegionControl'),'host': self}),
             ('Experiment Plot', {'type':'plot', 'pos':('right', 'File Loader'), 'size':(400, 100)}),
-            ('Traces Plot', {'type': 'plot', 'pos':('bottom', 'Experiment Plot'), 'size':(400,100)}),
-            ('Analysis Plots', {'type':'graphicsLayout', 'pos':('bottom', 'Traces Plot'), 'size': (400,100)})
+            ('Traces Plot', {'type': 'plot', 'pos':('bottom', 'Experiment Plot'), 'size':(400,200)}),
+            ('Results', {'type':'table', 'pos':('bottom', 'Traces Plot'), 'size': (400,200)})
         ])
         self.initializeElements()
 
         self.exptPlot = self.getElement('Experiment Plot', create=True)
         self.tracesPlot = self.getElement('Traces Plot', create=True)
+        self.resultsTable = self.getElement('Results', create=True)
 
         ### initialize variables
         self.expStart = 0
