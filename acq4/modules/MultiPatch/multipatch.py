@@ -55,8 +55,9 @@ class MultiPatchWindow(QtGui.QWidget):
         self.movementLayout = QtGui.QGridLayout()
         self.movementWidget.setLayout(self.movementLayout)
 
-        self.moveInBtn = QtGui.QPushButton("Move in")
-        self.moveOutBtn = QtGui.QPushButton("Move out")
+        self.stepInBtn = QtGui.QPushButton("Step in")
+        self.stepTargetOutBtn = QtGui.QPushButton("Step to target")
+        self.stepOutBtn = QtGui.QPushButton("Step out")
         self.moveAboveTargetBtn = QtGui.QPushButton("Above target")
         self.moveApproachBtn = QtGui.QPushButton("Approach")
         self.moveToTargetBtn = QtGui.QPushButton("To target")
@@ -99,12 +100,14 @@ class MultiPatchWindow(QtGui.QWidget):
         self.slowBtn.clicked.connect(lambda: self.fastBtn.setChecked(False))
 
     def moveIn(self):
+        speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.advanceTowardTarget(self.stepSizeSpin.value())
+            pip.advanceTowardTarget(self.stepSizeSpin.value(), speed)
 
     def moveOut(self):
+        speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.retract(self.stepSizeSpin.value())
+            pip.retract(self.stepSizeSpin.value(), speed)
 
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
@@ -148,5 +151,7 @@ class MultiPatchWindow(QtGui.QWidget):
             return 'slow'
         return default
 
-
-
+    def coarseRecalibrate(self):
+        """Recalibrate all selected pipette tips under low magnification.
+        """
+        pass

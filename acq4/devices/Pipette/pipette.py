@@ -228,7 +228,6 @@ class Pipette(Device, OptomechDevice):
         angle = self.getYawAngle() * np.pi / 180
         ds = self._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
-        print(angle, ds, globalIdlePos, idleDepth)
         self._moveToGlobal(globalIdlePos, speed)
 
     def _movePath(self, path):
@@ -490,6 +489,7 @@ class PipetteCamModInterface(CameraModuleInterface):
             pos = self.mod().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
             self.setTargetPos(pos, z)
+            self.target.setRelativeDepth(0)
 
     def setTargetPos(self, pos, z=None):
         self.target.setPos(pos)

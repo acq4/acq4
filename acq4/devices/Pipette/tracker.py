@@ -1,3 +1,4 @@
+import time
 import pickle
 import time
 import numpy as np
@@ -23,8 +24,10 @@ class PipetteTracker(object):
         except Exception:
             self.reference = {}
 
-    def takeFrame(self, imager=None, padding=40e-6):
+    def takeFrame(self, imager=None):
         """Acquire one frame from an imaging device.
+
+        This method guarantees that the frame is exposed *after* this method is called.
         """
         imager = self._getImager(imager)
 
@@ -36,6 +39,29 @@ class PipetteTracker(object):
         if restart:
             imager.start()
         return frame
+
+    def getNextFrame(self, imager=None):
+        """Return the next frame available from the imager. 
+
+        Note: the frame may have been exposed before this method was called.
+        """
+        imager = self._getImager(imager)
+        self.__nextFrame = None
+        def newFrame(newFrame):
+            self.__nextFrame = newFrame
+        imager.sigNewFrame.connect(newFrame)
+        try:
+            start = pg.ptime.time()
+            while pg.ptime.time() < start + 5.0:
+                pg.QtGui.QApplication.processEvents()
+                frame = self.__nextFrame
+                if frame is not None:
+                    self.__nextFrame = None
+                    return frame
+                time.sleep(0.01)
+            raise RuntimeError("Did not receive frame from imager.")
+        finally:
+            pg.disconnect(imager.sigNewFrame, newFrame)
 
     def _getImager(self, imager=None):
         if imager is None:
@@ -260,6 +286,8 @@ class PipetteTracker(object):
         # Grab one frame (if it is not already supplied) and crop it to the region around the pipette tip.
         if frame is None:
             frame = self.takeFrame()
+        elif frame == 'next':
+            frame = self.getNextFrame()
 
         # load up template images
         reference = self._getReference()
@@ -332,7 +360,8 @@ class PipetteTracker(object):
         if 'padding' not in kwds:
             ref = self._getReference()
             kwds['padding'] = ref['tipLength']
-
+        if 'frame' not in kwds:
+            kwds['frame'] = 'next'
         try:
             tipPos, corr = self.measureTipPosition(**kwds)
         except RuntimeError:
