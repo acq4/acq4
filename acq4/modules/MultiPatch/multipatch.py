@@ -58,6 +58,7 @@ class MultiPatchWindow(QtGui.QWidget):
         self.stepInBtn = QtGui.QPushButton("Step in")
         self.stepTargetOutBtn = QtGui.QPushButton("Step to target")
         self.stepOutBtn = QtGui.QPushButton("Step out")
+        self.moveInBtn = QtGui.QPushButton("Move in")
         self.moveAboveTargetBtn = QtGui.QPushButton("Above target")
         self.moveApproachBtn = QtGui.QPushButton("Approach")
         self.moveToTargetBtn = QtGui.QPushButton("To target")
@@ -66,13 +67,14 @@ class MultiPatchWindow(QtGui.QWidget):
         self.moveIdleBtn = QtGui.QPushButton("Idle")
 
         self.movementLayout.addWidget(self.moveInBtn, 0, 0)
-        self.movementLayout.addWidget(self.moveOutBtn, 0, 1)
-        self.movementLayout.addWidget(self.moveAboveTargetBtn, 0, 2)
-        self.movementLayout.addWidget(self.moveApproachBtn, 0, 3)
-        self.movementLayout.addWidget(self.moveToTargetBtn, 0, 4)
-        self.movementLayout.addWidget(self.moveHomeBtn, 0, 5)
-        self.movementLayout.addWidget(self.moveSearchBtn, 0, 6)
-        self.movementLayout.addWidget(self.moveIdleBtn, 0, 7)
+        self.movementLayout.addWidget(self.stepInBtn, 0, 1)
+        self.movementLayout.addWidget(self.stepOutBtn, 0, 2)
+        self.movementLayout.addWidget(self.moveAboveTargetBtn, 0, 3)
+        self.movementLayout.addWidget(self.moveApproachBtn, 0, 4)
+        self.movementLayout.addWidget(self.moveToTargetBtn, 0, 5)
+        self.movementLayout.addWidget(self.moveHomeBtn, 0, 6)
+        self.movementLayout.addWidget(self.moveSearchBtn, 0, 7)
+        self.movementLayout.addWidget(self.moveIdleBtn, 0, 8)
 
         self.stepSizeSpin = pg.SpinBox(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
         self.stepSizeLabel = QtGui.QLabel('Step size')
@@ -86,9 +88,9 @@ class MultiPatchWindow(QtGui.QWidget):
         self.movementLayout.addWidget(self.slowBtn, 1, 2)
         self.movementLayout.addWidget(self.fastBtn, 1, 3)
 
-
         self.moveInBtn.clicked.connect(self.moveIn)
-        self.moveOutBtn.clicked.connect(self.moveOut)
+        self.stepInBtn.clicked.connect(self.stepIn)
+        self.stepOutBtn.clicked.connect(self.stepOut)
         self.moveAboveTargetBtn.clicked.connect(self.moveAboveTarget)
         self.moveApproachBtn.clicked.connect(self.moveApproach)
         self.moveToTargetBtn.clicked.connect(self.moveToTarget)
@@ -99,12 +101,17 @@ class MultiPatchWindow(QtGui.QWidget):
         self.fastBtn.clicked.connect(lambda: self.slowBtn.setChecked(False))
         self.slowBtn.clicked.connect(lambda: self.fastBtn.setChecked(False))
 
+
     def moveIn(self):
+        for pip in self.selectedPipettes():
+            pip.startAdvancing(10e-6)
+
+    def stepIn(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
             pip.advanceTowardTarget(self.stepSizeSpin.value(), speed)
 
-    def moveOut(self):
+    def stepOut(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
             pip.retract(self.stepSizeSpin.value(), speed)

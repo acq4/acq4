@@ -379,6 +379,17 @@ class Pipette(Device, OptomechDevice):
         waypoint = pos + distance * unit
         return self._moveToGlobal(waypoint, speed, linear=True)
 
+    def startAdvancing(self, speed):
+        """Begin moving the pipette at a constant speed along its axis.
+
+        Positive speeds advance, negative speeds retract.
+        """
+        stage = self.parentDevice()
+        vel = [speed * np.cos(self.pitch), 0, speed * -np.sin(self.pitch)]
+        a = self.mapToParentDevice([0, 0, 0])
+        b = self.mapToParentDevice(vel)
+        stage.startMoving([b[0]-a[0], b[1]-a[1], b[2]-a[2]])
+
     def retract(self, distance, speed='slow'):
         """Retract the pipette a specified distance along its axis.
         """
