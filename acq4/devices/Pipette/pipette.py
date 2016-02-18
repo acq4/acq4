@@ -640,7 +640,7 @@ class Target(pg.GraphicsObject):
 
     def setRelativeDepth(self, depth):
         # adjust the apparent depth of the target
-        dist = depth * 255 / 100e-6
+        dist = depth * 255 / 50e-6
         self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
         self.update()
 
