@@ -86,6 +86,7 @@ class MultiClampTelegraph:
     def updateState(self, devID, state):
         #with self.lock:
             #self.devices[devID][1] = state
+        #print("update state:", devID, self.devIndex[devID])
         self.emit('update', self.devIndex[devID], state)
         
     def emit(self, *args):
@@ -194,23 +195,31 @@ class MultiClampTelegraph:
                 else:
                     try:
                         priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
+                    except IndexError:
+                        priSignal = "Auxiliary"  # some amps give signal=44 here, which is not in the list..
+
+                    try:
                         secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
-                        priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                        secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                    except IndexError:   ## Ignore when signals are out of range (auxiliary). Bah.
-                        return True
+                    except IndexError:
+                        secSignal = "Auxiliary"  # some amps give signal=44 here, which is not in the list..
+
+                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
                 
-                
+                # Scale factors are 0 for aux signals.
+                sf = data.dScaleFactor if data.dScaleFactor != 0 else 1
+                rsf = data.dRawScaleFactor if data.dRawScaleFactor != 0 else 1
+
                 state = {
                     'mode': mode,
                     'primarySignal': priSignal,
                     'primaryGain': data.dAlpha,
                     'primaryUnits': priUnits[0],
-                    'primaryScaleFactor': priUnits[1] / (data.dScaleFactor * data.dAlpha),
+                    'primaryScaleFactor': priUnits[1] / (sf * data.dAlpha),
                     'secondarySignal': secSignal,
                     'secondaryGain': 1.0,
                     'secondaryUnits': secUnits[0],
-                    'secondaryScaleFactor': secUnits[1] / (data.dRawScaleFactor * 1.0),
+                    'secondaryScaleFactor': secUnits[1] / (rsf * 1.0),
                     'membraneCapacitance': data.dMembraneCap,
                     'LPFCutoff': data.dLPFCutoff,
                     'extCmdScale': data.dExtCmdSens,

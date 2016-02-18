@@ -78,44 +78,36 @@ class MultiClamp(Device):
 
 
         # get a handle to our specific multiclamp channel
-        try:
-            if executable is not None:
-                self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
-            else:
-                self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
-            
-            ## wait for first update..
-            c = 0
-            while self.mc.getState() is None:
-                time.sleep(0.1)
-                c += 1
-                if c > 50:
-                    raise Exception("Timed out waiting for first update from multi clamp commander.")
-            
-            print "Created MultiClamp device", self.config['channelID']
+        if executable is not None:
+            self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
+        else:
+            self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
+        
+        ## wait for first update..
+        start = time.time()
+        while self.mc.getState() is None:
+            time.sleep(0.1)
+            if time.time() - start > 10:
+                raise Exception("Timed out waiting for first update from multi clamp commander.")
+        
+        print "Created MultiClamp device", self.config['channelID']
 
-            ## set configured holding values
-            if 'vcHolding' in self.config:
-                self.holding['VC'] = self.config['vcHolding']
-            if 'icHolding' in self.config:
-                self.holding['IC'] = self.config['icHolding']
+        ## set configured holding values
+        if 'vcHolding' in self.config:
+            self.holding['VC'] = self.config['vcHolding']
+        if 'icHolding' in self.config:
+            self.holding['IC'] = self.config['icHolding']
 
-            ## Set up default MC settings for each mode, then leave MC in I=0 mode
-            # look for 'defaults', followed by 'settings' (for backward compatibility)
-            defaults = self.config.get('defaults', self.config.get('settings', None))
-            for mode in ['IC', 'VC']:
-                self.setMode(mode) # Set mode even if we have no parameters to set;
-                                   # this ensures that self.lastState is filled.
-                if defaults is not None and mode in defaults:
-                    self.mc.setParams(defaults[mode])
-            self.setMode('I=0')  ## safest mode to leave clamp in
+        ## Set up default MC settings for each mode, then leave MC in I=0 mode
+        # look for 'defaults', followed by 'settings' (for backward compatibility)
+        defaults = self.config.get('defaults', self.config.get('settings', None))
+        for mode in ['IC', 'VC']:
+            self.setMode(mode) # Set mode even if we have no parameters to set;
+                               # this ensures that self.lastState is filled.
+            if defaults is not None and mode in defaults:
+                self.mc.setParams(defaults[mode])
+        self.setMode('I=0')  ## safest mode to leave clamp in
 
-        except Exception as ex1:
-            try:
-                mc.quit()
-            except:
-                pass
-            raise ex1
         
         dm.declareInterface(name, ['clamp'], self)
 
