@@ -59,8 +59,14 @@ def gaussian(v, x):
     return v[0] * np.exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3]
 
 def expDecay(v, x):
-    """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
+    """Exponential decay function valued at x. Parameter vector is [amplitude, tau]"""
     return v[0] * np.exp(-x / v[1]) #+ v[2]
+
+def expDecayWithOffset(v, x):
+    """Exponential decay function with a y-offset. Suitable for measuring a 
+    bridge-balance offset in a voltage response to a current pulse. Assumes a fixed t0 at x=0.
+    Parameter v is [amp, tau, y-offset]."""
+    return v[0] * (1- np.exp(-x/v[1])) + v[2]
 
 def expPulse(v, x):
     """Exponential pulse function (rising exponential with variable-length plateau followed by falling exponential)
@@ -1501,7 +1507,7 @@ def threshold(data, threshold, direction=1):
 def measureBaseline(data, threshold=2.0, iterations=2):
     """Find the baseline value of a signal by iteratively measuring the median value, then excluding outliers."""
     data = data.view(ndarray)
-    med = median(data)
+    med = np.median(data)
     if iterations > 1:
         std = data.std()
         thresh = std * threshold
@@ -2360,6 +2366,52 @@ def measureResistance(data, mode):
         raise Exception("Not sure how to interpret mode: %s. Please use either 'VC' or 'IC'. " %str(mode))
 
     return (inputResistance, seriesResistance)
+
+def measureResistanceWithExponentialFit(data, plot=False):
+    """Return a dict with 'inputResistance', 'bridgeBalance' and 'tau' keys for the given 
+    data. Fits the data to an exponential decay with a y-offset to measure the 
+    voltage drop across the bridge balance. Does not account for any bridge balance 
+    compensation done during recording.
+    Arguments:
+        data      A metaarray with a Time axis and 'primary' and 'command' channels, with a square step in the command channel."""
+
+    cmd = data['command']
+
+    pulseStart = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[0][0]]
+    pulseStop = cmd.axisValues('Time')[np.argwhere(cmd != cmd[0])[-1][0]]
+
+    baseline = data['Time':0:pulseStart]['primary']
+    baseline = measureBaseline(baseline)
+
+    pulse = data["Time":pulseStart:pulseStop]['primary']
+    xvals = pulse.axisValues('Time') - pulseStart
+
+    fitResult = fit(expDecayWithOffset, xvals, pulse, (-0.01, 0.01, 0.00), generateResult=True)
+
+    amp = fitResult[0][0]
+    tau = fitResult[0][1]
+    yOffset = fitResult[0][2]
+
+    commandAmp = cmd['Time':pulseStart][0] - cmd[0]
+
+    inputResistance = abs((amp - baseline)/commandAmp)
+    bridgeBalance = (yOffset - baseline)/commandAmp
+
+    results = {'inputResistance':inputResistance,
+            'bridgeBalance':bridgeBalance,
+            'tau':tau,
+            'fitResult':fitResult,
+            'xvals':xvals,
+            'pulse':pulse,
+            'baseline':baseline,
+            'commandAmp' :commandAmp}
+
+
+    return results
+
+
+
+
 
 
 
