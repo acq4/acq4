@@ -5,7 +5,7 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 import STDPControlTemplate, STDPPlotsTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
-from acq4.util.functions import measureResistance
+from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 import STDPFileLoader
 
@@ -614,8 +614,10 @@ class STDPAnalyzer(AnalysisModule):
                                                             ('slopeFitOffset', float),
                                                             ('highSlopeLocation', float),
                                                             ('pspAmplitude', float),
-                                                            ('InputResistance', float),
-                                                            ('HoldingCurrent',float)
+                                                            ('inputResistance', float),
+                                                            ('holdingCurrent',float),
+                                                            ('bridgeBalance', float),
+                                                            ('tau', float)
                                                             ])
 
         self.analysisResults['time'] = times
@@ -624,7 +626,7 @@ class STDPAnalyzer(AnalysisModule):
         
         if self.ctrl.healthCheck.isChecked():
             self.measureHealth(traces)
-            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['InputResistance'],
+            self.plots.RI_plot.plot(x=times-self.expStart, y=self.analysisResults['inputResistance'],
                 pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
 
         if self.ctrl.baselineCheck.isChecked():
@@ -633,7 +635,7 @@ class STDPAnalyzer(AnalysisModule):
                 pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
 
         self.measureCurrent(traces)
-        self.plots.holdingPlot.plot(x=times-self.expStart, y=self.analysisResults['HoldingCurrent'],
+        self.plots.holdingPlot.plot(x=times-self.expStart, y=self.analysisResults['holdingCurrent'],
             pen=None, symbol='o', symbolSize=symsize, symbolPen=None)
 
         postwin = [self.ctrl.plasticityRgnStartSpin.value(), self.ctrl.plasticityRgnEndSpin.value()]
@@ -683,7 +685,7 @@ class STDPAnalyzer(AnalysisModule):
 
     def measureCurrent(self, traces):
         for i, trace in enumerate(traces):
-            self.analysisResults[i]['HoldingCurrent'] = trace['secondary'].mean()
+            self.analysisResults[i]['holdingCurrent'] = trace['secondary'].mean()
 
     def measurePSP(self, traces):
         rgn = self.pspRgn.getRegion()
@@ -737,8 +739,11 @@ class STDPAnalyzer(AnalysisModule):
 
         for i, trace in enumerate(traces):
             data = trace['Time':rgn[0]:rgn[1]]
-            inputResistance = measureResistance(data, 'IC')[0]
-            self.analysisResults[i]['InputResistance'] = inputResistance
+            R = measureResistanceWithExponentialFit(data, debug=False)
+            self.analysisResults[i]['inputResistance'] = R['inputResistance']
+            self.analysisResults[i]['tau'] = R['tau']
+            bridgeCompensation = self.dataModel.getBridgeBalanceCompensation(trace)
+            self.analysisResults[i]['bridgeBalance'] = bridgeCompensation + R['bridgeBalance']
 
     def storeToDB(self):
         self.storeTrialsToDB()
@@ -760,7 +765,9 @@ class STDPAnalyzer(AnalysisModule):
             ('timestamp', 'real'),
             ('time', 'real'),
             ('RMP', 'real'),
-            ('InputResistance', 'real'),
+            ('inputResistance', 'real'),
+            ('tau', 'real'),
+            ('bridgeBalance', 'real'),
             ('pspSlope', 'real'),
             ('normalizedPspSlope', 'real'),
             ('slopeFitOffset', 'real'),
@@ -782,7 +789,9 @@ class STDPAnalyzer(AnalysisModule):
                                                             ('timestamp', float), 
                                                             ('time', float),
                                                             ('RMP', float), 
-                                                            ('InputResistance', float),
+                                                            ('inputResistance', float),
+                                                            ('tau', float),
+                                                            ('bridgeBalance', float)
                                                             ('pspSlope', float),
                                                             ('normalizedPspSlope', float),
                                                             ('slopeFitOffset', float),
@@ -806,7 +815,7 @@ class STDPAnalyzer(AnalysisModule):
             data[i]['timestamp'] = self.analysisResults[i]['time']
             data[i]['time'] = self.analysisResults[i]['time'] - self.expStart
             data[i]['RMP'] = self.analysisResults[i]['RMP']
-            data[i]['InputResistance'] = self.analysisResults[i]['InputResistance']
+            data[i]['inputResistance'] = self.analysisResults[i]['inputResistance']
             data[i]['pspSlope'] = self.analysisResults[i]['pspSlope']
             data[i]['normalizedPspSlope'] = self.analysisResults[i]['pspSlope']/baselineSlope
             data[i]['slopeFitOffset'] = self.analysisResults[i]['slopeFitOffset']
@@ -952,13 +961,13 @@ class STDPAnalyzer(AnalysisModule):
         rmpPlot.setXRange(-50, 3200)
         l.addItem(rmpPlot, row=5, col=0, colspan=3)
 
-        riPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['InputResistance'],
+        riPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['inputResistance'],
             pen=None, symbol='o', symbolSize=5, symbolBrush='w')
         riPlot.setYRange(0, 300e6)
         riPlot.setXRange(-50, 3200)
         l.addItem(riPlot, row=6, col=0, colspan=3)
 
-        holdingPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['HoldingCurrent'],
+        holdingPlot = pg.PlotItem(x=self.analysisResults['time']-self.expStart, y=self.analysisResults['holdingCurrent'],
             pen=None, symbol='o', symbolSize=5, symbolBrush='w' )
         holdingPlot.setYRange(-400e-12, 50e-12)
         holdingPlot.setXRange(-50, 3200)
