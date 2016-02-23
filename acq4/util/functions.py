@@ -2394,7 +2394,7 @@ def measureResistanceWithExponentialFit(data, plot=False):
 
     commandAmp = cmd['Time':pulseStart][0] - cmd[0]
 
-    inputResistance = abs((amp - baseline)/commandAmp)
+    inputResistance = abs((amp)/commandAmp)
     bridgeBalance = (yOffset - baseline)/commandAmp
 
     results = {'inputResistance':inputResistance,
