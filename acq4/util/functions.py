@@ -2367,13 +2367,17 @@ def measureResistance(data, mode):
 
     return (inputResistance, seriesResistance)
 
-def measureResistanceWithExponentialFit(data, plot=False):
-    """Return a dict with 'inputResistance', 'bridgeBalance' and 'tau' keys for the given 
+def measureResistanceWithExponentialFit(data, debug=False):
+    """Return a dict with 'inputResistance', 'bridgeBalance' and 'tau' keys for the given current clamp
     data. Fits the data to an exponential decay with a y-offset to measure the 
     voltage drop across the bridge balance. Does not account for any bridge balance 
     compensation done during recording.
     Arguments:
-        data      A metaarray with a Time axis and 'primary' and 'command' channels, with a square step in the command channel."""
+        data      A metaarray with a Time axis and 'primary' and 'command' channels, with a square step in the command channel.
+        debug     Default: False. If True, include extra intermediary calculated values in the dictionary that is returned. 
+
+    """
+
 
     cmd = data['command']
 
@@ -2399,13 +2403,13 @@ def measureResistanceWithExponentialFit(data, plot=False):
 
     results = {'inputResistance':inputResistance,
             'bridgeBalance':bridgeBalance,
-            'tau':tau,
-            'fitResult':fitResult,
-            'xvals':xvals,
-            'pulse':pulse,
-            'baseline':baseline,
-            'commandAmp' :commandAmp}
-
+            'tau':tau}
+    if debug:
+        results['fitResult'] = fitResult
+        results['xvals'] = xvals
+        results['pulse'] = pulse
+        results['baseline'] = baseline
+        results['commandAmp'] = commandAmp
 
     return results
 
