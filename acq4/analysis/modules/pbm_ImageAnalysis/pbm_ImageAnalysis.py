@@ -39,15 +39,15 @@ from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
 import ctrlTemplate
-import ctrlTemplateROIs
-import ctrlTemplateAnalysis
-import ctrlTemplatePhysiology
+import ctrlROIsTemplate
+import ctrlAnalysisTemplate
+import ctrlPhysiologyTemplate
 from acq4.analysis.tools import Utility
 from acq4.analysis.tools import Fitting
 from acq4.analysis.tools import PlotHelpers as PH  # matlab plotting helpers
 from acq4.util import functions as FN
 from acq4.util.HelpfulException import HelpfulException
-from acq4.devices.Scanner.ScanProgram import rect
+from acq4.devices.Scanner.scan_program import rect
 
 try:
     import cv2
@@ -130,15 +130,15 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ctrl.setupUi(self.ctrlWidget)
         
         self.ctrlROIFuncWidget = QtGui.QWidget()
-        self.ctrlROIFunc = ctrlTemplateROIs.Ui_Form()
+        self.ctrlROIFunc = ctrlROIsTemplate.Ui_Form()
         self.ctrlROIFunc.setupUi(self.ctrlROIFuncWidget)
 
         self.ctrlImageFuncWidget = QtGui.QWidget()
-        self.ctrlImageFunc = ctrlTemplateAnalysis.Ui_Form()
+        self.ctrlImageFunc = ctrlAnalysisTemplate.Ui_Form()
         self.ctrlImageFunc.setupUi(self.ctrlImageFuncWidget)
         
         self.ctrlPhysFuncWidget = QtGui.QWidget()
-        self.ctrlPhysFunc = ctrlTemplatePhysiology.Ui_Form()
+        self.ctrlPhysFunc = ctrlPhysiologyTemplate.Ui_Form()
         self.ctrlPhysFunc.setupUi(self.ctrlPhysFuncWidget)
         
         self.initDataState()
