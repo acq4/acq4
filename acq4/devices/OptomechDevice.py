@@ -100,7 +100,13 @@ class OptomechDevice(object):
         self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged)
         if config is not None:
             if 'parentDevice' in config:
-                self.setParentDevice(config['parentDevice'])
+                try:
+                    self.setParentDevice(config['parentDevice'])
+                except Exception as ex:
+                    if "No device named" in ex.message:
+                        print "Cannot set parent device %s; no device by that name." % config['parentDevice']
+                    else:
+                        raise
             if 'transform' in config:
                 self.setDeviceTransform(config['transform'])
             

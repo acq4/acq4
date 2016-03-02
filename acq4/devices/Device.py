@@ -12,7 +12,6 @@ class Device(QtCore.QObject):
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
-        #self.config = config
         self._name = name
     
     def name(self):
@@ -40,6 +39,12 @@ class Device(QtCore.QObject):
         This path should resolve to `acq4/config/devices/DeviceName_config`.
         """
         return os.path.join('devices', self.name() + '_config')
+
+    def configFileName(self, filename):
+        """Return the full path to a config file for this device.
+        """
+        filename = os.path.join(self.configPath(), filename)
+        return self.dm.configFileName(filename)
 
     def readConfigFile(self, filename):
         """Read a config file from this device's configuration directory.

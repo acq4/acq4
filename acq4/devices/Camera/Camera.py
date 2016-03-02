@@ -76,15 +76,7 @@ class Camera(DAQGeneric, OptomechDevice):
         ## Default values for scope state. These will be used if there is no scope defined.
         self.scopeState = {
             'id': 0,
-            #'scopePosition': [0, 0],   ## position of scope in global coords
-            #'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
-            #'offset': [0, 0],
-            #'objScale': 1,
-            #'pixelSize': (1, 1),
-            #'objective': '',
-            #'transform': None,
         }
-        
 
         self.scopeDev = None
         p = self
@@ -94,15 +86,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 self.scopeDev = p
                 self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
                 break
-        
-        #if 'scopeDevice' in config:
-            #self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            #self.scopeDev.sigPositionChanged.connect(self.positionChanged)
-            ### Cache microscope state for fast access later
-            #self.objectiveChanged()
-            #self.positionChanged()
-        #else:
-            #self.scopeDev = None
+
         self.transformChanged()
         if self.scopeDev is not None:
             self.objectiveChanged()
@@ -139,7 +123,7 @@ class Camera(DAQGeneric, OptomechDevice):
     
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
     
     def listParams(self, params=None):
         """Return a dictionary of parameter descriptions. By default, all parameters are listed.
@@ -156,7 +140,7 @@ class Camera(DAQGeneric, OptomechDevice):
         eg:
         {  'paramName': ([list of values], True, False, []) }
         """
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         """Set camera parameters. Options are:
@@ -169,10 +153,10 @@ class Camera(DAQGeneric, OptomechDevice):
               (note this may differ from requested values if autoCorrect is True)
            1: Boolean value indicating whether a restart is required to enact changes.
               If autoRestart is True, this value indicates whether the camera was restarted."""
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
         
     def getParams(self, params=None):
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
         
     def setParam(self, param, val, autoCorrect=True, autoRestart=True):
         return self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)[0]
@@ -188,19 +172,22 @@ class Camera(DAQGeneric, OptomechDevice):
         time is the time of arrival of the frame. Optionally, 'exposeStartTime' and 'exposeDoneTime' 
             may be specified if they are available.
         """
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
         
     def startCamera(self):
         """Calls the camera driver to start the camera's acquisition."""
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
         
     def stopCamera(self):
         """Calls the camera driver to stop the camera's acquisition.
         Note that the acquisition may be _required_ to stop, since other processes
         may be preparing to synchronize with the camera's exposure signal."""
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
 
-    
+    def noFrameWarning(self, time):
+        # display a warning message that no camera frames have arrived.
+        # This method is only here to allow PVCam to display some useful information.
+        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
     
     def pushState(self, name=None):
         #print "Camera: pushState", name
@@ -239,14 +226,6 @@ class Camera(DAQGeneric, OptomechDevice):
         else:
             if run:
                 self.start()
-            
-        
-        #if not run and self.isRuning():
-            #self.stop()
-        
-        #if run and (restart or (not self.isRunning()):
-            #self.start()
-        
 
     def start(self, block=True):
         """Start camera and acquisition thread"""
@@ -262,6 +241,28 @@ class Camera(DAQGeneric, OptomechDevice):
         #time.sleep(0.1)
         self.acqThread.stop(block=block)
         
+    def acquireFrames(self, n=1):
+        """Immediately acquire and return a specific number of frames.
+
+        This method blocks until all frames are acquired and may not be supported by all camera
+        types.
+        """
+        # TODO: Add a non-blocking mode that returns a Future.
+        frames = self._acquireFrames(n)
+
+        info = dict(self.getParams(['binning', 'exposure', 'region', 'triggerMode']))
+        ss = self.getScopeState()
+        ps = ss['pixelSize']  ## size of CCD pixel
+        info['pixelSize'] = [ps[0] * info['binning'][0], ps[1] * info['binning'][1]]
+        info['objective'] = ss.get('objective', None)
+        info['deviceTransform'] = pg.SRTTransform3D(ss['transform'])
+
+        return Frame(frames, info)
+
+    def _acquireFrames(self, n):
+        # todo: default implementation can use acquisition thread instead..
+        raise NotImplementedError("Camera class %s does not implement this method." % self.__class__.__name__)
+
     def restart(self):
         if self.isRunning():
             self.stop()
@@ -290,8 +291,6 @@ class Camera(DAQGeneric, OptomechDevice):
             if self.camConfig['triggerOutChannel']['device'] != daq:
                 return None
             return self.camConfig['triggerOutChannel']['channel']
-        
-
 
     def taskInterface(self, taskRunner):
         return CameraTaskGui(self, taskRunner)
@@ -346,7 +345,6 @@ class Camera(DAQGeneric, OptomechDevice):
         y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
         return (x, y)
         
-        
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
         with self.lock:
@@ -369,6 +367,7 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
+
     @staticmethod 
     def makeFrameTransform(region, binning):
         """Make a transform that maps from image coordinates to whole-sensor coordinates,
@@ -408,14 +407,13 @@ class Frame(imaging.Frame):
         info['frameTransform'] = tr
 
         imaging.Frame.__init__(self, data, info)
-
-
     
         
 class CameraTask(DAQGenericTask):
     """Default implementation of camera acquisition task.
-    Some of these functions may need to be reimplemented for subclasses."""
 
+    Some of these methods may need to be reimplemented for subclasses.
+    """
 
     def __init__(self, dev, cmd, parentTask):
         #print "Camera task:", cmd
@@ -857,7 +855,7 @@ class AcquireThread(Thread):
                     diff = ptime.time()-lastFrameTime
                     if diff > (10 + exposure):
                         if mode == 'Normal':
-                            print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+                            self.dev.noFrameWarning(diff)
                             break
                         else:
                             pass  ## do not exit loop if there is a possibility we are waiting for a trigger
@@ -870,13 +868,13 @@ class AcquireThread(Thread):
                 self.dev.stopCamera()
             #prof.mark('      camera stop:')
         except:
+            printExc("Error starting camera acquisition:")
             try:
                 with self.camLock:
                     #self.cam.stop()
                     self.dev.stopCamera()
             except:
                 pass
-            printExc("Error starting camera acquisition:")
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
         finally:
             pass

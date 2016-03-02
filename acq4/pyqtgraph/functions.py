@@ -767,12 +767,11 @@ def solveBilinearTransform(points1, points2):
     
     return matrix
     
-def rescaleData(data, scale, offset, dtype=None):
+def rescaleData(data, scale, offset, dtype=None, clip=None):
     """Return data rescaled and optionally cast to a new dtype::
     
         data => (data-offset) * scale
         
-    Uses scipy.weave (if available) to improve performance.
     """
     if dtype is None:
         dtype = data.dtype
@@ -817,9 +816,21 @@ def rescaleData(data, scale, offset, dtype=None):
             setConfigOptions(useWeave=False)
         
         #p = np.poly1d([scale, -offset*scale])
-        #data = p(data).astype(dtype)
-        d2 = data-offset
+        #d2 = p(data)
+        d2 = data - float(offset)
         d2 *= scale
+        
+        # Clip before converting dtype to avoid overflow
+        if dtype.kind in 'ui':
+            lim = np.iinfo(dtype)
+            if clip is None:
+                # don't let rescale cause integer overflow
+                d2 = np.clip(d2, lim.min, lim.max)
+            else:
+                d2 = np.clip(d2, max(clip[0], lim.min), min(clip[1], lim.max))
+        else:
+            if clip is not None:
+                d2 = np.clip(d2, *clip)
         data = d2.astype(dtype)
     return data
     
