@@ -21,7 +21,7 @@ from acq4.util.debug import *
 #   Bulb: Camera exposes one frame for the duration of each trigger pulse
 
 triggerModes = {
-    'TriggerType': {'FreeRun': 'Normal'},  # QImaging 
+    'TriggerType': {'Freerun': 'Normal'},  # QImaging 
     'Trigger': {'NORMAL': 'Normal', 'START': 'TriggerStart'},  # Hamamatsu
 }
 
@@ -167,7 +167,9 @@ class MicroManagerCamera(Camera):
                     params['binningY'] = ([int(v[1]) for v in vals], not readonly, True, [])
                     continue
                 elif prop in triggerModes:
+                    self._triggerProp = prop
                     modes = triggerModes[prop]
+                    self._triggerModes = (modes, {v:k for k,v in modes.items()})
                     prop = 'triggerMode'
                     vals = [modes[v] for v in vals]
                 elif prop == 'PixelType':
@@ -260,7 +262,11 @@ class MicroManagerCamera(Camera):
                 x = self.getParam('binningX')
                 value = (x, value)
                 param = 'binning'
-            value = '%dx%d' % value
+
+            if self._binningMode == 'x':
+                value = '%d' % value[0]
+            else:
+                value = '%dx%d' % value
             param = 'Binning'
 
         elif param == 'exposure':
@@ -269,8 +275,8 @@ class MicroManagerCamera(Camera):
             param = 'Exposure'
 
         elif param == 'triggerMode':
-            value = {'Normal': 'NORMAL', 'TriggerStart': 'START'}[value]
-            param = 'Trigger'
+            value = self._triggerModes[1][value]
+            param = self._triggerProp
 
         with self.camLock:
             self.mmc.setProperty(self.camName, str(param), str(value))
@@ -295,7 +301,7 @@ class MicroManagerCamera(Camera):
             'binning': 'Binning',
             'binningX': 'Binning',
             'binningY': 'Binning',
-            'triggerMode': 'Trigger',
+            'triggerMode': self._triggerProp,
             'bitDepth': 'PixelType',
         }.get(param, param)
         with self.camLock:
@@ -323,7 +329,9 @@ class MicroManagerCamera(Camera):
             # ms to s
             val = val * 1e-3
         elif param == 'bitDepth':
-            return int(val.rstrip('bit'))
+            val = int(val.rstrip('bit'))
+        elif param == 'triggerMode':
+            val = self._triggerModes[0][val]
 
         return val
 
