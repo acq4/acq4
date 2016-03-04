@@ -12,6 +12,19 @@ from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 
 
+# Micromanager does not standardize trigger modes across cameras,
+# so we use this dict to translate the modes of various cameras back
+# to the standard ACQ4 modes:
+#   Normal: Camera starts by software and acquires frames on its own clock
+#   TriggerStart: Camera starts by trigger and acquires frames on its own clock
+#   Strobe: Camera acquires one frame of a predefined exposure time for every trigger pulse
+#   Bulb: Camera exposes one frame for the duration of each trigger pulse
+
+triggerModes = {
+    'TriggerType': {'FreeRun': 'Normal'},  # QImaging 
+    'Trigger': {'NORMAL': 'Normal', 'START': 'TriggerStart'},  # Hamamatsu
+}
+
 
 class MicroManagerCamera(Camera):
     """Camera device that uses MicroManager to provide imaging.
@@ -153,9 +166,10 @@ class MicroManagerCamera(Camera):
                     params['binningX'] = ([int(v[0]) for v in vals], not readonly, True, [])
                     params['binningY'] = ([int(v[1]) for v in vals], not readonly, True, [])
                     continue
-                elif prop == 'Trigger':
+                elif prop in triggerModes:
+                    modes = triggerModes[prop]
                     prop = 'triggerMode'
-                    vals = [{'NORMAL': 'Normal', 'START': 'TriggerStart'}[v] for v in vals]
+                    vals = [modes[v] for v in vals]
                 elif prop == 'PixelType':
                     prop = 'bitDepth'
                     vals = [int(bd.rstrip('bit')) for bd in vals]
