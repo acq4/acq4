@@ -1,6 +1,14 @@
 import serial, struct, time, collections, threading
-from ..SerialDevice import SerialDevice
-
+try:
+    from ..SerialDevice import SerialDevice, TimeoutError, DataError
+except ValueError:
+    ## relative imports not allowed when running from command prompt, so
+    ## we adjust sys.path when running the script for testing
+    if __name__ == '__main__':
+        import sys, os
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        from SerialDevice import SerialDevice, TimeoutError, DataError
+        
 ErrorVals = {
     0: ('SP Over-run', 'The previous character was not unloaded before the latest was received.'),
     1: ('Frame Error', 'A valid stop bit was not received during the appropriate time period.'), 
@@ -396,7 +404,7 @@ class MaiTaiLaser(SerialDevice):
 
         
 if __name__ == '__main__':
-    s = SutterMP285(port=5, baud=19200) # Arduino baud rate, NOT MP285 baud rate.
+    s = MaiTaiLaser(port=3, baud=19200) # Arduino baud rate, NOT MP285 baud rate.
     #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
