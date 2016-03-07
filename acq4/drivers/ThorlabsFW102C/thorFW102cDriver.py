@@ -3,17 +3,17 @@ if __name__ == '__main__':
     d = os.path.dirname(__file__)
     sys.path.append(os.path.join(d, '../../util'))
     
-import acq4.util.ptime as ptime
+#import acq4.util.ptime as ptime
 from ctypes import *
 from acq4.util.clibrary import *
-from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
-from acq4.pyqtgraph import graphicsWindows as gw
-from PyQt4 import QtGui
-from acq4.util.Mutex import Mutex
+#from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
+#from acq4.pyqtgraph import graphicsWindows as gw
+#from PyQt4 import QtGui
+#from acq4.util.Mutex import Mutex
 from collections import OrderedDict
-import atexit
-import traceback
-import time
+#import atexit
+#import traceback
+#import time
 
 
 ### Load header files, open DLL
@@ -45,10 +45,22 @@ class fwFunctionError(Exception):
 
 class filterWheelDriverClass:
     def __init__(self):
-        self.cams = {}
+        self.fws = {}
         self.paramTable = OrderedDict()
         
-        self.listSerialPorts()
+        #print dir(lib)
+        #print LIB.fnUART_LIBRARY_list
+        ports = c_char_p()
+        res = LIB.fnUART_LIBRARY_list(ports,c_long(255))
+        #print res(), res.rval, res.args
+        #print ports.value
+
+        nBaud = c_long(115200)
+        nPort = c_long(4)
+        print nPort.value
+        res = LIB.fnUART_LIBRARY_open(nPort,nBaud)
+        
+        #self.listSerialPorts()
         
         global externalParams
         for p in externalParams:
@@ -91,10 +103,11 @@ class filterWheelDriverClass:
         return self.cams[cam]
         
     def __del__(self):
-        if len(self.cams) != 0:
+        if len(self.fws) != 0:
             self.quit()
         else:
-            self.call(lib.ReleaseDriver)
+            pass
+            #self.call(lib.ReleaseDriver)
 
     def quit(self):
         #print "quit() called from QCamDriverClass."

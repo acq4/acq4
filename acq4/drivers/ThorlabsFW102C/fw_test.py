@@ -3,6 +3,6 @@ sys.path.append('..\\..\\..\\')
 
 import thorFW102cDriver
 
-pco = thorFW102cDriver.filterWheelDriverClass()
+fw = thorFW102cDriver.filterWheelDriverClass()
 #cam = pco.getCamera('pixelfly')
 #cam.close()
