@@ -159,7 +159,7 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
         if isinstance(first, MetaArray):
             info = info + first._info
         else:
-            info = info + [[] for i in range(first.ndim+1)]
+            info = info + [{} for i in range(first.ndim+1)]
         data = MetaArray(np.empty(shape, first.dtype), info=info)
         if fill is not None:
             data[:] = fill
