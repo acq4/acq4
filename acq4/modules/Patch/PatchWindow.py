@@ -2,7 +2,6 @@
 from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
-#from PyQt4 import Qwt5 as Qwt
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
 from acq4.util.metaarray import *
@@ -15,7 +14,6 @@ from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
-#from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
 
 
@@ -23,7 +21,8 @@ class PatchWindow(QtGui.QMainWindow):
     
     sigWindowClosed = QtCore.Signal(object)
     
-    def __init__(self, dm, clampName):
+    def __init__(self, dm, config):
+        clampName = config['clampDev']
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
         self.startTime = None
@@ -40,8 +39,8 @@ class PatchWindow(QtGui.QMainWindow):
         
         self.params = {
             'mode': 'vc',
-            'rate': 400000,
-            'downsample': 10,
+            'rate': config.get('sampleRate', 100000),
+            'downsample': config.get('downsample', 3),
             'cycleTime': .2,
             'recordTime': 0.1,
             'delayTime': 0.03,
