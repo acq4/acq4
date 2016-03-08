@@ -57,8 +57,10 @@ class SerialDevice(object):
         the port name is unchanged.
         """
         if sys.platform.startswith('win'):
-            if isinstance(port, basestring) and port.lower()[:3] == 'com':
-                port = int(port[3:]) - 1
+            if isinstance(port, int):
+                port = 'com%d' % (port+1)
+            elif isinstance(port, basestring) and port.lower()[:3] == 'com':
+                port = port.lower()
         return port
 
     def open(self, port=None, baudrate=None, **kwds):
