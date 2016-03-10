@@ -278,6 +278,10 @@ class MicroManagerCamera(Camera):
             value = self._triggerModes[1][value]
             param = self._triggerProp
 
+        elif param == 'bitDepth':
+            param = 'PixelType'
+            value = '%dbit' % value
+
         with self.camLock:
             self.mmc.setProperty(self.camName, str(param), str(value))
 
