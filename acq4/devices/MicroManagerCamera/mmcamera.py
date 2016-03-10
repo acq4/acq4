@@ -51,6 +51,9 @@ class MicroManagerCamera(Camera):
         self.camName = str(name)  # we will use this name as the handle to the MM camera
         self.mmc = MMCorePy.CMMCore()
 
+        self._triggerProp = None  # the name of the property for setting trigger mode
+        self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
+        self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
         self._config = config
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
@@ -132,7 +135,7 @@ class MicroManagerCamera(Camera):
 
     def _readAllParams(self):
         # these are parameters expected for all cameras
-        defaultParams = ['exposure', 'binningX', 'binningY', 'regionX', 'regionY', 'regionW', 'regionH', 'triggerMode', 'bitDepth']
+        defaultParams = ['exposure', 'binningX', 'binningY', 'regionX', 'regionY', 'regionW', 'regionH', 'triggerMode']
 
         with self.camLock:
             params = OrderedDict([(n, None) for n in defaultParams])
@@ -172,9 +175,12 @@ class MicroManagerCamera(Camera):
                     self._triggerModes = (modes, {v:k for k,v in modes.items()})
                     prop = 'triggerMode'
                     vals = [modes[v] for v in vals]
-                elif prop == 'PixelType':
-                    prop = 'bitDepth'
-                    vals = [int(bd.rstrip('bit')) for bd in vals]
+
+                # translation from PixelType to bitDepth is not exact; this will take more work.
+                # for now we just expose PixelType directly.
+                # elif prop == 'PixelType':
+                #     prop = 'bitDepth'
+                #     vals = [int(bd.rstrip('bit')) for bd in vals]
 
                 params[prop] = (vals, not readonly, True, [])
 
@@ -193,7 +199,14 @@ class MicroManagerCamera(Camera):
                 'regionH': [(1, rgn[3], 1), True, True, []],
             })
 
-        self._allParams = params
+            if params['triggerMode'] is None:
+                params['triggerMode'] = (['Normal'], False, True, [])
+
+            if params['binningX'] is None:
+                params['binningX'] = [[1], False, True, []]
+                params['binningY'] = [[1], False, True, []]
+
+            self._allParams = params
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
@@ -254,6 +267,13 @@ class MicroManagerCamera(Camera):
             return
 
         if param.startswith('binning'):
+            if self._binningMode is None:
+                # camera does not support binning; only allow values of 1
+                if value in [1, (1, 1)]:
+                    return
+                else:
+                    raise ValueError('Invalid binning value %s=%s' % (param, value))
+
             if param == 'binningX':
                 y = self.getParam('binningY')
                 value = (value, y)
@@ -275,12 +295,17 @@ class MicroManagerCamera(Camera):
             param = 'Exposure'
 
         elif param == 'triggerMode':
+            if self._triggerProp is None:
+                # camera does not support triggering; only allow 'Normal' mode
+                if value != 'Normal':
+                    raise ValueError("Invalid trigger mode '%s'" % value)
+                return
             value = self._triggerModes[1][value]
             param = self._triggerProp
 
-        elif param == 'bitDepth':
-            param = 'PixelType'
-            value = '%dbit' % value
+        # elif param == 'bitDepth':
+        #     param = 'PixelType'
+        #     value = '%dbit' % value
 
         with self.camLock:
             self.mmc.setProperty(self.camName, str(param), str(value))
@@ -299,6 +324,15 @@ class MicroManagerCamera(Camera):
                 return rgn
             i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)
             return rgn[i]
+        elif param.startswith('binning') and self._binningMode is None:
+            # camera does not support binning; fake it here
+            if param == 'binning':
+                return (1,1)
+            elif param in ('binningX', 'binningY'):
+                return 1
+        elif param == 'triggerMode' and self._triggerProp is None:
+            # camera does not support triggering; fake it here
+            return 'Normal'
 
         paramTrans = {
             'exposure': 'Exposure',
@@ -320,20 +354,23 @@ class MicroManagerCamera(Camera):
             except ValueError:
                 pass
 
-        if param == 'binningY':
-            return int(val.split('x')[1])
-        elif param == 'binningX':
-            return int(val.split('x')[0])
-        elif param == 'binning':
+        if param in ('binning', 'binningX', 'binningY'):
             if self._binningMode == 'x':
-                return (int(val),) * 2
+                val = (int(val),) * 2
             else:
-                return tuple([int(b) for b in val.split('x')])
+                val = tuple([int(b) for b in val.split('x')])
+
+            if param == 'binningY':
+                return val[1]
+            elif param == 'binningX':
+                return val[0]
+            elif param == 'binning':
+                return val
         elif param == 'exposure':
             # ms to s
             val = val * 1e-3
-        elif param == 'bitDepth':
-            val = int(val.rstrip('bit'))
+        # elif param == 'bitDepth':
+        #     val = int(val.rstrip('bit'))
         elif param == 'triggerMode':
             val = self._triggerModes[0][val]
 
