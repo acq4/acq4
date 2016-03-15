@@ -206,10 +206,13 @@ class ScannerDeviceGui(QtGui.QWidget):
             dlg.show()
             dlg.raise_()  # Not sure why this is needed here..
 
-            ## Forget first 2 frames since some cameras can't seem to get these right.
-            frames = cameraResult.asArray()
-            frames = frames[2:]
-            positions = positions[2:]
+            if isinstance(cameraResult, list):
+                frames = np.concatenate([f.data() for f in cameraResult], axis=0)
+            else:
+                frames = cameraResult.asArray()
+                ## Forget first 2 frames since some cameras can't seem to get these right.
+                frames = frames[2:]
+                positions = positions[2:]
             
             ## Do background subtraction
             ## take out half the data until it can do the calculation without having a MemoryError.
@@ -240,7 +243,10 @@ class ScannerDeviceGui(QtGui.QWidget):
             fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
             # convert sigma to full width at 1/e
             fit[3] = abs(2 * (2 ** 0.5) * fit[3]) ## sometimes the fit for width comes out negative. *shrug*
-            someFrame = cameraResult.frames()[0]
+            if isinstance(cameraResult, list):
+                someFrame = cameraResult[0]
+            else:
+                someFrame = cameraResult.frames()[0]
             frameTransform = pg.SRTTransform(someFrame.globalTransform())
             pixelSize = someFrame.info()['pixelSize'][0]
             spotAmplitude = fit[0]
@@ -406,11 +412,11 @@ class ScannerDeviceGui(QtGui.QWidget):
                     x = xRange[0] + dx * i
                     y = yRange[0] + dy * j
                     positions.append([x, y])
-                    self.dev.setCommand(x, y)
+                    self.dev.setCommand([x, y])
                     images.append(camera.acquireFrames(1))
         finally:
             laser.closeShutter()
-        return background, images, positions
+        return background.data(), images, positions
 
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""

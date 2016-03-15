@@ -182,7 +182,7 @@ class Laser(DAQGeneric, OptomechDevice):
             self.writeConfigFile(index, 'index')
             self.calibrationIndex = index
         
-    def setAlignmentMode(self, b):
+    def setAlignmentMode(self, b=True):
         """If true, configures the laser for low-power alignment mode. 
         Note: If the laser achieves low power solely through PWM, then
         alignment mode will only be available during tasks."""
