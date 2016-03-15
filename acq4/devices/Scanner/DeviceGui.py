@@ -193,8 +193,13 @@ class ScannerDeviceGui(QtGui.QWidget):
         laser = str(self.ui.laserCombo.currentText())
         blurRadius = 5
         
-        ## Do fast scan of entire allowed command range
-        (background, cameraResult, positions) = self.scan()
+        cam = acq4.Manager.getManager().getDevice(camera)
+        if cam.getExposureChannel() is None:
+            # no exposure signal available; do slow scan
+            (background, cameraResult, positions) = self.sample()
+        else:
+            ## Do fast scan of entire allowed command range
+            (background, cameraResult, positions) = self.scan()
         #self.calibrationResult = {'bg': background, 'frames': cameraResult, 'pos': positions}
 
         with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
@@ -374,6 +379,38 @@ class ScannerDeviceGui(QtGui.QWidget):
         ss = (fr1 * mask).sum() / mask.sum()  ## integrate values within mask, divide by mask area
         assert(not np.isnan(ss))
         return ss
+
+    def sample(self):
+        """Sample a grid of x/y values and take a camera image at each location.
+        This is a slower alternative to the scan() method that does not require the use of a TTL exposure signal from the camera.        
+        """
+        man = acq4.Manager.getManager()
+        camera = man.getDevice(str(self.ui.cameraCombo.currentText()))
+        laser = man.getDevice(str(self.ui.laserCombo.currentText()))
+
+        xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
+        yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
+
+        background = camera.acquireFrames(1)
+
+        laser.setAlignmentMode()
+        try:
+            positions = []
+            images = []
+            n = 5
+            dx = (xRange[1]-xRange[0]) / (n-1)
+            dy = (yRange[1]-yRange[0]) / (n-1)
+
+            for i in range(n):
+                for j in range(n):
+                    x = xRange[0] + dx * i
+                    y = yRange[0] + dy * j
+                    positions.append([x, y])
+                    self.dev.setCommand(x, y)
+                    images.append(camera.acquireFrames(1))
+        finally:
+            laser.closeShutter()
+        return background, images, positions
 
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""

@@ -292,6 +292,12 @@ class Camera(DAQGeneric, OptomechDevice):
                 return None
             return self.camConfig['triggerOutChannel']['channel']
 
+    def getExposureChannel(self):
+        with self.lock:
+            if 'exposureChannel' not in self.camConfig:
+                return None
+            return self.camConfig['exposureChannel']
+
     def taskInterface(self, taskRunner):
         return CameraTaskGui(self, taskRunner)
 
