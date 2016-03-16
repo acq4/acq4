@@ -1,4 +1,9 @@
 #!/usr/bin/python
+"""
+Rebuild the Ui files
+Note: If the system complains about not finding PyQt4 from pyuic, and you are using
+anaconda, change the script in ~/anaconda/bin/pyuic4 to start with python2.7, not pythonw2.7
+"""
 import os, sys
 uic = 'pyuic4'
 sys.argv.pop(0)
