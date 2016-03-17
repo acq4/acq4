@@ -1,1 +1,1 @@
-from maitai import MaiTaiLaser, TimeoutError, MaiTaiError
+from maitai import MaiTai, TimeoutError, MaiTaiError
