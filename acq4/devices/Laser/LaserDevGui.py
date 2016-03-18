@@ -28,6 +28,7 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.qSwitchBtn.hide()
             if self.dev.isLaserOn():
                 self.onOffToggled(True)
+                self.ui.turnOnOffBtn.setChecked(True)
             else:
                 self.ui.shutterBtn.setEnabled(False)
         else:
