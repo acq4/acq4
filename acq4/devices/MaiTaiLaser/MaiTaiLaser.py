@@ -24,8 +24,8 @@ class MaiTaiLaser(Laser):
         self.mThread = MaiTaiThread(self, self.driver, self.driverLock)
         self.mThread.sigPowerChanged.connect(self.powerChanged)
         self.mThread.sigWavelengthChanged.connect(self.wavelengthChanged)
-        self.mThread.sigRelativeHumidityChanged.connect(self.humidityChanged)
-        self.mThread.sigPumpPowerChanged.connect(self.pumpPowerChanged)
+        self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
+        self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
         self.mThread.start()
         Laser.__init__(self, dm, config, name)
         
@@ -58,11 +58,13 @@ class MaiTaiLaser(Laser):
     
     def humidityChanged(self,hum):
         with self.maiTaiLock:
-            self.maiTaiHumidity = hum 
+            self.maiTaiHumidity = hum
+            self.sigRelativeHumidityChanged.emit(hum)
             
     def pumpPowerChanged(self,pP):
         with self.maiTaiLock:
-            self.maiTaiPumpPower = pP 
+            self.maiTaiPumpPower = pP
+            self.sigPumpPowerChanged.emit(pP)
             
     def humidity(self):
         with self.maiTaiLock:
@@ -128,8 +130,8 @@ class MaiTaiThread(Thread):
 
     sigPowerChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
-    sigRelativeHumidityChanged = QtCore.Signal(object)
-    sigPumpPowerChanged = QtCore.Signal(object)
+    sigRelHumidityChanged = QtCore.Signal(object)
+    sigPPowerChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
@@ -162,8 +164,8 @@ class MaiTaiThread(Thread):
                     pumpPower = self.driver.getPumpPower()
                 self.sigPowerChanged.emit(power)
                 self.sigWavelengthChanged.emit(wl)
-                self.sigRelativeHumidityChanged.emit(hum)
-                self.sigPumpPowerChanged.emit(pumpPower)
+                self.sigRelHumidityChanged.emit(hum)
+                self.sigPPowerChanged.emit(pumpPower)
                 time.sleep(0.5)
             except:
                 debug.printExc("Error in Coherent laser communication thread:")

@@ -630,45 +630,47 @@
    <item row="3" column="0" colspan="5">
     <widget class="QGroupBox" name="MaiTaiGroup">
      <layout class="QGridLayout" name="gridLayout_11">
-      <item row="2" column="0">
+      <item row="1" column="2">
+       <widget class="QLabel" name="relHumidityLabel">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
        <widget class="QLabel" name="label_14">
         <property name="text">
          <string>relative Humidity:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_13">
+      <item row="0" column="2">
+       <widget class="QLabel" name="PulsingLabel">
         <property name="text">
-         <string>Pulsing:</string>
+         <string>Not Pulsing</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
         </property>
        </widget>
       </item>
       <item row="0" column="0">
-       <widget class="QLabel" name="label_6">
+       <widget class="QLabel" name="EmissionLabel">
         <property name="text">
-         <string>Emission:</string>
+         <string>Emission Off</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QLabel" name="EmissionLabel">
+       <widget class="QLabel" name="ShutterLabel">
         <property name="text">
-         <string/>
+         <string>Shutter Closed</string>
         </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QLabel" name="PulsingLabel">
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QLabel" name="relHumidityLabel">
-        <property name="text">
-         <string/>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
         </property>
        </widget>
       </item>

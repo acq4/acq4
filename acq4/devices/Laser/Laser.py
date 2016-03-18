@@ -89,6 +89,8 @@ class Laser(DAQGeneric, OptomechDevice):
     sigOutputPowerChanged = QtCore.Signal(object, object)  ## power, bool (power within expected range)
     sigSamplePowerChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
+    sigRelativeHumidityChanged = QtCore.Signal(object)
+    sigPumpPowerChanged = QtCore.Signal(object)
     
     def __init__(self, manager, config, name):
         self.config = config

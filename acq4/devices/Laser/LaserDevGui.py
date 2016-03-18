@@ -157,12 +157,16 @@ class LaserDevGui(QtGui.QWidget):
             self.dev.switchLaserOn()
             self.ui.shutterBtn.setText('Turn Laser Off')
             self.ui.shutterBtn.setStyleSheet("QLabel {background-color: #ff0000}") 
+            self.ui.EmissionLabel.setText('Emission ON')
+            self.ui.shutterBtn.setStyleSheet("QLabel {color: #ff0000}") 
             self.ui.shutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
             self.ui.shutterBtn.setText('Turn Laser On')
-            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}") 
+            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
+            self.ui.EmissionLabel.setText('Emission Off')
+            self.ui.shutterBtn.setStyleSheet("QLabel {color: None}") 
             self.ui.shutterBtn.setEnabled(False)
             
     def currentPowerToggled(self, b):
