@@ -464,6 +464,9 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
+        self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
+        self.layout.addWidget(self.depthLabel, 1, 0)
+
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
 
@@ -481,11 +484,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
-        prof = pg.debug.Profiler()
         focus = self.getDevice().getFocusDepth()
-        prof('1')
         self.focusLine.setValue(focus)
-        prof('2')
 
         # Compute the target focal plane.
         # This is a little tricky because the objective might have an offset+scale relative
@@ -493,16 +493,14 @@ class ScopeCameraModInterface(CameraModuleInterface):
         fd = self.getDevice().focusDevice()
         if fd is None:
             return
-        prof('3')
         tpos = fd.globalTargetPosition()
-        prof('4')
         fpos = fd.globalPosition()
-        prof('5')
         dif = tpos[2] - fpos[2]
-        prof('6')
         with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
             self.movableFocusLine.setValue(focus + dif)
-        prof('7')
+
+        depth = fpos[2] - self.getDevice().getSurfaceDepth()
+        self.depthLabel.setValue(depth)
 
     def focusDragged(self):
         self.getDevice().setFocusDepth(self.movableFocusLine.value())
