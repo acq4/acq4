@@ -16,18 +16,35 @@ class MaiTaiLaser(Laser):
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         
         self.maiTaiLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
-        self.maiTaiPower = 0
+        self.maiTaiPower = 0.
         self.maiTaiWavelength = 0
+        self.maiTaiHumidity = 0.
+        self.maiTaiPumpPower = 0.
         
         self.mThread = MaiTaiThread(self, self.driver, self.driverLock)
         self.mThread.sigPowerChanged.connect(self.powerChanged)
         self.mThread.sigWavelengthChanged.connect(self.wavelengthChanged)
+        self.mThread.sigRelativeHumidityChanged.connect(self.humidityChanged)
+        self.mThread.sigPumpPowerChanged.connect(self.pumpPowerChanged)
         self.mThread.start()
         Laser.__init__(self, dm, config, name)
         
         self.hasShutter = True
         self.hasTunableWavelength = True
-        
+    
+    def isLaserOn():
+       with self.driverLock:
+           status = self.driver.checkStatus()
+           return bool(status%2)
+       
+    def switchLaserOn(self):
+        with self.driverLock:
+            self.driver.turnLaserOn()
+
+    def switchLaserOff(self):
+        with self.driverLock:
+            self.driver.turnLaserOff()
+            
     def powerChanged(self, power):
         with self.maiTaiLock:
             self.maiTaiPower = power
@@ -38,10 +55,26 @@ class MaiTaiLaser(Laser):
     def wavelengthChanged(self, wl):
         with self.maiTaiLock:
             self.maiTaiWavelength = wl
+    
+    def humidityChanged(self,hum):
+        with self.maiTaiLock:
+            self.maiTaiHumidity = hum 
+            
+    def pumpPowerChanged(self,pP):
+        with self.maiTaiLock:
+            self.maiTaiPumpPower = pP 
+            
+    def humidity(self):
+        with self.maiTaiLock:
+            return self.maiTaiHumidity 
         
     def outputPower(self):
         with self.maiTaiLock:
             return self.maiTaiPower
+    
+    def getPumpPower(self):
+        with self.maiTaiLock:
+            return self.maiTaiPumpPower
     
     def getWavelength(self):
         with self.maiTaiLock:
@@ -56,29 +89,6 @@ class MaiTaiLaser(Laser):
             bounds = self.driver.getWavelengthRange()
         return bounds[0]*1e-9, bounds[1]*1e-9
     
-    
-    def getGDDMinMax(self):
-        with self.driverLock:
-            gddlims = self.driver.getGDDMinMax()
-        return gddlims
-    
-    def setGDD(self, value):
-        with self.driverLock:
-            self.driver.setGDD(value)
-           # print 'comp is %s' % self.driver.getComp()
-            #print 'Gdd set to %s, reading back gives %s' % (value, self.driver.getGDD())
-       # with self.driverLock:
-       #     print 'Gdd set to %s, reading back gives %s' % (value, self.driver.getGDD())
-
-            
-            
-    def clearGDD(self):
-        with self.driverLock:
-            self.driver.clearGDD()
-        
-    ## Shutter functions are disabled because coherent lasers are not really designed to 
-    ## operate their shutters this way. Use an external shutter instead.
-    ## (excessive shutter activity can damage the shutter)
     def openShutter(self):
         with self.driverLock:
             self.driver.setShutter(True)
@@ -118,6 +128,8 @@ class MaiTaiThread(Thread):
 
     sigPowerChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
+    sigRelativeHumidityChanged = QtCore.Signal(object)
+    sigPumpPowerChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
@@ -146,8 +158,12 @@ class MaiTaiThread(Thread):
                 with self.driverLock:
                     power = self.driver.getPower() * 1e-3
                     wl = self.driver.getWavelength()*1e-9
+                    hum = self.driver.getRelativeHumidity()
+                    pumpPower = self.driver.getPumpPower()
                 self.sigPowerChanged.emit(power)
                 self.sigWavelengthChanged.emit(wl)
+                self.sigRelativeHumidityChanged.emit(hum)
+                self.sigPumpPowerChanged.emit(pumpPower)
                 time.sleep(0.5)
             except:
                 debug.printExc("Error in Coherent laser communication thread:")

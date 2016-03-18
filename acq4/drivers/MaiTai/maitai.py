@@ -78,8 +78,8 @@ class MaiTai(SerialDevice):
     
     def checkStatus(self):
         """Reads and returns the relative humidity (in percent) of the Mai Tai Ti:sapphire laser cavity. Humidity should always be below 10 %."""
-        isON = self['READ:ON?']
-        return isON
+        status = self['*STB?']
+        return status
     
     def getPower(self):
         """Reads and returns Mai Tai output power"""
@@ -215,12 +215,16 @@ if __name__ == '__main__':
     
     print 'shutter open? : ', maiTai.getShutter()
     
+    print 'check status : ', maiTai.checkStatus()
+    
     print 'turning laser on : ', 
     maiTai.turnLaserOn()
     print 'done'
+    print 'check status : ', maiTai.checkStatus()
     print 'opening shutter : ',
     maiTai.setShutter(True)
     print 'done'
+    print 'check status : ', maiTai.checkStatus()
     n=0
     while n < 10:
         print 'relative Humidity : ', maiTai.getRelativeHumidity()
@@ -232,7 +236,7 @@ if __name__ == '__main__':
     print 'closing shutter : ', 
     maiTai.setShutter(False)
     print 'done'
-    #print 'turning laser off : ', 
-    #maiTai.turnLaserOff()
-    #print 'done'
+    print 'turning laser off : ', 
+    maiTai.turnLaserOff()
+    print 'done'
             
