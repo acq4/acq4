@@ -363,6 +363,38 @@ def getWCCompSettings(data_handle):
         return {'WCCompValid': False, 'WCEnable': 0, 'WCResistance': 0., 'WholeCellCap': 0.,
                 'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000. }
 
+def getBridgeBalanceCompensation(data_handle):
+    """Return the bridge balance compensation setting for current clamp data, if bridge balance compensation was enabled.
+
+            data_handle    A MetaArray file or clamp file handle."""
+
+    if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
+        data = data_handle
+    elif isClampFile(data_handle):
+        data = data_handle.read(readAllData=False)
+    else:
+        raise Exception('%s not a clamp file.' % data)
+
+
+    mode = getClampMode(data)
+    global ic_modes
+    if mode not in ic_modes:
+        raise Exception("Data is in %s mode, not a current clamp mode, and therefore bridge balance compensation is not applicable." %str(mode))
+
+    info = data.infoCopy()[-1]
+    bridgeEnabled = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalEnable', None)
+    if bridgeEnabled is None:
+        raise Exception('Could not find whether BridgeBalance compensation was enabled for the given data.')
+    elif not bridgeEnabled:
+        return 0.0
+    else:
+        bridge = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalResist', None)
+        if bridge is not None:
+            return bridge
+        else:
+            raise Exception('Could not find BridgeBalanceCompensation value for the given data.')
+
+
 def getSampleRate(data_handle):
     """given clamp data, return the data sampling rate """
     if not isClampFile(data_handle):
@@ -696,8 +728,8 @@ class GetClamps():
             return None
         self.RSeriesUncomp = 0.
         if self.amplifierSettings['WCCompValid']:
-            if self.amplfierSettings['WCEnabled'] and self.amplifierSettings['CompEnabled']:
-                self.RSeriesUncomp= self.amplfierSettings['WCResistance'] * (1.0 - self.amplifierSettings['CompCorrection'] / 100.)
+            if self.amplifierSettings['WCEnabled'] and self.amplifierSettings['CompEnabled']:
+                self.RSeriesUncomp= self.amplifierSettings['WCResistance'] * (1.0 - self.amplifierSettings['CompCorrection'] / 100.)
             else:
                 self.RSeriesUncomp = 0.
 
