@@ -274,7 +274,7 @@ class LaserDevGui(QtGui.QWidget):
         else:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
             
-    def pumpPowerChanged(self,pumpPower)
+    def pumpPowerChanged(self,pumpPower):
         if pumpPower is None:
             self.ui.pumpPowerLabel.setText("?")
         else:

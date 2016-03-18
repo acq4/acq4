@@ -77,9 +77,8 @@ class MaiTai(SerialDevice):
         return self.convertToFloat(relHumidity)
     
     def checkStatus(self):
-        """Reads and returns the relative humidity (in percent) of the Mai Tai Ti:sapphire laser cavity. Humidity should always be below 10 %."""
-        status = self['*STB?']
-        return status
+        """Returns the product status byte."""
+        return int(self['*STB?'])
     
     def getPower(self):
         """Reads and returns Mai Tai output power"""

@@ -32,7 +32,7 @@ class MaiTaiLaser(Laser):
         self.hasShutter = True
         self.hasTunableWavelength = True
     
-    def isLaserOn():
+    def isLaserOn(self):
        with self.driverLock:
            status = self.driver.checkStatus()
            return bool(status%2)
