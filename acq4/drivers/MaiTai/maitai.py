@@ -1,4 +1,4 @@
-import serial, struct, time, collections, threading, re
+import serial, struct, time, collections, threading, re, pdb
 try:
     from ..SerialDevice import SerialDevice, TimeoutError, DataError
 except ValueError:
@@ -75,7 +75,12 @@ class MaiTai(SerialDevice):
         """Reads and returns the relative humidity (in percent) of the Mai Tai Ti:sapphire laser cavity. Humidity should always be below 10 %."""
         relHumidity = self['READ:HUM?']
         return self.convertToFloat(relHumidity)
-
+    
+    def checkStatus(self):
+        """Reads and returns the relative humidity (in percent) of the Mai Tai Ti:sapphire laser cavity. Humidity should always be below 10 %."""
+        isON = self['READ:ON?']
+        return isON
+    
     def getPower(self):
         """Reads and returns Mai Tai output power"""
         outputPower = self['READ:POWer?']

@@ -30,7 +30,7 @@ class MaiTaiLaser(Laser):
         
     def powerChanged(self, power):
         with self.maiTaiLock:
-            self.coherentPower = power
+            self.maiTaiPower = power
             self.setParam(currentPower=power)
             powerOk = self.checkPowerValidity(power)
             self.sigOutputPowerChanged.emit(power, powerOk)
@@ -41,7 +41,7 @@ class MaiTaiLaser(Laser):
         
     def outputPower(self):
         with self.maiTaiLock:
-            return self.coherentPower
+            return self.maiTaiPower
     
     def getWavelength(self):
         with self.maiTaiLock:
