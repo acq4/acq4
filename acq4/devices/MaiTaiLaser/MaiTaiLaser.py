@@ -9,6 +9,11 @@ import time
 
 class MaiTaiLaser(Laser):
 
+    sigRelativeHumidityChanged = QtCore.Signal(object)
+    sigPumpPowerChanged = QtCore.Signal(object)
+    sigPulsingStateChanged = QtCore.Signal(object)
+    
+    
     def __init__(self, dm, config, name):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
         self.baud = config.get('baud', 9600)
@@ -26,6 +31,7 @@ class MaiTaiLaser(Laser):
         self.mThread.sigWavelengthChanged.connect(self.wavelengthChanged)
         self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
         self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
+        self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
         self.mThread.start()
         Laser.__init__(self, dm, config, name)
         
@@ -65,7 +71,12 @@ class MaiTaiLaser(Laser):
         with self.maiTaiLock:
             self.maiTaiPumpPower = pP
             self.sigPumpPowerChanged.emit(pP)
-            
+    
+    def pulsingStateChanged(self, pulse):
+        with self.maiTaiLock:
+            self.maiTaiPumpPower = pulse
+            self.sigPulsingStateChanged.emit(pulse)
+    
     def humidity(self):
         with self.maiTaiLock:
             return self.maiTaiHumidity 
@@ -107,7 +118,10 @@ class MaiTaiLaser(Laser):
         
     def createTask(self, cmd, parentTask):
         return MaiTaiTask(self, cmd, parentTask)
-        
+
+    def deviceInterface(self, win):
+        return MaiTaiDevGui(self)
+    
 class MaiTaiTask(LaserTask):
     pass
     # This is disabled--internal shutter in coherent laser should NOT be used by ACQ4; use a separate shutter.
@@ -132,6 +146,7 @@ class MaiTaiThread(Thread):
     sigWavelengthChanged = QtCore.Signal(object)
     sigRelHumidityChanged = QtCore.Signal(object)
     sigPPowerChanged = QtCore.Signal(object)
+    sigPulsingSChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
@@ -162,10 +177,12 @@ class MaiTaiThread(Thread):
                     wl = self.driver.getWavelength()*1e-9
                     hum = self.driver.getRelativeHumidity()
                     pumpPower = self.driver.getPumpPower()
+                    isPulsing = self.driver.checkPulsing()
                 self.sigPowerChanged.emit(power)
                 self.sigWavelengthChanged.emit(wl)
                 self.sigRelHumidityChanged.emit(hum)
                 self.sigPPowerChanged.emit(pumpPower)
+                self.sigPulsingSChanged.emit(isPulsing)
                 time.sleep(0.5)
             except:
                 debug.printExc("Error in Coherent laser communication thread:")
