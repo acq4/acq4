@@ -11,6 +11,7 @@ import time
 class MaiTaiDevGui(LaserDevGui):
     
     def __init__(self, dev):
+        LaserDevGui.__init__(self,dev)
         self.dev = dev
         #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
@@ -21,6 +22,7 @@ class MaiTaiDevGui(LaserDevGui):
         ### configure gui
         ### hide group boxes which are not related to Mai Tai function 
         self.ui.powerGroup.hide()
+        self.ui.subPowerGroup.hide()
         self.ui.controlButtonGroup.hide()
         self.ui.wavelengthGroup.hide()
         
@@ -283,7 +285,7 @@ class MaiTaiDevGui(LaserDevGui):
         if pulsing: 
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
-            self.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
+            self.ui.relHumidityLabel.setText(siFormat(pulsing, suffix='%'))
     
     ## Calibration options below
     def updateCalibrationList(self):
