@@ -99,6 +99,7 @@ class Laser(DAQGeneric, OptomechDevice):
         self.hasQSwitch = False
         self.hasPCell = False
         self.hasTunableWavelength = False
+        self.hasExternalSwitch = False
         
         self.params = {
             'expectedPower': config.get('power', None), ## Expected output
@@ -109,10 +110,7 @@ class Laser(DAQGeneric, OptomechDevice):
             'powerAlert': True ## set True if you want changes in output power to raise an error
             }
         
-        try :
-            daqConfig 
-        except NameError:
-            daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
+        daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
         if 'powerIndicator' in config:
             self.hasPowerIndicator = True
             #### name of powerIndicator is config['powerIndicator']['channel'][0]
@@ -127,7 +125,10 @@ class Laser(DAQGeneric, OptomechDevice):
         if 'pCell' in config:
             daqConfig['pCell'] = config['pCell']
             self.hasPCell = True
-                        
+        if 'externalSwitch' in config:
+            daqConfig['externalSwitch'] = config['externalSwitch']
+            self.hasExternalSwitch = True
+    
         daqConfig['power'] = {'type': 'ao', 'units': 'W'}  ## virtual channel used for creating control widgets
         DAQGeneric.__init__(self, manager, daqConfig, name)
         OptomechDevice.__init__(self, manager, config, name)

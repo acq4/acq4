@@ -35,20 +35,17 @@ class MaiTaiLaser(Laser):
         self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
         self.mThread.start()
         
-        
-        daqConfig = {}
-        
-        if 'externalSwitch' in config:
-            daqConfig['externalSwitch'] = config['externalSwitch']
-            self.hasExternalSwitch = True
-
         Laser.__init__(self, dm, config, name)
         
         self.hasShutter = True
         self.hasTunableWavelength = True
         
-        manager.sigAbortAll.connect(self.closeInternalShutter)
-    
+        if self.hasExternalSwitch:
+            if not self.getInternalShutter():
+                self.setChanHolding('externalSwitch', 1)
+        
+        dm.sigAbortAll.connect(self.closeInternalShutter)
+        
     def isLaserOn(self):
        with self.driverLock:
            status = self.driver.checkStatus()
@@ -116,14 +113,14 @@ class MaiTaiLaser(Laser):
     
     def openInternalShutter(self):
         if self.hasExternalSwitch:
-            self.setChanHolding('externalSwitch', 1)
+            self.setChanHolding('externalSwitch', 0)
         with self.driverLock:
             self.driver.setShutter(True)
         #Laser.openShutter(self)
         
     def closeInternalShutter(self):
         if self.hasExternalSwitch:
-            self.setChanHolding('externalSwitch', 0)
+            self.setChanHolding('externalSwitch', 1)
         with self.driverLock:
             self.driver.setShutter(False)
         #Laser.closeShutter(self)

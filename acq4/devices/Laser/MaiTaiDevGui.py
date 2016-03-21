@@ -32,8 +32,11 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setChecked(True)
             if self.dev.getInternalShutter():
                 self.internalShutterToggled(True)
-                self.ui.shutterBtn_2.setChecked(True)
-        
+                self.ui.InternalShutterBtn.setChecked(True)
+           self.ui.InternalShutterBtn.setEnabled(True)
+        else:
+            self.ui.InternalShutterBtn.setEnabled(False)
+                
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
         
@@ -132,7 +135,8 @@ class MaiTaiDevGui(LaserDevGui):
         #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
         #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.turnOnOffBtn.toggled.connect(self.onOffToggled)
-        self.ui.internalShutterBtn.toggled.connect(self.internalShutterToggled)
+        self.ui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
+        self.ui.ExternalShutterBtn.toggled.connect(self.externalShutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
         self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
@@ -175,7 +179,8 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setText('Turn Off Laser')
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
             self.ui.EmissionLabel.setText('Emission ON')
-            self.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}") 
+            self.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}")
+            self.ui.InternalShutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
@@ -183,6 +188,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
             self.ui.EmissionLabel.setText('Emission Off')
             self.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
+            self.ui.InternalShutterBtn.setEnabled(False)
             
     def currentPowerToggled(self, b):
         if b:
