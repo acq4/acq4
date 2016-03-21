@@ -14,14 +14,15 @@ class MaiTaiDevGui(LaserDevGui):
         LaserDevGui.__init__(self,dev)
         self.dev = dev
         #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
-        self.ui = Ui_Form()
-        self.ui.setupUi(self)
+        #self.ui = Ui_Form()
+        #self.ui.setupUi(self)
+        
         self.calibrateWarning = self.dev.config.get('calibrationWarning', None)
         self.calibrateBtnState = 0
         
         ### configure gui
         ### hide group boxes which are not related to Mai Tai function 
-        self.ui.powerGroup.hide()
+        #self.ui.powerGroup.hide()
         self.ui.subPowerGroup.hide()
         self.ui.controlButtonGroup.hide()
         self.ui.wavelengthGroup.hide()
@@ -162,9 +163,9 @@ class MaiTaiDevGui(LaserDevGui):
         if b:
             self.dev.switchLaserOn()
             self.ui.turnOnOffBtn.setText('Turn Off Laser')
-            self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #ff0000}") 
+            self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #B00}") 
             self.ui.EmissionLabel.setText('Emission ON')
-            self.ui.shutterBtn.setStyleSheet("QLabel {color: #ff0000}") 
+            self.ui.shutterBtn.setStyleSheet("QLabel {color: #B00}") 
             self.ui.shutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
@@ -193,6 +194,7 @@ class MaiTaiDevGui(LaserDevGui):
         if b:
             self.dev.openShutter()
             self.ui.shutterBtn.setText('Close Shutter')
+            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: #B00}") 
         elif not b:
             self.dev.closeShutter()
             self.ui.shutterBtn.setText('Open Shutter')
