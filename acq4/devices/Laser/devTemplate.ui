@@ -675,7 +675,7 @@
        <widget class="QLabel" name="currentWaveLengthLabel">
         <property name="font">
          <font>
-          <pointsize>12</pointsize>
+          <pointsize>10</pointsize>
           <weight>75</weight>
           <bold>true</bold>
          </font>

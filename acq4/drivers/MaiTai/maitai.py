@@ -79,7 +79,7 @@ class MaiTai(SerialDevice):
     def isLaserOn(self):
         """Returns wheter laser is on."""
         status = int(self['*STB?'])  #Returns the product status byte.
-        return is_set(status,0)
+        return self.is_set(status,0)
     
     def getPower(self):
         """Reads and returns Mai Tai output power"""
@@ -112,10 +112,10 @@ class MaiTai(SerialDevice):
     def checkPulsing(self):
         """Return True if the laser is pulsing."""
         status = int(self['*STB?'])  #Returns the product status byte.
-        return is_set(status,1)
+        return self.is_set(status,1)
     
     def is_set(self,x, n):
-         """ checks whether n^th bit is set"""
+        """ checks whether n^th bit is set"""
         return (x & 2**n != 0)
 
     def turnLaserOn(self):

@@ -208,25 +208,25 @@ class MaiTaiDevGui(LaserDevGui):
         if b:
             self.dev.openInternalShutter()
             self.ui.InternalShutterBtn.setText('Close Laser Shutter')
-            self.ui.InternalShutterLabel.setText('Laser Shut. Open')
+            self.ui.InternalShutterLabel.setText('Laser Shutter Open')
             self.ui.InternalShutterLabel.setStyleSheet("QLabel {color: #0A0}") 
         elif not b:
             self.dev.closeInternalShutter()
             self.ui.InternalShutterBtn.setText('Open Laser Shutter')
             #self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
-            self.ui.InternalShutterLabel.setText('Laser Shut. Closed')
+            self.ui.InternalShutterLabel.setText('Laser Shutter Closed')
             self.ui.InternalShutterLabel.setStyleSheet("QLabel {color: None}")
     
     def externalShutterToggled(self, b):
         if b:
             self.dev.openShutter()
             self.ui.ExternalShutterBtn.setText('Close External Shutter')
-            self.ui.ExternalShutterLabel.setText('External Shut. Open')
+            self.ui.ExternalShutterLabel.setText('External Shutter Open')
             self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #10F}") 
         elif not b:
             self.dev.closeShutter()
             self.ui.ExternalShutterBtn.setText('Open External Shutter')   
-            self.ui.ExternalShutterLabel.setText('External Shut. Closed')
+            self.ui.ExternalShutterLabel.setText('External Shutter Closed')
             self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
     
     def expectedPowerSpinChanged(self, value):
