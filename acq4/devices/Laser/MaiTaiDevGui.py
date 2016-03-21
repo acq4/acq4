@@ -19,12 +19,10 @@ class MaiTaiDevGui(LaserDevGui):
         self.calibrateBtnState = 0
         
         ### configure gui
-        self.ui.energyCalcGroup.hide()  ## not using this for now
         ### hide group boxes which are not related to Mai Tai function 
-        self.ui.subPowerGroup.hide()
-        self.ui.GDDGroup.hide()
-        self.ui.checkPowerBtn.hide()
-        self.ui.qSwitchBtn.hide()
+        self.ui.powerGroup.hide()
+        self.ui.controlButtonGroup.hide()
+        self.ui.wavelengthGroup.hide()
         
         if self.dev.isLaserOn():
             self.onOffToggled(True)
