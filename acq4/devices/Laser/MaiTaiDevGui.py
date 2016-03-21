@@ -1,16 +1,16 @@
 from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
 from devTemplate import Ui_Form
+from LaserDevGui import LaserDevGui
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
 import time
 
 
-class LaserDevGui(QtGui.QWidget):
+class MaiTaiDevGui(LaserDevGui):
     
     def __init__(self, dev):
-        QtGui.QWidget.__init__(self)
         self.dev = dev
         #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
@@ -20,23 +20,23 @@ class LaserDevGui(QtGui.QWidget):
         
         ### configure gui
         self.ui.energyCalcGroup.hide()  ## not using this for now
+        ### hide group boxes which are not related to Mai Tai function 
+        self.ui.subPowerGroup.hide()
+        self.ui.GDDGroup.hide()
+        self.ui.checkPowerBtn.hide()
+        self.ui.qSwitchBtn.hide()
         
-        if self.dev.config.get('driver',None) == 'MaiTaiLaser':
-            self.ui.subPowerGroup.hide()
-            self.ui.GDDGroup.hide()
-            self.ui.checkPowerBtn.hide()
-            self.ui.qSwitchBtn.hide()
-            if self.dev.isLaserOn():
-                self.onOffToggled(True)
-                self.ui.turnOnOffBtn.setChecked(True)
-                if self.dev.getShutter():
-                    self.shutterToggled(True)
-                    self.ui.shutterBtn.setChecked(True)
-            else:
-                self.ui.shutterBtn.setEnabled(False)
+        if self.dev.isLaserOn():
+            self.onOffToggled(True)
+            self.ui.turnOnOffBtn.setChecked(True)
+            if self.dev.getShutter():
+                self.shutterToggled(True)
+                self.ui.shutterBtn.setChecked(True)
         else:
-            self.ui.MaiTaiGroup.hide()
-            self.ui.turnOnOffBtn.hide()
+            self.ui.shutterBtn.setEnabled(False)
+        
+        #self.ui.MaiTaiGroup.hide()
+        #self.ui.turnOnOffBtn.hide()
         
         
         self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
@@ -134,6 +134,8 @@ class LaserDevGui(QtGui.QWidget):
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         self.dev.sigPumpPowerChanged.connect(self.pumpPowerChanged)
         self.dev.sigRelativeHumidityChanged.connect(self.relHumidityChanged)
+        self.dev.sigPulsingStateChanged.connect(self.pulsingStateChanged)
+        
         try:
             self.dev.outputPower()  ## check laser power
         except:
@@ -159,7 +161,7 @@ class LaserDevGui(QtGui.QWidget):
     def onOffToggled(self, b):
         if b:
             self.dev.switchLaserOn()
-            self.ui.turnOnOffBtn.setText('Turn Laser Off')
+            self.ui.turnOnOffBtn.setText('Turn Off Laser')
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #ff0000}") 
             self.ui.EmissionLabel.setText('Emission ON')
             self.ui.shutterBtn.setStyleSheet("QLabel {color: #ff0000}") 
@@ -167,7 +169,7 @@ class LaserDevGui(QtGui.QWidget):
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
-            self.ui.turnOnOffBtn.setText('Turn Laser On')
+            self.ui.turnOnOffBtn.setText('Turn On Laser')
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
             self.ui.EmissionLabel.setText('Emission Off')
             self.ui.shutterBtn.setStyleSheet("QLabel {color: None}") 
@@ -194,14 +196,6 @@ class LaserDevGui(QtGui.QWidget):
         elif not b:
             self.dev.closeShutter()
             self.ui.shutterBtn.setText('Open Shutter')
-            
-    def qSwitchToggled(self, b):
-        if b:
-            self.dev.openQSwitch()
-            self.ui.qSwitchBtn.setText('Turn Off QSwitch')
-        elif not b:
-            self.dev.closeQSwitch()
-            self.ui.qSwitchBtn.setText('Turn On QSwitch')
             
     
     def expectedPowerSpinChanged(self, value):
@@ -257,13 +251,6 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.measurementSpin.setValue(mTime)
             
     
-    #def measurementSpinChanged(self, value):
-        #pass
-    
-    #def settlingSpinChanged(self, value):
-        #pass
-        
-
 
     def samplePowerChanged(self, power):
         if power is None:
@@ -295,12 +282,12 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
     
     def pulsingStateChanged(self, pulsing):
-        if pulsing: $#######################################as
+        if pulsing: 
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
             self.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
     
-    
+    ## Calibration options below
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
