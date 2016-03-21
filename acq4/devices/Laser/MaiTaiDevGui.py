@@ -123,7 +123,7 @@ class MaiTaiDevGui(LaserDevGui):
         #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
         #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.turnOnOffBtn.toggled.connect(self.onOffToggled)
-        self.ui.shutterBtn.toggled.connect(self.shutterToggled)
+        self.ui.shutterBtn_2.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
         self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
@@ -163,9 +163,9 @@ class MaiTaiDevGui(LaserDevGui):
         if b:
             self.dev.switchLaserOn()
             self.ui.turnOnOffBtn.setText('Turn Off Laser')
-            self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #B00}") 
+            self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
             self.ui.EmissionLabel.setText('Emission ON')
-            self.ui.EmissionLabel.setStyleSheet("QLabel {color: #B00}") 
+            self.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}") 
             self.ui.shutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
@@ -194,10 +194,13 @@ class MaiTaiDevGui(LaserDevGui):
         if b:
             self.dev.openShutter()
             self.ui.shutterBtn.setText('Close Shutter')
-            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: #B00}") 
+            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: #1F0}") 
+            self.ui.ShutterLabel.setStyleSheet("QLabel {color: #1F0}") 
         elif not b:
             self.dev.closeShutter()
             self.ui.shutterBtn.setText('Open Shutter')
+            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}") 
+            self.ui.ShutterLabel.setStyleSheet("QLabel {color: None}")
             
     
     def expectedPowerSpinChanged(self, value):
@@ -265,11 +268,12 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.outputPowerLabel.setText("?")
         else:
             self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
-            
-        if not valid:
-            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
-        else:
-            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
+        
+        self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #C00}")
+        #if not valid:
+        #    self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #C00}")
+        #else:
+        #    self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
             
     def pumpPowerChanged(self,pumpPower):
         if pumpPower is None:
@@ -285,7 +289,7 @@ class MaiTaiDevGui(LaserDevGui):
     
     def pulsingStateChanged(self, pulsing):
         if pulsing: 
-            self.ui.PulsingLabel.setStyleSheet("QLabel {color: #B00}")
+            self.ui.PulsingLabel.setStyleSheet("QLabel {color: #EF0}")
         else:
             self.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
     
