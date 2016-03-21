@@ -222,7 +222,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.dev.openShutter()
             self.ui.ExternalShutterBtn.setText('Close External Shutter')
             self.ui.ExternalShutterLabel.setText('External Shut. Open')
-            self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #0A0}") 
+            self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #10F}") 
         elif not b:
             self.dev.closeShutter()
             self.ui.ExternalShutterBtn.setText('Open External Shutter')   
@@ -322,7 +322,7 @@ class MaiTaiDevGui(LaserDevGui):
     def pulsingStateChanged(self, pulsing):
         if pulsing:
             self.ui.PulsingLabel.setText('Pulsing')
-            self.ui.PulsingLabel.setStyleSheet("QLabel {color: #EF0}")
+            self.ui.PulsingLabel.setStyleSheet("QLabel {color: #EA0}")
         else:
             self.ui.PulsingLabel.setText('Not Pulsing')
             self.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
