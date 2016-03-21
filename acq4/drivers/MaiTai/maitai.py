@@ -106,7 +106,9 @@ class MaiTai(SerialDevice):
     
     def checkPulsing(self):
         """Return True if the laser is pulsing."""
-        return bool(int(self['READ:PULS?']))
+        pu = self['READ:PULS?']
+        print pu
+        return False
 
     def turnLaserOn(self):
         
