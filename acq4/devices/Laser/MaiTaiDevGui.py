@@ -32,9 +32,9 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setChecked(True)
             if self.dev.getShutter():
                 self.shutterToggled(True)
-                self.ui.shutterBtn.setChecked(True)
+                self.ui.shutterBtn_2.setChecked(True)
         else:
-            self.ui.shutterBtn.setEnabled(False)
+            self.ui.shutterBtn_2.setEnabled(False)
         
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
@@ -178,7 +178,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
             self.ui.EmissionLabel.setText('Emission ON')
             self.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}") 
-            self.ui.shutterBtn.setEnabled(True)
+            self.ui.shutterBtn_2.setEnabled(True)
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
@@ -186,7 +186,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
             self.ui.EmissionLabel.setText('Emission Off')
             self.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
-            self.ui.shutterBtn.setEnabled(False)
+            self.ui.shutterBtn_2.setEnabled(False)
             
     def currentPowerToggled(self, b):
         if b:
@@ -205,13 +205,14 @@ class MaiTaiDevGui(LaserDevGui):
     def shutterToggled(self, b):
         if b:
             self.dev.openShutter()
-            self.ui.shutterBtn.setText('Close Shutter')
-            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: #1F0}") 
-            self.ui.ShutterLabel.setStyleSheet("QLabel {color: #1F0}") 
+            self.ui.shutterBtn_2.setText('Close Shutter')
+            self.ui.ShutterLabel.setText('Shutter Open')
+            self.ui.ShutterLabel.setStyleSheet("QLabel {color: #0A0}") 
         elif not b:
             self.dev.closeShutter()
-            self.ui.shutterBtn.setText('Open Shutter')
-            self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}") 
+            self.ui.shutterBtn_2.setText('Open Shutter')
+            #self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
+            self.ui.ShutterLabel.setText('Shutter Closed')
             self.ui.ShutterLabel.setStyleSheet("QLabel {color: None}")
             
     
