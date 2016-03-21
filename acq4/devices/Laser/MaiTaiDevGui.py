@@ -30,11 +30,9 @@ class MaiTaiDevGui(LaserDevGui):
         if self.dev.isLaserOn():
             self.onOffToggled(True)
             self.ui.turnOnOffBtn.setChecked(True)
-            if self.dev.getShutter():
-                self.shutterToggled(True)
+            if self.dev.getInternalShutter():
+                self.internalShutterToggled(True)
                 self.ui.shutterBtn_2.setChecked(True)
-        else:
-            self.ui.shutterBtn_2.setEnabled(False)
         
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
@@ -134,7 +132,7 @@ class MaiTaiDevGui(LaserDevGui):
         #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
         #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.turnOnOffBtn.toggled.connect(self.onOffToggled)
-        self.ui.shutterBtn_2.toggled.connect(self.shutterToggled)
+        self.ui.internalShutterBtn.toggled.connect(self.internalShutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
         self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
@@ -178,7 +176,6 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
             self.ui.EmissionLabel.setText('Emission ON')
             self.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}") 
-            self.ui.shutterBtn_2.setEnabled(True)
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
@@ -186,7 +183,6 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
             self.ui.EmissionLabel.setText('Emission Off')
             self.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
-            self.ui.shutterBtn_2.setEnabled(False)
             
     def currentPowerToggled(self, b):
         if b:
@@ -202,19 +198,30 @@ class MaiTaiDevGui(LaserDevGui):
         else:
             self.dev.setParam(powerAlert=False)
             
-    def shutterToggled(self, b):
+    def internalShutterToggled(self, b):
+        if b:
+            self.dev.openInternalShutter()
+            self.ui.InternalShutterBtn.setText('Close Laser Shutter')
+            self.ui.InternalShutterLabel.setText('Laser Shut. Open')
+            self.ui.InternalShutterLabel.setStyleSheet("QLabel {color: #0A0}") 
+        elif not b:
+            self.dev.closeInternalShutter()
+            self.ui.InternalShutterBtn.setText('Open Laser Shutter')
+            #self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
+            self.ui.InternalShutterLabel.setText('Laser Shut. Closed')
+            self.ui.InternalShutterLabel.setStyleSheet("QLabel {color: None}")
+    
+    def externalShutterToggled(self, b):
         if b:
             self.dev.openShutter()
-            self.ui.shutterBtn_2.setText('Close Shutter')
-            self.ui.ShutterLabel.setText('Shutter Open')
-            self.ui.ShutterLabel.setStyleSheet("QLabel {color: #0A0}") 
+            self.ui.ExternalShutterBtn.setText('Close External Shutter')
+            self.ui.ExternalShutterLabel.setText('External Shut. Open')
+            self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #0A0}") 
         elif not b:
             self.dev.closeShutter()
-            self.ui.shutterBtn_2.setText('Open Shutter')
-            #self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
-            self.ui.ShutterLabel.setText('Shutter Closed')
-            self.ui.ShutterLabel.setStyleSheet("QLabel {color: None}")
-            
+            self.ui.ExternalShutterBtn.setText('Open External Shutter')   
+            self.ui.ExternalShutterLabel.setText('External Shut. Closed')
+            self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
     
     def expectedPowerSpinChanged(self, value):
         self.dev.setParam(expectedPower=value)

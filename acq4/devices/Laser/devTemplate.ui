@@ -607,9 +607,19 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="shutterBtn_2">
+       <widget class="QPushButton" name="InternalShutterBtn">
         <property name="text">
-         <string>Open Shutter</string>
+         <string>Open Laser Shutter</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="ExternalShutterBtn">
+        <property name="text">
+         <string>Open External Shutter</string>
         </property>
         <property name="checkable">
          <bool>true</bool>
@@ -688,6 +698,13 @@
    <item row="1" column="0" colspan="3">
     <widget class="QGroupBox" name="MaiTaiGroup">
      <layout class="QGridLayout" name="gridLayout_11">
+      <item row="1" column="1">
+       <widget class="QLabel" name="relHumidityLabel">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
       <item row="1" column="0">
        <widget class="QLabel" name="label_14">
         <property name="text">
@@ -695,7 +712,7 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="2">
+      <item row="0" column="3">
        <widget class="QLabel" name="PulsingLabel">
         <property name="font">
          <font>
@@ -730,7 +747,7 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QLabel" name="ShutterLabel">
+       <widget class="QLabel" name="InternalShutterLabel">
         <property name="font">
          <font>
           <pointsize>12</pointsize>
@@ -739,24 +756,34 @@
          </font>
         </property>
         <property name="text">
-         <string>Shutter Closed</string>
+         <string>Laser Shut. Closed</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
-       <widget class="QLabel" name="relHumidityLabel">
+      <item row="1" column="3">
+       <widget class="QLabel" name="label_17">
         <property name="text">
          <string/>
         </property>
        </widget>
       </item>
-      <item row="1" column="2">
-       <widget class="QLabel" name="label_17">
+      <item row="0" column="2">
+       <widget class="QLabel" name="ExternalShutterLabel">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
         <property name="text">
-         <string/>
+         <string>External Shut. Closed</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
         </property>
        </widget>
       </item>

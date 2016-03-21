@@ -109,7 +109,10 @@ class Laser(DAQGeneric, OptomechDevice):
             'powerAlert': True ## set True if you want changes in output power to raise an error
             }
         
-        daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
+        try :
+            daqConfig 
+        except NameError:
+            daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
         if 'powerIndicator' in config:
             self.hasPowerIndicator = True
             #### name of powerIndicator is config['powerIndicator']['channel'][0]
