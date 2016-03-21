@@ -13,7 +13,7 @@ class MaiTaiLaser(Laser):
     sigRelativeHumidityChanged = QtCore.Signal(object)
     sigPumpPowerChanged = QtCore.Signal(object)
     sigPulsingStateChanged = QtCore.Signal(object)
-    
+    sigWavelengthChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
@@ -29,7 +29,7 @@ class MaiTaiLaser(Laser):
         
         self.mThread = MaiTaiThread(self, self.driver, self.driverLock)
         self.mThread.sigPowerChanged.connect(self.powerChanged)
-        self.mThread.sigWavelengthChanged.connect(self.wavelengthChanged)
+        self.mThread.sigWLChanged.connect(self.wavelengthChanged)
         self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
         self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
         self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
@@ -62,6 +62,7 @@ class MaiTaiLaser(Laser):
     def wavelengthChanged(self, wl):
         with self.maiTaiLock:
             self.maiTaiWavelength = wl
+            self.sigWavelengthChanged.emit(wl)
     
     def humidityChanged(self,hum):
         with self.maiTaiLock:
@@ -144,7 +145,7 @@ class MaiTaiTask(LaserTask):
 class MaiTaiThread(Thread):
 
     sigPowerChanged = QtCore.Signal(object)
-    sigWavelengthChanged = QtCore.Signal(object)
+    sigWLChanged = QtCore.Signal(object)
     sigRelHumidityChanged = QtCore.Signal(object)
     sigPPowerChanged = QtCore.Signal(object)
     sigPulsingSChanged = QtCore.Signal(object)
@@ -170,17 +171,17 @@ class MaiTaiThread(Thread):
     def run(self):
         self.stopThread = False
         with self.driverLock:
-            self.sigWavelengthChanged.emit(self.driver.getWavelength()*1e-9)
+            self.sigWLChanged.emit(self.driver.getWavelength()*1e-9)
         while True:
             try:
                 with self.driverLock:
-                    power = self.driver.getPower() * 1e-3
+                    power = self.driver.getPower()
                     wl = self.driver.getWavelength()*1e-9
                     hum = self.driver.getRelativeHumidity()
                     pumpPower = self.driver.getPumpPower()
                     isPulsing = self.driver.checkPulsing()
                 self.sigPowerChanged.emit(power)
-                self.sigWavelengthChanged.emit(wl)
+                self.sigWLChanged.emit(wl)
                 self.sigRelHumidityChanged.emit(hum)
                 self.sigPPowerChanged.emit(pumpPower)
                 self.sigPulsingSChanged.emit(isPulsing)

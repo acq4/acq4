@@ -59,7 +59,7 @@ class MaiTai(SerialDevice):
             raise Exception("Specified wavelength of %s nm is outside the supported range by the Mai Tai : %s < wavelength < %s" % (wl,minWaveLength,maxWaveLength)  )
         
         self['WAVelength'] = int(wl)
-
+        
         if block:
             while True:
                 if self.getWavelength() == wl:
@@ -87,7 +87,7 @@ class MaiTai(SerialDevice):
     
     def getPumpPower(self):
         """Reads and returns laser output power of the pump laser"""
-        pumpOutputPower = self['READ:POWer?']
+        pumpOutputPower = self['READ:PLASer:POWer?']
         return self.convertToFloat(pumpOutputPower)
     
     def getShutter(self):

@@ -39,15 +39,26 @@ class MaiTaiDevGui(LaserDevGui):
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
         
-        
-        self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
-        self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
-        if not self.dev.hasTunableWavelength:
-            self.ui.wavelengthGroup.setVisible(False)
-        else:
-            for x in self.dev.config.get('namedWavelengths', {}).keys():
-                self.ui.wavelengthCombo.addItem(x)
-            self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
+        startWL = self.dev.getWavelength()
+        self.ui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
+        self.ui.wavelengthSpin_2.setValue(startWL)
+        self.ui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
+        self.ui.currentWaveLengthLabel.setValue(siFormat(startWL, suffix='m'))
+        #if not self.dev.hasTunableWavelength:
+        #    self.ui.wavelengthGroup.setVisible(False)
+        #else:
+        #    for x in self.dev.config.get('namedWavelengths', {}).keys():
+        #        self.ui.wavelengthCombo.addItem(x)
+        #    self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
+
+        #self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
+        #self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
+        #if not self.dev.hasTunableWavelength:
+        #    self.ui.wavelengthGroup.setVisible(False)
+        #else:
+        #    for x in self.dev.config.get('namedWavelengths', {}).keys():
+        #        self.ui.wavelengthCombo.addItem(x)
+        #    self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
                 
         if not self.dev.hasPCell:
             self.ui.pCellGroup.hide()
@@ -115,7 +126,7 @@ class MaiTaiDevGui(LaserDevGui):
         self.ui.expectedPowerRadio.toggled.connect(self.expectedPowerToggled)
         self.ui.expectedPowerSpin.valueChanged.connect(self.expectedPowerSpinChanged)
         self.ui.toleranceSpin.valueChanged.connect(self.toleranceSpinChanged)
-        self.ui.wavelengthSpin.valueChanged.connect(self.wavelengthSpinChanged)
+        self.ui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
         self.ui.wavelengthCombo.currentIndexChanged.connect(self.wavelengthComboChanged)
         #self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
         self.ui.meterCombo.currentIndexChanged.connect(self.powerMeterChanged)
@@ -136,6 +147,7 @@ class MaiTaiDevGui(LaserDevGui):
         self.dev.sigPumpPowerChanged.connect(self.pumpPowerChanged)
         self.dev.sigRelativeHumidityChanged.connect(self.relHumidityChanged)
         self.dev.sigPulsingStateChanged.connect(self.pulsingStateChanged)
+        self.dev.sigWavelengthChanged.connect(self.wavelengthChanged)
         
         try:
             self.dev.outputPower()  ## check laser power
@@ -211,10 +223,16 @@ class MaiTaiDevGui(LaserDevGui):
     def toleranceSpinChanged(self, value):
         self.dev.setParam(tolerance=value)
     
+    def wavelengthChanged(self,wl):
+        if wl is None:
+            self.ui.currentWaveLengthLabel.setText("?")
+        else:
+            self.ui.currentWaveLengthLabel.setText(siFormat(wl, suffix='m'))
+        
     def wavelengthSpinChanged(self, value):
         self.dev.setWavelength(value)
-        if value not in self.dev.config.get('namedWavelengths', {}).keys():
-            self.ui.wavelengthCombo.setCurrentIndex(0)
+        #if value not in self.dev.config.get('namedWavelengths', {}).keys():
+        #    self.ui.wavelengthCombo.setCurrentIndex(0)
     
     def wavelengthComboChanged(self):
         if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."

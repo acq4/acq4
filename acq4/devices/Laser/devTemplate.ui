@@ -634,7 +634,7 @@
      <property name="title">
       <string/>
      </property>
-     <layout class="QGridLayout" name="gridLayout_9" columnstretch="0,0,0,0">
+     <layout class="QGridLayout" name="gridLayout_9" columnstretch="0,0,0">
       <property name="leftMargin">
        <number>6</number>
       </property>
@@ -675,20 +675,6 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="3">
-       <widget class="QLabel" name="label_6">
-        <property name="text">
-         <string>nm</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="3">
-       <widget class="QLabel" name="label_15">
-        <property name="text">
-         <string>nm</string>
-        </property>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>
@@ -707,6 +693,8 @@
         <property name="font">
          <font>
           <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
          </font>
         </property>
         <property name="text">
@@ -722,6 +710,8 @@
         <property name="font">
          <font>
           <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
          </font>
         </property>
         <property name="text">
@@ -737,6 +727,8 @@
         <property name="font">
          <font>
           <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
          </font>
         </property>
         <property name="text">
@@ -757,7 +749,7 @@
       <item row="1" column="2">
        <widget class="QLabel" name="label_17">
         <property name="text">
-         <string>%</string>
+         <string/>
         </property>
        </widget>
       </item>
