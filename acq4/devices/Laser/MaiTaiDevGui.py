@@ -165,7 +165,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setText('Turn Off Laser')
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #B00}") 
             self.ui.EmissionLabel.setText('Emission ON')
-            self.ui.shutterBtn.setStyleSheet("QLabel {color: #B00}") 
+            self.ui.EmissionLabel.setStyleSheet("QLabel {color: #B00}") 
             self.ui.shutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
@@ -173,7 +173,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.turnOnOffBtn.setText('Turn On Laser')
             self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
             self.ui.EmissionLabel.setText('Emission Off')
-            self.ui.shutterBtn.setStyleSheet("QLabel {color: None}") 
+            self.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
             self.ui.shutterBtn.setEnabled(False)
             
     def currentPowerToggled(self, b):
@@ -285,9 +285,9 @@ class MaiTaiDevGui(LaserDevGui):
     
     def pulsingStateChanged(self, pulsing):
         if pulsing: 
-            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
+            self.ui.PulsingLabel.setStyleSheet("QLabel {color: #B00}")
         else:
-            self.ui.relHumidityLabel.setText(siFormat(pulsing, suffix='%'))
+            self.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
     
     ## Calibration options below
     def updateCalibrationList(self):

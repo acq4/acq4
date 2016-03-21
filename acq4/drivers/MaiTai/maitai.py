@@ -98,6 +98,10 @@ class MaiTai(SerialDevice):
         """Open (True) or close (False) the shutter"""
         while self.getShutter() != val:
             self['SHUTter'] = (1 if val else 0)
+        if val:
+            print 'Shutter OPEN'
+        else:
+            print 'Shutter CLOSED'
         
         
     def getSystemIdentification(self):
@@ -122,12 +126,14 @@ class MaiTai(SerialDevice):
 
         self.write('ON\r')
         time.sleep(self.waitTime)
+        print 'LASER IS ON'
         
     def turnLaserOff(self):
         if self.getShutter():
             self.setShutter(False)
         self.write('OFF\r')
         time.sleep(self.waitTime)
+        print 'LASER IS OFF'
     
     def __getitem__(self, arg):  ## request a single value from the laser
         #print "write", arg
