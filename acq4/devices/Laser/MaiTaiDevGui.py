@@ -33,7 +33,7 @@ class MaiTaiDevGui(LaserDevGui):
             if self.dev.getInternalShutter():
                 self.internalShutterToggled(True)
                 self.ui.InternalShutterBtn.setChecked(True)
-           self.ui.InternalShutterBtn.setEnabled(True)
+            self.ui.InternalShutterBtn.setEnabled(True)
         else:
             self.ui.InternalShutterBtn.setEnabled(False)
                 
@@ -320,9 +320,11 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
     
     def pulsingStateChanged(self, pulsing):
-        if pulsing: 
+        if pulsing:
+            self.ui.PulsingLabel.setText('Pulsing')
             self.ui.PulsingLabel.setStyleSheet("QLabel {color: #EF0}")
         else:
+            self.ui.PulsingLabel.setText('Not Pulsing')
             self.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
     
     ## Calibration options below

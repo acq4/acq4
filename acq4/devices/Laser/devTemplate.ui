@@ -109,45 +109,7 @@
       <property name="bottomMargin">
        <number>6</number>
       </property>
-      <item row="0" column="5" rowspan="3">
-       <widget class="QGroupBox" name="energyCalcGroup">
-        <property name="title">
-         <string>For energy calculations use:</string>
-        </property>
-        <layout class="QVBoxLayout" name="verticalLayout">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QRadioButton" name="currentPowerRadio">
-           <property name="text">
-            <string>Current Power</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="expectedPowerRadio">
-           <property name="text">
-            <string>Expected Power</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item row="0" column="0">
+      <item row="1" column="0">
        <widget class="QLabel" name="label_4">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
@@ -160,14 +122,14 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="label_8">
         <property name="text">
          <string>Power at sample (calc.):</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
+      <item row="1" column="1">
        <widget class="QLabel" name="outputPowerLabel">
         <property name="font">
          <font>
@@ -181,7 +143,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="QLabel" name="samplePowerLabel">
         <property name="font">
          <font>
@@ -195,21 +157,21 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
+      <item row="0" column="0">
        <widget class="QLabel" name="label_16">
         <property name="text">
          <string>Current Pump Power:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="0" column="1">
        <widget class="QLabel" name="pumpPowerLabel">
         <property name="text">
          <string/>
         </property>
        </widget>
       </item>
-      <item row="0" column="2" rowspan="3">
+      <item row="0" column="2" rowspan="4">
        <widget class="QGroupBox" name="subPowerGroup">
         <layout class="QGridLayout" name="gridLayout_10">
          <item row="0" column="1">
@@ -249,6 +211,44 @@
              <width>75</width>
              <height>0</height>
             </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="5" rowspan="4">
+       <widget class="QGroupBox" name="energyCalcGroup">
+        <property name="title">
+         <string>For energy calculations use:</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QRadioButton" name="currentPowerRadio">
+           <property name="text">
+            <string>Current Power</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="expectedPowerRadio">
+           <property name="text">
+            <string>Expected Power</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -716,7 +716,7 @@
        <widget class="QLabel" name="PulsingLabel">
         <property name="font">
          <font>
-          <pointsize>12</pointsize>
+          <pointsize>10</pointsize>
           <weight>75</weight>
           <bold>true</bold>
          </font>
@@ -733,7 +733,7 @@
        <widget class="QLabel" name="EmissionLabel">
         <property name="font">
          <font>
-          <pointsize>12</pointsize>
+          <pointsize>10</pointsize>
           <weight>75</weight>
           <bold>true</bold>
          </font>
@@ -750,13 +750,13 @@
        <widget class="QLabel" name="InternalShutterLabel">
         <property name="font">
          <font>
-          <pointsize>12</pointsize>
+          <pointsize>10</pointsize>
           <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
         <property name="text">
-         <string>Laser Shut. Closed</string>
+         <string>Laser Shutter Closed</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -774,13 +774,13 @@
        <widget class="QLabel" name="ExternalShutterLabel">
         <property name="font">
          <font>
-          <pointsize>12</pointsize>
+          <pointsize>10</pointsize>
           <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
         <property name="text">
-         <string>External Shut. Closed</string>
+         <string>External Shutter Closed</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
