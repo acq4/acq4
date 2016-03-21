@@ -308,7 +308,7 @@ class Ui_Form(object):
         self.gridLayout_9.addWidget(self.wavelengthSpin_2, 0, 2, 1, 1)
         self.currentWaveLengthLabel = QtGui.QLabel(self.maitaiWavelengthGroup)
         font = QtGui.QFont()
-        font.setPointSize(12)
+        font.setPointSize(10)
         font.setBold(True)
         font.setWeight(75)
         self.currentWaveLengthLabel.setFont(font)
