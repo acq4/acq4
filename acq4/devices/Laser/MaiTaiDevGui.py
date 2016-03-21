@@ -43,7 +43,7 @@ class MaiTaiDevGui(LaserDevGui):
         self.ui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
         self.ui.wavelengthSpin_2.setValue(startWL)
         self.ui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
-        self.ui.currentWaveLengthLabel.setValue(siFormat(startWL, suffix='m'))
+        self.ui.currentWaveLengthLabel.setText(siFormat(startWL, suffix='m'))
         #if not self.dev.hasTunableWavelength:
         #    self.ui.wavelengthGroup.setVisible(False)
         #else:

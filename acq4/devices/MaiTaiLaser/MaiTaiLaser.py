@@ -92,8 +92,8 @@ class MaiTaiLaser(Laser):
             return self.maiTaiPumpPower
     
     def getWavelength(self):
-        with self.maiTaiLock:
-            return self.maiTaiWavelength
+        with self.driverLock:
+            return self.driver.getWavelength()*1e-9
         
     def setWavelength(self, wl):
         with self.driverLock:
