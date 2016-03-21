@@ -76,7 +76,7 @@ class Ui_Form(object):
         self.gridLayout_4.addWidget(self.label_8, 3, 0, 1, 1)
         self.outputPowerLabel = QtGui.QLabel(self.powerGroup)
         font = QtGui.QFont()
-        font.setPointSize(12)
+        font.setPointSize(10)
         font.setBold(True)
         font.setWeight(75)
         self.outputPowerLabel.setFont(font)

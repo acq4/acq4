@@ -76,9 +76,10 @@ class MaiTai(SerialDevice):
         relHumidity = self['READ:HUM?']
         return self.convertToFloat(relHumidity)
     
-    def checkStatus(self):
-        """Returns the product status byte."""
-        return int(self['*STB?'])
+    def isLaserOn(self):
+        """Returns wheter laser is on."""
+        status = int(self['*STB?'])  #Returns the product status byte.
+        return is_set(status,0)
     
     def getPower(self):
         """Reads and returns Mai Tai output power"""
@@ -110,11 +111,12 @@ class MaiTai(SerialDevice):
     
     def checkPulsing(self):
         """Return True if the laser is pulsing."""
-        pu = self['READ:PULS?']
-        if self.convertToFloat(pu)>0.:
-            return True
-        else:
-            return False
+        status = int(self['*STB?'])  #Returns the product status byte.
+        return is_set(status,1)
+    
+    def is_set(self,x, n):
+         """ checks whether n^th bit is set"""
+        return (x & 2**n != 0)
 
     def turnLaserOn(self):
         

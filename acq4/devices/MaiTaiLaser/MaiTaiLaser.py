@@ -48,8 +48,7 @@ class MaiTaiLaser(Laser):
         
     def isLaserOn(self):
        with self.driverLock:
-           status = self.driver.checkStatus()
-           return bool(status%2)
+           return self.driver.isLaserOne()
        
     def switchLaserOn(self):
         with self.driverLock:
