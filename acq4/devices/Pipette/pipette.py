@@ -141,8 +141,8 @@ class Pipette(Device, OptomechDevice):
         endPosGlobal = np.asarray(startPosGlobal) + globalMove  # this is where electrode should end up in global coordinates
         endPos = self.mapFromGlobal(endPosGlobal)  # and in local coordinates
 
-        # define the path to take in local coordiantes because that makes it
-        # easier to to the boundary intersections
+        # define the path to take in local coordinates because that makes it
+        # easier to do the boundary intersections
         homeAngle = np.arctan2(endPos[2], -endPos[0])
         if homeAngle > self.pitch:
             # diagonal move to 
@@ -156,19 +156,28 @@ class Pipette(Device, OptomechDevice):
             dx = -endPos[2] / np.tan(self.pitch)
             waypoint1 = self.mapToGlobal([dx, 0, endPos[2]])
             waypoint2 = self.mapToGlobal([endPos[0], 0, endPos[2]])
-            path = [
-                (waypoint1, speed, True),
-                (waypoint2, speed, False),
-                # (endPosGlobal, speed, False),
-            ]
+            if dx > 0:  # in case home z position is below the current z pos.
+                path = [
+                    (waypoint2, speed, False),
+                ]
+            else:
+                path = [
+                    (waypoint1, speed, True),
+                    (waypoint2, speed, False),
+                ]
 
         return self._movePath(path)
 
-    def goSearch(self, speed='fast'):
+    def goSearch(self, speed='fast', distance=0):
         """Focus the microscope 2mm above the surface, then move the electrode 
         tip to 500um below the focal point of the microscope. 
 
         This position is used when searching for new electrodes.
+
+        Set *distance* to adjust the search position along the pipette's x-axis. Positive values
+        move the pipette past the center of the microscope to improve the probability of seeing 
+        the tip immediately. Negative values move the tip farther from the microscipe center to 
+        reduce the probability of collisions.
         """
         # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
@@ -181,22 +190,32 @@ class Pipette(Device, OptomechDevice):
 
         # Here's where we want the pipette tip in global coordinates:
         globalTarget = scope.mapToGlobal([0, 0, self._opts['searchTipHeight'] - self._opts['searchHeight']])
-        pos = self.globalPosition()
-        if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
-            raise Exception('"Search" position should only be used when electrode is far from objective.')
-
-        # compute intermediate position
+        # adjust for distance argument:
         localTarget = self.mapFromGlobal(globalTarget)
-        # local vector pointing in direction of electrode tip
-        evec = np.array([1., 0., -np.tan(self.pitch)])
-        evec /= np.linalg.norm(evec)
-        waypoint = localTarget - evec * self._opts['idleDistance']
+        localTarget[0] += distance
+        globalTarget = self.mapToGlobal(localTarget)
 
-        path = [
-            (self.mapToGlobal(waypoint), speed, False),
-            (globalTarget, speed, True),
-        ]
-        return self._movePath(path)
+        return self._moveToGlobal(globalTarget, speed)
+
+        # below is an implementation of a multi-step move to help avoid obstacles on the way to search position. This slows us down a lot and 
+        # isn't terribly clever.
+
+        # pos = self.globalPosition()
+        # if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
+        #     raise Exception('"Search" position should only be used when electrode is far from objective.')
+
+        # # compute intermediate position
+        # localTarget = self.mapFromGlobal(globalTarget)
+        # # local vector pointing in direction of electrode tip
+        # evec = np.array([1., 0., -np.tan(self.pitch)])
+        # evec /= np.linalg.norm(evec)
+        # waypoint = localTarget - evec * self._opts['idleDistance']
+
+        # path = [
+        #     (self.mapToGlobal(waypoint), speed, False),
+        #     (globalTarget, speed, True),
+        # ]
+        # return self._movePath(path)
 
     def goApproach(self, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
@@ -329,6 +348,16 @@ class Pipette(Device, OptomechDevice):
         """
         return self.mapToGlobal([0, 0, 0])
 
+    def setGlobalPosition(self, pos):
+        """Set the device transform such that the pipette tip is located at the global position *pos*.
+
+        This method is for recalibration; it does not physically move the device.
+        """
+        lpos = self.mapFromGlobal(pos)
+        tr = self.deviceTransform()
+        tr.translate(*lpos)
+        self.setDeviceTransform(tr)
+
     def _moveToGlobal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
@@ -350,6 +379,24 @@ class Pipette(Device, OptomechDevice):
 
         This position is used to recalibrate the pipette immediately before going to approach.
         """
+        scope = self.scopeDevice()
+        waypoint1, waypoint2 = self.aboveTargetPath()
+
+        pfut = self._moveToGlobal(waypoint1, speed)
+        sfut = scope.setGlobalPosition(waypoint2)
+        pfut.wait(updates=True)
+        self._moveToGlobal(waypoint2, 'slow').wait(updates=True)
+        sfut.wait(updates=True)
+
+    def aboveTargetPath(self):
+        """Return the path to the "above target" recalibration position.
+
+        The path has 2 waypoints:
+
+        1. 100 um away from the second waypoint, on a diagonal approach. This is meant to normalize the hysteresis
+           at the second waypoint. 
+        2. This position is centered on the target, a small distance above the sample surface.
+        """
         target = self.targetPosition()
 
         # will recalibrate 50 um above surface
@@ -365,11 +412,7 @@ class Pipette(Device, OptomechDevice):
         lwp[0] -= dz / np.tan(self.pitch)
         waypoint1 = self.mapToGlobal(lwp)
 
-        pfut = self._moveToGlobal(waypoint1, speed)
-        sfut = scope.setGlobalPosition(waypoint2)
-        pfut.wait(updates=True)
-        self._moveToGlobal(waypoint2, 'slow').wait(updates=True)
-        sfut.wait(updates=True)
+        return waypoint1, waypoint2
 
     def advanceTowardTarget(self, distance, speed='slow'):
         target = self.targetPosition()
@@ -569,10 +612,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         # next set our position offset
         pos = [pos.x(), pos.y(), z]
-        gpos = dev.mapFromGlobal(pos)
-        tr = dev.deviceTransform()
-        tr.translate(*gpos)
-        dev.setDeviceTransform(tr)
+        dev.setGlobalPosition(pos)
 
     def controlWidget(self):
         return self.ctrl

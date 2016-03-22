@@ -17,7 +17,11 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(QtGui.QWidget):
     def __init__(self, module):
+        self._calibratePips = []
+        self._calibrateStagePositions = []
+
         QtGui.QWidget.__init__(self)
+        self.setWindowTitle('Multipatch')
         self.module = module
 
         self.layout = QtGui.QGridLayout()
@@ -63,7 +67,8 @@ class MultiPatchWindow(QtGui.QWidget):
         self.moveApproachBtn = QtGui.QPushButton("Approach")
         self.moveToTargetBtn = QtGui.QPushButton("To target")
         self.moveHomeBtn = QtGui.QPushButton("Home")
-        self.moveSearchBtn = QtGui.QPushButton("Search")
+        self.coarseSearchBtn = QtGui.QPushButton("Coarse search")
+        self.fineSearchBtn = QtGui.QPushButton("Fine search")
         self.moveIdleBtn = QtGui.QPushButton("Idle")
 
         self.movementLayout.addWidget(self.moveInBtn, 0, 0)
@@ -73,7 +78,8 @@ class MultiPatchWindow(QtGui.QWidget):
         self.movementLayout.addWidget(self.moveApproachBtn, 0, 4)
         self.movementLayout.addWidget(self.moveToTargetBtn, 0, 5)
         self.movementLayout.addWidget(self.moveHomeBtn, 0, 6)
-        self.movementLayout.addWidget(self.moveSearchBtn, 0, 7)
+        self.movementLayout.addWidget(self.coarseSearchBtn, 0, 7)
+        self.movementLayout.addWidget(self.fineSearchBtn, 1, 7)
         self.movementLayout.addWidget(self.moveIdleBtn, 0, 8)
 
         self.stepSizeSpin = pg.SpinBox(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
@@ -88,6 +94,11 @@ class MultiPatchWindow(QtGui.QWidget):
         self.movementLayout.addWidget(self.slowBtn, 1, 2)
         self.movementLayout.addWidget(self.fastBtn, 1, 3)
 
+        self.calibrateBtn = QtGui.QPushButton('Calibrate')
+        self.calibrateBtn.setCheckable(True)
+        self.calibrateBtn.toggled.connect(self.calibrateToggled)
+        self.movementLayout.addWidget(self.calibrateBtn, 1, 4)
+
         self.moveInBtn.clicked.connect(self.moveIn)
         self.stepInBtn.clicked.connect(self.stepIn)
         self.stepOutBtn.clicked.connect(self.stepOut)
@@ -96,7 +107,8 @@ class MultiPatchWindow(QtGui.QWidget):
         self.moveToTargetBtn.clicked.connect(self.moveToTarget)
         self.moveHomeBtn.clicked.connect(self.moveHome)
         self.moveIdleBtn.clicked.connect(self.moveIdle)
-        self.moveSearchBtn.clicked.connect(self.moveSearch)
+        self.coarseSearchBtn.clicked.connect(self.coarseSearch)
+        self.fineSearchBtn.clicked.connect(self.fineSearch)
 
         self.fastBtn.clicked.connect(lambda: self.slowBtn.setChecked(False))
         self.slowBtn.clicked.connect(lambda: self.fastBtn.setChecked(False))
@@ -118,8 +130,23 @@ class MultiPatchWindow(QtGui.QWidget):
 
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
-        for pip in self.selectedPipettes():
-            pip.goAboveTarget(speed)
+        pips = self.selectedPipettes()
+        if len(pips) == 1:
+            pips[0].goAboveTarget(speed=speed)
+            return
+
+        fut = []
+        wp = []
+        for pip in pips:
+            w1, w2 = pip.aboveTargetPath()
+            wp.append(w2)
+            fut.append(pip._moveToGlobal(w1, speed))
+        for f in fut:
+            f.wait(updates=True)
+        for pip, waypoint in zip(pips, wp):
+            pip._moveToGlobal(waypoint, 'slow')
+
+        self.calibrateWithStage(pips, wp)
 
     def moveApproach(self):
         speed = self.selectedSpeed(default='slow')
@@ -135,11 +162,6 @@ class MultiPatchWindow(QtGui.QWidget):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             pip.goHome(speed)
-
-    def moveSearch(self):
-        speed = self.selectedSpeed(default='fast')
-        for pip in self.selectedPipettes():
-            pip.goSearch(speed)
 
     def moveIdle(self):
         speed = self.selectedSpeed(default='fast')
@@ -158,7 +180,63 @@ class MultiPatchWindow(QtGui.QWidget):
             return 'slow'
         return default
 
-    def coarseRecalibrate(self):
-        """Recalibrate all selected pipette tips under low magnification.
+    def coarseSearch(self):
+        self.moveSearch(-700e-6)
+
+    def fineSearch(self):
+        self.moveSearch(-50e-6)
+
+    def moveSearch(self, distance):
+        speed = self.selectedSpeed(default='fast')
+        pips = self.selectedPipettes()
+        if len(pips) == 1:
+            pips[0].goSearch(speed)
+        else:
+            for pip in pips:
+                pip.goSearch(speed, distance=distance)
+
+    def calibrateWithStage(self, pipettes, positions):
+        """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
         """
-        pass
+        self.calibrateBtn.setChecked(False)
+        self.calibrateBtn.setChecked(True)
+        pipettes[0].scopeDevice().setGlobalPosition(positions.pop(0))
+        self._calibratePips = pipettes
+        self._calibrateStagePositions = positions
+
+    def calibrateToggled(self, b):
+        cammod = getManager().getModule('Camera')
+        self._cammod = cammod
+        pips = self.selectedPipettes()
+        if b is True:
+            if len(pips) == 0:
+                self.calibrateBtn.setChecked(False)
+                return
+            # start calibration of selected pipettes
+            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked)
+            self._calibratePips = pips
+        else:
+            # stop calibration
+            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked)
+            self._calibratePips = []
+            self._calibrateStagePositions = []
+
+    def cameraModuleClicked(self, ev):
+        if ev.button() != QtCore.Qt.LeftButton:
+            return
+
+        # Set next pipette position from mouse click
+        pip = self._calibratePips.pop(0)
+        pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
+        spos = pip.scopeDevice().globalPosition()
+        pos = [pos.x(), pos.y(), spos.z()]
+        pip.setGlobalPosition(pos)
+
+        # if calibration stage positions were requested, then move the stage now
+        if len(self._calibrateStagePositions) > 0:
+            stagepos = self._calibrateStagePositions.pop(0)
+            pip.scopeDevice().setGlobalPosition(stagepos)
+
+        if len(self._calibratePips) == 0:
+            self.calibrateBtn.setChecked(False)
+
