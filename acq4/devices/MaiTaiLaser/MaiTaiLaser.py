@@ -111,23 +111,25 @@ class MaiTaiLaser(Laser):
         return bounds[0]*1e-9, bounds[1]*1e-9
     
     def openInternalShutter(self):
-        if self.hasExternalSwitch:
-            self.setChanHolding('externalSwitch', 0)
         with self.driverLock:
             self.driver.setShutter(True)
-        #Laser.openShutter(self)
         
     def closeInternalShutter(self):
-        if self.hasExternalSwitch:
-            self.setChanHolding('externalSwitch', 1)
         with self.driverLock:
             self.driver.setShutter(False)
-        #Laser.closeShutter(self)
         
     def getInternalShutter(self):
         with self.driverLock:
             return self.driver.getShutter()
-        
+    
+    def externalSwitchON(self):
+        if self.hasExternalSwitch:
+            self.setChanHolding('externalSwitch', 1)
+    
+    def externalSwitchOFF(self):
+        if self.hasExternalSwitch:
+            self.setChanHolding('externalSwitch', 0)
+    
     def createTask(self, cmd, parentTask):
         return MaiTaiTask(self, cmd, parentTask)
 
