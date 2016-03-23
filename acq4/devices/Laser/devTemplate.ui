@@ -63,7 +63,7 @@
        </widget>
       </item>
       <item row="0" column="3">
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="alignmentModeBtn">
         <property name="text">
          <string>Alignment mode Off</string>
         </property>
