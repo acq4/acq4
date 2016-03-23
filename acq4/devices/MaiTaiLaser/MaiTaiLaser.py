@@ -200,7 +200,12 @@ class MaiTaiThread(Thread):
         with self.lock:
             self.cmds.append(cmd)
     def adjustPumpPower(self):
-        print 'last com PLP : ', self.driver.getLastCommandedPumpLaserPower()
+        lastCommandedPPBefore = self.driver.getLastCommandedPumpLaserPower()
+        newPP = lastCommandedPP*0.98 # decrease pump power by 2 % until laser stops pulsing
+        self.driver.setPumpLaserPower(newPP)
+        lastCommandedPPAfter = self.driver.getLastCommandedPumpLaserPower()
+        print 'PLP before : after , ', lastCommandedPPBefore, lastCommandedPPAfter
+        
         
     def run(self):
         self.stopThread = False

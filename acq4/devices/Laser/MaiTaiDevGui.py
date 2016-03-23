@@ -256,6 +256,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.ui.externalSwitchBtn.setEnabled(False)
     
     def alignmentModeToggled(self,b):
+        print 'alignment mode toggled'
         if b:
             self.dev.acitvateAlignmentMode()
             self.ui.alignmentModeBtn.setText('Alignment Mode ON')

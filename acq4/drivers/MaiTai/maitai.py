@@ -43,7 +43,7 @@ class MaiTai(SerialDevice):
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,xonxoff=True)
         self.waitTime = 0.5
         
-        self.modeNames = {'PCURrent':'Current %', 'PPOWer':'Green Power', 'POWer':'IR Power'}
+        self.modeNames = {'PCUR':'Current %', 'PPOW':'Green Power', 'POW':'IR Power'}
     
     def convertToFloat(self,returnString):
         return float(re.findall(self.re_float,returnString)[0])
@@ -95,11 +95,15 @@ class MaiTai(SerialDevice):
     
     def getLastCommandedPumpLaserPower(self):
         """ returns the last commanded pump laser power in Watts."""
-        return self['PLASer:POWer?']
+        return self.convertToFloat(self['PLASer:POWer?'])
     
     def setPumpLaserPower(self, ppower):
         """ set the pump laser power """
-        pass
+        lastCommandedPower = self.getLastCommandedPumpLaserPower()
+        if lastCommandedPower < ppower:
+            raise Exception("New pump laser output power is higher than the last commanded. Last command : %s ; New :  %s" % (lastCommandedPower, ppower) )
+        else:
+            self['PLASer:POWer'] = float(ppower)
     
     def getShutter(self):
         """Return True if the shutter is open."""
@@ -117,16 +121,16 @@ class MaiTai(SerialDevice):
     def getPumpMode(self):
         """ returns pump mode of the laser """
         crypticMode = self['MODE?']
-        print crypticMode
         return self.modeNames[crypticMode]
     
     def setPumpMode(self, mode):
         """ sets the pump mode of the laser """
+        oldMode = self.getPumpMode()
         for k in self.modeNames :
             if mode == self.modeNames[k] :
                 self['MODE'] = k
         newMode = self.getPumpMode()
-        print 'changedMode : ', mode, newMode
+        print 'changedMode : ', oldMode, newMode
         
     def getSystemIdentification(self):
         """Return a system identification string that contains 4 fields separated by commas."""
