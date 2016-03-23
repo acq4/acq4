@@ -43,7 +43,7 @@ class MaiTai(SerialDevice):
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,xonxoff=True)
         self.waitTime = 0.5
         
-        self.modeNames = OrderedDict([('PCURrent', 'Current %'), ('PPOWer', 'Green Power'), ('POWer', 'IR Power')])
+        self.modeNames = {'PCURrent':'Current %', 'PPOWer':'Green Power', 'POWer':'IR Power'}
     
     def convertToFloat(self,returnString):
         return float(re.findall(self.re_float,returnString)[0])
@@ -122,9 +122,9 @@ class MaiTai(SerialDevice):
     
     def setPumpMode(self, mode):
         """ sets the pump mode of the laser """
-        for key, value in self.modeNames :
-            if mode == value :
-                self['MODE'] = key
+        for k in self.modeNames :
+            if mode == self.modeNames[k] :
+                self['MODE'] = k
         newMode = self.getPumpMode()
         print 'changedMode : ', mode, newMode
         

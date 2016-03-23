@@ -260,7 +260,7 @@ class MaiTaiDevGui(LaserDevGui):
             self.dev.acitvateAlignmentMode()
             self.ui.alignmentModeBtn.setText('Alignment Mode ON')
         elif not b:
-            self.dev.deacitvateAlignmentMode()
+            self.dev.deactivateAlignmentMode()
             self.ui.alignmentModeBtn.setText('Alignment Mode OFF')
             
     
