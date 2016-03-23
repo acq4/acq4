@@ -140,10 +140,14 @@ class MaiTaiLaser(Laser):
     
     def acitvateAlignmentMode(self):
         with self.driverLock:
+            self.greenPowerIRMode = self.driver.getLastCommandedPumpLaserPower()
+        with self.driverLock:
             self.driver.setPumpMode('Green Power')
         self.mThread.alignmentMode = True
         
     def deactivateAlignmentMode(self):
+        with self.driverLock:
+            self.driver.setPumpLaserPower(self.greenPowerIRMode)
         with self.driverLock:
             self.driver.setPumpMode('IR Power')
         self.mThread.alignmentMode = False
@@ -201,8 +205,9 @@ class MaiTaiThread(Thread):
             self.cmds.append(cmd)
     def adjustPumpPower(self):
         lastCommandedPPBefore = self.driver.getLastCommandedPumpLaserPower()
-        newPP = lastCommandedPP*0.98 # decrease pump power by 2 % until laser stops pulsing
+        newPP = round(lastCommandedPPBefore*0.98,2) # decrease pump power by 2 % until laser stops pulsing
         self.driver.setPumpLaserPower(newPP)
+        time.sleep(2.)
         lastCommandedPPAfter = self.driver.getLastCommandedPumpLaserPower()
         print 'PLP before : after , ', lastCommandedPPBefore, lastCommandedPPAfter
         

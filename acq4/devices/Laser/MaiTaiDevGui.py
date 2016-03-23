@@ -251,12 +251,11 @@ class MaiTaiDevGui(LaserDevGui):
     
     def linkLaserExtSwitch(self,b):
         if b:
-            self.ui.externalSwitchBtn.setEnabled(True)
-        elif not b:
             self.ui.externalSwitchBtn.setEnabled(False)
+        elif not b:
+            self.ui.externalSwitchBtn.setEnabled(True)
     
     def alignmentModeToggled(self,b):
-        print 'alignment mode toggled'
         if b:
             self.dev.acitvateAlignmentMode()
             self.ui.alignmentModeBtn.setText('Alignment Mode ON')

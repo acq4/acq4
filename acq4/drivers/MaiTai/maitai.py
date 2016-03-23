@@ -99,11 +99,11 @@ class MaiTai(SerialDevice):
     
     def setPumpLaserPower(self, ppower):
         """ set the pump laser power """
-        lastCommandedPower = self.getLastCommandedPumpLaserPower()
-        if lastCommandedPower < ppower:
-            raise Exception("New pump laser output power is higher than the last commanded. Last command : %s ; New :  %s" % (lastCommandedPower, ppower) )
-        else:
-            self['PLASer:POWer'] = float(ppower)
+        #lastCommandedPower = self.getLastCommandedPumpLaserPower()
+        #if lastCommandedPower < ppower:
+        #    raise Exception("New pump laser output power is higher than the last commanded. Last command : %s ; New :  %s" % (lastCommandedPower, ppower) )
+        #else:
+        self['PLASer:POWer'] = float(ppower)
     
     def getShutter(self):
         """Return True if the shutter is open."""
