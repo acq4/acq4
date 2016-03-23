@@ -42,6 +42,8 @@ class MaiTai(SerialDevice):
         self.baud = baud
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,xonxoff=True)
         self.waitTime = 0.5
+        
+        self.modeNames = OrderedDict([('PCURrent', 'Current %'), ('PPOWer', 'Green Power'), ('POWer', 'IR Power')])
     
     def convertToFloat(self,returnString):
         return float(re.findall(self.re_float,returnString)[0])
@@ -91,6 +93,14 @@ class MaiTai(SerialDevice):
         pumpOutputPower = self['READ:PLASer:POWer?']
         return self.convertToFloat(pumpOutputPower)
     
+    def getLastCommandedPumpLaserPower(self):
+        """ returns the last commanded pump laser power in Watts."""
+        return self['PLASer:POWer?']
+    
+    def setPumpLaserPower(self, ppower):
+        """ set the pump laser power """
+        pass
+    
     def getShutter(self):
         """Return True if the shutter is open."""
         return bool(int(self['SHUTter?']))
@@ -104,6 +114,19 @@ class MaiTai(SerialDevice):
         else:
             print 'Shutter CLOSED'
         
+    def getPumpMode(self):
+        """ returns pump mode of the laser """
+        crypticMode = self['MODE?']
+        print crypticMode
+        return self.modeNames[crypticMode]
+    
+    def setPumpMode(self, mode):
+        """ sets the pump mode of the laser """
+        for key, value in self.modeNames :
+            if mode == value :
+                self['MODE'] = key
+        newMode = self.getPumpMode()
+        print 'changedMode : ', mode, newMode
         
     def getSystemIdentification(self):
         """Return a system identification string that contains 4 fields separated by commas."""

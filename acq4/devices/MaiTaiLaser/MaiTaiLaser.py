@@ -14,6 +14,7 @@ class MaiTaiLaser(Laser):
     sigPumpPowerChanged = QtCore.Signal(object)
     sigPulsingStateChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
+    sigModeChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
@@ -26,6 +27,7 @@ class MaiTaiLaser(Laser):
         self.maiTaiWavelength = 0
         self.maiTaiHumidity = 0.
         self.maiTaiPumpPower = 0.
+        self.maiTaiMode = None
         
         self.mThread = MaiTaiThread(self, self.driver, self.driverLock)
         self.mThread.sigPowerChanged.connect(self.powerChanged)
@@ -33,6 +35,7 @@ class MaiTaiLaser(Laser):
         self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
         self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
         self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
+        self.mThread.sigMoChanged.connect(self.modeChanged)
         self.mThread.start()
         
         Laser.__init__(self, dm, config, name)
@@ -88,7 +91,12 @@ class MaiTaiLaser(Laser):
     def humidity(self):
         with self.maiTaiLock:
             return self.maiTaiHumidity 
-        
+    
+    def modeChanged(self,mode):
+        with self.maiTaiLock:
+            self.maiTaiMode = mode
+            self.sigModeChanged.emit(mode)
+    
     def outputPower(self):
         with self.maiTaiLock:
             return self.maiTaiPower
@@ -130,6 +138,16 @@ class MaiTaiLaser(Laser):
         if self.hasExternalSwitch:
             self.setChanHolding('externalSwitch', 0)
     
+    def acitvateAlignmentMode(self):
+        with self.driverLock:
+            self.driver.setPumpMode('Green Power')
+        self.mThread.alignmentMode = True
+        
+    def deactivateAlignmentMode(self):
+        with self.driverLock:
+            self.driver.setPumpMode('IR Power')
+        self.mThread.alignmentMode = False
+    
     def createTask(self, cmd, parentTask):
         return MaiTaiTask(self, cmd, parentTask)
 
@@ -161,6 +179,7 @@ class MaiTaiThread(Thread):
     sigRelHumidityChanged = QtCore.Signal(object)
     sigPPowerChanged = QtCore.Signal(object)
     sigPulsingSChanged = QtCore.Signal(object)
+    sigMoChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
@@ -170,6 +189,7 @@ class MaiTaiThread(Thread):
         self.driver = driver
         self.driverLock = lock
         self.cmds = {}
+        self.alignmentMode = False
         
     def setWavelength(self, wl):
         pass
@@ -179,6 +199,8 @@ class MaiTaiThread(Thread):
         cmd = ['setShutter', opened]
         with self.lock:
             self.cmds.append(cmd)
+    def adjustPumpPower(self):
+        print 'last com PLP : ', self.driver.getLastCommandedPumpLaserPower()
         
     def run(self):
         self.stopThread = False
@@ -192,14 +214,20 @@ class MaiTaiThread(Thread):
                     hum = self.driver.getRelativeHumidity()
                     pumpPower = self.driver.getPumpPower()
                     isPulsing = self.driver.checkPulsing()
+                    mode = self.driver.getPumpMode()
+                    if self.alignmentMode:
+                        if isPulsing:
+                            self.adjustPumpPower()
+                    
                 self.sigPowerChanged.emit(power)
                 self.sigWLChanged.emit(wl)
                 self.sigRelHumidityChanged.emit(hum)
                 self.sigPPowerChanged.emit(pumpPower)
                 self.sigPulsingSChanged.emit(isPulsing)
+                self.sigMoChanged.emit(mode)
                 time.sleep(0.5)
             except:
-                debug.printExc("Error in Coherent laser communication thread:")
+                debug.printExc("Error in MaiTai laser communication thread:")
                 
             self.lock.lock()
             if self.stopThread:
@@ -208,9 +236,8 @@ class MaiTaiThread(Thread):
             self.lock.unlock()
             time.sleep(0.02)
 
-
         self.driver.close()
-
+    
     def stop(self, block=False):
         with self.lock:
             self.stopThread = True
