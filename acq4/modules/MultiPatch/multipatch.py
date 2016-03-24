@@ -70,6 +70,8 @@ class MultiPatchWindow(QtGui.QWidget):
         self.coarseSearchBtn = QtGui.QPushButton("Coarse search")
         self.fineSearchBtn = QtGui.QPushButton("Fine search")
         self.moveIdleBtn = QtGui.QPushButton("Idle")
+        self.hideBtn = QtGui.QPushButton('Hide markers')
+        self.hideBtn.setCheckable(True)
 
         self.movementLayout.addWidget(self.moveInBtn, 0, 0)
         self.movementLayout.addWidget(self.stepInBtn, 0, 1)
@@ -81,6 +83,7 @@ class MultiPatchWindow(QtGui.QWidget):
         self.movementLayout.addWidget(self.coarseSearchBtn, 0, 7)
         self.movementLayout.addWidget(self.fineSearchBtn, 1, 7)
         self.movementLayout.addWidget(self.moveIdleBtn, 0, 8)
+        self.movementLayout.addWidget(self.hideBtn, 1, 8)
 
         self.stepSizeSpin = pg.SpinBox(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
         self.stepSizeLabel = QtGui.QLabel('Step size')
@@ -109,6 +112,7 @@ class MultiPatchWindow(QtGui.QWidget):
         self.moveIdleBtn.clicked.connect(self.moveIdle)
         self.coarseSearchBtn.clicked.connect(self.coarseSearch)
         self.fineSearchBtn.clicked.connect(self.fineSearch)
+        self.hideBtn.toggled.connect(self.hideBtnToggled)
 
         self.fastBtn.clicked.connect(lambda: self.slowBtn.setChecked(False))
         self.slowBtn.clicked.connect(lambda: self.fastBtn.setChecked(False))
@@ -240,3 +244,6 @@ class MultiPatchWindow(QtGui.QWidget):
         if len(self._calibratePips) == 0:
             self.calibrateBtn.setChecked(False)
 
+    def hideBtnToggled(self, hide):
+        for pip in self.pips:
+            pip.hideMarkers(hide)

@@ -4,6 +4,7 @@ from __future__ import division
 import pickle
 from PyQt4 import QtCore, QtGui
 import numpy as np
+import weakref
 
 import acq4.pyqtgraph as pg
 from acq4 import getManager
@@ -69,6 +70,7 @@ class Pipette(Device, OptomechDevice):
         parent = self.parentDevice()
         assert isinstance(parent, Stage)
         self.pitch = parent.pitch * np.pi / 180.
+        self._camInterfaces = weakref.WeakKeyDictionary()
 
         self.target = None
 
@@ -91,7 +93,9 @@ class Pipette(Device, OptomechDevice):
         return None
 
     def cameraModuleInterface(self, mod):
-        return PipetteCamModInterface(self, mod)
+        iface = PipetteCamModInterface(self, mod)
+        self._camInterfaces[iface] = None
+        return iface
 
     def setStageOrientation(self, angle, inverty):
         tr = pg.SRTTransform3D(self.parentDevice().baseTransform())
@@ -449,6 +453,10 @@ class Pipette(Device, OptomechDevice):
             raise RuntimeError("No target defined for %s" % self.name())
         return self.target
 
+    def hideMarkers(self, hide):
+        for iface in self._camInterfaces.keys():
+            iface.hideMarkers(hide)
+
 
 class PipetteCamModInterface(CameraModuleInterface):
     """Implements user interface for Pipette.
@@ -457,7 +465,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def __init__(self, dev, mod):
         CameraModuleInterface.__init__(self, dev, mod)
-        self._targetPos = None
+        self._haveTarget = False
 
         self.ui = CamModTemplate()
         self.ctrl = QtGui.QWidget()
@@ -525,6 +533,10 @@ class PipetteCamModInterface(CameraModuleInterface):
     def selectedSpeed(self):
         return 'fast' if self.ui.fastRadio.isChecked() else 'slow'
 
+    def hideMarkers(self, hide):
+        self.centerArrow.setVisible(not hide)
+        self.target.setVisible(not hide and self._haveTarget)
+
     def sceneMouseClicked(self, ev):
         if ev.button() != QtCore.Qt.LeftButton:
             return
@@ -536,6 +548,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         elif self.ui.setTargetBtn.isChecked():
             self.target.setVisible(True)
+            self._haveTarget = True
             self.depthTarget.setVisible(True)
             self.ui.targetBtn.setEnabled(True)
             self.ui.approachBtn.setEnabled(True)
@@ -545,10 +558,8 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.setTargetPos(pos, z)
             self.target.setRelativeDepth(0)
 
-    def setTargetPos(self, pos, z=None):
+    def setTargetPos(self, pos, z):
         self.target.setPos(pos)
-        if z is None:
-            z = self._targetPos[2]
         self.depthTarget.setPos(0, z)
         self.dev().setTarget((pos.x(), pos.y(), z))
 
