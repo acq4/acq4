@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.Laser import *
-#import serial, struct
 from acq4.drivers.MaiTai import *
-from acq4.devices.Laser.MaiTaiDevGui import MaiTaiDevGui
+from acq4.devices.MaiTaiLaser.MaiTaiDevGui import MaiTaiDevGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
@@ -141,14 +140,12 @@ class MaiTaiLaser(Laser):
     def acitvateAlignmentMode(self):
         with self.driverLock:
             self.greenPowerIRMode = self.driver.getLastCommandedPumpLaserPower()
-        with self.driverLock:
             self.driver.setPumpMode('Green Power')
         self.mThread.alignmentMode = True
         
     def deactivateAlignmentMode(self):
         with self.driverLock:
             self.driver.setPumpLaserPower(self.greenPowerIRMode)
-        with self.driverLock:
             self.driver.setPumpMode('IR Power')
         self.mThread.alignmentMode = False
     

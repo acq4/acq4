@@ -9,18 +9,6 @@ except ValueError:
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
         from SerialDevice import SerialDevice, TimeoutError, DataError
         
-ErrorVals = {
-    0: ('SP Over-run', 'The previous character was not unloaded before the latest was received.'),
-    1: ('Frame Error', 'A valid stop bit was not received during the appropriate time period.'), 
-    2: ('Buffer Over-run', 'The input buffer is filled and CR has not been received.'),
-    4: ('Bad Command', 'Input can not be interpreted -- command byte not valid.'),
-    8: ('Move Interrupted', 'A requested move was interrupted by input on the serial port.'),
-    16:('Arduino error', 'Error was reported by arduino interface.'),
-    32:('MP285 Timeout', 'Arduino timed out waiting for response from MP285.'),
-    64:('Command timeout', 'Arduino timed out waiting for full command from computer.'),
-}
-    
-
 class TimeoutError(Exception):
     pass
 
@@ -29,9 +17,8 @@ class MaiTaiError(Exception):
 
 class MaiTai(SerialDevice):
     """
-    Class for communicating with Sutter MP-285 via serial port.
+    Class for communicating with Spectra-Physics Mai Tai laser via serial port.
     
-    Note that this class is NOT thread-safe.
     """
     def __init__(self, port, baud=9600):
         """
@@ -40,7 +27,7 @@ class MaiTai(SerialDevice):
         self.re_float = re.compile(r'\d*\.?\d+')
         self.port = port
         self.baud = baud
-        self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,xonxoff=True)
+        SerialDevice.__init__(self, port=int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,xonxoff=True)
         self.waitTime = 0.5
         
         self.modeNames = {'PCUR':'Current %', 'PPOW':'Green Power', 'POW':'IR Power'}
@@ -99,10 +86,6 @@ class MaiTai(SerialDevice):
     
     def setPumpLaserPower(self, ppower):
         """ set the pump laser power """
-        #lastCommandedPower = self.getLastCommandedPumpLaserPower()
-        #if lastCommandedPower < ppower:
-        #    raise Exception("New pump laser output power is higher than the last commanded. Last command : %s ; New :  %s" % (lastCommandedPower, ppower) )
-        #else:
         self['PLASer:POWer'] = float(ppower)
     
     def getShutter(self):
@@ -169,7 +152,7 @@ class MaiTai(SerialDevice):
     def __getitem__(self, arg):  ## request a single value from the laser
         #print "write", arg
         self.write("%s\r" % arg)
-        ret = self.readPacket()
+        ret = self.readUntil()
         #print "   return:", ret
         return ret
         
@@ -185,57 +168,57 @@ class MaiTai(SerialDevice):
         time.sleep(0.1)
         d += self.read()
         if len(d) > 0:
-            print "Sutter MP285: Warning: tossed data ", repr(d)
+            print "Mai Tai: Warning: tossed data ", repr(d)
         return d
     
-    def read(self):
-        ## read all bytes waiting in buffer; non-blocking.
-        n = self.sp.inWaiting()
-        if n > 0:
-            return self.sp.read(n)
-        return ''
+    #def read(self):
+        ### read all bytes waiting in buffer; non-blocking.
+        #n = self.sp.inWaiting()
+        #if n > 0:
+            #return self.sp.read(n)
+        #return ''
     
-    def write(self, data):
-        self.read()  ## always empty buffer before sending command
-        self.sp.write(data)
+    #def write(self, data):
+        #self.read()  ## always empty buffer before sending command
+        #self.sp.write(data)
         
-    def close(self):
-        self.sp.close()
+    #def close(self):
+        #self.sp.close()
 
-    def readPacket(self, expect=0, timeout=10, block=True):
-        ## Read until a CRLF is encountered (or timeout).
-        ## If expect is >0, then try to get a packet of that length, ignoring CRLF within that data
-        ## if block is False, then return immediately if no data is available.
-        start = time.time()
-        s = ''
-        errors = []
-        packets = []
-        while True:
-            s += self.read()
-            #print "read:", repr(s)
-            if not block and len(s) == 0:
-                return
+    #def readPacket(self, expect=0, timeout=10, block=True):
+        ### Read until a CRLF is encountered (or timeout).
+        ### If expect is >0, then try to get a packet of that length, ignoring CRLF within that data
+        ### if block is False, then return immediately if no data is available.
+        #start = time.time()
+        #s = ''
+        #errors = []
+        #packets = []
+        #while True:
+            #s += self.read()
+            ##print "read:", repr(s)
+            #if not block and len(s) == 0:
+                #return
             
-            while len(s) > 0:  ## pull packets out of s one at a time
-                if '\n' in s[expect:]:
-                    i = expect + s[expect:].index('\n')
-                    packets.append(s[:i])
-                    expect = 0
-                    s = s[i+2:]
-                else:
-                    break
+            #while len(s) > 0:  ## pull packets out of s one at a time
+                #if '\n' in s[expect:]:
+                    #i = expect + s[expect:].index('\n')
+                    #packets.append(s[:i])
+                    #expect = 0
+                    #s = s[i+2:]
+                #else:
+                    #break
                 
-            if len(s) == 0:
-                if len(packets) == 1:
-                    if 'Error' in packets[0]:
-                        raise Exception(packets[0])
-                    return packets[0]   ## success
-                if len(packets) > 1:
-                    raise Exception("Too many packets read.", packets)
+            #if len(s) == 0:
+                #if len(packets) == 1:
+                    #if 'Error' in packets[0]:
+                        #raise Exception(packets[0])
+                    #return packets[0]   ## success
+                #if len(packets) > 1:
+                    #raise Exception("Too many packets read.", packets)
             
-            time.sleep(0.01)
-            if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)))
+            #time.sleep(0.01)
+            #if time.time() - start > timeout:
+                #raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)))
       
         
 if __name__ == '__main__':
