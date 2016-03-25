@@ -180,7 +180,7 @@ class MaiTai(SerialDevice):
         errors = []
         packets = []
         while True:
-            n = self.sp.inWaiting()
+            n = self.serial.inWaiting()
             s += self.read(n)
             #print "read:", repr(s)
             if not block and len(s) == 0:
