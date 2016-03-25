@@ -14,10 +14,13 @@ class MaiTaiLaser(Laser):
     sigPulsingStateChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
     sigModeChanged = QtCore.Signal(object)
+    sigP2OptimizationChanged = QtCore.Signal(object)
+    sigHistoryBufferChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
         self.baud = config.get('baud', 9600)
+        self.alignmentPower = config.get('alignmentPower',0.2)
         self.driver = MaiTai(self.port, self.baud)
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         
@@ -26,7 +29,10 @@ class MaiTaiLaser(Laser):
         self.maiTaiWavelength = 0
         self.maiTaiHumidity = 0.
         self.maiTaiPumpPower = 0.
+        self.maiTaiPulsing = False
+        self.maiTaiP2Optimization = False
         self.maiTaiMode = None
+        self.maiTaiHistory = None
         
         self.mThread = MaiTaiThread(self, self.driver, self.driverLock)
         self.mThread.sigPowerChanged.connect(self.powerChanged)
@@ -35,6 +41,8 @@ class MaiTaiLaser(Laser):
         self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
         self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
         self.mThread.sigMoChanged.connect(self.modeChanged)
+        self.mThread.sigP2OChanged.connect(self.p2OptimizationChanged)
+        self.mThread.sigHChanged.connect(self.historyBufferChanged)
         self.mThread.start()
         
         Laser.__init__(self, dm, config, name)
@@ -84,8 +92,18 @@ class MaiTaiLaser(Laser):
     
     def pulsingStateChanged(self, pulse):
         with self.maiTaiLock:
-            self.maiTaiPumpPower = pulse
+            self.maiTaiPulsing = pulse
             self.sigPulsingStateChanged.emit(pulse)
+    
+    def p2OptimizationChanged(self, p2):
+        with self.maiTaiLock:
+            self.maiTaiP2Optimization = p2
+            self.sigP2OptimizationChanged.emit(p2)
+    
+    def historyBufferChanged(self, hist):
+        with self.maiTaiLock:
+            self.maiTaiHistory = hist
+            self.sigHistoryBufferChanged.emit(hist)
     
     def humidity(self):
         with self.maiTaiLock:
@@ -138,15 +156,18 @@ class MaiTaiLaser(Laser):
             self.setChanHolding('externalSwitch', 0)
     
     def acitvateAlignmentMode(self):
+        """ during alignment mode : switch off p2 opitimization, switch to green power, and reduce power to 200 mW """
         with self.driverLock:
-            self.greenPowerIRMode = self.driver.getLastCommandedPumpLaserPower()
+            self.driver.setP2Status(False)
+            self.greenPowerInIRMode = self.driver.getLastCommandedPumpLaserPower()
             self.driver.setPumpMode('Green Power')
         self.mThread.alignmentMode = True
         
     def deactivateAlignmentMode(self):
         with self.driverLock:
-            self.driver.setPumpLaserPower(self.greenPowerIRMode)
+            self.driver.setPumpLaserPower(self.greenPowerInIRMode)
             self.driver.setPumpMode('IR Power')
+            self.driver.setP2Status(True)
         self.mThread.alignmentMode = False
     
     def createTask(self, cmd, parentTask):
@@ -181,6 +202,8 @@ class MaiTaiThread(Thread):
     sigPPowerChanged = QtCore.Signal(object)
     sigPulsingSChanged = QtCore.Signal(object)
     sigMoChanged = QtCore.Signal(object)
+    sigP2OChanged = QtCore.Signal(object)
+    sigHChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
@@ -200,12 +223,18 @@ class MaiTaiThread(Thread):
         cmd = ['setShutter', opened]
         with self.lock:
             self.cmds.append(cmd)
-    def adjustPumpPower(self):
-        lastCommandedPPBefore = self.driver.getLastCommandedPumpLaserPower()
-        newPP = round(lastCommandedPPBefore*0.98,2) # decrease pump power by 2 % until laser stops pulsing
-        self.driver.setPumpLaserPower(newPP)
-        lastCommandedPPAfter = self.driver.getLastCommandedPumpLaserPower()
-        print 'pump laser power - before : new : after , ', lastCommandedPPBefore, newPP, lastCommandedPPAfter
+    def adjustPumpPower(self,currentPower):
+        """ keeps laser output power between alignmentPower value and  alignmentPower + 10%"""
+        lastCommandedPP = self.driver.getLastCommandedPumpLaserPower()
+        if self.dev.alignmentPower*1.1 < currentPower:
+            newPP = round(lastCommandedPP*0.95,2) # decrease pump power by 5 % until
+            self.driver.setPumpLaserPower(newPP)
+        elif self.dev.alignmentPower > currentPower:
+            newPP = round(lastCommandedPP*1.02,2) # increase pump power by 2 % until
+            self.driver.setPumpLaserPower(newPP)
+        newCommandedPP = self.driver.getLastCommandedPumpLaserPower()
+        print 'pump laser power - before : new : after , ', lastCommandedPP, newPP, newCommandedPP
+        pring 'laser output power : ', currentPower
         
         
     def run(self):
@@ -221,9 +250,10 @@ class MaiTaiThread(Thread):
                     pumpPower = self.driver.getPumpPower()
                     isPulsing = self.driver.checkPulsing()
                     mode = self.driver.getPumpMode()
+                    p2Optimization = self.driver.getP2Status()
+                    status = self.driver.getHistoryBuffer()
                     if self.alignmentMode:
-                        if isPulsing:
-                            self.adjustPumpPower()
+                        self.adjustPumpPower(power)
                     
                 self.sigPowerChanged.emit(power)
                 self.sigWLChanged.emit(wl)
@@ -231,6 +261,8 @@ class MaiTaiThread(Thread):
                 self.sigPPowerChanged.emit(pumpPower)
                 self.sigPulsingSChanged.emit(isPulsing)
                 self.sigMoChanged.emit(mode)
+                self.sigP2OChanged.emit(p2Optimization)
+                self.sigHChanged.emit(status)
                 time.sleep(0.5)
             except:
                 debug.printExc("Error in MaiTai laser communication thread:")

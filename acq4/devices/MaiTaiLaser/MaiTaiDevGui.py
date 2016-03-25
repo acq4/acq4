@@ -154,6 +154,8 @@ class MaiTaiDevGui(LaserDevGui):
         self.dev.sigPulsingStateChanged.connect(self.pulsingStateChanged)
         self.dev.sigWavelengthChanged.connect(self.wavelengthChanged)
         self.dev.sigModeChanged.connect(self.modeChanged)
+        self.dev.sigP2OptimizationChanged.connect(self.p2OptimizationChanged)
+        self.dev.sigHistoryBufferChanged.connect(self.historyBufferChanged)
         
         try:
             self.dev.outputPower()  ## check laser power
@@ -341,7 +343,21 @@ class MaiTaiDevGui(LaserDevGui):
         #    self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #C00}")
         #else:
         #    self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
-            
+    
+    def p2OptimizationChanged(self,p2Opt):
+        if p2Opt is None:
+            self.ui.P2OptimizationLabel.setText("?")
+        elif p2Opt:
+            self.ui.P2OptimizationLabel.setText("ON")
+        elif not p2Opt:
+            self.ui.P2OptimizationLabel.setText("OFF")
+    
+    def historyBufferChanged(self, hist):
+        if hist is None:
+            self.ui.systemStatusLabel.setText("?")
+        else:
+            self.ui.systemStatusLabel.setText(str(hist))
+    
     def pumpPowerChanged(self,pumpPower):
         if pumpPower is None:
             self.ui.pumpPowerLabel.setText("?")

@@ -124,6 +124,19 @@ class MaiTai(SerialDevice):
         status = int(self['*STB?'])  #Returns the product status byte.
         return self.is_set(status,1)
     
+    def getHistoryBuffer(self):
+        """ returns the content of the history buffer for the status and error codes """
+        history = self['READ:AHISTory?']
+        return history
+    
+    def getP2Status(self):
+        """ returns P2 pump optimization status """
+        return self['READ:PDITher?']
+    
+    def setP2Status(self, enable):
+        """ enable : True or disable : False P2 pump optimization """
+        self['CONTrol:PDITher'] = int(enable)
+    
     def is_set(self,x, n):
         """ checks whether n^th bit is set"""
         return (x & 2**n != 0)
