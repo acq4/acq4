@@ -152,7 +152,7 @@ class MaiTai(SerialDevice):
     def __getitem__(self, arg):  ## request a single value from the laser
         #print "write", arg
         self.write("%s\r" % arg)
-        ret = self.readUntil()
+        ret = self.readPacket()
         #print "   return:", ret
         return ret
         
@@ -171,54 +171,41 @@ class MaiTai(SerialDevice):
             print "Mai Tai: Warning: tossed data ", repr(d)
         return d
     
-    #def read(self):
-        ### read all bytes waiting in buffer; non-blocking.
-        #n = self.sp.inWaiting()
-        #if n > 0:
-            #return self.sp.read(n)
-        #return ''
-    
-    #def write(self, data):
-        #self.read()  ## always empty buffer before sending command
-        #self.sp.write(data)
-        
-    #def close(self):
-        #self.sp.close()
-
-    #def readPacket(self, expect=0, timeout=10, block=True):
-        ### Read until a CRLF is encountered (or timeout).
-        ### If expect is >0, then try to get a packet of that length, ignoring CRLF within that data
-        ### if block is False, then return immediately if no data is available.
-        #start = time.time()
-        #s = ''
-        #errors = []
-        #packets = []
-        #while True:
-            #s += self.read()
-            ##print "read:", repr(s)
-            #if not block and len(s) == 0:
-                #return
+   def readPacket(self, expect=0, timeout=10, block=True):
+        ## Read until a CRLF is encountered (or timeout).
+        ## If expect is >0, then try to get a packet of that length, ignoring CRLF within that data
+        ## if block is False, then return immediately if no data is available.
+        start = time.time()
+        s = ''
+        errors = []
+        packets = []
+        while True:
+            n = self.sp.inWaiting()
+            s += self.read(n)
+            #print "read:", repr(s)
+            if not block and len(s) == 0:
+                return
             
-            #while len(s) > 0:  ## pull packets out of s one at a time
-                #if '\n' in s[expect:]:
-                    #i = expect + s[expect:].index('\n')
-                    #packets.append(s[:i])
-                    #expect = 0
-                    #s = s[i+2:]
-                #else:
-                    #break
+            while len(s) > 0:  ## pull packets out of s one at a time
+                if '\n' in s[expect:]:
+                    i = expect + s[expect:].index('\n')
+                    packets.append(s[:i])
+                    expect = 0
+                    s = s[i+2:]
+                else:
+                    break
                 
-            #if len(s) == 0:
-                #if len(packets) == 1:
-                    #if 'Error' in packets[0]:
-                        #raise Exception(packets[0])
-                    #return packets[0]   ## success
-                #if len(packets) > 1:
-                    #raise Exception("Too many packets read.", packets)
+            if len(s) == 0:
+                if len(packets) == 1:
+                    if 'Error' in packets[0]:
+                        raise Exception(packets[0])
+                    return packets[0]   ## success
+                if len(packets) > 1:
+                    raise Exception("Too many packets read.", packets)
             
-            #time.sleep(0.01)
-            #if time.time() - start > timeout:
-                #raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)))
+            time.sleep(0.01)
+            if time.time() - start > timeout:
+                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)))
       
         
 if __name__ == '__main__':
