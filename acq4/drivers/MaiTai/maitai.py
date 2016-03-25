@@ -171,7 +171,7 @@ class MaiTai(SerialDevice):
             print "Mai Tai: Warning: tossed data ", repr(d)
         return d
     
-   def readPacket(self, expect=0, timeout=10, block=True):
+    def readPacket(self, expect=0, timeout=10, block=True):
         ## Read until a CRLF is encountered (or timeout).
         ## If expect is >0, then try to get a packet of that length, ignoring CRLF within that data
         ## if block is False, then return immediately if no data is available.
