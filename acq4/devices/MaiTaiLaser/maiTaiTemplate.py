@@ -22,13 +22,13 @@ except AttributeError:
     def _translate(context, text, disambig):
         return QtGui.QApplication.translate(context, text, disambig)
 
-class Ui_Form(object):
-    def setupUi(self, Form):
-        Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(660, 264)
-        self.verticalLayout = QtGui.QVBoxLayout(Form)
+class Ui_MaiTai(object):
+    def setupUi(self, MaiTai):
+        MaiTai.setObjectName(_fromUtf8("MaiTai"))
+        MaiTai.resize(660, 264)
+        self.verticalLayout = QtGui.QVBoxLayout(MaiTai)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
-        self.maitaiControlGroup = QtGui.QGroupBox(Form)
+        self.maitaiControlGroup = QtGui.QGroupBox(MaiTai)
         self.maitaiControlGroup.setObjectName(_fromUtf8("maitaiControlGroup"))
         self.gridLayout_12 = QtGui.QGridLayout(self.maitaiControlGroup)
         self.gridLayout_12.setObjectName(_fromUtf8("gridLayout_12"))
@@ -164,28 +164,28 @@ class Ui_Form(object):
         self.gridLayout_12.addWidget(self.maitaiWavelengthGroup, 3, 0, 1, 4)
         self.verticalLayout.addWidget(self.maitaiControlGroup)
 
-        self.retranslateUi(Form)
-        QtCore.QMetaObject.connectSlotsByName(Form)
+        self.retranslateUi(MaiTai)
+        QtCore.QMetaObject.connectSlotsByName(MaiTai)
 
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(_translate("Form", "Form", None))
-        self.maitaiControlGroup.setTitle(_translate("Form", "Mai Tai Control", None))
-        self.ExternalShutterBtn.setText(_translate("Form", "Open External Shutter", None))
-        self.turnOnOffBtn.setText(_translate("Form", "Turn Laser On", None))
-        self.InternalShutterBtn.setText(_translate("Form", "Open Laser Shutter", None))
-        self.label_15.setText(_translate("Form", "System Status:", None))
-        self.label_18.setText(_translate("Form", "P2 Optimization:", None))
-        self.label_14.setText(_translate("Form", "relative Humidity:", None))
-        self.PulsingLabel.setText(_translate("Form", "Not Pulsing", None))
-        self.InternalShutterLabel.setText(_translate("Form", "Laser Shutter Closed", None))
-        self.EmissionLabel.setText(_translate("Form", "Emission Off", None))
-        self.ExternalShutterLabel.setText(_translate("Form", "External Shutter Closed", None))
-        self.label_6.setText(_translate("Form", "Pump Mode:", None))
-        self.label_16.setText(_translate("Form", "Current Pump Power:", None))
-        self.alignmentModeBtn.setText(_translate("Form", "Alignment mode Off", None))
-        self.linkLaserExtSwitchCheckBox.setText(_translate("Form", "Link Laser Schutter to external Switch", None))
-        self.externalSwitchBtn.setText(_translate("Form", "External Switch ON", None))
-        self.label_13.setText(_translate("Form", "Set Wavelength: ", None))
-        self.label_2.setText(_translate("Form", "Current Wavelength:", None))
+    def retranslateUi(self, MaiTai):
+        MaiTai.setWindowTitle(_translate("MaiTai", "Form", None))
+        self.maitaiControlGroup.setTitle(_translate("MaiTai", "Mai Tai Control", None))
+        self.ExternalShutterBtn.setText(_translate("MaiTai", "Open External Shutter", None))
+        self.turnOnOffBtn.setText(_translate("MaiTai", "Turn Laser On", None))
+        self.InternalShutterBtn.setText(_translate("MaiTai", "Open Laser Shutter", None))
+        self.label_15.setText(_translate("MaiTai", "System Status:", None))
+        self.label_18.setText(_translate("MaiTai", "P2 Optimization:", None))
+        self.label_14.setText(_translate("MaiTai", "relative Humidity:", None))
+        self.PulsingLabel.setText(_translate("MaiTai", "Not Pulsing", None))
+        self.InternalShutterLabel.setText(_translate("MaiTai", "Laser Shutter Closed", None))
+        self.EmissionLabel.setText(_translate("MaiTai", "Emission Off", None))
+        self.ExternalShutterLabel.setText(_translate("MaiTai", "External Shutter Closed", None))
+        self.label_6.setText(_translate("MaiTai", "Pump Mode:", None))
+        self.label_16.setText(_translate("MaiTai", "Current Pump Power:", None))
+        self.alignmentModeBtn.setText(_translate("MaiTai", "Alignment mode Off", None))
+        self.linkLaserExtSwitchCheckBox.setText(_translate("MaiTai", "Link Laser Schutter to external Switch", None))
+        self.externalSwitchBtn.setText(_translate("MaiTai", "External Switch ON", None))
+        self.label_13.setText(_translate("MaiTai", "Set Wavelength: ", None))
+        self.label_2.setText(_translate("MaiTai", "Current Wavelength:", None))
 
 from acq4.pyqtgraph import SpinBox

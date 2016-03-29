@@ -2,7 +2,7 @@ from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
 from acq4.devices.Laser.devTemplate import Ui_Form
 from acq4.devices.Laser.LaserDevGui import LaserDevGui
-from maiTaiTemplate import maiTai_Form
+from maiTaiTemplate import Ui_MaiTai
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
@@ -23,13 +23,16 @@ class MaiTaiDevGui(LaserDevGui):
         
         ### configure gui
         ### hide group boxes which are not related to Mai Tai function 
-        #self.ui.powerGroup.hide()
-        #self.ui.subPowerGroup.hide()
         self.ui.buttonGroup.hide()
         self.ui.wavelengthGroup.hide()
         
-        maiTaiWidget = QtGui.QWidget(maiTai_Form)
-        self.ui.insertWidget(1,maiTaiWidget)
+        # setup Mai Tai widget
+        self.maiTai_widget = QtGui.QWidget()
+        self.maiTai_widget.ui = Ui_MaiTai()
+        self.maiTai_widget.ui.setupUi(self.maiTai_widget)
+        
+        # insert Mai Tai widget in Laser GUI
+        self.layout.insertWidget(1,self.maiTai_widget)
         
         if self.dev.isLaserOn():
             self.onOffToggled(True)
