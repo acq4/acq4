@@ -224,17 +224,17 @@ class MaiTaiThread(Thread):
         with self.lock:
             self.cmds.append(cmd)
     def adjustPumpPower(self,currentPower):
-        """ keeps laser output power between alignmentPower value and  alignmentPower + 10%"""
+        """ keeps laser output power between alignmentPower value and  alignmentPower + 25%"""
         lastCommandedPP = self.driver.getLastCommandedPumpLaserPower()
-        if self.dev.alignmentPower*1.1 < currentPower:
-            newPP = round(lastCommandedPP*0.95,2) # decrease pump power by 5 % until
+        if self.dev.alignmentPower*1.25 < currentPower:
+            newPP = round(lastCommandedPP*0.98,2) # decrease pump power by 2 % 
             self.driver.setPumpLaserPower(newPP)
         elif self.dev.alignmentPower > currentPower:
-            newPP = round(lastCommandedPP*1.02,2) # increase pump power by 2 % until
+            newPP = round(lastCommandedPP*1.01,2) # increase pump power by 1 % 
             self.driver.setPumpLaserPower(newPP)
-        newCommandedPP = self.driver.getLastCommandedPumpLaserPower()
-        print 'pump laser power - before : new : after , ', lastCommandedPP, newPP, newCommandedPP
-        print 'laser output power : ', currentPower
+        #newCommandedPP = self.driver.getLastCommandedPumpLaserPower()
+        #print 'pump laser power - before : new : after , ', lastCommandedPP, newPP, newCommandedPP
+        #print 'laser output power : ', currentPower
         
         
     def run(self):

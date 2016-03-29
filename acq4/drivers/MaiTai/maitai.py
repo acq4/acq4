@@ -158,11 +158,20 @@ class MaiTai(SerialDevice):
         """ returns the content of the history buffer for the status and error codes """
         history = self['READ:AHISTory?']
         lhist = [int(k) for k in history.split()]
-        return StatusErrorCodes[lhist[0]]
+        if lhist[0] in StatusErrorCodes:
+            return StatusErrorCodes[lhist[0]]
+        else:
+            return ("Unknown status/error code %s" % lhist[0])
     
     def getP2Status(self):
         """ returns P2 pump optimization status """
-        return self['READ:PDITher?']
+        p2Status = int(self['READ:PDITher?'])
+        if p2Status == 443:
+            return True
+        elif p2Status == 441:
+            return False
+        else:
+            return "Unknown status"
     
     def setP2Status(self, enable):
         """ enable : True or disable : False P2 pump optimization """
