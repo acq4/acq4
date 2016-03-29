@@ -4,10 +4,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from acq4.drivers.Scientifica import Scientifica
 
 if len(sys.argv) < 2:
-	print("Usage: test.py com4")
+	print("Usage: test.py com4 [9600|38400]")
 	sys.exit(-1)
 
-ps = Scientifica(sys.argv[1])
+baudrate = int(sys.argv[2]) if len(sys.argv) > 2 else None
+ps = Scientifica(sys.argv[1], baudrate=baudrate)
 
 print("Device type:  %s  Description:  %s" % (ps.getType(), ps.getDescription()))
 print("Firmware version: %r" % ps.getFirmwareVersion())

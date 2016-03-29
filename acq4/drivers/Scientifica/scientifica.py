@@ -32,18 +32,98 @@ class Scientifica(SerialDevice):
     """
     Provides interface to a Scientifica manipulator.
 
-    Example::
+    This can be initialized either with the com port name or with the string description
+    of the device.
+    Will attempt to connect at both 9600 and 38400 baud rates.
+
+    Examples::
 
         dev = Scientifica('com4')
         print dev.getPos()
         dev.moveTo([10e-3, 0, 0], 'fast')
-    """
 
-    def __init__(self, port, baudrate=9600):
+        # search for device with this description
+        dev2 = Scientifica(name='SliceScope')
+    """
+    openDevices = {}
+    availableDevices = None
+
+    @classmethod
+    def enumerateDevices(cls):
+        """Generate a list of all Scientifica devices found in the system.
+
+        Sets Scientifica.availableDevices to a dict of {name: port} pairs.
+
+        This works by searching for USB serial devices with device IDs used by Scientifica
+        (vid=0403, pid=6010) and sending a single serial request.
+        """
+        import serial.tools.list_ports
+        coms = serial.tools.list_ports.comports()
+        devs = {}
+        for com, name, ident in coms:
+            if 'VID_0403+PID_6010' not in ident:
+                continue
+            com = cls.normalizePortName(com)
+            if com in cls.openDevices:
+                name = cls.openDevices[com].getDescription()
+                devs[name] = com
+            else:
+                s = Scientifica(port=com)
+                devs[s.getDescription()] = com
+                s.close()
+
+        cls.availableDevices = devs
+
+    def __init__(self, port=None, name=None, baudrate=None):
         self.lock = RLock()
-        self.port = port
-        SerialDevice.__init__(self, port=self.port, baudrate=baudrate)
+
+        if name is not None:
+            assert port is None, "May not specify both name and port."
+            if self.availableDevices is None:
+                self.enumerateDevices()
+            if name not in self.availableDevices:
+                raise ValueError('Could not find Scientifica device with description "%s". Options are: %s' % 
+                    (name, list(self.availableDevices.keys())))
+            port = self.availableDevices[name]
+
+        if port is None:
+            raise ValueError("Must specify either name or port.")
+            
+        self.port = self.normalizePortName(port)
+        if self.port in self.openDevices:
+            raise RuntimeError("Port %s is already in use by %s" % (port, self.openDevices[self.port]))
+
+        # try both baudrates, regardless of the requested rate
+        # (but try the requested rate first)
+        baudrate = 9600 if baudrate is None else int(baudrate)
+        if baudrate == 9600:
+            baudrates = [9600, 38400]
+        elif baudrate == 38400:
+            baudrates = [38400, 9600]
+        else:
+            raise ValueError('invalid baudrate %s' % baudrate)
+
+        connected = False
+        for baudrate in baudrates:
+            try:
+                SerialDevice.__init__(self, port=self.port, baudrate=baudrate)
+                self.write('type\r')
+                self.readUntil('\r', timeout=1)
+                connected = True
+                break
+            except TimeoutError:
+                pass
+
+        if not connected:
+            raise RuntimeError("No response received from Scientifica device at %s. (tried baud rates: %s)" % (port, ', '.join(map(str, baudrates))))
+
+        Scientifica.openDevices[self.port] = self
         self._readAxisScale()
+
+    def close(self):
+        port = self.port
+        SerialDevice.close(self)
+        del Scientifica.openDevices[port]
 
     def send(self, msg):
         with self.lock:
@@ -296,3 +376,14 @@ class Scientifica(SerialDevice):
 
     def reset(self):
         self.send('RESET')
+
+    def setBaudrate(self, baudrate):
+        """Set the baud rate of the device.
+        May be either 9600 or 38400.
+        """
+        baudkey = {9600: '96', 38400: '38'}[baudrate]
+        with self.lock:
+            self.write('BAUD %s\r' % baudkey)
+            self.close()
+            self.open(baudrate=baudrate)
+
