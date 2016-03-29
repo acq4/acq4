@@ -61,7 +61,11 @@ class Scientifica(SerialDevice):
         coms = serial.tools.list_ports.comports()
         devs = {}
         for com, name, ident in coms:
-            if 'VID_0403+PID_6010' not in ident:
+            # several different ways this can appear:
+            #  VID_0403+PID_6010
+            #  VID_0403&PID_6010
+            #  VID:PID=0403:6010
+            if ('VID_0403' not in ident or 'PID_6010' not in ident) and '0403:6010' not in ident:
                 continue
             com = cls.normalizePortName(com)
             if com in cls.openDevices:
