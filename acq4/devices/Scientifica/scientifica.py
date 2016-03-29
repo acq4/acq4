@@ -14,15 +14,31 @@ class Scientifica(Stage):
     A Scientifica motorized device.
 
     This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
+    The device may be identified either by its serial port or by its description 
+    string:
 
         port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
+        name: <string>  # eg. 'SliceScope' or 'MicroStar 2'
+        baudrate: <int>  #  may be 9600 or 38400
+
+    The optional 'baudrate' parameter is used to set the baudrate of the device.
+    Both valid rates will be attempted when initially connecting.
     """
     def __init__(self, man, config, name):
-        self.port = config.pop('port')
+        # can specify 
+        port = config.pop('port', None)
+        name = config.pop('name', None)
+
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
-        self.dev = ScientificaDriver(self.port)
+        baudrate = config.pop('baudrate', None)
+        self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate)
+
+        # Controllers reset their baud to 9600 after power cycle
+        if baudrate is not None and self.dev.getBaudrate() != baudrate:
+            self.dev.setBaudrate(baudrate)
+
         self._lastMove = None
-        man.sigAbortAll.connect(self.stop)
+        man.sigAbortAll.connect(self.abort)
 
         Stage.__init__(self, man, config, name)
 
@@ -75,6 +91,14 @@ class Scientifica(Stage):
                 self._lastMove._stopped()
             self._lastMove = None
 
+    def abort(self):
+        """Stop the manipulator immediately.
+        """
+        self.dev.stop()
+        if self._lastMove is not None:
+            self._lastMove._stopped()
+            self._lastMove = None
+
     def setUserSpeed(self, v):
         """Set the maximum speed of the stage (m/sec) when under manual control.
 
@@ -124,6 +148,13 @@ class Scientifica(Stage):
 
     def deviceInterface(self, win):
         return ScientificaGUI(self, win)
+
+    def startMoving(self, vel):
+        """Begin moving the stage at a continuous velocity.
+        """
+        s = [int(-v * 1000. / 67. / self.scale[i]) for i,v in enumerate(vel)]
+        print(s)
+        self.dev.send('VJ %d %d %d C' % tuple(s))
 
 
 class MonitorThread(Thread):
