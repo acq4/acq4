@@ -8,6 +8,36 @@ except ValueError:
         import sys, os
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
         from SerialDevice import SerialDevice, TimeoutError, DataError
+
+
+StatusErrorCodes = {
+    400: ('System just finished boot'),
+    405: ('System ON'),
+    406: ('System OFF'),
+    407: ('command MODE PCUR received'),
+    408: ('command MODE PPOW received'),
+    409: ('command MODE POW received'),
+    421: ('communication error between Mai Tai & Power Supply'),
+    430: ('motors are moving'),
+    431: ('wavelength is stable, all motors stopped'),
+    444: ('P2 is between 10 and 90 %'),
+    445: ('P2 (X or Y) is between 1 and 10 % or 90 and 99 %'),
+    446: ('P2 (X or Y) is lower than 1 % or greater than 99 %'),
+    450: ('M3 is not available'),
+    451: ('M3 is disabled'),
+    452: ('M3 is inactive'),
+    453: ('M3 is active'),
+    454: ('M3 are between 10 and 90 %'),
+    455: ('M3 (X or Y) is betweeen 1 and 10 % or 90 and 99 %'),
+    456: ('M3 (X or Y) is lower than 1 or greater than 99 %'),
+    460: ('IR loop is not available'),
+    462: ('IR loop is inactive'),
+    463: ('IR loop is active'),
+    470: ('Tower temperature is correct'),
+    471: ('Tower temperature is warm'),
+    472: ('Tower temperature is hot'),
+    474: ('Tower temperature is cold'),
+}
         
 class TimeoutError(Exception):
     pass
@@ -127,7 +157,8 @@ class MaiTai(SerialDevice):
     def getHistoryBuffer(self):
         """ returns the content of the history buffer for the status and error codes """
         history = self['READ:AHISTory?']
-        return history
+        lhist = [int(k) for k in history.split()]
+        return StatusErrorCodes[lhist[0]]
     
     def getP2Status(self):
         """ returns P2 pump optimization status """

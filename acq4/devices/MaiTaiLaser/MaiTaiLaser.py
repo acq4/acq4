@@ -234,7 +234,7 @@ class MaiTaiThread(Thread):
             self.driver.setPumpLaserPower(newPP)
         newCommandedPP = self.driver.getLastCommandedPumpLaserPower()
         print 'pump laser power - before : new : after , ', lastCommandedPP, newPP, newCommandedPP
-        pring 'laser output power : ', currentPower
+        print 'laser output power : ', currentPower
         
         
     def run(self):
