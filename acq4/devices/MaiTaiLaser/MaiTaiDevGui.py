@@ -36,123 +36,33 @@ class MaiTaiDevGui(LaserDevGui):
         
         if self.dev.isLaserOn():
             self.onOffToggled(True)
-            self.ui.turnOnOffBtn.setChecked(True)
+            self.maiTai_widget.ui.turnOnOffBtn.setChecked(True)
             if self.dev.getInternalShutter():
                 self.internalShutterToggled(True)
-                self.ui.InternalShutterBtn.setChecked(True)
-            self.ui.InternalShutterBtn.setEnabled(True)
+                self.maiTai_widget.ui.InternalShutterBtn.setChecked(True)
+            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(True)
         else:
-            self.ui.InternalShutterBtn.setEnabled(False)
+            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(False)
                 
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
         
         startWL = self.dev.getWavelength()
-        self.ui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
-        self.ui.wavelengthSpin_2.setValue(startWL)
-        self.ui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
-        self.ui.currentWaveLengthLabel.setText(siFormat(startWL, suffix='m'))
-        #if not self.dev.hasTunableWavelength:
-        #    self.ui.wavelengthGroup.setVisible(False)
-        #else:
-        #    for x in self.dev.config.get('namedWavelengths', {}).keys():
-        #        self.ui.wavelengthCombo.addItem(x)
-        #    self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
+        self.maiTai_widget.ui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
+        self.maiTai_widget.ui.wavelengthSpin_2.setValue(startWL)
+        self.maiTai_widget.ui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
+        self.maiTai_widget.ui.currentWaveLengthLabel.setText(siFormat(startWL, suffix='m'))
+        
+        
+        self.maiTai_widget.ui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
+        
+        self.maiTai_widget.ui.turnOnOffBtn.toggled.connect(self.onOffToggled)
+        self.maiTai_widget.ui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
+        self.maiTai_widget.ui.ExternalShutterBtn.toggled.connect(self.externalShutterToggled)
+        self.maiTai_widget.ui.externalSwitchBtn.toggled.connect(self.externalSwitchToggled)
+        self.maiTai_widget.ui.linkLaserExtSwitchCheckBox.toggled.connect(self.linkLaserExtSwitch)
+        self.maiTai_widget.ui.alignmentModeBtn.toggled.connect(self.alignmentModeToggled)
 
-        #self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
-        #self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
-        #if not self.dev.hasTunableWavelength:
-        #    self.ui.wavelengthGroup.setVisible(False)
-        #else:
-        #    for x in self.dev.config.get('namedWavelengths', {}).keys():
-        #        self.ui.wavelengthCombo.addItem(x)
-        #    self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
-                
-        if not self.dev.hasPCell:
-            self.ui.pCellGroup.hide()
-        else:
-            self.ui.minVSpin.setOpts(step=0.1, minStep=0.01, siPrefix=True, dec=True)
-            self.ui.maxVSpin.setOpts(step=0.1, minStep=0.01, siPrefix=True, dec=True)
-            self.ui.stepsSpin.setOpts(step=1, dec=True)
-            
-        self.ui.measurementSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0], dec=True, step=1, minStep=0.01)
-        self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
-        self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.getParam('expectedPower'), dec=True, step=0.1, minStep=0.01)
-        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, None], value=self.dev.getParam('tolerance'))
-        
-        
-        if not self.dev.hasShutter:
-            self.ui.shutterBtn.setEnabled(False)
-        if not self.dev.hasQSwitch:
-            self.ui.qSwitchBtn.hide()
-            #self.ui.qSwitchBtn.setEnabled(False)
-        
-        
-        
-        
-        
-        ### Populate device lists
-        #self.ui.microscopeCombo.setTypes('microscope')
-        self.ui.meterCombo.setTypes('daqChannelGroup')
-        #defMicroscope = self.dev.config.get('scope', None)     
-        defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
-        #self.ui.microscopeCombo.setCurrentText(defMicroscope)
-        self.ui.meterCombo.setCurrentText(defPowerMeter)
-        #devs = self.dev.dm.listDevices()
-        #for d in devs:
-            #self.ui.microscopeCombo.addItem(d)
-            #self.ui.meterCombo.addItem(d)
-            #if d == defMicroscope:
-                #self.ui.microscopeCombo.setCurrentIndex(self.ui.microscopeCombo.count()-1)
-            #if d == defPowerMeter:
-                #self.ui.meterCombo.setCurrentIndex(self.ui.meterCombo.count()-1)
-         
-        ## get scope device to connect objective changed signal
-        #self.scope = getManager().getDevice(self.dev.config['scope'])
-        #self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
-        
-        ## Populate list of calibrations
-        #self.microscopes = []
-        self.updateCalibrationList()
-        
-        ## get scope device to connect objective changed signal
-        #self.scope = None
-        #while self.scope == None:
-            #for m in self.microscopes:
-                #try:
-                    #self.scope = getManager().getDevice(m)
-                #except:
-                    #pass
-        
-
-        ## make connections
-        self.ui.calibrateBtn.focusOutEvent = self.calBtnLostFocus
-        
-        self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
-        self.ui.deleteBtn.clicked.connect(self.deleteClicked)
-        self.ui.currentPowerRadio.toggled.connect(self.currentPowerToggled)
-        self.ui.expectedPowerRadio.toggled.connect(self.expectedPowerToggled)
-        self.ui.expectedPowerSpin.valueChanged.connect(self.expectedPowerSpinChanged)
-        self.ui.toleranceSpin.valueChanged.connect(self.toleranceSpinChanged)
-        self.ui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
-        self.ui.wavelengthCombo.currentIndexChanged.connect(self.wavelengthComboChanged)
-        #self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
-        self.ui.meterCombo.currentIndexChanged.connect(self.powerMeterChanged)
-        self.ui.channelCombo.currentIndexChanged.connect(self.channelChanged)
-        #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
-        #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
-        self.ui.turnOnOffBtn.toggled.connect(self.onOffToggled)
-        self.ui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
-        self.ui.ExternalShutterBtn.toggled.connect(self.externalShutterToggled)
-        self.ui.externalSwitchBtn.toggled.connect(self.externalSwitchToggled)
-        self.ui.linkLaserExtSwitchCheckBox.toggled.connect(self.linkLaserExtSwitch)
-        self.ui.alignmentModeBtn.toggled.connect(self.alignmentModeToggled)
-        self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
-        self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
-        self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
-        
-        self.ui.GDDEnableCheck.toggled.connect(self.GDDEnableToggled)
-        self.ui.GDDSpin.valueChanged.connect(self.GDDSpinChanged)
 
         self.dev.sigOutputPowerChanged.connect(self.outputPowerChanged)
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
@@ -164,173 +74,89 @@ class MaiTaiDevGui(LaserDevGui):
         self.dev.sigP2OptimizationChanged.connect(self.p2OptimizationChanged)
         self.dev.sigHistoryBufferChanged.connect(self.historyBufferChanged)
         
-        try:
-            self.dev.outputPower()  ## check laser power
-        except:
-            pass
-        
-        self.powerMeterChanged() ## populate channel combo for default power meter
-
-    def GDDEnableToggled(self, b):
-        if b:
-            gddlims = self.dev.getGDDMinMax()
-            self.ui.GDDLimits.setText("Min %d, Max %d" % (gddlims[0], gddlims[1]))
-            gddValue = self.ui.GDDSpin.value()
-          #  print 'gdd Value at enable checked: ', gddValue
-            self.dev.setGDD(gddValue)
-        elif not b:
-            self.dev.clearGDD() # turn it off. 
-        
-    def GDDSpinChanged(self, value):
-        if self.ui.GDDEnableCheck.isChecked():
-         #   print 'gdd value from spinchanged: ', value
-            self.dev.setGDD(value)
-        
     def onOffToggled(self, b):
         if b:
             self.dev.switchLaserOn()
-            self.ui.turnOnOffBtn.setText('Turn Off Laser')
-            self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
-            self.ui.EmissionLabel.setText('Emission ON')
-            self.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}")
-            self.ui.InternalShutterBtn.setEnabled(True)
+            self.maiTai_widget.ui.turnOnOffBtn.setText('Turn Off Laser')
+            self.maiTai_widget.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
+            self.maiTai_widget.ui.EmissionLabel.setText('Emission ON')
+            self.maiTai_widget.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}")
+            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
-            self.ui.turnOnOffBtn.setText('Turn On Laser')
-            self.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
-            self.ui.EmissionLabel.setText('Emission Off')
-            self.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
-            self.ui.InternalShutterBtn.setEnabled(False)
-            
-    def currentPowerToggled(self, b):
-        if b:
-            self.dev.setParam(useExpectedPower=False)
-    
-    def expectedPowerToggled(self, b):
-        if b:
-            self.dev.setParam(useExpectedPower=True)
-            
-    def powerAlertToggled(self, b):
-        if b:
-            self.dev.setParam(powerAlert=True)
-        else:
-            self.dev.setParam(powerAlert=False)
+            self.maiTai_widget.ui.turnOnOffBtn.setText('Turn On Laser')
+            self.maiTai_widget.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
+            self.maiTai_widget.ui.EmissionLabel.setText('Emission Off')
+            self.maiTai_widget.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
+            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(False)
             
     def internalShutterToggled(self, b):
         if b:
-            if self.ui.linkLaserExtSwitchCheckBox.isChecked():
+            if self.maiTai_widget.ui.linkLaserExtSwitchCheckBox.isChecked():
                 self.dev.externalSwitchOFF()
-                self.ui.externalSwitchBtn.setChecked(False)
-                self.ui.externalSwitchBtn.setText('External Switch OFF')
+                self.maiTai_widget.ui.externalSwitchBtn.setChecked(False)
+                self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch OFF')
             self.dev.openInternalShutter()
-            self.ui.InternalShutterBtn.setText('Close Laser Shutter')
-            self.ui.InternalShutterLabel.setText('Laser Shutter Open')
-            self.ui.InternalShutterLabel.setStyleSheet("QLabel {color: #0A0}")
+            self.maiTai_widget.ui.InternalShutterBtn.setText('Close Laser Shutter')
+            self.maiTai_widget.ui.InternalShutterLabel.setText('Laser Shutter Open')
+            self.maiTai_widget.ui.InternalShutterLabel.setStyleSheet("QLabel {color: #0A0}")
         elif not b:
             self.dev.closeInternalShutter()
-            self.ui.InternalShutterBtn.setText('Open Laser Shutter')
-            #self.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
-            self.ui.InternalShutterLabel.setText('Laser Shutter Closed')
-            self.ui.InternalShutterLabel.setStyleSheet("QLabel {color: None}")
-            if self.ui.linkLaserExtSwitchCheckBox.isChecked():
+            self.maiTai_widget.ui.InternalShutterBtn.setText('Open Laser Shutter')
+            #self.maiTai_widget.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
+            self.maiTai_widget.ui.InternalShutterLabel.setText('Laser Shutter Closed')
+            self.maiTai_widget.ui.InternalShutterLabel.setStyleSheet("QLabel {color: None}")
+            if self.maiTai_widget.ui.linkLaserExtSwitchCheckBox.isChecked():
                 self.dev.externalSwitchON()
-                self.ui.externalSwitchBtn.setChecked(True)
-                self.ui.externalSwitchBtn.setText('External Switch ON')
+                self.maiTai_widget.ui.externalSwitchBtn.setChecked(True)
+                self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch ON')
     
     def externalShutterToggled(self, b):
         if b:
             self.dev.openShutter()
-            self.ui.ExternalShutterBtn.setText('Close External Shutter')
-            self.ui.ExternalShutterLabel.setText('External Shutter Open')
-            self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #10F}") 
+            self.maiTai_widget.ui.ExternalShutterBtn.setText('Close External Shutter')
+            self.maiTai_widget.ui.ExternalShutterLabel.setText('External Shutter Open')
+            self.maiTai_widget.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #10F}") 
         elif not b:
             self.dev.closeShutter()
-            self.ui.ExternalShutterBtn.setText('Open External Shutter')   
-            self.ui.ExternalShutterLabel.setText('External Shutter Closed')
-            self.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
+            self.maiTai_widget.ui.ExternalShutterBtn.setText('Open External Shutter')   
+            self.maiTai_widget.ui.ExternalShutterLabel.setText('External Shutter Closed')
+            self.maiTai_widget.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
     
     def externalSwitchToggled(self,b):
         if b:
             self.dev.externalSwitchON()
-            self.ui.externalSwitchBtn.setText('External Switch ON')
+            self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch ON')
         elif not b:
             self.dev.externalSwitchOFF()
-            self.ui.externalSwitchBtn.setText('External Switch OFF')
+            self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch OFF')
     
     def linkLaserExtSwitch(self,b):
         if b:
-            self.ui.externalSwitchBtn.setEnabled(False)
+            self.maiTai_widget.ui.externalSwitchBtn.setEnabled(False)
         elif not b:
-            self.ui.externalSwitchBtn.setEnabled(True)
+            self.maiTai_widget.ui.externalSwitchBtn.setEnabled(True)
     
     def alignmentModeToggled(self,b):
         if b:
             self.dev.acitvateAlignmentMode()
-            self.ui.alignmentModeBtn.setText('Alignment Mode ON')
+            self.maiTai_widget.ui.alignmentModeBtn.setText('Alignment Mode ON')
         elif not b:
             self.dev.deactivateAlignmentMode()
-            self.ui.alignmentModeBtn.setText('Alignment Mode OFF')
+            self.maiTai_widget.ui.alignmentModeBtn.setText('Alignment Mode OFF')
             
-    
-    def expectedPowerSpinChanged(self, value):
-        self.dev.setParam(expectedPower=value)
-        #self.dev.expectedPower = value
-        self.dev.appendPowerHistory(value)
-    
-    def toleranceSpinChanged(self, value):
-        self.dev.setParam(tolerance=value)
     
     def wavelengthChanged(self,wl):
         if wl is None:
-            self.ui.currentWaveLengthLabel.setText("?")
+            self.maiTai_widget.ui.currentWaveLengthLabel.setText("?")
         else:
-            self.ui.currentWaveLengthLabel.setText(siFormat(wl, suffix='m'))
+            self.maiTai_widget.ui.currentWaveLengthLabel.setText(siFormat(wl, suffix='m'))
         
     def wavelengthSpinChanged(self, value):
         self.dev.setWavelength(value)
         #if value not in self.dev.config.get('namedWavelengths', {}).keys():
-        #    self.ui.wavelengthCombo.setCurrentIndex(0)
-    
-    def wavelengthComboChanged(self):
-        if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."
-            return # not selected
-        text = unicode(self.ui.wavelengthCombo.currentText())
-        wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
-        if wl is not None:
-            if len(wl) == 1:
-                self.ui.wavelengthSpin.setValue(wl)
-            elif len(wl) > 1:
-                self.ui.wavelengthSpin.setValue(wl[0])
-                gddValue = self.ui.GDDSpin.setValue(wl[1])
-            else:
-                print 'bad entry in devices.cfg for wavelength, GDD value'
-    #def microscopeChanged(self):
-        #pass
-    
-    def powerMeterChanged(self):
-        powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
-        channels = powerDev.listChannels()
-        self.ui.channelCombo.clear()
-        for k in channels.keys():
-            self.ui.channelCombo.addItem(k)
-        self.channelChanged()
-            
-    def channelChanged(self):   
-        powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
-        channels = powerDev.listChannels()
-        text = str(self.ui.channelCombo.currentText())
-        if text is not '':
-            sTime = channels[text].get('settlingTime', None)
-            mTime = channels[text].get('measurementTime', None)
-        else:
-            return
-            
-        if sTime is not None:
-            self.ui.settlingSpin.setValue(sTime)
-        if mTime is not None:
-            self.ui.measurementSpin.setValue(mTime)
-            
+        #    self.maiTai_widget.ui.wavelengthCombo.setCurrentIndex(0)
     
 
     def samplePowerChanged(self, power):
@@ -353,96 +179,45 @@ class MaiTaiDevGui(LaserDevGui):
     
     def p2OptimizationChanged(self,p2Opt):
         if p2Opt is None:
-            self.ui.P2OptimizationLabel.setText("?")
+            self.maiTai_widget.ui.P2OptimizationLabel.setText("?")
         elif p2Opt:
-            self.ui.P2OptimizationLabel.setText("ON")
+            self.maiTai_widget.ui.P2OptimizationLabel.setText("ON")
         elif not p2Opt:
-            self.ui.P2OptimizationLabel.setText("OFF")
+            self.maiTai_widget.ui.P2OptimizationLabel.setText("OFF")
     
     def historyBufferChanged(self, hist):
         if hist is None:
-            self.ui.systemStatusLabel.setText("?")
+            self.maiTai_widget.ui.systemStatusLabel.setText("?")
         else:
-            self.ui.systemStatusLabel.setText(str(hist))
+            self.maiTai_widget.ui.systemStatusLabel.setText(str(hist))
     
     def pumpPowerChanged(self,pumpPower):
         if pumpPower is None:
-            self.ui.pumpPowerLabel.setText("?")
+            self.maiTai_widget.ui.pumpPowerLabel.setText("?")
         else:
-            self.ui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
+            self.maiTai_widget.ui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
     
     def relHumidityChanged(self, humidity):
         if humidity is None:
-            self.ui.relHumidityLabel.setText("?")
+            self.maiTai_widget.ui.relHumidityLabel.setText("?")
         else:
-            self.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
+            self.maiTai_widget.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
     
     def modeChanged(self, mode):
         if mode is None:
-            self.ui.pumpModeLabel.setText("?")
+            self.maiTai_widget.ui.pumpModeLabel.setText("?")
         else:
-            self.ui.pumpModeLabel.setText(mode)
+            self.maiTai_widget.ui.pumpModeLabel.setText(mode)
     
     def pulsingStateChanged(self, pulsing):
         if pulsing:
-            self.ui.PulsingLabel.setText('Pulsing')
-            self.ui.PulsingLabel.setStyleSheet("QLabel {color: #EA0}")
+            self.maiTai_widget.ui.PulsingLabel.setText('Pulsing')
+            self.maiTai_widget.ui.PulsingLabel.setStyleSheet("QLabel {color: #EA0}")
         else:
-            self.ui.PulsingLabel.setText('Not Pulsing')
-            self.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
+            self.maiTai_widget.ui.PulsingLabel.setText('Not Pulsing')
+            self.maiTai_widget.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
     
-    ## Calibration options below
-    def updateCalibrationList(self):
-        self.ui.calibrationList.clear()
-        for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
-            item = QtGui.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
-            item.key = opticState
-            self.ui.calibrationList.addTopLevelItem(item)
-            
-    def calibrateClicked(self):
-        if self.calibrateBtnState == 0 and self.calibrateWarning is not None:
-            self.ui.calibrateBtn.setText(self.calibrateWarning)
-            self.calibrateBtnState = 1
-        elif self.calibrateBtnState == 1 or self.calibrateWarning is None:
-            try:
-                self.ui.calibrateBtn.setEnabled(False)
-                self.ui.calibrateBtn.setText('Calibrating...')
-                #scope = str(self.ui.microscopeCombo.currentText())
-                powerMeter = unicode(self.ui.meterCombo.currentText())
-                mTime = self.ui.measurementSpin.value()
-                sTime = self.ui.settlingSpin.value()
-                self.dev.calibrate(powerMeter, mTime, sTime)
-                self.updateCalibrationList()
-            except:
-                raise
-            finally:
-                self.resetCalibrateBtnState()
-                
-    def resetCalibrateBtnState(self):
-        self.calibrateBtnState = 0
-        self.ui.calibrateBtn.setEnabled(True)
-        self.ui.calibrateBtn.setText('Calibrate')
-        
-    def calBtnLostFocus(self, ev):
-        self.resetCalibrateBtnState()
-    
-    
-    def deleteClicked(self):
-        #self.dev.outputPower()
-        cur = self.ui.calibrationList.currentItem()
-        if cur is None:
-            return
-        #scope = str(cur.text(0))
-        #opticState = str(cur.text(0))
-        opticState = cur.key
-        
-        index = self.dev.getCalibrationIndex()
-        
-        del index[opticState]
-
-        self.dev.writeCalibrationIndex(index)
-        self.updateCalibrationList()
-    
+      
 
             
         
