@@ -238,7 +238,8 @@ class SMP285Interface(QtGui.QWidget):
         self.ui.zPosLabel.setText(text[2])
 
     def updateClicked(self):
-        self.dev.mThread.updatePos()
+        # self.dev.mThread.updatePos()
+        self.dev.getPosition(refresh=True)
         
     def joyStateChanged(self, btn, v):
         ms = self.ui.maxSpeedSpin.value()
