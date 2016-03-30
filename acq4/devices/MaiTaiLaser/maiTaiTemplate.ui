@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MaiTai</class>
- <widget class="QWidget" name="MaiTai">
+ <class>MaiTaiStatusWidget</class>
+ <widget class="QWidget" name="MaiTaiStatusWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -66,31 +66,10 @@
            </property>
           </widget>
          </item>
-         <item row="3" column="3">
-          <widget class="QLabel" name="P2OptimizationLabel">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="2">
-          <widget class="QLabel" name="label_18">
-           <property name="text">
-            <string>P2 Optimization:</string>
-           </property>
-          </widget>
-         </item>
          <item row="3" column="1">
           <widget class="QLabel" name="systemStatusLabel">
            <property name="text">
             <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_14">
-           <property name="text">
-            <string>relative Humidity:</string>
            </property>
           </widget>
          </item>
@@ -162,27 +141,6 @@
            </property>
           </widget>
          </item>
-         <item row="1" column="3">
-          <widget class="QLabel" name="pumpModeLabel">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QLabel" name="label_6">
-           <property name="text">
-            <string>Pump Mode:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLabel" name="relHumidityLabel">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
          <item row="2" column="0">
           <widget class="QLabel" name="label_16">
            <property name="text">
@@ -192,6 +150,48 @@
          </item>
          <item row="2" column="1">
           <widget class="QLabel" name="pumpPowerLabel">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="2">
+          <widget class="QLabel" name="label_18">
+           <property name="text">
+            <string>P2 Optimization:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="3">
+          <widget class="QLabel" name="P2OptimizationLabel">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_6">
+           <property name="text">
+            <string>Pump Mode:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLabel" name="pumpModeLabel">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QLabel" name="label_14">
+           <property name="text">
+            <string>relative Humidity:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="3">
+          <widget class="QLabel" name="relHumidityLabel">
            <property name="text">
             <string/>
            </property>
