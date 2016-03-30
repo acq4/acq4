@@ -2,7 +2,7 @@ from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
 from acq4.devices.Laser.devTemplate import Ui_Form
 from acq4.devices.Laser.LaserDevGui import LaserDevGui
-from maiTaiTemplate import Ui_MaiTai
+from maiTaiTemplate import MaiTaiStatusWidget
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
@@ -27,12 +27,17 @@ class MaiTaiDevGui(LaserDevGui):
         self.ui.wavelengthGroup.hide()
         
         # setup Mai Tai widget
-        self.maiTai_widget = QtGui.QWidget()
-        self.maiTai_widget.ui = Ui_MaiTai()
-        self.maiTai_widget.ui.setupUi(self.maiTai_widget)
+        self._maitaiui = MaiTaiStatusWidget()
+        self._maitaiwidget = QtGui.QWidget()
+        self._maitaiui.setupUi(self._maitaiwidget)
+        self.ui.mainLayout.insertWidget(0, self._maitaiwidget)
+        
+        #self.maiTai_widget = QtGui.QWidget()
+        #self.maiTai_widget.ui = Ui_MaiTai()
+        #self.maiTai_widget.ui.setupUi(self.maiTai_widget)
         
         # insert Mai Tai widget in Laser GUI
-        self.layout.insertWidget(1,self.maiTai_widget)
+        #self.layout.insertWidget(1,self.maiTai_widget)
         
         if self.dev.isLaserOn():
             self.onOffToggled(True)
