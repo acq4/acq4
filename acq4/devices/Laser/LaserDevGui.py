@@ -15,8 +15,7 @@ class LaserDevGui(QtGui.QWidget):
         #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.layout = QtGui.QVBoxLayout(self)
-        self.layout.insertWidget(1,self)
+
         self.calibrateWarning = self.dev.config.get('calibrationWarning', None)
         self.calibrateBtnState = 0
         

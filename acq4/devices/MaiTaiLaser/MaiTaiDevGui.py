@@ -30,43 +30,37 @@ class MaiTaiDevGui(LaserDevGui):
         self._maitaiui = MaiTaiStatusWidget()
         self._maitaiwidget = QtGui.QWidget()
         self._maitaiui.setupUi(self._maitaiwidget)
-        self.ui.mainLayout.insertWidget(0, self._maitaiwidget)
-        
-        #self.maiTai_widget = QtGui.QWidget()
-        #self.maiTai_widget.ui = Ui_MaiTai()
-        #self.maiTai_widget.ui.setupUi(self.maiTai_widget)
-        
         # insert Mai Tai widget in Laser GUI
-        #self.layout.insertWidget(1,self.maiTai_widget)
+        self.ui.mainLayout.insertWidget(0, self._maitaiwidget)
         
         if self.dev.isLaserOn():
             self.onOffToggled(True)
-            self.maiTai_widget.ui.turnOnOffBtn.setChecked(True)
+            self._maitaiui.turnOnOffBtn.setChecked(True)
             if self.dev.getInternalShutter():
                 self.internalShutterToggled(True)
-                self.maiTai_widget.ui.InternalShutterBtn.setChecked(True)
-            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(True)
+                self._maitaiui.InternalShutterBtn.setChecked(True)
+            self._maitaiui.InternalShutterBtn.setEnabled(True)
         else:
-            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(False)
+            self._maitaiui.InternalShutterBtn.setEnabled(False)
                 
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
         
         startWL = self.dev.getWavelength()
-        self.maiTai_widget.ui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
-        self.maiTai_widget.ui.wavelengthSpin_2.setValue(startWL)
-        self.maiTai_widget.ui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
-        self.maiTai_widget.ui.currentWaveLengthLabel.setText(siFormat(startWL, suffix='m'))
+        self._maitaiui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
+        self._maitaiui.wavelengthSpin_2.setValue(startWL)
+        self._maitaiui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
+        self._maitaiui.currentWaveLengthLabel.setText(siFormat(startWL, suffix='m'))
         
         
-        self.maiTai_widget.ui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
+        self._maitaiui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
         
-        self.maiTai_widget.ui.turnOnOffBtn.toggled.connect(self.onOffToggled)
-        self.maiTai_widget.ui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
-        self.maiTai_widget.ui.ExternalShutterBtn.toggled.connect(self.externalShutterToggled)
-        self.maiTai_widget.ui.externalSwitchBtn.toggled.connect(self.externalSwitchToggled)
-        self.maiTai_widget.ui.linkLaserExtSwitchCheckBox.toggled.connect(self.linkLaserExtSwitch)
-        self.maiTai_widget.ui.alignmentModeBtn.toggled.connect(self.alignmentModeToggled)
+        self._maitaiui.turnOnOffBtn.toggled.connect(self.onOffToggled)
+        self._maitaiui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
+        self._maitaiui.ExternalShutterBtn.toggled.connect(self.externalShutterToggled)
+        self._maitaiui.externalSwitchBtn.toggled.connect(self.externalSwitchToggled)
+        self._maitaiui.linkLaserExtSwitchCheckBox.toggled.connect(self.linkLaserExtSwitch)
+        self._maitaiui.alignmentModeBtn.toggled.connect(self.alignmentModeToggled)
 
 
         self.dev.sigOutputPowerChanged.connect(self.outputPowerChanged)
@@ -82,86 +76,86 @@ class MaiTaiDevGui(LaserDevGui):
     def onOffToggled(self, b):
         if b:
             self.dev.switchLaserOn()
-            self.maiTai_widget.ui.turnOnOffBtn.setText('Turn Off Laser')
-            self.maiTai_widget.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
-            self.maiTai_widget.ui.EmissionLabel.setText('Emission ON')
-            self.maiTai_widget.ui.EmissionLabel.setStyleSheet("QLabel {color: #C00}")
-            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(True)
+            self._maitaiui.turnOnOffBtn.setText('Turn Off Laser')
+            self._maitaiui.turnOnOffBtn.setStyleSheet("QLabel {background-color: #C00}") 
+            self._maitaiui.EmissionLabel.setText('Emission ON')
+            self._maitaiui.EmissionLabel.setStyleSheet("QLabel {color: #C00}")
+            self._maitaiui.InternalShutterBtn.setEnabled(True)
         else:
             self.dev.switchLaserOff()
             self.shutterToggled(False)
-            self.maiTai_widget.ui.turnOnOffBtn.setText('Turn On Laser')
-            self.maiTai_widget.ui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
-            self.maiTai_widget.ui.EmissionLabel.setText('Emission Off')
-            self.maiTai_widget.ui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
-            self.maiTai_widget.ui.InternalShutterBtn.setEnabled(False)
+            self._maitaiui.turnOnOffBtn.setText('Turn On Laser')
+            self._maitaiui.turnOnOffBtn.setStyleSheet("QLabel {background-color: None}")
+            self._maitaiui.EmissionLabel.setText('Emission Off')
+            self._maitaiui.EmissionLabel.setStyleSheet("QLabel {color: None}") 
+            self._maitaiui.InternalShutterBtn.setEnabled(False)
             
     def internalShutterToggled(self, b):
         if b:
-            if self.maiTai_widget.ui.linkLaserExtSwitchCheckBox.isChecked():
+            if self._maitaiui.linkLaserExtSwitchCheckBox.isChecked():
                 self.dev.externalSwitchOFF()
-                self.maiTai_widget.ui.externalSwitchBtn.setChecked(False)
-                self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch OFF')
+                self._maitaiui.externalSwitchBtn.setChecked(False)
+                self._maitaiui.externalSwitchBtn.setText('External Switch OFF')
             self.dev.openInternalShutter()
-            self.maiTai_widget.ui.InternalShutterBtn.setText('Close Laser Shutter')
-            self.maiTai_widget.ui.InternalShutterLabel.setText('Laser Shutter Open')
-            self.maiTai_widget.ui.InternalShutterLabel.setStyleSheet("QLabel {color: #0A0}")
+            self._maitaiui.InternalShutterBtn.setText('Close Laser Shutter')
+            self._maitaiui.InternalShutterLabel.setText('Laser Shutter Open')
+            self._maitaiui.InternalShutterLabel.setStyleSheet("QLabel {color: #0A0}")
         elif not b:
             self.dev.closeInternalShutter()
-            self.maiTai_widget.ui.InternalShutterBtn.setText('Open Laser Shutter')
-            #self.maiTai_widget.ui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
-            self.maiTai_widget.ui.InternalShutterLabel.setText('Laser Shutter Closed')
-            self.maiTai_widget.ui.InternalShutterLabel.setStyleSheet("QLabel {color: None}")
-            if self.maiTai_widget.ui.linkLaserExtSwitchCheckBox.isChecked():
+            self._maitaiui.InternalShutterBtn.setText('Open Laser Shutter')
+            #self._maitaiui.shutterBtn.setStyleSheet("QLabel {background-color: None}")
+            self._maitaiui.InternalShutterLabel.setText('Laser Shutter Closed')
+            self._maitaiui.InternalShutterLabel.setStyleSheet("QLabel {color: None}")
+            if self._maitaiui.linkLaserExtSwitchCheckBox.isChecked():
                 self.dev.externalSwitchON()
-                self.maiTai_widget.ui.externalSwitchBtn.setChecked(True)
-                self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch ON')
+                self._maitaiui.externalSwitchBtn.setChecked(True)
+                self._maitaiui.externalSwitchBtn.setText('External Switch ON')
     
     def externalShutterToggled(self, b):
         if b:
             self.dev.openShutter()
-            self.maiTai_widget.ui.ExternalShutterBtn.setText('Close External Shutter')
-            self.maiTai_widget.ui.ExternalShutterLabel.setText('External Shutter Open')
-            self.maiTai_widget.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: #10F}") 
+            self._maitaiui.ExternalShutterBtn.setText('Close External Shutter')
+            self._maitaiui.ExternalShutterLabel.setText('External Shutter Open')
+            self._maitaiui.ExternalShutterLabel.setStyleSheet("QLabel {color: #10F}") 
         elif not b:
             self.dev.closeShutter()
-            self.maiTai_widget.ui.ExternalShutterBtn.setText('Open External Shutter')   
-            self.maiTai_widget.ui.ExternalShutterLabel.setText('External Shutter Closed')
-            self.maiTai_widget.ui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
+            self._maitaiui.ExternalShutterBtn.setText('Open External Shutter')   
+            self._maitaiui.ExternalShutterLabel.setText('External Shutter Closed')
+            self._maitaiui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
     
     def externalSwitchToggled(self,b):
         if b:
             self.dev.externalSwitchON()
-            self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch ON')
+            self._maitaiui.externalSwitchBtn.setText('External Switch ON')
         elif not b:
             self.dev.externalSwitchOFF()
-            self.maiTai_widget.ui.externalSwitchBtn.setText('External Switch OFF')
+            self._maitaiui.externalSwitchBtn.setText('External Switch OFF')
     
     def linkLaserExtSwitch(self,b):
         if b:
-            self.maiTai_widget.ui.externalSwitchBtn.setEnabled(False)
+            self._maitaiui.externalSwitchBtn.setEnabled(False)
         elif not b:
-            self.maiTai_widget.ui.externalSwitchBtn.setEnabled(True)
+            self._maitaiui.externalSwitchBtn.setEnabled(True)
     
     def alignmentModeToggled(self,b):
         if b:
             self.dev.acitvateAlignmentMode()
-            self.maiTai_widget.ui.alignmentModeBtn.setText('Alignment Mode ON')
+            self._maitaiui.alignmentModeBtn.setText('Alignment Mode ON')
         elif not b:
             self.dev.deactivateAlignmentMode()
-            self.maiTai_widget.ui.alignmentModeBtn.setText('Alignment Mode OFF')
+            self._maitaiui.alignmentModeBtn.setText('Alignment Mode OFF')
             
     
     def wavelengthChanged(self,wl):
         if wl is None:
-            self.maiTai_widget.ui.currentWaveLengthLabel.setText("?")
+            self._maitaiui.currentWaveLengthLabel.setText("?")
         else:
-            self.maiTai_widget.ui.currentWaveLengthLabel.setText(siFormat(wl, suffix='m'))
+            self._maitaiui.currentWaveLengthLabel.setText(siFormat(wl, suffix='m'))
         
     def wavelengthSpinChanged(self, value):
         self.dev.setWavelength(value)
         #if value not in self.dev.config.get('namedWavelengths', {}).keys():
-        #    self.maiTai_widget.ui.wavelengthCombo.setCurrentIndex(0)
+        #    self._maitaiui.wavelengthCombo.setCurrentIndex(0)
     
 
     def samplePowerChanged(self, power):
@@ -184,43 +178,43 @@ class MaiTaiDevGui(LaserDevGui):
     
     def p2OptimizationChanged(self,p2Opt):
         if p2Opt is None:
-            self.maiTai_widget.ui.P2OptimizationLabel.setText("?")
+            self._maitaiui.P2OptimizationLabel.setText("?")
         elif p2Opt:
-            self.maiTai_widget.ui.P2OptimizationLabel.setText("ON")
+            self._maitaiui.P2OptimizationLabel.setText("ON")
         elif not p2Opt:
-            self.maiTai_widget.ui.P2OptimizationLabel.setText("OFF")
+            self._maitaiui.P2OptimizationLabel.setText("OFF")
     
     def historyBufferChanged(self, hist):
         if hist is None:
-            self.maiTai_widget.ui.systemStatusLabel.setText("?")
+            self._maitaiui.systemStatusLabel.setText("?")
         else:
-            self.maiTai_widget.ui.systemStatusLabel.setText(str(hist))
+            self._maitaiui.systemStatusLabel.setText(str(hist))
     
     def pumpPowerChanged(self,pumpPower):
         if pumpPower is None:
-            self.maiTai_widget.ui.pumpPowerLabel.setText("?")
+            self._maitaiui.pumpPowerLabel.setText("?")
         else:
-            self.maiTai_widget.ui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
+            self._maitaiui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
     
     def relHumidityChanged(self, humidity):
         if humidity is None:
-            self.maiTai_widget.ui.relHumidityLabel.setText("?")
+            self._maitaiui.relHumidityLabel.setText("?")
         else:
-            self.maiTai_widget.ui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
+            self._maitaiui.relHumidityLabel.setText(siFormat(humidity, suffix='%'))
     
     def modeChanged(self, mode):
         if mode is None:
-            self.maiTai_widget.ui.pumpModeLabel.setText("?")
+            self._maitaiui.pumpModeLabel.setText("?")
         else:
-            self.maiTai_widget.ui.pumpModeLabel.setText(mode)
+            self._maitaiui.pumpModeLabel.setText(mode)
     
     def pulsingStateChanged(self, pulsing):
         if pulsing:
-            self.maiTai_widget.ui.PulsingLabel.setText('Pulsing')
-            self.maiTai_widget.ui.PulsingLabel.setStyleSheet("QLabel {color: #EA0}")
+            self._maitaiui.PulsingLabel.setText('Pulsing')
+            self._maitaiui.PulsingLabel.setStyleSheet("QLabel {color: #EA0}")
         else:
-            self.maiTai_widget.ui.PulsingLabel.setText('Not Pulsing')
-            self.maiTai_widget.ui.PulsingLabel.setStyleSheet("QLabel {color: None}")
+            self._maitaiui.PulsingLabel.setText('Not Pulsing')
+            self._maitaiui.PulsingLabel.setStyleSheet("QLabel {color: None}")
     
       
 
