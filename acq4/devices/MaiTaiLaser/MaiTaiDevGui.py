@@ -31,7 +31,7 @@ class MaiTaiDevGui(LaserDevGui):
         self._maitaiwidget = QtGui.QWidget()
         self._maitaiui.setupUi(self._maitaiwidget)
         # insert Mai Tai widget in Laser GUI
-        self.ui.verticalLayout.insertWidget(0, self._maitaiwidget)
+        self.ui.verticalLayout_2.insertWidget(0, self._maitaiwidget)
         
         if self.dev.isLaserOn():
             self.onOffToggled(True)
