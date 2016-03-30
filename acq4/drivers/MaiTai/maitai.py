@@ -164,17 +164,19 @@ class MaiTai(SerialDevice):
             return ("Unknown status/error code %s" % lhist[0])
     
     def getP2Status(self):
-        """ returns P2 pump optimization status """
+        """ returns P2 pump optimization status. The values returned are servos active (TRUE) or inactive(FALSE). """
         p2Status = int(self['READ:PDITher?'])
-        if p2Status == 443:
+        if p2Status == 443: # P2 switch = Autoseek: if output power > ~ 150 mW, servo is active
             return True
-        elif p2Status == 441:
+        elif p2Status == 441: # P2 switch = off: servo always inactive
+            return False
+        elif p2Status == 442: # P2 switch = Autoseek: if output power < ~130 mW, servo is inactive
             return False
         else:
             return "Unknown status"
     
     def setP2Status(self, enable):
-        """ enable : True or disable : False P2 pump optimization """
+        """ Enable (1) or disable (0) the 'dither for power'. This  loop  dithers  mirror  P """
         self['CONTrol:PDITher'] = int(enable)
     
     def is_set(self,x, n):
