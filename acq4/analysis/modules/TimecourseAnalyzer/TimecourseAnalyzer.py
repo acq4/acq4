@@ -3,6 +3,8 @@ from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from collections import OrderedDict
 import numpy as np
 import acq4.pyqtgraph as pg
+from RegionParameter import RegionParameter
+#from acq4.pyqtgraph.parametertree import Parameter
 
 class TimecourseAnalyzer(AnalysisModule):
 
@@ -20,8 +22,8 @@ class TimecourseAnalyzer(AnalysisModule):
 
         self._elements_ = OrderedDict([
             ('Database', {'type':'ctrl', 'object': self.dbGui, 'size':(100,100)}),
-            ('AnalysisRegionControl', {'type':'parameterTree', 'pos':('above', 'Database'),'size': (100, 400)}),
-            ('File Loader', {'type':'fileInput', 'size': (100, 100), 'pos':('above', 'AnalysisRegionControl'),'host': self}),
+            ('Analysis Regions', {'type':'parameterTree', 'pos':('above', 'Database'),'size': (100, 400)}),
+            ('File Loader', {'type':'fileInput', 'size': (100, 100), 'pos':('above', 'Analysis Regions'),'host': self}),
             ('Experiment Plot', {'type':'plot', 'pos':('right', 'File Loader'), 'size':(400, 100)}),
             ('Traces Plot', {'type': 'plot', 'pos':('bottom', 'Experiment Plot'), 'size':(400,200)}),
             ('Results', {'type':'table', 'pos':('bottom', 'Traces Plot'), 'size': (400,200)})
@@ -31,6 +33,7 @@ class TimecourseAnalyzer(AnalysisModule):
         self.exptPlot = self.getElement('Experiment Plot', create=True)
         self.tracesPlot = self.getElement('Traces Plot', create=True)
         self.resultsTable = self.getElement('Results', create=True)
+        self.paramTree = self.getElement('Analysis Regions', create=True) 
 
         ### initialize variables
         self.expStart = 0
@@ -42,6 +45,10 @@ class TimecourseAnalyzer(AnalysisModule):
         self.traceSelectRgn.setRegion([0, 300])
         self.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
+
+        self.addRegionParam = pg.parametertree.Parameter.create(name="Add Region", type='action')
+        self.paramTree.addParameters(self.addRegionParam)
+        self.addRegionParam.sigActivated.connect(self.newRegionRequested)
 
     def loadFileRequested(self, files):
         """Called by FileLoader when the load EPSP file button is clicked, once for each selected file.
@@ -105,5 +112,8 @@ class TimecourseAnalyzer(AnalysisModule):
         
         for i, d in enumerate(data):
             self.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
+
+    def newRegionRequested(self):
+        self.paramTree.addParameters(RegionParameter(self.tracesPlot))
 
         
