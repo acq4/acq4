@@ -31,6 +31,7 @@ StatusErrorCodes = {
     455: ('M3 (X or Y) is betweeen 1 and 10 % or 90 and 99 %'),
     456: ('M3 (X or Y) is lower than 1 or greater than 99 %'),
     460: ('IR loop is not available'),
+    461: ('IR loop disabled'),
     462: ('IR loop is inactive'),
     463: ('IR loop is active'),
     470: ('Tower temperature is correct'),
