@@ -185,10 +185,10 @@ class MultiPatchWindow(QtGui.QWidget):
         return default
 
     def coarseSearch(self):
-        self.moveSearch(-700e-6)
+        self.moveSearch(-400e-6)
 
     def fineSearch(self):
-        self.moveSearch(-50e-6)
+        self.moveSearch(-30e-6)
 
     def moveSearch(self, distance):
         speed = self.selectedSpeed(default='fast')
@@ -239,7 +239,7 @@ class MultiPatchWindow(QtGui.QWidget):
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
             stagepos = self._calibrateStagePositions.pop(0)
-            pip.scopeDevice().setGlobalPosition(stagepos)
+            pip.scopeDevice().setGlobalPosition(stagepos, speed='slow')
 
         if len(self._calibratePips) == 0:
             self.calibrateBtn.setChecked(False)
