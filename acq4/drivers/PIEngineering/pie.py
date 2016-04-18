@@ -7,6 +7,7 @@ import numpy as np
 os.environ['PATH'] += ";C:\\Program Files (x86)\\PI Engineering\\P.I. Engineering SDK\\DLLs"
 pielib = ctypes.windll.PIEHid
 
+
 # The following structure is defined with 10 fields in PieHid32.h, but it appears that only
 # 4 of them are actually used by the library (???)
 class TEnumHIDInfo(ctypes.Structure):
@@ -222,6 +223,12 @@ class PIEDevice(object):
             return self.state.copy()
 
     def setCallback(self, cb):
+        """Set a callback to be invoked whenever the device state changes.
+
+        The callback must accept a single argument that is a dictionary describing
+        all state changes (note that a single callback may describe multiple changes
+        if they occur in quick succession).
+        """
         self._callback = cb
 
     def setLED(self, state):
@@ -373,40 +380,6 @@ def hexdump(data, size):
             i += 1
         print line
 
-# hexdump(buf, 540*count.value)
-
-# handle = 0
-# assert pielib.SetupInterfaceEx(handle, 1) == 0
-
-# import time, struct
-# readsize = pielib.GetReadLength(handle)
-# readbuf = (ctypes.c_char * readsize)()
-
-# writesize = pielib.GetWriteLength(handle)
-# writebuf = (ctypes.c_char * writesize)()
-# def send(*args):
-#     pad = writesize-len(args)
-#     writebuf[:] = struct.pack('=%dB%ds' % (len(args), pad), *(args + ('\0'*pad,)))
-#     return pielib.WriteData(handle, ctypes.byref(writebuf))
-
-# ````
-
-# led = 0
-# while True:
-#     if pielib.ReadData(handle, ctypes.byref(readbuf)) == 0:
-#         # hexdump(buf, readsize)
-#         (_, uid, btn, keys, jog, shuttle, timestamp) = struct.unpack('=3BI2bI', readbuf[:13])
-#         print "uid: %02x  btn: %02x  keys: %08x  jog: %02x  shuttle: %02x" % (uid, btn, keys, jog, shuttle)
-
-#         # toggle red/green LEDs
-#         send(0, 186, led << 6)
-#         led = (led + 1) % 4
-
-
-
-#     time.sleep(0.01)
-
-
 
 if __name__ == '__main__':
     h = getDeviceHandles()
@@ -417,9 +390,5 @@ if __name__ == '__main__':
 
     def cb(changes):
         print changes
-        # s = dev.getState()
-        # for i in range(s['keys'].shape[0]):
-        #     print s['keys'][i].astype('ubyte')
-        # print 'jog: %02x  shuttle: %02x  btn: %02x' % (s['jog'], s['shuttle'], s['button'])
     dev.setCallback(cb)
 
