@@ -1,9 +1,10 @@
 import sys, os
 if __name__ == '__main__':
     d = os.path.dirname(__file__)
-    sys.path.append(os.path.join(d, '../../util'))
+    #sys.path.append(os.path.join(d, '../../util'))
+    sys.path.append(os.path.join(d, '../../../'))
     
-#import acq4.util.ptime as ptime
+import acq4.util.ptime as ptime
 from ctypes import *
 from acq4.util.clibrary import *
 #from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
@@ -48,10 +49,11 @@ class filterWheelDriverClass:
         self.fws = {}
         self.paramTable = OrderedDict()
         
-        #print dir(lib)
+        #print dir(LIB)
         #print LIB.fnUART_LIBRARY_list
         ports = c_char_p()
         res = LIB.fnUART_LIBRARY_list(ports,c_long(255))
+        print res(), res.rval, res.args
         #print res(), res.rval, res.args
         #print ports.value
 
@@ -865,15 +867,15 @@ class QCameraClass:
         return a 
         
 if __name__ == '__main__':
-    print "Testing QCam driver..."
-    qcd = QCamDriverClass()
-    cams = qcd.listCameras()
-    print "Found cameras:", cams
-    cam = qcd.getCamera(cams[0])
-    print "Opened camera 0."
-    params = cam.listParams()
-    print "Parameters available:", params.keys()
-    qcd.quit()
+    print "Testing ThorLabs filter wheel ..."
+    fw = filterWheelDriverClass()
+    #cams = qcd.listCameras()
+    #print "Found cameras:", cams
+    #cam = qcd.getCamera(cams[0])
+    #print "Opened camera 0."
+    #params = cam.listParams()
+    #print "Parameters available:", params.keys()
+    #qcd.quit()
     
 #loadDriver()
 #cameras = listCameras()
