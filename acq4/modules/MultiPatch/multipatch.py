@@ -185,10 +185,10 @@ class MultiPatchWindow(QtGui.QWidget):
         return default
 
     def coarseSearch(self):
-        self.moveSearch(-400e-6)
+        self.moveSearch(-self.module.config.get('coarseSearchDistance', 400e-6))
 
     def fineSearch(self):
-        self.moveSearch(-30e-6)
+        self.moveSearch(-self.module.config.get('fineSearchDistance', 50e-6))
 
     def moveSearch(self, distance):
         speed = self.selectedSpeed(default='fast')
