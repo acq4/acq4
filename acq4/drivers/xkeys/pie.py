@@ -351,20 +351,23 @@ class XKeysDevice(object):
         if state is None:
             return
 
-        for k in newState:
+        for k,v in newState.items():
             if k == 'keys':
-                dif = np.argwhere(newState['keys'] != state['keys'])
+                dif = np.argwhere(v != state['keys'])
                 if len(dif) > 0:
-                    changes['keys'] = dif
+                    changes['keys'] = [(tuple(key), v[tuple(key)]) for key in dif]
+            elif k == 'jog':
+                if v != 0 and v != state[k]:
+                    changes[k] = v
             else:
-                if newState[k] != state[k]:
-                    changes[k] = newState[k]
+                if v != state[k]:
+                    changes[k] = v
         return changes
 
     def _dataCallback(self, data, devid, err):
         # hexdump(data, self.readsize)
         changes = self._handleData(data)
-        if self._callback is not None:
+        if len(changes) > 0 and self._callback is not None:
             self._callback(changes)
         return 1
 

@@ -14,7 +14,6 @@ except WindowsError as exc:
         executable = "C:\\Anaconda2-32\\python.exe"
         pie32Proc = mp.QtProcess(executable=executable, copySysPath=False)
         XKeysDriver = pie32Proc._import('acq4.drivers.xkeys')
-        #PIEDriver._setProxyOptions(deferGetattr=False)
         import atexit
         atexit.register(pie32Proc.close)
         PIE32_BRIDGE = True
@@ -42,6 +41,9 @@ class XKeys(Device):
             self.dev.setCallback(self._callback)
         else:
             self.dev.setCallback(self._stateChanged)
+
+    def getState(self):
+        return self.dev.state.copy()
 
     def capabilities(self):
         return self.dev.capabilities.copy()
