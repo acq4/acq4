@@ -1,1 +1,1 @@
-from .pie import PIEDevice, getDeviceHandles
+from .pie import XKeysDevice, getDeviceHandles

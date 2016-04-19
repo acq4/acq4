@@ -172,7 +172,7 @@ def getDeviceHandles():
     return handles
 
 
-class PIEDevice(object):
+class XKeysDevice(object):
     def __init__(self, handle):
         self.handle = handle
         self.readsize = pielib.GetReadLength(handle)
@@ -384,7 +384,7 @@ def hexdump(data, size):
 if __name__ == '__main__':
     h = getDeviceHandles()
     print "handles:", h
-    dev = PIEDevice(h[0])
+    dev = XKeysDevice(h[0])
     print dev.pid, dev.model
     dev.setBacklightRows(bl1=21, bl2=42)
 

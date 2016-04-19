@@ -4,7 +4,7 @@ from acq4.devices.Device import Device
 from acq4.util.Mutex import Mutex
 
 try:
-    import acq4.drivers.PIEngineering as PIEDriver
+    import acq4.drivers.xkeys as XKeysDriver
     PIE32_BRIDGE = False
 except WindowsError as exc:
     if exc.winerror == 193:
@@ -13,7 +13,7 @@ except WindowsError as exc:
         # need to make this configurable..
         executable = "C:\\Anaconda2-32\\python.exe"
         pie32Proc = mp.QtProcess(executable=executable, copySysPath=False)
-        PIEDriver = pie32Proc._import('acq4.drivers.PIEngineering')
+        XKeysDriver = pie32Proc._import('acq4.drivers.xkeys')
         #PIEDriver._setProxyOptions(deferGetattr=False)
         import atexit
         atexit.register(pie32Proc.close)
@@ -23,11 +23,11 @@ except WindowsError as exc:
 
 
 # create initial connection to all available devices
-pieDevices = [PIEDriver.PIEDevice(h) for h in PIEDriver.getDeviceHandles()]
+pieDevices = [XKeysDriver.XKeysDevice(h) for h in XKeysDriver.getDeviceHandles()]
 
 
-class PIEngineering(Device):
-    """P.I. Engineering input device.
+class XKeys(Device):
+    """P.I. Engineering X-Keys input device.
     """
     sigStateChanged = QtCore.Signal(object, object)  # self, changes
 
