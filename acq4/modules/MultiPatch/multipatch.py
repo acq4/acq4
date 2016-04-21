@@ -41,14 +41,20 @@ class MultiPatchWindow(QtGui.QWidget):
         for i, pip in enumerate(self.pips):
             nbtn = QtGui.QPushButton(re.sub(r'[^\d]+', '', pip.name()))
             nbtn.setCheckable(True)
+            soloBtn = QtGui.QPushButton('Solo')
+            soloBtn.setCheckable(True)
+            lockBtn = QtGui.QPushButton('Lock')
+            lockBtn.setCheckable(True)
             focusTipBtn = QtGui.QPushButton('Tip')
             focusTargetBtn = QtGui.QPushButton('Target')
 
             self.matrixLayout.addWidget(nbtn, 0, i)
-            self.matrixLayout.addWidget(focusTipBtn, 1, i)
-            self.matrixLayout.addWidget(focusTargetBtn, 2, i)
+            self.matrixLayout.addWidget(soloBtn, 1, i)
+            self.matrixLayout.addWidget(lockBtn, 2, i)
+            self.matrixLayout.addWidget(focusTipBtn, 3, i)
+            self.matrixLayout.addWidget(focusTargetBtn, 4, i)
 
-            btns = [nbtn, focusTipBtn, focusTargetBtn]
+            btns = [nbtn, soloBtn, lockBtn, focusTipBtn, focusTargetBtn]
             self.columns.append(btns)
             for b in btns:
                 b.pipette = pip
