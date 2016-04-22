@@ -35,6 +35,7 @@ class filterWheelDriver(SerialDevice):
     
     def setPos(self, newPos):
         """Sets filterwheel position to n """
+        print 'driver new pos ', newPos
         self['pos'] = int(newPos)
     
     def getPosCount(self):
@@ -55,6 +56,7 @@ class filterWheelDriver(SerialDevice):
             (0) - input (response to an ative low pulse advancing postion by 1
             (1) - output (generate an active high pulse when selected position arrive)
         """
+        print 'driver new trig ', newMode
         if int(newMode) in [0,1]:
             self['trig'] = int(newMode)
         else:
@@ -73,6 +75,7 @@ class filterWheelDriver(SerialDevice):
             (0) - slow
             (1) - fast
         """
+        print 'driver new speed ', newSpeed
         if int(newSpeed) in [0,1]:
             self['speed'] = int(newSpeed)
         else:

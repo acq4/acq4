@@ -29,17 +29,11 @@ class FilterWheel(Device, OptomechDevice):
         if len(self.positionLabels) != self.getPositionCount():
             raise Exception("Number of FilterWheel positions %s must correspond to number of labels!" % self.getPositionCount())
         
-        self.maiTaiPower = 0.
-        self.maiTaiWavelength = 0
-        self.maiTaiHumidity = 0.
-        self.maiTaiPumpPower = 0.
-        self.maiTaiPulsing = False
-        self.maiTaiP2Optimization = False
-        self.maiTaiMode = None
-        self.maiTaiHistory = None
-        
-        #self.mThread = MaiTaiThread(self, self.driver, self.driverLock)
-        #self.mThread.sigPowerChanged.connect(self.powerChanged)
+        with self.driverLock:
+            self.position = self.driver.getPos()
+
+        self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
+        self.mThread.fwPosChanged.connect(self.positionChanged)
         #self.mThread.sigWLChanged.connect(self.wavelengthChanged)
         #self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
         #self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
@@ -83,6 +77,11 @@ class FilterWheel(Device, OptomechDevice):
     def getPositionCount(self):
         with self.driverLock:
             return self.driver.getPosCount()
+    
+    def positionChanged(self,newPos):
+        with self.filterWheelLock:
+            self.position = newPos
+            self.sigFilterWheelPositionChanged.emit(newPos)
         
     #def createTask(self, cmd, parentTask):
     #    return FilterWheelTask(self, cmd, parentTask)
@@ -108,17 +107,9 @@ class FilterWheel(Device, OptomechDevice):
     #         self.dev.closeShutter()
     #     LaserTask.stop(self, abort)
         
-class MaiTaiThread(Thread):
+class FilterWheelThread(Thread):
 
-    sigPowerChanged = QtCore.Signal(object)
-    sigWLChanged = QtCore.Signal(object)
-    sigRelHumidityChanged = QtCore.Signal(object)
-    sigPPowerChanged = QtCore.Signal(object)
-    sigPulsingSChanged = QtCore.Signal(object)
-    sigMoChanged = QtCore.Signal(object)
-    sigP2OChanged = QtCore.Signal(object)
-    sigHChanged = QtCore.Signal(object)
-    sigError = QtCore.Signal(object)
+    fwPosChanged = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
         Thread.__init__(self)
@@ -127,59 +118,20 @@ class MaiTaiThread(Thread):
         self.driver = driver
         self.driverLock = lock
         self.cmds = {}
-        self.alignmentMode = False
-        
-    def setWavelength(self, wl):
-        pass
-        
-    def setShutter(self, opened):
-        wait = QtCore.QWaitCondition()
-        cmd = ['setShutter', opened]
-        with self.lock:
-            self.cmds.append(cmd)
-    def adjustPumpPower(self,currentPower):
-        """ keeps laser output power between alignmentPower value and  alignmentPower + 25%"""
-        lastCommandedPP = self.driver.getLastCommandedPumpLaserPower()
-        if self.dev.alignmentPower*1.25 < currentPower:
-            newPP = round(lastCommandedPP*0.98,2) # decrease pump power by 2 % 
-            self.driver.setPumpLaserPower(newPP)
-        elif self.dev.alignmentPower > currentPower:
-            newPP = round(lastCommandedPP*1.01,2) # increase pump power by 1 % 
-            self.driver.setPumpLaserPower(newPP)
-        #newCommandedPP = self.driver.getLastCommandedPumpLaserPower()
-        #print 'pump laser power - before : new : after , ', lastCommandedPP, newPP, newCommandedPP
-        #print 'laser output power : ', currentPower
-        
+
         
     def run(self):
         self.stopThread = False
         with self.driverLock:
-            self.sigWLChanged.emit(self.driver.getWavelength()*1e-9)
+            self.fwPosChanged.emit(self.driver.getPos())
         while True:
             try:
                 with self.driverLock:
-                    power = self.driver.getPower()
-                    wl = self.driver.getWavelength()*1e-9
-                    hum = self.driver.getRelativeHumidity()
-                    pumpPower = self.driver.getPumpPower()
-                    isPulsing = self.driver.checkPulsing()
-                    mode = self.driver.getPumpMode()
-                    p2Optimization = self.driver.getP2Status()
-                    status = self.driver.getHistoryBuffer()
-                    if self.alignmentMode:
-                        self.adjustPumpPower(power)
-                    
-                self.sigPowerChanged.emit(power)
-                self.sigWLChanged.emit(wl)
-                self.sigRelHumidityChanged.emit(hum)
-                self.sigPPowerChanged.emit(pumpPower)
-                self.sigPulsingSChanged.emit(isPulsing)
-                self.sigMoChanged.emit(mode)
-                self.sigP2OChanged.emit(p2Optimization)
-                self.sigHChanged.emit(status)
+                    pos = self.driver.getPos()
+                self.fwPosChanged.emit(pos)
                 time.sleep(0.5)
             except:
-                debug.printExc("Error in MaiTai laser communication thread:")
+                debug.printExc("Error in Filter Wheel communication thread:")
                 
             self.lock.lock()
             if self.stopThread:
@@ -195,4 +147,4 @@ class MaiTaiThread(Thread):
             self.stopThread = True
         if block:
             if not self.wait(10000):
-                raise Exception("Timed out while waiting for thread exit!")
+                raise Exception("Timed out while waiting for Filter Wheel thread exit!")
