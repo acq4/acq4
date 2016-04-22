@@ -51,15 +51,14 @@ class filterWheelDriverClass:
         
         #print dir(LIB)
         #print LIB.fnUART_LIBRARY_list
-        ports = c_char_p()
-        res = LIB.fnUART_LIBRARY_list(ports,c_long(255))
-        print res(), res.rval, res.args
+        ports = c_char_p('test')
+        res = LIB.fnUART_LIBRARY_list(ports,c_int(255))
         #print res(), res.rval, res.args
-        #print ports.value
+        #print res(), res.rval, res.args
+        print ports.value, res
 
-        nBaud = c_long(115200)
-        nPort = c_long(4)
-        print nPort.value
+        nPort = c_int(0)
+        nBaud = c_int(115200)
         res = LIB.fnUART_LIBRARY_open(nPort,nBaud)
         
         #self.listSerialPorts()
