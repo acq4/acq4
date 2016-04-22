@@ -3,7 +3,7 @@ from acq4.Manager import getManager, logExc, logMsg
 #from acq4.devices.Laser.devTemplate import Ui_Form
 #from acq4.devices.Laser.LaserDevGui import LaserDevGui
 #from maiTaiTemplate import Ui_MaiTaiStatusWidget
-from FilterWheelTemplate import Ui_Form
+from FilterWheelTemplate import Ui_FilterWheelWidget
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
@@ -16,7 +16,7 @@ class FilterWheelDevGui(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.dev = dev 
         
-        self.ui = Ui_Form()
+        self.ui = Ui_FilterWheelWidget()
         self.ui.setupUi(self)
         
         #self.calibrateWarning = self.dev.config.get('calibrationWarning', None)
