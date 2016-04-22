@@ -22,7 +22,7 @@ class FilterWheel(Device, OptomechDevice):
         self.baud = config.get('baud', 115200)
         self.positionLabels = config.get('postionLabels')
         
-        self.fwDriver = filterWheelDriver(self.port, self.baud)
+        self.driver = filterWheelDriver(self.port, self.baud)
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
 
@@ -56,7 +56,7 @@ class FilterWheel(Device, OptomechDevice):
     def setTriggerMode(self, trigMode):
         with self.driverLock:
             self.driver.setTriggerMode(trigMode)
-            self.sigFilterWheelTrigModeChanged.emit(pos)
+            self.sigFilterWheelTrigModeChanged.emit(trigMode)
     
     def getTriggerMode(self):
         with self.driverLock:
@@ -65,7 +65,7 @@ class FilterWheel(Device, OptomechDevice):
     def setSpeed(self, speed):
         with self.driverLock:
             self.driver.setSpeed(speed)
-            self.sigFilterWheelSpeedChanged.emit(pos)
+            self.sigFilterWheelSpeedChanged.emit(speed)
     
     def getSpeed(self):
         with self.driverLock:

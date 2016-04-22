@@ -19,55 +19,32 @@ class FilterWheelDevGui(QtGui.QWidget):
         self.ui = Ui_FilterWheelWidget()
         self.ui.setupUi(self)
         
-        #self.calibrateWarning = self.dev.config.get('calibrationWarning', None)
-        #self.calibrateBtnState = 0
-        
-        ### configure gui
-        ### hide group boxes which are not related to Mai Tai function 
-        #self.ui.buttonGroup.hide()
-        #self.ui.wavelengthGroup.hide()
-        
-        # setup Mai Tai widget
-        #self._maitaiui = Ui_MaiTaiStatusWidget()
-        #self._maitaiwidget = QtGui.QWidget()
-        #self._maitaiui.setupUi(self._maitaiwidget)
-        # insert Mai Tai widget in Laser GUI
-        #self.ui.verticalLayout_2.insertWidget(0, self._maitaiwidget)
-        
+        self.positionGroup = QtGui.QButtonGroup()
+        positionButtons = []
         for i in range(self.dev.getPositionCount()):
-            radio = QtGui.QRadioButton(str(self.dev.positionLabels[i]))
-            self.ui.PositionGridLayout.addWidget(radio,i+1,1)
-        self.ui.PositionGridLayout.addStretch(1)
+            positionButtons.append(QtGui.QRadioButton(str(self.dev.positionLabels[i])))
+            #radio = QtGui.QRadioButton(str(self.dev.positionLabels[i]))
+            self.positionGroup.addButton(positionButtons[-1])
+            self.ui.PositionGridLayout.addWidget(positionButtons[-1],i+1,1)
+        self.positionGroup.setExclusive(True)
         
+        currentPos = self.dev.getPosition()
+        positionButtons[i].setChecked(True)
         
         if self.dev.getTriggerMode()==0:
-            self.ui.inputTrigButton.setEnabled(True)
+            self.ui.inputTrigButton.setChecked(True)
         elif self.dev.getTriggerMode()==1:
-            self.ui.outputTrigButton.setEnabled(True)
+            self.ui.outputTrigButton.setChecked(True)
         
         if self.dev.getSpeed()==0:
-            self.ui.SlowButton.setEnabled(True)
+            self.ui.SlowButton.setChecked(True)
         elif self.dev.getSpeed()==1:
-            self.ui.FastButton.setEnabled(True)
+            self.ui.FastButton.setChecked(True)
         
-        
-        startWL = self.dev.getWavelength()
-        self._maitaiui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
-        self._maitaiui.wavelengthSpin_2.setValue(startWL)
-        self._maitaiui.wavelengthSpin_2.setOpts(bounds=self.dev.getWavelengthRange())
-        self._maitaiui.currentWaveLengthLabel.setText(siFormat(startWL, suffix='m'))
-        
-        
-        #self.ui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
         
         
         self.ui.SlowButton.toggled.connect(self.slowSpeedToggled)
         self.ui.inputTrigButton.toggled.connect(self.inputTrigToggled)
-        #self._maitaiui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
-        #self._maitaiui.ExternalShutterBtn.toggled.connect(self.externalShutterToggled)
-        #self._maitaiui.externalSwitchBtn.toggled.connect(self.externalSwitchToggled)
-        #self._maitaiui.linkLaserExtSwitchCheckBox.toggled.connect(self.linkLaserExtSwitch)
-        #self._maitaiui.alignmentModeBtn.toggled.connect(self.alignmentModeToggled)
 
 
         self.dev.sigFilterWheelPositionChanged.connect(self.positionChanged)
@@ -77,30 +54,30 @@ class FilterWheelDevGui(QtGui.QWidget):
     def slowSpeedToggled(self, b):
         if b:
             self.dev.setSpeed(0)
-            self.ui.SlowButton.setEnabled(True)
+            self.ui.SlowButton.setChecked(True)
         else:
             self.dev.setSpeed(1)
-            self.ui.FastButton.setEnabled(True)
+            self.ui.FastButton.setChecked(True)
             
     def speedChanged(self, newSpeed):
         if newSpeed==0:
-            self.ui.SlowButton.setEnabled(True)
+            self.ui.SlowButton.setChecked(True)
         else:
-            self.ui.FastButton.setEnabled(True)
+            self.ui.FastButton.setChecked(True)
     
     def inputTrigToggled(self, b):
         if b:
             self.dev.setTriggerMode(0)
-            self.ui.inputTrigButton.setEnabled(True)
+            self.ui.inputTrigButton.setChecked(True)
         elif not b:
             self.dev.setTriggerMode(1)
-            self.ui.outputTrigButton.setEnabled(True)
+            self.ui.outputTrigButton.setChecked(True)
             
     def trigModeChanged(self, newTrigMode):
         if newTrigMode==0:
-            self.ui.inputTrigButton.setEnabled(True)
+            self.ui.inputTrigButton.setChecked(True)
         else:
-            self.ui.outputTrigButton.setEnabled(True)
+            self.ui.outputTrigButton.setChecked(True)
             
     def positionChanged(self, newPos):
         print newPos
