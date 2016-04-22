@@ -23,13 +23,12 @@ class FilterWheelDevGui(QtGui.QWidget):
         self.positionButtons = []
         for i in range(self.dev.getPositionCount()):
             self.positionButtons.append(QtGui.QRadioButton(str(i+1) + ' : ' + str(self.dev.positionLabels[i])))
-            #radio = QtGui.QRadioButton(str(self.dev.positionLabels[i]))
             self.positionGroup.addButton(self.positionButtons[-1],i)
             self.ui.PositionGridLayout.addWidget(self.positionButtons[-1],i+1,1)
             self.connect(self.positionButtons[-1], QtCore.SIGNAL("clicked()"), self.positionButtonClicked)
         self.positionGroup.setExclusive(True)
         
-        self.updatePostion()
+        self.updatePosition()
         
         if self.dev.getTriggerMode()==0:
             self.ui.inputTrigButton.setChecked(True)
@@ -78,16 +77,13 @@ class FilterWheelDevGui(QtGui.QWidget):
             self.ui.outputTrigButton.setChecked(True)
     def updatePosition(self):
         currentPos = self.dev.getPosition()
-        print 'current position', currentPos
         self.positionButtons[currentPos-1].setChecked(True)
         
     def positionButtonClicked(self):
         newPos = self.positionGroup.checkedId()
-        print 'new pos:', (newPos+1)
         self.dev.setPosition((newPos+1))
     
     def positionChanged(self, newPos):
-        print 'position changed', newPos
         self.positionButtons[newPos-1].setChecked(True)
 
             

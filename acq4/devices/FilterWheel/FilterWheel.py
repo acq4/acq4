@@ -33,19 +33,8 @@ class FilterWheel(Device, OptomechDevice):
             self.position = self.driver.getPos()
 
         self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
-        self.mThread.fwPosChanged.connect(self.positionChanged)
-        #self.mThread.sigWLChanged.connect(self.wavelengthChanged)
-        #self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
-        #self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
-        #self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
-        #self.mThread.sigMoChanged.connect(self.modeChanged)
-        #self.mThread.sigP2OChanged.connect(self.p2OptimizationChanged)
-        #self.mThread.sigHChanged.connect(self.historyBufferChanged)
-        #self.mThread.start()
-        
-        #Laser.__init__(self, dm, config, name)
-        
-        #dm.sigAbortAll.connect(self.closeInternalShutter)
+        self.fwThread.fwPosChanged.connect(self.positionChanged)
+        self.fwThread.start()
         
     def setTriggerMode(self, trigMode):
         with self.driverLock:
