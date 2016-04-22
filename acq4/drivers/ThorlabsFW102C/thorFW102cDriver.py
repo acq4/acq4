@@ -17,7 +17,7 @@ errorMessages = {
     'invalid string buffer':0XED
     }
 
-class filterWheelDriverClass(SerialDevice):
+class filterWheelDriver(SerialDevice):
     """
     Class for communicating with ThorLabs FW 102C Motorized Filter Wheel
     

@@ -22,7 +22,7 @@ class FilterWheel(Device, OptomechDevice):
         self.baud = config.get('baud', 115200)
         self.positionLabels = config.get('postionLabels')
         
-        self.fwDriver = thorFW102cDriver(self.port, self.baud)
+        self.fwDriver = filterWheelDriver(self.port, self.baud)
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
 
@@ -84,14 +84,14 @@ class FilterWheel(Device, OptomechDevice):
         with self.driverLock:
             return self.driver.getPosCount()
         
-    def createTask(self, cmd, parentTask):
-        return FilterWheelTask(self, cmd, parentTask)
+    #def createTask(self, cmd, parentTask):
+    #    return FilterWheelTask(self, cmd, parentTask)
 
     def deviceInterface(self, win):
         return FilterWheelDevGui(self)
     
-class FilterWheelTask(LaserTask):
-    pass
+#class FilterWheelTask(LaserTask):
+    #pass
     # This is disabled--internal shutter in coherent laser should NOT be used by ACQ4; use a separate shutter.
     #
     # def start(self):

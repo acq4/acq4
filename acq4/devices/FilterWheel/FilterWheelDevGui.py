@@ -34,12 +34,10 @@ class FilterWheelDevGui(QtGui.QWidget):
         # insert Mai Tai widget in Laser GUI
         #self.ui.verticalLayout_2.insertWidget(0, self._maitaiwidget)
         
-        buttonVBox = QtGui.QVBoxLayout()
         for i in range(self.dev.getPositionCount()):
             radio = QtGui.QRadioButton(str(self.dev.positionLabels[i]))
-            buttonVBox.addWidget(radio)
-        buttonVBox.addStretch(1)
-        self.ui.PositionGroup.setLayout(buttonVBox)
+            self.ui.PositionGridLayout.addWidget(radio,i+1,1)
+        self.ui.PositionGridLayout.addStretch(1)
         
         
         if self.dev.getTriggerMode()==0:
