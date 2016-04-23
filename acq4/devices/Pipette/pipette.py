@@ -55,6 +55,9 @@ class Pipette(Device, OptomechDevice):
     * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 mm.
     """
+
+    sigTargetChanged = QtCore.Signal(object, object)
+
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
@@ -179,9 +182,9 @@ class Pipette(Device, OptomechDevice):
         This position is used when searching for new electrodes.
 
         Set *distance* to adjust the search position along the pipette's x-axis. Positive values
-        move the pipette past the center of the microscope to improve the probability of seeing 
-        the tip immediately. Negative values move the tip farther from the microscipe center to 
-        reduce the probability of collisions.
+        move the tip farther from the microscipe center to reduce the probability of collisions.
+        Negative values move the pipette past the center of the microscope to improve the
+        probability of seeing the tip immediately. 
         """
         # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
@@ -196,7 +199,7 @@ class Pipette(Device, OptomechDevice):
         globalTarget = scope.mapToGlobal([0, 0, self._opts['searchTipHeight'] - self._opts['searchHeight']])
         # adjust for distance argument:
         localTarget = self.mapFromGlobal(globalTarget)
-        localTarget[0] += distance
+        localTarget[0] -= distance
         globalTarget = self.mapToGlobal(localTarget)
 
         return self._moveToGlobal(globalTarget, speed)
@@ -447,6 +450,7 @@ class Pipette(Device, OptomechDevice):
 
     def setTarget(self, target):
         self.target = np.array(target)
+        self.sigTargetChanged.emit(self, self.target)
 
     def targetPosition(self):
         if self.target is None:
@@ -456,6 +460,14 @@ class Pipette(Device, OptomechDevice):
     def hideMarkers(self, hide):
         for iface in self._camInterfaces.keys():
             iface.hideMarkers(hide)
+
+    def focusTip(self, speed='slow'):
+        pos = self.globalPosition()
+        self.scopeDevice().setGlobalPosition(pos, speed=speed)
+
+    def focusTarget(self, speed='slow'):
+        pos = self.targetPosition()
+        self.scopeDevice().setGlobalPosition(pos, speed=speed)
 
 
 class PipetteCamModInterface(CameraModuleInterface):
@@ -512,6 +524,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
+        dev.sigTargetChanged.connect(self.targetChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
@@ -547,21 +560,23 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.calibrateAxis.setPos(pos)
 
         elif self.ui.setTargetBtn.isChecked():
-            self.target.setVisible(True)
-            self._haveTarget = True
-            self.depthTarget.setVisible(True)
-            self.ui.targetBtn.setEnabled(True)
-            self.ui.approachBtn.setEnabled(True)
-            self.ui.setTargetBtn.setChecked(False)
             pos = self.mod().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
             self.setTargetPos(pos, z)
             self.target.setRelativeDepth(0)
 
     def setTargetPos(self, pos, z):
-        self.target.setPos(pos)
-        self.depthTarget.setPos(0, z)
         self.dev().setTarget((pos.x(), pos.y(), z))
+
+    def targetChanged(self, dev, pos):
+        self.target.setPos(pg.Point(pos[:2]))
+        self.depthTarget.setPos(0, pos[2])
+        self.target.setVisible(True)
+        self._haveTarget = True
+        self.depthTarget.setVisible(True)
+        self.ui.targetBtn.setEnabled(True)
+        self.ui.approachBtn.setEnabled(True)
+        self.ui.setTargetBtn.setChecked(False)
 
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()

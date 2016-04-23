@@ -34,15 +34,33 @@ class PatchPipette(Pipette):
         # maybe 'state' should be available via a different method?
 
     def getPressure(self):
-        ...
+        pass
 
     def setPressure(self):
         # accepts waveforms as well?
-        ...
+        pass
+
+    def approach(self):
+        """Prepare pipette to enter tissue and patch a cell.
+
+        - Move pipette to diagonal approach position
+        - Auto-correct pipette offset
+        - May increase pressure
+        - Automatically hide tip/target markers when the tip is near the target
+        """
 
     def seal(self):
-        """Attempt to seal onto a cell by releasing pressure
+        """Attempt to seal onto a cell.
 
         * switches to VC holding after passing 100 MOhm
         * increase suction if seal does not form
         """
+
+    def breakIn(self):
+        """Rupture the cell membrane using negative current pulses.
+
+        * -2 psi for 3 sec or until rupture
+        * -4, -6, -8 psi if needed
+        * longer wait time if needed
+        """
+

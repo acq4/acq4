@@ -19,6 +19,7 @@ class MultiPatchWindow(QtGui.QWidget):
     def __init__(self, module):
         self._calibratePips = []
         self._calibrateStagePositions = []
+        self._setTargetPips = []
 
         QtGui.QWidget.__init__(self)
         self.setWindowTitle('Multipatch')
@@ -54,10 +55,17 @@ class MultiPatchWindow(QtGui.QWidget):
             self.matrixLayout.addWidget(focusTipBtn, 3, i)
             self.matrixLayout.addWidget(focusTargetBtn, 4, i)
 
+            nbtn.clicked.connect(self.selectionChanged)
+            soloBtn.clicked.connect(self.soloBtnClicked)
+            lockBtn.clicked.connect(self.lockBtnClicked)
+            focusTipBtn.clicked.connect(self.focusTipBtnClicked)
+            focusTargetBtn.clicked.connect(self.focusTargetBtnClicked)
+
             btns = [nbtn, soloBtn, lockBtn, focusTipBtn, focusTargetBtn]
             self.columns.append(btns)
             for b in btns:
                 b.pipette = pip
+
 
         self.movementWidget = QtGui.QWidget()
         self.layout.addWidget(self.movementWidget)
@@ -107,6 +115,11 @@ class MultiPatchWindow(QtGui.QWidget):
         self.calibrateBtn.setCheckable(True)
         self.calibrateBtn.toggled.connect(self.calibrateToggled)
         self.movementLayout.addWidget(self.calibrateBtn, 1, 4)
+
+        self.setTargetBtn = QtGui.QPushButton('Set target')
+        self.setTargetBtn.setCheckable(True)
+        self.setTargetBtn.toggled.connect(self.setTargetToggled)
+        self.movementLayout.addWidget(self.setTargetBtn, 1, 5)
 
         self.moveInBtn.clicked.connect(self.moveIn)
         self.stepInBtn.clicked.connect(self.stepIn)
@@ -179,7 +192,14 @@ class MultiPatchWindow(QtGui.QWidget):
             pip.goIdle(speed)
 
     def selectedPipettes(self):
-        return [col[0].pipette for col in self.columns if col[0].isChecked()]
+        sel = []
+        for col in self.columns:
+            if col[1].isChecked():
+                # solo mode
+                return [col[1].pipette]
+            if col[0].isChecked() and not col[2].isChecked():
+                sel.append(col[0].pipette)
+        return sel
 
     def selectedSpeed(self, default):
         if self.fastBtn.isChecked():
@@ -191,10 +211,10 @@ class MultiPatchWindow(QtGui.QWidget):
         return default
 
     def coarseSearch(self):
-        self.moveSearch(-self.module.config.get('coarseSearchDistance', 400e-6))
+        self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
 
     def fineSearch(self):
-        self.moveSearch(-self.module.config.get('fineSearchDistance', 50e-6))
+        self.moveSearch(self.module.config.get('fineSearchDistance', 50e-6))
 
     def moveSearch(self, distance):
         speed = self.selectedSpeed(default='fast')
@@ -219,19 +239,37 @@ class MultiPatchWindow(QtGui.QWidget):
         self._cammod = cammod
         pips = self.selectedPipettes()
         if b is True:
+            self.setTargetBtn.setChecked(False)
             if len(pips) == 0:
                 self.calibrateBtn.setChecked(False)
                 return
             # start calibration of selected pipettes
-            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked)
+            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked_calibrate)
             self._calibratePips = pips
         else:
             # stop calibration
-            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked)
+            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked_calibrate)
             self._calibratePips = []
             self._calibrateStagePositions = []
 
-    def cameraModuleClicked(self, ev):
+    def setTargetToggled(self, b):
+        cammod = getManager().getModule('Camera')
+        self._cammod = cammod
+        pips = self.selectedPipettes()
+        if b is True:
+            self.calibrateBtn.setChecked(False)
+            if len(pips) == 0:
+                self.setTargetBtn.setChecked(False)
+                return
+            # start calibration of selected pipettes
+            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked_setTarget)
+            self._setTargetPips = pips
+        else:
+            # stop calibration
+            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked_setTarget)
+            self._setTargetPips = []
+
+    def cameraModuleClicked_calibrate(self, ev):
         if ev.button() != QtCore.Qt.LeftButton:
             return
 
@@ -250,6 +288,55 @@ class MultiPatchWindow(QtGui.QWidget):
         if len(self._calibratePips) == 0:
             self.calibrateBtn.setChecked(False)
 
+    def cameraModuleClicked_setTarget(self, ev):
+        if ev.button() != QtCore.Qt.LeftButton:
+            return
+
+        # Set next pipette position from mouse click
+        pip = self._setTargetPips.pop(0)
+        pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
+        spos = pip.scopeDevice().globalPosition()
+        pos = [pos.x(), pos.y(), spos.z()]
+        pip.setTarget(pos)
+
+        if len(self._setTargetPips) == 0:
+            self.setTargetBtn.setChecked(False)
+
     def hideBtnToggled(self, hide):
         for pip in self.pips:
             pip.hideMarkers(hide)
+
+    def soloBtnClicked(self, state):
+        pip = self.sender().pipette
+        if state is True:
+            # uncheck all other solo buttons
+            for btns in self.columns:
+                if btns[1].pipette is pip:
+                    continue
+                btns[1].setChecked(False)
+        self.selectionChanged()
+
+    def lockBtnClicked(self, state):
+        pip = self.sender().pipette
+        # lock manipulator movement, pressure
+        self.selectionChanged()
+
+    def focusTipBtnClicked(self, state):
+        pip = self.sender().pipette
+        speed = self.selectedSpeed(default='slow')
+        pip.focusTip(speed)
+
+    def focusTargetBtnClicked(self, state):
+        pip = self.sender().pipette
+        speed = self.selectedSpeed(default='slow')
+        pip.focusTarget(speed)
+
+    def selectionChanged(self):
+        pips = self.selectedPipettes()
+        solo = len(pips) == 1
+        none = len(pips) == 0
+
+        if none:
+            self.calibrateBtn.setChecked(False)
+            self.setTargetBtn.setChecked(False)
+
