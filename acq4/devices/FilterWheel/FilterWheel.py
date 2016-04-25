@@ -20,6 +20,7 @@ class FilterWheel(Device, OptomechDevice):
         OptomechDevice.__init__(self, dm, config, name)
         
         self.scopeDev = None
+        self.currentFilter = None
         p = self
         while p is not None:
             p = p.parentDevice()
@@ -54,12 +55,11 @@ class FilterWheel(Device, OptomechDevice):
         
         with self.driverLock:
             self.currentFWPosition = self.driver.getPos()
-
+            self.currentObjective = self.getFilter()
+            
         self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
         self.fwThread.fwPosChanged.connect(self.positionChanged)
         self.fwThread.start()
-        
-        print 'current filter', self.currentFWPosition, self.getFilter()
         
     def setTriggerMode(self, trigMode):
         with self.driverLock:
@@ -86,7 +86,6 @@ class FilterWheel(Device, OptomechDevice):
             
     def getPosition(self):
         with self.driverLock:
-            self.currentFWPosition = self.driver.getPos()
             return self.driver.getPos()
         
     def getPositionCount(self):
@@ -96,6 +95,7 @@ class FilterWheel(Device, OptomechDevice):
     def positionChanged(self,newPos):
         with self.filterWheelLock:
             self.currentFWPosition = newPos
+            self.currentFilter = self.getFilter()
             self.sigFilterWheelPositionChanged.emit(newPos)
         
     #def createTask(self, cmd, parentTask):

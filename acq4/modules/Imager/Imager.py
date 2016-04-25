@@ -330,7 +330,7 @@ class Imager(Module):
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get('detectors', [config.get('detector')])
         
-        self.filterwheel = self.manager.getDevice(config['filterwheel'],None)
+        self.filterwheel = self.manager.getDevice(config['filterwheel'])
         if self.filterwheel is not None:
             self.filterwheel.sigFilterWheelPositionChanged.connect(self.filterUpdate)
         
@@ -487,7 +487,7 @@ class Imager(Module):
         """ Update the filter information
         Used to report that the filter has changed in the parameter tree,
         """
-        self.param['Scan Properties', 'Filter'] = self.filterwheel.currentFilter.name()
+        self.param['Scan Properties', 'Filter'] = ('pos%s : %s') % (self.filterwheel.currentFWPosition, self.filterwheel.currentFilter.name())
 
     def clearROIMap(self):
         for k in self.objectiveROImap.keys():
