@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
 from acq4.drivers.ThorlabsFW102C import *
+from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
 from acq4.devices.FilterWheel.FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
+from acq4.devices.Device import *
 from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -138,7 +140,7 @@ class FilterWheel(Device, OptomechDevice):
         """
         Return a list of available filters.
         """
-        with self.lock:
+        with self.filterWheelLock:
             return self.filters.values()
     
     def _allFilters(self):
@@ -192,16 +194,29 @@ class Filter(OptomechDevice):
 
 
     
-class FilterWheelTask():
+class FilterWheelTask(DeviceTask):
     #pass
     # This is disabled--internal shutter in coherent laser should NOT be used by ACQ4; use a separate shutter.
     #
     def __init__(self, dev, cmd, parentTask):
+        DeviceTask.__init__(self, dev, cmd, parentTask)
         self.dev = dev
         self.cmd = cmd
         self.parentTask = parentTask
-        print parentTask
+        #print parentTask
         
+    def configure(self):
+        """Sets the state of a remote multiclamp to prepare for a program run."""
+        #print "mc configure"
+        with self.dev.filterWheelLock:
+            #self.state = self.dev.getLastState()
+            print 'command :', self.cmd
+            requiredPos = int(self.cmd['filterWheelPosition'][0])
+            if self.dev.currentFWPosition != requiredPos:
+                print 'current pos:', self.dev.currentFWPosition
+                print 'requir. pos:', requiredPos
+                self.dev.setPosition(requiredPos)
+            
     def start(self):
         # self.shutterOpened = self.dev.getShutter()
         # if not self.shutterOpened:
@@ -209,26 +224,63 @@ class FilterWheelTask():
         #     time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
         #                      ## Note: It is recommended to keep the laser's shutter open rather than
         #                      ## rely on this to open it for you.
-        print 'start filterwheel task'
+        #print state['filterCombo']
+        #print 'start filterwheel task'
         #LaserTask.start(self)
+        pass
         
     def stop(self, abort):
-        print 'end filterwheel task'
+        pass
+        #print 'end filterwheel task'
         #if not self.shutterOpened:
         #    self.dev.closeShutter()
         #LaserTask.stop(self, abort)
 
+    def isDone(self):
+        return True
+    
 class FilterWheelTaskGui(TaskGui):
     
     #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
     def __init__(self, dev, taskRunner):
+        
         TaskGui.__init__(self, dev, taskRunner)
 
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.dev = dev
         
+        filters = self.dev.listFilters()
+        for i in range(len(filters)):
+            item = self.ui.filterCombo.addItem(('%s-%s')%((i+1),filters[i].name())) 
+            
+        ## Create state group for saving/restoring state
+        self.stateGroup = pg.WidgetGroup([
+            (self.ui.filterCombo,),
+        ])
         
+    def generateTask(self, params=None):
+        state = self.stateGroup.state()
+        task = {}
+        task['recordState'] = True
+        task['filterWheelPosition'] = state['filterCombo']
+        return task    
+    
+    def saveState(self, saveItems=False):
+        state = self.stateGroup.state()
+        return state
+    
+    def restoreState(self, state):
+        self.stateGroup.setState(state)
+        
+    def storeConfiguration(self):
+        state = self.saveState(saveItems=True)
+        self.dev.writeConfigFile(state, 'lastConfig')
+
+    def loadConfiguration(self):
+        state = self.dev.readConfigFile('lastConfig')
+        self.restoreState(state)    
         
 class FilterWheelThread(Thread):
 
