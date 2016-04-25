@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
 from acq4.drivers.ThorlabsFW102C import *
-from acq4.devices.FilterWheel.FilterWheelTaskGui import Ui_Form
+from acq4.devices.FilterWheel.FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
