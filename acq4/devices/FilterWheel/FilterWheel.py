@@ -18,16 +18,36 @@ class FilterWheel(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
         
+        self.scopeDev = None
+        p = self
+        while p is not None:
+            p = p.parentDevice()
+            if isinstance(p, Microscope):
+                self.scopeDev = p
+                
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
         self.baud = config.get('baud', 115200)
-        self.positionLabels = config.get('postionLabels')
+        #self.positionLabels = config.get('postionLabels')
+        
         
         self.driver = filterWheelDriver(self.port, self.baud)
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
-
-        if len(self.positionLabels) != self.getPositionCount():
-            raise Exception("Number of FilterWheel positions %s must correspond to number of labels!" % self.getPositionCount())
+        
+        
+        self.filters = collections.OrderedDict()
+        ## Format of self.filters is:
+        ## { 
+        ##    filterWheelPosition1: {filterName: filter},
+        ##    filterWheelPosition2: {filterName: filter},
+        ## }
+        nPos = self.getPositionCount()
+        for k in range(nPos):  ## Set value for each filter
+            filt = Filter(config['objectives'],self,k)
+            self.filters[k] = filt
+        
+        #if len(self.positionLabels) != self.getPositionCount():
+        #    raise Exception("Number of FilterWheel positions %s must correspond to number of labels!" % self.getPositionCount())
         
         with self.driverLock:
             self.position = self.driver.getPos()
@@ -77,6 +97,42 @@ class FilterWheel(Device, OptomechDevice):
 
     def deviceInterface(self, win):
         return FilterWheelDevGui(self)
+
+
+class Filter(OptomechDevice):
+    
+    #class SignalProxyObject(QtCore.QObject):
+        #sigTransformChanged = QtCore.Signal(object) ## self
+    
+    def __init__(self, config, fw, key, scope):
+        #self.__sigProxy = Objective.SignalProxyObject()
+        #self.sigTransformChanged = self.__sigProxy.sigTransformChanged
+        #self._config = config
+        self._config = config
+        self._fw = fw
+        self._key = key
+        if key in config:
+            name = config[key]['name']
+        else:
+            name = 'empty'
+        
+        OptomechDevice.__init__(self, fw.dm, {}, name)
+        
+        #if 'offset' in config:
+        #    self.setOffset(config['offset'])
+        #if 'scale' in config:
+        #    self.setScale(config['scale'])
+            
+    def key(self):
+        return self._key
+
+    def scope(self):
+        return self._scope
+        
+    def __repr__(self):
+        return "<Filter %s.%s>" % (self._fw.name(), self.name())
+
+
     
 #class FilterWheelTask(LaserTask):
     #pass
