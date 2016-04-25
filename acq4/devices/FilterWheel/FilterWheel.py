@@ -254,10 +254,18 @@ class FilterWheelTaskGui(TaskGui):
         filters = self.dev.listFilters()
         for i in range(len(filters)):
             item = self.ui.filterCombo.addItem(('%s-%s')%((i+1),filters[i].name())) 
-            
+        
+        for i in range(2):
+            if i == 0:
+                item = self.ui.sequenceCombo.addItem('off')
+            elif i == 1:
+                item = self.ui.sequenceCombo.addItem('list')
+                
         ## Create state group for saving/restoring state
         self.stateGroup = pg.WidgetGroup([
             (self.ui.filterCombo,),
+            (self.ui.sequenceCombo,),
+            (self.ui.sequenceListEdit,),
         ])
         
     def generateTask(self, params=None):
@@ -265,6 +273,9 @@ class FilterWheelTaskGui(TaskGui):
         task = {}
         task['recordState'] = True
         task['filterWheelPosition'] = state['filterCombo']
+        task['sequenceSetting'] = state['sequenceCombo']
+        #if state['sequenceCombo'] == 'list':
+        task['sequenceList'] = state['sequenceListEdit']
         return task    
     
     def saveState(self, saveItems=False):

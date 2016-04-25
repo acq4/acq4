@@ -28,17 +28,27 @@ class Ui_Form(object):
         Form.resize(400, 300)
         self.gridLayout_2 = QtGui.QGridLayout(Form)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
+        self.label_2 = QtGui.QLabel(Form)
+        self.label_2.setObjectName(_fromUtf8("label_2"))
+        self.gridLayout_2.addWidget(self.label_2, 1, 0, 1, 1)
+        self.sequenceCombo = QtGui.QComboBox(Form)
+        self.sequenceCombo.setObjectName(_fromUtf8("sequenceCombo"))
+        self.gridLayout_2.addWidget(self.sequenceCombo, 1, 1, 1, 1)
         self.label = QtGui.QLabel(Form)
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout_2.addWidget(self.label, 0, 0, 1, 1)
         self.filterCombo = QtGui.QComboBox(Form)
         self.filterCombo.setObjectName(_fromUtf8("filterCombo"))
         self.gridLayout_2.addWidget(self.filterCombo, 0, 1, 1, 1)
+        self.sequenceListEdit = QtGui.QLineEdit(Form)
+        self.sequenceListEdit.setObjectName(_fromUtf8("sequenceListEdit"))
+        self.gridLayout_2.addWidget(self.sequenceListEdit, 2, 1, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(_translate("Form", "Form", None))
+        self.label_2.setText(_translate("Form", "Sequence", None))
         self.label.setText(_translate("Form", "Filter Wheel position", None))
 
