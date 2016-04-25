@@ -2,6 +2,7 @@
 from acq4.devices.OptomechDevice import *
 from acq4.drivers.ThorlabsFW102C import *
 from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
+from acq4.devices.Microscope import Microscope
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
@@ -43,18 +44,22 @@ class FilterWheel(Device, OptomechDevice):
         ## }
         nPos = self.getPositionCount()
         for k in range(nPos):  ## Set value for each filter
-            filt = Filter(config['objectives'],self,k)
+            filt = Filter(config['filters'],self,k)
             self.filters[k] = filt
         
+        #print self.filters.values()
+        #print self.filters[1].name(), self.filters[1].description()
         #if len(self.positionLabels) != self.getPositionCount():
         #    raise Exception("Number of FilterWheel positions %s must correspond to number of labels!" % self.getPositionCount())
         
         with self.driverLock:
-            self.position = self.driver.getPos()
+            self.currentFWPosition = self.driver.getPos()
 
         self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
         self.fwThread.fwPosChanged.connect(self.positionChanged)
         self.fwThread.start()
+        
+        print 'current filter', self.currentFWPosition, self.getFilter()
         
     def setTriggerMode(self, trigMode):
         with self.driverLock:
@@ -81,6 +86,7 @@ class FilterWheel(Device, OptomechDevice):
             
     def getPosition(self):
         with self.driverLock:
+            self.currentFWPosition = self.driver.getPos()
             return self.driver.getPos()
         
     def getPositionCount(self):
@@ -89,12 +95,51 @@ class FilterWheel(Device, OptomechDevice):
     
     def positionChanged(self,newPos):
         with self.filterWheelLock:
-            self.position = newPos
+            self.currentFWPosition = newPos
             self.sigFilterWheelPositionChanged.emit(newPos)
         
     #def createTask(self, cmd, parentTask):
     #    return FilterWheelTask(self, cmd, parentTask)
+    
+    def setObjectiveIndex(self, index):
+        """Selects the objective currently in position *index*"""
+        index = str(index)
+        if index not in self.selectedObjectives:
+            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(self.objectives.keys())))
+            
+        ## determine new objective, return early if there is no change
+        ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
+        lastObj = self.currentObjective
+        self.currentSwitchPosition = index
+        self.currentObjective = self.getObjective()
+        if self.currentObjective == lastObj:
+            return
+        
+        self.setCurrentSubdevice(self.currentObjective)
+        #self.updateDeviceTransform()
+        self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
+    
+    def getFilter(self):
+        """Return the currently active Filter."""
+        with self.filterWheelLock:
+            if (self.currentFWPosition-1) not in self.filters:
+                return None
+            return self.filters[(self.currentFWPosition-1)]
+            #return self.objectives[self.currentSwitchPosition][selected]
+    
+    def listFilters(self):
+        """
+        Return a list of available filters.
+        """
+        with self.lock:
+            return self.filters.values()
+    
+    def _allFilters(self):
+        ## used by (preferrably only) GUI interface
+        return self.filters
+    
+    
     def deviceInterface(self, win):
         return FilterWheelDevGui(self)
 
@@ -104,17 +149,21 @@ class Filter(OptomechDevice):
     #class SignalProxyObject(QtCore.QObject):
         #sigTransformChanged = QtCore.Signal(object) ## self
     
-    def __init__(self, config, fw, key, scope):
+    def __init__(self, config, fw, key):
         #self.__sigProxy = Objective.SignalProxyObject()
         #self.sigTransformChanged = self.__sigProxy.sigTransformChanged
         #self._config = config
         self._config = config
         self._fw = fw
         self._key = key
+        #print config, key
+        key = str(key)
         if key in config:
             name = config[key]['name']
+            self._description = config[key]['description']
         else:
             name = 'empty'
+            self._description = '-'
         
         OptomechDevice.__init__(self, fw.dm, {}, name)
         
@@ -126,9 +175,12 @@ class Filter(OptomechDevice):
     def key(self):
         return self._key
 
-    def scope(self):
-        return self._scope
-        
+    def description(self):
+        return self._description
+    
+    def filterwheel(self):
+        return self._fw
+    
     def __repr__(self):
         return "<Filter %s.%s>" % (self._fw.name(), self.name())
 

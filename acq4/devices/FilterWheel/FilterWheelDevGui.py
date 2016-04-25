@@ -22,9 +22,11 @@ class FilterWheelDevGui(QtGui.QWidget):
         self.positionGroup = QtGui.QButtonGroup()
         self.positionButtons = []
         for i in range(self.dev.getPositionCount()):
-            self.positionButtons.append(QtGui.QRadioButton(str(i+1) + ' : ' + str(self.dev.positionLabels[i])))
+            self.positionButtons.append(QtGui.QRadioButton(str(i+1) + ' : '))
             self.positionGroup.addButton(self.positionButtons[-1],i)
-            self.ui.PositionGridLayout.addWidget(self.positionButtons[-1],i+1,1)
+            self.ui.PositionGridLayout.addWidget(self.positionButtons[-1],2*i+1,1)
+            self.ui.PositionGridLayout.addWidget(QtGui.QLabel(str(self.dev.filters[i].name())),2*i+1,2)
+            self.ui.PositionGridLayout.addWidget(QtGui.QLabel(str(self.dev.filters[i].description())),2*i+2,2)
             self.connect(self.positionButtons[-1], QtCore.SIGNAL("clicked()"), self.positionButtonClicked)
         self.positionGroup.setExclusive(True)
         
