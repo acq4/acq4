@@ -330,6 +330,10 @@ class Imager(Module):
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get('detectors', [config.get('detector')])
         
+        self.filterwheel = self.manager.getDevice(config['filterwheel'],None)
+        if self.filterwheel is not None:
+            self.filterwheel.sigFilterWheelPositionChanged.connect(self.filterUpdate)
+        
         self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
         self.attenuatorChannel = config['attenuator'][1]
         
@@ -384,6 +388,7 @@ class Imager(Module):
                 dict(name='Wavelength', type='float', value=700, suffix='nm', readonly=True),
                 dict(name='Power', type='float', value=0.00, suffix='W', readonly=True),
                 dict(name='Objective', type='str', value='Unknown', readonly=True),
+                dict(name='Filter', type='str', value='Unknown', readonly=True),
             ]),
             dict(name='Image Control', type='group', children=[
                 dict(name='Decomb', type='float', value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=2e-7, decimals=5, children=[
@@ -423,6 +428,7 @@ class Imager(Module):
 
         # insert an ROI into the camera image that corresponds to our scan area                
         self.objectiveUpdate() # force update of objective information and create appropriate ROI
+        self.filterUpdate()
         # check the devices...        
         self.updateParams() # also force update now to make sure all parameters are synchronized
         self.param.child('Scan Control').sigTreeStateChanged.connect(self.updateParams)
@@ -477,6 +483,11 @@ class Imager(Module):
                 self.roiChanged() # do this now as well so that the parameter tree is correct. 
             else:
                 roi.hide()
+    def filterUpdate(self, reset=False):
+        """ Update the filter information
+        Used to report that the filter has changed in the parameter tree,
+        """
+        self.param['Scan Properties', 'Filter'] = self.filterwheel.currentFilter.name()
 
     def clearROIMap(self):
         for k in self.objectiveROImap.keys():
