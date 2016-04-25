@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
 from acq4.drivers.ThorlabsFW102C import *
-from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
+from acq4.devices.FilterWheel.FilterWheelTaskGui import Ui_Form
 from acq4.devices.Microscope import Microscope
+from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
@@ -98,9 +99,14 @@ class FilterWheel(Device, OptomechDevice):
             self.currentFilter = self.getFilter()
             self.sigFilterWheelPositionChanged.emit(newPos)
         
-    #def createTask(self, cmd, parentTask):
-    #    return FilterWheelTask(self, cmd, parentTask)
+    def createTask(self, cmd, parentTask):
+        with self.filterWheelLock:
+            return FilterWheelTask(self, cmd, parentTask)
     
+    def taskInterface(self, taskRunner):
+        with self.filterWheelLock:
+            return FilterWheelTaskGui(self, taskRunner)
+        
     def setObjectiveIndex(self, index):
         """Selects the objective currently in position *index*"""
         index = str(index)
@@ -186,23 +192,43 @@ class Filter(OptomechDevice):
 
 
     
-#class FilterWheelTask(LaserTask):
+class FilterWheelTask():
     #pass
     # This is disabled--internal shutter in coherent laser should NOT be used by ACQ4; use a separate shutter.
     #
-    # def start(self):
-    #     # self.shutterOpened = self.dev.getShutter()
-    #     # if not self.shutterOpened:
-    #     #     self.dev.openShutter()
-    #     #     time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
-    #     #                      ## Note: It is recommended to keep the laser's shutter open rather than
-    #     #                      ## rely on this to open it for you.
-    #     LaserTask.start(self)
+    def __init__(self, dev, cmd, parentTask):
+        self.dev = dev
+        self.cmd = cmd
+        self.parentTask = parentTask
+        print parentTask
         
-    # def stop(self, abort):
-    #     if not self.shutterOpened:
-    #         self.dev.closeShutter()
-    #     LaserTask.stop(self, abort)
+    def start(self):
+        # self.shutterOpened = self.dev.getShutter()
+        # if not self.shutterOpened:
+        #     self.dev.openShutter()
+        #     time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
+        #                      ## Note: It is recommended to keep the laser's shutter open rather than
+        #                      ## rely on this to open it for you.
+        print 'start filterwheel task'
+        #LaserTask.start(self)
+        
+    def stop(self, abort):
+        print 'end filterwheel task'
+        #if not self.shutterOpened:
+        #    self.dev.closeShutter()
+        #LaserTask.stop(self, abort)
+
+class FilterWheelTaskGui(TaskGui):
+    
+    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
+    
+    def __init__(self, dev, taskRunner):
+        TaskGui.__init__(self, dev, taskRunner)
+
+        self.ui = Ui_Form()
+        self.ui.setupUi(self)
+        
+        
         
 class FilterWheelThread(Thread):
 
