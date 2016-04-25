@@ -175,8 +175,8 @@ def getDeviceHandles():
 class XKeysDevice(object):
     def __init__(self, handle):
         self.handle = handle
-        self.readsize = pielib.GetReadLength(handle)
-        self.writesize = pielib.GetWriteLength(handle)
+        self._readsize = pielib.GetReadLength(handle)
+        self._writesize = pielib.GetWriteLength(handle)
         callPieFunc('SetupInterfaceEx', handle, 1)
 
         # request descriptor packet
@@ -192,6 +192,10 @@ class XKeysDevice(object):
             raise Exception("Unsupported PIE device %d. (currently supported models are: %s)" % (self.pid, list(deviceNames.values())))
         self.model = deviceNames[pidkey]
         self.capabilities = dict(zip(capabilityKeys, deviceCapabilities[pidkey]))
+        self.keyshape = (self.capabilities['rows'], self.capabilities['columns'])
+        rows, cols = self.keyshape
+        self._keymask = np.empty((rows, cols), dtype='ubyte')
+        self._keymask[:] = (2**np.arange(rows)).reshape(rows, 1)
 
         # select device-specific methods
         self._unpackEventData = getattr(self, '_unpackEventData_'+pidkey)
@@ -199,15 +203,15 @@ class XKeysDevice(object):
         self.state = None
         self.stateLock = threading.Lock()
         self.getState(refresh=True)
-        # self.keyState = np.zeros((self.capabilities['rows'], self.capabilities['columns']), dtype=bool)
-        # self.joyState = [None] * self.capabilities['joysticks']
-        # self.jogState = None
-        # self.touchState = None
 
         # Start monitor thread
         self._callback = None
         self._ctypes_cb = dataCallbackType(self._dataCallback)
         callPieFunc('SetDataCallback', self.handle, 2, self._ctypes_cb)
+
+        # reset all backlights
+        self.backlightState = np.zeros((rows, cols, 2), dtype='ubyte')
+        self.setBacklightRows(0, 0)
 
     def getState(self, refresh=False):
         """Return the current state of the device.
@@ -238,26 +242,49 @@ class XKeysDevice(object):
         """
         self._send(0, 186, state << 6)
 
+    def setIntensity(self, b1, b2):
+        """Set backlight intensity (0-255).
+        """
+        self._send(0, 187, b1, b2)
+
+    def setBacklights(self, state):
+        """Set the state of all backlights.
+
+        *state* must be an array of shape (rows, cols, 2), where state[..., 0] gives
+        values for the blue backlights and state[..., 1] are for red. Values may be 
+        0=off, 1=on, or 2=flashing.
+
+        Note: each individual light change requires about 60 ms; expect to wait a
+        long time if many lights have changed.
+        """
+        diff = np.argwhere(state != self.backlightState)
+        for ind in diff:
+            if ind[2] == 0:
+                self.setBacklight(ind[0], ind[1], state[tuple(ind)], None)
+            else:
+                self.setBacklight(ind[0], ind[1], None, state[tuple(ind)])
+
     def setBacklight(self, row, col, bl1=None, bl2=None):
         """Set backlight status of a specific key.
 
         *bl1* and *bl2* may be 0=off, 1=on, 2=flash.
         *row* and *col* may be None to change all backlights in a column or row.
         """
+        rows, cols = self.keyshape
         if row is None:
-            for row in range(self.capabilities['rows']):
+            for row in range(rows):
                 self.setBacklight(row, col, bl1, bl2)
             return
         if col is None:
-            for col in range(self.capabilities['columns']):
+            for col in range(cols):
                 self.setBacklight(row, col, bl1, bl2)
             return
 
         row = int(row)
         col = int(col)
-        if 0 > row >= self.capabilities['rows']:
+        if 0 > row >= rows:
             raise IndexError("Row %d is invalid for this device." % row)
-        if 0 > col >= self.capabilities['columns']:
+        if 0 > col >= cols:
             raise IndexError("Column %d is invalid for this device." % col)
         if bl1 not in (None, 0, 1, 2) or bl2 not in (None, 0, 1, 2):
             raise ValueError("Backlight state must be 0, 1, or 2.")
@@ -265,14 +292,21 @@ class XKeysDevice(object):
         index = row + col * 8
         if bl1 is not None:
             self._send(0, 181, index, bl1)
+            self.backlightState[row, col, 0] = bl1
         if bl2 is not None:
-            self._send(0, 181, index+32, bl2)
+            self._send(0, 181, index+8*cols, bl2)
+            self.backlightState[row, col, 1] = bl2
 
     def setBacklightRows(self, bl1=None, bl2=None):
         if bl1 is not None:
             self._send(0, 182, 0, bl1)
+            for i in range(self.keyshape[0]):
+                self.backlightState[i, :, 0] = 1 if (bl1 & 2**i) > 0 else 0
         if bl2 is not None:
             self._send(0, 182, 1, bl2)
+            for i in range(self.keyshape[0]):
+                self.backlightState[i, :, 1] = 1 if (bl2 & 2**i) > 0 else 0
+
 
     def close(self):
         """Close the device and stop its event handling thread.
@@ -287,8 +321,8 @@ class XKeysDevice(object):
     def _send(self, *args):
         """Send a request to the library for this device.
         """
-        writebuf = (ctypes.c_char * self.writesize)()
-        pad = self.writesize-len(args)
+        writebuf = (ctypes.c_char * self._writesize)()
+        pad = self._writesize-len(args)
         writebuf[:] = struct.pack('=%dB%ds' % (len(args), pad), *(args + ('\0'*pad,)))
         while True:
             try:
@@ -303,7 +337,7 @@ class XKeysDevice(object):
     def _read(self):
         """Return next data packet in the buffer, or None if the buffer is empty.
         """
-        readbuf = (ctypes.c_char * self.readsize)()
+        readbuf = (ctypes.c_char * self._readsize)()
         try:
             callPieFunc('ReadData', self.handle, ctypes.byref(readbuf))
         except PIEException as exc:
@@ -336,9 +370,17 @@ class XKeysDevice(object):
         keys = (mask & np.array([[b1, b2, b3, b4]])).astype(bool)
         return {'keys': keys, 'jog': jog, 'shuttle': shuttle, 'button': bool(btn)}
 
+    def _unpackEventData_XKE128(self, data):
+        rows, cols = self.keyshape
+        keybytes = np.array([list(bytearray(data[2:2+cols]))])
+        keys = (self._keymask & keybytes).astype(bool)
+        return {'keys': keys}
+
     def _handleData(self, data):
         """Update the known device state from *data* and return a summary of state
         changes.
+
+        This method is thread safe.
         """
         newState = self._unpackEventData(data)
         changes = {}
@@ -385,13 +427,30 @@ def hexdump(data, size):
 
 
 if __name__ == '__main__':
+    import sys
+    if len(sys.argv) > 1:
+        index = int(sys.argv[1])
+    else:
+        index = 0
     h = getDeviceHandles()
-    print "handles:", h
-    dev = XKeysDevice(h[0])
-    print dev.pid, dev.model
-    dev.setBacklightRows(bl1=21, bl2=42)
+    print "Available device handles:", h
+    dev = XKeysDevice(h[index])
+    print "Device %d  handle %d:" % (index, h[index]), dev.pid, dev.model
+    dev.setBacklightRows(bl1=0, bl2=0)
 
     def cb(changes):
         print changes
+        if 'keys' in changes:
+            for key, state in changes['keys']:
+                if key[1] in (0, 1):
+                    rows = dev.keyshape[0]
+                    bl = (dev.state['keys'][:,:2] * (2**np.arange(rows)).reshape(rows, 1)).sum(axis=0)
+                    dev.setBacklightRows(*bl)
+                else:
+                    dev.setBacklight(key[0], key[1], int(state), None)
+                    if state:
+                        dev.setBacklight(key[0], key[1], None, 1)
+
     dev.setCallback(cb)
+
 
