@@ -13,7 +13,7 @@ class PatchPipette(Pipette):
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
     def __init__(self, deviceManager, config, name):
-        self.clamp = config.pop('clampDevice')
+        # self.clamp = config.pop('clampDevice')
 
         Pipette.__init__(self, deviceManager, config, name)
 

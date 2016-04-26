@@ -247,17 +247,25 @@ class XKeysDevice(object):
         """
         self._send(0, 187, b1, b2)
 
-    def setBacklights(self, state):
+    def setBacklights(self, state, axis=None, reverse=None):
         """Set the state of all backlights.
 
         *state* must be an array of shape (rows, cols, 2), where state[..., 0] gives
         values for the blue backlights and state[..., 1] are for red. Values may be 
         0=off, 1=on, or 2=flashing.
 
+        *axis* (0 or 1) and *reverse* (True or False) affect the direction that changes
+        are sorted before being applied (for visual effect).
+
         Note: each individual light change requires about 60 ms; expect to wait a
         long time if many lights have changed.
         """
-        diff = np.argwhere(state != self.backlightState)
+        diff = [tuple(d) for d in np.argwhere(state != self.backlightState)]
+        if axis is not None:
+            diff = sorted(diff, key=lambda x: x[axis])
+        if reverse is True:
+            diff = diff[::-1]
+
         for ind in diff:
             if ind[2] == 0:
                 self.setBacklight(ind[0], ind[1], state[tuple(ind)], None)
@@ -397,7 +405,7 @@ class XKeysDevice(object):
             if k == 'keys':
                 dif = np.argwhere(v != state['keys'])
                 if len(dif) > 0:
-                    changes['keys'] = [(tuple(key), v[tuple(key)]) for key in dif]
+                    changes['keys'] = [(tuple(key), bool(v[tuple(key)])) for key in dif]
             elif k == 'jog':
                 if v != 0 and v != state[k]:
                     changes[k] = v

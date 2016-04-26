@@ -4,6 +4,7 @@ from PyQt4 import QtGui, QtCore
 
 from acq4.modules.Module import Module
 from acq4 import getManager
+from acq4.devices.PatchPipette import PatchPipette
 import acq4.pyqtgraph as pg
 
 
@@ -42,29 +43,30 @@ class MultiPatchWindow(QtGui.QWidget):
         for i, pip in enumerate(self.pips):
             nbtn = QtGui.QPushButton(re.sub(r'[^\d]+', '', pip.name()))
             nbtn.setCheckable(True)
-            soloBtn = QtGui.QPushButton('Solo')
-            soloBtn.setCheckable(True)
             lockBtn = QtGui.QPushButton('Lock')
             lockBtn.setCheckable(True)
+            soloBtn = QtGui.QPushButton('Solo')
+            soloBtn.setCheckable(True)
             focusTipBtn = QtGui.QPushButton('Tip')
             focusTargetBtn = QtGui.QPushButton('Target')
 
             self.matrixLayout.addWidget(nbtn, 0, i)
-            self.matrixLayout.addWidget(soloBtn, 1, i)
-            self.matrixLayout.addWidget(lockBtn, 2, i)
+            self.matrixLayout.addWidget(lockBtn, 1, i)
+            self.matrixLayout.addWidget(soloBtn, 2, i)
             self.matrixLayout.addWidget(focusTipBtn, 3, i)
             self.matrixLayout.addWidget(focusTargetBtn, 4, i)
 
-            nbtn.clicked.connect(self.selectionChanged)
+            nbtn.clicked.connect(self.selectBtnClicked)
             soloBtn.clicked.connect(self.soloBtnClicked)
             lockBtn.clicked.connect(self.lockBtnClicked)
             focusTipBtn.clicked.connect(self.focusTipBtnClicked)
             focusTargetBtn.clicked.connect(self.focusTargetBtnClicked)
 
-            btns = [nbtn, soloBtn, lockBtn, focusTipBtn, focusTargetBtn]
+            btns = {'sel':nbtn, 'lock':lockBtn, 'solo':soloBtn, 'tip':focusTipBtn, 'target':focusTargetBtn}
             self.columns.append(btns)
-            for b in btns:
+            for b in btns.values():
                 b.pipette = pip
+            btns['pipette'] = pip
 
 
         self.movementWidget = QtGui.QWidget()
@@ -86,6 +88,7 @@ class MultiPatchWindow(QtGui.QWidget):
         self.moveIdleBtn = QtGui.QPushButton("Idle")
         self.hideBtn = QtGui.QPushButton('Hide markers')
         self.hideBtn.setCheckable(True)
+        self.sealBtn = QtGui.QPushButton('Seal')
 
         self.movementLayout.addWidget(self.moveInBtn, 0, 0)
         self.movementLayout.addWidget(self.stepInBtn, 0, 1)
@@ -132,10 +135,18 @@ class MultiPatchWindow(QtGui.QWidget):
         self.coarseSearchBtn.clicked.connect(self.coarseSearch)
         self.fineSearchBtn.clicked.connect(self.fineSearch)
         self.hideBtn.toggled.connect(self.hideBtnToggled)
+        self.sealBtn.clicked.connect(self.sealClicked)
 
         self.fastBtn.clicked.connect(lambda: self.slowBtn.setChecked(False))
         self.slowBtn.clicked.connect(lambda: self.fastBtn.setChecked(False))
 
+
+        xkdevname = module.config.get('xkeysDevice', None)
+        if xkdevname is not None:
+            self.xkdev = getManager().getDevice(xkdevname)
+            self.xkdev.sigStateChanged.connect(self.xkeysStateChanged)
+        else:
+            self.xkdev = None
 
     def moveIn(self):
         for pip in self.selectedPipettes():
@@ -175,6 +186,8 @@ class MultiPatchWindow(QtGui.QWidget):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
             pip.goApproach(speed)
+            if isinstance(pip, PatchPipette):
+                pip.autoPipetteOffset()
 
     def moveToTarget(self):
         speed = self.selectedSpeed(default='slow')
@@ -194,11 +207,11 @@ class MultiPatchWindow(QtGui.QWidget):
     def selectedPipettes(self):
         sel = []
         for col in self.columns:
-            if col[1].isChecked():
+            if col['solo'].isChecked():
                 # solo mode
-                return [col[1].pipette]
-            if col[0].isChecked() and not col[2].isChecked():
-                sel.append(col[0].pipette)
+                return [col['pipette']]
+            if col['sel'].isChecked() and not col['lock'].isChecked():
+                sel.append(col['pipette'])
         return sel
 
     def selectedSpeed(self, default):
@@ -214,16 +227,18 @@ class MultiPatchWindow(QtGui.QWidget):
         self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
 
     def fineSearch(self):
-        self.moveSearch(self.module.config.get('fineSearchDistance', 50e-6))
+        pips = self.selectedPipettes()
+        if len(pips) == 1:
+            distance = 0
+        else:
+            distance = self.module.config.get('fineSearchDistance', 50e-6)
+        self.moveSearch(distance)
 
     def moveSearch(self, distance):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
-        if len(pips) == 1:
-            pips[0].goSearch(speed)
-        else:
-            for pip in pips:
-                pip.goSearch(speed, distance=distance)
+        for pip in pips:
+            pip.goSearch(speed, distance=distance)
 
     def calibrateWithStage(self, pipettes, positions):
         """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
@@ -287,6 +302,8 @@ class MultiPatchWindow(QtGui.QWidget):
 
         if len(self._calibratePips) == 0:
             self.calibrateBtn.setChecked(False)
+            self.updateXKeysBacklight()
+
 
     def cameraModuleClicked_setTarget(self, ev):
         if ev.button() != QtCore.Qt.LeftButton:
@@ -301,6 +318,7 @@ class MultiPatchWindow(QtGui.QWidget):
 
         if len(self._setTargetPips) == 0:
             self.setTargetBtn.setChecked(False)
+            self.updateXKeysBacklight()
 
     def hideBtnToggled(self, hide):
         for pip in self.pips:
@@ -311,9 +329,9 @@ class MultiPatchWindow(QtGui.QWidget):
         if state is True:
             # uncheck all other solo buttons
             for btns in self.columns:
-                if btns[1].pipette is pip:
+                if btns['solo'].pipette is pip:
                     continue
-                btns[1].setChecked(False)
+                btns['solo'].setChecked(False)
         self.selectionChanged()
 
     def lockBtnClicked(self, state):
@@ -331,6 +349,12 @@ class MultiPatchWindow(QtGui.QWidget):
         speed = self.selectedSpeed(default='slow')
         pip.focusTarget(speed)
 
+    def selectBtnClicked(self, b):
+        pip = self.sender().pipette
+        if isinstance(pip, PatchPipette):
+            pip.setActive(b)
+        self.selectionChanged()
+
     def selectionChanged(self):
         pips = self.selectedPipettes()
         solo = len(pips) == 1
@@ -339,4 +363,69 @@ class MultiPatchWindow(QtGui.QWidget):
         if none:
             self.calibrateBtn.setChecked(False)
             self.setTargetBtn.setChecked(False)
+
+        self.updateXKeysBacklight()
+
+    def updateXKeysBacklight(self):
+        if self.xkdev is None:
+            return
+        sel = self.selectedPipettes()
+        bl = np.zeros(self.xkdev.keyshape + (2,), dtype='ubyte')
+        for i, col in enumerate(self.columns):
+            pip = col['pipette']
+            bl[0, i+4, 0] = 1 if col['sel'].isChecked() else 0
+            bl[1, i+4, 0] = 1 if pip in sel else 0
+            bl[1, i+4, 1] = 1 if col['lock'].isChecked() else 0
+            bl[2, i+4, 0] = 1 if pip in sel else 0
+            bl[2, i+4, 1] = 1 if col['solo'].isChecked() else 0
+
+        bl[0, 1] = 1 if self.hideBtn.isChecked() else 0
+        bl[0, 2] = 1 if self.setTargetBtn.isChecked() else 0
+        bl[2, 2] = 1 if self.calibrateBtn.isChecked() else 0
+        bl[4, 0] = 1 if self.slowBtn.isChecked() else 0
+        bl[4, 2] = 1 if self.fastBtn.isChecked() else 0
+        self.xkdev.setBacklights(bl, axis=1)
+
+    def xkeysStateChanged(self, dev, changes):
+        for k,v in changes.items():
+            if k == 'keys':
+                for key, state in v:
+                    if state is True:
+                        if key[1] > 3:
+                            row = key[0]
+                            col = key[1] - 4
+                            actions = {0:'sel', 1:'lock', 2:'solo', 3:'tip'}
+                            if row in actions:
+                                self.columns[col][actions[row]].click()
+                        else:
+                            self.xkeysAction(key)
+
+    def xkeysAction(self, key):
+        actions = {
+            (0, 0): self.sealBtn,
+            (0, 1): self.hideBtn,
+            (0, 2): self.setTargetBtn,
+            (2, 0): self.coarseSearchBtn,
+            (2, 1): self.fineSearchBtn,
+            (2, 2): self.calibrateBtn,
+            (3, 0): self.moveIdleBtn,
+            (3, 1): self.moveAboveTargetBtn,
+            (3, 2): self.moveApproachBtn,
+            (4, 0): self.slowBtn,
+            (4, 2): self.fastBtn,
+            (6, 2): self.moveHomeBtn,
+        }
+        action = actions.get(key, None)
+        if action is None:
+            return
+        action.click()
+        self.updateXKeysBacklight()
+
+    def sealClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.seal()
+
+
 
