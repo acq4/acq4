@@ -56,6 +56,10 @@ class PatchPipette(Pipette):
         * increase suction if seal does not form
         """
 
+    def setState(self, state):
+        """out, bath, approach, seal, attached, breakin, wholecell
+        """
+
     def breakIn(self):
         """Rupture the cell membrane using negative current pulses.
 

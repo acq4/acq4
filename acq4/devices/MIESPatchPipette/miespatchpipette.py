@@ -35,17 +35,20 @@ class MIESPatchPipette(PatchPipette):
         # accepts waveforms as well?
         pass
 
-    def seal(self):
-        """Attempt to seal onto a cell by releasing pressure
-
-        * switches to VC holding after passing 100 MOhm
-        * increase suction if seal does not form
-        """
-        self.mies.selectHeadstage(self._headstage)
-        self.mies.clickSeal()
+    def setState(self, state):
+        if state == 'seal':
+            self.mies.selectHeadstage(self._headstage)
+            self.mies.clickSeal()
+        elif state == 'bath':
+            self.mies.selectHeadstage(self._headstage)
+            self.mies.clickApproach()
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)
 
+    def setSelected(self):
+        self.mies.selectHeadstage(self._headstage)
+
     def autoPipetteOffset(self):
-        self.mies.autoPipetteOffset(self._headstage)
+        self.mies.selectHeadstage(self._headstage)
+        self.mies.autoPipetteOffset()

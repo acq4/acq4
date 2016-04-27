@@ -1,4 +1,4 @@
-import re
+import os, re
 import numpy as np
 from PyQt4 import QtGui, QtCore
 
@@ -24,6 +24,7 @@ class MultiPatchWindow(QtGui.QWidget):
 
         QtGui.QWidget.__init__(self)
         self.setWindowTitle('Multipatch')
+        self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
         self.module = module
 
         self.layout = QtGui.QGridLayout()
@@ -198,6 +199,8 @@ class MultiPatchWindow(QtGui.QWidget):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             pip.goHome(speed)
+            if isinstance(pip, PatchPipette):
+                pip.setState('out')
 
     def moveIdle(self):
         speed = self.selectedSpeed(default='fast')
@@ -238,6 +241,8 @@ class MultiPatchWindow(QtGui.QWidget):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
         for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('bath')
             pip.goSearch(speed, distance=distance)
 
     def calibrateWithStage(self, pipettes, positions):
@@ -332,7 +337,11 @@ class MultiPatchWindow(QtGui.QWidget):
                 if btns['solo'].pipette is pip:
                     continue
                 btns['solo'].setChecked(False)
+
         self.selectionChanged()
+
+        if state is True and isinstance(pip, PatchPipette):
+            pip.setSelected()
 
     def lockBtnClicked(self, state):
         pip = self.sender().pipette
@@ -374,10 +383,10 @@ class MultiPatchWindow(QtGui.QWidget):
         for i, col in enumerate(self.columns):
             pip = col['pipette']
             bl[0, i+4, 0] = 1 if col['sel'].isChecked() else 0
-            bl[1, i+4, 0] = 1 if pip in sel else 0
-            bl[1, i+4, 1] = 1 if col['lock'].isChecked() else 0
-            bl[2, i+4, 0] = 1 if pip in sel else 0
-            bl[2, i+4, 1] = 1 if col['solo'].isChecked() else 0
+            bl[1, i+4, 1] = 1 if pip in sel else 0
+            bl[1, i+4, 0] = 1 if col['lock'].isChecked() else 0
+            bl[2, i+4, 1] = 1 if pip in sel else 0
+            bl[2, i+4, 0] = 1 if col['solo'].isChecked() else 0
 
         bl[0, 1] = 1 if self.hideBtn.isChecked() else 0
         bl[0, 2] = 1 if self.setTargetBtn.isChecked() else 0
@@ -425,7 +434,7 @@ class MultiPatchWindow(QtGui.QWidget):
         pips = self.selectedPipettes()
         for pip in pips:
             if isinstance(pip, PatchPipette):
-                pip.seal()
+                pip.setState('seal')
 
 
 
