@@ -1,8 +1,16 @@
 import sys
 import win32com.client
 import pywintypes
+import pythoncom
 import numpy as np
 import subprocess as sp
+import concurrent.futures
+import atexit
+
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from acq4.pyqtgraph import QtCore, QtGui
+from acq4.pyqtgraph.util.mutex import Mutex
 
 """
 Thanks to: Jason Yamada-Hanff  https://github.com/yamad/igor-mode
@@ -48,6 +56,55 @@ dtypes = {
     0x01: 'complex',
     0x00: 'str',
 }
+
+
+class IgorThread(QtCore.QThread):
+
+    _newRequest = QtCore.Signal(object)
+
+    def __init__(self):
+        QtCore.QThread.__init__(self)
+        self._nextReqId = 0
+        self._requests = {}
+        self._reqLock = Mutex()
+        self.moveToThread(self)
+        self.igor = IgorBridge()
+        self._newRequest.connect(self._processRequest)
+        self.start()
+        atexit.register(self.quit)
+
+    def __call__(self, *args, **kwds):
+        return self._sendRequest('__call__', args, kwds)
+
+    def getWave(self, *args, **kwds):
+        return self._sendRequest('getWave', args, kwds)
+
+    def getVariable(self, *args, **kwds):
+        return self._sendRequest('getVariable', args, kwds)
+
+    def _sendRequest(self, req, args, kwds):
+        reqid = self._nextReqId
+        self._nextReqId += 1
+        fut = concurrent.futures.Future()
+        with self._reqLock:
+            self._requests[reqid] = fut
+        self._newRequest.emit((reqid, req, args, kwds))
+        return fut
+
+    def _processRequest(self, req):
+        reqid, method, args, kwds = req
+        try:
+            result = getattr(self.igor, method)(*args, **kwds)
+            with self._reqLock:
+                self._requests.pop(reqid).set_result(result)
+
+        except Exception as exc:
+            with self._reqLock:
+                self._requests.pop(reqid).set_exception(exc)
+
+    def run(self):
+      pythoncom.CoInitialize()
+      QtCore.QThread.run(self)
 
 
 class IgorBridge(object):
@@ -136,26 +193,31 @@ if __name__ == '__main__':
     import pyqtgraph as pg
     app = pg.mkQApp()
     plt = pg.plot(labels={'bottom': ('Time', 's')})
-    igor = IgorBridge()
+    igor = IgorThread()
+    fut = []
 
     def update():
-        global data, scaling
+        global data, scaling, fut
         if not plt.isVisible():
             timer.stop()
             return
-        data, scaling = igor.getWave(path, file)
-        #data, scaling = igor.getWave('root:MIES:ITCDevices:ITC1600:Device0:TestPulse', 'TestPulseITC')
-        print(data.shape)
-        x = np.arange(data.shape[0]) * (scaling[0][0] * 1e-3)
-        plt.clear()
-        if data.ndim == 2:
-            plt.plot(x, data[:,-1])
-        else:
-            plt.plot(x, data)
+
+        if len(fut) < 10:
+            fut.append(igor.getWave(path, file))
+
+        if fut[0].done():
+            data, scaling = fut.pop(0).result()
+            #data, scaling = igor.getWave('root:MIES:ITCDevices:ITC1600:Device0:TestPulse', 'TestPulseITC')
+            x = np.arange(data.shape[0]) * (scaling[0][0] * 1e-3)
+            plt.clear()
+            if data.ndim == 2:
+                plt.plot(x, data[:,-1])
+            else:
+                plt.plot(x, data)
 
 
     timer = pg.QtCore.QTimer()
     timer.timeout.connect(update)
-    timer.start(1000)
+    timer.start(10)
 
     app.exec_()
