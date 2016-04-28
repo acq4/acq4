@@ -64,9 +64,6 @@ class IgorThread(QtCore.QThread):
 
     def __init__(self):
         QtCore.QThread.__init__(self)
-        self._nextReqId = 0
-        self._requests = {}
-        self._reqLock = Mutex()
         self.moveToThread(self)
         self.igor = IgorBridge()
         self._newRequest.connect(self._processRequest)
@@ -83,24 +80,17 @@ class IgorThread(QtCore.QThread):
         return self._sendRequest('getVariable', args, kwds)
 
     def _sendRequest(self, req, args, kwds):
-        reqid = self._nextReqId
-        self._nextReqId += 1
         fut = concurrent.futures.Future()
-        with self._reqLock:
-            self._requests[reqid] = fut
-        self._newRequest.emit((reqid, req, args, kwds))
+        self._newRequest.emit((fut, req, args, kwds))
         return fut
 
     def _processRequest(self, req):
-        reqid, method, args, kwds = req
+        fut, method, args, kwds = req
         try:
-            result = getattr(self.igor, method)(*args, **kwds)
-            with self._reqLock:
-                self._requests.pop(reqid).set_result(result)
-
+            getattr(self.igor, method)(*args, **kwds)
+            fut.set_result(result)
         except Exception as exc:
-            with self._reqLock:
-                self._requests.pop(reqid).set_exception(exc)
+            fut.set_exception(exc)
 
     def run(self):
       pythoncom.CoInitialize()
