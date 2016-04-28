@@ -4,6 +4,7 @@ from acq4.drivers.ThorlabsFW102C import *
 from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
 from acq4.devices.FilterWheel.FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
+from acq4.util.SequenceRunner import *
 from acq4.devices.Device import *
 from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
@@ -109,25 +110,6 @@ class FilterWheel(Device, OptomechDevice):
         with self.filterWheelLock:
             return FilterWheelTaskGui(self, taskRunner)
         
-    def setObjectiveIndex(self, index):
-        """Selects the objective currently in position *index*"""
-        index = str(index)
-        if index not in self.selectedObjectives:
-            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(self.objectives.keys())))
-            
-        ## determine new objective, return early if there is no change
-        ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
-        lastObj = self.currentObjective
-        self.currentSwitchPosition = index
-        self.currentObjective = self.getObjective()
-        if self.currentObjective == lastObj:
-            return
-        
-        self.setCurrentSubdevice(self.currentObjective)
-        #self.updateDeviceTransform()
-        self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
-
-    
     def getFilter(self):
         """Return the currently active Filter."""
         with self.filterWheelLock:
@@ -211,7 +193,7 @@ class FilterWheelTask(DeviceTask):
         with self.dev.filterWheelLock:
             #self.state = self.dev.getLastState()
             print 'command :', self.cmd
-            requiredPos = int(self.cmd['filterWheelPosition'][0])
+            requiredPos = int(self.cmd['filterWheelPosition'][0]) # that the first character of string and convert it to int
             if self.dev.currentFWPosition != requiredPos:
                 print 'current pos:', self.dev.currentFWPosition
                 print 'requir. pos:', requiredPos
@@ -252,30 +234,36 @@ class FilterWheelTaskGui(TaskGui):
         self.dev = dev
         
         filters = self.dev.listFilters()
-        for i in range(len(filters)):
-            item = self.ui.filterCombo.addItem(('%s-%s')%((i+1),filters[i].name())) 
+        filterList = self.generatFilterList(filters)
+        for i in range(len(filterList)):
+            item = self.ui.filterCombo.addItem('%s' % filterList[i][1]) 
         
-        for i in range(2):
-            if i == 0:
-                item = self.ui.sequenceCombo.addItem('off')
-            elif i == 1:
-                item = self.ui.sequenceCombo.addItem('list')
-                
+        item = self.ui.sequenceCombo.addItem('off')
+        item = self.ui.sequenceCombo.addItem('list')
+        self.ui.sequenceListEdit.hide()
+        
+        self.ui.sequenceCombo.currentIndexChanged.connect(self.sequenceChanged)
+        self.ui.sequenceListEdit.editingFinished.connect(self.sequenceChanged)
+            
         ## Create state group for saving/restoring state
         self.stateGroup = pg.WidgetGroup([
             (self.ui.filterCombo,),
             (self.ui.sequenceCombo,),
             (self.ui.sequenceListEdit,),
         ])
-        
+    
     def generateTask(self, params=None):
+        print 'params in gernateTask :', params
         state = self.stateGroup.state()
+        
+        if params is None or 'filterWheelPosition' not in params:
+            target = state['filterCombo']
+        else:
+            target = self.filterTaskList[params['filterWheelPosition']]
+        
         task = {}
         task['recordState'] = True
-        task['filterWheelPosition'] = state['filterCombo']
-        task['sequenceSetting'] = state['sequenceCombo']
-        #if state['sequenceCombo'] == 'list':
-        task['sequenceList'] = state['sequenceListEdit']
+        task['filterWheelPosition'] = target #state['filterCombo']
         return task    
     
     def saveState(self, saveItems=False):
@@ -284,6 +272,8 @@ class FilterWheelTaskGui(TaskGui):
     
     def restoreState(self, state):
         self.stateGroup.setState(state)
+        if state['sequenceCombo'] == 'off':
+            self.ui.sequenceListEdit.hide()
         
     def storeConfiguration(self):
         state = self.saveState(saveItems=True)
@@ -293,6 +283,41 @@ class FilterWheelTaskGui(TaskGui):
         state = self.dev.readConfigFile('lastConfig')
         self.restoreState(state)    
         
+    def listSequence(self):
+        if self.ui.sequenceCombo.currentIndex() == 1:
+            filt = self.getFilterList()
+            return collections.OrderedDict([('filterWheelPosition', filt)])
+        else:
+            return []
+        
+    def sequenceChanged(self):
+        self.filterTaskList = None
+        self.sigSequenceChanged.emit(self.dev.name())
+        if self.ui.sequenceCombo.currentIndex() == 1:
+            self.ui.sequenceListEdit.show()
+        else:
+            self.ui.sequenceListEdit.hide()
+        
+    def getFilterList(self):
+        self.filterTaskList = []
+        pos = self.ui.sequenceListEdit.text()
+        if pos == '':
+            return self.filterTaskList
+        else:
+            pos = map( int, pos.split(',') )
+            for i in range(len(pos)):
+                self.filterTaskList.append(self.filterList[pos[i]-1])
+            #print 'filterTaskList :', self.filterTaskList
+            return self.filterTaskList
+    
+    def generatFilterList(self, filt):
+        self.filterList = []
+        for i in range(len(filt)):
+            self.filterList.append([(i+1),'%s-%s' % ((i+1),filt[i].name())])
+        #print 'filterList : ', self.filterList
+        return self.filterList
+            
+    
 class FilterWheelThread(Thread):
 
     fwPosChanged = QtCore.Signal(object)
