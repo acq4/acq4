@@ -251,7 +251,9 @@ class FilterWheelTaskGui(TaskGui):
             (self.ui.sequenceCombo,),
             (self.ui.sequenceListEdit,),
         ])
-    
+        
+        
+        
     def generateTask(self, params=None):
         print 'params in gernateTask :', params
         state = self.stateGroup.state()
@@ -274,6 +276,7 @@ class FilterWheelTaskGui(TaskGui):
         self.stateGroup.setState(state)
         if state['sequenceCombo'] == 'off':
             self.ui.sequenceListEdit.hide()
+        self.sequenceChanged()
         
     def storeConfiguration(self):
         state = self.saveState(saveItems=True)
