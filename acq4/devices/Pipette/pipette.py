@@ -690,6 +690,7 @@ class Target(pg.GraphicsObject):
 
     def __init__(self, movable=True):
         pg.GraphicsObject.__init__(self)
+        self._bounds = None
         self.movable = movable
         self.moving = False
         self.label = None
@@ -711,21 +712,28 @@ class Target(pg.GraphicsObject):
         self.update()
 
     def boundingRect(self):
-        w = self.pixelLength(pg.Point(1, 0))
-        if w is None:
-            return QtCore.QRectF()
-        w *= 25
-        h = 25 * self.pixelLength(pg.Point(0, 1))
-        r = QtCore.QRectF(-w*2, -h*2, w*4, h*4)
-        return r
+        if self._bounds is None:
+            # too slow!
+            # w = self.pixelLength(pg.Point(1, 0))
+            # if w is None:
+            #     return QtCore.QRectF()
+            # h = self.pixelLength(pg.Point(0, 1))
+            o = self.mapToScene(QtCore.QPointF(0, 0))
+            w = 1.0 / (self.mapToScene(QtCore.QPointF(1, 0)) - o).x()
+            h = 1.0 / (self.mapToScene(QtCore.QPointF(0, 1)) - o).y()
+            self._px = (w, h)
+            w *= 30
+            h *= 30 
+            self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
+        return self._bounds
 
     def viewTransformChanged(self):
+        self._bounds = None
         self.prepareGeometryChange()
 
     def paint(self, p, *args):
         p.setRenderHint(p.Antialiasing)
-        px = self.pixelLength(pg.Point(1, 0))
-        py = self.pixelLength(pg.Point(0, 1))
+        px, py = self._px
         w = 5 * px
         h = 5 * py
         r = QtCore.QRectF(-w, -h, w*2, h*2)
@@ -775,6 +783,7 @@ class Axis(pg.ROI):
         tr.rotate(90)
         self._path |= tr.map(arrow)
         self.pxLen = [1, 1]
+        self._bounds = None
 
         pg.ROI.__init__(self, pos, angle=angle, invertible=True, movable=False)
         if inverty:
@@ -794,6 +803,8 @@ class Axis(pg.ROI):
         self.sigRegionChanged.connect(self.viewTransformChanged)
 
     def viewTransformChanged(self):
+        if not self.isVisible():
+            return
         w = self.pixelLength(pg.Point(1, 0))
         if w is None:
             self._pxLen = [None, None]
@@ -808,6 +819,7 @@ class Axis(pg.ROI):
         finally:
             self.blockSignals(False)
         self.updateText()
+        self._bounds = None
         self.prepareGeometryChange()
 
     def updateText(self):
@@ -818,24 +830,25 @@ class Axis(pg.ROI):
         self.y.setPos(0, h*100)
 
     def boundingRect(self):
-        w, h = self._pxLen
-        if w is None:
-            return QtCore.QRectF()
-        w = w * 100
-        h = abs(h * 100)
-        r = QtCore.QRectF(-w, -h, w*2, h*2)
-        return r
+        if self._bounds is None:
+            w, h = self._pxLen
+            if w is None:
+                return QtCore.QRectF()
+            w = w * 100
+            h = abs(h * 100)
+            self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
+        return self._bounds
+
+    def setVisible(self, v):
+        pg.ROI.setVisible(self, v)
+        if v is True:
+            self.viewTransformChanged()
 
     def paint(self, p, *args):
         p.setRenderHint(p.Antialiasing)
         w, h = self._pxLen
-        # r = QtCore.QRectF(-w, -h, w*2, h*2)
         p.setPen(pg.mkPen('y'))
         p.setBrush(pg.mkBrush(255, 255, 0, 100))
-        # p.drawEllipse(r)
-        # p.drawLine(pg.Point(-w*2, 0), pg.Point(w*2, 0))
-        # p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
         p.scale(w, h)
         p.drawPath(self._path)
-
 
