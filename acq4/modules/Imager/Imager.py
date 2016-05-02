@@ -487,7 +487,7 @@ class Imager(Module):
         """ Update the filter information
         Used to report that the filter has changed in the parameter tree,
         """
-        self.param['Scan Properties', 'Filter'] = ('%s') % (self.filterwheel.currentFilter.name())
+        self.param['Scan Properties', 'Filter'] = self.filterwheel.currentFilter.name()
 
     def clearROIMap(self):
         for k in self.objectiveROImap.keys():

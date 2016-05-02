@@ -26,7 +26,16 @@ class ImagingModule(AnalysisModule):
         self.splitter.addWidget(self.ptree)
         self.imageView = pg.ImageView()
         self.splitter.addWidget(self.imageView)
-
+        
+        # find first scope device that is parent of scanner
+        dev = self.scannerDev
+        while dev is not None and not isinstance(dev, Microscope):
+            dev = dev.parentDevice()
+        self.scopeDev = dev
+        self.filterwheel = self.manager.getDevice(config['filterwheel'])
+        if self.filterwheel is not None:
+            self.filterwheel.sigFilterWheelPositionChanged.connect(self.opticsUpdate)
+        
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
@@ -54,6 +63,10 @@ class ImagingModule(AnalysisModule):
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
 
+    def opticsUpdate(self, reset=False):
+        self.params['imager', 'Objective'] = self.scopeDev.currentObjective.name()
+        self.param['imager', 'Filter'] = self.filterwheel.currentFilter.name()
+        
     def addDetectorClicked(self):
         self.addNewDetector()
 

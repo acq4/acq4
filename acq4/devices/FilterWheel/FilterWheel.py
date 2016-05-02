@@ -316,7 +316,7 @@ class FilterWheelTaskGui(TaskGui):
     def generatFilterList(self, filt):
         self.filterList = []
         for i in range(len(filt)):
-            self.filterList.append([(i+1),'%s' % (filt[i].name())])
+            self.filterList.append([(i+1), filt[i].name()])
         #print 'filterList : ', self.filterList
         return self.filterList
             
