@@ -8,6 +8,7 @@ import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
+from acq4.devices.Microscope import Microscope
 from acq4.util.HelpfulException import HelpfulException
 # import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
 from acq4.devices.Scanner.scan_program.rect import RectScan
@@ -18,6 +19,8 @@ class ImagingModule(AnalysisModule):
         AnalysisModule.__init__(self, *args)
         # self.ui = Ui_Form()
         # self.ui.setupUi(self)
+        taskRunner = args
+        print 'taskRunner', dir(taskRunner)
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         self.splitter = QtGui.QSplitter()
@@ -26,15 +29,6 @@ class ImagingModule(AnalysisModule):
         self.splitter.addWidget(self.ptree)
         self.imageView = pg.ImageView()
         self.splitter.addWidget(self.imageView)
-        
-        # find first scope device that is parent of scanner
-        dev = self.scannerDev
-        while dev is not None and not isinstance(dev, Microscope):
-            dev = dev.parentDevice()
-        self.scopeDev = dev
-        self.filterwheel = self.manager.getDevice(config['filterwheel'])
-        if self.filterwheel is not None:
-            self.filterwheel.sigFilterWheelPositionChanged.connect(self.opticsUpdate)
         
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
@@ -46,6 +40,8 @@ class ImagingModule(AnalysisModule):
             dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
             dict(name='display', type='bool', value=True),
             dict(name='scanProgram', type='list', values=[]),
+            dict(name='Objective', type='str', value='Unknown', readonly=True),
+            dict(name='Filter', type='str', value='Unknown', readonly=True),
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
@@ -53,6 +49,17 @@ class ImagingModule(AnalysisModule):
         self.params.child('decomb', 'auto').sigActivated.connect(self.autoDecomb)
 
         self.man = getManager()
+        print self.man, dir(self.man.devices)
+        self.scannerDev = self.man.getDevice('Scanner')
+        # find first scope device that is parent of scanner
+        dev = self.scannerDev
+        while dev is not None and not isinstance(dev, Microscope):
+            dev = dev.parentDevice()
+        self.scopeDev = dev
+        self.filterwheel = self.man.getDevice('FilterWheel')
+        if self.filterwheel is not None:
+            self.filterwheel.sigFilterWheelPositionChanged.connect(self.opticsUpdate)
+        
         self.lastFrame = None
         # self.SUF = SUFA.ScannerUtilities()
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
@@ -64,8 +71,8 @@ class ImagingModule(AnalysisModule):
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
 
     def opticsUpdate(self, reset=False):
-        self.params['imager', 'Objective'] = self.scopeDev.currentObjective.name()
-        self.param['imager', 'Filter'] = self.filterwheel.currentFilter.name()
+        self.params['Objective'] = self.scopeDev.currentObjective.name()
+        self.params['Filter'] = self.filterwheel.currentFilter.name()
         
     def addDetectorClicked(self):
         self.addNewDetector()
