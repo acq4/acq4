@@ -149,10 +149,10 @@ class Filter(OptomechDevice):
         #print config, key
         key = str(key)
         if key in config:
-            name = config[key]['name']
+            name = '%s-%s' %((int(key)+1), config[key]['name'])
             self._description = config[key]['description']
         else:
-            name = 'empty'
+            name = '%s-%s' %((int(key)+1), 'empty')
             self._description = '-'
         
         OptomechDevice.__init__(self, fw.dm, {}, name)
@@ -316,7 +316,7 @@ class FilterWheelTaskGui(TaskGui):
     def generatFilterList(self, filt):
         self.filterList = []
         for i in range(len(filt)):
-            self.filterList.append([(i+1),'%s-%s' % ((i+1),filt[i].name())])
+            self.filterList.append([(i+1),'%s' % (filt[i].name())])
         #print 'filterList : ', self.filterList
         return self.filterList
             

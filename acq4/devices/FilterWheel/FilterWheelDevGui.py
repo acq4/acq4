@@ -22,7 +22,7 @@ class FilterWheelDevGui(QtGui.QWidget):
         self.positionGroup = QtGui.QButtonGroup()
         self.positionButtons = []
         for i in range(self.dev.getPositionCount()):
-            self.positionButtons.append(QtGui.QRadioButton(str(i+1) + ' : '))
+            self.positionButtons.append(QtGui.QRadioButton())
             self.positionGroup.addButton(self.positionButtons[-1],i)
             self.ui.PositionGridLayout.addWidget(self.positionButtons[-1],2*i+1,1)
             self.ui.PositionGridLayout.addWidget(QtGui.QLabel(str(self.dev.filters[i].name())),2*i+1,2)
