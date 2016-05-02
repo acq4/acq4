@@ -13,7 +13,35 @@ import acq4.util.debug as debug
 import time
 
 class FilterWheel(Device, OptomechDevice):
+    """ Thorlabs motorized filter wheel (FW102C)
+    The Filter wheel device class adds control and display for the filter wheel device status.
+    
+    * Maintains list of the filters in the six filter-wheel positions with their description
+    * Support for selecting a filter wheel position
+    * Support for filter wheel implementation during task : specific filter wheel position during one task, different positions as task sequence
+    * Support to changing filter wheel speed and input/ouput modus 
+    
+    Configuration examples:
+    
+    FilterWheel:
+        driver: 'FilterWheel'
+        port: 4                         ## serial port connected to filter-wheel
+        baud: 115200
+        parentDevice: 'Microscope'
+        filters: # filters in slots
+            0:  # first slot
+                name: 'green_and_shortpass'
+                description: 'ET535/70m Chroma, FESH0700 ThorL'
+            1:  # second slot 
+                name: 'red'
+                description: 'ET630/75m-2p Chroma'
+            2: # third slot
+                name: 'shortpass'
+                description: 'shortpass'
 
+
+    """
+    
     sigFilterWheelPositionChanged = QtCore.Signal(object)
     sigFilterWheelSpeedChanged = QtCore.Signal(object)
     sigFilterWheelTrigModeChanged = QtCore.Signal(object)
