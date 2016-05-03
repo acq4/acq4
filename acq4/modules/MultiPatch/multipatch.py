@@ -62,7 +62,7 @@ class MultiPatchWindow(QtGui.QWidget):
 
         self.setWindowTitle('Multipatch')
         self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
-        
+
         # self.layout = QtGui.QGridLayout()
         # self.setLayout(self.layout)
 
@@ -192,12 +192,12 @@ class MultiPatchWindow(QtGui.QWidget):
     def stepIn(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.advanceTowardTarget(self.stepSizeSpin.value(), speed)
+            pip.advanceTowardTarget(self.ui.stepSizeSpin.value(), speed)
 
     def stepOut(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.retract(self.stepSizeSpin.value(), speed)
+            pip.retract(self.ui.stepSizeSpin.value(), speed)
 
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
