@@ -45,6 +45,7 @@ class FilterWheel(Device, OptomechDevice):
     sigFilterWheelPositionChanged = QtCore.Signal(object)
     sigFilterWheelSpeedChanged = QtCore.Signal(object)
     sigFilterWheelTrigModeChanged = QtCore.Signal(object)
+    sigFilterWheelSensorModeChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         
@@ -115,7 +116,16 @@ class FilterWheel(Device, OptomechDevice):
         with self.driverLock:
             self.driver.setPos(pos)
             self.sigFilterWheelPositionChanged.emit(pos)
-            
+    
+    def getSensorMode(self):
+        with self.driverLock:
+            return self.driver.getSensorMode()
+        
+    def setSensorMode(self, sensorMode):
+        with self.driverLock:
+            self.driver.setSensorMode(sensorMode)
+            self.sigFilterWheelSensorModeChanged.emit(sensorMode)
+    
     def getPosition(self):
         with self.driverLock:
             return self.driver.getPos()

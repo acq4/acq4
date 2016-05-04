@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>262</width>
-    <height>194</height>
+    <width>207</width>
+    <height>226</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -80,12 +80,39 @@
      </attribute>
     </widget>
    </item>
-   <item row="2" column="0" colspan="3">
+   <item row="3" column="0" colspan="3">
     <widget class="QGroupBox" name="PositionGroup">
      <property name="title">
       <string>Current Position</string>
      </property>
      <layout class="QGridLayout" name="PositionGridLayout"/>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="font">
+      <font>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Sensor Mode</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QRadioButton" name="sensorOffButton">
+     <property name="text">
+      <string>off</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="2">
+    <widget class="QRadioButton" name="sensorOnButton">
+     <property name="text">
+      <string>on</string>
+     </property>
     </widget>
    </item>
   </layout>

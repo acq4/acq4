@@ -25,7 +25,7 @@ except AttributeError:
 class Ui_FilterWheelWidget(object):
     def setupUi(self, FilterWheelWidget):
         FilterWheelWidget.setObjectName(_fromUtf8("FilterWheelWidget"))
-        FilterWheelWidget.resize(262, 194)
+        FilterWheelWidget.resize(207, 226)
         self.gridLayout = QtGui.QGridLayout(FilterWheelWidget)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.FastButton = QtGui.QRadioButton(FilterWheelWidget)
@@ -66,7 +66,20 @@ class Ui_FilterWheelWidget(object):
         self.PositionGroup.setObjectName(_fromUtf8("PositionGroup"))
         self.PositionGridLayout = QtGui.QGridLayout(self.PositionGroup)
         self.PositionGridLayout.setObjectName(_fromUtf8("PositionGridLayout"))
-        self.gridLayout.addWidget(self.PositionGroup, 2, 0, 1, 3)
+        self.gridLayout.addWidget(self.PositionGroup, 3, 0, 1, 3)
+        self.label_2 = QtGui.QLabel(FilterWheelWidget)
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self.label_2.setFont(font)
+        self.label_2.setObjectName(_fromUtf8("label_2"))
+        self.gridLayout.addWidget(self.label_2, 2, 0, 1, 1)
+        self.sensorOffButton = QtGui.QRadioButton(FilterWheelWidget)
+        self.sensorOffButton.setObjectName(_fromUtf8("sensorOffButton"))
+        self.gridLayout.addWidget(self.sensorOffButton, 2, 1, 1, 1)
+        self.sensorOnButton = QtGui.QRadioButton(FilterWheelWidget)
+        self.sensorOnButton.setObjectName(_fromUtf8("sensorOnButton"))
+        self.gridLayout.addWidget(self.sensorOnButton, 2, 2, 1, 1)
 
         self.retranslateUi(FilterWheelWidget)
         QtCore.QMetaObject.connectSlotsByName(FilterWheelWidget)
@@ -80,4 +93,7 @@ class Ui_FilterWheelWidget(object):
         self.SlowButton.setText(_translate("FilterWheelWidget", "slow", None))
         self.outputTrigButton.setText(_translate("FilterWheelWidget", "output", None))
         self.PositionGroup.setTitle(_translate("FilterWheelWidget", "Current Position", None))
+        self.label_2.setText(_translate("FilterWheelWidget", "Sensor Mode", None))
+        self.sensorOffButton.setText(_translate("FilterWheelWidget", "off", None))
+        self.sensorOnButton.setText(_translate("FilterWheelWidget", "on", None))
 

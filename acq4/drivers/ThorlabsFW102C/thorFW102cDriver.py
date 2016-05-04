@@ -81,6 +81,24 @@ class filterWheelDriver(SerialDevice):
         else:
             raise Exception("FilterWheel speed has to be '0' or '1'", newMode)
     
+    def getSensorMode(self):
+        """ returns sensor behavior when wheel is idle : 
+            (0) - Sensors turn off when wheel is idle to eliminiate stray light
+            (1) - Sensors remain active
+        """
+        sensor = self['sensors?']
+        return int(sensor)
+    
+    def setSensorMode(self, newSensorMode):
+        """sensor modes : 
+            (0) - Sensors turn off when wheel is idle to eliminiate stray light
+            (1) - Sensors remain active
+        """
+        if int(newSensorMode) in [0,1]:
+            self['sensors'] = int(newSensorMode)
+        else:
+            raise Exception("FilterWheel speed has to be '0' or '1'", newMode)
+    
     def getIdentification(self):
         """ identification query """
         idn = self['*idn?']

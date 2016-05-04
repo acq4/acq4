@@ -42,21 +42,27 @@ class FilterWheelDevGui(QtGui.QWidget):
         elif self.dev.getSpeed()==1:
             self.ui.FastButton.setChecked(True)
         
+        if self.dev.getSensorMode()==0:
+            self.ui.sensorOffButton.setChecked(True)
+        elif self.dev.getSensorMode()==1:
+            self.ui.sensorOnButton.setChecked(True)
+        
         self.ui.SlowButton.toggled.connect(self.slowSpeedToggled)
         self.ui.inputTrigButton.toggled.connect(self.inputTrigToggled)
-
+        self.ui.sensorOffButton.toggled.connect(self.sensorModeToggled)
 
         self.dev.sigFilterWheelPositionChanged.connect(self.positionChanged)
         self.dev.sigFilterWheelSpeedChanged.connect(self.speedChanged)
         self.dev.sigFilterWheelTrigModeChanged.connect(self.trigModeChanged)
+        self.dev.sigFilterWheelSensorModeChanged.connect(self.sensorModeChanged)
         
     def slowSpeedToggled(self, b):
         if b:
             self.dev.setSpeed(0)
-            self.ui.SlowButton.setChecked(True)
+            #self.ui.SlowButton.setChecked(True)
         else:
             self.dev.setSpeed(1)
-            self.ui.FastButton.setChecked(True)
+            #self.ui.FastButton.setChecked(True)
             
     def speedChanged(self, newSpeed):
         if newSpeed==0:
@@ -67,16 +73,31 @@ class FilterWheelDevGui(QtGui.QWidget):
     def inputTrigToggled(self, b):
         if b:
             self.dev.setTriggerMode(0)
-            self.ui.inputTrigButton.setChecked(True)
+            #self.ui.inputTrigButton.setChecked(True)
         elif not b:
             self.dev.setTriggerMode(1)
-            self.ui.outputTrigButton.setChecked(True)
-        
+            #self.ui.outputTrigButton.setChecked(True)
+            
+    def sensorModeToggled(self, b):
+        if b:
+            self.dev.setSensorMode(0)
+            #self.ui.sensorOffButton.setChecked(True)
+        elif not b:
+            self.dev.setSensorMode(1)
+            #self.ui.sensorOnButton.setChecked(True)
+            
     def trigModeChanged(self, newTrigMode):
         if newTrigMode==0:
             self.ui.inputTrigButton.setChecked(True)
         else:
             self.ui.outputTrigButton.setChecked(True)
+    
+    def sensorModeChanged(self, newSensorMode):
+        if newSensorMode==0:
+            self.ui.sensorOffButton.setChecked(True)
+        else:
+            self.ui.sensorOnButton.setChecked(True)
+            
     def updatePosition(self):
         currentPos = self.dev.getPosition()
         self.positionButtons[currentPos-1].setChecked(True)
