@@ -577,6 +577,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.targetBtn.setEnabled(True)
         self.ui.approachBtn.setEnabled(True)
         self.ui.setTargetBtn.setChecked(False)
+        self.focusChanged()
 
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()
@@ -719,11 +720,11 @@ class Target(pg.GraphicsObject):
             #     return QtCore.QRectF()
             # h = self.pixelLength(pg.Point(0, 1))
             o = self.mapToScene(QtCore.QPointF(0, 0))
-            w = 1.0 / (self.mapToScene(QtCore.QPointF(1, 0)) - o).x()
-            h = 1.0 / (self.mapToScene(QtCore.QPointF(0, 1)) - o).y()
+            w = abs(1.0 / (self.mapToScene(QtCore.QPointF(1, 0)) - o).x())
+            h = abs(1.0 / (self.mapToScene(QtCore.QPointF(0, 1)) - o).y())
             self._px = (w, h)
-            w *= 30
-            h *= 30 
+            w *= 21
+            h *= 21 
             self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
         return self._bounds
 
