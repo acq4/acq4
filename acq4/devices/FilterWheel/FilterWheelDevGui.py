@@ -51,7 +51,7 @@ class FilterWheelDevGui(QtGui.QWidget):
         self.ui.inputTrigButton.toggled.connect(self.inputTrigToggled)
         self.ui.sensorOffButton.toggled.connect(self.sensorModeToggled)
 
-        self.dev.sigFilterWheelPositionChanged.connect(self.positionChanged)
+        self.dev.sigFilterChanged.connect(self.positionChanged)
         self.dev.sigFilterWheelSpeedChanged.connect(self.speedChanged)
         self.dev.sigFilterWheelTrigModeChanged.connect(self.trigModeChanged)
         self.dev.sigFilterWheelSensorModeChanged.connect(self.sensorModeChanged)
