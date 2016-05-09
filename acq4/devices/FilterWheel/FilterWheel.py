@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.drivers.ThorlabsFW102C import ThorlabsFW102C
+from acq4.drivers.ThorlabsFW102C import FilterWheelDriver
 from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
 from acq4.devices.FilterWheel.FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
 from acq4.util.SequenceRunner import SequenceRunner
-#from acq4.devices.Device import *
+from acq4.devices.Device import *
 from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
+import acq4.pyqtgraph as pg
 import time
+from collections import OrderedDict
 
 class FilterWheel(Device, OptomechDevice):
     """ Thorlabs motorized filter wheel (FW102C)
@@ -65,12 +67,12 @@ class FilterWheel(Device, OptomechDevice):
         #self.positionLabels = config.get('postionLabels')
         
         
-        self.driver = ThorlabsFW102C.FilterWheelDriver(self.port, self.baud)
+        self.driver = FilterWheelDriver(self.port, self.baud)
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
         
         
-        self.filters = collections.OrderedDict()
+        self.filters = OrderedDict()
         ## Format of self.filters is:
         ## { 
         ##    filterWheelPosition1: {filterName: filter},
@@ -173,13 +175,7 @@ class FilterWheel(Device, OptomechDevice):
 
 class Filter(OptomechDevice):
     
-    #class SignalProxyObject(QtCore.QObject):
-        #sigTransformChanged = QtCore.Signal(object) ## self
-    
     def __init__(self, config, fw, key):
-        #self.__sigProxy = Objective.SignalProxyObject()
-        #self.sigTransformChanged = self.__sigProxy.sigTransformChanged
-        #self._config = config
         self._config = config
         self._fw = fw
         self._key = key
@@ -194,11 +190,6 @@ class Filter(OptomechDevice):
         
         OptomechDevice.__init__(self, fw.dm, {}, name)
         
-        #if 'offset' in config:
-        #    self.setOffset(config['offset'])
-        #if 'scale' in config:
-        #    self.setScale(config['scale'])
-            
     def key(self):
         return self._key
 
@@ -301,7 +292,7 @@ class FilterWheelTaskGui(TaskGui):
     def listSequence(self):
         if self.ui.sequenceCombo.currentIndex() == 1:
             filt = self.getFilterList()
-            return collections.OrderedDict([('filterWheelPosition', filt)])
+            return OrderedDict([('filterWheelPosition', filt)])
         else:
             return []
         
