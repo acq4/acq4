@@ -48,9 +48,7 @@ class ImagingModule(AnalysisModule):
         self.params.child('decomb', 'auto').sigActivated.connect(self.autoDecomb)
 
         self.man = getManager()
-        print self.man, dir(self.man.devices)
-        print self.params.param('detectors')
-        self.scannerDev = self.man.getDevice(self.params.param('detectors'))
+        self.scannerDev = self.man.getDevice(self.params['scanner'])
         # find first scope device that is parent of scanner
         dev = self.scannerDev
         while dev is not None and not isinstance(dev, Microscope):
