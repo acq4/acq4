@@ -20,7 +20,6 @@ class ImagingModule(AnalysisModule):
         # self.ui = Ui_Form()
         # self.ui.setupUi(self)
         taskRunner = args
-        print 'taskRunner', dir(taskRunner)
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         self.splitter = QtGui.QSplitter()
@@ -50,15 +49,16 @@ class ImagingModule(AnalysisModule):
 
         self.man = getManager()
         print self.man, dir(self.man.devices)
-        self.scannerDev = self.man.getDevice('Scanner')
+        print self.params.param('detectors')
+        self.scannerDev = self.man.getDevice(self.params.param('detectors'))
         # find first scope device that is parent of scanner
         dev = self.scannerDev
         while dev is not None and not isinstance(dev, Microscope):
             dev = dev.parentDevice()
         self.scopeDev = dev
-        self.filterwheel = self.man.getDevice('FilterWheel')
-        if self.filterwheel is not None:
-            self.filterwheel.sigFilterWheelPositionChanged.connect(self.opticsUpdate)
+        self.filterDevice = self.man.getDevice('FilterWheel')
+        if self.filterDevice is not None:
+            self.filterDevice.sigFilterChanged.connect(self.opticsUpdate)
         
         self.lastFrame = None
         # self.SUF = SUFA.ScannerUtilities()
@@ -72,7 +72,7 @@ class ImagingModule(AnalysisModule):
 
     def opticsUpdate(self, reset=False):
         self.params['Objective'] = self.scopeDev.currentObjective.name()
-        self.params['Filter'] = self.filterwheel.currentFilter.name()
+        self.params['Filter'] = self.filterDevice.currentFilter.name()
         
     def addDetectorClicked(self):
         self.addNewDetector()

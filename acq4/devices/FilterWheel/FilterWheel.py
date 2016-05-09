@@ -44,7 +44,7 @@ class FilterWheel(Device, OptomechDevice):
 
     """
     
-    sigFilterWheelPositionChanged = QtCore.Signal(object)
+    sigFilterChanged = QtCore.Signal(object)
     sigFilterWheelSpeedChanged = QtCore.Signal(object)
     sigFilterWheelTrigModeChanged = QtCore.Signal(object)
     sigFilterWheelSensorModeChanged = QtCore.Signal(object)
@@ -139,7 +139,7 @@ class FilterWheel(Device, OptomechDevice):
         with self.filterWheelLock:
             self.currentFWPosition = newPos
             self.currentFilter = self.getFilter()
-            self.sigFilterWheelPositionChanged.emit(newPos)
+            self.sigFilterChanged.emit(newPos)
         
     def createTask(self, cmd, parentTask):
         with self.filterWheelLock:
