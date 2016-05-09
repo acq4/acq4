@@ -17,16 +17,16 @@ errorMessages = {
     'invalid string buffer':0XED
     }
 
-class filterWheelDriver(SerialDevice):
+class FilterWheelDriver(SerialDevice):
     """
     Class for communicating with ThorLabs FW 102C Motorized Filter Wheel
     
     """
-    def __init__(self, port, baud=115200):
+    def __init__(self, p, baud=115200):
         #self.fws = {}
         #self.paramTable = OrderedDict()
         
-        SerialDevice.__init__(self, port=int(port), baudrate=baud)
+        SerialDevice.__init__(self, port=p, baudrate=baud)
         
     def getPos(self):
         """Reads and returns the current filterwheel position """
@@ -35,7 +35,6 @@ class filterWheelDriver(SerialDevice):
     
     def setPos(self, newPos):
         """Sets filterwheel position to n """
-        print 'driver new pos ', newPos
         self['pos'] = int(newPos)
     
     def getPosCount(self):
@@ -56,7 +55,6 @@ class filterWheelDriver(SerialDevice):
             (0) - input (response to an ative low pulse advancing postion by 1
             (1) - output (generate an active high pulse when selected position arrive)
         """
-        print 'driver new trig ', newMode
         if int(newMode) in [0,1]:
             self['trig'] = int(newMode)
         else:
@@ -75,7 +73,6 @@ class filterWheelDriver(SerialDevice):
             (0) - slow
             (1) - fast
         """
-        print 'driver new speed ', newSpeed
         if int(newSpeed) in [0,1]:
             self['speed'] = int(newSpeed)
         else:

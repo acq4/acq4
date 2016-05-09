@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-from acq4.devices.OptomechDevice import *
-from acq4.drivers.ThorlabsFW102C import *
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.drivers.ThorlabsFW102C import ThorlabsFW102C
 from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
 from acq4.devices.FilterWheel.FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
-from acq4.util.SequenceRunner import *
-from acq4.devices.Device import *
+from acq4.util.SequenceRunner import SequenceRunner
+#from acq4.devices.Device import *
 from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -25,7 +25,7 @@ class FilterWheel(Device, OptomechDevice):
     
     FilterWheel:
         driver: 'FilterWheel'
-        port: 4                         ## serial port connected to filter-wheel
+        port: COM4                         ## serial port connected to filter-wheel
         baud: 115200
         parentDevice: 'Microscope'
         filters: # filters in slots
@@ -60,12 +60,12 @@ class FilterWheel(Device, OptomechDevice):
             if isinstance(p, Microscope):
                 self.scopeDev = p
                 
-        self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
+        self.port = config['port']  ## windows com ports start at COM1, pyserial ports start at 0
         self.baud = config.get('baud', 115200)
         #self.positionLabels = config.get('postionLabels')
         
         
-        self.driver = filterWheelDriver(self.port, self.baud)
+        self.driver = ThorlabsFW102C.FilterWheelDriver(self.port, self.baud)
         self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
         self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
         
@@ -88,7 +88,7 @@ class FilterWheel(Device, OptomechDevice):
         
         with self.driverLock:
             self.currentFWPosition = self.driver.getPos()
-            self.currentObjective = self.getFilter()
+            self.currentFilter = self.getFilter()
             
         self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
         self.fwThread.fwPosChanged.connect(self.positionChanged)
@@ -115,7 +115,6 @@ class FilterWheel(Device, OptomechDevice):
     def setPosition(self, pos):
         with self.driverLock:
             self.driver.setPos(pos)
-            self.sigFilterWheelPositionChanged.emit(pos)
     
     def getSensorMode(self):
         with self.driverLock:
@@ -215,9 +214,7 @@ class Filter(OptomechDevice):
 
     
 class FilterWheelTask(DeviceTask):
-    #pass
-    # This is disabled--internal shutter in coherent laser should NOT be used by ACQ4; use a separate shutter.
-    #
+
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.dev = dev
@@ -226,42 +223,23 @@ class FilterWheelTask(DeviceTask):
         #print parentTask
         
     def configure(self):
-        """Sets the state of a remote multiclamp to prepare for a program run."""
-        #print "mc configure"
+
         with self.dev.filterWheelLock:
             #self.state = self.dev.getLastState()
-            print 'command :', self.cmd
-            requiredPos = int(self.cmd['filterWheelPosition'][0]) # that the first character of string and convert it to int
+            requiredPos = int(self.cmd['filterWheelPosition'][0]) # take the first character of string and convert it to int
             if self.dev.currentFWPosition != requiredPos:
-                print 'current pos:', self.dev.currentFWPosition
-                print 'requir. pos:', requiredPos
                 self.dev.setPosition(requiredPos)
             
     def start(self):
-        # self.shutterOpened = self.dev.getShutter()
-        # if not self.shutterOpened:
-        #     self.dev.openShutter()
-        #     time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
-        #                      ## Note: It is recommended to keep the laser's shutter open rather than
-        #                      ## rely on this to open it for you.
-        #print state['filterCombo']
-        #print 'start filterwheel task'
-        #LaserTask.start(self)
         pass
         
     def stop(self, abort):
         pass
-        #print 'end filterwheel task'
-        #if not self.shutterOpened:
-        #    self.dev.closeShutter()
-        #LaserTask.stop(self, abort)
 
     def isDone(self):
         return True
     
 class FilterWheelTaskGui(TaskGui):
-    
-    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
     def __init__(self, dev, taskRunner):
         
@@ -290,10 +268,7 @@ class FilterWheelTaskGui(TaskGui):
             (self.ui.sequenceListEdit,),
         ])
         
-        
-        
     def generateTask(self, params=None):
-        print 'params in gernateTask :', params
         state = self.stateGroup.state()
         
         if params is None or 'filterWheelPosition' not in params:
@@ -312,8 +287,7 @@ class FilterWheelTaskGui(TaskGui):
     
     def restoreState(self, state):
         self.stateGroup.setState(state)
-        if state['sequenceCombo'] == 'off':
-            self.ui.sequenceListEdit.hide()
+        self.ui.sequenceListEdit.setVisible(state['sequenceCombo'] != 'off')
         self.sequenceChanged()
         
     def storeConfiguration(self):
