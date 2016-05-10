@@ -54,10 +54,7 @@ class ImagingModule(AnalysisModule):
         while dev is not None and not isinstance(dev, Microscope):
             dev = dev.parentDevice()
         self.scopeDev = dev
-        self.filterDevice = self.man.getDevice('FilterWheel')
-        if self.filterDevice is not None:
-            self.filterDevice.sigFilterChanged.connect(self.opticsUpdate)
-        
+                
         self.lastFrame = None
         # self.SUF = SUFA.ScannerUtilities()
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
@@ -70,7 +67,8 @@ class ImagingModule(AnalysisModule):
 
     def opticsUpdate(self, reset=False):
         self.params['Objective'] = self.scopeDev.currentObjective.name()
-        self.params['Filter'] = self.filterDevice.currentFilter.name()
+        if self.filterDevice is not None:
+            self.params['Filter'] = self.filterDevice.currentFilter.name()
         
     def addDetectorClicked(self):
         self.addNewDetector()
@@ -79,7 +77,18 @@ class ImagingModule(AnalysisModule):
         self.params.child('detectors').addChild(
             dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value, removable=True),
             autoIncrementName=True)
-                
+        
+        for detector in self.params.param('detectors') :
+            det = self.man.getDevice(detector.value())
+            filt = det.getFilterDevice()
+            if filt is not None:
+                self.filterDevice =  self.man.getDevice(filt)
+            else:
+                self.filterDevice = None
+
+        if self.filterDevice is not None:
+            self.filterDevice.sigFilterChanged.connect(self.opticsUpdate)
+        
     def quit(self):
         self.clear()
         AnalysisModule.quit(self)
