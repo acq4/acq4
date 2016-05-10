@@ -330,9 +330,11 @@ class Imager(Module):
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get('detectors', [config.get('detector')])
         
-        try:
-            self.filterDevice = self.manager.getDevice(config['filterwheel'])
-        except:
+        det = self.manager.getDevice(self.detectors[0][0])
+        filt = det.getFilterDevice()
+        if filt is not None:
+            self.filterDevice =  self.manager.getDevice(filt)
+        else:
             self.filterDevice = None
             
         if self.filterDevice is not None:
