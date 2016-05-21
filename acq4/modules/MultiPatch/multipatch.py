@@ -462,6 +462,7 @@ class MultiPatchWindow(QtGui.QWidget):
             (3, 2): self.ui.approachBtn,
             (4, 0): self.ui.slowBtn,
             (4, 2): self.ui.fastBtn,
+            (6, 1): self.ui.toTargetBtn,
             (6, 2): self.ui.homeBtn,
         }
         action = actions.get(key, None)
