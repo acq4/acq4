@@ -20,9 +20,18 @@ class MultiPatch(Module):
 
 
 class PipetteControl(QtGui.QWidget):
+
+    sigMoveStarted = QtCore.Signal(object)
+    sigMoveFinished = QtCore.Signal(object)
+
     def __init__(self, pipette, parent=None):
         QtGui.QWidget.__init__(self, parent)
         self.pip = pipette
+        self.moving = False
+        self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
+        self.moveTimer = QtCore.QTimer()
+        self.moveTimer.timeout.connect(self.positionChangeFinished)
+
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
 
@@ -46,6 +55,17 @@ class PipetteControl(QtGui.QWidget):
 
     def locked(self):
         return self.ui.lockBtn.isChecked()
+
+    def positionChanged(self):
+        self.moveTimer.start(500)
+        if self.moving is False:
+            self.moving = True
+            self.sigMoveStarted.emit(self)
+
+    def positionChangeFinished(self):
+        self.moveTimer.stop()
+        self.moving = False
+        self.sigMoveFinished.emit(self)
 
 
 class MultiPatchWindow(QtGui.QWidget):
@@ -79,7 +99,8 @@ class MultiPatchWindow(QtGui.QWidget):
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
             ctrl = PipetteControl(pip)
-
+            ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
+            ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
 
             # nbtn = QtGui.QPushButton(re.sub(r'[^\d]+', '', pip.name()))
             # nbtn.setCheckable(True)
@@ -421,6 +442,7 @@ class MultiPatchWindow(QtGui.QWidget):
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
             bl[0, i+4, 0] = 1 if ctrl.selected() else 0
+            bl[0, i+4, 1] = 2 if ctrl.moving else 0
             bl[1, i+4, 1] = 1 if pip in sel else 0
             bl[1, i+4, 0] = 1 if ctrl.locked() else 0
             bl[2, i+4, 1] = 1 if pip in sel else 0
@@ -477,5 +499,9 @@ class MultiPatchWindow(QtGui.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('seal')
 
+    def pipetteMoveStarted(self):
+        self.updateXKeysBacklight()
 
+    def pipetteMoveFinished(self):
+        self.updateXKeysBacklight()
 
