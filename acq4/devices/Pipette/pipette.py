@@ -69,6 +69,7 @@ class Pipette(Device, OptomechDevice):
             'approachHeight': config.get('approachHeight', 100e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
+            'showCameraModuleUI': config.get('showCameraModuleUI', True),
         }
         parent = self.parentDevice()
         assert isinstance(parent, Stage)
@@ -96,6 +97,8 @@ class Pipette(Device, OptomechDevice):
         return None
 
     def cameraModuleInterface(self, mod):
+        if self._opts['showCameraModuleUI'] is False:
+            return None
         iface = PipetteCamModInterface(self, mod)
         self._camInterfaces[iface] = None
         return iface

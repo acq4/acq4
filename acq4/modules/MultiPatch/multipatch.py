@@ -83,14 +83,6 @@ class MultiPatchWindow(QtGui.QWidget):
         self.setWindowTitle('Multipatch')
         self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
 
-        # self.layout = QtGui.QGridLayout()
-        # self.setLayout(self.layout)
-
-        # self.matrix = QtGui.QWidget()
-        # self.matrixLayout = QtGui.QGridLayout()
-        # self.matrix.setLayout(self.matrixLayout)
-        # self.layout.addWidget(self.matrix, 0, 0)
-
         man = getManager()
         pipNames = man.listInterfaces('pipette')
         self.pips = [man.getDevice(name) for name in pipNames]
@@ -102,20 +94,6 @@ class MultiPatchWindow(QtGui.QWidget):
             ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
             ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
 
-            # nbtn = QtGui.QPushButton(re.sub(r'[^\d]+', '', pip.name()))
-            # nbtn.setCheckable(True)
-            # lockBtn = QtGui.QPushButton('Lock')
-            # lockBtn.setCheckable(True)
-            # soloBtn = QtGui.QPushButton('Solo')
-            # soloBtn.setCheckable(True)
-            # focusTipBtn = QtGui.QPushButton('Tip')
-            # focusTargetBtn = QtGui.QPushButton('Target')
-
-            # self.matrixLayout.addWidget(nbtn, 0, i)
-            # self.matrixLayout.addWidget(lockBtn, 1, i)
-            # self.matrixLayout.addWidget(soloBtn, 2, i)
-            # self.matrixLayout.addWidget(focusTipBtn, 3, i)
-            # self.matrixLayout.addWidget(focusTargetBtn, 4, i)
             self.ui.matrixLayout.addWidget(ctrl, i, 0)
 
             ctrl.ui.selectBtn.clicked.connect(self.selectBtnClicked)
@@ -126,62 +104,9 @@ class MultiPatchWindow(QtGui.QWidget):
 
             self.pipCtrls.append(ctrl)
 
-
-        # self.movementWidget = QtGui.QWidget()
-        # self.layout.addWidget(self.movementWidget)
-
-        # self.movementLayout = QtGui.QGridLayout()
-        # self.movementWidget.setLayout(self.movementLayout)
-
-        # self.stepInBtn = QtGui.QPushButton("Step in")
-        # self.stepTargetOutBtn = QtGui.QPushButton("Step to target")
-        # self.stepOutBtn = QtGui.QPushButton("Step out")
-        # self.moveInBtn = QtGui.QPushButton("Move in")
-        # self.moveAboveTargetBtn = QtGui.QPushButton("Above target")
-        # self.moveApproachBtn = QtGui.QPushButton("Approach")
-        # self.moveToTargetBtn = QtGui.QPushButton("To target")
-        # self.moveHomeBtn = QtGui.QPushButton("Home")
-        # self.coarseSearchBtn = QtGui.QPushButton("Coarse search")
-        # self.fineSearchBtn = QtGui.QPushButton("Fine search")
-        # self.moveIdleBtn = QtGui.QPushButton("Idle")
-        # self.hideBtn = QtGui.QPushButton('Hide markers')
-        # self.hideBtn.setCheckable(True)
-        # self.sealBtn = QtGui.QPushButton('Seal')
-
-        # self.movementLayout.addWidget(self.moveInBtn, 0, 0)
-        # self.movementLayout.addWidget(self.stepInBtn, 0, 1)
-        # self.movementLayout.addWidget(self.stepOutBtn, 0, 2)
-        # self.movementLayout.addWidget(self.moveAboveTargetBtn, 0, 3)
-        # self.movementLayout.addWidget(self.moveApproachBtn, 0, 4)
-        # self.movementLayout.addWidget(self.moveToTargetBtn, 0, 5)
-        # self.movementLayout.addWidget(self.moveHomeBtn, 0, 6)
-        # self.movementLayout.addWidget(self.coarseSearchBtn, 0, 7)
-        # self.movementLayout.addWidget(self.fineSearchBtn, 1, 7)
-        # self.movementLayout.addWidget(self.moveIdleBtn, 0, 8)
-        # self.movementLayout.addWidget(self.hideBtn, 1, 8)
-
-        # self.stepSizeSpin = pg.SpinBox(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
         self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
-        # self.stepSizeLabel = QtGui.QLabel('Step size')
-        # self.fastBtn = QtGui.QPushButton('Fast')
-        # self.fastBtn.setCheckable(True)
-        # self.slowBtn = QtGui.QPushButton('Slow')
-        # self.slowBtn.setCheckable(True)
-
-        # self.movementLayout.addWidget(self.stepSizeLabel, 1, 0)
-        # self.movementLayout.addWidget(self.stepSizeSpin, 1, 1)
-        # self.movementLayout.addWidget(self.slowBtn, 1, 2)
-        # self.movementLayout.addWidget(self.fastBtn, 1, 3)
-
-        # self.calibrateBtn = QtGui.QPushButton('Calibrate')
-        # self.calibrateBtn.setCheckable(True)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
-        # self.movementLayout.addWidget(self.calibrateBtn, 1, 4)
-
-        # self.setTargetBtn = QtGui.QPushButton('Set target')
-        # self.setTargetBtn.setCheckable(True)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
-        # self.movementLayout.addWidget(self.setTargetBtn, 1, 5)
 
         self.ui.moveInBtn.clicked.connect(self.moveIn)
         self.ui.stepInBtn.clicked.connect(self.stepIn)
