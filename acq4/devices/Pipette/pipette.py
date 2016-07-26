@@ -342,6 +342,13 @@ class Pipette(Device, OptomechDevice):
             raise Exception("Surface depth has not been set.")
         return surface + self._opts['approachHeight']
 
+    def depthBelowSurface(self):
+        """Return the current depth of the pipette tip below the sample surface.
+        """
+        scope = self.scopeDevice()
+        surface = scope.getSurfaceDepth()
+        return surface - self.globalPosition()[2]
+
     def advance(self, depth, speed):
         """Move the electrode along its axis until it reaches the specified
         (global) depth.
