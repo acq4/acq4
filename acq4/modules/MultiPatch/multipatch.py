@@ -70,6 +70,8 @@ class PipetteControl(QtGui.QWidget):
 
 class MultiPatchWindow(QtGui.QWidget):
     def __init__(self, module):
+        self.storageFile = None
+
         self._calibratePips = []
         self._calibrateStagePositions = []
         self._setTargetPips = []
@@ -120,6 +122,8 @@ class MultiPatchWindow(QtGui.QWidget):
         self.ui.fineSearchBtn.clicked.connect(self.fineSearch)
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
         self.ui.sealBtn.clicked.connect(self.sealClicked)
+        self.ui.recordBtn.toggled.connect(self.recordToggled)
+        self.ui.resetBtn.clicked.connect(self.resetHistory)
 
         self.ui.fastBtn.clicked.connect(lambda: self.ui.slowBtn.setChecked(False))
         self.ui.slowBtn.clicked.connect(lambda: self.ui.fastBtn.setChecked(False))
@@ -128,8 +132,11 @@ class MultiPatchWindow(QtGui.QWidget):
         if xkdevname is not None:
             self.xkdev = getManager().getDevice(xkdevname)
             self.xkdev.sigStateChanged.connect(self.xkeysStateChanged)
+            self.xkdev.dev.setIntensity(255, 255)
         else:
             self.xkdev = None
+
+        self.resetHistory()
 
     def moveIn(self):
         for pip in self.selectedPipettes():
@@ -293,7 +300,6 @@ class MultiPatchWindow(QtGui.QWidget):
             self.ui.calibrateBtn.setChecked(False)
             self.updateXKeysBacklight()
 
-
     def cameraModuleClicked_setTarget(self, ev):
         if ev.button() != QtCore.Qt.LeftButton:
             return
@@ -424,9 +430,40 @@ class MultiPatchWindow(QtGui.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('seal')
 
-    def pipetteMoveStarted(self):
+    def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
+        self.recordEvent('move_start', pip.pip.name())
 
-    def pipetteMoveFinished(self):
+    def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
+        pos = pip.pip.globalPosition()
+        self.recordEvent('move_stop', str(pip.pip.name()), pos[0], pos[1], pos[2])
+
+    def recordToggled(self, rec):
+        if self.storageFile is not None:
+            self.storageFile.close()
+            self.storageFile = None
+            self.resetHistory()
+        if rec is True:
+            man = getManager()
+            sdir = man.getCurrentDir()
+            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'a')
+            self.writeRecords(self.eventHistory)
+
+    def recordEvent(self, *args):
+        self.eventHistory.append(args)
+        self.writeRecords([args])
+
+    def resetHistory(self):
+        self.eventHistory = []
+        for pc in self.pipCtrls:
+            pip = pc.pip
+
+
+    def writeRecords(self, recs):
+        if self.storageFile is None:
+            return
+        for rec in recs:
+            self.storageFile.write('%0.4f,'%pg.ptime.time() + ','.join(map(repr, rec)) + '\n')
+        self.storageFile.flush()
 
