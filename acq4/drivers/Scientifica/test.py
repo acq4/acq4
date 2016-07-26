@@ -8,7 +8,11 @@ if len(sys.argv) < 2:
 	sys.exit(-1)
 
 baudrate = int(sys.argv[2]) if len(sys.argv) > 2 else None
-ps = Scientifica(sys.argv[1], baudrate=baudrate)
+port = sys.argv[1]
+if port.lower().startswith('com') or port.startswith('/dev/'):
+    ps = Scientifica(port=port, baudrate=baudrate)
+else:
+    ps = Scientifica(name=port, baudrate=baudrate)
 
 print("Device type:  %s  Description:  %s" % (ps.getType(), ps.getDescription()))
 print("Firmware version: %r" % ps.getFirmwareVersion())
