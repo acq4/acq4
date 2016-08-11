@@ -31,7 +31,14 @@ class Scientifica(Stage):
 
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         baudrate = config.pop('baudrate', None)
-        self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate)
+        ctrl_version = config.pop('version', 2)
+        try:
+            self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
+        except RuntimeError as err:
+            if hasattr(err, 'dev_version'):
+                raise RuntimeError(err.message + " You must add `version=%d` to the configuration for this device and double-check any speed/acceleration parameters." % int(err.dev_version))
+            else:
+                raise
 
         # Controllers reset their baud to 9600 after power cycle
         if baudrate is not None and self.dev.getBaudrate() != baudrate:

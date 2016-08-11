@@ -145,8 +145,10 @@ class Scientifica(SerialDevice):
         self._version = float(self.send('ver'))
         if ctrl_version is not None and ((self._version >= 3) != (ctrl_version >= 3)):
             name = self.getDescription()
-            raise RuntimeError("Scientifica device %s uses controller version %s, but version %s was requested. Warning: speed and acceleration"
+            err = RuntimeError("Scientifica device %s uses controller version %s, but version %s was requested. Warning: speed and acceleration"
                                " parameter values are NOT compatible between controller versions." % (name, self._version, ctrl_version))
+            err.dev_version = self._version
+            raise err
 
         self._readAxisScale()
 
@@ -203,8 +205,12 @@ class Scientifica(SerialDevice):
         """
         with self.lock:
             ## request position
-            packet = self.send('POS')
-            return [int(x) / 10. for x in packet.split('\t')]
+            if self._version < 3:
+                packet = self.send('POS')
+                return [int(x) / 10. for x in packet.split('\t')]
+            else:
+                packet = self.send('P')
+                return [int(x) / 100. for x in packet.split('\t')]
 
     _param_commands = {
         'maxSpeed': ('TOP', 'TOP %f', float),
