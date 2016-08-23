@@ -72,7 +72,7 @@ class Scientifica(Stage):
             else:
                 self.dev.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * self.scale[0]))
+        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * abs(self.scale[0])))
         
         # thread for polling position changes
         self.monitor = MonitorThread(self)
@@ -113,7 +113,7 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setSpeed(v / self.scale[0])
+        self.dev.setSpeed(v / abs(self.scale[0]))
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -222,10 +222,10 @@ class ScientificaMoveFuture(MoveFuture):
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.dev.lock:
-            self.dev.dev.moveTo(pos, speed / self.dev.scale[0])
+            self.dev.dev.moveTo(pos, speed / abs(self.dev.scale[0]))
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
-            self.dev.dev.setSpeed(userSpeed / self.dev.scale[0])
+            self.dev.dev.setSpeed(userSpeed / abs(self.dev.scale[0]))
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.

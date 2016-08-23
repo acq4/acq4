@@ -224,6 +224,8 @@ class Scientifica(SerialDevice):
         'joyDirectionZ': ('JDZ ?', 'JDZ %d', bool),
         'approachAngle': ('ANGLE', 'ANGLE %f', float),
         'approachMode': ('APPROACH', 'APPROACH %d', bool),
+        'objDisp': ('OBJDISP', 'OBJDISP %d', float),
+        'objLift': ('OBJLIFT', 'OBJLIFT %d', float),
     }
 
     @staticmethod
@@ -399,7 +401,10 @@ class Scientifica(SerialDevice):
             for i in range(3):
                 if pos[i] is None:
                     pos[i] = currentPos[i]
-                pos[i] = int(pos[i] * 10)  # convert to units of 0.1 um
+                if self._version < 3:
+                    pos[i] = int(pos[i] * 10)  # convert to units of 0.1 um
+                else:
+                    pos[i] = int(pos[i] * 100)  # convert to units of 0.01 um
 
             if speed is None:
                 speed = self.getSpeed()
