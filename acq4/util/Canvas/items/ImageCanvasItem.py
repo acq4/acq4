@@ -4,8 +4,11 @@ from CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
 import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.flowchart
 import acq4.util.DataManager as DataManager
 import acq4.util.debug as debug
+
+
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):
@@ -24,7 +27,6 @@ class ImageCanvasItem(CanvasItem):
 
         item = None
         self.data = None
-        self.currentT = None
         
         if isinstance(image, QtGui.QGraphicsItem):
             item = image
@@ -55,8 +57,6 @@ class ImageCanvasItem(CanvasItem):
                             opts['scale'] = self.handle.info()['pixelSize']
                         if 'microscope' in self.handle.info():
                             m = self.handle.info()['microscope']
-                            print 'm: ',m
-                            print 'mpos: ', m['position']
                             opts['pos'] = m['position'][0:2]
                         else:
                             info = self.data._info[-1]
@@ -75,23 +75,38 @@ class ImageCanvasItem(CanvasItem):
             item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
 
-        self.histogram = pg.PlotWidget()
+        self.splitter = QtGui.QSplitter()
+        self.splitter.setOrientation(QtCore.Qt.Vertical)
+        self.layout.addWidget(self.splitter, self.layout.rowCount(), 0, 1, 2)
+
+        self.filterGroup = pg.GroupBox('Image Filter')
+        fgl = QtGui.QVBoxLayout()
+        self.filterGroup.setLayout(fgl)
+        fgl.setContentsMargins(0, 0, 0, 0)
+        self.splitter.addWidget(self.filterGroup)
+        
+        self.filter = pg.flowchart.Flowchart(terminals={'dataIn': {'io':'in'}, 'dataOut': {'io':'out'}})
+        self.filter.connectTerminals(self.filter['dataIn'], self.filter['dataOut'])
+        self.filter.sigStateChanged.connect(self.filterStateChanged)
+        fgl.addWidget(self.filter.widget())
+
+
+        self.histogram = pg.HistogramLUTWidget()
+        self.histogram.setImageItem(self.graphicsItem())
         self.blockHistogram = False
-        self.histogram.setMaximumHeight(100)
-        self.levelRgn = pg.LinearRegionItem()
-        self.histogram.addItem(self.levelRgn)
-        self.updateHistogram(autoLevels=True)
 
         # addWidget arguments: row, column, rowspan, colspan 
-        self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 3)
+        self.splitter.addWidget(self.histogram)
+
+        self.imgModeCombo = QtGui.QComboBox()
+        self.imgModeCombo.addItems(['SourceOver', 'Overlay', 'Plus', 'Multiply'])
+        self.layout.addWidget(self.imgModeCombo, self.layout.rowCount(), 0, 1, 2)
+        self.imgModeCombo.currentIndexChanged.connect(self.imgModeChanged)
+
 
         self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
-        #self.timeSlider.setMinimum(0)
-        #self.timeSlider.setMaximum(self.data.shape[0]-1)
-        self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 3)
+        self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
         self.timeSlider.valueChanged.connect(self.timeChanged)
-        self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
-        self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
         thisRow = self.layout.rowCount()
 
         self.edgeBtn = QtGui.QPushButton('Edge')
@@ -118,31 +133,35 @@ class ImageCanvasItem(CanvasItem):
         self.maxMedianBtn.clicked.connect(self.maxMedianClicked)
         self.layout.addWidget(self.maxMedianBtn, thisRow+2, 1, 1, 1)
 
-        self.filterOrder = QtGui.QComboBox()
-        self.filterLabel = QtGui.QLabel('Order')
-        for n in range(1,11):
-            self.filterOrder.addItem("%d" % n)
-        self.layout.addWidget(self.filterLabel, thisRow+3, 2, 1, 1)
-        self.layout.addWidget(self.filterOrder, thisRow+3, 3, 1, 1)
-        
+        self.zPlaneWidget = QtGui.QWidget()
+        self.zPlaneLayout = QtGui.QHBoxLayout()
+        self.zPlaneWidget.setLayout(self.zPlaneLayout)
+        self.layout.addWidget(self.zPlaneWidget, thisRow+3, 0, 1, 2)
+
         self.zPlanes = QtGui.QComboBox()
         self.zPlanesLabel = QtGui.QLabel('# planes')
         for s in ['All', '1', '2', '3', '4', '5']:
             self.zPlanes.addItem("%s" % s)
-        self.layout.addWidget(self.zPlanesLabel, thisRow+3, 0, 1, 1)
-        self.layout.addWidget(self.zPlanes, thisRow + 3, 1, 1, 1)
+        self.zPlaneLayout.addWidget(self.zPlanesLabel)
+        self.zPlaneLayout.addWidget(self.zPlanes)
+
+        self.filterOrder = QtGui.QComboBox()
+        self.filterLabel = QtGui.QLabel('Order')
+        for n in range(1,11):
+            self.filterOrder.addItem("%d" % n)
+        self.zPlaneLayout.addWidget(self.filterLabel)
+        self.zPlaneLayout.addWidget(self.filterOrder)
 
         ## controls that only appear if there is a time axis
         self.timeControls = [self.timeSlider, self.edgeBtn, self.maxBtn, self.meanBtn, self.maxBtn2,
-            self.maxMedianBtn, self.filterOrder, self.zPlanes]
+            self.maxMedianBtn, self.zPlaneWidget, self.tvBtn]
 
         if self.data is not None:
-            self.updateImage(self.data)
-
-
-        self.graphicsItem().sigImageChanged.connect(self.updateHistogram)
-        self.levelRgn.sigRegionChanged.connect(self.levelsChanged)
-        self.levelRgn.sigRegionChangeFinished.connect(self.levelsChangeFinished)
+            if isinstance(self.data, pg.metaarray.MetaArray):
+                self.filter.setInput(dataIn=self.data.asarray())
+            else:
+                self.filter.setInput(dataIn=self.data)
+            self.updateImage()
 
     @classmethod
     def checkFile(cls, fh):
@@ -156,16 +175,16 @@ class ImageCanvasItem(CanvasItem):
         return 0
 
     def timeChanged(self, t):
-        self.graphicsItem().updateImage(self.data[t])
-        self.currentT = t
+        self.updateImage()
 
     def tRange(self):
         """
         for a window around the current image, define a range for
         averaging or whatever
         """
+        currentT = self.timeSlider.value()
         sh = self.data.shape
-        if self.currentT is None:
+        if currentT is None:
             tsel = range(0, sh[0])
         else:
             sel = self.zPlanes.currentText()
@@ -173,17 +192,18 @@ class ImageCanvasItem(CanvasItem):
                 tsel = range(0, sh[0])
             else:
                 ir = int(sel)
-                llim = self.currentT - ir
+                llim = currentT - ir
                 if llim < 0:
                     llim = 0
-                rlim = self.currentT + ir
+                rlim = currentT + ir
                 if rlim > sh[0]:
                     rlim = sh[0]
                 tsel = range(llim, rlim)
         return tsel
 
-    def timeSliderPressed(self):
-        self.blockHistogram = True
+    def imgModeChanged(self):
+        mode = str(self.imgModeCombo.currentText())
+        self.graphicsItem().setCompositionMode(getattr(QtGui.QPainter, 'CompositionMode_' + mode))
 
     def edgeClicked(self):
         ## unsharp mask to enhance fine details
@@ -193,16 +213,12 @@ class ImageCanvasItem(CanvasItem):
         dif = blur - blur2
         #dif[dif < 0.] = 0
         self.graphicsItem().updateImage(dif.max(axis=0))
-        self.updateHistogram(autoLevels=True)
 
     def maxClicked(self):
         ## just the max of a stack
         tsel = self.tRange()
         fd = self.data[tsel,:,:].asarray().astype(float)
         self.graphicsItem().updateImage(fd.max(axis=0))
-        print 'max stack image udpate done'
-        self.updateHistogram(autoLevels=True)
-        #print 'histogram updated'
         
     def max2Clicked(self):
         ## just the max of a stack, after a little 3d bluring
@@ -211,11 +227,7 @@ class ImageCanvasItem(CanvasItem):
         filt = self.filterOrder.currentText()
         n = int(filt)
         blur = ndimage.gaussian_filter(fd, (n,n,n))
-        print 'image blurred'
         self.graphicsItem().updateImage(blur.max(axis=0))
-        print 'image udpate done'
-        self.updateHistogram(autoLevels=True)
-        #print 'histogram updated'
 
     def maxMedianClicked(self):
         ## just the max of a stack, after a little 3d bluring
@@ -225,14 +237,12 @@ class ImageCanvasItem(CanvasItem):
         n = int(filt) + 1 # value of 1 is no filter so start with 2
         blur = ndimage.median_filter(fd, size=n)
         self.graphicsItem().updateImage(blur.max(axis=0))
-        self.updateHistogram(autoLevels=True)
 
     def meanClicked(self):
         ## just the max of a stack
         tsel = self.tRange()
         fd = self.data[tsel,:,:].asarray().astype(float)
         self.graphicsItem().updateImage(fd.mean(axis=0))
-        self.updateHistogram(autoLevels=True)
 
     def tvClicked(self):
         tsel = self.tRange()
@@ -241,29 +251,19 @@ class ImageCanvasItem(CanvasItem):
         n = (int(filt) + 1) # value of 1 is no filter so start with 2
         blur = self.tv_denoise(fd, weight=n, n_iter_max=5)
         self.graphicsItem().updateImage(blur.max(axis=0))
-        self.updateHistogram(autoLevels=True)
 
-    def timeSliderReleased(self):
-        self.blockHistogram = False
-        self.updateHistogram()
+    def filterStateChanged(self):
+        self.updateImage()
 
-    def updateHistogram(self, autoLevels=False):
-        if self.blockHistogram:
-            return
-        x, y = self.graphicsItem().getHistogram()
-        if x is None: ## image has no data
-            return
-        self.histogram.clearPlots()
-        self.histogram.plot(x, y)
-        if autoLevels:
-            self.graphicsItem().updateImage(autoLevels=True)
-            w, b = self.graphicsItem().getLevels()
-            self.levelRgn.blockSignals(True)
-            self.levelRgn.setRegion([w, b])
-            self.levelRgn.blockSignals(False)
+    def updateImage(self):
+        img = self.graphicsItem()
 
-    def updateImage(self, data, autoLevels=True):
-        self.data = data
+        # Try running data through flowchart filter
+        # data = self.data
+        data = self.filter.output()['dataOut']
+        if data is None:
+            data = self.data
+
         if data.ndim == 4:
             showTime = True
         elif data.ndim == 3:
@@ -277,16 +277,10 @@ class ImageCanvasItem(CanvasItem):
         if showTime:
             self.timeSlider.setMinimum(0)
             self.timeSlider.setMaximum(self.data.shape[0]-1)
-            self.timeSlider.valueChanged.connect(self.timeChanged)
-            self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
-            self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
-            #self.timeSlider.show()
-            #self.maxBtn.show()
-            self.graphicsItem().updateImage(data[self.timeSlider.value()])
+            # self.timeSlider.valueChanged.connect(self.timeChanged)
+            self.graphicsItem().setImage(data[self.timeSlider.value()])
         else:
-            #self.timeSlider.hide()
-            #self.maxBtn.hide()
-            self.graphicsItem().updateImage(data, autoLevels=autoLevels)
+            self.graphicsItem().setImage(data)
 
         for widget in self.timeControls:
             widget.setVisible(showTime)
@@ -294,16 +288,6 @@ class ImageCanvasItem(CanvasItem):
         tr = self.saveTransform()
         self.resetUserTransform()
         self.restoreTransform(tr)
-
-        self.updateHistogram(autoLevels=autoLevels)
-
-    def levelsChanged(self):
-        rgn = self.levelRgn.getRegion()
-        self.graphicsItem().setLevels(rgn)
-        self.hideSelectBox()
-
-    def levelsChangeFinished(self):
-        self.showSelectBox()
 
     def _tv_denoise_3d(self, im, weight=100, eps=2.e-4, n_iter_max=200):
         """

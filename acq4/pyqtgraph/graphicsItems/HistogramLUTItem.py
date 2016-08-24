@@ -205,6 +205,7 @@ class HistogramLUTItem(GraphicsWidget):
     def imageChanged(self, autoLevel=False, autoRange=False):
         if self.imageItem() is None:
             return
+            
         if self.levelMode == 'mono':
             for plt in self.plots[1:]:
                 plt.setVisible(False)
@@ -222,6 +223,9 @@ class HistogramLUTItem(GraphicsWidget):
                 mx = h[0][-1]
                 self.region.setRegion([mn, mx])
                 profiler('set region')
+            else:
+                mn, mx = self.imageItem().levels
+                self.region.setRegion([mn, mx])
         else:
             # plot one histogram for each channel
             self.plots[0].setVisible(False)
