@@ -345,4 +345,20 @@ class RemovePeriodic(CtrlNode):
         return ma
         
         
-        
+class TVDenoise(CtrlNode):
+    nodeName = 'TVDenoise'
+    uiTemplate = [
+        ('weight', 'spin', {'value': 50, 'min': None, 'max': None, 'step': 1.0}),
+        ('epsilon', 'spin', {'value': 2.4e-4, 'min': 1e-16, 'max': None, 'step': 1e-4}),
+        ('keepType', 'check', {'checked': False}),
+        ('maxIter', 'intSpin', {'value': 200, 'min': 1, 'max': 100000}),
+    ]
+
+    def processData(self, data):
+        s = self.stateGroup.state()
+        w = s['weight']
+        e = s['epsilon']
+        k = s['keepType']
+        i = s['maxIter']
+        return functions.tv_denoise(data, weight=w, eps=e, keep_type=k, n_iter_max=i)
+
