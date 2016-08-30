@@ -87,7 +87,7 @@ class IgorThread(QtCore.QThread):
     def _processRequest(self, req):
         fut, method, args, kwds = req
         try:
-            getattr(self.igor, method)(*args, **kwds)
+            result = getattr(self.igor, method)(*args, **kwds)
             fut.set_result(result)
         except Exception as exc:
             fut.set_exception(exc)
