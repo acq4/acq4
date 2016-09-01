@@ -6,6 +6,8 @@ import numpy as np
 import subprocess as sp
 import concurrent.futures
 import atexit
+import zmq
+
 
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -171,6 +173,42 @@ class IgorBridge(object):
             else:
                 return r
 
+
+class ZMQIgorBridge(object):
+    """Bridge to Igor via ZMQ REQ/REP.
+    """
+    _context = zmq.Context()
+
+    def __init__(self, host="tcp://localhost", port=5670, timeout=1000):
+        super(ZMQIgorBridge, self).__init__()
+        self.address = "{}{}".format(host, port)
+        self._socket = self._context.socket(zmq.REQ)
+        self._socket.setsockopt(zmq.RCVTIMEO, timeout)
+        self._socket.connect(self.address)
+
+    def __call__(self, cmd, params):
+        callJSON = self.formatCall(cmd, params)
+        self._socket.send_json(callJSON)
+        reply = self._socket.recv_json()
+        return self.parseReply(reply)
+
+    def formatCall(self, cmd, params):
+        JSON = {"version": 1,
+                "CallFunction": {
+                    "name": cmd,
+                    "params": params}
+                }
+        return JSON
+
+    def parseReply(self, reply):
+        err = reply.get("errorCode", {}).get("value", None)
+        if err is None:
+            raise RuntimeError("Invalid response from Igor")
+        elif err != 0:
+            msg = reply.get("errorCode", {}).get("msg", "")
+            raise RuntimeError("Call failed with message: {}".format(msg))
+        else:
+            return reply.get("return", {}).get("value", None)
 
 if __name__ == '__main__':
     import sys
