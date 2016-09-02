@@ -181,13 +181,13 @@ class ZMQIgorBridge(object):
 
     def __init__(self, host="tcp://localhost", port=5670, timeout=1000):
         super(ZMQIgorBridge, self).__init__()
-        self.address = "{}{}".format(host, port)
+        self.address = "{}:{}".format(host, port)
         self._socket = self._context.socket(zmq.REQ)
         self._socket.setsockopt(zmq.RCVTIMEO, timeout)
         self._socket.connect(self.address)
 
     def __call__(self, cmd, params):
-        callJSON = self.formatCall(cmd, params)
+        callJSON = self.formatCall(cmd, params=[])
         self._socket.send_json(callJSON)
         reply = self._socket.recv_json()
         return self.parseReply(reply)
@@ -208,7 +208,7 @@ class ZMQIgorBridge(object):
             msg = reply.get("errorCode", {}).get("msg", "")
             raise RuntimeError("Call failed with message: {}".format(msg))
         else:
-            return reply.get("return", {}).get("value", None)
+            return reply.get("result", {}).get("value", None)
 
 if __name__ == '__main__':
     import sys
