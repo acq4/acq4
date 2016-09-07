@@ -43,12 +43,16 @@ class MIESBridge(object):
     def setCtrl(self, name, value=None):
         """Set or activate a GUI control in MIES.
         """
+        windowName = '"{}"'.format(self.windowName)
+        name_arg = '"{}"'.format(name)
         if value is None:
-            return self.igor('PGC_SetAndActivateControl("%s", "%s")' % (self.windowName, name))
+            return self.igor('PGC_SetAndActivateControl', windowName, name_arg)
         elif isinstance(value, int):
-            return self.igor('PGC_SetAndActivateControl("%s", "%s", val=%d)' % (self.windowName, name, value))
+            val = 'val={:d}'.format(value)
+            return self.igor('PGC_SetAndActivateControl', windowName, name_arg, val)
         elif isinstance(value, float):
-            return self.igor('PGC_SetAndActivateControl("%s", "%s", val=%f)' % (self.windowName, name, value))
+            val = 'val={:f}'.format(value)
+            return self.igor('PGC_SetAndActivateControl', windowName, name_arg, val)
         else:
             raise TypeError("Invalid value %s" % value)
 

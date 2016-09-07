@@ -133,11 +133,15 @@ class IgorBridge(object):
             raise Exception("No Igor process found.")
 
     @tryReconnect
-    def __call__(self, cmd):
+    def __call__(self, cmd, *args):
+        cmd = self.formatCall(cmd, *args)
         err, errmsg, hist, res = self.app.Execute2(1, 0, cmd, 0, "", "", "")
         if err != 0:
             raise RuntimeError("Igor call returned error code %d: %s" % (err, errmsg))
         return res
+
+    def formatCall(self, cmd, *args):
+        return "{}({})".format(cmd, ", ".join(["{}"]*len(args)).format(*args))
 
     @tryReconnect
     def getWave(self, folder, waveName):
@@ -186,8 +190,8 @@ class ZMQIgorBridge(object):
         self._socket.setsockopt(zmq.RCVTIMEO, timeout)
         self._socket.connect(self.address)
 
-    def __call__(self, cmd, params):
-        callJSON = self.formatCall(cmd, params=[])
+    def __call__(self, cmd, params=[]):
+        callJSON = self.formatCall(cmd, params=params)
         self._socket.send_json(callJSON)
         reply = self._socket.recv_json()
         return self.parseReply(reply)
