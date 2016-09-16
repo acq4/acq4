@@ -135,6 +135,7 @@ class IgorBridge(object):
     @tryReconnect
     def __call__(self, cmd, *args):
         cmd = self.formatCall(cmd, *args)
+        print cmd
         err, errmsg, hist, res = self.app.Execute2(1, 0, cmd, 0, "", "", "")
         if err != 0:
             raise RuntimeError("Igor call returned error code %d: %s" % (err, errmsg))
@@ -183,6 +184,8 @@ class ZMQIgorBridge(object):
     """
     _context = zmq.Context()
 
+    _types = {"NT_FP32": np.float32}
+
     def __init__(self, host="tcp://localhost", port=5670, timeout=1000):
         super(ZMQIgorBridge, self).__init__()
         self.address = "{}:{}".format(host, port)
@@ -192,6 +195,7 @@ class ZMQIgorBridge(object):
 
     def __call__(self, cmd, params=[]):
         callJSON = self.formatCall(cmd, params=params)
+        print callJSON
         self._socket.send_json(callJSON)
         reply = self._socket.recv_json()
         return self.parseReply(reply)
@@ -212,7 +216,25 @@ class ZMQIgorBridge(object):
             msg = reply.get("errorCode", {}).get("msg", "")
             raise RuntimeError("Call failed with message: {}".format(msg))
         else:
-            return reply.get("result", {}).get("value", None)
+            result = reply.get("result", {})
+            restype = result.get("type", "")
+            val = result.get("value", None)
+            if restype == "wave":
+                return self.parseWave(val)
+            else:
+                return val
+
+    def parseWave(self, jsonWave):
+        try:
+            dtype = self._types.get(jsonWave["type"], np.float)
+            shape = jsonWave["dimension"]["size"]
+            raw = np.array(jsonWave["data"]["raw"], dtype=dtype)
+        except Exception as e:
+            print e
+            return None
+        return raw.reshape(shape[::-1])
+
+
 
 if __name__ == '__main__':
     import sys
