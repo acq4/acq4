@@ -9,7 +9,6 @@ import acq4.util.DataManager as DataManager
 import acq4.util.debug as debug
 
 
-
 class ImageCanvasItem(CanvasItem):
     def __init__(self, image=None, **opts):
         """
@@ -78,17 +77,10 @@ class ImageCanvasItem(CanvasItem):
         self.splitter = QtGui.QSplitter()
         self.splitter.setOrientation(QtCore.Qt.Vertical)
         self.layout.addWidget(self.splitter, self.layout.rowCount(), 0, 1, 2)
-
-        self.filterGroup = pg.GroupBox('Image Filter')
-        fgl = QtGui.QVBoxLayout()
-        self.filterGroup.setLayout(fgl)
-        fgl.setContentsMargins(0, 0, 0, 0)
-        self.splitter.addWidget(self.filterGroup)
         
-        self.filter = pg.flowchart.Flowchart(terminals={'dataIn': {'io':'in'}, 'dataOut': {'io':'out'}})
+        self.filter = ImageFilterWidget()
         self.filter.sigStateChanged.connect(self.filterStateChanged)
-        fgl.addWidget(self.filter.widget())
-
+        self.splitter.addWidget(self.filter)
 
         self.histogram = pg.HistogramLUTWidget()
         self.histogram.setImageItem(self.graphicsItem())
@@ -102,7 +94,6 @@ class ImageCanvasItem(CanvasItem):
         self.layout.addWidget(self.imgModeCombo, self.layout.rowCount(), 0, 1, 2)
         self.imgModeCombo.currentIndexChanged.connect(self.imgModeChanged)
 
-
         self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
         self.timeSlider.valueChanged.connect(self.timeChanged)
@@ -112,9 +103,9 @@ class ImageCanvasItem(CanvasItem):
 
         if self.data is not None:
             if isinstance(self.data, pg.metaarray.MetaArray):
-                self.filter.setInput(dataIn=self.data.asarray())
+                self.filter.setInput(self.data.asarray())
             else:
-                self.filter.setInput(dataIn=self.data)
+                self.filter.setInput(self.data)
             self.updateImage()
 
     @classmethod
@@ -142,7 +133,7 @@ class ImageCanvasItem(CanvasItem):
         img = self.graphicsItem()
 
         # Try running data through flowchart filter
-        data = self.filter.output()['dataOut']
+        data = self.filter.output()
         if data is None:
             data = self.data
 
@@ -170,3 +161,45 @@ class ImageCanvasItem(CanvasItem):
         self.resetUserTransform()
         self.restoreTransform(tr)
 
+
+class ImageFilterWidget(QtGui.QWidget):
+    
+    sigStateChanged = QtCore.Signal()
+    
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+        
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        
+        self.btns = {}
+        self.btns['mean'] = QtGui.QPushButton('Mean')
+        self.btns['mean'].clicked.connect(self.meanClicked)
+        self.layout.addWidget(self.btns['mean'], 0, 0)
+        
+        # show flowchart control panel inside a collapsible group box
+        self.fcGroup = pg.GroupBox('Filter Flowchart')
+        fgl = QtGui.QVBoxLayout()
+        self.fcGroup.setLayout(fgl)
+        fgl.setContentsMargins(0, 0, 0, 0)
+        self.layout.addWidget(self.fcGroup, 1, 0)
+        self.fc = pg.flowchart.Flowchart(terminals={'dataIn': {'io':'in'}, 'dataOut': {'io':'out'}})
+        fgl.addWidget(self.fc.widget())
+        self.fc.sigStateChanged.connect(self.sigStateChanged)
+
+    def meanClicked(self):
+        self.fc.clear()
+        s = self.fc.createNode('Slice')
+        m = self.fc.createNode('Mean')
+        self.fc.connectTerminals(self.fc['dataIn'], s['In'])
+        self.fc.connectTerminals(s['Out'], m['In'])
+        self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+        
+    def setInput(self, img):
+        self.fc.setInput(dataIn=img)
+        
+    def output(self):
+        return self.fc.output()['dataOut']
+
+    def process(self, img):
+        return self.fc.process(dataIn=img)['dataOut']

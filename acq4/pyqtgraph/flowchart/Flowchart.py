@@ -233,7 +233,6 @@ class Flowchart(Node):
         term2 = self.internalTerminal(term2)
         term1.connectTo(term2)
         
-        
     def process(self, **args):
         """
         Process data through the flowchart, returning the output.
