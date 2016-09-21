@@ -170,12 +170,22 @@ class ImageFilterWidget(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         
         self.layout = QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
-        self.btns = {}
-        self.btns['mean'] = QtGui.QPushButton('Mean')
-        self.btns['mean'].clicked.connect(self.meanClicked)
-        self.layout.addWidget(self.btns['mean'], 0, 0)
+        # Set up filter buttons
+        self.btns = OrderedDict()
+        row, col = 0, 0
+        for name in ['Mean', 'Edge Max']:
+            btn = QtGui.QPushButton(name)
+            self.btns[name] = btn
+            btn.setCheckable(True)
+            self.layout.addWidget(btn, row, col)
+            btn.clicked.connect(self.filterBtnClicked)
+            col += 1
+            if col > 1:
+                col = 0
+                row += 1
         
         # show flowchart control panel inside a collapsible group box
         self.fcGroup = pg.GroupBox('Filter Flowchart')
@@ -187,13 +197,25 @@ class ImageFilterWidget(QtGui.QWidget):
         fgl.addWidget(self.fc.widget())
         self.fc.sigStateChanged.connect(self.sigStateChanged)
 
-    def meanClicked(self):
+    def filterBtnClicked(self, checked):
         self.fc.clear()
-        s = self.fc.createNode('Slice')
-        m = self.fc.createNode('Mean')
-        self.fc.connectTerminals(self.fc['dataIn'], s['In'])
-        self.fc.connectTerminals(s['Out'], m['In'])
-        self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+        if not checked:
+            return
+        name = self.sender().text()
+        if name == 'Mean':
+            s = self.fc.createNode('Slice')
+            m = self.fc.createNode('Mean', pos=[150, 0])
+            self.fc.connectTerminals(self.fc['dataIn'], s['In'])
+            self.fc.connectTerminals(s['Out'], m['In'])
+            self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+        elif name == 'Edge':
+            s = self.fc.createNode('Slice')
+            f1 = self.fc.createNode('GaussianFilter')
+            f2 = self.fc.createNode('GaussianFilter')
+            self.fc.connectTerminals(self.fc['dataIn'], s['In'])
+            self.fc.connectTerminals(s['Out'], m['In'])
+            self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+
         
     def setInput(self, img):
         self.fc.setInput(dataIn=img)
