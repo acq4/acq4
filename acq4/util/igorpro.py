@@ -64,10 +64,13 @@ class IgorThread(QtCore.QThread):
 
     _newRequest = QtCore.Signal(object)
 
-    def __init__(self):
+    def __init__(self, useZMQ=False):
         QtCore.QThread.__init__(self)
         self.moveToThread(self)
-        self.igor = IgorBridge()
+        if useZMQ:
+            self.igor = ZMQIgorBridge()
+        else:
+            self.igor = IgorBridge()
         self._newRequest.connect(self._processRequest)
         self.start()
         atexit.register(self.quit)
@@ -133,15 +136,25 @@ class IgorBridge(object):
             raise Exception("No Igor process found.")
 
     @tryReconnect
-    def __call__(self, cmd, *args):
-        cmd = self.formatCall(cmd, *args)
-        print cmd
+    def __call__(self, cmd, *args, **kwds):
+        """Make an Igor function call.
+        
+        Any keyword arguments are optional parameters.
+        """
+        cmd = self.formatCall(cmd, *args, **kwds)
         err, errmsg, hist, res = self.app.Execute2(1, 0, cmd, 0, "", "", "")
         if err != 0:
             raise RuntimeError("Igor call returned error code %d: %s" % (err, errmsg))
         return res
 
-    def formatCall(self, cmd, *args):
+    def formatCall(self, cmd, *args, **kwds):
+        for kwd, val in kwds.iteritems():
+            if isinstance(val, int):
+                args.append("{}={:d}".format(kwd, val))
+            elif isinstance(val, float):
+                args.append("{}={:f}".format(kwd, val))
+            else:
+                raise TypeError("Invalid value: {}".format(val))
         return "{}({})".format(cmd, ", ".join(["{}"]*len(args)).format(*args))
 
     @tryReconnect
@@ -180,8 +193,7 @@ class IgorBridge(object):
 
 
 class ZMQIgorBridge(object):
-    """Bridge to Igor via ZMQ REQ/REP.
-    """
+    """Bridge to Igor via ZMQ REQ/REP."""
     _context = zmq.Context()
 
     _types = {"NT_FP32": np.float32}
@@ -193,9 +205,9 @@ class ZMQIgorBridge(object):
         self._socket.setsockopt(zmq.RCVTIMEO, timeout)
         self._socket.connect(self.address)
 
-    def __call__(self, cmd, params=[]):
-        callJSON = self.formatCall(cmd, params=params)
-        print callJSON
+    def __call__(self, cmd, *args, **kwds):
+        # TODO: Handle optional values whenever they become supported in Igor
+        callJSON = self.formatCall(cmd, params=args)
         self._socket.send_json(callJSON)
         reply = self._socket.recv_json()
         return self.parseReply(reply)

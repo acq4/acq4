@@ -11,16 +11,24 @@ class MIESBridge(object):
     _bridge = None
 
     @classmethod
-    def getBridge(cls):
+    def getBridge(cls, useZMQ=False):
         """Return a singleton MIESBridge instance.
         """
+        # TODO: Handle switching between ZMQ and ActiveX?
         if cls._bridge is None:
-            cls._bridge = MIESBridge()
+            cls._bridge = MIESBridge(useZMQ=useZMQ)
         return cls._bridge
 
-    def __init__(self):
-        self.igor = IgorThread()
+    def __init__(self, useZMQ=False):
+        self.igor = IgorThread(useZMQ)
+        self.usingZMQ = useZMQ
         self.windowName = 'ITC1600_Dev_0'
+
+    def getTPValues(self):
+        if self.usingZMQ:
+            return self.igor("FFI_ReturnTPValues")
+        else:
+            raise RuntimeError("getTPValues not supported in ActiveX")
 
     def selectHeadstage(self, hs):
         return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
@@ -28,11 +36,15 @@ class MIESBridge(object):
     def setManualPressure(self, pressure):
         return self.setCtrl("setvar_DataAcq_SSPressure", pressure)
 
-    def clickApproach(self):
-        return self.setCtrl("button_DataAcq_Approach")
+    def setApproach(self, hs):
+        windowName = '"{}"'.format(self.windowName)
+        return self.igor("P_MethodApproach", windowName, hs)
+        #return self.setCtrl("button_DataAcq_Approach")
 
-    def clickSeal(self):
-        return self.setCtrl("button_DataAcq_Seal")
+    def setSeal(self):
+        windowName = '"{}"'.format(self.windowName)
+        return self.igor("P_MethodSeal", windowName, hs)
+        #return self.setCtrl("button_DataAcq_Seal")
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
@@ -47,14 +59,5 @@ class MIESBridge(object):
         name_arg = '"{}"'.format(name)
         if value is None:
             return self.igor('PGC_SetAndActivateControl', windowName, name_arg)
-        elif isinstance(value, int):
-            val = 'val={:d}'.format(value)
-            return self.igor('PGC_SetAndActivateControl', windowName, name_arg, val)
-        elif isinstance(value, float):
-            val = 'val={:f}'.format(value)
-            return self.igor('PGC_SetAndActivateControl', windowName, name_arg, val)
         else:
-            raise TypeError("Invalid value %s" % value)
-
-    
-
+            return self.igor('PGC_SetAndActivateControlVar', windowName, name_arg, value)
