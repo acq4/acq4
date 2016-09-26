@@ -79,9 +79,15 @@ class ImageCanvasItem(CanvasItem):
         self.splitter.setOrientation(QtCore.Qt.Vertical)
         self.layout.addWidget(self.splitter, self.layout.rowCount(), 0, 1, 2)
         
+        self.filterGroup = pg.GroupBox("Image Filter")
+        fgl = QtGui.QGridLayout()
+        fgl.setContentsMargins(3, 3, 3, 3)
+        fgl.setSpacing(1)
+        self.filterGroup.setLayout(fgl)
         self.filter = ImageFilterWidget()
         self.filter.sigStateChanged.connect(self.filterStateChanged)
-        self.splitter.addWidget(self.filter)
+        fgl.addWidget(self.filter)
+        self.splitter.addWidget(self.filterGroup)
 
         self.histogram = pg.HistogramLUTWidget()
         self.histogram.setImageItem(self.graphicsItem())
@@ -192,7 +198,7 @@ class ImageFilterWidget(QtGui.QWidget):
                 row += 1
         
         # show flowchart control panel inside a collapsible group box
-        self.fcGroup = pg.GroupBox('Filter Flowchart')
+        self.fcGroup = pg.GroupBox('Filter Settings')
         fgl = QtGui.QVBoxLayout()
         self.fcGroup.setLayout(fgl)
         fgl.setContentsMargins(0, 0, 0, 0)
