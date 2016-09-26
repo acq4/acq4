@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from collections import OrderedDict
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from CanvasItem import CanvasItem
 import numpy as np
@@ -107,7 +108,14 @@ class ImageCanvasItem(CanvasItem):
             else:
                 self.filter.setInput(self.data)
             self.updateImage()
-
+            
+            # Needed to ensure selection box wraps the image properly
+            tr = self.saveTransform()
+            self.resetUserTransform()
+            self.restoreTransform(tr)
+            # Why doesn't this work?
+            #self.selectBoxFromUser() ## move select box to match new bounds
+            
     @classmethod
     def checkFile(cls, fh):
         if not fh.isFile():
@@ -157,10 +165,6 @@ class ImageCanvasItem(CanvasItem):
         for widget in self.timeControls:
             widget.setVisible(showTime)
 
-        tr = self.saveTransform()
-        self.resetUserTransform()
-        self.restoreTransform(tr)
-
 
 class ImageFilterWidget(QtGui.QWidget):
     
@@ -176,7 +180,7 @@ class ImageFilterWidget(QtGui.QWidget):
         # Set up filter buttons
         self.btns = OrderedDict()
         row, col = 0, 0
-        for name in ['Mean', 'Edge Max']:
+        for name in ['Mean', 'Max', 'Max w/Gaussian', 'Max w/Median', 'Edge']:
             btn = QtGui.QPushButton(name)
             self.btns[name] = btn
             btn.setCheckable(True)
@@ -192,28 +196,66 @@ class ImageFilterWidget(QtGui.QWidget):
         fgl = QtGui.QVBoxLayout()
         self.fcGroup.setLayout(fgl)
         fgl.setContentsMargins(0, 0, 0, 0)
-        self.layout.addWidget(self.fcGroup, 1, 0)
+        self.layout.addWidget(self.fcGroup, row+1, 0, 1, 2)
         self.fc = pg.flowchart.Flowchart(terminals={'dataIn': {'io':'in'}, 'dataOut': {'io':'out'}})
         fgl.addWidget(self.fc.widget())
+        self.fcGroup.setCollapsed(True)
         self.fc.sigStateChanged.connect(self.sigStateChanged)
 
     def filterBtnClicked(self, checked):
         self.fc.clear()
+        
         if not checked:
             return
-        name = self.sender().text()
+        btn = self.sender()
+        
+        # uncheck all other filter btns
+        for b in self.btns.values():
+            if b is not btn:
+                b.setChecked(False)
+        
+        name = btn.text()
         if name == 'Mean':
             s = self.fc.createNode('Slice')
             m = self.fc.createNode('Mean', pos=[150, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
-        elif name == 'Edge':
+        elif name == 'Max':
             s = self.fc.createNode('Slice')
-            f1 = self.fc.createNode('GaussianFilter')
-            f2 = self.fc.createNode('GaussianFilter')
+            m = self.fc.createNode('Max', pos=[150, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], m['In'])
+            self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+        elif name == 'Max w/Gaussian':
+            s = self.fc.createNode('Slice', pos=[-40, 0])
+            f = self.fc.createNode('GaussianFilter', pos=[70, 0])
+            m = self.fc.createNode('Max', pos=[180, 0])
+            self.fc.connectTerminals(self.fc['dataIn'], s['In'])
+            self.fc.connectTerminals(s['Out'], f['In'])
+            self.fc.connectTerminals(f['Out'], m['In'])
+            self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+        elif name == 'Max w/Median':
+            s = self.fc.createNode('Slice', pos=[-40, 0])
+            f = self.fc.createNode('MedianFilter', pos=[70, 0])
+            m = self.fc.createNode('Max', pos=[180, 0])
+            self.fc.connectTerminals(self.fc['dataIn'], s['In'])
+            self.fc.connectTerminals(s['Out'], f['In'])
+            self.fc.connectTerminals(f['Out'], m['In'])
+            self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
+        elif name == 'Edge':
+            s = self.fc.createNode('Slice', pos=[-40, 0])
+            f1 = self.fc.createNode('PythonEval', name='GaussDiff', pos=[70, 0])
+            f1.setCode("""
+                from scipy.ndimage import gaussian_filter
+                img = args['input'].astype(float)
+                edge = gaussian_filter(img, (0, 2, 2)) - gaussian_filter(img, (0, 1, 1))
+                return {'output': edge} 
+            """)
+            m = self.fc.createNode('Max', pos=[180, 0])
+            self.fc.connectTerminals(self.fc['dataIn'], s['In'])
+            self.fc.connectTerminals(s['Out'], f1['input'])
+            self.fc.connectTerminals(f1['output'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
 
         
