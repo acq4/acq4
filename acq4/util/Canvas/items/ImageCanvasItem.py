@@ -203,6 +203,14 @@ class ImageFilterWidget(QtGui.QWidget):
         self.fc.sigStateChanged.connect(self.sigStateChanged)
 
     def filterBtnClicked(self, checked):
+        # remember slice before clearing fc
+        snode = self.fc.nodes().get('Slice', None)
+        if snode is not None:
+            snstate = snode.saveState()
+        else:
+            snstate = None
+        print snstate
+        
         self.fc.clear()
         
         if not checked:
@@ -216,35 +224,35 @@ class ImageFilterWidget(QtGui.QWidget):
         
         name = btn.text()
         if name == 'Mean':
-            s = self.fc.createNode('Slice')
-            m = self.fc.createNode('Mean', pos=[150, 0])
+            s = self.fc.createNode('Slice', name="Slice")
+            m = self.fc.createNode('Mean', name="Mean", pos=[150, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
         elif name == 'Max':
-            s = self.fc.createNode('Slice')
-            m = self.fc.createNode('Max', pos=[150, 0])
+            s = self.fc.createNode('Slice', name="Slice")
+            m = self.fc.createNode('Max', name="Max", pos=[150, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
         elif name == 'Max w/Gaussian':
-            s = self.fc.createNode('Slice', pos=[-40, 0])
-            f = self.fc.createNode('GaussianFilter', pos=[70, 0])
-            m = self.fc.createNode('Max', pos=[180, 0])
+            s = self.fc.createNode('Slice', name="Slice", pos=[-40, 0])
+            f = self.fc.createNode('GaussianFilter', name="GaussianFilter", pos=[70, 0])
+            m = self.fc.createNode('Max', name="Max", pos=[180, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], f['In'])
             self.fc.connectTerminals(f['Out'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
         elif name == 'Max w/Median':
-            s = self.fc.createNode('Slice', pos=[-40, 0])
-            f = self.fc.createNode('MedianFilter', pos=[70, 0])
-            m = self.fc.createNode('Max', pos=[180, 0])
+            s = self.fc.createNode('Slice', name="Slice", pos=[-40, 0])
+            f = self.fc.createNode('MedianFilter', name="MedianFilter", pos=[70, 0])
+            m = self.fc.createNode('Max', name="Max", pos=[180, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], f['In'])
             self.fc.connectTerminals(f['Out'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
         elif name == 'Edge':
-            s = self.fc.createNode('Slice', pos=[-40, 0])
+            s = self.fc.createNode('Slice', name="Slice", pos=[-40, 0])
             f1 = self.fc.createNode('PythonEval', name='GaussDiff', pos=[70, 0])
             f1.setCode("""
                 from scipy.ndimage import gaussian_filter
@@ -252,12 +260,19 @@ class ImageFilterWidget(QtGui.QWidget):
                 edge = gaussian_filter(img, (0, 2, 2)) - gaussian_filter(img, (0, 1, 1))
                 return {'output': edge} 
             """)
-            m = self.fc.createNode('Max', pos=[180, 0])
+            m = self.fc.createNode('Max', name="Max", pos=[180, 0])
             self.fc.connectTerminals(self.fc['dataIn'], s['In'])
             self.fc.connectTerminals(s['Out'], f1['input'])
             self.fc.connectTerminals(f1['output'], m['In'])
             self.fc.connectTerminals(m['Out'], self.fc['dataOut'])
 
+        # restore slice is possible
+        if snstate is not None:
+            snode = self.fc.nodes().get('Slice', None)
+            if snode is not None:
+                print "restore!"
+                snode.restoreState(snstate)
+        
         
     def setInput(self, img):
         self.fc.setInput(dataIn=img)
