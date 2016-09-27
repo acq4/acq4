@@ -244,7 +244,7 @@ class ZMQIgorBridge(object):
         except Exception as e:
             print e
             return None
-        return raw.reshape(shape[::-1])
+        return raw.reshape(shape, order="F")
 
 
 

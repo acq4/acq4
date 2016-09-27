@@ -1,14 +1,19 @@
-from .igorpro import IgorThread
+from igorpro import IgorThread
+from PyQt4 import QtCore
 
 
 def __reload__(old):
-    MIESBridge._bridge = old['MIESBridge']._bridge
+    MIES._bridge = old['MIESBridge']._bridge
 
 
-class MIESBridge(object):
+class MIES(QtCore.QObject):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
+    dataReady = QtCore.Signal()
     _bridge = None
+    ALLDATA = None
+    PEAKRES = 1
+    SSRES = 2
 
     @classmethod
     def getBridge(cls, useZMQ=False):
@@ -16,19 +21,48 @@ class MIESBridge(object):
         """
         # TODO: Handle switching between ZMQ and ActiveX?
         if cls._bridge is None:
-            cls._bridge = MIESBridge(useZMQ=useZMQ)
+            cls._bridge = MIES(useZMQ=useZMQ)
         return cls._bridge
 
     def __init__(self, useZMQ=False):
+        super(MIES, self).__init__(parent=None)
         self.igor = IgorThread(useZMQ)
         self.usingZMQ = useZMQ
+        self.currentData = None
         self.windowName = 'ITC1600_Dev_0'
+        self.updateTimer = QtCore.QTimer()
+        self.updateTimer.timeout.connect(self.getMIESUpdate)
+        self.updateTimer.start(20)
 
-    def getTPValues(self):
+    def getMIESUpdate(self):
         if self.usingZMQ:
-            return self.igor("FFI_ReturnTPValues")
+            data = self.igor("FFI_ReturnTPValues").result()[...,0]
+            self.processUpdate(data)
+            return data
         else:
-            raise RuntimeError("getTPValues not supported in ActiveX")
+            raise RuntimeError("getMIESUpdate not supported in ActiveX")
+
+    def processUpdate(self, data):
+        if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
+            self.currentData = data
+            self.dataReady.emit()
+        elif self.currentData is not None:
+            print data[:,0]
+            print "{:f}".format(data[0,0])
+
+    def getHeadstageData(self, hs, dataIndex=None):
+        if self.currentData is None:
+            return None, None
+        else:
+            ts = self.currentData[0,hs]
+            if dataIndex is None:
+                d = self.currentData[1:,hs]
+            else:
+                d = self.currentData[dataIndex,hs]
+            return ts, d
+
+    def resetData(self):
+        self.currentData = None
 
     def selectHeadstage(self, hs):
         return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
@@ -61,3 +95,28 @@ class MIESBridge(object):
             return self.igor('PGC_SetAndActivateControl', windowName, name_arg)
         else:
             return self.igor('PGC_SetAndActivateControlVar', windowName, name_arg, value)
+
+
+if __name__ == "__main__":
+    from PyQt4 import QtGui
+    import pyqtgraph as pg
+    import sys
+
+    class W(QtGui.QWidget):
+        def __init__(self, parent=None):
+            super(W, self).__init__(parent=parent)
+            self.mies = MIES.getBridge(True)
+            self.mies.dataReady.connect(self.grabit)
+            self.b = QtGui.QPushButton("grab", parent=self)
+            self.b.clicked.connect(self.mies.getMIESUpdate)
+            l = QtGui.QVBoxLayout()
+            l.addWidget(self.b)
+            self.setLayout(l)
+
+        def grabit(self):
+            print self.mies.getHeadstageData(0)
+
+    app = pg.mkQApp()
+    w = W()
+    w.show()
+    sys.exit(app.exec_())
