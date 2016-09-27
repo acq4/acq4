@@ -1,15 +1,13 @@
 from .igorpro import IgorThread
-from PyQt4 import QtCore
 
 
 def __reload__(old):
-    MIES._bridge = old['MIESBridge']._bridge
+    MIESBridge._bridge = old['MIESBridge']._bridge
 
 
-class MIES(QtCore.QObject):
+class MIESBridge(object):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
-    dataReady = QtCore.Signal()
     _bridge = None
 
     @classmethod
@@ -18,30 +16,19 @@ class MIES(QtCore.QObject):
         """
         # TODO: Handle switching between ZMQ and ActiveX?
         if cls._bridge is None:
-            cls._bridge = MIES(useZMQ=useZMQ)
+            cls._bridge = MIESBridge(useZMQ=useZMQ)
         return cls._bridge
 
     def __init__(self, useZMQ=False):
         self.igor = IgorThread(useZMQ)
         self.usingZMQ = useZMQ
         self.windowName = 'ITC1600_Dev_0'
-        self.updateTimer = QtCore.QTimer()
-        self.updateTimer.timeout.connect(self.getMIESUpdate)
-        self.updateTimer.start(200)
 
-    def getMIESUpdate(self):
+    def getTPValues(self):
         if self.usingZMQ:
-            data = self.igor("FFI_ReturnTPValues")
-            self.processUpdate(data)
-            return data
+            return self.igor("FFI_ReturnTPValues")
         else:
-            raise RuntimeError("getMIESUpdate not supported in ActiveX")
-
-    def processUpdate(self, data):
-        pass
-
-    def resetData(self):
-        pass
+            raise RuntimeError("getTPValues not supported in ActiveX")
 
     def selectHeadstage(self, hs):
         return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
@@ -74,7 +61,3 @@ class MIES(QtCore.QObject):
             return self.igor('PGC_SetAndActivateControl', windowName, name_arg)
         else:
             return self.igor('PGC_SetAndActivateControlVar', windowName, name_arg, value)
-
-    def __del__(self):
-        self.updateTimer.stop()
-        super(MIES, self).__del__()

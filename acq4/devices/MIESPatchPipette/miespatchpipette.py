@@ -1,5 +1,5 @@
 from ..PatchPipette import PatchPipette
-from acq4.util.miesbridge import MIESBridge
+from acq4.util.mies import MIES
 
 
 class MIESPatchPipette(PatchPipette):
@@ -7,7 +7,7 @@ class MIESPatchPipette(PatchPipette):
     electrophysiology and pressure control.
     """
     def __init__(self, deviceManager, config, name):
-        self.mies = MIESBridge.getBridge()
+        self.mies = MIES.getBridge()
         self._headstage = config.pop('headstage')
 
         PatchPipette.__init__(self, deviceManager, config, name)
