@@ -42,7 +42,8 @@ class FileDataView(QtGui.QSplitter):
                 return
             else:
                 image = False
-                data = file.read()
+                with pg.BusyCursor():
+                    data = file.read()
                 if typ == 'ImageFile': 
                     image = True
                 elif typ == 'MetaArray':
@@ -54,32 +55,33 @@ class FileDataView(QtGui.QSplitter):
                     return
                         
         
-        if image:
-            if self.currentType == 'image' and len(self.widgets) > 0:
-                try:
-                    self.widgets[0].setImage(data, autoRange=False)
-                except:
-                    print "widget types:", map(type, self.widgets)
-                    raise
+        with pg.BusyCursor():
+            if image:
+                if self.currentType == 'image' and len(self.widgets) > 0:
+                    try:
+                        self.widgets[0].setImage(data, autoRange=False)
+                    except:
+                        print "widget types:", map(type, self.widgets)
+                        raise
+                else:
+                    self.clear()
+                    w = pg.ImageView(self)
+                    #print "add image:", w.ui.roiPlot.plotItem
+                    #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
+                    self.addWidget(w)
+                    w.setImage(data)
+                    self.widgets.append(w)
+                self.currentType = 'image'
             else:
                 self.clear()
-                w = pg.ImageView(self)
-                #print "add image:", w.ui.roiPlot.plotItem
-                #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
+                w = pg.MultiPlotWidget(self)
                 self.addWidget(w)
-                w.setImage(data)
+                w.plot(data)
+                self.currentType = 'plot'
                 self.widgets.append(w)
-            self.currentType = 'image'
-        else:
-            self.clear()
-            w = pg.MultiPlotWidget(self)
-            self.addWidget(w)
-            w.plot(data)
-            self.currentType = 'plot'
-            self.widgets.append(w)
-            #print "add mplot:", w.mPlotItem.plots
-            
-            #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
+                #print "add mplot:", w.mPlotItem.plots
+                
+                #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
         
         if (hasattr(data, 'implements') and data.implements('MetaArray')):
             if self.dictWidget is None:
