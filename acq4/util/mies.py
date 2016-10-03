@@ -29,6 +29,7 @@ class MIES(QtCore.QObject):
         self.igor = IgorThread(useZMQ)
         self.usingZMQ = useZMQ
         self.currentData = None
+        self._future = None
         self.windowName = 'ITC1600_Dev_0'
         self.updateTimer = QtCore.QTimer()
         self.updateTimer.timeout.connect(self.getMIESUpdate)
@@ -36,9 +37,12 @@ class MIES(QtCore.QObject):
 
     def getMIESUpdate(self):
         if self.usingZMQ:
-            data = self.igor("FFI_ReturnTPValues").result()[...,0]
-            self.processUpdate(data)
-            return data
+            if self._future is None:
+                self._future = self.igor("FFI_ReturnTPValues")
+            if self._future.done():
+                data = self._future.result()[...,0] # dimension hack when return value suddenly changed
+                self._future = None
+                self.processUpdate(data)
         else:
             raise RuntimeError("getMIESUpdate not supported in ActiveX")
 
@@ -47,6 +51,7 @@ class MIES(QtCore.QObject):
             self.currentData = data
             self.dataReady.emit()
         elif self.currentData is not None:
+            # debugging an issue
             print data[:,0]
             print "{:f}".format(data[0,0])
 
@@ -62,6 +67,7 @@ class MIES(QtCore.QObject):
             return ts, d
 
     def resetData(self):
+        self._future = None
         self.currentData = None
 
     def selectHeadstage(self, hs):
