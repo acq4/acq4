@@ -6,6 +6,7 @@ import serial, struct, time, collections
 import numpy as np
 
 from acq4.util.Mutex import RecursiveMutex as RLock
+from acq4.util.debug import printExc
 from ..SerialDevice import SerialDevice, TimeoutError, DataError
 
 
@@ -72,9 +73,12 @@ class Scientifica(SerialDevice):
                 name = cls.openDevices[com].getDescription()
                 devs[name] = com
             else:
-                s = Scientifica(port=com)
-                devs[s.getDescription()] = com
-                s.close()
+                try:
+                    s = Scientifica(port=com)
+                    devs[s.getDescription()] = com
+                    s.close()
+                except Exception:
+                    printExc("Error while initializing Scientifica device at %s:" % com)
 
         cls.availableDevices = devs
 
