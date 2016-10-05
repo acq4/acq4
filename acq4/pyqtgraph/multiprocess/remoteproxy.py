@@ -567,6 +567,10 @@ class RemoteEventHandler(object):
             self.proxies[ref] = proxy._proxyId
     
     def deleteProxy(self, ref):
+        if self.send is None:
+            # this can happen during shutdown
+            return
+
         with self.proxyLock:
             proxyId = self.proxies.pop(ref)
             
