@@ -2,7 +2,7 @@
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
 from __future__ import division
-import serial, struct, time, collections
+import serial, struct, time, collections, re
 import numpy as np
 
 from acq4.util.Mutex import RecursiveMutex as RLock
@@ -423,7 +423,7 @@ class Scientifica(SerialDevice):
     def getCurrents(self):
         """Return a tuple of the (run, standby) current values.
         """
-        c = self.send('CURRENT').split(' ')
+        c = re.split(r'\s+', self.send('CURRENT'))
         return (int(c[0]), int(c[1]))
 
     def setCurrents(self, run, standby):
