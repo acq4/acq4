@@ -101,7 +101,7 @@ class ComboBox(QtGui.QComboBox):
     @blockIfUnchanged
     def setItems(self, items):
         """
-        *items* may be a list or a dict. 
+        *items* may be a list, a tuple, or a dict. 
         If a dict is given, then the keys are used to populate the combo box
         and the values will be used for both value() and setValue().
         """
@@ -190,13 +190,13 @@ class ComboBox(QtGui.QComboBox):
     @ignoreIndexChange
     @blockIfUnchanged
     def addItems(self, items):
-        if isinstance(items, list):
+        if isinstance(items, list) or isinstance(items, tuple):
             texts = items
             items = dict([(x, x) for x in items])
         elif isinstance(items, dict):
             texts = list(items.keys())
         else:
-            raise TypeError("items argument must be list or dict (got %s)." % type(items))
+            raise TypeError("items argument must be list or dict or tuple (got %s)." % type(items))
         
         for t in texts:
             if t in self._items:
