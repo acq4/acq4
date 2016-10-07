@@ -352,7 +352,6 @@ class Flowchart(Node):
             #tdeps[t] = lastNode
             if lastInd is not None:
                 dels.append((lastInd+1, t))
-        #dels.sort(lambda a,b: cmp(b[0], a[0]))
         dels.sort(key=lambda a: a[0], reverse=True)
         for i, t in dels:
             ops.insert(i, ('d', t))
@@ -382,22 +381,22 @@ class Flowchart(Node):
             terms = set(startNode.outputs().values())
             
             #print "======= Updating", startNode
-            #print "Order:", order
+            # print("Order:", order)
             for node in order[1:]:
-                #print "Processing node", node
+                # print("Processing node", node)
+                update = False
                 for term in list(node.inputs().values()):
-                    #print "  checking terminal", term
+                    # print("  checking terminal", term)
                     deps = list(term.connections().keys())
-                    update = False
                     for d in deps:
                         if d in terms:
-                            #print "    ..input", d, "changed"
-                            update = True
+                            # print("    ..input", d, "changed")
+                            update |= True
                             term.inputChanged(d, process=False)
-                    if update:
-                        #print "  processing.."
-                        node.update()
-                        terms |= set(node.outputs().values())
+                if update:
+                    # print("  processing..")
+                    node.update()
+                    terms |= set(node.outputs().values())
                     
         finally:
             self.processing = False
@@ -467,7 +466,6 @@ class Flowchart(Node):
                 self.clear()
             Node.restoreState(self, state)
             nodes = state['nodes']
-            #nodes.sort(lambda a, b: cmp(a['pos'][0], b['pos'][0]))
             nodes.sort(key=lambda a: a['pos'][0])
             for n in nodes:
                 if n['name'] in self._nodes:

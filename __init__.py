@@ -49,6 +49,7 @@ else:
 CONFIG_OPTIONS = {
     'useOpenGL': useOpenGL, ## by default, this is platform-dependent (see widgets/GraphicsView). Set to True or False to explicitly enable/disable opengl.
     'leftButtonPan': True,  ## if false, left button drags a rubber band for zooming in viewbox
+    # foreground/background take any arguments to the 'mkColor' in /pyqtgraph/functions.py
     'foreground': 'd',  ## default foreground color for axes, labels, etc.
     'background': 'k',        ## default background for GraphicsWidget
     'antialias': False,
@@ -58,16 +59,32 @@ CONFIG_OPTIONS = {
     'exitCleanup': True,    ## Attempt to work around some exit crash bugs in PyQt and PySide
     'enableExperimental': False, ## Enable experimental features (the curious can search for this key in the code)
     'crashWarning': False,  # If True, print warnings about situations that may result in a crash
+    'imageAxisOrder': 'col-major',  # For 'row-major', image data is expected in the standard (row, col) order.
+                                 # For 'col-major', image data is expected in reversed (col, row) order.
+                                 # The default is 'col-major' for backward compatibility, but this may
+                                 # change in the future.
 } 
 
 
 def setConfigOption(opt, value):
+    global CONFIG_OPTIONS
+    if opt not in CONFIG_OPTIONS:
+        raise KeyError('Unknown configuration option "%s"' % opt)
+    if opt == 'imageAxisOrder' and value not in ('row-major', 'col-major'):
+        raise ValueError('imageAxisOrder must be either "row-major" or "col-major"')
     CONFIG_OPTIONS[opt] = value
 
 def setConfigOptions(**opts):
-    CONFIG_OPTIONS.update(opts)
+    """Set global configuration options. 
+    
+    Each keyword argument sets one global option. 
+    """
+    for k,v in opts.items():
+        setConfigOption(k, v)
 
 def getConfigOption(opt):
+    """Return the value of a single global configuration option.
+    """
     return CONFIG_OPTIONS[opt]
 
 
@@ -347,7 +364,7 @@ def exit():
     
     ## close file handles
     if sys.platform == 'darwin':
-        for fd in xrange(3, 4096):
+        for fd in range(3, 4096):
             if fd not in [7]:  # trying to close 7 produces an illegal instruction on the Mac.
                 os.close(fd)
     else:

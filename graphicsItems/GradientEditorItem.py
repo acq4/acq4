@@ -1,17 +1,17 @@
+import weakref
+import numpy as np
 from ..Qt import QtGui, QtCore
 from ..python2_3 import sortList
 from .. import functions as fn
 from .GraphicsObject import GraphicsObject
 from .GraphicsWidget import GraphicsWidget
 from ..widgets.SpinBox import SpinBox
-import weakref
 from ..pgcollections import OrderedDict
 from ..colormap import ColorMap
+from ..python2_3 import cmp
 
-import numpy as np
 
 __all__ = ['TickSliderItem', 'GradientEditorItem']
-
 
 Gradients = OrderedDict([
     ('thermal', {'ticks': [(0.3333, (185, 0, 0, 255)), (0.6666, (255, 220, 0, 255)), (1, (255, 255, 255, 255)), (0, (0, 0, 0, 255))], 'mode': 'rgb'}),
@@ -24,7 +24,12 @@ Gradients = OrderedDict([
     ('grey', {'ticks': [(0.0, (0, 0, 0, 255)), (1.0, (255, 255, 255, 255))], 'mode': 'rgb'}),
 ])
 
-
+def addGradientListToDocstring():
+    """Decorator to add list of current pre-defined gradients to the end of a function docstring."""
+    def dec(fn):
+        fn.__doc__ = fn.__doc__ + str(Gradients.keys()).strip('[').strip(']')
+        return fn
+    return dec
 
 
 
@@ -479,11 +484,12 @@ class GradientEditorItem(TickSliderItem):
         act = self.sender()
         self.loadPreset(act.name)
         
+    @addGradientListToDocstring()
     def loadPreset(self, name):
         """
-        Load a predefined gradient. 
-    
-        """ ## TODO: provide image with names of defined gradients
+        Load a predefined gradient. Currently defined gradients are: 
+        """## TODO: provide image with names of defined gradients
+        
         #global Gradients
         self.restoreState(Gradients[name])
     
@@ -820,7 +826,7 @@ class Tick(QtGui.QGraphicsWidget):  ## NOTE: Making this a subclass of GraphicsO
         self.pg.lineTo(QtCore.QPointF(scale/3**0.5, scale))
         self.pg.closeSubpath()
         
-        QtGui.QGraphicsObject.__init__(self)
+        QtGui.QGraphicsWidget.__init__(self)
         self.setPos(pos[0], pos[1])
         if self.movable:
             self.setZValue(1)
