@@ -77,6 +77,8 @@ class XKeys(Device):
         else:
             self.dev.setCallback(self._stateChanged)
 
+        self.dev.setIntensity(255,255)
+
     def setBacklights(self, state, **kwds):
         if PIE32_BRIDGE:
             self.dev.__getattr__('setBacklights', _deferGetattr=True)(state, _callSync='off', **kwds)
