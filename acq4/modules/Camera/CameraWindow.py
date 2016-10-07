@@ -559,10 +559,10 @@ class ImageSequencer(QtGui.QWidget):
         self.ui = SequencerTemplate()
         self.ui.setupUi(self)
 
-        self.ui.zStartSpin.setOpts(value=100e-6, suffix='m', siPrefix=True, step=10e-6, precision=6)
-        self.ui.zEndSpin.setOpts(value=50e-6, suffix='m', siPrefix=True, step=10e-6, precision=6)
-        self.ui.zSpacingSpin.setOpts(minimum=1e-9, value=1e-6, suffix='m', siPrefix=True, dec=True, minStep=1e-9, step=0.5)
-        self.ui.intervalSpin.setOpts(minimum=0, value=1, suffix='s', siPrefix=True, dec=True, minStep=1e-3, step=1)
+        self.ui.zStartSpin.setOpts(value=100e-6, suffix='m', siPrefix=True, step=10e-6, decimals=6)
+        self.ui.zEndSpin.setOpts(value=50e-6, suffix='m', siPrefix=True, step=10e-6, decimals=6)
+        self.ui.zSpacingSpin.setOpts(min=1e-9, value=1e-6, suffix='m', siPrefix=True, dec=True, minStep=1e-9, step=0.5)
+        self.ui.intervalSpin.setOpts(min=0, value=1, suffix='s', siPrefix=True, dec=True, minStep=1e-3, step=1)
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
