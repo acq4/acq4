@@ -12,17 +12,25 @@ class MIESPatchPipette(PatchPipette):
         self.mies.sigDataReady.connect(self.updateState)
         self._headstage = config.pop('headstage')
         self.TPData = {"time": [],
-                     "Rss": [],
-                     "Rpeak": []}
+                       "Rss": [],
+                       "Rpeak": []}
         PatchPipette.__init__(self, deviceManager, config, name)
 
-    def updateState(self):
+    def updateState(self, TPArray):
         """Got the signal from MIES that data is available, update"""
-        ts, data = self.mies.getHeadstageData(self._headstage)
-        self.TPData["time"].append(ts)
-        self.TPData["Rss"].append(data[0])
-        self.TPData["Rpeak"].append(data[1])
+        TPDict = self.parseTPData(TPArray)
+        for key, timeseries in self.TPData.iteritems():
+            timeseries.append(TPDict[key])
         self.sigStateChanged.emit()
+
+    def parseTPData(self, TPArray):
+        """Take the incoming array and make a dictionary of it"""
+        TPData = {
+            "time": TPArray[0, self._headstage],
+            "Rss": TPArray[1, self._headstage],
+            "Rpeak": TPArray[2, self._headstage]
+            }
+        return TPData
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.

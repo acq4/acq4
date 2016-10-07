@@ -60,6 +60,9 @@ dtypes = {
 }
 
 
+class IgorCallError(Exception):
+    pass
+
 class IgorThread(QtCore.QThread):
 
     _newRequest = QtCore.Signal(object)
@@ -226,7 +229,7 @@ class ZMQIgorBridge(object):
             raise RuntimeError("Invalid response from Igor")
         elif err != 0:
             msg = reply.get("errorCode", {}).get("msg", "")
-            raise RuntimeError("Call failed with message: {}".format(msg))
+            return IgorCallError("Call failed with message: {}".format(msg))
         else:
             result = reply.get("result", {})
             restype = result.get("type", "")

@@ -1,4 +1,4 @@
-from igorpro import IgorThread
+from igorpro import IgorThread, IgorCallError
 from PyQt4 import QtCore
 
 
@@ -9,7 +9,8 @@ def __reload__(old):
 class MIES(QtCore.QObject):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
-    sigDataReady = QtCore.Signal()
+    sigDataReady = QtCore.Signal(object)
+    _sigFutureComplete = QtCore.Signal(object)
     _bridge = None
     ALLDATA = None
     PEAKRES = 1
@@ -32,6 +33,7 @@ class MIES(QtCore.QObject):
         self._future = None
         self._exiting = False
         self.windowName = 'ITC1600_Dev_0'
+        self._sigFutureComplete.connect(self.processUpdate)
         self.start()
 
     def start(self):
@@ -42,17 +44,23 @@ class MIES(QtCore.QObject):
     def getMIESUpdate(self):
         if self.usingZMQ:
             self._future = self.igor("FFI_ReturnTPValues")
-            self._future.add_done_callback(self.processUpdate)
+            self._future.add_done_callback(self._sigFutureComplete.emit)
         else:
             raise RuntimeError("getMIESUpdate not supported in ActiveX")
 
     def processUpdate(self, future):
-        data = future.result()[...,0] # dimension hack when return value suddenly changed
-        if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
-            self.currentData = data
-            self.sigDataReady.emit()
+        res = future.result()
+        if isinstance(res, IgorCallError):
+            # Test pulse isn't running, let's wait a little longer
+            nextCallWait = 200
+        else:
+            data = future.result()[...,0] # dimension hack when return value suddenly changed
+            if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
+                self.currentData = data
+                self.sigDataReady.emit(data)
+            nextCallWait = 0
         if not self._exiting:
-            QtCore.QTimer.singleShot(20, self.getMIESUpdate)
+            QtCore.QTimer.singleShot(nextCallWait, self.getMIESUpdate)
 
     def getHeadstageData(self, hs, dataIndex=None):
         if self.currentData is None:
@@ -115,15 +123,15 @@ if __name__ == "__main__":
         def __init__(self, parent=None):
             super(W, self).__init__(parent=parent)
             self.mies = MIES.getBridge(True)
-            self.mies.sigDataReady.connect(self.grabit)
+            self.mies.sigDataReady.connect(self.printit)
             self.b = QtGui.QPushButton("stop", parent=self)
             self.b.clicked.connect(self.mies.exit)
             l = QtGui.QVBoxLayout()
             l.addWidget(self.b)
             self.setLayout(l)
 
-        def grabit(self):
-            print self.mies.getHeadstageData(0)
+        def printit(self, data):
+            print data
 
     app = pg.mkQApp()
     w = W()
