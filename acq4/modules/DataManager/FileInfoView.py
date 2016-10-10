@@ -144,7 +144,9 @@ class FileInfoView(QtGui.QWidget):
         else:
             return
         #print "Update", field, val
-        self.current.setInfo({field: val})
+        info = self.current.info()
+        if field not in info or val != info[field]:
+            self.current.setInfo({field: val})
             
     def clear(self):
         #print "clear"
