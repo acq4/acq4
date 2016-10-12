@@ -20,6 +20,7 @@ import weakref
 from .CanvasManager import CanvasManager
 from .CanvasItem import CanvasItem, GroupCanvasItem
 
+
 class Canvas(QtGui.QWidget):
     
     sigSelectionChanged = QtCore.Signal(object, object)
@@ -259,7 +260,6 @@ class Canvas(QtGui.QWidget):
             ci.setTemporaryTransform(transform)
             ci.sigTransformChanged.emit(ci)
         
-
     def addGraphicsItem(self, item, **opts):
         """Add a new GraphicsItem to the scene at pos.
         Common options are name, pos, scale, and z
@@ -268,13 +268,11 @@ class Canvas(QtGui.QWidget):
         item._canvasItem = citem
         self.addItem(citem)
         return citem
-            
 
     def addGroup(self, name, **kargs):
         group = GroupCanvasItem(name=name)
         self.addItem(group, **kargs)
         return group
-        
 
     def addItem(self, citem):
         """
@@ -408,7 +406,6 @@ class Canvas(QtGui.QWidget):
         if isinstance(item, QtGui.QTreeWidgetItem):
             item = item.canvasItem()
             
-            
         if isinstance(item, CanvasItem):
             item.setCanvas(None)
             listItem = item.listItem
@@ -430,14 +427,12 @@ class Canvas(QtGui.QWidget):
     def clear(self):
         while len(self.items) > 0:
             self.removeItem(self.items[0])
-        
 
     def addToScene(self, item):
         self.view.addItem(item)
         
     def removeFromScene(self, item):
         self.view.removeItem(item)
-
     
     def listItems(self):
         """Return a dictionary of name:item pairs"""
@@ -462,6 +457,16 @@ class Canvas(QtGui.QWidget):
         self.menuItem = None
         import gc
         gc.collect()
+
+    def saveState(self):
+        """Return a serializable structure representing the current state of the canvas.
+        
+        Includes ordered list of items, per-item properties, and view state.
+        """
+        return {
+            'items': [i.saveState for i in self.items],
+            'view': self.view.saveState(),
+        }
 
 
 class SelectBox(ROI):

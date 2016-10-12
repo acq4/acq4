@@ -57,9 +57,7 @@ class MosaicEditor(AnalysisModule):
         self.initializeElements()
 
         self.ui.canvas = self.getElement('Canvas', create=True)
-        self.items = weakref.WeakKeyDictionary()
-        self.files = weakref.WeakValueDictionary()
-        self.cells = {}
+        self.clear()
 
         #addScanImagesBtn = QtGui.QPushButton()
         #addScanImagesBtn.setText('Add Scan Image')
@@ -302,6 +300,25 @@ class MosaicEditor(AnalysisModule):
     def getLoadedFiles(self):
         """Return a list of all file handles that have been loaded"""
         return self.items.values()
+
+    def clear(self):
+        """Remove all loaded data and reset to the default state.
+        """
+        self.ui.canvas.clear()
+        self.items = weakref.WeakKeyDictionary()
+        self.files = weakref.WeakValueDictionary()
+        self.cells = {}
+        
+    def saveState(self):
+        """Return a serializable representation of the current state of the MosaicEditor.
+        
+        This includes the list of all items, their current visibility and
+        parameters, and the view configuration.
+        """
+        return {'canvas': self.ui.canvas.saveState()}
+        
+    def restoreState(self, state):
+        self.ui.canvas.restoreState(state['canvas'])
 
     def quit(self):
         self.files = None

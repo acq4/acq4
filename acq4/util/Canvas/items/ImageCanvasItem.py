@@ -171,6 +171,17 @@ class ImageCanvasItem(CanvasItem):
         for widget in self.timeControls:
             widget.setVisible(showTime)
 
+    def saveState(self):
+        state = CanvasItem.saveState(self)
+        state['imagestate'] = self.histogram.saveState()
+        state['filter'] = self.filter.saveState()
+        return state
+    
+    def restoreState(self, state):
+        CanvasItem.restoreState(state)
+        self.histogram.restoreState(state['imagestate'])
+        self.filter.restoreState(state['filter'])
+
 
 class ImageFilterWidget(QtGui.QWidget):
     
@@ -279,7 +290,6 @@ class ImageFilterWidget(QtGui.QWidget):
                 print "restore!"
                 snode.restoreState(snstate)
         
-        
     def setInput(self, img):
         self.fc.setInput(dataIn=img)
         
@@ -288,3 +298,9 @@ class ImageFilterWidget(QtGui.QWidget):
 
     def process(self, img):
         return self.fc.process(dataIn=img)['dataOut']
+
+    def saveState(self):
+        return {'flowchart': self.fc.saveState()}
+    
+    def restoreState(self, state):
+        self.fc.restoreState(state['flowchart'])

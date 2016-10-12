@@ -1,5 +1,6 @@
 from acq4.pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
 
+
 class CanvasItem(OrigCanvasItem):
     ## extent canvasitem to have support for filehandles
     
@@ -45,4 +46,7 @@ class CanvasItem(OrigCanvasItem):
             raise Exception("Transform has invalid scale; not saving: %s" % str(trans))
         fh.setInfo(userTransform=trans)
     
-
+    def saveState(self):
+        state = OrigCanvasItem.saveState()
+        state['filename'] = None if self.handle is None else self.handle.name()
+        return state

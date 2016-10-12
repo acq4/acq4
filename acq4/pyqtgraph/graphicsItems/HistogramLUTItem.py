@@ -309,3 +309,12 @@ class HistogramLUTItem(GraphicsWidget):
         else:
             raise ValueError("Unknown level mode %r" %  self.levelMode) 
     
+    def saveState(self):
+        return {
+            'gradient': self.gradient.saveState(),
+            'levels': self.getLevels(),
+        }
+    
+    def restoreState(self, state):
+        self.gradient.restoreState(state['gradient'])
+        self.setLevels(state['levels'])
