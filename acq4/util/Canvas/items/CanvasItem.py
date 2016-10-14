@@ -46,7 +46,7 @@ class CanvasItem(OrigCanvasItem):
             raise Exception("Transform has invalid scale; not saving: %s" % str(trans))
         fh.setInfo(userTransform=trans)
     
-    def saveState(self):
-        state = OrigCanvasItem.saveState()
-        state['filename'] = None if self.handle is None else self.handle.name()
+    def saveState(self, relativeTo=None):
+        state = OrigCanvasItem.saveState(self)
+        state['filename'] = None if self.handle is None else self.handle.name(relativeTo=relativeTo)
         return state

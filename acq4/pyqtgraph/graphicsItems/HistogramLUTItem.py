@@ -317,4 +317,4 @@ class HistogramLUTItem(GraphicsWidget):
     
     def restoreState(self, state):
         self.gradient.restoreState(state['gradient'])
-        self.setLevels(state['levels'])
+        self.setLevels(*state['levels'])

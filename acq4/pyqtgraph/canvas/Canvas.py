@@ -458,16 +458,6 @@ class Canvas(QtGui.QWidget):
         import gc
         gc.collect()
 
-    def saveState(self):
-        """Return a serializable structure representing the current state of the canvas.
-        
-        Includes ordered list of items, per-item properties, and view state.
-        """
-        return {
-            'items': [i.saveState for i in self.items],
-            'view': self.view.saveState(),
-        }
-
 
 class SelectBox(ROI):
     def __init__(self, scalable=False):

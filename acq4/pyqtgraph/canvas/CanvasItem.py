@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import numpy as np
 from ..Qt import QtGui, QtCore, QtSvg, USE_PYSIDE
 from ..graphicsItems.ROI import ROI
 from .. import SRTTransform, ItemGroup
@@ -237,6 +238,12 @@ class CanvasItem(QtCore.QObject):
         alpha = val / 1023.
         self._graphicsItem.setOpacity(alpha)
         
+    def setAlpha(self, alpha):
+        self.alphaSlider.setValue(int(np.clip(alpha * 1023, 0, 1023)))
+        
+    def alpha(self):
+        return self.alphaSlider.value() / 1023.
+        
     def isMovable(self):
         return self.opts['movable']
         
@@ -449,12 +456,12 @@ class CanvasItem(QtCore.QObject):
             'type': self.__class__.__name__,
             'name': self.name,
             'visible': self.isVisible(),
-            'alpha': self.alphaSlider.value(),
+            'alpha': self.alpha(),
             'userTransform': self.saveTransform(), 
             'z': self.zValue(),
             'scalable': self.opts['scalable'],
             'rotatable': self.opts['rotatable'],
-            'translatable': self.opts['translatable'],
+            'movable': self.opts['movable'],
         }
     
     def restoreState(self, state):

@@ -171,14 +171,14 @@ class ImageCanvasItem(CanvasItem):
         for widget in self.timeControls:
             widget.setVisible(showTime)
 
-    def saveState(self):
-        state = CanvasItem.saveState(self)
+    def saveState(self, **kwds):
+        state = CanvasItem.saveState(self, **kwds)
         state['imagestate'] = self.histogram.saveState()
         state['filter'] = self.filter.saveState()
         return state
     
     def restoreState(self, state):
-        CanvasItem.restoreState(state)
+        CanvasItem.restoreState(self, state)
         self.histogram.restoreState(state['imagestate'])
         self.filter.restoreState(state['filter'])
 

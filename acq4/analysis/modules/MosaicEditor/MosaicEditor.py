@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
 
-from PyQt4 import QtGui, QtCore
-from acq4.analysis.AnalysisModule import AnalysisModule
 #from flowchart import *
 import os
 import glob
+import json
+import weakref
 from collections import OrderedDict
-import acq4.util.debug as debug
 import numpy as np
 import scipy
 import scipy.stats
-import acq4.pyqtgraph as pg
 
-import weakref
-#import FileLoader
-#import DatabaseGui
-#import FeedbackButton
+import acq4.util.debug as debug
+import acq4.pyqtgraph as pg
+from acq4.analysis.AnalysisModule import AnalysisModule
+from PyQt4 import QtGui, QtCore
 from MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
@@ -39,9 +37,18 @@ class MosaicEditor(AnalysisModule):
     The resulting images may be saved as SVG or PNG files.
     Mosaic Editor makes extensive use of pyqtgraph Canvas methods.
     """
+    
+    # Version number for save format.
+    #   increment minor version number for backward-compatible changes
+    #   increment major version number for backward-incompatible changes
+    _saveVersion = (1, 0)
+    
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
+        self.items = weakref.WeakKeyDictionary()
+        self.files = weakref.WeakValueDictionary()
+
         self.ctrl = QtGui.QWidget()
         self.ui = Ui_Form()
         self.ui.setupUi(self.ctrl)
@@ -57,14 +64,11 @@ class MosaicEditor(AnalysisModule):
         self.initializeElements()
 
         self.ui.canvas = self.getElement('Canvas', create=True)
-        self.clear()
+        self.clear(ask=False)
 
-        #addScanImagesBtn = QtGui.QPushButton()
-        #addScanImagesBtn.setText('Add Scan Image')
         self.ui.fileLoader = self.getElement('File Loader', create=True)
         self.ui.fileLoader.ui.fileTree.hide()
 
-        #self.ui.fileLoader.ui.verticalLayout_2.addWidget(addScanImagesBtn)
         try:
             self.ui.fileLoader.setBaseClicked() # get the currently selected directory in the DataManager
         except:
@@ -72,9 +76,12 @@ class MosaicEditor(AnalysisModule):
 
         for a in atlas.listAtlases():
             self.ui.atlasCombo.addItem(a)
+            
+        self.saveBtn = QtGui.QPushButton("Save ...")
+        self.saveBtn.clicked.connect(self.saveClicked)
+        self.saveBtn.show()
 
         self.ui.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
-        #self.ui.exportSvgBtn.clicked.connect(self.exportSvg)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
         self.ui.normalizeBtn.clicked.connect(self.normalizeImages)
         self.ui.tileShadingBtn.clicked.connect(self.rescaleImages)
@@ -108,10 +115,6 @@ class MosaicEditor(AnalysisModule):
         self.closeAtlas()
         
         cls = atlas.getAtlasClass(name)
-        #if name == 'AuditoryCortex':
-        #    obj = cls(canvas=self.getElement('Canvas'))
-        #else:
-             #obj = cls()
         obj = cls()
         ctrl = obj.ctrlWidget(host=self)
         self.ui.atlasLayout.addWidget(ctrl, 0, 0)
@@ -123,16 +126,19 @@ class MosaicEditor(AnalysisModule):
             return
 
         for f in files:
+            if f.shortName().endswith('.mosaic'):
+                self.loadStateFile(f.name())
+                continue
+                
             if f in self.files:   ## Do not allow loading the same file more than once
                 item = self.files[f]
                 item.show()  # just show the file; but do not load it
                 continue
             
             if f.isFile():  # add specified files
-                item = self.canvas.addFile(f)
+                item = self.addFile(f)
             elif f.isDir():  # Directories are more complicated
                 if self.dataModel.dirType(f) == 'Cell':  #  If it is a cell, just add the cell "Marker" to the plot
-                # note: this breaks loading all images in Cell directory (need another way to do that)
                     item = self.canvas.addFile(f)
                 else:  # in all other directory types, look for MetaArray files
                     filesindir = glob.glob(f.name() + '/*.ma')
@@ -141,21 +147,23 @@ class MosaicEditor(AnalysisModule):
                             fdh = DataManager.getFileHandle(fd) # open file to get handle.
                         except IOError:
                             continue # just skip file
-                        item = self.canvas.addFile(fdh)  # add it
-                        self.amendFile(f, item)
+                        item = self.addFile(fdh)
                     if len(filesindir) == 0:  # add protocol sequences
-                        item = self.canvas.addFile(f)
-        self.canvas.selectItem(item)
+                        item = self.addFile(f)
         self.canvas.autoRange()
 
-    def amendFile(self, f, item):
+    def addFile(self, f, name=None, inheritTransform=True):
+        """Load a file and add it to the canvas.
+        
+        The new item will inherit the user transform from the previous item
+        (chronologocally) if it does not already have a user transform specified.
         """
-        f must be a file loaded through canvas.
-        Here we update the timestamp, the list of loaded files, and fix
-        the transform if necessary
-        """
+        item = self.canvas.addFile(f, name=name)
+        self.canvas.selectItem(item)
+        
         if isinstance(item, list):
             item = item[0]
+            
         self.items[item] = f
         self.files[f] = item
         try:
@@ -163,10 +171,8 @@ class MosaicEditor(AnalysisModule):
         except:
             item.timestamp = None
 
-        #self.loaded.append(f)
-
         ## load or guess user transform for this item
-        if not item.hasUserTransform() and item.timestamp is not None:
+        if inheritTransform and not item.hasUserTransform() and item.timestamp is not None:
             ## Record the timestamp for this file, see what is the most recent transformation to copy
             best = None
             for i2 in self.items:
@@ -178,11 +184,11 @@ class MosaicEditor(AnalysisModule):
                     if best is None or i2.timestamp > best.timestamp:
                         best = i2
 
-            if best is None:
-                return
-
-            trans = best.saveTransform()
-            item.restoreTransform(trans)
+            if best is not None:
+                trans = best.saveTransform()
+                item.restoreTransform(trans)
+            
+        return item
 
     def rescaleImages(self):
         """
@@ -301,27 +307,102 @@ class MosaicEditor(AnalysisModule):
         """Return a list of all file handles that have been loaded"""
         return self.items.values()
 
-    def clear(self):
+    def clear(self, ask=True):
         """Remove all loaded data and reset to the default state.
-        """
-        self.ui.canvas.clear()
-        self.items = weakref.WeakKeyDictionary()
-        self.files = weakref.WeakValueDictionary()
-        self.cells = {}
         
-    def saveState(self):
+        If ask is True (and there are items loaded), then the user is prompted
+        before clearing. If the user declines, then this method returns False.
+        """
+        if ask and len(self.items) > 0:
+            clear = QtGui.QMessageBox.question(None, "Warning", "Really clear all items?")
+            if not clear:
+                return False
+            
+        self.ui.canvas.clear()
+        self.items.clear()
+        self.files.clear()
+        self.lastSaveFile = None
+        return True
+        
+    def saveState(self, relativeTo=None):
         """Return a serializable representation of the current state of the MosaicEditor.
         
         This includes the list of all items, their current visibility and
         parameters, and the view configuration.
         """
-        return {'canvas': self.ui.canvas.saveState()}
+        items = list(self.items.keys())
+        items.sort(key=lambda i: i.zValue())
+
+        return OrderedDict([
+            ('contents', 'MosaicEditor_save'),
+            ('version', self._saveVersion),
+            ('rootPath', relativeTo.name() if relativeTo is not None else ''),
+            ('items', [item.saveState(relativeTo=relativeTo) for item in items]),
+            ('view', self.ui.canvas.view.getState()),
+        ])
         
-    def restoreState(self, state):
-        self.ui.canvas.restoreState(state['canvas'])
+    def saveStateFile(self, filename):
+        dh = DataManager.getDirHandle(os.path.dirname(filename))
+        state = self.saveState(relativeTo=dh)
+        json.dump(state, open(filename, 'w'), indent=4, cls=Encoder)
+        
+    def restoreState(self, state, rootPath=None):
+        if state.get('contents', None) != 'MosaicEditor_save':
+            raise TypeError("This does not appear to be MosaicEditor save data.")
+        if state['version'][0] > self._saveVersion[0]:
+            raise TypeError("Save data has version %d.%d, but this MosaicEditor only supports up to version %d.x." % (state['version'][0], state['version'][1], self._saveVersion[0]))
+
+        if not self.clear():
+            return
+
+        root = state['rootPath']
+        if root == '':
+            # data was stored with no root path; filenames should be absolute
+            root = None
+        else:
+            # data was stored with no root path; filenames should be relative to the loaded file            
+            root = DataManager.getHandle(rootPath)
+            
+        for itemState in state['items']:
+            fname = itemState['filename']
+            if root is None:
+                fh = DataManager.getHandle(fh)
+            else:
+                fh = root[fname]
+            item = self.addFile(fh, name=itemState['name'], inheritTransform=False)
+            item.restoreState(itemState)
+        
+        self.ui.canvas.view.setState(state['view'])
+
+    def loadStateFile(self, filename):
+        state = json.load(open(filename, 'r'))
+        self.restoreState(state, rootPath=os.path.dirname(filename))
+
+    def saveClicked(self):
+        base = self.ui.fileLoader.baseDir()
+        if self.lastSaveFile is None:
+            path = base.name()
+        else:
+            path = self.lastSaveFile
+                
+        filename = QtGui.QFileDialog.getSaveFileName(None, "Save mosaic file", path, "Mosaic files (*.mosaic)")
+        if not filename.endswith('.mosaic'):
+            filename += '.mosaic'
+        self.lastSaveFile = filename
+        
+        self.saveStateFile(filename)
 
     def quit(self):
         self.files = None
-        self.cells = None
         self.items = None
         self.ui.canvas.clear()
+
+
+class Encoder(json.JSONEncoder):
+    """Used to clean up state for JSON export.
+    """
+    def default(self, o):
+        if isinstance(o, np.integer):
+            return int(o)
+        
+        return json.JSONEncoder.default(o)
