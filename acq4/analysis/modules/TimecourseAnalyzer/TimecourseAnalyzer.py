@@ -1,9 +1,11 @@
 from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
+from acq4.util.flowchart import *
 from collections import OrderedDict
 import numpy as np
 import acq4.pyqtgraph as pg
 from RegionParameter import RegionParameter
+import os
 #from acq4.pyqtgraph.parametertree import Parameter
 
 class TimecourseAnalyzer(AnalysisModule):
@@ -20,24 +22,31 @@ class TimecourseAnalyzer(AnalysisModule):
         ])
         self.dbGui = DatabaseGui(dm=self.dataManager(), tables=tables)
 
+        
+        flowchartDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
+        self.flowchart = Flowchart(filePath=flowchartDir)
+        self.flowchart.addInput('dataIn')
+        self.flowchart.addOutput('results')
+
         self._elements_ = OrderedDict([
             ('Database', {'type':'ctrl', 'object': self.dbGui, 'size':(100,100)}),
-            ('Analysis Regions', {'type':'parameterTree', 'pos':('above', 'Database'),'size': (100, 400)}),
-            ('File Loader', {'type':'fileInput', 'size': (100, 100), 'pos':('above', 'Analysis Regions'),'host': self}),
+            ('Analysis Options', {'type':'ctrl', 'object': self.flowchart.widget(), 'pos':('above', 'Database'),'size': (100, 400)}),
+            ('File Loader', {'type':'fileInput', 'size': (100, 100), 'pos':('above', 'Analysis Options'),'host': self}),
             ('Experiment Plot', {'type':'plot', 'pos':('right', 'File Loader'), 'size':(400, 100)}),
             ('Traces Plot', {'type': 'plot', 'pos':('bottom', 'Experiment Plot'), 'size':(400,200)}),
-            ('Results', {'type':'table', 'pos':('bottom', 'Traces Plot'), 'size': (400,200)})
+            ('Results Plot', {'type': 'plot', 'pos':('bottom', 'Traces Plot'), 'size':(400,200)}),
+            ('Results Table', {'type':'table', 'pos':('bottom', 'Traces Plot'), 'size': (400,200)})
         ])
         self.initializeElements()
 
         self.exptPlot = self.getElement('Experiment Plot', create=True)
         self.tracesPlot = self.getElement('Traces Plot', create=True)
-        self.resultsTable = self.getElement('Results', create=True)
-        self.paramTree = self.getElement('Analysis Regions', create=True) 
+        self.resultsTable = self.getElement('Results Table', create=True)
+        #self.paramTree = self.getElement('Analysis Regions', create=True) 
 
         ### initialize variables
         self.expStart = 0
-        self.traces = np.array([], dtype=[('timestamp', float), ('data', object)])
+        self.traces = np.array([], dtype=[('timestamp', float), ('data', object), ('fileHandle', object)])
         self.files = []
 
 
@@ -46,9 +55,9 @@ class TimecourseAnalyzer(AnalysisModule):
         self.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
 
-        self.addRegionParam = pg.parametertree.Parameter.create(name="Add Region", type='action')
-        self.paramTree.addParameters(self.addRegionParam)
-        self.addRegionParam.sigActivated.connect(self.newRegionRequested)
+        #self.addRegionParam = pg.parametertree.Parameter.create(name="Add Region", type='action')
+        #self.paramTree.addParameters(self.addRegionParam)
+        #self.addRegionParam.sigActivated.connect(self.newRegionRequested)
 
     def loadFileRequested(self, files):
         """Called by FileLoader when the load EPSP file button is clicked, once for each selected file.
@@ -62,7 +71,7 @@ class TimecourseAnalyzer(AnalysisModule):
 
         with pg.ProgressDialog("Loading data..", 0, n) as dlg:
             for f in files:
-                arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object)])
+                arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object), ('fileHandle', object)])
                 maxi = -1
                 for i, protoDir in enumerate(f.ls()):
                     df = self.dataModel.getClampFile(f[protoDir])
@@ -71,6 +80,7 @@ class TimecourseAnalyzer(AnalysisModule):
                         break
                     data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
+                    arr[i]['fileHandle'] = df
                     arr[i]['timestamp'] = timestamp
                     arr[i]['data'] = data
                     maxi += 1  # keep track of successfully read traces
@@ -108,12 +118,14 @@ class TimecourseAnalyzer(AnalysisModule):
 
         ### plot all the traces with timestamps within the selected region (according to self.traceSelectRgn)
         data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)
-                          *(self.traces['timestamp'] < rgn[1]+self.expStart)]['data']
+                          *(self.traces['timestamp'] < rgn[1]+self.expStart)]
         
-        for i, d in enumerate(data):
+        for i, d in enumerate(data['data']):
             self.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
-    def newRegionRequested(self):
-        self.paramTree.addParameters(RegionParameter(self.tracesPlot))
+        self.flowchart.setInput(dataIn=data[0]['fileHandle'])
+
+    #def newRegionRequested(self):
+    #    self.paramTree.addParameters(RegionParameter(self.tracesPlot))
 
         
