@@ -31,7 +31,14 @@ class Scientifica(Stage):
 
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         baudrate = config.pop('baudrate', None)
-        self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate)
+        ctrl_version = config.pop('version', 2)
+        try:
+            self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
+        except RuntimeError as err:
+            if hasattr(err, 'dev_version'):
+                raise RuntimeError(err.message + " You must add `version=%d` to the configuration for this device and double-check any speed/acceleration parameters." % int(err.dev_version))
+            else:
+                raise
 
         # Controllers reset their baud to 9600 after power cycle
         if baudrate is not None and self.dev.getBaudrate() != baudrate:
@@ -65,7 +72,7 @@ class Scientifica(Stage):
             else:
                 self.dev.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * self.scale[0]))
+        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * abs(self.scale[0])))
         
         # thread for polling position changes
         self.monitor = MonitorThread(self)
@@ -106,7 +113,7 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setSpeed(v / self.scale[0])
+        self.dev.setSpeed(v / abs(self.scale[0]))
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -215,10 +222,10 @@ class ScientificaMoveFuture(MoveFuture):
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.dev.lock:
-            self.dev.dev.moveTo(pos, speed / self.dev.scale[0])
+            self.dev.dev.moveTo(pos, speed / abs(self.dev.scale[0]))
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
-            self.dev.dev.setSpeed(userSpeed / self.dev.scale[0])
+            self.dev.dev.setSpeed(userSpeed / abs(self.dev.scale[0]))
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
