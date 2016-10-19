@@ -119,6 +119,9 @@ class Ui_MultiPatch(object):
         self.matrixLayout.setSpacing(0)
         self.matrixLayout.setObjectName(_fromUtf8("matrixLayout"))
         self.gridLayout.addWidget(self.matrixWidget, 0, 3, 9, 1)
+        self.reSealBtn = QtGui.QPushButton(MultiPatch)
+        self.reSealBtn.setObjectName(_fromUtf8("reSealBtn"))
+        self.gridLayout.addWidget(self.reSealBtn, 7, 1, 1, 1)
 
         self.retranslateUi(MultiPatch)
         QtCore.QMetaObject.connectSlotsByName(MultiPatch)
@@ -146,5 +149,6 @@ class Ui_MultiPatch(object):
         self.label.setText(_translate("MultiPatch", "Step size", None))
         self.toTargetBtn.setText(_translate("MultiPatch", "To target", None))
         self.resetBtn.setText(_translate("MultiPatch", "Reset History", None))
+        self.reSealBtn.setText(_translate("MultiPatch", "ReSeal", None))
 
 from acq4.pyqtgraph import SpinBox

@@ -124,6 +124,7 @@ class MultiPatchWindow(QtGui.QWidget):
         self.ui.sealBtn.clicked.connect(self.sealClicked)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
+        self.ui.reSealBtn.clicked.connect(self.reSeal)
 
         self.ui.fastBtn.clicked.connect(lambda: self.ui.slowBtn.setChecked(False))
         self.ui.slowBtn.clicked.connect(lambda: self.ui.fastBtn.setChecked(False))
@@ -151,6 +152,12 @@ class MultiPatchWindow(QtGui.QWidget):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
             pip.retract(self.ui.stepSizeSpin.value(), speed)
+
+    def reSeal(self):
+        speed = self.module.config.get('reSealSpeed', 1e-6)
+        distance = self.module.config.get('reSealDistance', 150e-6)
+        for pip in self.selectedPipettes():
+            pip.retract(distance, speed)
 
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
