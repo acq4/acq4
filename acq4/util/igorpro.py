@@ -6,6 +6,7 @@ import numpy as np
 import subprocess as sp
 import concurrent.futures
 import atexit
+import json
 import zmq
 
 
@@ -199,29 +200,34 @@ class ZMQIgorBridge(object):
     """Bridge to Igor via ZMQ REQ/REP."""
     _context = zmq.Context()
 
-    _types = {"NT_FP32": np.float32}
+    _types = {"NT_FP32": np.float32,
+              "NT_FP64": np.float64}
 
-    def __init__(self, host="tcp://localhost", port=5670, timeout=1000):
+    def __init__(self, host="tcp://localhost", port=5670):
         super(ZMQIgorBridge, self).__init__()
         self.address = "{}:{}".format(host, port)
-        self._socket = self._context.socket(zmq.REQ)
-        self._socket.setsockopt(zmq.RCVTIMEO, timeout)
+        self._socket = self._context.socket(zmq.DEALER)
+        self._socket.setsockopt(zmq.IDENTITY, "igorbridge")
         self._socket.connect(self.address)
 
     def __call__(self, cmd, *args, **kwds):
         # TODO: Handle optional values whenever they become supported in Igor
-        callJSON = self.formatCall(cmd, params=args)
-        self._socket.send_json(callJSON)
-        reply = self._socket.recv_json()
-        return self.parseReply(reply)
+        messageID = kwds.pop("messageID", "sync")
+        call = self.formatCall(cmd, params=args, messageID=messageID)
+        self._socket.send_multipart(call)
+        if messageID == "sync":
+            reply = json.loads(self._socket.recv_multipart()[-1])
+            return self.parseReply(reply)
 
-    def formatCall(self, cmd, params):
-        JSON = {"version": 1,
+    def formatCall(self, cmd, params, messageID="sync"):
+        call = {"version": 1,
+                "messageID": messageID,
                 "CallFunction": {
                     "name": cmd,
                     "params": params}
                 }
-        return JSON
+        msg = [b"", json.dumps(call).encode()]
+        return msg
 
     def parseReply(self, reply):
         err = reply.get("errorCode", {}).get("value", None)

@@ -49,17 +49,17 @@ class MIES(QtCore.QObject):
             raise RuntimeError("getMIESUpdate not supported in ActiveX")
 
     def processUpdate(self, future):
-        res = future.result()
-        if isinstance(res, IgorCallError):
-            # Test pulse isn't running, let's wait a little longer
-            nextCallWait = 200
-        else:
-            data = future.result()[...,0] # dimension hack when return value suddenly changed
-            if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
-                self.currentData = data
-                self.sigDataReady.emit(data)
-            nextCallWait = 0
         if not self._exiting:
+            res = future.result()
+            if isinstance(res, IgorCallError):
+                # Test pulse isn't running, let's wait a little longer
+                nextCallWait = 200
+            else:
+                data = res[...,0] # dimension hack when return value suddenly changed
+                if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
+                    self.currentData = data
+                    self.sigDataReady.emit(data)
+                nextCallWait = 0
             QtCore.QTimer.singleShot(nextCallWait, self.getMIESUpdate)
 
     def getHeadstageData(self, hs, dataIndex=None):
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             self.mies = MIES.getBridge(True)
             self.mies.sigDataReady.connect(self.printit)
             self.b = QtGui.QPushButton("stop", parent=self)
-            self.b.clicked.connect(self.mies.exit)
+            self.b.clicked.connect(self.mies.quit)
             l = QtGui.QVBoxLayout()
             l.addWidget(self.b)
             self.setLayout(l)
