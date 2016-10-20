@@ -175,12 +175,14 @@ class ImageCanvasItem(CanvasItem):
         state = CanvasItem.saveState(self, **kwds)
         state['imagestate'] = self.histogram.saveState()
         state['filter'] = self.filter.saveState()
+        state['composition'] = self.imgModeCombo.currentText()
         return state
     
     def restoreState(self, state):
         CanvasItem.restoreState(self, state)
-        self.histogram.restoreState(state['imagestate'])
         self.filter.restoreState(state['filter'])
+        self.imgModeCombo.setCurrentIndex(self.imgModeCombo.findText(state['composition']))
+        self.histogram.restoreState(state['imagestate'])
 
 
 class ImageFilterWidget(QtGui.QWidget):

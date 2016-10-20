@@ -79,7 +79,8 @@ class MosaicEditor(AnalysisModule):
             
         self.saveBtn = QtGui.QPushButton("Save ...")
         self.saveBtn.clicked.connect(self.saveClicked)
-        self.saveBtn.show()
+        l = self.ui.canvas.ui.gridLayout
+        l.addWidget(self.saveBtn, l.rowCount(), 0, 1, l.columnCount())
 
         self.ui.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
