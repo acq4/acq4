@@ -19,17 +19,25 @@ class MIESPatchPipette(PatchPipette):
     def updateState(self, TPArray):
         """Got the signal from MIES that data is available, update"""
         TPDict = self.parseTPData(TPArray)
-        for key, timeseries in self.TPData.iteritems():
-            timeseries.append(TPDict[key])
-        self.sigStateChanged.emit()
+        if TPDict:
+            for key, timeseries in self.TPData.iteritems():
+                timeseries.append(TPDict[key])
+            self.sigStateChanged.emit()
 
     def parseTPData(self, TPArray):
         """Take the incoming array and make a dictionary of it"""
-        TPData = {
-            "time": TPArray[0, self._headstage],
-            "Rss": TPArray[1, self._headstage],
-            "Rpeak": TPArray[2, self._headstage]
-            }
+        try:
+            lastTime = self.TPData["time"][-1]
+        except IndexError:
+            lastTime = 0
+        if TPArray[0, self._headstage] > lastTime:
+            TPData = {
+                "time": TPArray[0, self._headstage],
+                "Rss": TPArray[1, self._headstage],
+                "Rpeak": TPArray[2, self._headstage]
+                }
+        else:
+            TPData = {}
         return TPData
 
     def getPatchStatus(self):

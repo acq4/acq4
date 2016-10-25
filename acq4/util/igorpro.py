@@ -197,7 +197,7 @@ class IgorBridge(object):
 
 
 class ZMQIgorBridge(object):
-    """Bridge to Igor via ZMQ REQ/REP."""
+    """Bridge to Igor via ZMQ DEALER/ROUTER."""
     _context = zmq.Context()
 
     _types = {"NT_FP32": np.float32,

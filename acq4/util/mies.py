@@ -56,9 +56,8 @@ class MIES(QtCore.QObject):
                 nextCallWait = 200
             else:
                 data = res[...,0] # dimension hack when return value suddenly changed
-                if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
-                    self.currentData = data
-                    self.sigDataReady.emit(data)
+                self.currentData = data
+                self.sigDataReady.emit(data)
                 nextCallWait = 0
             QtCore.QTimer.singleShot(nextCallWait, self.getMIESUpdate)
 
