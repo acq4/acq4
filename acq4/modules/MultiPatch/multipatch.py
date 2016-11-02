@@ -29,12 +29,14 @@ class PipetteControl(QtGui.QWidget):
         self.pip = pipette
         self.moving = False
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
-        self.pip.sigStateChanged.connect(self.updatePlots)
+        self.pip.sigDataChanged.connect(self.updatePlots)
+        self.pip.sigStateChanged.connect(self.stateChanged)
         self.moveTimer = QtCore.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
+        self.ui.stateCombo.activated.connect(self.changeState)
 
         n = re.sub(r'[^\d]+', '', pipette.name())
         self.ui.selectBtn.setText(n)
@@ -58,11 +60,23 @@ class PipetteControl(QtGui.QWidget):
         return self.ui.lockBtn.isChecked()
 
     def updatePlots(self):
+        """Update the pipette data plots."""
+        # TODO: Make the information plotted selectable for future
+        #       case where we have more than just Rss and Rpeak
         t = self.pip.TPData["time"]
         rss = self.pip.TPData["Rss"]
         peak = self.pip.TPData["Rpeak"]
         self.tpPlot.plot(t, rss, clear=True)
         self.rPlot.plot(t, peak, clear=True)
+
+    def stateChanged(self, state):
+        """Pipette's state changed, reflect that in the UI"""
+        index = self.ui.stateCombo.findText(state)
+        self.ui.stateCombo.setCurrentIndex(index)
+
+    def changeState(self, stateIndex):
+        state = str(self.ui.stateCombo.itemText(stateIndex))
+        self.pip.setState(state)
 
     def positionChanged(self):
         self.moveTimer.start(500)

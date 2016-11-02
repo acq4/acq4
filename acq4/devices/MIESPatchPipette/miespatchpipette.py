@@ -9,14 +9,14 @@ class MIESPatchPipette(PatchPipette):
     """
     def __init__(self, deviceManager, config, name):
         self.mies = MIES.getBridge(True)
-        self.mies.sigDataReady.connect(self.updateState)
+        self.mies.sigDataReady.connect(self.updateTPData)
         self._headstage = config.pop('headstage')
         self.TPData = {"time": [],
                        "Rss": [],
                        "Rpeak": []}
         PatchPipette.__init__(self, deviceManager, config, name)
 
-    def updateState(self, TPArray):
+    def updateTPData(self, TPArray):
         """Got the signal from MIES that data is available, update"""
         TPDict = self.parseTPData(TPArray)
         if TPDict:
@@ -70,6 +70,7 @@ class MIESPatchPipette(PatchPipette):
         elif state == 'bath':
             self.mies.selectHeadstage(self._headstage)
             self.mies.setApproach()
+        self.sigStateChanged.emit(state)
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)
