@@ -1,4 +1,5 @@
 from ..Pipette import Pipette
+from PyQt4 import QtCore
 
 
 class PatchPipette(Pipette):
@@ -12,10 +13,13 @@ class PatchPipette(Pipette):
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
+    sigStateChanged = QtCore.Signal(object)
+
     def __init__(self, deviceManager, config, name):
         # self.clamp = config.pop('clampDevice')
 
         Pipette.__init__(self, deviceManager, config, name)
+        self.state = "out"
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -59,6 +63,11 @@ class PatchPipette(Pipette):
     def setState(self, state):
         """out, bath, approach, seal, attached, breakin, wholecell
         """
+        self.state = state
+        self.sigStateChanged.emit(self)
+
+    def getState(self):
+        return self.state
 
     def breakIn(self):
         """Rupture the cell membrane using negative current pulses.

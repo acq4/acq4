@@ -22,7 +22,7 @@ class MIESPatchPipette(PatchPipette):
         if TPDict:
             for key, timeseries in self.TPData.iteritems():
                 timeseries.append(TPDict[key])
-            self.sigStateChanged.emit()
+            self.sigDataChanged.emit()
 
     def parseTPData(self, TPArray):
         """Take the incoming array and make a dictionary of it"""
@@ -63,6 +63,10 @@ class MIESPatchPipette(PatchPipette):
         # accepts waveforms as well?
         pass
 
+    def goApproach(self, speed):
+        super(MIESPatchPipette, self).goApproach(speed)
+        self.setState("approach")
+
     def setState(self, state):
         if state == 'seal':
             self.mies.selectHeadstage(self._headstage)
@@ -70,7 +74,8 @@ class MIESPatchPipette(PatchPipette):
         elif state == 'bath':
             self.mies.selectHeadstage(self._headstage)
             self.mies.setApproach()
-        self.sigStateChanged.emit(state)
+        self.state = state
+        self.sigStateChanged.emit(self)
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)

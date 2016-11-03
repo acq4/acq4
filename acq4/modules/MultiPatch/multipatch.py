@@ -31,7 +31,8 @@ class PipetteControl(QtGui.QWidget):
         self.moving = False
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
         self.pip.sigDataChanged.connect(self.updatePlots)
-        self.pip.sigStateChanged.connect(self.stateChanged)
+        if isinstance(pipette, PatchPipette):
+            self.pip.sigStateChanged.connect(self.stateChanged)
         self.moveTimer = QtCore.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
@@ -70,14 +71,16 @@ class PipetteControl(QtGui.QWidget):
         self.tpPlot.plot(t, rss, clear=True)
         self.rPlot.plot(t, peak, clear=True)
 
-    def stateChanged(self, state):
+    def stateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
+        state = pipette.getState()
         index = self.ui.stateCombo.findText(state)
         self.ui.stateCombo.setCurrentIndex(index)
 
     def changeState(self, stateIndex):
-        state = str(self.ui.stateCombo.itemText(stateIndex))
-        self.pip.setState(state)
+        if isinstance(self.pip, PatchPipette):
+            state = str(self.ui.stateCombo.itemText(stateIndex))
+            self.pip.setState(state)
 
     def positionChanged(self):
         self.moveTimer.start(500)
@@ -117,12 +120,17 @@ class MultiPatchWindow(QtGui.QWidget):
         if len(microscopeNames) == 1:
             self.microscope = man.getDevice(microscopeNames[0])
             self.microscope.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
+        elif len(microscopeNames) == 0:
+            # flying blind?
+            self.microscope = None
         else:
             raise AssertionError("Currently only 1 microscope is supported")
 
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
             pip.sigTargetChanged.connect(self.pipetteTargetChanged)
+            if isinstance(pip, PatchPipette):
+                pip.sigStateChanged.connect(self.pipetteStateChanged)
             ctrl = PipetteControl(pip)
             ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
             ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
@@ -168,6 +176,15 @@ class MultiPatchWindow(QtGui.QWidget):
             self.xkdev = None
 
         self.resetHistory()
+
+        for i, pip in enumerate(self.pips):
+            if isinstance(pip, PatchPipette):
+                self.pipetteStateChanged(pip)
+
+        if self.microscope:
+            d = self.microscope.getSurfaceDepth()
+            if d is not None:
+                self.surfaceDepthChanged(d)
 
     def moveIn(self):
         for pip in self.selectedPipettes():
@@ -481,6 +498,12 @@ class MultiPatchWindow(QtGui.QWidget):
                  "target_position": (target[0], target[1], target[2])}
         self.recordEvent(**event)
 
+    def pipetteStateChanged(self, pipette):
+        event = {"device": str(pipette.name()),
+                 "event": "state_changed",
+                 "state": str(pipette.getState())}
+        self.recordEvent(**event)
+
     def surfaceDepthChanged(self, depth):
         event = {"device": str(self.microscope.name()),
                  "event": "surface_depth_changed",
@@ -512,6 +535,6 @@ class MultiPatchWindow(QtGui.QWidget):
         if self.storageFile is None:
             return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec) + "\n")
+            self.storageFile.write(json.dumps(rec) + ",\n")
         self.storageFile.flush()
 
