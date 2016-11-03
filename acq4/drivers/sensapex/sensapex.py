@@ -82,49 +82,66 @@ class UMP(object):
                 raise Exception("UMP Error %d: %s" % (err, errstr))
         return rval
 
-    def open(self):
+    def open(self, address=None, timeout=None):
+        """Open the UMP device at the given address.
+        
+        The default address "169.254.255.255" should suffice in most situations.
+        """
+        if address is None:
+            address = LIBUMP_DEF_BCAST_ADDRESS
+        if timeout is None:
+            timeout = LIBUMP_DEF_TIMEOUT
         if self.h is not None:
             raise TypeError("UMP is already open.")
-        addr = ctypes.create_string_buffer(LIBUMP_DEF_BCAST_ADDRESS)
-        ptr = self.lib.ump_open(addr, c_uint(LIBUMP_DEF_TIMEOUT), c_int(LIBUMP_DEF_GROUP))
+        addr = ctypes.create_string_buffer(address)
+        ptr = self.lib.ump_open(addr, c_uint(timeout), c_int(LIBUMP_DEF_GROUP))
         if ptr == 0:
             raise RuntimeError("Error connecting to UMP:", self.lib.ump_errorstr(ptr))
         self.h = pointer(ump_state.from_address(ptr))
         atexit.register(self.close)
         
     def close(self):
+        """Close the UMP device.
+        """
         self.lib.ump_close(self.h)
         self.h = None
 
     def select_dev(self, dev):
+        """Select a device from the UMP.
+        """
         self.call('select_dev', c_int(dev))
 
     def get_pos(self):
+        """Return the absolute position of the selected device.
+        """
         xyzw = c_int(), c_int(), c_int(), c_int()
         r = self.call('get_positions', *[byref(x) for x in xyzw])
         return [x.value for x in xyzw[:r]]
 
     def goto_pos(self, pos, speed, block=True):
+        """Request the selected device to move to an absolute position.
+        
+        If *block* is True, then this method only returns after ``is_busy()``
+        return False.
+        """
         pos = list(pos) + [0] * (4-len(pos))
         args = [c_int(x) for x in pos + [speed]]
         self.call('goto_position', *args)
         
         if block:
             while True:
-                self.receive()
+                self._receive()
                 if self.is_busy() == 0:
                     break
 
     def is_busy(self):
+        """Return True if the selected device is currently moving.
+        """
         status = self.call('get_status')
         busy = self.lib.ump_is_busy_status(status)
         return busy
 
-    def receive(self):
+    def _receive(self):
+        """Check for a status update packet.
+        """
         self.call('receive', 200)
-
-
-ump = UMP()
-ump.select_dev(1)
-print ump.get_pos()
-import user
