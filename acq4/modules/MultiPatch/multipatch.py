@@ -1,5 +1,6 @@
 import os, re
 import numpy as np
+import json
 from PyQt4 import QtGui, QtCore
 
 from acq4.modules.Module import Module
@@ -112,8 +113,16 @@ class MultiPatchWindow(QtGui.QWidget):
         self.pips = [man.getDevice(name) for name in pipNames]
         self.pips.sort(key=lambda p: int(re.sub(r'[^\d]+', '', p.name())))
 
+        microscopeNames = man.listInterfaces('microscope')
+        if len(microscopeNames) == 1:
+            self.microscope = man.getDevice(microscopeNames[0])
+            self.microscope.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
+        else:
+            raise AssertionError("Currently only 1 microscope is supported")
+
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
+            pip.sigTargetChanged.connect(self.pipetteTargetChanged)
             ctrl = PipetteControl(pip)
             ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
             ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
@@ -454,12 +463,29 @@ class MultiPatchWindow(QtGui.QWidget):
 
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
-        self.recordEvent('move_start', pip.pip.name())
+        event = {"device": str(pip.pip.name()),
+                 "event": "move_start"}
+        self.recordEvent(**event)
 
     def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
         pos = pip.pip.globalPosition()
-        self.recordEvent('move_stop', str(pip.pip.name()), pos[0], pos[1], pos[2])
+        event = {"device": str(pip.pip.name()),
+                 "event": "move_stop",
+                 "position": (pos[0], pos[1], pos[2])}
+        self.recordEvent(**event)
+
+    def pipetteTargetChanged(self, pipette, target):
+        event = {"device": str(pipette.name()),
+                 "event": "target_changed",
+                 "target_position": (target[0], target[1], target[2])}
+        self.recordEvent(**event)
+
+    def surfaceDepthChanged(self, depth):
+        event = {"device": str(self.microscope.name()),
+                 "event": "surface_depth_changed",
+                 "surface_depth": depth}
+        self.recordEvent(**event)
 
     def recordToggled(self, rec):
         if self.storageFile is not None:
@@ -472,20 +498,20 @@ class MultiPatchWindow(QtGui.QWidget):
             self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'a')
             self.writeRecords(self.eventHistory)
 
-    def recordEvent(self, *args):
-        self.eventHistory.append(args)
-        self.writeRecords([args])
+    def recordEvent(self, **kwds):
+        kwds["event_time"] = '%0.4f,'%pg.ptime.time()
+        self.eventHistory.append(kwds)
+        self.writeRecords([kwds])
 
     def resetHistory(self):
         self.eventHistory = []
         for pc in self.pipCtrls:
             pip = pc.pip
 
-
     def writeRecords(self, recs):
         if self.storageFile is None:
             return
         for rec in recs:
-            self.storageFile.write('%0.4f,'%pg.ptime.time() + ','.join(map(repr, rec)) + '\n')
+            self.storageFile.write(json.dumps(rec) + "\n")
         self.storageFile.flush()
 
