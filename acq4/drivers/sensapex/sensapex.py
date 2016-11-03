@@ -1,4 +1,4 @@
-import os, ctypes, atexit
+import os, ctypes, atexit, time
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, byref,
                     POINTER, pointer, Structure)
@@ -61,7 +61,28 @@ class ump_state(Structure):
 
 
 class UMP(object):
+    """Wrapper for the Sensapex uMp API.
+    
+    Example:
+    
+        ump = UMP.get_ump()
+        pos = ump.get_pos(1)  # get position for manipulator 1
+        pos[0] += 10000  # add 10 um to x axis 
+        ump.goto_pos(1, pos, speed=10)
+    """
+    _single = None
+    
+    @classmethod
+    def get_ump(cls):
+        """Return a UMP instance.
+        """
+        if cls._single is None:
+            cls._single = UMP()
+        return cls._single
+    
     def __init__(self):
+        if self._single is not None:
+            raise Exception("Won't create another UMP object. Use get_ump() instead.")
         self.lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
         self.lib.ump_errorstr.restype = c_char_p
         self.h = None
@@ -106,42 +127,82 @@ class UMP(object):
         self.lib.ump_close(self.h)
         self.h = None
 
-    def select_dev(self, dev):
-        """Select a device from the UMP.
-        """
-        self.call('select_dev', c_int(dev))
+    #def select_dev(self, dev):
+        #"""Select a device from the UMP.
+        #"""
+        #self.call('select_dev', c_int(dev))
 
-    def get_pos(self):
-        """Return the absolute position of the selected device.
+    def get_pos(self, dev, timeout=None):
+        """Return the absolute position of the specified device (in nm).
+        
+        If *timeout* == 0, then the position is returned directly from cache
+        and not queried from the device.
         """
-        xyzw = c_int(), c_int(), c_int(), c_int()
-        r = self.call('get_positions', *[byref(x) for x in xyzw])
-        return [x.value for x in xyzw[:r]]
+        if timeout is None:
+            timeout = LIBUMP_DEF_TIMEOUT
+        xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
+        timeout = c_int(timeout)
+        r = self.call('get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe])
+        return [x.value for x in xyzwe[:r]]
 
-    def goto_pos(self, pos, speed, block=True):
-        """Request the selected device to move to an absolute position.
+    def goto_pos(self, dev, pos, speed, block=False):
+        """Request the specified device to move to an absolute position (in nm).
+        
+        *speed* is given in um/sec.
         
         If *block* is True, then this method only returns after ``is_busy()``
         return False.
         """
         pos = list(pos) + [0] * (4-len(pos))
-        args = [c_int(x) for x in pos + [speed]]
-        self.call('goto_position', *args)
+        args = [c_int(int(x)) for x in [dev] + pos + [speed]]
+        self.call('goto_position_ext', *args)
         
         if block:
             while True:
-                self._receive()
-                if self.is_busy() == 0:
+                self.receive()
+                if self.is_busy(dev) == 0:
                     break
+                time.sleep(0.005)
 
-    def is_busy(self):
-        """Return True if the selected device is currently moving.
+    def is_busy(self, dev):
+        """Return True if the specified device is currently moving.
         """
-        status = self.call('get_status')
+        status = self.call('get_status_ext', c_int(dev))
         busy = self.lib.ump_is_busy_status(status)
         return busy
-
-    def _receive(self):
-        """Check for a status update packet.
+    
+    def stop_all(self):
+        """Stop all manipulators.
         """
-        self.call('receive', 200)
+        self.call('stop_all')
+        
+    def stop(self, dev):
+        """Stop the specified manipulator.
+        """
+        self.call('stop_ext', c_int(dev))
+
+    def receive(self):
+        """Receive and cache position updates for all manipulators.
+        """
+        self.call('receive', 0)
+
+
+
+class SensapexDevice(object):
+    """UMP wrapper for accessing a single sensapex manipulator.
+    """
+    def __init__(self, devid):
+        self.devid = int(devid)
+        self.ump = UMP.get_ump()
+        
+    def get_pos(self, timeout=None):
+        return self.ump.get_pos(self.devid, timeout=timeout)
+    
+    def goto_pos(self, pos, speed, block=False):
+        return self.ump.goto_pos(self.devid, pos, speed, block=block)
+    
+    def is_busy(self):
+        return self.ump.is_busy(self.devid)
+    
+    def stop(self):
+        return self.ump.stop(self.devid)
