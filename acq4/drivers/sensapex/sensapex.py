@@ -65,18 +65,13 @@ class ump_state(Structure):
 class UMP(object):
     """Wrapper for the Sensapex uMp API.
     
-    Example:
-    
-        ump = UMP.get_ump()
-        pos = ump.get_pos(1)  # get position for manipulator 1
-        pos[0] += 10000  # add 10 um to x axis 
-        ump.goto_pos(1, pos, speed=10)
+    All calls except get_ump are thread-safe.
     """
     _single = None
     
     @classmethod
     def get_ump(cls):
-        """Return a UMP instance.
+        """Return a singleton UMP instance.
         """
         if cls._single is None:
             cls._single = UMP()
@@ -195,6 +190,13 @@ class UMP(object):
 
 class SensapexDevice(object):
     """UMP wrapper for accessing a single sensapex manipulator.
+
+    Example:
+    
+        dev = SensapexDevice(1)  # get handle to manipulator 1
+        pos = dev.get_pos()
+        pos[0] += 10000  # add 10 um to x axis 
+        dev.goto_pos(pos, speed=10)
     """
     def __init__(self, devid):
         self.devid = int(devid)

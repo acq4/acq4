@@ -16,6 +16,26 @@ class Sensapex(Stage):
     def __init__(self, man, config, name):
         self.devid = config.get('deviceId')
         self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
+        self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
+        
+        # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
+        a = self.xPitch * np.pi / 180.
+        s = self.scale
+        pts1 = np.array([  # unit vector in sensapex space
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+        ])
+        pts2 = np.array([  # corresponding vector in global space
+            [0, 0, 0],
+            [s * np.cos(a), 0, -s * np.sin(a)],
+            [0, s, 0],
+            [0, 0, s],
+        ])
+        self._internalTransform = pg.Transform3D(pg.solve3DTransform(pts1, pts2))
+        self._internalInvTransform = self._internalTransform.inverted()[0]
+        
         self.dev = SensapexDevice(self.devid)
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
@@ -56,8 +76,7 @@ class Sensapex(Stage):
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = self.dev.get_pos()
-            pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
+            pos = self._internalTransaform.map(self.dev.get_pos())
             if pos != self._lastPos:
                 self._lastPos = pos
                 emit = True
@@ -151,7 +170,8 @@ class SensapexMoveFuture(MoveFuture):
         self._interrupted = False
         self._errorMSg = None
         self._finished = False
-        pos = np.array(pos) / np.array(self.dev.scale)
+        #pos = np.array(pos) / np.array(self.dev.scale)
+        pos = self.dev._internalInvTransform.map(pos)
         self.dev.dev.goto_pos(pos, speed * 1e6)
         
     def wasInterrupted(self):
