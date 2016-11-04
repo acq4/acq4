@@ -2,8 +2,10 @@ import os, ctypes, atexit, time
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, byref,
                     POINTER, pointer, Structure)
-path = os.path.abspath(os.path.dirname(__file__))
+from acq4.util.Mutex import RecursiveMutex as RLock
 
+path = os.path.abspath(os.path.dirname(__file__))
+UMP_LIBRARY = os.path.join(path, 'libump.so.1.0.0')
 
 LIBUMP_MAX_MANIPULATORS = 254
 LIBUMP_MAX_LOG_LINE_LENGTH = 256
@@ -81,27 +83,29 @@ class UMP(object):
         return cls._single
     
     def __init__(self):
+        self.lock = RLock()
         if self._single is not None:
             raise Exception("Won't create another UMP object. Use get_ump() instead.")
-        self.lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
+        self.lib = ctypes.cdll.LoadLibrary(UMP_LIBRARY)
         self.lib.ump_errorstr.restype = c_char_p
         self.h = None
         self.open()
         
     def call(self, fn, *args):
-        if self.h is None:
-            raise TypeError("UMP is not open.")
-        rval = getattr(self.lib, 'ump_' + fn)(self.h, *args)
-        if rval < 0:
-            err = self.lib.ump_last_error(self.h)
-            errstr = self.lib.ump_errorstr(err)
-            print rval, self.lib.ump_errorstr(rval)
-            if err == -1:
-                oserr = self.lib.ump_last_os_errno(self.h)
-                raise Exception("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)))
-            else:
-                raise Exception("UMP Error %d: %s" % (err, errstr))
-        return rval
+        with self.lock():
+            if self.h is None:
+                raise TypeError("UMP is not open.")
+            rval = getattr(self.lib, 'ump_' + fn)(self.h, *args)
+            if rval < 0:
+                err = self.lib.ump_last_error(self.h)
+                errstr = self.lib.ump_errorstr(err)
+                print rval, self.lib.ump_errorstr(rval)
+                if err == -1:
+                    oserr = self.lib.ump_last_os_errno(self.h)
+                    raise Exception("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)))
+                else:
+                    raise Exception("UMP Error %d: %s" % (err, errstr))
+            return rval
 
     def open(self, address=None, timeout=None):
         """Open the UMP device at the given address.
@@ -124,8 +128,9 @@ class UMP(object):
     def close(self):
         """Close the UMP device.
         """
-        self.lib.ump_close(self.h)
-        self.h = None
+        with self.lock:
+            self.lib.ump_close(self.h)
+            self.h = None
 
     #def select_dev(self, dev):
         #"""Select a device from the UMP.
@@ -167,9 +172,9 @@ class UMP(object):
     def is_busy(self, dev):
         """Return True if the specified device is currently moving.
         """
-        status = self.call('get_status_ext', c_int(dev))
-        busy = self.lib.ump_is_busy_status(status)
-        return busy
+        with self.lock:
+            status = self.call('get_status_ext', c_int(dev))
+            return self.lib.ump_is_busy_status(status)
     
     def stop_all(self):
         """Stop all manipulators.
