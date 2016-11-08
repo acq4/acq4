@@ -27,6 +27,7 @@ class TimecourseAnalyzer(AnalysisModule):
         self.flowchart = Flowchart(filePath=flowchartDir)
         self.flowchart.addInput('dataIn')
         self.flowchart.addOutput('results')
+        self.flowchart.sigChartLoaded.connect(self.connectPlots)
 
         self._elements_ = OrderedDict([
             ('Database', {'type':'ctrl', 'object': self.dbGui, 'size':(100,100)}),
@@ -58,6 +59,14 @@ class TimecourseAnalyzer(AnalysisModule):
         #self.addRegionParam = pg.parametertree.Parameter.create(name="Add Region", type='action')
         #self.paramTree.addParameters(self.addRegionParam)
         #self.addRegionParam.sigActivated.connect(self.newRegionRequested)
+
+    def connectPlots(self):
+        dp = self.getElement('Traces Plot', create=False)
+        #fp = self.getElement('Filter Plot', create=False)
+        if dp is not None and 'Plot_000' in self.flowchart.nodes().keys():
+            self.flowchart.nodes()['Plot_000'].setPlot(dp)
+        #if fp is not None and 'Plot_001' in self.flowchart.nodes().keys():
+        #    self.flowchart.nodes()['Plot_001'].setPlot(fp)
 
     def loadFileRequested(self, files):
         """Called by FileLoader when the load EPSP file button is clicked, once for each selected file.
