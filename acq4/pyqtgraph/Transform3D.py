@@ -4,12 +4,13 @@ from . import functions as fn
 from .Vector import Vector
 import numpy as np
 
+
 class Transform3D(QtGui.QMatrix4x4):
     """
     Extension of QMatrix4x4 with some helpful methods added.
     """
     def __init__(self, *args):
-        if len(args) == 1:
+        if len(args) == 1 and isinstance(args[0], (list, tuple, np.ndarray)):
             args = [x for y in args[0] for x in y]
             if len(args) != 16:
                 raise TypeError("Single argument to Transform3D must have 16 elements.")

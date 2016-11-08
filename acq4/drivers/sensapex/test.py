@@ -1,8 +1,13 @@
-import sys
-from sensapex import UMP
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from sensapex import SensapexDevice
 import user
 
-ump = UMP.get_ump()
+if len(sys.argv) != 2:
+    print "USAGE: python test.py <device_id>"
+    sys.exit(-1)
+devid = int(sys.argv[1])
+dev = SensapexDevice(devid)
 
-dev = int(sys.argv[1])
-print ump.get_pos(dev)
+print dev.get_pos()

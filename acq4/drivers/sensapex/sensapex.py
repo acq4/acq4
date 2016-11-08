@@ -1,11 +1,15 @@
-import os, ctypes, atexit, time
+import os, sys, ctypes, atexit, time
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, byref,
                     POINTER, pointer, Structure)
 from acq4.util.Mutex import RecursiveMutex as RLock
 
 path = os.path.abspath(os.path.dirname(__file__))
-UMP_LIBRARY = os.path.join(path, 'libump.so.1.0.0')
+if sys.platform == 'win32':
+    os.environ['PATH'] += ";" + path
+    UMP_LIB = ctypes.windll.ump
+else:
+    UMP_LIB = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
 
 LIBUMP_MAX_MANIPULATORS = 254
 LIBUMP_MAX_LOG_LINE_LENGTH = 256
@@ -62,6 +66,13 @@ class ump_state(Structure):
     ]
 
 
+class UMPError(Exception):
+    def __init__(self, msg, errno, oserrno):
+        Exception.__init__(self, msg)
+        self.errno = errno
+        self.oserrno = oserrno
+
+
 class UMP(object):
     """Wrapper for the Sensapex uMp API.
     
@@ -81,13 +92,13 @@ class UMP(object):
         self.lock = RLock()
         if self._single is not None:
             raise Exception("Won't create another UMP object. Use get_ump() instead.")
-        self.lib = ctypes.cdll.LoadLibrary(UMP_LIBRARY)
+        self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
         self.h = None
         self.open()
         
     def call(self, fn, *args):
-        with self.lock():
+        with self.lock:
             if self.h is None:
                 raise TypeError("UMP is not open.")
             rval = getattr(self.lib, 'ump_' + fn)(self.h, *args)
@@ -97,9 +108,9 @@ class UMP(object):
                 print rval, self.lib.ump_errorstr(rval)
                 if err == -1:
                     oserr = self.lib.ump_last_os_errno(self.h)
-                    raise Exception("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)))
+                    raise UMPError("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
-                    raise Exception("UMP Error %d: %s" % (err, errstr))
+                    raise Exception("UMP Error %d: %s" % (err, errstr), err, None)
             return rval
 
     def open(self, address=None, timeout=None):

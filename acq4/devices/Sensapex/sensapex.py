@@ -6,7 +6,7 @@ from ..Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.sensapex import SensapexDevice
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug, ptime, SpinBox
+from acq4.pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
 
 
 class Sensapex(Stage):
@@ -29,11 +29,13 @@ class Sensapex(Stage):
         ])
         pts2 = np.array([  # corresponding vector in global space
             [0, 0, 0],
-            [s * np.cos(a), 0, -s * np.sin(a)],
-            [0, s, 0],
-            [0, 0, s],
+            [s[0] * np.cos(a), 0, -s[0] * np.sin(a)],
+            [0, s[1], 0],
+            [0, 0, s[2]],
         ])
-        self._internalTransform = pg.Transform3D(pg.solve3DTransform(pts1, pts2))
+        tr = solve3DTransform(pts1, pts2)
+        tr[3,3] = 1
+        self._internalTransform = Transform3D(tr)
         self._internalInvTransform = self._internalTransform.inverted()[0]
         
         self.dev = SensapexDevice(self.devid)
@@ -76,7 +78,7 @@ class Sensapex(Stage):
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = self._internalTransaform.map(self.dev.get_pos())
+            pos = self._internalTransform.map(self.dev.get_pos()[:3])
             if pos != self._lastPos:
                 self._lastPos = pos
                 emit = True
@@ -158,7 +160,7 @@ class MonitorThread(Thread):
 
                 time.sleep(interval)
             except:
-                debug.printExc('Error in Scientifica monitor thread:')
+                debug.printExc('Error in Sensapex monitor thread:')
                 time.sleep(maxInterval)
                 
 
@@ -228,11 +230,11 @@ class SensapexMoveFuture(MoveFuture):
 
 
 
-#class ScientificaGUI(StageInterface):
+#class SensapexGUI(StageInterface):
     #def __init__(self, dev, win):
         #StageInterface.__init__(self, dev, win)
 
-        ## Insert Scientifica-specific controls into GUI
+        ## Insert Sensapex-specific controls into GUI
         #self.zeroBtn = QtGui.QPushButton('Zero position')
         #self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
         #self.nextRow += 1
