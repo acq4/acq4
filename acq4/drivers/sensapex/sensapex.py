@@ -97,6 +97,21 @@ class UMP(object):
         self.h = None
         self.open()
         
+    def list_devices(self, max_id=16):
+        """Return a list of all connected device IDs.
+        """
+        devs = []
+        for i in range(min(max_id, LIBUMP_MAX_MANIPULATORS)):
+            try:
+                p = self.get_pos(i)
+                devs.append(i)
+            except UMPError as ex:
+                if ex.errno == -5:  # device does not exist
+                    continue
+                else:
+                    raise
+        return devs
+
     def call(self, fn, *args):
         with self.lock:
             if self.h is None:
@@ -105,12 +120,11 @@ class UMP(object):
             if rval < 0:
                 err = self.lib.ump_last_error(self.h)
                 errstr = self.lib.ump_errorstr(err)
-                print rval, self.lib.ump_errorstr(rval)
                 if err == -1:
                     oserr = self.lib.ump_last_os_errno(self.h)
                     raise UMPError("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
-                    raise Exception("UMP Error %d: %s" % (err, errstr), err, None)
+                    raise UMPError("UMP Error %d: %s" % (err, errstr), err, None)
             return rval
 
     def open(self, address=None, timeout=None):
@@ -197,6 +211,15 @@ class UMP(object):
         """
         self.call('receive', 0)
 
+    def select(self, dev):
+        """Select a device on the TCU.
+        """
+        self.call('cu_select_manipulator', dev)
+
+    def set_active(self, dev, active):
+        """Set whether TCU remote control can move a manipulator.
+        """
+        self.call('cu_set_active', dev, int(active))
 
 
 class SensapexDevice(object):
@@ -224,3 +247,9 @@ class SensapexDevice(object):
     
     def stop(self):
         return self.ump.stop(self.devid)
+
+    def select(self):
+        return self.ump.select(self.devid)
+
+    def set_active(self, active):
+        return self.ump.set_active(self.devid, active)
