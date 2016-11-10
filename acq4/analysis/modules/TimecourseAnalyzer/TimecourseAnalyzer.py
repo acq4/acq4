@@ -43,6 +43,7 @@ class TimecourseAnalyzer(AnalysisModule):
         self.exptPlot = self.getElement('Experiment Plot', create=True)
         self.tracesPlot = self.getElement('Traces Plot', create=True)
         self.resultsTable = self.getElement('Results Table', create=True)
+        self.resultsTable.setSortingEnabled(False)
         #self.paramTree = self.getElement('Analysis Regions', create=True) 
 
         ### initialize variables
@@ -55,6 +56,8 @@ class TimecourseAnalyzer(AnalysisModule):
         self.traceSelectRgn.setRegion([0, 300])
         self.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
+        self.traceSelectRgn.sigRegionChangeFinished.connect(self.updateAnalysis)
+        self.flowchart.sigOutputChanged.connect(self.flowchartOutputChanged)
 
         #self.addRegionParam = pg.parametertree.Parameter.create(name="Add Region", type='action')
         #self.paramTree.addParameters(self.addRegionParam)
@@ -132,9 +135,20 @@ class TimecourseAnalyzer(AnalysisModule):
         for i, d in enumerate(data['data']):
             self.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
-        self.flowchart.setInput(dataIn=data[0]['fileHandle'])
+    def updateAnalysis(self):
+        self.resultsTable.clear()
 
-    #def newRegionRequested(self):
-    #    self.paramTree.addParameters(RegionParameter(self.tracesPlot))
+        rgn = self.traceSelectRgn.getRegion()
+        data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)
+                          *(self.traces['timestamp'] < rgn[1]+self.expStart)]
+        for i, d in enumerate(data):
+            self.flowchart.setInput(dataIn=d['fileHandle'])
+
+
+    def flowchartOutputChanged(self):
+        self.resultsTable.appendData([self.flowchart.output()['results']])
+
+    
+
 
         
