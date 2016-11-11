@@ -65,8 +65,12 @@ class XKeys(Device):
         index = config.get('index', 0)
         devs = getDevices()
         if len(devs) == 0:
-            raise Exception("No PIE devices found.")
-        self.dev = devs[index]
+            raise Exception("No X-Keys devices found.")
+        try:
+            self.dev = devs[index]
+        except IndexError:
+            devstr = ", ".join(["%d: %s" % (i, devs[i].model) for i in range(len(devs))])
+            raise ValueError("No X-Keys with device index %d. Options are: %s" % (index, devstr))
         self.model = self.dev.model
         self.keyshape = self.dev.keyshape
         self.capabilities = self.dev.capabilities
