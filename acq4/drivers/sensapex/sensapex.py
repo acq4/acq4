@@ -117,6 +117,8 @@ class UMP(object):
             if self.h is None:
                 raise TypeError("UMP is not open.")
             rval = getattr(self.lib, 'ump_' + fn)(self.h, *args)
+            if 'get_pos' not in fn:
+                print "sensapex:", rval, fn, args
             if rval < 0:
                 err = self.lib.ump_last_error(self.h)
                 errstr = self.lib.ump_errorstr(err)
@@ -185,7 +187,7 @@ class UMP(object):
         if block:
             while True:
                 self.receive()
-                if self.is_busy(dev) == 0:
+                if not self.is_busy(dev):
                     break
                 time.sleep(0.005)
 
@@ -193,8 +195,9 @@ class UMP(object):
         """Return True if the specified device is currently moving.
         """
         with self.lock:
+            self.receive()
             status = self.call('get_status_ext', c_int(dev))
-            return self.lib.ump_is_busy_status(status)
+            return bool(self.lib.ump_is_busy_status(status))
     
     def stop_all(self):
         """Stop all manipulators.
@@ -209,7 +212,7 @@ class UMP(object):
     def receive(self):
         """Receive and cache position updates for all manipulators.
         """
-        self.call('receive', 0)
+        self.call('receive', 200)
 
     def select(self, dev):
         """Select a device on the TCU.

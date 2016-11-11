@@ -79,7 +79,11 @@ class Sensapex(Stage):
         # Called by superclass when user requests position refresh
         with self.lock:
             pos = self._internalTransform.map(self.dev.get_pos()[:3])
-            if pos != self._lastPos:
+            if self._lastPos is None:
+                dif = 1
+            else:
+                dif = ((np.array(pos) - np.array(self._lastPos))**2).sum()**0.5
+            if dif > 0.1e-6:
                 self._lastPos = pos
                 emit = True
             else:
@@ -170,7 +174,7 @@ class SensapexMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
-        self._errorMSg = None
+        self._errorMsg = None
         self._finished = False
         #pos = np.array(pos) / np.array(self.dev.scale)
         pos = self.dev._internalInvTransform.map(pos)
@@ -194,7 +198,9 @@ class SensapexMoveFuture(MoveFuture):
                 return -1
             else:
                 return 1
-        if self.dev.dev.is_busy():
+        busy = self.dev.dev.is_busy()
+        print "Busy:", busy
+        if busy:
             # Still moving
             return 0
         # did we reach target?
