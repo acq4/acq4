@@ -3,7 +3,7 @@ import time
 import numpy as np
 from PyQt4 import QtGui, QtCore
 from ..Stage import Stage, MoveFuture, StageInterface
-from acq4.drivers.sensapex import SensapexDevice
+from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
@@ -13,6 +13,10 @@ class Sensapex(Stage):
     """
     A Sensapex manipulator.
     """
+    
+    monitorThread = None
+    devices = {}
+    
     def __init__(self, man, config, name):
         self.devid = config.get('deviceId')
         self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
@@ -52,8 +56,11 @@ class Sensapex(Stage):
         
         
         # thread for polling position changes
-        self.monitor = MonitorThread(self)
-        self.monitor.start()
+        if Sensapex.monitorThread is None:
+            Sensapex.monitorThread = MonitorThread()
+            Sensapex.monitorThread.start()
+            
+        Sensapex.devices[self.devid] = self
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -78,7 +85,7 @@ class Sensapex(Stage):
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = self._internalTransform.map(self.dev.get_pos()[:3])
+            pos = self._internalTransform.map(self.dev.get_pos(timeout=0)[:3])
             if self._lastPos is None:
                 dif = 1
             else:
@@ -103,7 +110,10 @@ class Sensapex(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
-        self.monitor.stop()
+        Sensapex.devices.pop(self.devid)
+        if len(Sensapex.devices) == 0:
+            Sensapex.monitorThread.stop()
+            Sensapex.monitorThread = None
         Stage.quit(self)
 
     def _move(self, abs, rel, speed, linear):
@@ -121,14 +131,11 @@ class Sensapex(Stage):
 
 
 class MonitorThread(Thread):
-    """Thread to poll for manipulator position changes.
+    """Thread to poll for all Sensapex manipulator position changes.
     """
-    def __init__(self, dev):
-        self.dev = dev
+    def __init__(self):
         self.lock = Mutex(recursive=True)
         self.stopped = False
-        self.interval = 0.3
-        
         Thread.__init__(self)
 
     def start(self):
@@ -139,33 +146,26 @@ class MonitorThread(Thread):
         with self.lock:
             self.stopped = True
 
-    def setInterval(self, i):
-        with self.lock:
-            self.interval = i
-    
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
-        lastPos = None
+        ump = UMP.get_ump()
+        devices = Sensapex.devices
         while True:
             try:
                 with self.lock:
                     if self.stopped:
                         break
-                    maxInterval = self.interval
-
-                pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
-                if pos != lastPos:
-                    # if there was a change, then loop more rapidly for a short time.
-                    interval = minInterval
-                    lastPos = pos
-                else:
-                    interval = min(maxInterval, interval*2)
-
-                time.sleep(interval)
+                try:
+                    devid = ump.recv()
+                except UMPError as err:
+                    if err.errno == -3:
+                        # ignore timeouts
+                        pass
+                dev = devices.get(devid, None)
+                if dev is not None:
+                    dev._getPosition()
             except:
                 debug.printExc('Error in Sensapex monitor thread:')
-                time.sleep(maxInterval)
+                time.sleep(1)
                 
 
 class SensapexMoveFuture(MoveFuture):
@@ -199,7 +199,6 @@ class SensapexMoveFuture(MoveFuture):
             else:
                 return 1
         busy = self.dev.dev.is_busy()
-        print "Busy:", busy
         if busy:
             # Still moving
             return 0
