@@ -154,15 +154,26 @@ class MonitorThread(Thread):
                 with self.lock:
                     if self.stopped:
                         break
-                try:
-                    devid = ump.recv()
-                except UMPError as err:
-                    if err.errno == -3:
-                        # ignore timeouts
-                        pass
-                dev = devices.get(devid, None)
-                if dev is not None:
-                    dev._getPosition()
+                    
+                # read all updates waiting in queue
+                devids = ump.recv_all()
+                
+                if len(devids) == 0:
+                    # no packets in queue; just wait for the next one.
+                    try:
+                        devids = [ump.recv()]
+                    except UMPError as err:
+                        if err.errno == -3:
+                            # ignore timeouts
+                            continue
+                
+                for devid in devids:
+                    dev = devices.get(devid, None)
+                    if dev is not None:
+                        # received an update packet for this device; ask it to update its position
+                        dev._getPosition()
+                        
+                time.sleep(0.03)  # rate-limit updates to 30 Hz 
             except:
                 debug.printExc('Error in Sensapex monitor thread:')
                 time.sleep(1)
