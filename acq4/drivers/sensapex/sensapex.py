@@ -2,7 +2,6 @@ import os, sys, ctypes, atexit, time, threading
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, byref,
                     POINTER, pointer, Structure)
-from acq4.util.Mutex import RecursiveMutex as RLock
 
 path = os.path.abspath(os.path.dirname(__file__))
 if sys.platform == 'win32':
@@ -91,7 +90,7 @@ class UMP(object):
         return cls._single
     
     def __init__(self):
-        self.lock = RLock()
+        self.lock = threading.RLock()
         if self._single is not None:
             raise Exception("Won't create another UMP object. Use get_ump() instead.")
         self._timeout = 200
