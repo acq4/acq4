@@ -38,7 +38,6 @@ class MockNIDAQ:
     def listAOChannels(self, dev):
         return self.devs[dev]['aoChans'].keys()
 
-
     def listDILines(self, dev):
         return self.devs[dev]['lines'].keys()
 
@@ -50,17 +49,9 @@ class MockNIDAQ:
 
     def listDOPorts(self, dev):
         return self.devs[dev]['ports'].keys()
-
-
-    #def __getattr__(self, attr):
-        #return lambda *args: self
     
     def listDevices(self):
         return self.devs.keys()
-    
-    #def getDevice(self, ind):
-        #return self.devName
-
 
     def createTask(self, *args):
         return self
@@ -84,11 +75,9 @@ class MockNIDAQ:
         ##print "DAQ Returning %d:%d at %f" % (start, stop, time.time())
         #return (self.data[:, start:stop], size)
         return np.zeros(size)
-        
     
     def GetReadAvailSampPerChan(self):
         return self.sampleRate * (time.time() - self.dataPtr)
-        
 
     def createTask(self):
         return Task(self)
@@ -105,8 +94,18 @@ class MockNIDAQ:
             mode = mode.lower()
             mode = modes.get(mode, None)
         return mode
-        
     
+    def interpretChannel(self, chan):
+
+        parts = chan.lstrip('/').split('/')
+        dev = parts.pop(0)
+        if len(parts) == 1 and parts[0].startswith('line'):
+            # normalize "/Dev1/line0' => ('Dev1', 'port0/line0')
+            chan = 'port0/' + parts[0]
+        else:
+            chan = '/'.join(parts)
+        return dev, chan
+
     def writeAnalogSample(self, chan, value, vRange=[-10., 10.], timeout=10.0):
         """Set the value of an AO or DO port"""
         t = self.createTask()
@@ -128,17 +127,23 @@ class MockNIDAQ:
 
     def writeDigitalSample(self, chan, value, timeout=10.):
         """Set the value of an AO or DO port"""
-        t = self.createTask()
-        t.CreateDOChan(chan, "", self.lib.Val_ChanForAllLines)
+        dev, chan = self.interpretChannel(chan)
+        chan = '/%s/%s' % (dev, chan)
+        self.devs[dev]['lines'][chan] = value
+        # t = self.createTask()
+        # t.CreateDOChan(chan, "", self.lib.Val_ChanForAllLines)
         #t.WriteDigitalScalarU32(True, timeout, value, None)
         
     def readDigitalSample(self, chan, timeout=10.0):
         """Get the value of an AI port"""
-        t = self.createTask()
-        t.CreateDIChan(chan, "", self.lib.Val_ChanForAllLines)
-        val = ctypes.c_ulong(0)
-        t.ReadDigitalScalarU32(timeout, byref(val), None)
-        return val.value
+        dev, chan = self.interpretChannel(chan)
+        chan = '/%s/%s' % (dev, chan)
+        return self.devs[dev]['lines'][chan]
+        # t = self.createTask()
+        # t.CreateDIChan(chan, "", self.lib.Val_ChanForAllLines)
+        # val = ctypes.c_ulong(0)
+        # t.ReadDigitalScalarU32(timeout, byref(val), None)
+        # return val.value
 
     def startClock(self, clock, duration):
         self.clocks[clock] = (time.time(), duration)
