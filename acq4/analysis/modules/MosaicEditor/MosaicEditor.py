@@ -76,11 +76,22 @@ class MosaicEditor(AnalysisModule):
 
         for a in atlas.listAtlases():
             self.ui.atlasCombo.addItem(a)
-            
+        
+        # Add buttons to the canvas control panel    
+        self.btnBox = QtGui.QWidget()
+        self.btnLayout = QtGui.QGridLayout()
+        self.btnLayout.setContentsMargins(0, 0, 0, 0)
+        self.btnBox.setLayout(self.btnLayout)
+        l = self.ui.canvas.ui.gridLayout
+        l.addWidget(self.btnBox, l.rowCount(), 0, 1, l.columnCount())
+
         self.saveBtn = QtGui.QPushButton("Save ...")
         self.saveBtn.clicked.connect(self.saveClicked)
-        l = self.ui.canvas.ui.gridLayout
-        l.addWidget(self.saveBtn, l.rowCount(), 0, 1, l.columnCount())
+        self.btnLayout.addWidget(self.saveBtn, 0, 0)
+
+        self.clearBtn = QtGui.QPushButton("Clear All")
+        self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
+        self.btnLayout.addWidget(self.clearBtn, 0, 1)
 
         self.ui.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
@@ -387,6 +398,8 @@ class MosaicEditor(AnalysisModule):
             path = self.lastSaveFile
                 
         filename = QtGui.QFileDialog.getSaveFileName(None, "Save mosaic file", path, "Mosaic files (*.mosaic)")
+        if filename == '':
+            return
         if not filename.endswith('.mosaic'):
             filename += '.mosaic'
         self.lastSaveFile = filename
