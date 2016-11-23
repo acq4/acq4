@@ -74,8 +74,17 @@ class Scientifica(Stage):
 
         self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * abs(self.scale[0])))
         
+        # whether to monitor for changes to a MOC
+        self.monitorObj = config.get('monitorObjective', False)
+        if self.monitorObj is True:
+            if self.dev._version < 3:
+                raise TypeError("Scientifica motion card version %s does not support reading objective position." % self.dev._version)
+            self.objectiveState = None
+            self._checkObjective()
+
         # thread for polling position changes
-        self.monitor = MonitorThread(self)
+
+        self.monitor = MonitorThread(self, self.monitorObj)
         self.monitor.start()
 
     def capabilities(self):
@@ -163,13 +172,27 @@ class Scientifica(Stage):
         print(s)
         self.dev.send('VJ %d %d %d C' % tuple(s))
 
+    def _checkObjective(self):
+        with self.lock:
+            obj = int(self.dev.send('obj'))
+            if obj != self.objectiveState:
+                self.objectiveState = obj
+                self.sigSwitchChanged.emit(self, {'objective': obj})
+
+    def getSwitch(self, name):
+        if name == 'objective' and self.monitorObj:
+            return self.objectiveState
+        else:
+            return Stage.getSwitch(name)
+
 
 class MonitorThread(Thread):
     """Thread to poll for manipulator position changes.
     """
-    def __init__(self, dev):
+    def __init__(self, dev, monitorObj):
         self.dev = dev
         self.lock = Mutex(recursive=True)
+        self.monitorObj = monitorObj
         self.stopped = False
         self.interval = 0.3
         
@@ -205,6 +228,9 @@ class MonitorThread(Thread):
                     lastPos = pos
                 else:
                     interval = min(maxInterval, interval*2)
+
+                if self.monitorObj is True:
+                    self.dev._checkObjective()
 
                 time.sleep(interval)
             except:
