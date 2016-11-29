@@ -7,6 +7,18 @@ highly modular and extensible, allowing support to be added for new types of
 devices, techniques, user-interface modules, and analyses.
 """
 
+import os, sys, re, shutil
+from subprocess import check_output
+
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
+
+import distutils.sysconfig as sysconfig
+
+
+
 setupOpts = dict(
     name='acq4',
     description='Neurophysiology acquisition and analysis platform',
@@ -18,13 +30,6 @@ setupOpts = dict(
 )
 
 
-
-from distutils.core import setup
-import distutils.dir_util
-import distutils.sysconfig
-import os, sys, re
-from subprocess import check_output
-
 ## generate list of all sub-packages
 path = os.path.abspath(os.path.dirname(__file__))
 n = len(path.split(os.path.sep))
@@ -34,7 +39,7 @@ allPackages = ['.'.join(p) for p in subdirs]
 ## Make sure build directory is clean before installing
 buildPath = os.path.join(path, 'build')
 if os.path.isdir(buildPath):
-    distutils.dir_util.remove_tree(buildPath)
+    shutil.rmtree(buildPath)
 
 
 ## Determine current version string

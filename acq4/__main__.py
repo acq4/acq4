@@ -6,13 +6,13 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 print("Loading ACQ4...")
+import os, sys
 if __package__ is None:
     import acq4
     __package__ = 'acq4'
+from . import pyqtgraph as pg
 from .pyqtgraph.Qt import QtGui, QtCore
-
-from .Manager import *
-from numpy import *
+from .Manager import Manager
 
 # Pull some args out
 if "--profile" in sys.argv:
@@ -31,6 +31,11 @@ else:
 ## Enable stack trace output when a crash is detected
 from .util.debug import enableFaulthandler
 enableFaulthandler()
+
+## Prevent Windows 7 from grouping ACQ4 windows under a single generic python icon in the taskbar
+if sys.platform == 'win32':
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('ACQ4')
 
 ## Initialize Qt
 app = pg.mkQApp()

@@ -4,6 +4,7 @@ from __future__ import division
 import pickle
 from PyQt4 import QtCore, QtGui
 import numpy as np
+import weakref
 
 import acq4.pyqtgraph as pg
 from acq4 import getManager
@@ -54,6 +55,9 @@ class Pipette(Device, OptomechDevice):
     * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 mm.
     """
+
+    sigTargetChanged = QtCore.Signal(object, object)
+
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
@@ -65,10 +69,14 @@ class Pipette(Device, OptomechDevice):
             'approachHeight': config.get('approachHeight', 100e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
+            'showCameraModuleUI': config.get('showCameraModuleUI', True),
         }
         parent = self.parentDevice()
         assert isinstance(parent, Stage)
         self.pitch = parent.pitch * np.pi / 180.
+        self._camInterfaces = weakref.WeakKeyDictionary()
+
+        self.target = None
 
         cal = self.readConfigFile('calibration')
         if cal != {}:
@@ -76,6 +84,7 @@ class Pipette(Device, OptomechDevice):
             self.setDeviceTransform(cal['transform'])
 
         self.tracker = PipetteTracker(self)
+        deviceManager.declareInterface(name, ['pipette'], self)
 
     def scopeDevice(self):
         return self._scopeDev
@@ -88,7 +97,11 @@ class Pipette(Device, OptomechDevice):
         return None
 
     def cameraModuleInterface(self, mod):
-        return PipetteCamModInterface(self, mod)
+        if self._opts['showCameraModuleUI'] is False:
+            return None
+        iface = PipetteCamModInterface(self, mod)
+        self._camInterfaces[iface] = None
+        return iface
 
     def setStageOrientation(self, angle, inverty):
         tr = pg.SRTTransform3D(self.parentDevice().baseTransform())
@@ -138,8 +151,8 @@ class Pipette(Device, OptomechDevice):
         endPosGlobal = np.asarray(startPosGlobal) + globalMove  # this is where electrode should end up in global coordinates
         endPos = self.mapFromGlobal(endPosGlobal)  # and in local coordinates
 
-        # define the path to take in local coordiantes because that makes it
-        # easier to to the boundary intersections
+        # define the path to take in local coordinates because that makes it
+        # easier to do the boundary intersections
         homeAngle = np.arctan2(endPos[2], -endPos[0])
         if homeAngle > self.pitch:
             # diagonal move to 
@@ -153,19 +166,28 @@ class Pipette(Device, OptomechDevice):
             dx = -endPos[2] / np.tan(self.pitch)
             waypoint1 = self.mapToGlobal([dx, 0, endPos[2]])
             waypoint2 = self.mapToGlobal([endPos[0], 0, endPos[2]])
-            path = [
-                (waypoint1, speed, True),
-                (waypoint2, speed, False),
-                # (endPosGlobal, speed, False),
-            ]
+            if dx > 0:  # in case home z position is below the current z pos.
+                path = [
+                    (waypoint2, speed, False),
+                ]
+            else:
+                path = [
+                    (waypoint1, speed, True),
+                    (waypoint2, speed, False),
+                ]
 
-        self._movePath(path)
+        return self._movePath(path)
 
-    def goSearch(self, speed='fast'):
+    def goSearch(self, speed='fast', distance=0):
         """Focus the microscope 2mm above the surface, then move the electrode 
         tip to 500um below the focal point of the microscope. 
 
         This position is used when searching for new electrodes.
+
+        Set *distance* to adjust the search position along the pipette's x-axis. Positive values
+        move the tip farther from the microscipe center to reduce the probability of collisions.
+        Negative values move the pipette past the center of the microscope to improve the
+        probability of seeing the tip immediately. 
         """
         # Bring focus to 2mm above surface (if needed)
         scope = self.scopeDevice()
@@ -178,28 +200,39 @@ class Pipette(Device, OptomechDevice):
 
         # Here's where we want the pipette tip in global coordinates:
         globalTarget = scope.mapToGlobal([0, 0, self._opts['searchTipHeight'] - self._opts['searchHeight']])
-        pos = self.globalPosition()
-        if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
-            raise Exception('"Search" position should only be used when electrode is far from objective.')
-
-        # compute intermediate position
+        # adjust for distance argument:
         localTarget = self.mapFromGlobal(globalTarget)
-        # local vector pointing in direction of electrode tip
-        evec = np.array([1., 0., -np.tan(self.pitch)])
-        evec /= np.linalg.norm(evec)
-        waypoint = localTarget - evec * self._opts['idleDistance']
+        localTarget[0] -= distance
+        globalTarget = self.mapToGlobal(localTarget)
 
-        path = [
-            (self.mapToGlobal(waypoint), speed, False),
-            (globalTarget, speed, True),
-        ]
-        self._movePath(path)
+        return self._moveToGlobal(globalTarget, speed)
 
-    def goApproach(self, target, speed):
+        # below is an implementation of a multi-step move to help avoid obstacles on the way to search position. This slows us down a lot and 
+        # isn't terribly clever.
+
+        # pos = self.globalPosition()
+        # if np.linalg.norm(np.asarray(globalTarget) - pos) < 5e-3:
+        #     raise Exception('"Search" position should only be used when electrode is far from objective.')
+
+        # # compute intermediate position
+        # localTarget = self.mapFromGlobal(globalTarget)
+        # # local vector pointing in direction of electrode tip
+        # evec = np.array([1., 0., -np.tan(self.pitch)])
+        # evec /= np.linalg.norm(evec)
+        # waypoint = localTarget - evec * self._opts['idleDistance']
+
+        # path = [
+        #     (self.mapToGlobal(waypoint), speed, False),
+        #     (globalTarget, speed, True),
+        # ]
+        # return self._movePath(path)
+
+    def goApproach(self, speed):
         """Move the electrode tip such that it is 100um above the sample surface with its
         axis aligned to the target. 
         """
-        self._movePath(self._approachPath(target, speed))
+        target = self.targetPosition()
+        return self._movePath(self._approachPath(target, speed))
 
     def goIdle(self, speed='fast'):
         """Move the electrode tip to the outer edge of the recording chamber, 1mm above the sample surface.
@@ -224,12 +257,12 @@ class Pipette(Device, OptomechDevice):
         angle = self.getYawAngle() * np.pi / 180
         ds = self._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
-        print(angle, ds, globalIdlePos, idleDepth)
         self._moveToGlobal(globalIdlePos, speed)
 
     def _movePath(self, path):
         # move along a path defined in global coordinates. 
         # Format is [(pos, speed, linear), ...]
+        # returns the movefuture of the last move.
 
         # Simplify path if possible
         pos = self.globalPosition()
@@ -240,8 +273,12 @@ class Pipette(Device, OptomechDevice):
                 path2.append(step)
             pos = pos2
 
+        fut = None
         for pos, speed, linear in path2:
-            self._moveToGlobal(pos, speed, linear=linear).wait(updates=True)
+            if fut is not None:
+                fut.wait(updates=True)
+            fut =self._moveToGlobal(pos, speed, linear=linear)
+        return fut
     
     def _approachPath(self, target, speed):
         # Return steps (in global coords) needed to move to approach position
@@ -285,13 +322,14 @@ class Pipette(Device, OptomechDevice):
 
         return path
 
-    def goTarget(self, target, speed):
+    def goTarget(self, speed):
+        target = self.targetPosition()
         pos = self.globalPosition()
         if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
             return
         path = self._approachPath(target, speed)
         path.append([target, 100e-6, True])
-        self._movePath(path)
+        return self._movePath(path)
 
     def approachDepth(self):
         """Return the global depth where the electrode should move to when starting approach mode.
@@ -303,6 +341,13 @@ class Pipette(Device, OptomechDevice):
         if surface is None:
             raise Exception("Surface depth has not been set.")
         return surface + self._opts['approachHeight']
+
+    def depthBelowSurface(self):
+        """Return the current depth of the pipette tip below the sample surface.
+        """
+        scope = self.scopeDevice()
+        surface = scope.getSurfaceDepth()
+        return surface - self.globalPosition()[2]
 
     def advance(self, depth, speed):
         """Move the electrode along its axis until it reaches the specified
@@ -320,6 +365,16 @@ class Pipette(Device, OptomechDevice):
         """
         return self.mapToGlobal([0, 0, 0])
 
+    def setGlobalPosition(self, pos):
+        """Set the device transform such that the pipette tip is located at the global position *pos*.
+
+        This method is for recalibration; it does not physically move the device.
+        """
+        lpos = self.mapFromGlobal(pos)
+        tr = self.deviceTransform()
+        tr.translate(*lpos)
+        self.setDeviceTransform(tr)
+
     def _moveToGlobal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
@@ -335,12 +390,32 @@ class Pipette(Device, OptomechDevice):
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
-    def goAboveTarget(self, target, speed):
+    def goAboveTarget(self, speed):
         """Move the pipette tip to be centered over the target in x/y, and 100 um above
         the sample surface in z. 
 
         This position is used to recalibrate the pipette immediately before going to approach.
         """
+        scope = self.scopeDevice()
+        waypoint1, waypoint2 = self.aboveTargetPath()
+
+        pfut = self._moveToGlobal(waypoint1, speed)
+        sfut = scope.setGlobalPosition(waypoint2)
+        pfut.wait(updates=True)
+        self._moveToGlobal(waypoint2, 'slow').wait(updates=True)
+        sfut.wait(updates=True)
+
+    def aboveTargetPath(self):
+        """Return the path to the "above target" recalibration position.
+
+        The path has 2 waypoints:
+
+        1. 100 um away from the second waypoint, on a diagonal approach. This is meant to normalize the hysteresis
+           at the second waypoint. 
+        2. This position is centered on the target, a small distance above the sample surface.
+        """
+        target = self.targetPosition()
+
         # will recalibrate 50 um above surface
         scope = self.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
@@ -354,11 +429,54 @@ class Pipette(Device, OptomechDevice):
         lwp[0] -= dz / np.tan(self.pitch)
         waypoint1 = self.mapToGlobal(lwp)
 
-        pfut = self._moveToGlobal(waypoint1, speed)
-        sfut = scope.setGlobalPosition(waypoint2)
-        pfut.wait(updates=True)
-        self._moveToGlobal(waypoint2, 'slow').wait(updates=True)
-        sfut.wait(updates=True)
+        return waypoint1, waypoint2
+
+    def advanceTowardTarget(self, distance, speed='slow'):
+        target = self.targetPosition()
+        pos = self.globalPosition()
+        dif = target - pos
+        unit = dif / (dif**2).sum()**0.5
+        waypoint = pos + distance * unit
+        return self._moveToGlobal(waypoint, speed, linear=True)
+
+    def startAdvancing(self, speed):
+        """Begin moving the pipette at a constant speed along its axis.
+
+        Positive speeds advance, negative speeds retract.
+        """
+        stage = self.parentDevice()
+        vel = [speed * np.cos(self.pitch), 0, speed * -np.sin(self.pitch)]
+        a = self.mapToParentDevice([0, 0, 0])
+        b = self.mapToParentDevice(vel)
+        stage.startMoving([b[0]-a[0], b[1]-a[1], b[2]-a[2]])
+
+    def retract(self, distance, speed='slow'):
+        """Retract the pipette a specified distance along its axis.
+        """
+        dz = distance * np.sin(self.pitch)
+        dx = -distance * np.cos(self.pitch)
+        return self._moveToLocal([dx, 0, dz], speed, linear=True) 
+
+    def setTarget(self, target):
+        self.target = np.array(target)
+        self.sigTargetChanged.emit(self, self.target)
+
+    def targetPosition(self):
+        if self.target is None:
+            raise RuntimeError("No target defined for %s" % self.name())
+        return self.target
+
+    def hideMarkers(self, hide):
+        for iface in self._camInterfaces.keys():
+            iface.hideMarkers(hide)
+
+    def focusTip(self, speed='slow'):
+        pos = self.globalPosition()
+        self.scopeDevice().setGlobalPosition(pos, speed=speed)
+
+    def focusTarget(self, speed='slow'):
+        pos = self.targetPosition()
+        self.scopeDevice().setGlobalPosition(pos, speed=speed)
 
 
 class PipetteCamModInterface(CameraModuleInterface):
@@ -368,7 +486,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def __init__(self, dev, mod):
         CameraModuleInterface.__init__(self, dev, mod)
-        self._targetPos = None
+        self._haveTarget = False
 
         self.ui = CamModTemplate()
         self.ctrl = QtGui.QWidget()
@@ -414,6 +532,8 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
         mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
+        dev.sigTargetChanged.connect(self.targetChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
@@ -435,6 +555,10 @@ class PipetteCamModInterface(CameraModuleInterface):
     def selectedSpeed(self):
         return 'fast' if self.ui.fastRadio.isChecked() else 'slow'
 
+    def hideMarkers(self, hide):
+        self.centerArrow.setVisible(not hide)
+        self.target.setVisible(not hide and self._haveTarget)
+
     def sceneMouseClicked(self, ev):
         if ev.button() != QtCore.Qt.LeftButton:
             return
@@ -445,25 +569,29 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.calibrateAxis.setPos(pos)
 
         elif self.ui.setTargetBtn.isChecked():
-            self.target.setVisible(True)
-            self.depthTarget.setVisible(True)
-            self.ui.targetBtn.setEnabled(True)
-            self.ui.approachBtn.setEnabled(True)
-            self.ui.setTargetBtn.setChecked(False)
             pos = self.mod().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
             self.setTargetPos(pos, z)
+            self.target.setRelativeDepth(0)
 
-    def setTargetPos(self, pos, z=None):
-        self.target.setPos(pos)
-        if z is None:
-            z = self._targetPos[2]
-        self.depthTarget.setPos(0, z)
-        self._targetPos = (pos.x(), pos.y(), z)
+    def setTargetPos(self, pos, z):
+        self.dev().setTarget((pos.x(), pos.y(), z))
+
+    def targetChanged(self, dev, pos):
+        self.target.setPos(pg.Point(pos[:2]))
+        self.depthTarget.setPos(0, pos[2])
+        self.target.setVisible(True)
+        self._haveTarget = True
+        self.depthTarget.setVisible(True)
+        self.ui.targetBtn.setEnabled(True)
+        self.ui.approachBtn.setEnabled(True)
+        self.ui.setTargetBtn.setChecked(False)
+        self.focusChanged()
 
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()
         self.setTargetPos(self.target.pos(), z)
+        self.target.setRelativeDepth(0)
 
     def transformChanged(self):
         # manipulator's global transform has changed; update the center arrow and orientation axis
@@ -493,6 +621,14 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.calibrateAxis.setAngle(angle)
             ys = self.calibrateAxis.size()[1]
 
+    def focusChanged(self):
+        try:
+            tdepth = self.dev().targetPosition()[2]
+        except RuntimeError:
+            return
+        fdepth = self.dev().scopeDevice().getFocusDepth()
+        self.target.setRelativeDepth(fdepth - tdepth)
+
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
         angle = self.calibrateAxis.angle()
@@ -512,10 +648,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         # next set our position offset
         pos = [pos.x(), pos.y(), z]
-        gpos = dev.mapFromGlobal(pos)
-        tr = dev.deviceTransform()
-        tr.translate(*gpos)
-        dev.setDeviceTransform(tr)
+        dev.setGlobalPosition(pos)
 
     def controlWidget(self):
         return self.ctrl
@@ -547,10 +680,10 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.ui.setTargetBtn.setChecked(False)
 
     def targetClicked(self):
-        self.getDevice().goTarget(self._targetPos, self.selectedSpeed())
+        self.getDevice().goTarget(self.selectedSpeed())
 
     def approachClicked(self):
-        self.getDevice().goApproach(self._targetPos, self.selectedSpeed())
+        self.getDevice().goApproach(self.selectedSpeed())
 
     def autoCalibrateClicked(self):
         self.getDevice().tracker.autoCalibrate()
@@ -559,9 +692,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.getDevice().tracker.takeReferenceFrames()
 
     def aboveTargetClicked(self):
-        if self._targetPos is None:
-            raise Exception("No target selected for %s" % self.getDevice().name())
-        self.getDevice().goAboveTarget(self._targetPos, self.selectedSpeed())        
+        self.getDevice().goAboveTarget(self.selectedSpeed())        
 
 
 class Target(pg.GraphicsObject):
@@ -569,10 +700,12 @@ class Target(pg.GraphicsObject):
 
     def __init__(self, movable=True):
         pg.GraphicsObject.__init__(self)
+        self._bounds = None
         self.movable = movable
         self.moving = False
         self.label = None
         self.labelAngle = 0
+        self.color = (255, 255, 0)
 
     def setLabel(self, label):
         self.label = label
@@ -582,26 +715,39 @@ class Target(pg.GraphicsObject):
         self.labelAngle = angle
         self.update()
 
+    def setRelativeDepth(self, depth):
+        # adjust the apparent depth of the target
+        dist = depth * 255 / 50e-6
+        self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
+        self.update()
+
     def boundingRect(self):
-        w = self.pixelLength(pg.Point(1, 0))
-        if w is None:
-            return QtCore.QRectF()
-        w *= 25
-        h = 25 * self.pixelLength(pg.Point(0, 1))
-        r = QtCore.QRectF(-w*2, -h*2, w*4, h*4)
-        return r
+        if self._bounds is None:
+            # too slow!
+            # w = self.pixelLength(pg.Point(1, 0))
+            # if w is None:
+            #     return QtCore.QRectF()
+            # h = self.pixelLength(pg.Point(0, 1))
+            o = self.mapToScene(QtCore.QPointF(0, 0))
+            w = abs(1.0 / (self.mapToScene(QtCore.QPointF(1, 0)) - o).x())
+            h = abs(1.0 / (self.mapToScene(QtCore.QPointF(0, 1)) - o).y())
+            self._px = (w, h)
+            w *= 21
+            h *= 21 
+            self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
+        return self._bounds
 
     def viewTransformChanged(self):
+        self._bounds = None
         self.prepareGeometryChange()
 
     def paint(self, p, *args):
         p.setRenderHint(p.Antialiasing)
-        px = self.pixelLength(pg.Point(1, 0))
-        py = self.pixelLength(pg.Point(0, 1))
+        px, py = self._px
         w = 5 * px
         h = 5 * py
         r = QtCore.QRectF(-w, -h, w*2, h*2)
-        p.setPen(pg.mkPen('y'))
+        p.setPen(pg.mkPen(self.color))
         p.setBrush(pg.mkBrush(0, 0, 255, 100))
         p.drawEllipse(r)
         p.drawLine(pg.Point(-w*2, 0), pg.Point(w*2, 0))
@@ -647,6 +793,7 @@ class Axis(pg.ROI):
         tr.rotate(90)
         self._path |= tr.map(arrow)
         self.pxLen = [1, 1]
+        self._bounds = None
 
         pg.ROI.__init__(self, pos, angle=angle, invertible=True, movable=False)
         if inverty:
@@ -666,6 +813,8 @@ class Axis(pg.ROI):
         self.sigRegionChanged.connect(self.viewTransformChanged)
 
     def viewTransformChanged(self):
+        if not self.isVisible():
+            return
         w = self.pixelLength(pg.Point(1, 0))
         if w is None:
             self._pxLen = [None, None]
@@ -680,6 +829,7 @@ class Axis(pg.ROI):
         finally:
             self.blockSignals(False)
         self.updateText()
+        self._bounds = None
         self.prepareGeometryChange()
 
     def updateText(self):
@@ -690,24 +840,25 @@ class Axis(pg.ROI):
         self.y.setPos(0, h*100)
 
     def boundingRect(self):
-        w, h = self._pxLen
-        if w is None:
-            return QtCore.QRectF()
-        w = w * 100
-        h = abs(h * 100)
-        r = QtCore.QRectF(-w, -h, w*2, h*2)
-        return r
+        if self._bounds is None:
+            w, h = self._pxLen
+            if w is None:
+                return QtCore.QRectF()
+            w = w * 100
+            h = abs(h * 100)
+            self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
+        return self._bounds
+
+    def setVisible(self, v):
+        pg.ROI.setVisible(self, v)
+        if v is True:
+            self.viewTransformChanged()
 
     def paint(self, p, *args):
         p.setRenderHint(p.Antialiasing)
         w, h = self._pxLen
-        # r = QtCore.QRectF(-w, -h, w*2, h*2)
         p.setPen(pg.mkPen('y'))
         p.setBrush(pg.mkBrush(255, 255, 0, 100))
-        # p.drawEllipse(r)
-        # p.drawLine(pg.Point(-w*2, 0), pg.Point(w*2, 0))
-        # p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
         p.scale(w, h)
         p.drawPath(self._path)
-
 

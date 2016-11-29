@@ -187,7 +187,7 @@ class Camera(DAQGeneric, OptomechDevice):
     def noFrameWarning(self, time):
         # display a warning message that no camera frames have arrived.
         # This method is only here to allow PVCam to display some useful information.
-        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % time
     
     def pushState(self, name=None):
         #print "Camera: pushState", name

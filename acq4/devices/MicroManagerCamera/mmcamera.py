@@ -151,6 +151,9 @@ class MicroManagerCamera(Camera):
                             self.mmc.getPropertyLowerLimit(self.camName, prop),
                             self.mmc.getPropertyUpperLimit(self.camName, prop),
                         )
+                    else:
+                        # just guess..
+                        vals = (1e-6, 1e3)
                 else:
                     vals = list(vals)
                 readonly = self.mmc.isPropertyReadOnly(self.camName, prop)

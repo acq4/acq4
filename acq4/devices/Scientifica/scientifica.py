@@ -31,7 +31,14 @@ class Scientifica(Stage):
 
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         baudrate = config.pop('baudrate', None)
-        self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate)
+        ctrl_version = config.pop('version', 2)
+        try:
+            self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
+        except RuntimeError as err:
+            if hasattr(err, 'dev_version'):
+                raise RuntimeError(err.message + " You must add `version=%d` to the configuration for this device and double-check any speed/acceleration parameters." % int(err.dev_version))
+            else:
+                raise
 
         # Controllers reset their baud to 9600 after power cycle
         if baudrate is not None and self.dev.getBaudrate() != baudrate:
@@ -65,10 +72,19 @@ class Scientifica(Stage):
             else:
                 self.dev.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * self.scale[0]))
+        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * abs(self.scale[0])))
         
+        # whether to monitor for changes to a MOC
+        self.monitorObj = config.get('monitorObjective', False)
+        if self.monitorObj is True:
+            if self.dev._version < 3:
+                raise TypeError("Scientifica motion card version %s does not support reading objective position." % self.dev._version)
+            self.objectiveState = None
+            self._checkObjective()
+
         # thread for polling position changes
-        self.monitor = MonitorThread(self)
+
+        self.monitor = MonitorThread(self, self.monitorObj)
         self.monitor.start()
 
     def capabilities(self):
@@ -106,7 +122,7 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setSpeed(v / self.scale[0])
+        self.dev.setSpeed(v / abs(self.scale[0]))
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -156,13 +172,27 @@ class Scientifica(Stage):
         print(s)
         self.dev.send('VJ %d %d %d C' % tuple(s))
 
+    def _checkObjective(self):
+        with self.lock:
+            obj = int(self.dev.send('obj'))
+            if obj != self.objectiveState:
+                self.objectiveState = obj
+                self.sigSwitchChanged.emit(self, {'objective': obj})
+
+    def getSwitch(self, name):
+        if name == 'objective' and self.monitorObj:
+            return self.objectiveState
+        else:
+            return Stage.getSwitch(name)
+
 
 class MonitorThread(Thread):
     """Thread to poll for manipulator position changes.
     """
-    def __init__(self, dev):
+    def __init__(self, dev, monitorObj):
         self.dev = dev
         self.lock = Mutex(recursive=True)
+        self.monitorObj = monitorObj
         self.stopped = False
         self.interval = 0.3
         
@@ -199,6 +229,9 @@ class MonitorThread(Thread):
                 else:
                     interval = min(maxInterval, interval*2)
 
+                if self.monitorObj is True:
+                    self.dev._checkObjective()
+
                 time.sleep(interval)
             except:
                 debug.printExc('Error in Scientifica monitor thread:')
@@ -215,10 +248,10 @@ class ScientificaMoveFuture(MoveFuture):
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.dev.lock:
-            self.dev.dev.moveTo(pos, speed / self.dev.scale[0])
+            self.dev.dev.moveTo(pos, speed / abs(self.dev.scale[0]))
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
-            self.dev.dev.setSpeed(userSpeed / self.dev.scale[0])
+            self.dev.dev.setSpeed(userSpeed / abs(self.dev.scale[0]))
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
