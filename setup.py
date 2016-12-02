@@ -29,7 +29,6 @@ setupOpts = dict(
     author_email='luke.campagnola@gmail.com',
 )
 
-
 ## generate list of all sub-packages
 path = os.path.abspath(os.path.dirname(__file__))
 n = len(path.split(os.path.sep))

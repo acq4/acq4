@@ -279,6 +279,10 @@ class FileHandle(QtCore.QObject):
             newDir._childChanged()
         
     def rename(self, newName):
+        """Rename this file.
+
+        *newName* should be the new name of the file *excluding* its path.
+        """
         self.checkExists()
         with self.lock:
             parent = self.parent()
@@ -288,13 +292,14 @@ class FileHandle(QtCore.QObject):
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
             info = {}
-            if parent.isManaged(oldName):
+            managed = parent.isManaged(oldName)
+            if managed:
                 info = parent._fileInfo(oldName)
                 parent.forget(oldName)
             os.rename(fn1, fn2)
             self.path = fn2
             self.manager._handleChanged(self, 'renamed', fn1, fn2)
-            if parent.isManaged(oldName):
+            if managed:
                 parent.indexFile(newName, info=info)
                 
             self.emitChanged('renamed', fn1, fn2)
