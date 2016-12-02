@@ -19,7 +19,7 @@ setupOpts = dict(
 
 
 
-from distutils.core import setup
+from setuptools import setup
 import distutils.dir_util
 import distutils.sysconfig
 import os, sys, re
