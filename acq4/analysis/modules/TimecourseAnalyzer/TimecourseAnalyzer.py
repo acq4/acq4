@@ -51,7 +51,8 @@ class TimecourseAnalyzer(AnalysisModule):
         self.tracesPlot = self.getElement('Traces Plot', create=True)
         self.resultsTable = self.getElement('Results Table', create=True)
         self.resultsTable.setSortingEnabled(False)
-        #self.paramTree = self.getElement('Analysis Regions', create=True) 
+        self.resultsPlot = self.getElement('Results Plot', create=True)
+        self.resultsPlot.getViewBox().setXLink(self.exptPlot.getViewBox()) ## link the x-axes of the exptPlot and the resultsPlot
 
         ### initialize variables
         self.expStart = 0
@@ -60,10 +61,10 @@ class TimecourseAnalyzer(AnalysisModule):
 
 
         self.traceSelectRgn = pg.LinearRegionItem()
-        self.traceSelectRgn.setRegion([0, 300])
+        self.traceSelectRgn.setRegion([0, 60])
         self.exptPlot.addItem(self.traceSelectRgn)
         self.traceSelectRgn.sigRegionChanged.connect(self.updateTracesPlot)
-        self.traceSelectRgn.sigRegionChangeFinished.connect(self.updateAnalysis)
+        #self.traceSelectRgn.sigRegionChangeFinished.connect(self.updateAnalysis)
         #self.flowchart.sigOutputChanged.connect(self.flowchartOutputChanged)
 
         #self.addRegionParam = pg.parametertree.Parameter.create(name="Add Region", type='action')
@@ -71,6 +72,14 @@ class TimecourseAnalyzer(AnalysisModule):
         #self.addRegionParam.sigActivated.connect(self.newRegionRequested)
         self.analyzeBtn.clicked.connect(self.analyzeBtnClicked)
         self.storeToDBBtn.clicked.connect(self.storeToDBBtnClicked)
+
+    def tableColumnSelected(self, column):
+        #print "ColumnSelected -- ", column
+        key = self.resultsTable.horizontalHeaderItem(column).text()
+        
+        self.resultsPlot.clear()
+        self.resultsPlot.getPlotItem().setLabel('left', text=str(key))
+        self.resultsPlot.plot([{'x':t['time'], 'y':t[str(key)]} for t in self.traces['results']], pen=None, symbol='o', symbolPen=None)
 
     def connectPlots(self):
         dp = self.getElement('Traces Plot', create=False)
@@ -144,19 +153,6 @@ class TimecourseAnalyzer(AnalysisModule):
         for i, d in enumerate(data['data']):
             self.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
-    def updateAnalysis(self):
-        self.resultsTable.clear()
-
-        rgn = self.traceSelectRgn.getRegion()
-        data = self.traces[(self.traces['timestamp'] > rgn[0]+self.expStart)
-                          *(self.traces['timestamp'] < rgn[1]+self.expStart)]
-        for i, d in enumerate(data):
-            self.flowchart.setInput(dataIn=d['fileHandle'])
-
-
-    #def flowchartOutputChanged(self):
-    #    self.resultsTable.appendData([self.flowchart.output()['results']])
-
     def analyzeBtnClicked(self, *args):
         self.resultsTable.clear()
         for i, t in enumerate(self.traces):
@@ -170,6 +166,8 @@ class TimecourseAnalyzer(AnalysisModule):
             results['CellDir'] = self.dataModel.getParent(t['fileHandle'], 'Cell')
 
             t['results'] = results
+
+        self.resultsTable.horizontalHeader().sectionClicked.connect(self.tableColumnSelected)
 
 
     def storeToDBBtnClicked(self, *args):
