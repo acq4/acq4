@@ -21,6 +21,7 @@ class TimecourseAnalyzer(AnalysisModule):
         self.flowchart = Flowchart(filePath=flowchartDir)
         self.flowchart.addInput('dataIn')
         self.flowchart.addOutput('results')
+        self.flowchart.outputNode._allowAddInput = False ## make sure all data is coming out of output['results']
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
 
         tables = OrderedDict([(self.dbIdentity+'.traces', 'TimecourseAnalyzer_traces')])
@@ -157,97 +158,52 @@ class TimecourseAnalyzer(AnalysisModule):
     #    self.resultsTable.appendData([self.flowchart.output()['results']])
 
     def analyzeBtnClicked(self, *args):
+        self.resultsTable.clear()
         for i, t in enumerate(self.traces):
-            results = self.flowchart.process(dataIn=t['fileHandle'])
-            t['results'] = results['results']
+            results = self.flowchart.process(dataIn=t['fileHandle'])['results']
+            ## make sure results has these fields regardless of what's in the flowchart
+            results['timestamp'] = t['timestamp']
+            results['time'] = results['timestamp'] - self.expStart
+            self.resultsTable.appendData([results])
+            results['ProtocolDir'] = self.dataModel.getParent(t['fileHandle'], 'Protocol')
+            results['ProtocolSequenceDir'] = self.dataModel.getParent(t['fileHandle'], 'ProtocolSequence')
+            results['CellDir'] = self.dataModel.getParent(t['fileHandle'], 'Cell')
+
+            t['results'] = results
+
 
     def storeToDBBtnClicked(self, *args):
-        #if len(self.analysisResults) == 0:
-        #    self.analyze()
 
         db = self.dbGui.getDb()
         if db is None:
             raise Exception("No database loaded.")
         
-        table = self.dbGui.getTableName(self.dbIdentity+'.traces')
+        identity = self.dbIdentity+'.traces'
+        table = self.dbGui.getTableName(identity)
 
-        trialFields = OrderedDict([
-            ('CellDir', 'directory:Cell'),
-            ('ProtocolSequenceDir', 'directory:ProtocolSequence'),
-            ('ProtocolDir', 'directory:Protocol'),
-            ('timestamp', 'real'),
-            ('time', 'real'),
-            ('rmp', 'real'),
-            ('pspSlope', 'real'),
-            ('maxSlopeTime', 'real'),
-            ('pspAmplitude', 'real'),
-            ('pspPeakTime', 'real'),
-            ('condition', 'text'),
-            ('APnumber', 'int'),
-
-            ])
-
-        db.checkTable(table, owner=self.dbIdentity+'.traces', columns=trialFields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir'], ['CellDir']])
-
-
-        data = np.zeros(len(self.traces), dtype=[
-                                                            ('CellDir', object),
-                                                            ('ProtocolSequenceDir', object),
-                                                            ('ProtocolDir', object),
-                                                            ('timestamp', float), 
-                                                            ('time', float),
-                                                            ('rmp', float), 
-                                                            #('inputResistance', float),
-                                                            #('tau', float),
-                                                            #('bridgeBalance', float)
-                                                            ('pspSlope', float),
-                                                            #('normalizedPspSlope', float),
-                                                            #('slopeFitOffset', float),
-                                                            ('maxSlopeTime', float),
-                                                            ('pspAmplitude', float),
-                                                            ('pspPeakTime', float),
-                                                            #('pspRgnStart', float),
-                                                            #('pspRgnEnd', float),
-                                                            #('analysisCtrlState', object),
-                                                            #('averageCtrlState', object),
-                                                            #('includedProtocols', object)
-                                                            ('condition', str),
-                                                            ('APnumber', int)
-                                                            ])
-
-        data['CellDir'] = self.dataModel.getParent(self.files[0], 'Cell')
-        #data['pspRgnStart'] = self.pspRgn.getRegion()[0]
-        #data['pspRgnEnd'] = self.pspRgn.getRegion()[1]
-        #data['analysisCtrlState'] = str(self.analysisCtrl.state())
-        #data['averageCtrlState'] = str(self.averageCtrl.state())
-
-        #baselineSlope = self.analysisResults[self.analysisResults['time'] < self.expStart+300]['pspSlope'].mean()
-        for i in range(len(self.traces)):
-            fh = self.traces[i]['fileHandle']
-            data[i]['ProtocolDir'] = self.dataModel.getParent(fh, 'Protocol')
-            data[i]['ProtocolSequenceDir'] = self.dataModel.getParent(fh, 'ProtocolSequence')
-            data[i]['timestamp'] = self.traces[i]['timestamp']
-            data[i]['time'] = self.traces[i]['timestamp'] - self.expStart
-            data[i]['rmp'] = self.traces[i]['results']['RMP']
-            #data[i]['inputResistance'] = self.analysisResults[i]['inputResistance']
-            data[i]['pspSlope'] = self.traces[i]['results']['slope']
-            #data[i]['normalizedPspSlope'] = self.analysisResults[i]['pspSlope']/baselineSlope
-            #data[i]['slopeFitOffset'] = self.analysisResults[i]['slopeFitOffset']
-            data[i]['maxSlopeTime'] = self.traces[i]['results']['maxSlopeTime']
-            data[i]['pspAmplitude'] = self.traces[i]['results']['amplitude']
-            #data[i]['includedProtocols'] = self.averagedTraces[i]['origTimes'] ### TODO: make this protocolDirs instead of timestamps....
-            data[i]['pspPeakTime'] = self.traces[i]['results']['pspPeakTime']
-            data[i]['condition'] = self.traces[i]['results']['condition']
-            data[i]['APnumber'] = self.traces[i]['results']['APnumber']
-
-        old = db.select(table, where={'CellDir':data['CellDir'][0]}, toArray=True)
-        if old is not None: ## only do deleting if there is already data stored for this cell
-            db.delete(table, where={'CellDir': data['CellDir'][0]})
+        data = list(self.traces['results'])
+        fields = db.describeData(data)
         
-        db.insert(table, data)
+        ## override directory fields since describeData can't guess these for us
+        fields['CellDir'] = 'directory:Cell'
+        fields['ProtocolDir'] = 'directory:Protocol'
+        fields['ProtocolSequenceDir'] = 'directory:ProtocolSequence'
 
+        with db.transaction():
+            ## Make sure target table exists and has correct columns, links to input file
+            db.checkTable(table, owner=identity, columns=fields, create=True, addUnknownColumns=True, indexes=[['ProtocolDir'], ['ProtocolSequenceDir'], ['CellDir']])
+            
+            # delete old
+            for source in set([d['ProtocolDir'] for d in data]):
+                #name = rec['SourceFile']
+                db.delete(table, where={'ProtocolDir': source})
 
-    
-
+            # write new
+            with pg.ProgressDialog("Storing data...", 0, 100) as dlg:
+                for n, nmax in db.iterInsert(table, data, chunkSize=30):
+                    dlg.setMaximum(nmax)
+                    dlg.setValue(n)
+                    if dlg.wasCanceled():
+                        raise HelpfulException("Canceled by user.", msgType='status')
 
         
