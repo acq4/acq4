@@ -4,8 +4,9 @@ from acq4.util.flowchart import *
 from collections import OrderedDict
 import numpy as np
 import acq4.pyqtgraph as pg
-from RegionParameter import RegionParameter
+#from RegionParameter import RegionParameter
 import os
+import acq4.util.debug as debug
 #from acq4.pyqtgraph.parametertree import Parameter
 
 class TimecourseAnalyzer(AnalysisModule):
@@ -22,7 +23,13 @@ class TimecourseAnalyzer(AnalysisModule):
         self.flowchart.addInput('dataIn')
         self.flowchart.addOutput('results')
         self.flowchart.outputNode._allowAddInput = False ## make sure all data is coming out of output['results']
-        self.flowchart.sigChartLoaded.connect(self.connectPlots)
+        
+
+        try:
+            ## load default chart
+            self.flowchart.loadFile(os.path.join(flowchartDir, 'default.fc'))
+        except:
+            debug.printExc('Error loading default flowchart:')
 
         tables = OrderedDict([(self.dbIdentity+'.traces', 'TimecourseAnalyzer_traces')])
         self.dbGui = DatabaseGui(dm=host.dataManager(), tables=tables)
@@ -72,6 +79,7 @@ class TimecourseAnalyzer(AnalysisModule):
         #self.addRegionParam.sigActivated.connect(self.newRegionRequested)
         self.analyzeBtn.clicked.connect(self.analyzeBtnClicked)
         self.storeToDBBtn.clicked.connect(self.storeToDBBtnClicked)
+        self.flowchart.sigChartLoaded.connect(self.connectPlots)
 
     def tableColumnSelected(self, column):
         #print "ColumnSelected -- ", column
@@ -152,6 +160,8 @@ class TimecourseAnalyzer(AnalysisModule):
         
         for i, d in enumerate(data['data']):
             self.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
+
+        self.flowchart.setInput(dataIn=data[0]['fileHandle'])
 
     def analyzeBtnClicked(self, *args):
         self.resultsTable.clear()
