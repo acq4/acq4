@@ -112,10 +112,14 @@ class TimecourseAnalyzer(AnalysisModule):
                 arr = np.zeros((len(f.ls())), dtype=[('timestamp', float), ('data', object), ('fileHandle', object), ('results', object)])
                 maxi = -1
                 for i, protoDir in enumerate(f.ls()):
+                    if not f[protoDir].isDir():
+                        print "Skipping file %s" %f[protoDir].name()
+                        continue
                     df = self.dataModel.getClampFile(f[protoDir])
                     if df is None:
-                        print 'Error in reading data file %s' % f.name()
-                        break
+                        print 'Error in reading data file %s' % f[protoDir].name()
+                        #break
+                        continue
                     data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
                     arr[i]['fileHandle'] = df
@@ -165,17 +169,21 @@ class TimecourseAnalyzer(AnalysisModule):
 
     def analyzeBtnClicked(self, *args):
         self.resultsTable.clear()
-        for i, t in enumerate(self.traces):
-            results = self.flowchart.process(dataIn=t['fileHandle'])['results']
-            ## make sure results has these fields regardless of what's in the flowchart
-            results['timestamp'] = t['timestamp']
-            results['time'] = results['timestamp'] - self.expStart
-            self.resultsTable.appendData([results])
-            results['ProtocolDir'] = self.dataModel.getParent(t['fileHandle'], 'Protocol')
-            results['ProtocolSequenceDir'] = self.dataModel.getParent(t['fileHandle'], 'ProtocolSequence')
-            results['CellDir'] = self.dataModel.getParent(t['fileHandle'], 'Cell')
-
-            t['results'] = results
+        with pg.ProgressDialog("Analyzing..", 0, len(self.traces)) as dlg:
+            for i, t in enumerate(self.traces):
+                results = self.flowchart.process(dataIn=t['fileHandle'])['results']
+                ## make sure results has these fields regardless of what's in the flowchart
+                results['timestamp'] = t['timestamp']
+                results['time'] = results['timestamp'] - self.expStart
+                self.resultsTable.appendData([results])
+                results['ProtocolDir'] = self.dataModel.getParent(t['fileHandle'], 'Protocol')
+                results['ProtocolSequenceDir'] = self.dataModel.getParent(t['fileHandle'], 'ProtocolSequence')
+                results['CellDir'] = self.dataModel.getParent(t['fileHandle'], 'Cell')
+                t['results'] = results
+                dlg += 1
+                if dlg.wasCanceled():
+                    self.resultsTable.horizontalHeader().sectionClicked.connect(self.tableColumnSelected)
+                    return
 
         self.resultsTable.horizontalHeader().sectionClicked.connect(self.tableColumnSelected)
 
