@@ -97,6 +97,17 @@ class TimecourseAnalyzer(AnalysisModule):
         #if fp is not None and 'Plot_001' in self.flowchart.nodes().keys():
         #    self.flowchart.nodes()['Plot_001'].setPlot(fp)
 
+    def clearFilesRequested(self):
+        self.expStart = 0
+        self.traces = np.array([], dtype=[('timestamp', float), ('data', object), ('fileHandle', object), ('results', object)])
+        self.files = []
+        self.updateExptPlot()
+        self.traceSelectRgn.setRegion([0, 60])
+        self.tracesPlot.clear()
+        self.resultsTable.clear()
+        self.resultsPlot.clear()
+
+
     def loadFileRequested(self, files):
         """Called by FileLoader when the load EPSP file button is clicked, once for each selected file.
                 files - a list of the file currently selected in FileLoader
@@ -143,11 +154,11 @@ class TimecourseAnalyzer(AnalysisModule):
         """Update the experiment plots with markers for the the timestamps of 
         all loaded EPSP traces, and averages (if selected in the UI)."""
 
-        if len(self.traces) == 0:
-            return
-
         self.exptPlot.clear()
         self.exptPlot.addItem(self.traceSelectRgn)
+
+        if len(self.traces) == 0:
+            return
 
         self.exptPlot.plot(x=self.traces['timestamp']-self.expStart, y=[1]*len(self.traces), pen=None, symbol='o', symbolSize=6)
 
@@ -165,7 +176,8 @@ class TimecourseAnalyzer(AnalysisModule):
         for i, d in enumerate(data['data']):
             self.tracesPlot.plot(d['primary'], pen=pg.intColor(i, len(data)))
 
-        self.flowchart.setInput(dataIn=data[0]['fileHandle'])
+        if len(data) > 0:
+            self.flowchart.setInput(dataIn=data[0]['fileHandle'])
 
     def analyzeBtnClicked(self, *args):
         self.resultsTable.clear()
