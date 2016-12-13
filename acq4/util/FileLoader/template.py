@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './acq4/util/FileLoader/template.ui'
+# Form implementation generated from reading ui file 'acq4/util/FileLoader/template.ui'
 #
-# Created: Tue Dec 24 01:49:17 2013
-#      by: PyQt4 UI code generator 4.10
+# Created: Tue Dec 13 15:21:33 2016
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(361, 557)
+        Form.resize(238, 433)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
@@ -49,20 +49,23 @@ class Ui_Form(object):
         self.dirTree.setObjectName(_fromUtf8("dirTree"))
         self.dirTree.headerItem().setText(0, _fromUtf8("1"))
         self.verticalLayout.addWidget(self.dirTree)
+        self.loadBtn = QtGui.QPushButton(self.layoutWidget)
+        self.loadBtn.setObjectName(_fromUtf8("loadBtn"))
+        self.verticalLayout.addWidget(self.loadBtn)
         self.layoutWidget1 = QtGui.QWidget(self.splitter)
         self.layoutWidget1.setObjectName(_fromUtf8("layoutWidget1"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_2.setSpacing(0)
         self.verticalLayout_2.setMargin(0)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
-        self.loadBtn = QtGui.QPushButton(self.layoutWidget1)
-        self.loadBtn.setObjectName(_fromUtf8("loadBtn"))
-        self.verticalLayout_2.addWidget(self.loadBtn)
         self.fileTree = QtGui.QTreeWidget(self.layoutWidget1)
         self.fileTree.setHeaderHidden(True)
         self.fileTree.setObjectName(_fromUtf8("fileTree"))
         self.fileTree.headerItem().setText(0, _fromUtf8("1"))
         self.verticalLayout_2.addWidget(self.fileTree)
+        self.clearBtn = QtGui.QPushButton(self.layoutWidget1)
+        self.clearBtn.setObjectName(_fromUtf8("clearBtn"))
+        self.verticalLayout_2.addWidget(self.clearBtn)
         self.label = QtGui.QLabel(self.layoutWidget1)
         self.label.setObjectName(_fromUtf8("label"))
         self.verticalLayout_2.addWidget(self.label)
@@ -78,6 +81,7 @@ class Ui_Form(object):
         Form.setWindowTitle(_translate("Form", "Form", None))
         self.setDirBtn.setText(_translate("Form", "Set Base Dir ->", None))
         self.loadBtn.setText(_translate("Form", "Load File ->", None))
+        self.clearBtn.setText(_translate("Form", "Clear", None))
         self.label.setText(_translate("Form", "Notes:", None))
 
 from acq4.util.DirTreeWidget import DirTreeWidget

@@ -8,7 +8,8 @@ from acq4.Manager import logMsg, logExc, getManager
 class FileLoader(QtGui.QWidget):
     """Interface for 1) displaying directory tree and 2) loading a file from the tree.
     You must call setHost, and the widget will call host.loadFileRequested whenever 
-    the user requests to load a file."""
+    the user requests to load a file and host.clearFilesRequested whenever the user 
+    clicks the clear button."""
     
     
     sigFileLoaded = QtCore.Signal(object)
@@ -26,9 +27,14 @@ class FileLoader(QtGui.QWidget):
         
         self.ui.setDirBtn.clicked.connect(self.setBaseClicked)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
+        self.ui.clearBtn.clicked.connect(self.clearClicked)
         self.ui.dirTree.currentItemChanged.connect(self.updateNotes) ## self.ui.dirTree is a DirTreeWidget
         self.ui.dirTree.itemDoubleClicked.connect(self.doubleClickEvent)
         self.ui.fileTree.currentItemChanged.connect(self.selectedFileChanged)
+
+        ### disable clearBtn if host does not have a clearFilesRequested function
+        if not hasattr(host, 'clearFilesRequested') and self.host is not None:
+            self.ui.clearBtn.setEnabled(False)
         
         self.ui.fileTree.setVisible(showFileTree)
         self.ui.notesTextEdit.setReadOnly(True)
@@ -81,6 +87,13 @@ class FileLoader(QtGui.QWidget):
             #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
+
+    def clearClicked(self):
+        if self.host is not None:
+            self.host.clearFilesRequested()
+        self.ui.fileTree.clear()
+        self.loaded = []
+
             
     def selectedFileChanged(self):
         self.sigSelectedFileChanged.emit(self.ui.fileTree.currentItem())
