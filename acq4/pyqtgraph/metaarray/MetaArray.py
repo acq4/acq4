@@ -1084,7 +1084,6 @@ class MetaArray(object):
                 'chunks': None,
                 'compression': None
             }
-        
             
         ## set maximum shape to allow expansion along appendAxis
         append = False
@@ -1113,14 +1112,16 @@ class MetaArray(object):
             data[tuple(sl)] = self.view(np.ndarray)
             
             ## add axis values if they are present.
+            axKeys = ["values"].extend(ops.get("appendKeys", []))
             axInfo = f['info'][str(ax)]
-            if 'values' in axInfo:
-                v = axInfo['values']
-                v2 = self._info[ax]['values']
-                shape = list(v.shape)
-                shape[0] += v2.shape[0]
-                v.resize(shape)
-                v[-v2.shape[0]:] = v2
+            for key in axKeys:
+                if key in axInfo:
+                    v = axInfo[key]
+                    v2 = self._info[ax][key]
+                    shape = list(v.shape)
+                    shape[0] += v2.shape[0]
+                    v.resize(shape)
+                    v[-v2.shape[0]:] = v2
             f.close()
         else:
             f = h5py.File(fileName, 'w')
