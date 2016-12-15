@@ -261,35 +261,6 @@ class CameraWindow(QtGui.QMainWindow):
         # update ROI plots
         self.roiWidget.newFrame(iface, frame)
     
-    def ifaceTransformChanged(self, iface):
-        # imaging device moved; update viewport and tracked group.
-        # This is only used when the camera is not running--
-        # if the camera is running, then this is taken care of in drawFrame to
-        # ensure that the image remains stationary on screen.
-        prof = Profiler()
-        if not self.cam.isRunning():
-            tr = pg.SRTTransform(self.cam.globalTransform())
-            self.updateTransform(tr)
-            
-    def updateTransform(self, tr):
-        # update view for new transform such that sensor bounds remain stationary on screen.
-        pos = tr.getTranslation()
-        
-        scale = tr.getScale()
-        if scale != self.lastCameraScale:
-            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
-            self.view.scaleBy(scale / self.lastCameraScale)
-            pg.QtGui.QApplication.processEvents()
-            anchor2 = self.view.mapDeviceToView(anchor)
-            diff = pos - anchor2
-            self.lastCameraScale = scale
-        else:
-            diff = pos - self.lastCameraPosition
-            
-        self.view.translateBy(diff)
-        self.lastCameraPosition = pos
-        self.cameraItemGroup.setTransform(tr)
-    
 
 class CameraModuleInterface(QtCore.QObject):
     """ Base class used to plug new interfaces into the camera module.
