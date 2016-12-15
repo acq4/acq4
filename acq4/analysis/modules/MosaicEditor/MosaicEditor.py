@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-#from flowchart import *
 import os
 import glob
 import json
@@ -17,7 +16,7 @@ from PyQt4 import QtGui, QtCore
 from MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
-
+from acq4.util.Canvas.Canvas import Canvas
 
 class MosaicEditor(AnalysisModule):
     """
@@ -53,17 +52,18 @@ class MosaicEditor(AnalysisModule):
         self.ui = Ui_Form()
         self.ui.setupUi(self.ctrl)
         self.atlas = None
-        self.canvas = None # grab canvas information when loading files
+        self.canvas = Canvas(name='MosaicEditor')
 
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
-            ('Mosaic', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('right',), 'size': (600, 200)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Mosaic'), 'size': (600, 800), 'args': {'name': 'MosaicEditor'}}),
+            ('Mosaic', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('right',), 'size': (600, 100)}),
+            ('Canvas', {'type': 'ctrl', 'object': self.canvas.ui.view, 'pos': ('bottom', 'Mosaic'), 'size': (600, 800)}),
+            ('ItemList', {'type': 'ctrl', 'object': self.canvas.ui.canvasCtrlWidget, 'pos': ('right', 'Canvas'), 'size': (200, 400)}),
+            ('ItemCtrl', {'type': 'ctrl', 'object': self.canvas.ui.canvasItemCtrl, 'pos': ('bottom', 'ItemList'), 'size': (200, 400)}),
         ])
 
         self.initializeElements()
 
-        self.ui.canvas = self.getElement('Canvas', create=True)
         self.clear(ask=False)
 
         self.ui.fileLoader = self.getElement('File Loader', create=True)
@@ -82,7 +82,7 @@ class MosaicEditor(AnalysisModule):
         self.btnLayout = QtGui.QGridLayout()
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
         self.btnBox.setLayout(self.btnLayout)
-        l = self.ui.canvas.ui.gridLayout
+        l = self.canvas.ui.gridLayout
         l.addWidget(self.btnBox, l.rowCount(), 0, 1, l.columnCount())
 
         self.saveBtn = QtGui.QPushButton("Save ...")
@@ -93,7 +93,7 @@ class MosaicEditor(AnalysisModule):
         self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
         self.btnLayout.addWidget(self.clearBtn, 0, 1)
 
-        self.ui.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
+        self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
         self.ui.normalizeBtn.clicked.connect(self.normalizeImages)
         self.ui.tileShadingBtn.clicked.connect(self.rescaleImages)
@@ -133,7 +133,6 @@ class MosaicEditor(AnalysisModule):
         self.atlas = ctrl
 
     def loadFileRequested(self, files):
-        self.canvas = self.getElement('Canvas')
         if files is None:
             return
 
@@ -330,7 +329,7 @@ class MosaicEditor(AnalysisModule):
             if not clear:
                 return False
             
-        self.ui.canvas.clear()
+        self.canvas.clear()
         self.items.clear()
         self.files.clear()
         self.lastSaveFile = None
@@ -350,7 +349,7 @@ class MosaicEditor(AnalysisModule):
             ('version', self._saveVersion),
             ('rootPath', relativeTo.name() if relativeTo is not None else ''),
             ('items', [item.saveState(relativeTo=relativeTo) for item in items]),
-            ('view', self.ui.canvas.view.getState()),
+            ('view', self.canvas.view.getState()),
         ])
         
     def saveStateFile(self, filename):
@@ -384,7 +383,7 @@ class MosaicEditor(AnalysisModule):
             item = self.addFile(fh, name=itemState['name'], inheritTransform=False)
             item.restoreState(itemState)
         
-        self.ui.canvas.view.setState(state['view'])
+        self.canvas.view.setState(state['view'])
 
     def loadStateFile(self, filename):
         state = json.load(open(filename, 'r'))
@@ -409,7 +408,7 @@ class MosaicEditor(AnalysisModule):
     def quit(self):
         self.files = None
         self.items = None
-        self.ui.canvas.clear()
+        self.canvas.clear()
 
 
 class Encoder(json.JSONEncoder):
