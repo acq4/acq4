@@ -91,15 +91,19 @@ class ImageCanvasItem(CanvasItem):
 
         self.histogram = pg.HistogramLUTWidget()
         self.histogram.setImageItem(self.graphicsItem())
-        self.blockHistogram = False
 
         # addWidget arguments: row, column, rowspan, colspan 
         self.splitter.addWidget(self.histogram)
 
         self.imgModeCombo = QtGui.QComboBox()
         self.imgModeCombo.addItems(['SourceOver', 'Overlay', 'Plus', 'Multiply'])
-        self.layout.addWidget(self.imgModeCombo, self.layout.rowCount(), 0, 1, 2)
+        self.layout.addWidget(self.imgModeCombo, self.layout.rowCount(), 0, 1, 1)
         self.imgModeCombo.currentIndexChanged.connect(self.imgModeChanged)
+        
+        self.autoBtn = QtGui.QPushButton("Auto")
+        self.autoBtn.setCheckable(True)
+        self.autoBtn.setChecked(True)
+        self.layout.addWidget(self.autoBtn, self.layout.rowCount()-1, 1, 1, 1)
 
         self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
@@ -164,9 +168,9 @@ class ImageCanvasItem(CanvasItem):
         if showTime:
             self.timeSlider.setMinimum(0)
             self.timeSlider.setMaximum(data.shape[0]-1)
-            self.graphicsItem().setImage(data[self.timeSlider.value()])
+            self.graphicsItem().setImage(data[self.timeSlider.value()], autoLevels=self.autoBtn.isChecked())
         else:
-            self.graphicsItem().setImage(data)
+            self.graphicsItem().setImage(data, autoLevels=self.autoBtn.isChecked())
 
         for widget in self.timeControls:
             widget.setVisible(showTime)
