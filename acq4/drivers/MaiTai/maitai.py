@@ -10,6 +10,44 @@ except ValueError:
         from SerialDevice import SerialDevice, TimeoutError, DataError
 
 
+StatusErrorCodesPumpLaser = {
+    1: ('Laser ON, Power Mode OK'),
+    2: ('Laser ON, CurrentMode OK'),
+    3: (' Laser ON, Power Mode Adjust'),
+    4: (' Laser ON, Current Mode Adjust'),
+    5: (' Laser Diodes OFF, Ready'),
+    6: (' Sleep Mode OK'),
+    56: ('Watchdog expired, Turn laser key'),
+    58: ('Watchdog working normally'),
+    88: ('Diode Therm Short'),
+    89: (' Diode Therm Open'),
+    90: ('Diode MaxT Exceed'),
+    91: ('Diode Over Temperature'),
+    92: ('Diode Under Temperature'),
+    100: ('Diode Temperature'),
+    101: ('HSink Over Temperature'),
+    102: ('HSink Under Temperature'),
+    103: ('HSink Therm Short'),
+    104: ('HSink Therm Open'),
+    105: ('HSink MaxT Exceed'),
+    106: ('Tower Temperature'),
+    116: ('Interlocks Cleared'),
+    117: ('Fuse Interlock'),
+    118: ('System Interlock'),
+    119: ('User Interlock'),
+    120: ('Key Switch ILK'),
+    121: ('Remote Interlock'),
+    122: ('Head Interlock'),
+    123: ('Boot test Fail'),
+    131: ('Head overtemp check chiller'),
+    201: ('Current Calibration Diode 1'),
+    202: ('Current Calibration Diode 2'),
+    205: ('Temperature Calibration Diode 1'),
+    206: ('Temperature Calibration Diode 2'),
+    209: (' SHG temperature Setting'),
+}
+
+
 StatusErrorCodes = {
     400: ('System just finished boot'),
     405: ('System ON'),
@@ -163,6 +201,15 @@ class MaiTai(SerialDevice):
             return StatusErrorCodes[lhist[0]]
         else:
             return ("Unknown status/error code %s" % lhist[0])
+   
+   def getHistoryBufferPumpLaser(self):
+        """ returns the content of the history buffer for the status and error codes of the pump laser operation """
+        historyPL = self['PLASer:AHISTory?']
+        lhistPL = [int(k) for k in historyPL.split()]
+        if lhistPL[0] in StatusErrorCodesPumpLaser:
+            return StatusErrorCodesPumpLaser[lhistPL[0]]
+        else:
+            return ("Unknown Pump Laser status/error code %s" % lhistPL[0])
     
     def getP2Status(self):
         """ returns P2 pump optimization status. The values returned are servos active (TRUE) or inactive(FALSE). """

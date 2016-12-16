@@ -16,6 +16,7 @@ class MaiTaiLaser(Laser):
     sigModeChanged = QtCore.Signal(object)
     sigP2OptimizationChanged = QtCore.Signal(object)
     sigHistoryBufferChanged = QtCore.Signal(object)
+    sigHistoryBufferPumpLaserChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
@@ -43,6 +44,7 @@ class MaiTaiLaser(Laser):
         self.mThread.sigMoChanged.connect(self.modeChanged)
         self.mThread.sigP2OChanged.connect(self.p2OptimizationChanged)
         self.mThread.sigHChanged.connect(self.historyBufferChanged)
+        self.mThread.sigHPLChanged.connect(self.historyBufferPumpLaserChanged)
         self.mThread.start()
         
         Laser.__init__(self, dm, config, name)
@@ -104,6 +106,11 @@ class MaiTaiLaser(Laser):
         with self.maiTaiLock:
             self.maiTaiHistory = hist
             self.sigHistoryBufferChanged.emit(hist)
+    
+    def historyBufferPumpLaserChanged(self, histPL):
+        with self.maiTaiLock:
+            self.maiTaiPumpLaserHistory = histPL
+            self.sigHistoryBufferPumpLaserChanged.emit(histPL)
     
     def humidity(self):
         with self.maiTaiLock:
@@ -204,6 +211,7 @@ class MaiTaiThread(Thread):
     sigMoChanged = QtCore.Signal(object)
     sigP2OChanged = QtCore.Signal(object)
     sigHChanged = QtCore.Signal(object)
+    sigHPLChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
@@ -252,6 +260,7 @@ class MaiTaiThread(Thread):
                     mode = self.driver.getPumpMode()
                     p2Optimization = self.driver.getP2Status()
                     status = self.driver.getHistoryBuffer()
+                    statusPumpLaser = self.driver.getHistoryBufferPumpLaser()
                     if self.alignmentMode:
                         self.adjustPumpPower(power)
                     
@@ -263,6 +272,7 @@ class MaiTaiThread(Thread):
                 self.sigMoChanged.emit(mode)
                 self.sigP2OChanged.emit(p2Optimization)
                 self.sigHChanged.emit(status)
+                self.sigHPLChanged.emit(statusPumpLaser)
                 time.sleep(0.5)
             except:
                 debug.printExc("Error in MaiTai laser communication thread:")

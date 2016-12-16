@@ -72,6 +72,7 @@ class MaiTaiDevGui(LaserDevGui):
         self.dev.sigModeChanged.connect(self.modeChanged)
         self.dev.sigP2OptimizationChanged.connect(self.p2OptimizationChanged)
         self.dev.sigHistoryBufferChanged.connect(self.historyBufferChanged)
+        self.dev.sigHistoryBufferPumpLaserChanged.connect(self.historyBufferPumpLaserChanged)
         
     def onOffToggled(self, b):
         if b:
@@ -189,6 +190,12 @@ class MaiTaiDevGui(LaserDevGui):
             self._maitaiui.systemStatusLabel.setText("?")
         else:
             self._maitaiui.systemStatusLabel.setText(str(hist))
+    
+    def historyBufferPumpLaserChanged(self, histPL):
+        if histPL is None:
+            self._maitaiui.pumpLaserSystemStatusLabel.setText("?")
+        else:
+            self._maitaiui.pumpLaserSystemStatusLabel.setText(str(histPL))
     
     def pumpPowerChanged(self,pumpPower):
         if pumpPower is None:
