@@ -202,7 +202,7 @@ class MaiTai(SerialDevice):
         else:
             return ("Unknown status/error code %s" % lhist[0])
    
-   def getHistoryBufferPumpLaser(self):
+    def getHistoryBufferPumpLaser(self):
         """ returns the content of the history buffer for the status and error codes of the pump laser operation """
         historyPL = self['PLASer:AHISTory?']
         lhistPL = [int(k) for k in historyPL.split()]
