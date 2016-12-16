@@ -325,8 +325,9 @@ class MosaicEditor(AnalysisModule):
         before clearing. If the user declines, then this method returns False.
         """
         if ask and len(self.items) > 0:
-            clear = QtGui.QMessageBox.question(None, "Warning", "Really clear all items?")
-            if not clear:
+            response = QtGui.QMessageBox.question(self.clearBtn, "Warning", "Really clear all items?", 
+                QtGui.QMessageBox.Ok|QtGui.QMessageBox.Cancel)
+            if response != QtGui.QMessageBox.Ok:
                 return False
             
         self.canvas.clear()
