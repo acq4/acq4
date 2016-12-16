@@ -106,7 +106,7 @@ class MultiPatchWindow(QtGui.QWidget):
 
             self.pipCtrls.append(ctrl)
 
-        self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
+        self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
 
