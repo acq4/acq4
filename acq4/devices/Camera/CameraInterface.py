@@ -27,6 +27,8 @@ class CameraInterface(CameraModuleInterface):
     """
     
     sigNewFrame = QtCore.Signal(object, object)  # self, frame
+    sigStarted = QtCore.Signal(object)
+    sigStopped = QtCore.Signal(object)
     
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
@@ -35,6 +37,7 @@ class CameraInterface(CameraModuleInterface):
         self.view = module.getView()
         self.hasQuit = False
         self.boundaryItems = {}
+        self._trackView = False
 
         ## setup UI
         self.ui = CameraInterfaceTemplate()
@@ -136,7 +139,6 @@ class CameraInterface(CameraModuleInterface):
     def openCamera(self, ind=0):
         try:
             self.bitDepth = self.cam.getParam('bitDepth')
-            #self.setLevelRange()
             self.camSize = self.cam.getParam('sensorSize')
             self.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.cam.getScopeDevice()
@@ -149,12 +151,14 @@ class CameraInterface(CameraModuleInterface):
             bins.reverse()
             for b in bins:
                 self.ui.binningCombo.addItem(str(b))
-
-
         except:
             self.showMessage("Error opening camera")
             raise
-    
+
+    def setViewTracking(self, track):
+        # called by camera module when its view should track the motion of this device.
+        self._trackView = track
+
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
@@ -170,7 +174,8 @@ class CameraInterface(CameraModuleInterface):
         
         ## Update viewport to correct for scope movement/scaling
         tr = pg.SRTTransform(frame.deviceTransform())
-        self.updateTransform(tr)
+        if self._trackView:
+            self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
             
@@ -181,7 +186,8 @@ class CameraInterface(CameraModuleInterface):
         scale = tr.getScale()
         if scale != self.lastCameraScale:
             anchor = self.view.mapViewToDevice(self.lastCameraPosition)
-            self.view.scaleBy(scale / self.lastCameraScale)
+            if self._trackView:
+                self.view.scaleBy(scale / self.lastCameraScale)
             pg.QtGui.QApplication.processEvents()
             anchor2 = self.view.mapDeviceToView(anchor)
             diff = pos - anchor2
@@ -189,7 +195,8 @@ class CameraInterface(CameraModuleInterface):
         else:
             diff = pos - self.lastCameraPosition
             
-        self.view.translateBy(diff)
+        if self._trackView:
+            self.view.translateBy(diff)
         self.lastCameraPosition = pos
         self.cameraItemGroup.setTransform(tr)
 
@@ -226,9 +233,14 @@ class CameraInterface(CameraModuleInterface):
 
     def cameraStopped(self):
         self.imagingCtrl.acquisitionStopped()
+        self.sigStopped.emit(self)
 
     def cameraStarted(self):
         self.imagingCtrl.acquisitionStarted()
+        self.sigStarted.emit(self)
+
+    def isRunning(self):
+        return self.cam.isRunning()
 
     def binningComboChanged(self, args):
         self.setBinning(*args)

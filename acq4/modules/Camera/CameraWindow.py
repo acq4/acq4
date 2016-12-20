@@ -57,7 +57,7 @@ class CameraWindow(QtGui.QMainWindow):
         # Add a group that will track to the center of the view
         # self.trackedGroup = pg.GroupItem()
         # self.view.addItem(self.trackedGroup)
-
+        
         # search for all devices that provide a cameraModuleInterface() method
         man = Manager.getManager()
         devices = [man.getDevice(dev) for dev in man.listDevices()]
@@ -147,17 +147,16 @@ class CameraWindow(QtGui.QMainWindow):
             self.docks[name] = None
         if hasattr(iface, 'sigNewFrame'):
             iface.sigNewFrame.connect(self.newFrame)
-        if hasattr(iface, 'sigTransformChanged'):
-            iface.sigTransformChanged.connect(self.ifaceTransformChanged)
+        iface.sigStarted.connect(self.updateViewTracking)
+        iface.sigStopped.connect(self.updateViewTracking)
 
         self.sigInterfaceAdded.emit(name, iface)
+        self.updateViewTracking()
 
     def removeInterface(self, name):
         self.interfaces[name].quit()
 
     def _removeInterface(self, iface):
-        print "======== remove", iface
-        print self.interfaces
         name = None
         if isinstance(iface, CameraModuleInterface):
             for k,v in self.interfaces.items():
@@ -174,13 +173,30 @@ class CameraWindow(QtGui.QMainWindow):
         iface = self.interfaces.pop(name)
         if hasattr(iface, 'sigNewFrame'):
             pg.disconnect(iface.sigNewFrame, self.newFrame)
-        if hasattr(iface, 'sigTransformChanged'):
-            pg.disconnect(iface.sigTransformChanged, self.ifaceTransformChanged)
+        pg.disconnect(iface.sigStarted, self.updateViewTracking)
+        pg.disconnect(iface.sigStopped, self.updateViewTracking)
+        
         dock = self.docks.pop(name, None)
         if dock is not None:
             dock.close()
 
         self.sigInterfaceRemoved.emit(name, iface)
+
+    def updateViewTracking(self):
+        """Select a single interface to track.
+        """
+        trackedIface = None
+        for iface in self.interfaces.values():
+            if iface.canImage:
+                # track imaging devices if there are any
+                trackedIface = iface
+                # prefer imaging devices that are running
+                if iface.isRunning():
+                    break
+
+        # Update view tracking option for all interfaces 
+        for iface in self.interfaces.values():
+            iface.setViewTracking(iface is trackedIface)
 
     def getView(self):
         return self.view
@@ -267,6 +283,8 @@ class CameraModuleInterface(QtCore.QObject):
 
     """
     sigNewFrame = QtCore.Signal(object, object)  # (self, frame)
+    sigStarted = QtCore.Signal(object)
+    sigStopped = QtCore.Signal(object)
 
     # indicates this is an interface to an imaging device. 
     canImage = True
@@ -308,7 +326,13 @@ class CameraModuleInterface(QtCore.QObject):
         """Request the imaging device to acquire a single frame.
         """
         raise NotImplementedError()
-
+    
+    def setViewTracking(self, track):
+        """Called by Camera module to inform this interface that it may 
+        update the view transform to track itself.
+        """
+        pass
+    
     def quit(self):
         """Called when the interface is removed from the camera module or when
         the camera module is about to quit.
@@ -321,8 +345,6 @@ class CameraModuleInterface(QtCore.QObject):
             if scene is not None:
                 scene.removeItem(item)
         self.mod().window()._removeInterface(self)
-
-
 
 
 class PlotROI(pg.ROI):
