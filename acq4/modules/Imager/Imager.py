@@ -215,6 +215,7 @@ class RegionCtrl(pg.ROI):
         self.addScaleHandle([1,0], [0,1])
         self.setZValue(1200)
 
+
 class TileControl(pg.ROI):
     """
     Create an ROI for the Tile Regions. Note that the color is RED, 
@@ -224,7 +225,6 @@ class TileControl(pg.ROI):
         self.addScaleHandle([0,0], [1,1])
         self.addScaleHandle([1,1], [0,0])
         self.setZValue(1400)
-    
 
 
 class Imager(Module):
@@ -348,11 +348,6 @@ class Imager(Module):
         for mode in VideoModes:
             self.imagingCtrl.addVideoButton(mode)
 
-        # Connect other UI controls
-        # self.ui.run_button.clicked.connect(self.PMT_Run)
-        # self.ui.stop_button.clicked.connect(self.PMT_Stop)
-        # self.ui.set_TilesButton.clicked.connect(self.setTilesROI)
-        
         #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.ui.restoreROI.clicked.connect(self.restoreROI)
         self.ui.saveROI.clicked.connect(self.saveROI)
@@ -392,32 +387,6 @@ class Imager(Module):
                     ]),
                 dict(name='Camera Module', type='interface', interfaceTypes=['cameraModule']),
             ]),
-            # dict(name='Scope Device', type='interface', interfaceTypes=['microscope']),
-            # dict(name='Scanner Device', type='interface', interfaceTypes=['scanner']),
-            # dict(name='Laser Device', type='interface', interfaceTypes=['laser']),
-            # dict(name="Tiles", type="bool", value=False, children=[
-            #     dict(name='Stage', type='interface', interfaceTypes='stage'),
-            #     dict(name="X0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-            #     dict(name="X1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-            #     dict(name="Y0", type="float", value=-100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-            #     dict(name="Y1", type="float", value=100., suffix='um', dec=True, minStep=1, step=1, limits=[-2.5e3,2.5e3], siPrefix=True),
-            #     dict(name="StepSize", type="float", value=100, suffix='um', dec=True, minStep=1e-5, step=0.5, limits=[1e-5,1e3], siPrefix=True),
-                
-            # ]),
-            # dict(name="Z-Stack", type="bool", value=False, children=[
-            #     dict(name='Stage', type='interface', interfaceTypes='stage'),
-            #     dict(name="Step Size", type="float", value=5e-6, suffix='m', dec=True, minStep=1e-7, step=0.5, limits=[1e-9,1], siPrefix=True),
-            #     dict(name="Steps", type='int', value=10, step=1, limits=[1,None]),
-            #     dict(name="Depth", type="float", value=0, readonly=True, suffix='m', siPrefix=True)
-            # ]),
-            # dict(name="Timed", type="bool", value=False, children=[
-            #     dict(name="Interval", type="float", value=5.0, suffix='s', dec=True, minStep=0.1, step=0.5, limits=[0.1,30], siPrefix=True),
-            #     dict(name="N Intervals", type='int', value=10, step=1, limits=[1,None]),
-            #     dict(name="Duration", type="float", value=0, readonly=True, suffix='s', siPrefix = True),
-            #     dict(name="Current Frame", type='int', value = 0, readonly=True),
-            # ]),
-            # dict(name='Show PMT V', type='bool', value=False),
-            # dict(name='Show Mirror V', type='bool', value=False),
         ])
         self.tree.setParameters(self.param, showTop=False)
 
@@ -433,21 +402,8 @@ class Imager(Module):
 
         self.updateImagingProtocol()
 
-
     def quit(self):
         self.abortTask()
-        # if self.imageItem is not None and self.imageItem.scene() is not None:
-        #     self.imageItem.scene().removeItem(self.imageItem)
-        # for obj,item in self.objectiveROImap.items(): # remove the ROI's for all objectives.
-        #     try:
-        #         if item.scene() is not None:
-        #             item.scene().removeItem(item)
-        #     except:
-        #         pass
-        # if self.tileRoi is not None:
-        #     if self.tileRoi.scene() is not None:
-        #         self.tileRoi.scene().removeItem(self.tileRoi)
-        #     self.tileRoi = None
         self.camModInterface.quit()
         self.imagingCtrl.quit()
         self.imageItem = None
@@ -543,7 +499,6 @@ class Imager(Module):
         return roi
     
     def restoreROI(self):
-        
         if self.storedROI is not None:
             (width, height, x, y) = self.storedROI
             self.currentRoi.setSize([width, height])
@@ -620,53 +575,6 @@ class Imager(Module):
     def reAlign(self):
         self.objectiveUpdate(reset=True) # try this... 
         self.roiChanged()
-
-    # def setTilesROI(self, roiColor = 'r'):
-    #     # the initial ROI will be larger than the current field and centered.
-    #     if self.tileRoi is not None and self.tileRoiVisible:
-    #         self.hideROI(self.tileRoi)
-    #         self.tileRoiVisible = False
-    #         if self.tileRoi is not None:
-    #             return
-           
-            
-    #     state = self.currentRoi.getState()
-    #     width, height = state['size']
-    #     x, y = state['pos']
-        
-    #     csize= [width*3.0,  height*3.0]
-    #     cpos = [x, y]
-    #     self.tileRoi = RegionCtrl(cpos, csize, [255., 0., 0.]) # Note that the position actually gets overridden by the camera additem below..
-    #     self.tileRoi.setZValue(11000)
-    #     self.cameraModule.window().addItem(self.tileRoi)
-    #     self.tileRoi.setPos(cpos)
-    #     self.tileRoi.sigRegionChangeFinished.connect(self.tileROIChanged)
-    #     self.tileRoiVisible = True
-    #     return self.tileRoi
-        
-    # def tileROIChanged(self):
-    #     """ read the TILE ROI rectangle width and height and repost
-    #     in the parameter tree """
-    #     state = self.tileRoi.getState()
-    #     self.tileWidth, self.tileHeight = state['size']
-    #     self.tilexPos, self.tileyPos = state['pos']
-    #     x0, y0 =  self.tileRoi.pos()
-    #     x0 = x0 - self.xPos # align against currrent 2p Image lower left corner
-    #     y0 = y0 - self.yPos
-    #     self.param['Tiles', 'X0'] = x0 * 1e6
-    #     self.param['Tiles', 'Y0'] = y0 * 1e6
-    #     self.param['Tiles', 'X1'] = self.tileWidth * 1e6
-    #     self.param['Tiles', 'Y1'] = self.tileHeight * 1e6
-    #     # record position of ROI in Scanner's local coordinate system
-    #     # we can use this later to allow the ROI to track stage movement
-    #     tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
-    #     pt1 = pg.Point(self.tilexPos, self.tileyPos)
-    #     pt2 = pg.Point(self.tilexPos+self.tileWidth, self.tileyPos+self.tileHeight)
-    #     self.tileRoi.scannerCoords = [
-    #         tr.map(pt1),
-    #         tr.map(pt2),
-    #         ]
-
         
     def updateParams(self, root=None, changes=()):
         """Parameters have changed; update any dependent parameters and the scan program.
@@ -778,6 +686,9 @@ class Imager(Module):
 
     def stopVideoClicked(self):
         self.imagingThread.stopVideo()
+
+    def isRunning(self):
+        return self.imagingThread.isRunning()
 
     def videoStopped(self):
         self.imagingCtrl.acquisitionStopped()
@@ -904,140 +815,6 @@ class Imager(Module):
         ## New image is displayed; update image transform
         self.imageItem.setTransform(frame.globalTransform().as2D())
 
-    # def PMT_Run(self):
-    #     """
-    #     This routine handles special cases where we want multiple frames to be
-    #     automatically collected. The 3 modes implemented are:
-    #     Z-stack (currently not used as the stage isn't good enough...)
-    #     Tiles - collect a tiled x-y sequence of images as single images.
-    #     Timed - collect a series of images as a 2p-stack. 
-    #     The parameters for each are set in the paramtree, and the
-    #     data collection is initiated with the "Run" button and
-    #     can be terminated early with the "stop" button.
-    #     """
-        
-    #     info = {}
-    #     frameInfo = None  # will be filled in by takeImage()
-    #     self.stopFlag = False
-    #     if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
-    #         return # only one mode at a time... 
-    #     self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
-        
-    #     if self.param['Z-Stack']: # moving in z for a focus stack
-    #         imageFilename = '2pZstack'
-    #         info['2pImageType'] = 'Z-Stack'
-    #         stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
-    #         images = []
-    #         nSteps = self.param['Z-Stack', 'Steps']
-    #         for i in range(nSteps):
-    #             img, frameInfo = self.takeImage()
-    #             img = img[np.newaxis, ...]
-    #             if img is None:
-    #                 break
-    #             images.append(img)
-    #             self.view.setImage(img)
-                
-    #             if i < nSteps-1:
-    #                 ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
-    #                 stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
-    #         imgData = np.concatenate(images, axis=0)
-    #         info.update(frameInfo)
-    #         if self.param['Store']:
-    #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-        
-    #     elif self.param['Tiles']: # moving in x and y to get a tiled image set
-    #         info['2pImageType'] = 'Tiles'
-    #         dirhandle = self.manager.getCurrentDir()
-    #         if self.param['Store']:
-    #             dirhandle = dirhandle.mkdir('2PTiles', autoIncrement=True, info=info)
-    #         imageFilename = '2pImage'
-            
-    #         stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
-    #         #print dir(stage.mp285)
-    #         #print stage.mp285.stat()
-    #         #return
-    #         self.param['Timed', 'Current Frame'] = 0 # get frame times ...
-    #         images = []
-    #         originalPos = stage.pos
-    #         state = self.currentRoi.getState()
-    #         self.width, self.height = state['size']
-    #         originalSpeed = 200
-    #         mp285speed = 1000
-
-    #         x0 = self.param['Tiles', 'X0'] *1e-6 # convert back to meters
-    #         x1 = x0 + self.param['Tiles', 'X1'] *1e-6
-    #         y0 = self.param['Tiles', 'Y0'] *1e-6
-    #         y1 = y0 + self.param['Tiles', 'Y1'] *1e-6
-    #         tileXY = self.param['Tiles', 'StepSize']*1e-6
-    #         nXTiles = np.ceil((x1-x0)/tileXY)
-    #         nYTiles = np.ceil((y1-y0)/tileXY)
-           
-    #         # positions are relative......
-    #         xpos = np.arange(x0, x0+nXTiles*tileXY, tileXY) +originalPos[0]
-    #         ypos = np.arange(y0, y0+nYTiles*tileXY, tileXY) +originalPos[1]
-    #         stage.moveTo([xpos[0], ypos[0]],
-    #                      speed=mp285speed, fine = True, block=True) # move and wait until complete.  
-
-    #         ypath = 0
-    #         xdir = 1 # positive movement direction (serpentine tracking)
-    #         xpos1 = xpos
-    #         for yp in ypos:
-    #             if self.stopFlag:
-    #                 break
-    #             for xp in xpos1:
-    #                 if self.stopFlag:
-    #                     break
-    #                 stage.moveTo([xp, yp], speed=mp285speed, fine = True, block=True, timeout = 10.)
-    #                 (images, frameInfo) = self.PMT_Snap(dirhandle = dirhandle) # now take image
-    #                 #  stage.moveBy([tileXY*xdir, 0.], speed=mp285speed, fine = True, block=True, timeout = 10.)
-    #             xdir *= -1 # reverse direction
-    #             if xdir < 0:
-    #                 xpos1 = xpos[::-1] # reverse order of array, serpentine movement.
-    #             else:
-    #                 xpos1 = xpos
-    #         stage.moveTo([xpos[0], ypos[0]],
-    #                      speed=originalSpeed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
-
-    #     elif self.param['Timed']: # 
-    #         imageFilename = '2pTimed'
-    #         info['2pImageType'] = 'Timed'
-    #         self.param['Timed', 'Current Frame'] = 0
-    #         images = []
-    #         nSteps = self.param['Timed', 'N Intervals']
-    #         for i in range(nSteps):
-    #             if self.stopFlag:
-    #                 break
-    #             self.param['Timed', 'Current Frame'] = i
-    #             (img, frameInfo) = self.takeImage()
-    #             img = img[np.newaxis, ...]
-    #             if img is None:
-    #                return
-    #             images.append(img)
-    #             self.view.setImage(img)
-    #             if self.stopFlag:
-    #                 break
-                
-    #             if i < nSteps-1:
-    #                 time.sleep(self.param['Timed', 'Interval'])
-    #         imgData = np.concatenate(images, axis=0)
-    #         info.update(frameInfo)
-    #         if self.param['Store']:
-    #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-
-    #     else:
-    #         imageFilename = '2pImage'
-    #         info['2pImageType'] = 'Snap'
-    #         (imgData, frameInfo) = self.takeImage()
-    #         if imgData is None:
-    #             return
-    #         self.view.setImage(imgData)
-    #         info.update(frameInfo)
-    #         if self.param['Store']:
-    #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-
-    # def PMT_Stop(self):
-    #     self.stopFlag = True
-
 
 class ImagerCamModInterface(CameraModuleInterface):
     """For plugging in the 2p imager system to the camera module.
@@ -1063,6 +840,9 @@ class ImagerCamModInterface(CameraModuleInterface):
 
     def newFrame(self, frame):
         self.sigNewFrame.emit(self, frame)
+
+    def isRunning(self):
+        return self.imager.isRunning()
 
 
 class ImagingFrame(imaging.Frame):
@@ -1226,10 +1006,3 @@ class ImagingThread(Thread):
 
         frame = ImagingFrame(pmtData, rectSystem.copy(), info)
         self.sigNewFrame.emit(frame)
-
-
-
-
-
-
-
