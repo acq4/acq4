@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
+from acq4.devices.LightSource import LightSource
 from acq4.devices.Stage import Stage
 from deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
@@ -22,12 +23,14 @@ class Microscope(Device, OptomechDevice):
     """
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
+    sigLightChanged = QtCore.Signal()
     sigObjectiveListChanged = QtCore.Signal()
     sigSurfaceDepthChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
+
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.switchDevice = None
@@ -61,6 +64,10 @@ class Microscope(Device, OptomechDevice):
             self.addSubdevice(obj)
         
         
+        ## if there is a light source, configure it here
+        if 'lightSource' in config:
+            self.lightSource = dm.getDevice(config['lightSource'])
+
         ## If there is a switch device, configure it here
         if 'objectiveSwitch' in config:
             self.switchDevice = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
@@ -120,6 +127,10 @@ class Microscope(Device, OptomechDevice):
                 return None
             return self.selectedObjectives[self.currentSwitchPosition]
             #return self.objectives[self.currentSwitchPosition][selected]
+
+    def getLightSource(self):
+        with self.lock:
+            return self.lightSource
     
     def listObjectives(self):
         """

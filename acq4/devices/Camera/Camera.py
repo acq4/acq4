@@ -3,7 +3,6 @@ from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.LightSource import LightSource
-from acq4.devices.LEDLightSource import LEDLightSource, lightSourceStatus
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -58,6 +57,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def __init__(self, dm, config, name):
         OptomechDevice.__init__(self, dm, config, name)
+
         self.lock = Mutex(Mutex.Recursive)
         
         # Generate config to use for DAQ 
@@ -91,6 +91,13 @@ class Camera(DAQGeneric, OptomechDevice):
         self.transformChanged()
         if self.scopeDev is not None:
             self.objectiveChanged()
+
+
+        if self.scopeDev is not None:
+            self.lightSource = self.scopeDev.getLightSource()
+            if self.lightSource is not None:
+                print "creating scopeDev"
+                self.lightSource.sigLightChanged.connect(self.lightChanged)
         
         
         self.setupCamera() 
@@ -368,6 +375,14 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
+
+    def lightChanged(self):        
+        self.scopeState['lightSourceState'] = self.lightSource.describe()
+
+    def getLightState(self):
+        with self.lock:
+            lightState = self.lightSource.getLightSourceState()
+            return lightState
 
     @staticmethod 
     def makeFrameTransform(region, binning):
@@ -816,7 +831,8 @@ class AcquireThread(Thread):
                             'deviceTransform': transform,
                         }
 
-                    lightSourceInfo = {'lightSourceStatus': lightSourceStatus()}
+                    lightSourceStatus = self.dev.getLightState()
+                    lightSourceInfo = {'lightSourceStatus': lightSourceStatus}
 
                     ## Copy frame info to info array
                     info.update(frameInfo)
