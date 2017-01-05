@@ -96,7 +96,6 @@ class Camera(DAQGeneric, OptomechDevice):
         if self.scopeDev is not None:
             self.lightSource = self.scopeDev.getLightSource()
             if self.lightSource is not None:
-                print "creating scopeDev"
                 self.lightSource.sigLightChanged.connect(self.lightChanged)
         
         
@@ -383,6 +382,11 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             lightState = self.lightSource.getLightSourceState()
             return lightState
+
+    def getLightSourceDescription(self):
+        with self.lock:
+            lightSourceDescription = self.lightSource.describeAll()
+            return lightSourceDescription
 
     @staticmethod 
     def makeFrameTransform(region, binning):
@@ -788,6 +792,8 @@ class AcquireThread(Thread):
         lastFrameId = None
         fps = None
         
+        lightSourceDescription = self.dev.getLightSourceDescription()
+
         camState = dict(self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
         exposure = camState['exposure']
@@ -829,6 +835,7 @@ class AcquireThread(Thread):
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
                             'objective': ss.get('objective', None),
                             'deviceTransform': transform,
+                            'lightSource': lightSourceDescription
                         }
 
                     lightSourceStatus = self.dev.getLightState()

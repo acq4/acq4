@@ -56,6 +56,7 @@ class LightSource(Device):
         self.sourceState = state
 
     def getLightSourceState(self):
+        self.getLEDState()
         return self.sourceState
 
     def describeAll(self):

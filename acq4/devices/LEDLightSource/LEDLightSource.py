@@ -25,13 +25,7 @@ class LEDLightSource(LightSource):
 
         self.state = {}
 
-        self.poll()
-        
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.poll)
-        self.timer.start(config['interval']*1000)
-
-    def poll(self):
+    def getLEDState(self):
         with self.lock:
             change = {}
             for name, conf in self.leds.iteritems():
