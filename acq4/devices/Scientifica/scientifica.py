@@ -183,7 +183,7 @@ class Scientifica(Stage):
         if name == 'objective' and self.monitorObj:
             return self.objectiveState
         else:
-            return Stage.getSwitch(name)
+            return Stage.getSwitch(self, name)
 
 
 class MonitorThread(Thread):
