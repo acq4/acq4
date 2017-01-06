@@ -453,10 +453,9 @@ class Pipette(Device, OptomechDevice):
     def retract(self, distance, speed='slow'):
         """Retract the pipette a specified distance along its axis.
         """
-        pos = self.globalPosition()
         dz = distance * np.sin(self.pitch)
         dx = -distance * np.cos(self.pitch)
-        return self._moveToLocal([dx, 0, dz], speed, linear=True)
+        return self._moveToLocal([dx, 0, dz], speed, linear=True) 
 
     def setTarget(self, target):
         self.target = np.array(target)

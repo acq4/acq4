@@ -21,7 +21,7 @@ class Stage(Device, OptomechDevice):
 
     sigPositionChanged = QtCore.Signal(object)
     sigLimitsChanged = QtCore.Signal(object)
-    sigSwitchChanged = QtCore.Signal(object, object)
+    sigSwitchChanged = QtCore.Signal(object, object)  # self, {switch_name: value, ...}
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
