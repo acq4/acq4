@@ -33,11 +33,8 @@ class CameraInterface(CameraModuleInterface):
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
 
-        self.module = module
-        self.view = module.getView()
         self.hasQuit = False
         self.boundaryItems = {}
-        self._trackView = False
 
         ## setup UI
         self.ui = CameraInterfaceTemplate()
@@ -98,7 +95,7 @@ class CameraInterface(CameraModuleInterface):
 
         ## Set up microscope objective borders
         self.borders = CameraItemGroup(self.cam)
-        self.module.addItem(self.borders)
+        self.view.addItem(self.borders)
         self.borders.setZValue(-1)
         
         self.cam.sigGlobalTransformChanged.connect(self.globalTransformChanged)
@@ -154,10 +151,6 @@ class CameraInterface(CameraModuleInterface):
         except:
             self.showMessage("Error opening camera")
             raise
-
-    def setViewTracking(self, track):
-        # called by camera module when its view should track the motion of this device.
-        self._trackView = track
 
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
@@ -266,12 +259,6 @@ class CameraInterface(CameraModuleInterface):
         self.cam.setParam('exposure', self.exposure, autoRestart=autoRestart)
 
     def updateCameraDecorations(self):
-        ps = self.cameraScale
-        pos = self.lastCameraPosition
-        cs = self.camSize
-        if ps is None:
-            return
-
         m = self.cam.globalTransform()
         self.cameraItemGroup.setTransform(pg.SRTTransform(m))
 
@@ -300,7 +287,7 @@ class CameraInterface(CameraModuleInterface):
         Manager.logMsg("Camera stopped acquisition.", importance=0)
 
     def showMessage(self, msg, delay=2000):
-        self.module.showMessage(msg, delay)
+        self.mod().showMessage(msg, delay)
 
     def getImageItem(self):
         return self.imageItem

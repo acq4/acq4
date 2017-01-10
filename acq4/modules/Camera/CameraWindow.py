@@ -293,7 +293,9 @@ class CameraModuleInterface(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self.mod = weakref.ref(mod)
         self.dev = weakref.ref(dev)
+        self.view = mod.window().getView()
         self._hasQuit = False
+        self._trackView = False
 
     def getDevice(self):
         return self.dev()
@@ -331,7 +333,7 @@ class CameraModuleInterface(QtCore.QObject):
         """Called by Camera module to inform this interface that it may 
         update the view transform to track itself.
         """
-        pass
+        self._trackView = track
     
     def quit(self):
         """Called when the interface is removed from the camera module or when
