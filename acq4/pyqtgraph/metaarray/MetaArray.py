@@ -1112,7 +1112,8 @@ class MetaArray(object):
             data[tuple(sl)] = self.view(np.ndarray)
             
             ## add axis values if they are present.
-            axKeys = ["values"].extend(opts.get("appendKeys", []))
+            axKeys = ["values"]
+            axKeys.extend(opts.get("appendKeys", []))
             axInfo = f['info'][str(ax)]
             for key in axKeys:
                 if key in axInfo:
