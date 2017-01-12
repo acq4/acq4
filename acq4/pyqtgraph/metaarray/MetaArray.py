@@ -1019,6 +1019,7 @@ class MetaArray(object):
         """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)
         opts:
             appendAxis: the name (or index) of the appendable axis. Allows the array to grow.
+            appendKeys: a list of keys (other than "values") for metadata to append to on the appendable axis.
             compression: None, 'gzip' (good compression), 'lzf' (fast compression), etc.
             chunks: bool or tuple specifying chunk shape
         """
@@ -1123,6 +1124,8 @@ class MetaArray(object):
                     shape[0] += v2.shape[0]
                     v.resize(shape)
                     v[-v2.shape[0]:] = v2
+                else:
+                    raise TypeError('Cannot append to axis info key "%s"; this key is not present in the target file.' % key)
             f.close()
         else:
             f = h5py.File(fileName, 'w')
