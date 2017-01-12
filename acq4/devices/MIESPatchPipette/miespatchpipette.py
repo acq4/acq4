@@ -40,6 +40,9 @@ class MIESPatchPipette(PatchPipette):
             TPData = {}
         return TPData
 
+    def getTPRange(self):
+        return self.mies.getTPRange()
+
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
 

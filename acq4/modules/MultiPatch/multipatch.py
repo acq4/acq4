@@ -35,6 +35,7 @@ class PipetteControl(QtGui.QWidget):
             self.pip.sigStateChanged.connect(self.stateChanged)
         self.moveTimer = QtCore.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
+        self.isMasterPlotter = False
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
@@ -48,8 +49,13 @@ class PipetteControl(QtGui.QWidget):
             ch.pipCtrl = self
 
         self.gv = pg.GraphicsLayoutWidget()
-        self.tpPlot = self.gv.addPlot()
-        self.rPlot = self.gv.addPlot()
+        self.leftPlot = self.gv.addPlot(title="Rss")
+        self.leftPlot.disableAutoRange(pg.ViewBox.XAxis)
+        self.leftPlot.setMouseEnabled(False)
+        self.rightPlot = self.gv.addPlot(title="Rpeak")
+        self.rightPlot.disableAutoRange(pg.ViewBox.XAxis)
+        self.rightPlot.setMouseEnabled(False)
+        self.rightPlot.setXLink(self.leftPlot.getViewBox())
         self.ui.plotLayout.addWidget(self.gv)
 
     def solo(self):
@@ -68,8 +74,11 @@ class PipetteControl(QtGui.QWidget):
         t = self.pip.TPData["time"]
         rss = self.pip.TPData["Rss"]
         peak = self.pip.TPData["Rpeak"]
-        self.tpPlot.plot(t, rss, clear=True)
-        self.rPlot.plot(t, peak, clear=True)
+        self.leftPlot.plot(t, rss, clear=True)
+        self.rightPlot.plot(t, peak, clear=True)
+        if self.isMasterPlotter:
+            mn, mx = self.pip.getTPRange()
+            self.leftPlot.setXRange(mn, mx)
 
     def stateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
@@ -142,6 +151,11 @@ class MultiPatchWindow(QtGui.QWidget):
             ctrl.ui.lockBtn.clicked.connect(self.lockBtnClicked)
             ctrl.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
             ctrl.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
+
+            if i > 0:
+                ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
+            else:
+                ctrl.isMasterPlotter = True
 
             self.pipCtrls.append(ctrl)
 

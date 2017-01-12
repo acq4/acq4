@@ -34,6 +34,8 @@ class MIES(QtCore.QObject):
         self._exiting = False
         self.windowName = 'ITC1600_Dev_0'
         self._sigFutureComplete.connect(self.processUpdate)
+        self._initTPTime = None
+        self._lastTPTime = None
         self.start()
 
     def start(self):
@@ -57,20 +59,25 @@ class MIES(QtCore.QObject):
             else:
                 data = res[...,0] # dimension hack when return value suddenly changed
                 self.currentData = data
+                self._updateTPTimes(data)
                 self.sigDataReady.emit(data)
                 nextCallWait = 0
             QtCore.QTimer.singleShot(nextCallWait, self.getMIESUpdate)
 
-    def getHeadstageData(self, hs, dataIndex=None):
-        if self.currentData is None:
-            return None, None
+    def _updateTPTimes(self, TPArray):
+        """Update globally tracked initial and end TP times"""
+        if self._initTPTime is None:
+            try:
+                self._initTPTime = TPArray[0,:][TPArray[0,:] > 0].min()
+            except ValueError:
+                pass
+        self._lastTPTime = TPArray[0,:].max()
+
+    def getTPRange(self):
+        if self._initTPTime is None:
+            return 0, 0
         else:
-            ts = self.currentData[0,hs]
-            if dataIndex is None:
-                d = self.currentData[1:,hs]
-            else:
-                d = self.currentData[dataIndex,hs]
-            return ts, d
+            return self._initTPTime, self._lastTPTime
 
     def resetData(self):
         self.currentData = None
