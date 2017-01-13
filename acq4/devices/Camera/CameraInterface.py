@@ -172,23 +172,8 @@ class CameraInterface(CameraModuleInterface):
         self.imageItemGroup.setTransform(tr)
             
     def updateTransform(self, tr):
-        lastTr = self._lastDeviceTransform
-        if tr == lastTr:
-            return
-        if self._trackView and lastTr != None:
-            ## update view for new transform such that sensor bounds remain stationary on screen.
-            pos1 = lastTr.getTranslation()
-            pos2 = tr.getTranslation()
-            scale1 = lastTr.getScale()
-            scale2 = tr.getScale()
-            if scale1 != scale2:
-                scaleRatio = scale2 / scale1
-                self.view.scaleBy(scaleRatio, center=pos1)
-            if pos1 != pos2:
-                self.view.translateBy(pos2 - pos1)
-            
-        self._lastDeviceTransform = tr
-        
+        # handle view tracking first
+        CameraModuleInterface.updateTransform(self, tr)
         # move camera-related graphics items to follow camera
         self.cameraItemGroup.setTransform(tr)
 

@@ -335,6 +335,29 @@ class CameraModuleInterface(QtCore.QObject):
         """
         self._trackView = track
     
+    def updateTransform(self, tr):
+        """Should be called whenever the device's transform has changed.
+        
+        This method causes the view to scale/translate to match the device if
+        it is currently being tracked.
+        """
+        lastTr = self._lastDeviceTransform
+        if tr == lastTr:
+            return
+        if self._trackView and lastTr != None:
+            ## update view for new transform such that sensor bounds remain stationary on screen.
+            pos1 = lastTr.getTranslation()
+            pos2 = tr.getTranslation()
+            scale1 = lastTr.getScale()
+            scale2 = tr.getScale()
+            if scale1 != scale2:
+                scaleRatio = scale2 / scale1
+                self.view.scaleBy(scaleRatio, center=pos1)
+            if pos1 != pos2:
+                self.view.translateBy(pos2 - pos1)
+            
+        self._lastDeviceTransform = tr
+    
     def quit(self):
         """Called when the interface is removed from the camera module or when
         the camera module is about to quit.
