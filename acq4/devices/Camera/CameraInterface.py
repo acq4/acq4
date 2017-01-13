@@ -82,10 +82,9 @@ class CameraInterface(CameraModuleInterface):
         self.openCamera()
 
         ## Initialize values
-        self.lastCameraPosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
-        self.lastCameraScale = Point(1.0, 1.0)
         self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
+        self._lastDeviceTransform = None
 
         ## Camera region-of-interest control
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
@@ -173,24 +172,24 @@ class CameraInterface(CameraModuleInterface):
         self.imageItemGroup.setTransform(tr)
             
     def updateTransform(self, tr):
-        ## update view for new transform such that sensor bounds remain stationary on screen.
-        pos = tr.getTranslation()
-        
-        scale = tr.getScale()
-        if scale != self.lastCameraScale:
-            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
-            if self._trackView:
-                self.view.scaleBy(scale / self.lastCameraScale)
-            pg.QtGui.QApplication.processEvents()
-            anchor2 = self.view.mapDeviceToView(anchor)
-            diff = pos - anchor2
-            self.lastCameraScale = scale
-        else:
-            diff = pos - self.lastCameraPosition
+        lastTr = self._lastDeviceTransform
+        if tr == lastTr:
+            return
+        if self._trackView and lastTr != None:
+            ## update view for new transform such that sensor bounds remain stationary on screen.
+            pos1 = lastTr.getTranslation()
+            pos2 = tr.getTranslation()
+            scale1 = lastTr.getScale()
+            scale2 = tr.getScale()
+            if scale1 != scale2:
+                scaleRatio = scale2 / scale1
+                self.view.scaleBy(scaleRatio, center=pos1)
+            if pos1 != pos2:
+                self.view.translateBy(pos2 - pos1)
             
-        if self._trackView:
-            self.view.translateBy(diff)
-        self.lastCameraPosition = pos
+        self._lastDeviceTransform = tr
+        
+        # move camera-related graphics items to follow camera
         self.cameraItemGroup.setTransform(tr)
 
     def regionWidgetChanged(self, *args):
