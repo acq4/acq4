@@ -333,10 +333,15 @@ class CameraModuleInterface(QtCore.QObject):
         """
         return None
 
-    def takeImage(self):
+    def takeImage(self, closeShutter=None):
         """Request the imaging device to acquire a single frame.
+
+        The optional closeShutter argument is used to tell laser scanning devices whether
+        to close their shutter after imaging. Cameras can simply ignore this option.
         """
-        raise NotImplementedError()
+        # Note: this is a bit kludgy. 
+        # Would be nice to have a more natural way of handling this..
+        raise NotImplementedError(str(self))
 
     def quit(self):
         """Called when the interface is removed from the camera module or when
@@ -753,12 +758,15 @@ class SequencerThread(Thread):
         prot = self.prot
         maxIter = prot['timelapseCount']
         interval = prot['timelapseInterval']
+        dev = self.prot['imager'].getDevice()
 
         depths = prot['zStackValues']
         iter = 0
         while True:
             start = time.time()
 
+            running = dev.isRunning()
+            dev.stop()
             self.holdImagerFocus(True)
             self.openShutter(True)   # don't toggle shutter between stack frames
             try:
@@ -783,6 +791,8 @@ class SequencerThread(Thread):
             finally:
                 self.openShutter(False)
                 self.holdImagerFocus(False)
+                if running:
+                    dev.start()
 
             iter += 1
             if maxIter == 0 or iter >= maxIter:
@@ -825,10 +835,17 @@ class SequencerThread(Thread):
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.
         """
-        imager = self.prot['imager'].getDevice().setFocusHolding(hold)
+        idev = self.prot['imager'].getDevice()
+        fdev = idev.getFocusDevice()
+        if fdev is None:
+            raise Exception("Device %s is not connected to a focus controller." % idev)
+        if hasattr(fdev, 'setHolding'):
+            fdev.setHolding(hold)
 
     def openShutter(self, open):
-        imager = self.prot['imager'].getDevice().openShutter(open)
+        idev = self.prot['imager'].getDevice()
+        if hasattr(idev, 'openShutter'):
+            idev.openShutter(open)
 
     def getFrame(self):
         # request next frame
@@ -836,13 +853,16 @@ class SequencerThread(Thread):
         with self.lock:
             # clear out any previously received frames
             self._frame = None
-        imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
 
-        # wait for frame to arrive
-        self.sleep(until='frame')
-        with self.lock:
-            frame = self._frame
-            self._frame = None
+        frame = imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
+
+        if frame is None:
+            # wait for frame to arrive by signal
+            # (camera and LSM imagers behave differently here; this behavior needs to be made consistent)
+            self.sleep(until='frame')
+            with self.lock:
+                frame = self._frame
+                self._frame = None
         return frame
 
     def recordFrame(self, frame, iter, depthIndex):

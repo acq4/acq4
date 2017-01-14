@@ -474,16 +474,7 @@ class CameraTask(DAQGenericTask):
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel']['device']
             self.__startOrder = [daqName], []
-            #startOrder.remove(name)
-            #startOrder.insert(startOrder.index(daqName)+1, name)
             prof.mark('conf 1')
-        
-        ## If we are not triggering the daq, request that we start before everyone else
-        ## (no need to stop, we will simply record frames as they are collected)
-        #else:
-            #startOrder.remove(name)
-            #startOrder.insert(0, name)
-            #prof.mark('conf 2')
             
         ## We want to avoid this if at all possible since it may be very expensive
         if restart:
@@ -514,7 +505,6 @@ class CameraTask(DAQGenericTask):
         if disconnect:   ## Must be done only after unlocking mutex
             self.dev.acqThread.disconnectCallback(self.newFrame)
 
-        
     def start(self):
         ## arm recording
         self.frames = []
@@ -526,8 +516,7 @@ class CameraTask(DAQGenericTask):
             
         ## Last I checked, this does nothing. It should be here anyway, though..
         DAQGenericTask.start(self)
-        
-        
+    
     def isDone(self):
         ## If camera stopped, then probably there was a problem and we are finished.
         if not self.dev.isRunning():
@@ -565,6 +554,7 @@ class CameraTask(DAQGenericTask):
             data, info = result[k]
             if data is not None:
                 dh.writeFile(data, k, info=info)
+
 
 class CameraTaskResult:
     def __init__(self, task, frames, daqResult):

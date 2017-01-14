@@ -817,11 +817,6 @@ class Imager(Module):
     def setFocusDepth(self, depth):
         return self.scannerDev.setFocusDepth(depth)
 
-    def setFocusHolding(self, hold):
-        dev = self.scannerDev.getFocusDevice()
-        if hasattr(dev, 'setHolding'):
-            dev.setHolding(hold)
-        
     def takeImage(self, allowBlanking=True):
         """
         Take an image using the scanning system and PMT, and return with the data.
