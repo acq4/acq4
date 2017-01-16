@@ -84,7 +84,6 @@ class CameraInterface(CameraModuleInterface):
         ## Initialize values
         self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
-        self._lastDeviceTransform = None
 
         ## Camera region-of-interest control
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
@@ -158,7 +157,7 @@ class CameraInterface(CameraModuleInterface):
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
             tr = pg.SRTTransform(self.cam.globalTransform())
-            self.updateTransform(tr)
+            self.deviceTransformChanged(tr)
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
@@ -167,13 +166,13 @@ class CameraInterface(CameraModuleInterface):
         ## Update viewport to correct for scope movement/scaling
         tr = pg.SRTTransform(frame.deviceTransform())
         if self._trackView:
-            self.updateTransform(tr)
+            self.deviceTransformChanged(tr)
 
         self.imageItemGroup.setTransform(tr)
             
-    def updateTransform(self, tr):
+    def deviceTransformChanged(self, tr):
         # handle view tracking first
-        CameraModuleInterface.updateTransform(self, tr)
+        CameraModuleInterface.deviceTransformChanged(self, tr)
         # move camera-related graphics items to follow camera
         self.cameraItemGroup.setTransform(tr)
 

@@ -272,7 +272,6 @@ class Imager(Module):
         self.dockarea.addDock(scanDock, 'bottom', recDock)
         self.dockarea.addDock(bgDock, 'bottom', dispDock)
 
-
         # TODO: resurrect this for situations when the camera module can't be used
         # self.view = ImagerView()
         # self.w1.addWidget(self.view)   # add the view to the right of w1     
@@ -292,7 +291,7 @@ class Imager(Module):
         
         self.objectiveROImap = {} # this is a dict that we will populate with the name
         # of the objective and the associated ROI object .
-        # That way, each objective has a scan region appopriate for it's magnification.
+        # That way, each objective has a scan region appopriate for its magnification.
 
         # we assume that you are not going to change the current camera or scope while running
         # ... not just yet anyway.
@@ -306,7 +305,6 @@ class Imager(Module):
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         self.laserDev = self.manager.getDevice(config['laser'])
         self.scannerDev = self.manager.getDevice(config['scanner'])
-
 
         self.imagingThread = ImagingThread(self.laserDev, self.scannerDev)
         self.imagingThread.sigNewFrame.connect(self.newFrame)
@@ -458,6 +456,7 @@ class Imager(Module):
         finally:
             self.currentRoi.sigRegionChangeFinished.connect(self.roiChanged)
         self.setScanPosFromRoi()
+        self.camModInterface.deviceTransformChanged(pg.SRTTransform3D(globalTr).as2D())
         if self.imagingThread.isRunning():
             self.updateImagingProtocol()
 

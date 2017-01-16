@@ -28,6 +28,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         self.interfaces = OrderedDict()  # owner: widget
         self.docks = OrderedDict()       # owner: dock
+        self._trackedIface = None
         
         # Start building UI
         QtGui.QMainWindow.__init__(self)
@@ -185,14 +186,18 @@ class CameraWindow(QtGui.QMainWindow):
     def updateViewTracking(self):
         """Select a single interface to track.
         """
-        trackedIface = None
+        trackedIface = self._trackedIface
         for iface in self.interfaces.values():
             if iface.canImage:
                 # track imaging devices if there are any
-                trackedIface = iface
+                if trackedIface is None:
+                    trackedIface = iface
                 # prefer imaging devices that are running
                 if iface.isRunning():
+                    trackedIface = iface
                     break
+                
+        self._trackedIface = trackedIface
 
         # Update view tracking option for all interfaces 
         for iface in self.interfaces.values():
@@ -296,6 +301,7 @@ class CameraModuleInterface(QtCore.QObject):
         self.view = mod.window().getView()
         self._hasQuit = False
         self._trackView = False
+        self._lastDeviceTransform = None
 
     def getDevice(self):
         return self.dev()
@@ -335,7 +341,7 @@ class CameraModuleInterface(QtCore.QObject):
         """
         self._trackView = track
     
-    def updateTransform(self, tr):
+    def deviceTransformChanged(self, tr):
         """Should be called whenever the device's transform has changed.
         
         This method causes the view to scale/translate to match the device if
