@@ -35,7 +35,6 @@ class PipetteControl(QtGui.QWidget):
             self.pip.sigStateChanged.connect(self.stateChanged)
         self.moveTimer = QtCore.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
-        self.isMasterPlotter = False
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
@@ -50,11 +49,7 @@ class PipetteControl(QtGui.QWidget):
 
         self.gv = pg.GraphicsLayoutWidget()
         self.leftPlot = self.gv.addPlot(title="Rss")
-        self.leftPlot.disableAutoRange(pg.ViewBox.XAxis)
-        self.leftPlot.setMouseEnabled(False)
         self.rightPlot = self.gv.addPlot(title="Rpeak")
-        self.rightPlot.disableAutoRange(pg.ViewBox.XAxis)
-        self.rightPlot.setMouseEnabled(False)
         self.rightPlot.setXLink(self.leftPlot.getViewBox())
         self.ui.plotLayout.addWidget(self.gv)
 
@@ -76,9 +71,6 @@ class PipetteControl(QtGui.QWidget):
         peak = self.pip.TPData["Rpeak"]
         self.leftPlot.plot(t, rss, clear=True)
         self.rightPlot.plot(t, peak, clear=True)
-        if self.isMasterPlotter:
-            mn, mx = self.pip.getTPRange()
-            self.leftPlot.setXRange(mn, mx)
 
     def stateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
@@ -152,12 +144,8 @@ class MultiPatchWindow(QtGui.QWidget):
             ctrl.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
             ctrl.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
 
-            if i > 0:
-                ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
-            else:
-                ctrl.isMasterPlotter = True
-
             self.pipCtrls.append(ctrl)
+            ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
 
         self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, limits=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
