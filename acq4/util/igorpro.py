@@ -62,7 +62,12 @@ dtypes = {
 
 
 class IgorCallError(Exception):
-    pass
+    FAILED = 1
+    TIMEDOUT = 2
+    def __init__(self, message, errno=1):
+        self.errno = errno
+        super(IgorCallError, self).__init__(message)
+
 
 class IgorThread(QtCore.QThread):
 
@@ -231,7 +236,8 @@ class ZMQIgorBridge(object):
             self._unresolvedFutures[messageID] = future
         except zmq.error.Again:
             self._unresolvedFutures.pop(messageID)
-            future.set_result(IgorCallError("Call timed out"))
+            future.set_exception(IgorCallError("Send timed out",
+                IgorCallError.TIMEDOUT))
         return future
 
     def _checkRecv(self):

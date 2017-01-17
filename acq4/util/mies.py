@@ -35,6 +35,9 @@ class MIES(QtCore.QObject):
         self._sigFutureComplete.connect(self.processUpdate)
         self._initTPTime = None
         self._lastTPTime = None
+        self._TPTimer = QtCore.QTimer()
+        self._TPTimer.setSingleShot(True)
+        self._TPTimer.timeout.connect(self.getMIESUpdate)
         self.start()
 
     def start(self):
@@ -46,6 +49,7 @@ class MIES(QtCore.QObject):
         if self.usingZMQ:
             future = self.igor("FFI_ReturnTPValues")
             future.add_done_callback(self._sigFutureComplete.emit)
+            self._TPTimer.start(5000) # by default recheck after 5 seconds, overridden if we get data
         else:
             raise RuntimeError("getMIESUpdate not supported in ActiveX")
 
@@ -61,7 +65,7 @@ class MIES(QtCore.QObject):
                 self._updateTPTimes(data)
                 self.sigDataReady.emit(data)
                 nextCallWait = 0
-            QtCore.QTimer.singleShot(nextCallWait, self.getMIESUpdate)
+            self._TPTimer.start(nextCallWait)
 
     def _updateTPTimes(self, TPArray):
         """Update globally tracked initial and end TP times"""
