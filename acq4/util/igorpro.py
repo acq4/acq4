@@ -89,8 +89,11 @@ class IgorThread(QtCore.QThread):
         return self._sendRequest('getVariable', args, kwds)
 
     def _sendRequest(self, req, args, kwds):
-        fut = concurrent.futures.Future()
-        self._newRequest.emit((fut, req, args, kwds))
+        if isinstance(self.igor, ZMQIgorBridge):
+            return getattr(self.igor, req)(*args, **kwds)
+        else:
+            fut = concurrent.futures.Future()
+            self._newRequest.emit((fut, req, args, kwds))
         return fut
 
     def _processRequest(self, req):
@@ -205,21 +208,48 @@ class ZMQIgorBridge(object):
 
     def __init__(self, host="tcp://localhost", port=5670):
         super(ZMQIgorBridge, self).__init__()
+        self._unresolvedFutures = {}
+        self._currentMessageID = 0
         self.address = "{}:{}".format(host, port)
         self._socket = self._context.socket(zmq.DEALER)
         self._socket.setsockopt(zmq.IDENTITY, "igorbridge")
+        self._socket.setsockopt(zmq.SNDTIMEO, 1000)
         self._socket.connect(self.address)
+        self._poller = zmq.Poller()
+        self._poller.register(self._socket, zmq.POLLIN)
+        self._pollTimer = QtCore.QTimer()
+        self._pollTimer.timeout.connect(self._checkRecv)
+        self._pollTimer.start(100)
 
     def __call__(self, cmd, *args, **kwds):
         # TODO: Handle optional values whenever they become supported in Igor
-        messageID = kwds.pop("messageID", "sync")
+        messageID = self._getMessageID()
+        future = concurrent.futures.Future()
         call = self.formatCall(cmd, params=args, messageID=messageID)
-        self._socket.send_multipart(call)
-        if messageID == "sync":
-            reply = json.loads(self._socket.recv_multipart()[-1])
-            return self.parseReply(reply)
+        try:
+            self._socket.send_multipart(call)
+            self._unresolvedFutures[messageID] = future
+        except zmq.error.Again:
+            self._unresolvedFutures.pop(messageID)
+            future.set_result(IgorCallError("Call timed out"))
+        return future
 
-    def formatCall(self, cmd, params, messageID="sync"):
+    def _checkRecv(self):
+        socks = self._poller.poll(100)
+        if socks:
+            reply = json.loads(self._socket.recv_multipart()[-1])
+            messageID = reply.get("messageID", None)
+            reply = self.parseReply(reply)
+            future = self._unresolvedFutures.pop(messageID, None)
+            if future:
+                future.set_result(reply)
+
+    def _getMessageID(self):
+        mid = self._currentMessageID
+        self._currentMessageID += 1
+        return str(mid)
+
+    def formatCall(self, cmd, params, messageID):
         call = {"version": 1,
                 "messageID": messageID,
                 "CallFunction": {

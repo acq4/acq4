@@ -30,7 +30,6 @@ class MIES(QtCore.QObject):
         self.igor = IgorThread(useZMQ)
         self.usingZMQ = useZMQ
         self.currentData = None
-        self._future = None
         self._exiting = False
         self.windowName = 'ITC1600_Dev_0'
         self._sigFutureComplete.connect(self.processUpdate)
@@ -45,8 +44,8 @@ class MIES(QtCore.QObject):
 
     def getMIESUpdate(self):
         if self.usingZMQ:
-            self._future = self.igor("FFI_ReturnTPValues")
-            self._future.add_done_callback(self._sigFutureComplete.emit)
+            future = self.igor("FFI_ReturnTPValues")
+            future.add_done_callback(self._sigFutureComplete.emit)
         else:
             raise RuntimeError("getMIESUpdate not supported in ActiveX")
 
