@@ -3,7 +3,6 @@ from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import acq4.util.Mutex as Mutex
 
-
 class LightSource(Device):
     """Simple device which reports information of current illumination source."""
 
@@ -14,6 +13,7 @@ class LightSource(Device):
         self.lightsourceconfig = config.get('sources', config)
 
         self.sourceState = {}
+
         self.lock = Mutex.Mutex()
         self.sigLightChanged.connect(self.lightChanged)
 
@@ -22,72 +22,53 @@ class LightSource(Device):
         self.description = []
 
         for name, conf in self.lightsourceconfig.iteritems():
-            if (name=="leds"):
+            if not isinstance(conf, basestring):
+                sources = {}
+                sources["source"] = name
+                sourceDescription = []
+
+                # print "Sources:{}".format(sources)
+
                 for k, v in conf.iteritems():
                     name = k
-                    desc = {'name':name}
+                    desc = {}
+                    desc['name'] = k
 
                     for key, value in v.iteritems():
+                        desc[key] = value
+                        
+                    sourceDescription.append(desc)
 
-                        if (key == "channel"):
-                            ledtype = value[1]
-                            desc['ledtype'] = ledtype
-
-                        if (key == "model"):
-                            model = value
-                            desc['model'] = model
-
-                        if (key == "wavelength"):
-                            wavelength = value
-                            desc['wavelength'] = wavelength
-
-                        if (key == "power"):
-                            power = value
-                            desc['power'] = power
-
-                    if (self.sourceState[name] == 1):
-                        desc['state'] = 1
-                        self.description.append(desc)
+                sources["description"] = sourceDescription
+                self.description.append(sources)
 
         return self.description	
-
 
     def lightChanged(self, state):
         self.sourceState = state
 
     def getLightSourceState(self):
-        self.getLEDState()
         return self.sourceState
 
     def describeAll(self):
         self.descriptionAll = []
 
         for name, conf in self.lightsourceconfig.iteritems():
-            if (name=="leds"):
+            if not isinstance(conf, basestring):
+                sources = {}
+                sources = {"source": name}
+
                 for k, v in conf.iteritems():
                     name = k
+                    desc = {}
                     desc = {'name':name}
 
                     for key, value in v.iteritems():
-                        if (key == "channel"):
-                            ledtype = value[1]
-                            desc['ledtype'] = ledtype
+                        desc[key] = value
 
-                        if (key == "model"):
-                            model = value
-                            desc['model'] = model
+                sources["description"] = desc
 
-                        if (key == "wavelength"):
-                            wavelength = value
-                            desc['wavelength'] = wavelength
-
-                        if (key == "power"):
-                            power = value
-                            desc['power'] = power
-
-                        desc['state'] = 1
-
-                        self.descriptionAll.append(desc)
+                self.descriptionAll.append(sources)
 
         return self.descriptionAll
 

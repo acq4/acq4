@@ -2,7 +2,7 @@
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.devices.LightSource import LightSource
+# from acq4.devices.LightSource import LightSource
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -91,9 +91,6 @@ class Camera(DAQGeneric, OptomechDevice):
         self.transformChanged()
         if self.scopeDev is not None:
             self.objectiveChanged()
-
-
-        if self.scopeDev is not None:
             self.lightSource = self.scopeDev.getLightSource()
             if self.lightSource is not None:
                 self.lightSource.sigLightChanged.connect(self.lightChanged)
