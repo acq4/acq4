@@ -73,10 +73,10 @@ class MIESPatchPipette(PatchPipette):
     def setState(self, state):
         if state == 'seal':
             self.mies.selectHeadstage(self._headstage)
-            self.mies.setSeal()
+            self.mies.setSeal(self._headstage)
         elif state == 'bath':
             self.mies.selectHeadstage(self._headstage)
-            self.mies.setApproach()
+            self.mies.setApproach(self._headstage)
         self.state = state
         self.sigStateChanged.emit(self)
 

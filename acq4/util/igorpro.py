@@ -95,7 +95,7 @@ class IgorThread(QtCore.QThread):
 
     def _sendRequest(self, req, args, kwds):
         if isinstance(self.igor, ZMQIgorBridge):
-            return getattr(self.igor, req)(*args, **kwds)
+            return getattr(self.igor, req)(*args)
         else:
             fut = concurrent.futures.Future()
             self._newRequest.emit((fut, req, args, kwds))
@@ -219,14 +219,13 @@ class ZMQIgorBridge(object):
         self._socket = self._context.socket(zmq.DEALER)
         self._socket.setsockopt(zmq.IDENTITY, "igorbridge")
         self._socket.setsockopt(zmq.SNDTIMEO, 1000)
+        self._socket.setsockopt(zmq.RCVTIMEO, 0)
         self._socket.connect(self.address)
-        self._poller = zmq.Poller()
-        self._poller.register(self._socket, zmq.POLLIN)
         self._pollTimer = QtCore.QTimer()
         self._pollTimer.timeout.connect(self._checkRecv)
         self._pollTimer.start(100)
 
-    def __call__(self, cmd, *args, **kwds):
+    def __call__(self, cmd, *args):
         # TODO: Handle optional values whenever they become supported in Igor
         messageID = self._getMessageID()
         future = concurrent.futures.Future()
@@ -241,14 +240,19 @@ class ZMQIgorBridge(object):
         return future
 
     def _checkRecv(self):
-        socks = self._poller.poll(100)
-        if socks:
+        try:
             reply = json.loads(self._socket.recv_multipart()[-1])
             messageID = reply.get("messageID", None)
-            reply = self.parseReply(reply)
-            future = self._unresolvedFutures.pop(messageID, None)
-            if future:
+            future = self._unresolvedFutures.get(messageID, None)
+            if future is None:
+                raise RuntimeError("No future found for messageID {}".format(messageID))
+            try:
+                reply = self.parseReply(reply)
                 future.set_result(reply)
+            except IgorCallError as e:
+                future.set_exception(e)
+        except zmq.error.Again:
+            pass
 
     def _getMessageID(self):
         mid = self._currentMessageID
@@ -271,7 +275,7 @@ class ZMQIgorBridge(object):
             raise RuntimeError("Invalid response from Igor")
         elif err != 0:
             msg = reply.get("errorCode", {}).get("msg", "")
-            return IgorCallError("Call failed with message: {}".format(msg))
+            raise IgorCallError("Call failed with message: {}".format(msg))
         else:
             result = reply.get("result", {})
             restype = result.get("type", "")
@@ -282,13 +286,9 @@ class ZMQIgorBridge(object):
                 return val
 
     def parseWave(self, jsonWave):
-        try:
-            dtype = self._types.get(jsonWave["type"], np.float)
-            shape = jsonWave["dimension"]["size"]
-            raw = np.array(jsonWave["data"]["raw"], dtype=dtype)
-        except Exception as e:
-            print e
-            return None
+        dtype = self._types.get(jsonWave["type"], np.float)
+        shape = jsonWave["dimension"]["size"]
+        raw = np.array(jsonWave["data"]["raw"], dtype=dtype)
         return raw.reshape(shape, order="F")
 
 

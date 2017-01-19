@@ -3,7 +3,7 @@ from PyQt4 import QtCore
 
 
 def __reload__(old):
-    MIES._bridge = old['MIESBridge']._bridge
+    MIES._bridge = old['MIES']._bridge
 
 
 class MIES(QtCore.QObject):
@@ -55,16 +55,16 @@ class MIES(QtCore.QObject):
 
     def processUpdate(self, future):
         if not self._exiting:
-            res = future.result()
-            if isinstance(res, IgorCallError):
-                # Test pulse isn't running, let's wait a little longer
-                nextCallWait = 200
-            else:
+            try:
+                res = future.result()
                 data = res[...,0] # dimension hack when return value suddenly changed
                 self.currentData = data
                 self._updateTPTimes(data)
                 self.sigDataReady.emit(data)
                 nextCallWait = 0
+            except IgorCallError:
+                # Test pulse isn't running, let's wait a little longer
+                nextCallWait = 200
             self._TPTimer.start(nextCallWait)
 
     def _updateTPTimes(self, TPArray):
@@ -96,7 +96,7 @@ class MIES(QtCore.QObject):
         return self.igor("P_MethodApproach", windowName, hs)
         #return self.setCtrl("button_DataAcq_Approach")
 
-    def setSeal(self):
+    def setSeal(self, hs):
         windowName = '"{}"'.format(self.windowName)
         return self.igor("P_MethodSeal", windowName, hs)
         #return self.setCtrl("button_DataAcq_Seal")
@@ -108,19 +108,15 @@ class MIES(QtCore.QObject):
         return self.setCtrl('button_DataAcq_AutoPipOffset_VC')
 
     def setCtrl(self, name, value=None):
-        """Set or activate a GUI control in MIES.
-        """
-        windowName = '"{}"'.format(self.windowName)
+        """Set or activate a GUI control in MIES."""
         name_arg = '"{}"'.format(name)
         if value is None:
-            return self.igor('PGC_SetAndActivateControl', windowName, name_arg)
+            return self.igor('PGC_SetAndActivateControl', self.windowName, name)
         else:
-            return self.igor('PGC_SetAndActivateControlVar', windowName, name_arg, value)
+            return self.igor('PGC_SetAndActivateControlVar', self.windowName, name, value)
 
     def quit(self):
         self._exiting = True
-        if self._future:
-            self._future.cancel()
 
 
 if __name__ == "__main__":
