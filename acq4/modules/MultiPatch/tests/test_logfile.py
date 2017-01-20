@@ -8,6 +8,7 @@ def test_timeseries_index():
         (10, 0.5),
         (12, 13.4),
         (29.8, 5),
+        (29.8, 5.5),
         (29.9, 6),
         (30.0, 7),
         (30.1, 8),
@@ -20,6 +21,7 @@ def test_timeseries_index():
         (29.8, (5, 0)),
         (29.9, (6, -102.7)),
         (30.0, (7, 23.)),
+        (30.0, (7, 24.)),
         (30.1, (8, 0)),
         (35, (0, 0)),
     ]
@@ -31,7 +33,8 @@ def test_timeseries_index():
         (29.9, 'd'),
         (30.0, 'e'),
         (30.1, 'f'),
-        (35, 'g'),
+        (30.1, 'g'),
+        (35, 'h'),
     ]
     
     def lookup(t, ts):
@@ -61,6 +64,6 @@ def test_timeseries_index():
                 ts = IrregularTimeSeries(interpolate=interp, resolution=res)
                 for t,v in tsdata:
                     ts[t] = v
-                for t in np.arange(-1, 40, 0.1):
+                for t in np.arange(-1, 40, 0.05):
                     assert ts[t] == lookup(t, ts)
     

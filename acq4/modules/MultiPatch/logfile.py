@@ -57,6 +57,12 @@ class MultiPatchLog(object):
         for dev in self.devices():
             state[dev] = {'position': self._devices[dev]['position'][time]}
         return state
+
+    def firstTime(self):
+        return self._minTime
+
+    def lastTime(self):
+        return self._maxTime
         
 
 
@@ -70,6 +76,21 @@ class IrregularTimeSeries(object):
     
     If enabled, values are interpolated linearly. Values may be of any type,
     but only scalar, array, and tuple-of-scalar types may be interpolated.
+
+    Example::
+
+        # Initialize with a list of (time, value) pairs
+        series = IrregularTimeSeries(data=[
+            (10.5, 0.1),
+            (12.0, 0.7),
+            (16.0, 0.5),
+            (34.2, 1.2),
+        ], interpolate=True)
+
+        # Look up the series value at any arbitrary time
+        series[5.0]   # returns None because the series begins at 10.0
+        series[14.0]  # returns 0.6; interpolated between 2nd and 3rd timepoints
+        series[50]    # returns 1.2; the last value in the time series
     """
     def __init__(self, data=None, interpolate=False, resolution=1.0):
         self.interpolate = interpolate
@@ -83,9 +104,14 @@ class IrregularTimeSeries(object):
             self.extend(data)
     
     def __setitem__(self, time, value):
-        if len(self.events) > 0 and time <= self.events[-1][0]:
+        """Set the value of this series at a specific time.
+
+        Points in the series must be added in increasing chronological order.
+        It is allowed to add multiple values for the same time point.
+        """
+        if len(self.events) > 0 and time < self.events[-1][0]:
             raise ValueError("Time points must be added in increasing order.")
-        
+
         if self._startTime is None:
             self._startTime = time
         i = self._getIndex(time)
@@ -103,6 +129,8 @@ class IrregularTimeSeries(object):
             self[t] = v
        
     def __getitem__(self, time):
+        """Return the value of this series at the given time.
+        """
         events = self.events
         if len(events) == 0:
             return None
@@ -144,6 +172,16 @@ class IrregularTimeSeries(object):
         else:
             return v1 * (1.0 - s) + v2 * s
     
+    def times(self):
+        """Return a list of the time points in the series.
+        """
+        return [ev[0] for ev in self.events]
+
+    def values(self):
+        """Return a list of the values at each point in the series.
+        """
+        return [ev[1] for ev in self.events]
+
     def firstValue(self):
         if len(self.events) == 0:
             return None
@@ -155,6 +193,18 @@ class IrregularTimeSeries(object):
             return None
         else:
             return self.events[-1][1]
+
+    def firstTime(self):
+        if len(self.events) == 0:
+            return None
+        else:
+            return self.events[0][0]
+
+    def lastTime(self):
+        if len(self.events) == 0:
+            return None
+        else:
+            return self.events[-1][0]
 
     def __len__(self):
         return len(self.events)
