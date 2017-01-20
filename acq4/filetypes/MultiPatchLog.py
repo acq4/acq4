@@ -12,8 +12,8 @@ class MultiPatchLog(FileType):
     @classmethod
     def read(cls, fileHandle):
         """Read a file, return a data object"""
-        lines = open(fileHandle.name(), 'r').readlines()
-        return [re.split(r',\s*', line.strip()) for line in lines]
+        from ..modules.MultiPatch.logfile import MultiPatchLog
+        return MultiPatchLog(fileHandle.name())
         
     @classmethod
     def acceptsFile(cls, fileHandle):
