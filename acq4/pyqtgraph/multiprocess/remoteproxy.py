@@ -461,10 +461,7 @@ class RemoteEventHandler(object):
             return req
             
         if callSync == 'sync':
-            try:
-                return req.result()
-            except NoResultError:
-                return req
+            return req.result()
         
     def close(self, callSync='off', noCleanup=False, **kwds):
         try:
