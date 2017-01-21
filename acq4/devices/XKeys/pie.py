@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import platform
 from PyQt4 import QtGui, QtCore
 from acq4.devices.Device import Device
 from acq4.util.Mutex import Mutex
+import acq4.pyqtgraph.multiprocess as mp
 
 def __reload__(old):
     # avoid enumerating devices more than once because this seems to generate lots of (potentially dangerous)
@@ -22,23 +24,19 @@ XKeysDriver = None
 def getDriver():
     global XKeysDriver, PIE32_BRIDGE, mp, pie32Proc
     if XKeysDriver is None:
-        try:
+        if platform.architecture()[0] == '32bit':
             import acq4.drivers.xkeys as XKeysDriver
             PIE32_BRIDGE = False
-        except WindowsError as exc:
-            if exc.winerror == 193:
-                global pie32Proc
-                # can't load PIE driver from 64-bit python
-                import acq4.pyqtgraph.multiprocess as mp
-                # need to make this configurable..
-                executable = "C:\\Anaconda2-32\\python.exe"
-                pie32Proc = mp.QtProcess(executable=executable, copySysPath=False)
-                XKeysDriver = pie32Proc._import('acq4.drivers.xkeys')
-                import atexit
-                atexit.register(pie32Proc.close)
-                PIE32_BRIDGE = True
-            else:
-                raise
+        else:
+            # can't load PIE driver from 64-bit python
+            global pie32Proc
+            # need to make this configurable..
+            executable = "C:\\Anaconda2-32\\python.exe"
+            pie32Proc = mp.QtProcess(executable=executable, copySysPath=False)
+            XKeysDriver = pie32Proc._import('acq4.drivers.xkeys')
+            import atexit
+            atexit.register(pie32Proc.close)
+            PIE32_BRIDGE = True
 
     return XKeysDriver
 
@@ -50,7 +48,16 @@ def getDevices():
     if pieDevices is None:
         # create initial connection to all available devices
         drv = getDriver()
-        pieDevices = [drv.XKeysDevice(h) for h in drv.getDeviceHandles()]
+        try:
+            pieDevices = [drv.XKeysDevice(h) for h in drv.getDeviceHandles()]
+        except mp.NoResultError:
+            # XKeys can completely lock up the remote process if the device
+            # is left in a bad state
+            XKeysDriver = None
+            global pie32Proc
+            pie32Proc.proc.kill()
+            pie32Proc = None
+            raise Exception("No response received from xkeys remote process (try unplugging/replugging your xkeys device).")
     return pieDevices
 
 

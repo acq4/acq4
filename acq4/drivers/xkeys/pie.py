@@ -5,7 +5,15 @@
 import os, sys, struct, ctypes, time, threading
 import numpy as np
 os.environ['PATH'] += ";C:\\Program Files (x86)\\PI Engineering\\P.I. Engineering SDK\\DLLs"
-pielib = ctypes.windll.PIEHid
+
+# Delay loading PIEHid--this is only supported in 32-bit, and it helps multiprocessing to have this module
+# be importable on 64-bit (so we have access to PIEException)
+_pielib = None
+def pielib():
+    global _pielib
+    if _pielib is None:
+        _pielib = ctypes.windll.PIEHid
+    return _pielib
 
 
 # The following structure is defined with 10 fields in PieHid32.h, but it appears that only
@@ -151,7 +159,7 @@ class PIEException(Exception):
 def callPieFunc(func, *args):
     """Call a PIE function and raise PIEException if the return value is other than 0.
     """
-    err = getattr(pielib, func)(*args)
+    err = getattr(pielib(), func)(*args)
     if err != 0:
         errstr = errorStrings.get(err, 'Unknown error')
         raise PIEException(err, "PIE error %d: %s" % (err, errstr))
@@ -175,12 +183,14 @@ def getDeviceHandles():
 class XKeysDevice(object):
     def __init__(self, handle):
         self.handle = handle
-        self._readsize = pielib.GetReadLength(handle)
-        self._writesize = pielib.GetWriteLength(handle)
+        self._readsize = pielib().GetReadLength(handle)
+        self._writesize = pielib().GetWriteLength(handle)
         callPieFunc('SetupInterfaceEx', handle, 1)
 
         # request descriptor packet
         self._clearEvents()
+        # Note: If the device is in a bad state (often caused by improper shutdown), then this line
+        # can hang indefinitely. There might be no way around this..
         self._send(0, 214, 0)
         self.desc = self._unpackDescData(self._readOne())
 
@@ -319,7 +329,7 @@ class XKeysDevice(object):
     def close(self):
         """Close the device and stop its event handling thread.
         """
-        pielib.CleanupInterface(self.handle)
+        pielib().CleanupInterface(self.handle)
 
     def _clearEvents(self):
         """Purge all pending events from the buffer.
