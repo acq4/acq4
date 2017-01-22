@@ -6,17 +6,13 @@ import acq4.util.Mutex as Mutex
 class LightSource(Device):
     """Simple device which reports information of current illumination source."""
 
-    sigLightChanged = QtCore.Signal(object)
+    sigLightChanged = QtCore.Signal(object) # to be used upstream 
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lightsourceconfig = config.get('sources', config)
-
         self.sourceState = {}
-
         self.lock = Mutex.Mutex()
-        self.sigLightChanged.connect(self.lightChanged)
-
 
     def describe(self):
         self.description = []
@@ -26,8 +22,6 @@ class LightSource(Device):
                 sources = {}
                 sources["source"] = name
                 sourceDescription = []
-
-                # print "Sources:{}".format(sources)
 
                 for k, v in conf.iteritems():
                     name = k
@@ -43,9 +37,6 @@ class LightSource(Device):
                 self.description.append(sources)
 
         return self.description	
-
-    def lightChanged(self, state):
-        self.sourceState = state
 
     def getLightSourceState(self):
         return self.sourceState
@@ -67,7 +58,6 @@ class LightSource(Device):
                         desc[key] = value
 
                 sources["description"] = desc
-
                 self.descriptionAll.append(sources)
 
         return self.descriptionAll
