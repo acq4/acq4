@@ -10,7 +10,7 @@ class LightSource(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lightsourceconfig = config.get('sources', config)
+        # self.lightsourceconfig = config.get('sources')
         self.sourceState = {}
         self.lock = Mutex.Mutex()
 
@@ -19,8 +19,30 @@ class LightSource(Device):
 
         for name, conf in self.lightsourceconfig.iteritems():
             if not isinstance(conf, basestring):
-                sources = {}
-                sources["source"] = name
+                desc = {}
+                desc['name'] = name
+                sourceDescription = []
+
+                for k, v in conf.iteritems():
+                    desc[k] = v
+                    sourceDescription.append(desc)
+
+                desc["description"] = sourceDescription
+            
+            self.description.append(desc)
+
+        return self.description	
+
+    def getLightSourceState(self):
+        return self.sourceState
+
+    def describeAll(self):
+        self.descriptionAll = []
+
+        for name, conf in self.lightsourceconfig.iteritems():
+            if not isinstance(conf, basestring):
+                desc = {}
+                desc['name'] = name
                 sourceDescription = []
 
                 for k, v in conf.iteritems():
@@ -33,32 +55,13 @@ class LightSource(Device):
                         
                     sourceDescription.append(desc)
 
-                sources["description"] = sourceDescription
-                self.description.append(sources)
+                desc["description"] = sourceDescription
 
-        return self.description	
+            self.descriptionAll.append(desc)
 
-    def getLightSourceState(self):
-        return self.sourceState
+        statusItem = {"status": self.sourceState}
 
-    def describeAll(self):
-        self.descriptionAll = []
-
-        for name, conf in self.lightsourceconfig.iteritems():
-            if not isinstance(conf, basestring):
-                sources = {}
-                sources = {"source": name}
-
-                for k, v in conf.iteritems():
-                    name = k
-                    desc = {}
-                    desc = {'name':name}
-
-                    for key, value in v.iteritems():
-                        desc[key] = value
-
-                sources["description"] = desc
-                self.descriptionAll.append(sources)
+        self.descriptionAll.append(statusItem)
 
         return self.descriptionAll
 

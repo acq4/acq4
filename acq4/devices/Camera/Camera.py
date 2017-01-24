@@ -382,7 +382,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def getLightSourceDescription(self):
         with self.lock:
-            lightSourceDescription = self.lightSource.describeAll()
+            lightSourceDescription = self.lightSource.describe()
             return lightSourceDescription
 
     @staticmethod 

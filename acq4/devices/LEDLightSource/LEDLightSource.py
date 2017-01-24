@@ -9,13 +9,13 @@ class LEDLightSource(LightSource):
     """Simple device which reports the status of the LED Light Sources...reports up to the LightSource object."""    
     def __init__(self, dm, config, name):
         LightSource.__init__(self, dm, config, name)
-        self.ledconfig = config.get('leds')
+        self.lightsourceconfig = config.get('leds')
 
         self.leds = {}
         self.ledState = {}
         self.ledStatus ={}
 
-        for name, conf in self.ledconfig.iteritems():
+        for name, conf in self.lightsourceconfig.iteritems():
             chan = conf["channel"][1]
             device = conf["channel"][0]
 
@@ -23,26 +23,22 @@ class LEDLightSource(LightSource):
 
             dev.sigHoldingChanged.connect(self.updateLEDState)
 
-            #get an inital state
-            # initState = device.getChannelValue(chan, block=False)
-            # print "name:{} initState:{}".format(name, initState)
-
             self.leds[name] = (dev, conf['channel'])
             #get an inital state
-            initState = dev.getChannelValue(chan, block=False)
-            print "name:{} initState:{}".format(name, initState)
+            initState = dev.getChannelValue(chan)
 
             ledStatusItem = {"name":name, "state": initState}
             self.ledState[chan] = ledStatusItem
 
-        self.sourceState["led"] = self.ledState
+        self.sourceState["leds"] = self.ledState
 
     def updateLEDState(self, channel, value):
         self.ledState[channel]["state"] = value
-        self.sourceState["led"] = self.ledState
+        self.sourceState["leds"] = self.ledState
         self.sigLightChanged.emit(self.ledState)    
 
     def getLEDState(self):
+        self.sourceState = []
         with self.lock:
             change = {}
             for name, conf in self.leds.iteritems():
@@ -54,6 +50,6 @@ class LEDLightSource(LightSource):
                     change[name] = val
                     self.ledState[name] = val
 
-        self.sourceState["led"] = self.ledState
+        self.sourceState["leds"] = self.ledState
         
 
