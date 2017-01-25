@@ -47,6 +47,8 @@ class MosaicEditor(AnalysisModule):
         
         self.items = weakref.WeakKeyDictionary()
         self.files = weakref.WeakValueDictionary()
+        
+        self._addTypes = OrderedDict()
 
         self.ctrl = QtGui.QWidget()
         self.ui = Ui_Form()
@@ -85,13 +87,17 @@ class MosaicEditor(AnalysisModule):
         l = self.canvas.ui.gridLayout
         l.addWidget(self.btnBox, l.rowCount(), 0, 1, l.columnCount())
 
+        self.addCombo = QtGui.QComboBox()
+        self.addCombo.currentIndexChanged.connect(self.addItemChanged)
+        self.btnLayout.addWidget(self.addCombo, 0, 0, 1, 2)
+
         self.saveBtn = QtGui.QPushButton("Save ...")
         self.saveBtn.clicked.connect(self.saveClicked)
-        self.btnLayout.addWidget(self.saveBtn, 0, 0)
+        self.btnLayout.addWidget(self.saveBtn, 1, 0)
 
         self.clearBtn = QtGui.QPushButton("Clear All")
         self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
-        self.btnLayout.addWidget(self.clearBtn, 0, 1)
+        self.btnLayout.addWidget(self.clearBtn, 1, 1)
 
         self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
@@ -102,6 +108,39 @@ class MosaicEditor(AnalysisModule):
         self.ui.mosaicFlipUDBtn.clicked.connect(self.flipUD)
 
         self.imageMax = 0.0
+        
+        self.registerItemType('Grid', MosaicEditor.makeGrid)
+        self.registerItemType('Ruler', MosaicEditor.makeRuler)
+
+    def registerItemType(self, name, func):
+        """Add an item type to the list of addable items. 
+        
+        *func* must be a callable that takes this MosaicEditor as its only argument
+        and returns a CanvasItem instance.
+        """
+        self._addTypes[name] = func
+        self.addCombo.clear()
+        self.addCombo.addItem('Add item..')
+        for k in self._addTypes:
+            self.addCombo.addItem(k)
+            
+    def addItemChanged(self, index):
+        # User requested to create and add a new item
+        if index <= 0:
+            return
+        itemtype = self.addCombo.currentText()
+        self.addCombo.setCurrentIndex(0)
+        item = self._addTypes[itemtype](self)
+        if isinstance(item, QtGui.QGraphicsItem):
+            self.addItem(item, name=itemtype)
+        else:
+            self.addItem(item)
+        
+    def makeGrid(self):
+        return pg.GridItem()
+    
+    def makeRuler(self):
+        return pg.graphicsItems.ROI.RulerROI([pg.Point([0, 0]), pg.Point([1e-3, 1e-3])])
 
     def atlasComboChanged(self, ind):
         if ind == 0:
@@ -200,6 +239,13 @@ class MosaicEditor(AnalysisModule):
                 item.restoreTransform(trans)
             
         return item
+
+    def addItem(self, item, **opts):
+        if isinstance(item, QtGui.QGraphicsItem):
+            return self.canvas.addGraphicsItem(item, **opts)
+        else:
+            self.canvas.addItem(item)
+            return item
 
     def rescaleImages(self):
         """
