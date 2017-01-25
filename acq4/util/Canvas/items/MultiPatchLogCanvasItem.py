@@ -4,6 +4,7 @@ from CanvasItem import CanvasItem
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np
+from .MarkersItem import MarkersItem
 
 
 class MultiPatchLogCanvasItem(CanvasItem):
@@ -21,8 +22,10 @@ class MultiPatchLogCanvasItem(CanvasItem):
             self.pipettes[dev] = arrow
             arrow.setParentItem(self.groupitem)
         
-        opts = {'movable': False, 'rotatable': False, 'name': self.handle.shortName()}
+        opts = {'movable': False, 'rotatable': False}
         opts.update(kwds)
+        if opts.get('name') is None:
+            opts['name'] = self.handle.shortName()            
         CanvasItem.__init__(self, self.groupitem, **opts)
 
         self.timeSlider = QtGui.QSlider()
@@ -30,11 +33,14 @@ class MultiPatchLogCanvasItem(CanvasItem):
         self.timeSlider.setOrientation(QtCore.Qt.Horizontal)
         self.timeSlider.setMinimum(0)
         self.timeSlider.setMaximum(10 * (self.data.lastTime() - self.data.firstTime()))
-
         self.timeSlider.valueChanged.connect(self.timeSliderChanged)
 
+        self.createMarkersBtn = QtGui.QPushButton('Create markers')
+        self.layout.addWidget(self.createMarkersBtn, self.layout.rowCount(), 0)
+        self.createMarkersBtn.clicked.connect(self.createMarkersClicked)
+
     def timeSliderChanged(self, v):
-        t = (v / 10.) + self.data.firstTime()
+        t = self.currentTime()
         pos = self.data.state(t)
         for dev,arrow in self.pipettes.items():
             p = pos.get(dev, {'position':None})['position']
@@ -43,6 +49,19 @@ class MultiPatchLogCanvasItem(CanvasItem):
             else:
                 arrow.show()
                 arrow.setPos(*p[:2])
+
+    def currentTime(self):
+        v = self.timeSlider.value()
+        return (v / 10.) + self.data.firstTime()
+
+    def createMarkersClicked(self):
+        markers = MarkersItem(name=self.name + '_markers')
+        state = self.data.state(self.currentTime())
+        for k,v in state.items():
+            if v.get('position') is None:
+                continue
+            markers.addMarker(name=k, position=v['position'])
+        self.canvas.addItem(markers)
 
     @classmethod
     def checkFile(cls, fh):

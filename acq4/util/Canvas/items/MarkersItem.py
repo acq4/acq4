@@ -14,8 +14,7 @@ class MarkersItem(CanvasItem):
     def __init__(self, **kwds):
         item = pg.ItemGroup()
         opts = {'name': 'markers', 'scalable': False, 'rotatable': False, 'movable': False}
-        opts.update(kwds)
-        
+        opts.update(kwds)        
         CanvasItem.__init__(self, item, **opts)
 
         self.params = pg.parametertree.Parameter.create(name='Markers', type='group', addText='Add marker...')
@@ -28,45 +27,21 @@ class MarkersItem(CanvasItem):
     def checkFile(cls, fh):
         return 0
     
-    def addMarker(self, name='marker'):
-        param = pg.parametertree.Parameter.create(name=name, autoIncrementName=True, type='group', renamable=True, removable=True, children=[
+    def addMarker(self, name='marker', position=(0, 0, 0), params=None):
+        children = [
             {'name': 'Position', 'type': 'group', 'children': [
-                {'name': 'x', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True},
-                {'name': 'y', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True},
-                {'name': 'z', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True},
+                {'name': 'x', 'type': 'float', 'value': position[0], 'suffix': 'm', 'siPrefix': True},
+                {'name': 'y', 'type': 'float', 'value': position[1], 'suffix': 'm', 'siPrefix': True},
+                {'name': 'z', 'type': 'float', 'value': position[2], 'suffix': 'm', 'siPrefix': True},
             ]},
-        ])
+        ]
+        # allow adding extra parameters when adding new markers
+        if params is not None:
+            children.extend(kwds['params'])
+        
+        param = pg.parametertree.Parameter.create(name=name, autoIncrementName=True, type='group', renamable=True, removable=True, children=children)
         self.params.addChild(param)
     
-    
-class MarkerItemCtrlWidget(QtGui.QSplitter):
-    def __init__(self, canvasitem):
-        QtGui.QSplitter.__init__(self)
-        self.canvasitem = weakref.ref(canvasitem)
-
-        self.ptree = pg.parametertree.ParameterTree(showHeader=False)
-        self.ptree.setParameters(canvasitem.params)
-            
-        self.addWidget(self.ptree)
-
-        self.ctrlWidget = QtGui.QWidget(self)
-        self.ctrlLayout = QtGui.QGridLayout()
-        self.ctrlWidget.setLayout(self.ctrlLayout)
-
-        self.addWidget(self.ctrlWidget)
-
-        btns = [
-            # ('setCellPosition', "Set selected cell position"),
-            ('saveJson', 'Save JSON'),
-        ]
-        self.btns = {}
-        for name, text in btns:
-            btn = QtGui.QPushButton(text)
-            self.btns[name] = btn
-            self.ctrlLayout.addWidget(btn, self.ctrlLayout.rowCount(), 0)
-            slot = getattr(self, name)
-            btn.clicked.connect(slot)
-
     def setMarkerPosition(self):
         self.btns['setCellPosition'].setText("Click on new cell position")
         # Evaluate items under click, ignore anything that is transparent, and raise an exception if the top item is partially transparent.
@@ -75,6 +50,26 @@ class MarkerItemCtrlWidget(QtGui.QSplitter):
             # just show one line for the most recently-updated image depth?
             # One line per image?
 
+    
+class MarkerItemCtrlWidget(QtGui.QWidget):
+    def __init__(self, canvasitem):
+        QtGui.QWidget.__init__(self)
+        self.canvasitem = weakref.ref(canvasitem)
+
+        self.layout = QtGui.QGridLayout()
+        
+        self.ptree = pg.parametertree.ParameterTree(showHeader=False)
+        self.ptree.setParameters(canvasitem.params)
+        self.layout.addWidget(self.ptree, 0, 0, 1, 2)
+
+        self.saveJsonBtn = QtGui.QPushButton('Save Json')
+        self.layout.addWidget(self.saveJsonBtn, 1, 0)
+        self.saveJsonBtn.clicked.connect(self.saveJson)
+        
+        self.copyJsonBtn = QtGui.QPushButton('Copy Json')
+        self.layout.addWidget(self.copyJsonBtn, 1, 0)
+        self.copyJsonBtn.clicked.connect(self.copyJson)
+
     def saveJson(self):
         filename = QtGui.QFileDialog.getSaveFileName(None, "Save markers", path, "JSON files (*.json)")
         if filename == '':
@@ -82,5 +77,6 @@ class MarkerItemCtrlWidget(QtGui.QSplitter):
         if not filename.endswith('.json'):
             filename += '.json'
 
-        
+    def copyJson(self):
+        pass
     
