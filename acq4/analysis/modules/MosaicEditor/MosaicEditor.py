@@ -17,6 +17,8 @@ from MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
+import acq4
+
 
 class MosaicEditor(AnalysisModule):
     """
@@ -111,12 +113,15 @@ class MosaicEditor(AnalysisModule):
         
         self.registerItemType('Grid', MosaicEditor.makeGrid)
         self.registerItemType('Ruler', MosaicEditor.makeRuler)
+        self.registerItemType('Markers', MosaicEditor.makeMarkers)
+        self.registerItemType('Cell', MosaicEditor.makeCell)
+        
 
     def registerItemType(self, name, func):
         """Add an item type to the list of addable items. 
         
         *func* must be a callable that takes this MosaicEditor as its only argument
-        and returns a CanvasItem instance.
+        and returns a CanvasItem instance or a (GraphicsItem, {options}) tuple.
         """
         self._addTypes[name] = func
         self.addCombo.clear()
@@ -131,16 +136,24 @@ class MosaicEditor(AnalysisModule):
         itemtype = self.addCombo.currentText()
         self.addCombo.setCurrentIndex(0)
         item = self._addTypes[itemtype](self)
-        if isinstance(item, QtGui.QGraphicsItem):
-            self.addItem(item, name=itemtype)
+        if isinstance(item, tuple):
+            item, opts = item
+            opts.setdefault('name', itemtype)
+            self.addItem(item, **opts)
         else:
             self.addItem(item)
         
     def makeGrid(self):
-        return pg.GridItem()
+        return (pg.GridItem(), {'name': 'grid', 'renamable': True})
     
     def makeRuler(self):
-        return pg.graphicsItems.ROI.RulerROI([pg.Point([0, 0]), pg.Point([1e-3, 1e-3])])
+        return (pg.graphicsItems.ROI.RulerROI([pg.Point([0, 0]), pg.Point([1e-3, 1e-3])]), {'name': 'ruler'})
+
+    def makeMarkers(self):
+        return acq4.util.Canvas.items.MarkersItem()
+
+    def makeCell(self):
+        return acq4.util.Canvas.items.CellCanvasItem()
 
     def atlasComboChanged(self, ind):
         if ind == 0:

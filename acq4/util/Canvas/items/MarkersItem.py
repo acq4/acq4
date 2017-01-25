@@ -1,52 +1,51 @@
+# -*- coding: utf-8 -*-
+import weakref
 from PyQt4 import QtCore, QtGui
-import numpy as np
+from .CanvasItem import CanvasItem
 import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.parametertree
-import acq4.util.DataManager as DataManager
-from .. import Atlas
 
 
-class CCFAtlas(Atlas.Atlas):
-    """MosaicEditor atlas based on Allen Institute Common Coordinate Framework
-
-    * Map slice images to virtual slice of the CCF
-    * Layer annotations
-    * Multiple 3D cell positions
-    * Map cell positions to CCF or to normalized layer coordinates
+class MarkersItem(CanvasItem):
     """
-    def __init__(self):
-        Atlas.Atlas.__init__(self)
+    Canvas item used for marking multiple locations in 3D.
+    
+    """
+    
+    def __init__(self, **kwds):
+        item = pg.ItemGroup()
+        opts = {'name': 'markers', 'scalable': False, 'rotatable': False, 'movable': False}
+        opts.update(kwds)
+        
+        CanvasItem.__init__(self, item, **opts)
 
-        self.params = pg.parametertree.Parameter.create(name='Cells', type='group', addText='Add cell...')
-        self.params.addNew = self.addNewCell
-
-        self._ctrlWidget = None
-
-    def ctrlWidget(self, host):
-        if self._ctrlWidget is None:
-            self._ctrlWidget = AICCFCtrlWidget(self, host)
-        return self._ctrlWidget
-
-    def addNewCell(self, name='Cell'):
+        self.params = pg.parametertree.Parameter.create(name='Markers', type='group', addText='Add marker...')
+        self.params.addNew = self.addMarker
+        
+        self._ctrl = MarkerItemCtrlWidget(self)
+        self.layout.addWidget(self._ctrl, self.layout.rowCount(), 0, 1, 2)
+    
+    @classmethod
+    def checkFile(cls, fh):
+        return 0
+    
+    def addMarker(self, name='marker'):
         param = pg.parametertree.Parameter.create(name=name, autoIncrementName=True, type='group', renamable=True, removable=True, children=[
             {'name': 'Position', 'type': 'group', 'children': [
                 {'name': 'x', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True},
                 {'name': 'y', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True},
                 {'name': 'z', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True},
             ]},
-            {'name': 'Pipette', 'type': 'str'},
         ])
         self.params.addChild(param)
-
-
-class AICCFCtrlWidget(QtGui.QSplitter):
-    def __init__(self, atlas, host):
+    
+    
+class MarkerItemCtrlWidget(QtGui.QSplitter):
+    def __init__(self, canvasitem):
         QtGui.QSplitter.__init__(self)
-        self.atlas = atlas
-        self.host = host
+        self.canvasitem = weakref.ref(canvasitem)
 
-        self.ptree = pg.parametertree.ParameterTree()
-        self.ptree.setParameters(atlas.params)
+        self.ptree = pg.parametertree.ParameterTree(showHeader=False)
+        self.ptree.setParameters(canvasitem.params)
             
         self.addWidget(self.ptree)
 
@@ -57,7 +56,6 @@ class AICCFCtrlWidget(QtGui.QSplitter):
         self.addWidget(self.ctrlWidget)
 
         btns = [
-            ('addFromMultipatch', "Add cells from multipatch log"),
             # ('setCellPosition', "Set selected cell position"),
             ('saveJson', 'Save JSON'),
         ]
@@ -69,14 +67,7 @@ class AICCFCtrlWidget(QtGui.QSplitter):
             slot = getattr(self, name)
             btn.clicked.connect(slot)
 
-    def addFromMultipatch(self):
-        """Add new cells from the current state of the selected multipatch log.
-        """
-
-        raise Exception("Please select a loaded multipatch log in the canvas item list.")
-
-
-    def setCellPosition(self):
+    def setMarkerPosition(self):
         self.btns['setCellPosition'].setText("Click on new cell position")
         # Evaluate items under click, ignore anything that is transparent, and raise an exception if the top item is partially transparent.
         # what if the top item has a composition mode that renders it invisible? 
@@ -85,8 +76,11 @@ class AICCFCtrlWidget(QtGui.QSplitter):
             # One line per image?
 
     def saveJson(self):
-        filename = QtGui.QFileDialog.getSaveFileName(None, "Save atlas configuration", path, "JSON files (*.json)")
+        filename = QtGui.QFileDialog.getSaveFileName(None, "Save markers", path, "JSON files (*.json)")
         if filename == '':
             return
         if not filename.endswith('.json'):
             filename += '.json'
+
+        
+    
