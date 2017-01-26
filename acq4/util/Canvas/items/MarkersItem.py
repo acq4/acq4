@@ -22,7 +22,7 @@ class MarkersItem(CanvasItem):
         
         self._ctrl = MarkerItemCtrlWidget(self)
         self.layout.addWidget(self._ctrl, self.layout.rowCount(), 0, 1, 2)
-    
+
     @classmethod
     def checkFile(cls, fh):
         return 0
@@ -41,6 +41,13 @@ class MarkersItem(CanvasItem):
         
         param = pg.parametertree.Parameter.create(name=name, autoIncrementName=True, type='group', renamable=True, removable=True, children=children)
         self.params.addChild(param)
+
+        param.target = pg.graphicsItems.TargetItem.TargetItem()
+        param.target.setLabel(name)
+        param.target.setParentItem(self.graphicsItem())
+        param.target.setPos(position[0], position[1])
+        param.target.param = weakref.ref(param)
+        param.target.sigDragged.connect(self._targetMoved)
     
     def setMarkerPosition(self):
         self.btns['setCellPosition'].setText("Click on new cell position")
@@ -49,6 +56,12 @@ class MarkersItem(CanvasItem):
         # Maybe we just need a global focus similar to the camera module?
             # just show one line for the most recently-updated image depth?
             # One line per image?
+
+    def _targetMoved(self, target):
+        pos = target.pos()
+        param = target.param()
+        param['Position', 'x'] = pos.x()
+        param['Position', 'y'] = pos.y()
 
     
 class MarkerItemCtrlWidget(QtGui.QWidget):
