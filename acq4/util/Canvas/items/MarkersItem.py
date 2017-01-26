@@ -20,8 +20,8 @@ class MarkersItem(CanvasItem):
         self.params = pg.parametertree.Parameter.create(name='Markers', type='group', addText='Add marker...')
         self.params.addNew = self.addMarker
         
-        self._ctrl = MarkerItemCtrlWidget(self)
-        self.layout.addWidget(self._ctrl, self.layout.rowCount(), 0, 1, 2)
+        self._markerCtrl = MarkerItemCtrlWidget(self)
+        self.layout.addWidget(self._markerCtrl, self.layout.rowCount(), 0, 1, 2)
 
     @classmethod
     def checkFile(cls, fh):
@@ -29,7 +29,7 @@ class MarkersItem(CanvasItem):
     
     def addMarker(self, name='marker', position=(0, 0, 0), params=None):
         children = [
-            {'name': 'Position', 'type': 'group', 'children': [
+            {'name': 'Position', 'type': 'group', 'expanded': False, 'children': [
                 {'name': 'x', 'type': 'float', 'value': position[0], 'suffix': 'm', 'siPrefix': True},
                 {'name': 'y', 'type': 'float', 'value': position[1], 'suffix': 'm', 'siPrefix': True},
                 {'name': 'z', 'type': 'float', 'value': position[2], 'suffix': 'm', 'siPrefix': True},
@@ -42,12 +42,14 @@ class MarkersItem(CanvasItem):
         param = pg.parametertree.Parameter.create(name=name, autoIncrementName=True, type='group', renamable=True, removable=True, children=children)
         self.params.addChild(param)
 
-        param.target = pg.graphicsItems.TargetItem.TargetItem()
-        param.target.setLabel(name)
-        param.target.setParentItem(self.graphicsItem())
-        param.target.setPos(position[0], position[1])
-        param.target.param = weakref.ref(param)
-        param.target.sigDragged.connect(self._targetMoved)
+        target = pg.graphicsItems.TargetItem.TargetItem()
+        target.setLabel(name)
+        target.setLabelAngle(45)
+        target.setParentItem(self.graphicsItem())
+        target.setPos(position[0], position[1])
+        target.param = weakref.ref(param)
+        target.sigDragged.connect(self._targetMoved)
+        param.target = target
     
     def setMarkerPosition(self):
         self.btns['setCellPosition'].setText("Click on new cell position")
@@ -70,6 +72,7 @@ class MarkerItemCtrlWidget(QtGui.QWidget):
         self.canvasitem = weakref.ref(canvasitem)
 
         self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
         
         self.ptree = pg.parametertree.ParameterTree(showHeader=False)
         self.ptree.setParameters(canvasitem.params)
