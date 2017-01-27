@@ -30,9 +30,10 @@ class MultiPatchLogCanvasItem(CanvasItem):
 
         self.timeSlider = QtGui.QSlider()
         self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
+        self._timeSliderResolution = 10.  # 10 ticks per second on the time slider
         self.timeSlider.setOrientation(QtCore.Qt.Horizontal)
         self.timeSlider.setMinimum(0)
-        self.timeSlider.setMaximum(10 * (self.data.lastTime() - self.data.firstTime()))
+        self.timeSlider.setMaximum(self._timeSliderResolution * (self.data.lastTime() - self.data.firstTime()))
         self.timeSlider.valueChanged.connect(self.timeSliderChanged)
 
         self.createMarkersBtn = QtGui.QPushButton('Create markers')
@@ -52,7 +53,10 @@ class MultiPatchLogCanvasItem(CanvasItem):
 
     def currentTime(self):
         v = self.timeSlider.value()
-        return (v / 10.) + self.data.firstTime()
+        return (v / self._timeSliderResolution) + self.data.firstTime()
+
+    def setCurrentTime(self, t):
+        self.timeSlider.setValue(self._timeSliderResolution * (t - self.data.firstTime()))
 
     def createMarkersClicked(self):
         markers = MarkersItem(name=self.name + '_markers')
@@ -71,3 +75,11 @@ class MultiPatchLogCanvasItem(CanvasItem):
         else:
             return 0
 
+    def saveState(self, **kwds):
+        state = CanvasItem.saveState(self, **kwds)
+        state['currentTime'] = self.currentTime()
+        return state
+
+    def restoreState(self, state):
+        self.setCurrentTime(state.pop('currentTime'))
+        CanvasItem.restoreState(self, state)

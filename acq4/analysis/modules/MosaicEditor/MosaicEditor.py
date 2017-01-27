@@ -90,7 +90,7 @@ class MosaicEditor(AnalysisModule):
         l.addWidget(self.btnBox, l.rowCount(), 0, 1, l.columnCount())
 
         self.addCombo = QtGui.QComboBox()
-        self.addCombo.currentIndexChanged.connect(self.addItemChanged)
+        self.addCombo.currentIndexChanged.connect(self._addItemChanged)
         self.btnLayout.addWidget(self.addCombo, 0, 0, 1, 2)
 
         self.saveBtn = QtGui.QPushButton("Save ...")
@@ -129,19 +129,13 @@ class MosaicEditor(AnalysisModule):
         for k in self._addTypes:
             self.addCombo.addItem(k)
             
-    def addItemChanged(self, index):
+    def _addItemChanged(self, index):
         # User requested to create and add a new item
         if index <= 0:
             return
         itemtype = self.addCombo.currentText()
         self.addCombo.setCurrentIndex(0)
-        item = self._addTypes[itemtype](self)
-        if isinstance(item, tuple):
-            item, opts = item
-            opts.setdefault('name', itemtype)
-            self.addItem(item, **opts)
-        else:
-            self.addItem(item)
+        self.addItem(type=itemtype)
         
     def makeGrid(self):
         return (pg.GridItem(), {'name': 'grid', 'renamable': True})
@@ -253,7 +247,20 @@ class MosaicEditor(AnalysisModule):
             
         return item
 
-    def addItem(self, item, **opts):
+    def addItem(self, item=None, type=None, **opts):
+        """Add an item to the MosaicEditor canvas.
+
+        May provide either *item* which is a CanvasItem or QGraphicsItem instance, or
+        *type* which is a string specifying the type of item to create and add.
+        """
+        if item is None:
+            if type is None:
+                raise ValueError("Must provide either item or type argument.")
+            item = self._addTypes[type](self)
+            if isinstance(item, tuple):
+                item, opts = item
+                opts.setdefault('name', type)
+
         if isinstance(item, QtGui.QGraphicsItem):
             return self.canvas.addGraphicsItem(item, **opts)
         else:
@@ -401,7 +408,7 @@ class MosaicEditor(AnalysisModule):
         This includes the list of all items, their current visibility and
         parameters, and the view configuration.
         """
-        items = list(self.items.keys())
+        items = list(self.canvas.items)
         items.sort(key=lambda i: i.zValue())
 
         return OrderedDict([
@@ -434,16 +441,30 @@ class MosaicEditor(AnalysisModule):
             # data was stored with no root path; filenames should be relative to the loaded file            
             root = DataManager.getHandle(rootPath)
             
+        loadfail = []
         for itemState in state['items']:
-            fname = itemState['filename']
-            if root is None:
-                fh = DataManager.getHandle(fh)
+            fname = itemState.get('filename')
+            if fname is None:
+                # create item from scratch and restore state
+                itemtype = itemState.get('type')
+                if itemtype not in self._addTypes:
+                    # warn the user later on that we could not load this item
+                    loadfail.append((itemState.get('name'), 'Unknown item type "%s"' % itemtype))
+                    continue
+                item = self.addItem(type=itemtype)
             else:
-                fh = root[fname]
-            item = self.addFile(fh, name=itemState['name'], inheritTransform=False)
+                # create item by loading file and restore state
+                if root is None:
+                    fh = DataManager.getHandle(fh)
+                else:
+                    fh = root[fname]
+                item = self.addFile(fh, name=itemState['name'], inheritTransform=False)
             item.restoreState(itemState)
-        
+
         self.canvas.view.setState(state['view'])
+        if len(loadfail) > 0:
+            msg = "\n".join(["%s: %s" % m for m in loadfail])
+            raise Exception("Failed to load some items:\n%s" % msg)
 
     def loadStateFile(self, filename):
         state = json.load(open(filename, 'r'))

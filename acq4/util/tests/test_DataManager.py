@@ -48,6 +48,21 @@ def test_datamanager():
     assert d3.name() not in dm.dm._getTree(d1.name())
     assert d2.name() in dm.dm._getTree(d1.name())
 
+    #
+    # root
+    #   + subdir
+    #   |   + subdir2
+    #   + subdir3
+    #
+    assert d1.name(relativeTo=rh) == 'subdir'
+    assert d2.name(relativeTo=rh) == os.path.join('subdir', 'subdir2')
+    assert d2.name(relativeTo=d1) == 'subdir2'
+    assert d2.name(relativeTo=d2) == ''
+    assert d1.name(relativeTo=d2) == '..'
+    assert rh.name(relativeTo=d2) == os.path.join('..', '..')
+    assert d3.name(relativeTo=d2) == os.path.join('..', '..', 'subdir3')
+    assert d2.name(relativeTo=d3) == os.path.join('..', 'subdir', 'subdir2')
+
     # rename subdir from tree widget
     item.setText(0, 'subdir_renamed')
     assert d1.shortName() == 'subdir_renamed'

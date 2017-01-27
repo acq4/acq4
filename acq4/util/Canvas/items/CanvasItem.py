@@ -48,5 +48,6 @@ class CanvasItem(OrigCanvasItem):
     
     def saveState(self, relativeTo=None):
         state = OrigCanvasItem.saveState(self)
-        state['filename'] = None if self.handle is None else self.handle.name(relativeTo=relativeTo)
+        handle = self.getHandle()
+        state['filename'] = None if handle is None else handle.name(relativeTo=relativeTo)
         return state
