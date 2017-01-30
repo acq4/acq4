@@ -42,7 +42,7 @@ class MosaicEditor(AnalysisModule):
     # Version number for save format.
     #   increment minor version number for backward-compatible changes
     #   increment major version number for backward-incompatible changes
-    _saveVersion = (1, 0)
+    _saveVersion = (2, 0)
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
@@ -117,7 +117,7 @@ class MosaicEditor(AnalysisModule):
         self.registerItemType('Cell', MosaicEditor.makeCell)
         
 
-    def registerItemType(self, name, func):
+    def registerItemType(self, itemclass, menuString=None):
         """Add an item type to the list of addable items. 
         
         *func* must be a callable that takes this MosaicEditor as its only argument

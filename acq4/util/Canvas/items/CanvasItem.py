@@ -4,6 +4,8 @@ from acq4.pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
 class CanvasItem(OrigCanvasItem):
     ## extent canvasitem to have support for filehandles
     
+    _typeName = "Item"
+    
     def __init__(self, *args, **kargs):
         OrigCanvasItem.__init__(self, *args, **kargs)
         
@@ -19,10 +21,15 @@ class CanvasItem(OrigCanvasItem):
                 self.restoreTransform(self.opts['defaultUserTransform'])
             if self.opts['name'] is None:
                 self.opts['name'] = self.opts['handle'].shortName()
-        
+
+    @classmethod
+    def typeName(cls):
+        """Return a string used to represent this item type to the user."""
+        return cls._typeName
+     
     def getHandle(self):
         """Return the file handle for this item, if any exists."""
-        return self.opts['handle']
+        return self.opts.get('handle')
     
     @classmethod
     def checkFile(cls, handle):

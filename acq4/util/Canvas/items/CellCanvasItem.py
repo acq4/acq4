@@ -3,12 +3,16 @@ from CanvasItem import CanvasItem
 from PyQt4 import QtCore, QtGui
 import acq4.pyqtgraph as pg
 import acq4.Manager
+from .itemtypes import registerItemType
+
 
 class CellCanvasItem(CanvasItem):
     """
     Canvas item used for marking the location of cells.
     
     """
+    _typeName = "Cell"
+    _requiresFile = False
     
     def __init__(self, **opts):
         if 'scale' not in opts:
@@ -33,4 +37,7 @@ class CellCanvasItem(CanvasItem):
         except AttributeError:
             return 0
         
+registerItemType(CellCanvasItem)
+
+
     

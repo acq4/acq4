@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from acq4.pyqtgraph.Qt import QtCore, QtGui, QtSvg
 from CanvasItem import CanvasItem
+from .itemtypes import registerItemType
+
 
 class SvgCanvasItem(CanvasItem):
+    _typeName = "SVG"
     
     def __init__(self, handle, **opts):
         opts['handle'] = handle
@@ -16,5 +19,6 @@ class SvgCanvasItem(CanvasItem):
         else:
             return 0
         
+registerItemType(SvgCanvasItem)
         
     

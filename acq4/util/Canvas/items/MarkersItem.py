@@ -3,13 +3,15 @@ import weakref
 from PyQt4 import QtCore, QtGui
 from .CanvasItem import CanvasItem
 import acq4.pyqtgraph as pg
+from .itemtypes import registerItemType
 
 
-class MarkersItem(CanvasItem):
+class MarkersCanvasItem(CanvasItem):
     """
     Canvas item used for marking multiple locations in 3D.
     
     """
+    _typeName = "Markers"
     
     def __init__(self, **kwds):
         item = pg.ItemGroup()
@@ -128,6 +130,8 @@ class PointParameter(pg.parametertree.Parameter):
             else:
                 with pg.SignalBlock(self.sigTreeStateChanged, self._treeStateChanged):
                     self.setValue((self['x'], self['y'], self['z']))
+
+registerItemType(MarkersItem)
 
 
 class MarkerItemCtrlWidget(QtGui.QWidget):

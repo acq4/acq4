@@ -4,12 +4,15 @@ from CanvasItem import CanvasItem
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np
-from .MarkersItem import MarkersItem
+from .MarkersCanvasItem import MarkersCanvasItem
+from .itemtypes import registerItemType
 
 
 class MultiPatchLogCanvasItem(CanvasItem):
     """For displaying events recorded in a MultiPatch log file.
     """
+    _typeName = "Multipatch Log"
+    
     def __init__(self, handle, **kwds):
         self.handle = handle
         self.data = handle.read()
@@ -59,7 +62,7 @@ class MultiPatchLogCanvasItem(CanvasItem):
         self.timeSlider.setValue(self._timeSliderResolution * (t - self.data.firstTime()))
 
     def createMarkersClicked(self):
-        markers = MarkersItem(name=self.name + '_markers')
+        markers = MarkersCanvasItem(name=self.name + '_markers')
         state = self.data.state(self.currentTime())
         for k,v in state.items():
             if v.get('position') is None:
@@ -83,3 +86,5 @@ class MultiPatchLogCanvasItem(CanvasItem):
     def restoreState(self, state):
         self.setCurrentTime(state.pop('currentTime'))
         CanvasItem.restoreState(self, state)
+
+registerItemType(MultiPatchLogCanvasItem)
