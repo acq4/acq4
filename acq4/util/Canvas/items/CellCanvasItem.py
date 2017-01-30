@@ -12,7 +12,6 @@ class CellCanvasItem(CanvasItem):
     
     """
     _typeName = "Cell"
-    _requiresFile = False
     
     def __init__(self, **opts):
         if 'scale' not in opts:

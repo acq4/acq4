@@ -21,7 +21,6 @@ class ImageCanvasItem(CanvasItem):
 
     """
     _typeName = "Image"
-    _requiresFile = False
     
     def __init__(self, image=None, **opts):
 
