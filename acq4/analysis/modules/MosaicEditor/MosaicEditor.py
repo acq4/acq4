@@ -17,6 +17,7 @@ from MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
+from acq4.util.Canvas import items
 import acq4
 
 
@@ -92,6 +93,7 @@ class MosaicEditor(AnalysisModule):
         self.addCombo = QtGui.QComboBox()
         self.addCombo.currentIndexChanged.connect(self._addItemChanged)
         self.btnLayout.addWidget(self.addCombo, 0, 0, 1, 2)
+        self.addCombo.addItem('Add item..')
 
         self.saveBtn = QtGui.QPushButton("Save ...")
         self.saveBtn.clicked.connect(self.saveClicked)
@@ -111,43 +113,28 @@ class MosaicEditor(AnalysisModule):
 
         self.imageMax = 0.0
         
-        self.registerItemType('Grid', MosaicEditor.makeGrid)
-        self.registerItemType('Ruler', MosaicEditor.makeRuler)
-        self.registerItemType('Markers', MosaicEditor.makeMarkers)
-        self.registerItemType('Cell', MosaicEditor.makeCell)
-        
+        self.registerItemType(items.getItemType('GridCanvasItem'))
+        self.registerItemType(items.getItemType('RulerCanvasItem'))
+        self.registerItemType(items.getItemType('MarkersCanvasItem'))
+        self.registerItemType(items.getItemType('CellCanvasItem'))
 
     def registerItemType(self, itemclass, menuString=None):
         """Add an item type to the list of addable items. 
-        
-        *func* must be a callable that takes this MosaicEditor as its only argument
-        and returns a CanvasItem instance or a (GraphicsItem, {options}) tuple.
         """
-        self._addTypes[name] = func
-        self.addCombo.clear()
-        self.addCombo.addItem('Add item..')
-        for k in self._addTypes:
-            self.addCombo.addItem(k)
+        if menuString is None:
+            menuString = itemclass.typeName()
+        if itemclass.__name__ not in items.itemTypes():
+            items.registerItemType(itemclass)
+        self._addTypes[menuString] = itemclass.__name__
+        self.addCombo.addItem(menuString)
             
     def _addItemChanged(self, index):
         # User requested to create and add a new item
         if index <= 0:
             return
-        itemtype = self.addCombo.currentText()
+        itemtype = self._addTypes[self.addCombo.currentText()]
         self.addCombo.setCurrentIndex(0)
         self.addItem(type=itemtype)
-        
-    def makeGrid(self):
-        return (pg.GridItem(), {'name': 'grid', 'renamable': True})
-    
-    def makeRuler(self):
-        return (pg.graphicsItems.ROI.RulerROI([pg.Point([0, 0]), pg.Point([1e-3, 1e-3])]), {'name': 'ruler'})
-
-    def makeMarkers(self):
-        return acq4.util.Canvas.items.MarkersItem()
-
-    def makeCell(self):
-        return acq4.util.Canvas.items.CellCanvasItem()
 
     def atlasComboChanged(self, ind):
         if ind == 0:
@@ -247,25 +234,16 @@ class MosaicEditor(AnalysisModule):
             
         return item
 
-    def addItem(self, item=None, type=None, **opts):
+    def addItem(self, item=None, type=None, **kwds):
         """Add an item to the MosaicEditor canvas.
 
         May provide either *item* which is a CanvasItem or QGraphicsItem instance, or
         *type* which is a string specifying the type of item to create and add.
         """
-        if item is None:
-            if type is None:
-                raise ValueError("Must provide either item or type argument.")
-            item = self._addTypes[type](self)
-            if isinstance(item, tuple):
-                item, opts = item
-                opts.setdefault('name', type)
-
         if isinstance(item, QtGui.QGraphicsItem):
-            return self.canvas.addGraphicsItem(item, **opts)
+            return self.canvas.addGraphicsItem(item, **kwds)
         else:
-            self.canvas.addItem(item)
-            return item
+            return self.canvas.addItem(item, type, **kwds)
 
     def rescaleImages(self):
         """
@@ -447,11 +425,11 @@ class MosaicEditor(AnalysisModule):
             if fname is None:
                 # create item from scratch and restore state
                 itemtype = itemState.get('type')
-                if itemtype not in self._addTypes:
+                if itemtype not in items.itemTypes():
                     # warn the user later on that we could not load this item
                     loadfail.append((itemState.get('name'), 'Unknown item type "%s"' % itemtype))
                     continue
-                item = self.addItem(type=itemtype)
+                item = self.addItem(type=itemtype, name=itemState['name'])
             else:
                 # create item by loading file and restore state
                 if root is None:

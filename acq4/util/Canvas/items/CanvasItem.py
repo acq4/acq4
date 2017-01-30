@@ -21,6 +21,11 @@ class CanvasItem(OrigCanvasItem):
                 self.restoreTransform(self.opts['defaultUserTransform'])
             if self.opts['name'] is None:
                 self.opts['name'] = self.opts['handle'].shortName()
+        else:
+            if self.opts['name'] is None:
+                self.opts['name'] = self.typeName()
+            
+        
 
     @classmethod
     def typeName(cls):

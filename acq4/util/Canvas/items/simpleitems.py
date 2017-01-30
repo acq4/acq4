@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from acq4.pyqtgraph.Qt import QtCore, QtGui, QtSvg
+import acq4.pyqtgraph as pg
 from CanvasItem import CanvasItem
 from .itemtypes import registerItemType
+
 
 
 class GridCanvasItem(CanvasItem):
@@ -18,7 +20,7 @@ class RulerCanvasItem(CanvasItem):
     _typeName = "Ruler"
     
     def __init__(self, points=((0, 0), (1, 1)), **kwds):
-        item = pg.RulerROI(points)
+        item = pg.graphicsItems.ROI.RulerROI(points)
         CanvasItem.__init__(self, item, **kwds)
 
 registerItemType(RulerCanvasItem)

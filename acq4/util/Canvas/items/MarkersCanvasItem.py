@@ -3,6 +3,7 @@ import weakref
 from PyQt4 import QtCore, QtGui
 from .CanvasItem import CanvasItem
 import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.graphicsItems.TargetItem
 from .itemtypes import registerItemType
 
 
@@ -15,7 +16,7 @@ class MarkersCanvasItem(CanvasItem):
     
     def __init__(self, **kwds):
         item = pg.ItemGroup()
-        opts = {'name': 'markers', 'scalable': False, 'rotatable': False, 'movable': False}
+        opts = {'scalable': False, 'rotatable': False, 'movable': False}
         opts.update(kwds)        
         CanvasItem.__init__(self, item, **opts)
 
@@ -85,7 +86,7 @@ class MarkersCanvasItem(CanvasItem):
 
     def restoreState(self, state):
         markers = state.pop('markers')
-        CanvasItem.restoreState(state)
+        CanvasItem.restoreState(self, state)
         for marker in self.params.children():
             self.removeMarker(marker.name())
         for name, pos in markers:
@@ -131,7 +132,7 @@ class PointParameter(pg.parametertree.Parameter):
                 with pg.SignalBlock(self.sigTreeStateChanged, self._treeStateChanged):
                     self.setValue((self['x'], self['y'], self['z']))
 
-registerItemType(MarkersItem)
+registerItemType(MarkersCanvasItem)
 
 
 class MarkerItemCtrlWidget(QtGui.QWidget):
