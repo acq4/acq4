@@ -416,6 +416,7 @@ class Canvas(QtGui.QWidget):
             ctrl = item.ctrlWidget()
             ctrl.hide()
             self.ui.ctrlLayout.removeWidget(ctrl)
+            ctrl.setParent(None)
         else:
             if hasattr(item, '_canvasItem'):
                 self.removeItem(item._canvasItem)
