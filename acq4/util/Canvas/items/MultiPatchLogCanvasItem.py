@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import time, re
 from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 import acq4.Manager
@@ -14,9 +15,7 @@ class MultiPatchLogCanvasItem(CanvasItem):
     _typeName = "Multipatch Log"
     
     def __init__(self, handle, **kwds):
-        self.handle = handle
         self.data = handle.read()
-
         self.groupitem = pg.ItemGroup()
 
         self.pipettes = {}
@@ -25,23 +24,20 @@ class MultiPatchLogCanvasItem(CanvasItem):
             self.pipettes[dev] = arrow
             arrow.setParentItem(self.groupitem)
         
-        opts = {'movable': False, 'rotatable': False}
+        opts = {'movable': False, 'rotatable': False, 'handle': handle}
         opts.update(kwds)
         if opts.get('name') is None:
-            opts['name'] = self.handle.shortName()            
+            opts['name'] = handle.shortName()            
         CanvasItem.__init__(self, self.groupitem, **opts)
 
-        self.timeSlider = QtGui.QSlider()
-        self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
         self._timeSliderResolution = 10.  # 10 ticks per second on the time slider
-        self.timeSlider.setOrientation(QtCore.Qt.Horizontal)
-        self.timeSlider.setMinimum(0)
-        self.timeSlider.setMaximum(self._timeSliderResolution * (self.data.lastTime() - self.data.firstTime()))
-        self.timeSlider.valueChanged.connect(self.timeSliderChanged)
-
-        self.createMarkersBtn = QtGui.QPushButton('Create markers')
-        self.layout.addWidget(self.createMarkersBtn, self.layout.rowCount(), 0)
-        self.createMarkersBtn.clicked.connect(self.createMarkersClicked)
+        self._mpCtrlWidget = MultiPatchLogCtrlWidget()
+        self.layout.addWidget(self._mpCtrlWidget, self.layout.rowCount(), 0, 1, 2)
+        self._mpCtrlWidget.timeSlider.setMaximum(self._timeSliderResolution * (self.data.lastTime() - self.data.firstTime()))
+        self._mpCtrlWidget.timeSlider.valueChanged.connect(self.timeSliderChanged)
+        self._mpCtrlWidget.createMarkersBtn.clicked.connect(self.createMarkersClicked)
+        
+        self.timeSliderChanged(0)
 
     def timeSliderChanged(self, v):
         t = self.currentTime()
@@ -53,21 +49,42 @@ class MultiPatchLogCanvasItem(CanvasItem):
             else:
                 arrow.show()
                 arrow.setPos(*p[:2])
+        if t < 1e7:
+            # looks like a relative time
+            h = int(t / 3600.)
+            m = int((t % 3600) / 60.)
+            s = t % 60
+            tstr = "%d:%02d:%0.1f" % (h, m, s)
+        else:
+            # looks like a timestamp
+            tt = time.localtime(t)
+            tstr = time.strftime("%Y-%m-%d %H:%M:%S", tt)
+        self._mpCtrlWidget.timeLabel.setText(tstr)
 
     def currentTime(self):
-        v = self.timeSlider.value()
+        v = self._mpCtrlWidget.timeSlider.value()
         return (v / self._timeSliderResolution) + self.data.firstTime()
 
     def setCurrentTime(self, t):
-        self.timeSlider.setValue(self._timeSliderResolution * (t - self.data.firstTime()))
+        self._mpCtrlWidget.timeSlider.setValue(self._timeSliderResolution * (t - self.data.firstTime()))
 
     def createMarkersClicked(self):
+        fmt = str(self._mpCtrlWidget.createMarkersFormat.text())
         markers = MarkersCanvasItem(name=self.name + '_markers')
         state = self.data.state(self.currentTime())
         for k,v in state.items():
             if v.get('position') is None:
                 continue
-            markers.addMarker(name=k, position=v['position'])
+            
+            # Extract marker number from pipette name
+            m = re.match(r'\D+(\d+)', k)
+            if m is not None:
+                n = int(m.group(1))
+                name = fmt % n
+            else:
+                name = k
+            
+            markers.addMarker(name=name, position=v['position'])
         self.canvas.addItem(markers)
 
     @classmethod
@@ -88,3 +105,26 @@ class MultiPatchLogCanvasItem(CanvasItem):
         CanvasItem.restoreState(self, state)
 
 registerItemType(MultiPatchLogCanvasItem)
+
+
+
+class MultiPatchLogCtrlWidget(QtGui.QWidget):
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.timeSlider = QtGui.QSlider()
+        self.layout.addWidget(self.timeSlider, 0, 0)
+        self.timeSlider.setOrientation(QtCore.Qt.Horizontal)
+        self.timeSlider.setMinimum(0)
+
+        self.timeLabel = QtGui.QLabel()
+        self.layout.addWidget(self.timeLabel, 0, 1)
+
+        self.createMarkersBtn = QtGui.QPushButton('Create markers')
+        self.layout.addWidget(self.createMarkersBtn, 1, 0)
+        
+        self.createMarkersFormat = QtGui.QLineEdit("Cell_%02d")
+        self.layout.addWidget(self.createMarkersFormat, 1, 1)

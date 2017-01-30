@@ -7,7 +7,7 @@ class Canvas(OrigCanvas):
     
     def addFile(self, fh, **opts):
         ## automatically determine what item type to load from file. May invoke dataModel for extra help.
-        types = items.listItems()
+        types = list(items.itemTypes().values())
         
         maxScore = 0
         bestType = None
@@ -37,8 +37,7 @@ class Canvas(OrigCanvas):
             if type is None:
                 raise ValueError("Must provide either item or type argument.")
             item = items.getItemType(type)(**opts)
-            opts = {}
-
-        if len(opts) > 0:
-            raise TypeError("Cannot apply extra options to an existing CanvasItem: %s" % opts)
+        else:
+            if len(opts) > 0:
+                raise TypeError("Cannot apply extra options to an existing CanvasItem: %s" % opts)
         return OrigCanvas.addItem(self, item)
