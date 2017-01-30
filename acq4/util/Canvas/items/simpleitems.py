@@ -4,6 +4,26 @@ from CanvasItem import CanvasItem
 from .itemtypes import registerItemType
 
 
+class GridCanvasItem(CanvasItem):
+    _typeName = "Grid"
+    
+    def __init__(self, **kwds):
+        item = pg.GridItem()
+        CanvasItem.__init__(self, item, **kwds)
+
+registerItemType(GridCanvasItem)
+
+
+class RulerCanvasItem(CanvasItem):
+    _typeName = "Ruler"
+    
+    def __init__(self, points=((0, 0), (1, 1)), **kwds):
+        item = pg.RulerROI(points)
+        CanvasItem.__init__(self, item, **kwds)
+
+registerItemType(RulerCanvasItem)
+
+
 class SvgCanvasItem(CanvasItem):
     _typeName = "SVG"
     
