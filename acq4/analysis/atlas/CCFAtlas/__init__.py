@@ -1,1 +1,0 @@
-from .aiccf import CCFAtlas
