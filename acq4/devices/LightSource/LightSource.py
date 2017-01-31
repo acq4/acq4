@@ -19,22 +19,23 @@ class LightSource(Device):
 
         for name, conf in self.lightsourceconfig.iteritems():
             if not isinstance(conf, basestring):
-                desc = {}
-                desc['name'] = name
-                sourceDescription = []
+                
+                for x in range(len(self.sourceState["leds"])):
+                    if ((self.sourceState["leds"][x]["state"] == 1) and (self.sourceState["leds"][x]["name"] == name)):
+                        desc = {}
+                        desc['name'] = name
+                        desc['state'] = 1
+                        sourceDescription = []
 
-                for k, v in conf.iteritems():
-                    desc[k] = v
-                    sourceDescription.append(desc)
+                        for k, v in conf.iteritems():
+                            desc[k] = v
 
-                desc["description"] = sourceDescription
-            
-            self.description.append(desc)
+                        self.description.append(desc)
 
         return self.description	
 
     def getLightSourceState(self):
-        return self.sourceState
+        return self.sourceState["leds"]
 
     def describeAll(self):
         self.descriptionAll = []

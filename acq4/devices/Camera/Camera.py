@@ -2,7 +2,7 @@
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
-# from acq4.devices.LightSource import LightSource
+
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -254,11 +254,12 @@ class Camera(DAQGeneric, OptomechDevice):
         # TODO: Add a non-blocking mode that returns a Future.
         frames = self._acquireFrames(n)
 
-        info = dict(self.getParams(['binning', 'exposure', 'region', 'triggerMode', 'lightSourceStatus']))
+        info = dict(self.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         ss = self.getScopeState()
         ps = ss['pixelSize']  ## size of CCD pixel
         info['pixelSize'] = [ps[0] * info['binning'][0], ps[1] * info['binning'][1]]
         info['objective'] = ss.get('objective', None)
+        info['lightSource'] = ss.get('lightSourceState', None)
         info['deviceTransform'] = pg.SRTTransform3D(ss['transform'])
 
         return Frame(frames, info)
@@ -372,8 +373,9 @@ class Camera(DAQGeneric, OptomechDevice):
             self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
 
-    def lightChanged(self):        
-        self.scopeState['lightSourceState'] = self.lightSource.describe()
+    def lightChanged(self):
+        with self.lock:        
+            self.scopeState['lightSourceState'] = self.lightSource.describe()
 
     def getLightState(self):
         with self.lock:
@@ -788,8 +790,6 @@ class AcquireThread(Thread):
         lastFrameTime = None
         lastFrameId = None
         fps = None
-        
-        lightSourceDescription = self.dev.getLightSourceDescription()
 
         camState = dict(self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
@@ -804,7 +804,7 @@ class AcquireThread(Thread):
             lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
             scopeState = None
-            lightState = None
+
             while True:
                 ti = 0
                 now = ptime.time()
@@ -827,21 +827,16 @@ class AcquireThread(Thread):
                         ## regenerate frameInfo here
                         ps = ss['pixelSize']  ## size of CCD pixel
                         transform = pg.SRTTransform3D(ss['transform'])
-                        
+
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
                             'objective': ss.get('objective', None),
                             'deviceTransform': transform,
-                            'lightSource': lightSourceDescription
+                            'lightSource': ss.get('lightSourceState', None)
                         }
 
-                    lightSourceStatus = self.dev.getLightState()
-                    lightSourceInfo = {'lightSourceStatus': lightSourceStatus}
-
                     ## Copy frame info to info array
-                    info.update(frameInfo)
-                    info.update(lightSourceInfo)
-
+                    info.update(frameInfo)                    
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)

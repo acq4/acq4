@@ -12,7 +12,7 @@ class LEDLightSource(LightSource):
         self.lightsourceconfig = config.get('leds')
 
         self.leds = {}
-        self.ledState = {}
+        self.ledState = []
         self.ledStatus ={}
 
         for name, conf in self.lightsourceconfig.iteritems():
@@ -27,13 +27,16 @@ class LEDLightSource(LightSource):
             #get an inital state
             initState = dev.getChannelValue(chan)
 
-            ledStatusItem = {"name":name, "state": initState}
-            self.ledState[chan] = ledStatusItem
+            ledStatusItem = {"name":name, "state": initState, "chan":chan}
+            self.ledState.append(ledStatusItem)
 
         self.sourceState["leds"] = self.ledState
 
     def updateLEDState(self, channel, value):
-        self.ledState[channel]["state"] = value
+        for x in range(len(self.ledState)):
+            if (self.ledState[x]["chan"] == channel):
+                self.ledState[x]["state"] = value
+
         self.sourceState["leds"] = self.ledState
         self.sigLightChanged.emit(self.ledState)    
 
