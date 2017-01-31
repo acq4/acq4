@@ -108,10 +108,11 @@ class PointParameter(pg.parametertree.Parameter):
     itemClass = PointParameterItem
 
     def __init__(self, **kwds):
+        pos = kwds.get('value', (0, 0, 0))
         pg.parametertree.Parameter.__init__(self, expanded=False, children=[
-                {'name': 'x', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True, 'step': 10e-6},
-                {'name': 'y', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True, 'step': 10e-6},
-                {'name': 'z', 'type': 'float', 'value': 0, 'suffix': 'm', 'siPrefix': True, 'step': 10e-6},
+                {'name': 'x', 'type': 'float', 'value': pos[0], 'suffix': 'm', 'siPrefix': True, 'step': 10e-6},
+                {'name': 'y', 'type': 'float', 'value': pos[1], 'suffix': 'm', 'siPrefix': True, 'step': 10e-6},
+                {'name': 'z', 'type': 'float', 'value': pos[2], 'suffix': 'm', 'siPrefix': True, 'step': 10e-6},
         ], **kwds)
         self._updateChildren()
         self.sigTreeStateChanged.connect(self._treeStateChanged)

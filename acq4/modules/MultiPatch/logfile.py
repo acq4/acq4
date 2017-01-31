@@ -1,4 +1,4 @@
-import re
+import re, json
 
 
 class MultiPatchLog(object):
@@ -13,10 +13,30 @@ class MultiPatchLog(object):
     def read(self, file):
         for line in open(file, 'r').readlines():
             # parse line
-            fields = re.split(r',\s*', line.strip())
-            time, eventType, device = [eval(v) for v in fields[:3]]
-            data = fields[3:]
-            time = float(time)
+            if line.startswith('{'):
+                # json format
+                event = json.loads(line.rstrip(',\n'))
+
+                # just to cover a bug; remove after updating legacy log files
+                if isinstance(event['event_time'], basestring):
+                    event['event_time'] = float(event['event_time'].rstrip(','))
+            else:
+                # this covers the original multipatch log format; remove after updating all legacy log files
+                fields = re.split(r',\s*', line.strip())
+                time, eventType, device = [eval(v) for v in fields[:3]]
+                data = fields[3:]
+                time = float(time)
+
+                event = {
+                    'event_time': time,
+                    'device': device,
+                    'event': eventType,
+                }
+                if eventType == 'move_stop':
+                    event['position'] = list(map(float, data))
+
+            # keep track of min/max time values
+            time = event['event_time']
             if self._minTime is None:
                 self._minTime = time
                 self._maxTime = time
@@ -24,15 +44,8 @@ class MultiPatchLog(object):
                 self._minTime = min(self._minTime, time)
                 self._maxTime = max(self._maxTime, time)
 
-            event = {
-                'event_time': time,
-                'device': device,
-                'event': eventType,
-            }
-            if eventType == 'move_stop':
-                event['position'] = list(map(float, data))
-
             # initialize irregular time series if needed
+            device = event['device']
             if device not in self._devices:
                 self._devices[device] = {
                     'position': IrregularTimeSeries(interpolate=True)

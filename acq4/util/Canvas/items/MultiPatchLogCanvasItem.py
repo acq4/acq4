@@ -70,8 +70,10 @@ class MultiPatchLogCanvasItem(CanvasItem):
 
     def createMarkersClicked(self):
         fmt = str(self._mpCtrlWidget.createMarkersFormat.text())
-        markers = MarkersCanvasItem(name=self.name + '_markers')
+
+        # get name and position of each new marker
         state = self.data.state(self.currentTime())
+        pips = []
         for k,v in state.items():
             if v.get('position') is None:
                 continue
@@ -84,7 +86,13 @@ class MultiPatchLogCanvasItem(CanvasItem):
             else:
                 name = k
             
-            markers.addMarker(name=name, position=v['position'])
+            pips.append((name, v['position']))
+        pips.sort()
+
+        # create new canvas item and add markers
+        markers = MarkersCanvasItem(name=self.name + '_markers')
+        for name, pos in pips:
+            markers.addMarker(name=name, position=pos)
         self.canvas.addItem(markers)
 
     @classmethod
