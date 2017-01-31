@@ -16,7 +16,7 @@ from .Qt import QtGui, QtCore, USE_PYSIDE
 from .metaarray import MetaArray
 from . import getConfigOption, setConfigOptions
 from . import debug
-
+from .reload import getPreviousVersion 
 
 
 Colors = {

@@ -8,18 +8,21 @@ import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.flowchart
 import acq4.util.DataManager as DataManager
 import acq4.util.debug as debug
+from .itemtypes import registerItemType
 
 
 class ImageCanvasItem(CanvasItem):
-    def __init__(self, image=None, **opts):
-        """
-        CanvasItem displaying an image. 
-        The image may be 2 or 3-dimensional.
-        Options:
-            image: May be a fileHandle, ndarray, or GraphicsItem.
-            handle: May optionally be specified in place of image
+    """
+    CanvasItem displaying an image. 
+    The image may be 2 or 3-dimensional.
+    Options:
+        image: May be a fileHandle, ndarray, or GraphicsItem.
+        handle: May optionally be specified in place of image
 
-        """
+    """
+    _typeName = "Image"
+    
+    def __init__(self, image=None, **opts):
 
         ## If no image was specified, check for a file handle..
         if image is None:
@@ -187,6 +190,8 @@ class ImageCanvasItem(CanvasItem):
         self.filter.restoreState(state['filter'])
         self.imgModeCombo.setCurrentIndex(self.imgModeCombo.findText(state['composition']))
         self.histogram.restoreState(state['imagestate'])
+
+registerItemType(ImageCanvasItem)
 
 
 class ImageFilterWidget(QtGui.QWidget):

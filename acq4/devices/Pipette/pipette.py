@@ -12,6 +12,7 @@ from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
 from .cameraModTemplate import Ui_Form as CamModTemplate
 from .tracker import PipetteTracker
 
@@ -502,7 +503,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.centerArrow.setZValue(5000)
         mod.addItem(self.centerArrow)
 
-        self.target = Target()
+        self.target = TargetItem()
         self.target.setZValue(5000)
         mod.addItem(self.target)
         self.target.setVisible(False)
@@ -522,7 +523,7 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.target.setLabel(num)
             self.target.setLabelAngle(dev.getYawAngle())
 
-        self.depthTarget = Target(movable=False)
+        self.depthTarget = TargetItem(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
@@ -694,92 +695,6 @@ class PipetteCamModInterface(CameraModuleInterface):
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())        
 
-
-class Target(pg.GraphicsObject):
-    sigDragged = QtCore.Signal(object)
-
-    def __init__(self, movable=True):
-        pg.GraphicsObject.__init__(self)
-        self._bounds = None
-        self.movable = movable
-        self.moving = False
-        self.label = None
-        self.labelAngle = 0
-        self.color = (255, 255, 0)
-
-    def setLabel(self, label):
-        self.label = label
-        self.update()
-
-    def setLabelAngle(self, angle):
-        self.labelAngle = angle
-        self.update()
-
-    def setRelativeDepth(self, depth):
-        # adjust the apparent depth of the target
-        dist = depth * 255 / 50e-6
-        self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
-        self.update()
-
-    def boundingRect(self):
-        if self._bounds is None:
-            # too slow!
-            # w = self.pixelLength(pg.Point(1, 0))
-            # if w is None:
-            #     return QtCore.QRectF()
-            # h = self.pixelLength(pg.Point(0, 1))
-            o = self.mapToScene(QtCore.QPointF(0, 0))
-            w = abs(1.0 / (self.mapToScene(QtCore.QPointF(1, 0)) - o).x())
-            h = abs(1.0 / (self.mapToScene(QtCore.QPointF(0, 1)) - o).y())
-            self._px = (w, h)
-            w *= 21
-            h *= 21 
-            self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
-        return self._bounds
-
-    def viewTransformChanged(self):
-        self._bounds = None
-        self.prepareGeometryChange()
-
-    def paint(self, p, *args):
-        p.setRenderHint(p.Antialiasing)
-        px, py = self._px
-        w = 5 * px
-        h = 5 * py
-        r = QtCore.QRectF(-w, -h, w*2, h*2)
-        p.setPen(pg.mkPen(self.color))
-        p.setBrush(pg.mkBrush(0, 0, 255, 100))
-        p.drawEllipse(r)
-        p.drawLine(pg.Point(-w*2, 0), pg.Point(w*2, 0))
-        p.drawLine(pg.Point(0, -h*2), pg.Point(0, h*2))
-
-        if self.label is not None:
-            angle = self.labelAngle * np.pi / 180.
-            pos = p.transform().map(QtCore.QPointF(0, 0)) + 15 * QtCore.QPointF(np.cos(angle), -np.sin(angle))
-            p.resetTransform()
-            p.drawText(QtCore.QRectF(pos.x()-10, pos.y()-10, 20, 20), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, self.label)
-
-    def mouseDragEvent(self, ev):
-        if not self.movable:
-            return
-        if ev.button() == QtCore.Qt.LeftButton:
-            if ev.isStart():
-                self.moving = True
-                self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
-                self.startPosition = self.pos()
-            ev.accept()
-            
-            if not self.moving:
-                return
-                
-            self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
-            if ev.isFinish():
-                self.moving = False
-                self.sigDragged.emit(self)
-
-    def hoverEvent(self, ev):
-        if self.movable:
-            ev.acceptDrags(QtCore.Qt.LeftButton)
 
 
 class Axis(pg.ROI):

@@ -17,6 +17,9 @@ from MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
+from acq4.util.Canvas import items
+import acq4
+
 
 class MosaicEditor(AnalysisModule):
     """
@@ -40,13 +43,15 @@ class MosaicEditor(AnalysisModule):
     # Version number for save format.
     #   increment minor version number for backward-compatible changes
     #   increment major version number for backward-incompatible changes
-    _saveVersion = (1, 0)
+    _saveVersion = (2, 0)
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
         self.items = weakref.WeakKeyDictionary()
         self.files = weakref.WeakValueDictionary()
+        
+        self._addTypes = OrderedDict()
 
         self.ctrl = QtGui.QWidget()
         self.ui = Ui_Form()
@@ -85,13 +90,18 @@ class MosaicEditor(AnalysisModule):
         l = self.canvas.ui.gridLayout
         l.addWidget(self.btnBox, l.rowCount(), 0, 1, l.columnCount())
 
+        self.addCombo = QtGui.QComboBox()
+        self.addCombo.currentIndexChanged.connect(self._addItemChanged)
+        self.btnLayout.addWidget(self.addCombo, 0, 0, 1, 2)
+        self.addCombo.addItem('Add item..')
+
         self.saveBtn = QtGui.QPushButton("Save ...")
         self.saveBtn.clicked.connect(self.saveClicked)
-        self.btnLayout.addWidget(self.saveBtn, 0, 0)
+        self.btnLayout.addWidget(self.saveBtn, 1, 0)
 
         self.clearBtn = QtGui.QPushButton("Clear All")
         self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
-        self.btnLayout.addWidget(self.clearBtn, 0, 1)
+        self.btnLayout.addWidget(self.clearBtn, 1, 1)
 
         self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
@@ -102,6 +112,29 @@ class MosaicEditor(AnalysisModule):
         self.ui.mosaicFlipUDBtn.clicked.connect(self.flipUD)
 
         self.imageMax = 0.0
+        
+        self.registerItemType(items.getItemType('GridCanvasItem'))
+        self.registerItemType(items.getItemType('RulerCanvasItem'))
+        self.registerItemType(items.getItemType('MarkersCanvasItem'))
+        self.registerItemType(items.getItemType('CellCanvasItem'))
+
+    def registerItemType(self, itemclass, menuString=None):
+        """Add an item type to the list of addable items. 
+        """
+        if menuString is None:
+            menuString = itemclass.typeName()
+        if itemclass.__name__ not in items.itemTypes():
+            items.registerItemType(itemclass)
+        self._addTypes[menuString] = itemclass.__name__
+        self.addCombo.addItem(menuString)
+            
+    def _addItemChanged(self, index):
+        # User requested to create and add a new item
+        if index <= 0:
+            return
+        itemtype = self._addTypes[self.addCombo.currentText()]
+        self.addCombo.setCurrentIndex(0)
+        self.addItem(type=itemtype)
 
     def atlasComboChanged(self, ind):
         if ind == 0:
@@ -200,6 +233,17 @@ class MosaicEditor(AnalysisModule):
                 item.restoreTransform(trans)
             
         return item
+
+    def addItem(self, item=None, type=None, **kwds):
+        """Add an item to the MosaicEditor canvas.
+
+        May provide either *item* which is a CanvasItem or QGraphicsItem instance, or
+        *type* which is a string specifying the type of item to create and add.
+        """
+        if isinstance(item, QtGui.QGraphicsItem):
+            return self.canvas.addGraphicsItem(item, **kwds)
+        else:
+            return self.canvas.addItem(item, type, **kwds)
 
     def rescaleImages(self):
         """
@@ -342,7 +386,7 @@ class MosaicEditor(AnalysisModule):
         This includes the list of all items, their current visibility and
         parameters, and the view configuration.
         """
-        items = list(self.items.keys())
+        items = list(self.canvas.items)
         items.sort(key=lambda i: i.zValue())
 
         return OrderedDict([
@@ -375,16 +419,30 @@ class MosaicEditor(AnalysisModule):
             # data was stored with no root path; filenames should be relative to the loaded file            
             root = DataManager.getHandle(rootPath)
             
+        loadfail = []
         for itemState in state['items']:
-            fname = itemState['filename']
-            if root is None:
-                fh = DataManager.getHandle(fh)
+            fname = itemState.get('filename')
+            if fname is None:
+                # create item from scratch and restore state
+                itemtype = itemState.get('type')
+                if itemtype not in items.itemTypes():
+                    # warn the user later on that we could not load this item
+                    loadfail.append((itemState.get('name'), 'Unknown item type "%s"' % itemtype))
+                    continue
+                item = self.addItem(type=itemtype, name=itemState['name'])
             else:
-                fh = root[fname]
-            item = self.addFile(fh, name=itemState['name'], inheritTransform=False)
+                # create item by loading file and restore state
+                if root is None:
+                    fh = DataManager.getHandle(fh)
+                else:
+                    fh = root[fname]
+                item = self.addFile(fh, name=itemState['name'], inheritTransform=False)
             item.restoreState(itemState)
-        
+
         self.canvas.view.setState(state['view'])
+        if len(loadfail) > 0:
+            msg = "\n".join(["%s: %s" % m for m in loadfail])
+            raise Exception("Failed to load some items:\n%s" % msg)
 
     def loadStateFile(self, filename):
         state = json.load(open(filename, 'r'))
