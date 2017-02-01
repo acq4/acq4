@@ -280,7 +280,7 @@ class ZMQIgorBridge(object):
             result = reply.get("result", {})
             restype = result.get("type", "")
             val = result.get("value", None)
-            if restype == "wave":
+            if (restype == "wave") and (val is not None):
                 return self.parseWave(val)
             else:
                 return val

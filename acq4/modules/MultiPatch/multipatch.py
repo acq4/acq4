@@ -48,8 +48,8 @@ class PipetteControl(QtGui.QWidget):
             ch.pipCtrl = self
 
         self.gv = pg.GraphicsLayoutWidget()
-        self.leftPlot = self.gv.addPlot(title="Rss")
-        self.rightPlot = self.gv.addPlot(title="Rpeak")
+        self.leftPlot = self.gv.addPlot()
+        self.rightPlot = self.gv.addPlot()
         self.rightPlot.setXLink(self.leftPlot.getViewBox())
         self.ui.plotLayout.addWidget(self.gv)
 
@@ -524,7 +524,7 @@ class MultiPatchWindow(QtGui.QWidget):
             self.writeRecords(self.eventHistory)
 
     def recordEvent(self, **kwds):
-        kwds["event_time"] = '%0.4f,'%pg.ptime.time()
+        kwds["event_time"] = pg.ptime.time()
         self.eventHistory.append(kwds)
         self.writeRecords([kwds])
 
