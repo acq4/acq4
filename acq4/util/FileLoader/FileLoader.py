@@ -89,11 +89,21 @@ class FileLoader(QtGui.QWidget):
             QtGui.QApplication.restoreOverrideCursor()
 
     def clearClicked(self):
+        """Remove all loaded data. User will be asked whether they really want to clear."""
+        ## double-check with user to avoid accidental button presses
+        if len(self.items) > 0:
+            response = QtGui.QMessageBox.question(self.clearBtn, "Warning", "Really clear all items?", 
+                QtGui.QMessageBox.Ok|QtGui.QMessageBox.Cancel)
+            if response != QtGui.QMessageBox.Ok:
+                return
+        else:
+            return
+
+        ## clear the data
         if self.host is not None:
             self.host.clearFilesRequested()
         self.ui.fileTree.clear()
         self.loaded = []
-
             
     def selectedFileChanged(self):
         self.sigSelectedFileChanged.emit(self.ui.fileTree.currentItem())

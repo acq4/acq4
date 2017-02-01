@@ -2,8 +2,7 @@
 
 # Form implementation generated from reading ui file 'acq4/util/FileLoader/template.ui'
 #
-# Created: Tue Dec 13 15:21:33 2016
-#      by: PyQt4 UI code generator 4.10.4
+# Created by: PyQt4 UI code generator 4.11.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -38,7 +37,6 @@ class Ui_Form(object):
         self.layoutWidget.setObjectName(_fromUtf8("layoutWidget"))
         self.verticalLayout = QtGui.QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setSpacing(0)
-        self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.setDirBtn = QtGui.QPushButton(self.layoutWidget)
         self.setDirBtn.setObjectName(_fromUtf8("setDirBtn"))
@@ -52,20 +50,19 @@ class Ui_Form(object):
         self.loadBtn = QtGui.QPushButton(self.layoutWidget)
         self.loadBtn.setObjectName(_fromUtf8("loadBtn"))
         self.verticalLayout.addWidget(self.loadBtn)
+        self.clearBtn = QtGui.QPushButton(self.layoutWidget)
+        self.clearBtn.setObjectName(_fromUtf8("clearBtn"))
+        self.verticalLayout.addWidget(self.clearBtn)
         self.layoutWidget1 = QtGui.QWidget(self.splitter)
         self.layoutWidget1.setObjectName(_fromUtf8("layoutWidget1"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_2.setSpacing(0)
-        self.verticalLayout_2.setMargin(0)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
         self.fileTree = QtGui.QTreeWidget(self.layoutWidget1)
         self.fileTree.setHeaderHidden(True)
         self.fileTree.setObjectName(_fromUtf8("fileTree"))
         self.fileTree.headerItem().setText(0, _fromUtf8("1"))
         self.verticalLayout_2.addWidget(self.fileTree)
-        self.clearBtn = QtGui.QPushButton(self.layoutWidget1)
-        self.clearBtn.setObjectName(_fromUtf8("clearBtn"))
-        self.verticalLayout_2.addWidget(self.clearBtn)
         self.label = QtGui.QLabel(self.layoutWidget1)
         self.label.setObjectName(_fromUtf8("label"))
         self.verticalLayout_2.addWidget(self.label)
