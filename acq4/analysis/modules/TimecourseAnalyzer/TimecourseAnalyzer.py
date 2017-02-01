@@ -54,6 +54,7 @@ class TimecourseAnalyzer(AnalysisModule):
         ])
         self.initializeElements()
 
+        self.fileLoader= self.getElement('File Loader', create=True)
         self.exptPlot = self.getElement('Experiment Plot', create=True)
         self.tracesPlot = self.getElement('Traces Plot', create=True)
         self.resultsTable = self.getElement('Results Table', create=True)
@@ -80,6 +81,7 @@ class TimecourseAnalyzer(AnalysisModule):
         self.analyzeBtn.clicked.connect(self.analyzeBtnClicked)
         self.storeToDBBtn.clicked.connect(self.storeToDBBtnClicked)
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
+        self.fileLoader.sigClearRequested.connect(self.clearFilesRequested)
 
     def tableColumnSelected(self, column):
         #print "ColumnSelected -- ", column
@@ -98,6 +100,7 @@ class TimecourseAnalyzer(AnalysisModule):
         #    self.flowchart.nodes()['Plot_001'].setPlot(fp)
 
     def clearFilesRequested(self):
+        print "clear files called."
         self.expStart = 0
         self.traces = np.array([], dtype=[('timestamp', float), ('data', object), ('fileHandle', object), ('results', object)])
         self.files = []
