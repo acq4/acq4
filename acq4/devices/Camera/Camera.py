@@ -376,6 +376,7 @@ class Camera(DAQGeneric, OptomechDevice):
     def lightChanged(self):
         with self.lock:        
             self.scopeState['lightSourceState'] = self.lightSource.describe()
+            self.scopeState['id'] += 1
 
     def getLightState(self):
         with self.lock:
