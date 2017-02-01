@@ -15,6 +15,7 @@ class FileLoader(QtGui.QWidget):
     sigFileLoaded = QtCore.Signal(object)
     sigBaseChanged = QtCore.Signal(object)
     sigSelectedFileChanged = QtCore.Signal(object)
+    sigClearRequested = QtCore.Signal(object)
     
     def __init__(self, dataManager, host=None, showFileTree=True):
         self._baseDir = None
@@ -31,10 +32,6 @@ class FileLoader(QtGui.QWidget):
         self.ui.dirTree.currentItemChanged.connect(self.updateNotes) ## self.ui.dirTree is a DirTreeWidget
         self.ui.dirTree.itemDoubleClicked.connect(self.doubleClickEvent)
         self.ui.fileTree.currentItemChanged.connect(self.selectedFileChanged)
-
-        ### disable clearBtn if host does not have a clearFilesRequested function
-        if not hasattr(host, 'clearFilesRequested') and self.host is not None:
-            self.ui.clearBtn.setEnabled(False)
         
         self.ui.fileTree.setVisible(showFileTree)
         self.ui.notesTextEdit.setReadOnly(True)
@@ -84,7 +81,6 @@ class FileLoader(QtGui.QWidget):
                     self.ui.fileTree.addTopLevelItem(item)
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
-            #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
 
@@ -100,8 +96,7 @@ class FileLoader(QtGui.QWidget):
             return
 
         ## clear the data
-        if self.host is not None:
-            self.host.clearFilesRequested()
+        self.sigClearRequested.emit()
         self.ui.fileTree.clear()
         self.loaded = []
             
@@ -131,16 +126,11 @@ class FileLoader(QtGui.QWidget):
 
         
     def updateNotes(self, current, previous):
-        #sFile = self.ui.dirTree.selectedFile()
         fh = current
         if fh is None:
             return
-        
         notes = fh.handle.info().get('notes', ' ')
-        
         self.ui.notesTextEdit.setPlainText(notes)
-        #print fh
-        #print fh.info()
         
     def loadedFiles(self):
         """Return a list of loaded file handles"""
