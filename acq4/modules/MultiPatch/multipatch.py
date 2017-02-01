@@ -158,7 +158,7 @@ class MultiPatchWindow(QtGui.QWidget):
         distance = self.module.config.get('reSealDistance', 150e-6)
         for pip in self.selectedPipettes():
             pip.retract(distance, speed)
-
+        
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
@@ -386,11 +386,12 @@ class MultiPatchWindow(QtGui.QWidget):
             bl[2, i+4, 1] = 1 if pip in sel else 0
             bl[2, i+4, 0] = 1 if ctrl.solo() else 0
 
-        bl[0, 1] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
+        bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
         bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
         bl[2, 2] = 1 if self.ui.calibrateBtn.isChecked() else 0
-        bl[4, 0] = 1 if self.ui.slowBtn.isChecked() else 0
+        bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
         bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
+        
         self.xkdev.setBacklights(bl, axis=1)
 
     def xkeysStateChanged(self, dev, changes):
@@ -412,18 +413,17 @@ class MultiPatchWindow(QtGui.QWidget):
     def xkeysAction(self, key):
         actions = {
             (0, 0): self.ui.sealBtn,
-            (0, 1): self.ui.hideMarkersBtn,
+            (1, 2): self.ui.hideMarkersBtn,
             (0, 2): self.ui.setTargetBtn,
             (2, 0): self.ui.coarseSearchBtn,
             (2, 1): self.ui.fineSearchBtn,
             (2, 2): self.ui.calibrateBtn,
-            (3, 0): self.ui.idleBtn,
             (3, 1): self.ui.aboveTargetBtn,
             (3, 2): self.ui.approachBtn,
-            (4, 0): self.ui.slowBtn,
+            (4, 1): self.ui.slowBtn,
             (4, 2): self.ui.fastBtn,
-            (6, 1): self.ui.toTargetBtn,
             (6, 2): self.ui.homeBtn,
+            (5, 0): self.ui.reSealBtn,
         }
         action = actions.get(key, None)
         if action is None:
