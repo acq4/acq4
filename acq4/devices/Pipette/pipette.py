@@ -503,7 +503,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.centerArrow.setZValue(5000)
         mod.addItem(self.centerArrow)
 
-        self.target = TargetItem()
+        self.target = Target()
         self.target.setZValue(5000)
         mod.addItem(self.target)
         self.target.setVisible(False)
@@ -523,7 +523,7 @@ class PipetteCamModInterface(CameraModuleInterface):
             self.target.setLabel(num)
             self.target.setLabelAngle(dev.getYawAngle())
 
-        self.depthTarget = TargetItem(movable=False)
+        self.depthTarget = Target(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
@@ -695,6 +695,14 @@ class PipetteCamModInterface(CameraModuleInterface):
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())        
 
+
+class Target(TargetItem):
+    def setRelativeDepth(self, depth):
+        # adjust the apparent depth of the target
+        dist = depth * 255 / 50e-6
+        self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
+        self._picture = None
+        self.update()
 
 
 class Axis(pg.ROI):

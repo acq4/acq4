@@ -42,12 +42,6 @@ class TargetItem(GraphicsObject):
         self.labelAngle = angle
         self._updateLabel()
 
-    def setRelativeDepth(self, depth):
-        # adjust the apparent depth of the target
-        dist = depth * 255 / 50e-6
-        self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
-        self.update()
-
     def boundingRect(self):
         if self._picture is None:
             self._drawPicture()
