@@ -8,12 +8,14 @@ from acq4.Manager import logMsg, logExc, getManager
 class FileLoader(QtGui.QWidget):
     """Interface for 1) displaying directory tree and 2) loading a file from the tree.
     You must call setHost, and the widget will call host.loadFileRequested whenever 
-    the user requests to load a file."""
+    the user requests to load a file and host.clearFilesRequested whenever the user 
+    clicks the clear button."""
     
     
     sigFileLoaded = QtCore.Signal(object)
     sigBaseChanged = QtCore.Signal(object)
     sigSelectedFileChanged = QtCore.Signal(object)
+    sigClearRequested = QtCore.Signal()
     
     def __init__(self, dataManager, host=None, showFileTree=True):
         self._baseDir = None
@@ -26,6 +28,7 @@ class FileLoader(QtGui.QWidget):
         
         self.ui.setDirBtn.clicked.connect(self.setBaseClicked)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
+        self.ui.clearBtn.clicked.connect(self.clearClicked)
         self.ui.dirTree.currentItemChanged.connect(self.updateNotes) ## self.ui.dirTree is a DirTreeWidget
         self.ui.dirTree.itemDoubleClicked.connect(self.doubleClickEvent)
         self.ui.fileTree.currentItemChanged.connect(self.selectedFileChanged)
@@ -78,9 +81,24 @@ class FileLoader(QtGui.QWidget):
                     self.ui.fileTree.addTopLevelItem(item)
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
-            #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
+
+    def clearClicked(self):
+        """Remove all loaded data. User will be asked whether they really want to clear."""
+        ## double-check with user to avoid accidental button presses
+        if len(self.loaded) > 0:
+            response = QtGui.QMessageBox.question(self.ui.clearBtn, "Warning", "Really clear all items?", 
+                QtGui.QMessageBox.Ok|QtGui.QMessageBox.Cancel)
+            if response != QtGui.QMessageBox.Ok:
+                return
+        else:
+            return
+
+        ## clear the data
+        self.sigClearRequested.emit()
+        self.ui.fileTree.clear()
+        self.loaded = []
             
     def selectedFileChanged(self):
         self.sigSelectedFileChanged.emit(self.ui.fileTree.currentItem())
@@ -108,16 +126,11 @@ class FileLoader(QtGui.QWidget):
 
         
     def updateNotes(self, current, previous):
-        #sFile = self.ui.dirTree.selectedFile()
         fh = current
         if fh is None:
             return
-        
         notes = fh.handle.info().get('notes', ' ')
-        
         self.ui.notesTextEdit.setPlainText(notes)
-        #print fh
-        #print fh.info()
         
     def loadedFiles(self):
         """Return a list of loaded file handles"""
