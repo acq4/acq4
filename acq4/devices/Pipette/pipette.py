@@ -700,7 +700,8 @@ class Target(TargetItem):
     def setRelativeDepth(self, depth):
         # adjust the apparent depth of the target
         dist = depth * 255 / 50e-6
-        self.color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
+        color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
+        self.pen = pg.mkPen(color)
         self._picture = None
         self.update()
 
