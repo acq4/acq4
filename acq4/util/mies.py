@@ -2,6 +2,11 @@ from igorpro import IgorThread, IgorCallError
 from PyQt4 import QtCore
 
 
+# MIES constants, see MIES_Constants.ipf
+PRESSURE_METHOD_APPROACH = 0
+PRESSURE_METHOD_SEAL = 1
+
+
 def __reload__(old):
     MIES._bridge = old['MIES']._bridge
 
@@ -92,14 +97,10 @@ class MIES(QtCore.QObject):
         return self.setCtrl("setvar_DataAcq_SSPressure", pressure)
 
     def setApproach(self, hs):
-        windowName = '"{}"'.format(self.windowName)
-        return self.igor("P_MethodApproach", windowName, hs)
-        #return self.setCtrl("button_DataAcq_Approach")
+        return self.igor("P_SetPressureMode", self.windowName, hs, PRESSURE_METHOD_APPROACH)
 
     def setSeal(self, hs):
-        windowName = '"{}"'.format(self.windowName)
-        return self.igor("P_MethodSeal", windowName, hs)
-        #return self.setCtrl("button_DataAcq_Seal")
+        return self.igor("P_SetPressureMode", self.windowName, hs, PRESSURE_METHOD_SEAL)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
