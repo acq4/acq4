@@ -2,67 +2,41 @@
 from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import acq4.util.Mutex as Mutex
+from collections import OrderedDict
+
 
 class LightSource(Device):
-    """Simple device which reports information of current illumination source."""
-
-    sigLightChanged = QtCore.Signal(object) # to be used upstream 
+    """Device tracking the state and properties of multiple illumination sources.
+    """
+    # emitted when the on/off status of a light changes
+    sigLightChanged = QtCore.Signal(object, object)  # self, light_name
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        # self.lightsourceconfig = config.get('sources')
-        self.sourceState = {}
-        self.lock = Mutex.Mutex()
+        self._sources = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
+        self._lock = Mutex.Mutex()
 
-    def describe(self):
-        self.description = []
+    def describe(self, onlyActive=True):
+        """Return a description of the current state of all active light sources.
 
-        for name, conf in self.lightsourceconfig.iteritems():
-            if not isinstance(conf, basestring):
-                
-                for x in range(len(self.sourceState["leds"])):
-                    if ((self.sourceState["leds"][x]["state"] == 1) and (self.sourceState["leds"][x]["name"] == name)):
-                        desc = {}
-                        desc['name'] = name
-                        desc['state'] = 1
-                        sourceDescription = []
+        If onlyActive is False, then information for all sources will be returned, whether or not they are active.
+        """
+        if onlyActive:
+            return OrderedDict([(n,s) for n,s in self._sources.items() if s['active']])
+        else:
+            return self._sources.copy()
 
-                        for k, v in conf.iteritems():
-                            desc[k] = v
+    def activeSources(self):
+        """Return the names of all active light sources.
+        """
+        return [s['name'] for s in self._sources if s['active']]
 
-                        self.description.append(desc)
+    def sourceActive(self, name):
+        """Return True if the named light source is currently active.
+        """
+        return self.sources[name]['active']
 
-        return self.description	
-
-    def getLightSourceState(self):
-        return self.sourceState["leds"]
-
-    def describeAll(self):
-        self.descriptionAll = []
-
-        for name, conf in self.lightsourceconfig.iteritems():
-            if not isinstance(conf, basestring):
-                desc = {}
-                desc['name'] = name
-                sourceDescription = []
-
-                for k, v in conf.iteritems():
-                    name = k
-                    desc = {}
-                    desc['name'] = k
-
-                    for key, value in v.iteritems():
-                        desc[key] = value
-                        
-                    sourceDescription.append(desc)
-
-                desc["description"] = sourceDescription
-
-            self.descriptionAll.append(desc)
-
-        statusItem = {"status": self.sourceState}
-
-        self.descriptionAll.append(statusItem)
-
-        return self.descriptionAll
-
+    def setSourceActive(self, name, active):
+        """Activate / deactivate a light source.
+        """
+        raise NotImplementedError()

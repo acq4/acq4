@@ -1,58 +1,36 @@
 # -*- coding: utf-8 -*-
-from acq4.devices.Device import *
-from acq4.devices.LightSource import *
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTaskGui
-from PyQt4 import QtCore, QtGui
-import acq4.util.Mutex as Mutex
+from ..LightSource import *
+
 
 class LEDLightSource(LightSource):
-    """Simple device which reports the status of the LED Light Sources...reports up to the LightSource object."""    
+    """Light source device controlled using digital outputs."""
     def __init__(self, dm, config, name):
         LightSource.__init__(self, dm, config, name)
-        self.lightsourceconfig = config.get('leds')
 
-        self.leds = {}
-        self.ledState = []
-        self.ledStatus ={}
+        self._channelsByName = {}  # name: (dev, chan)
+        self._channelNames = {} # (dev, chan): name
 
-        for name, conf in self.lightsourceconfig.iteritems():
-            chan = conf["channel"][1]
-            device = conf["channel"][0]
-
+        for name, conf in config['leds'].items():
+            device, chan = conf.pop("channel")
             dev = dm.getDevice(device)
+            dev.sigHoldingChanged.connect(self._mkcb(dev))
 
-            dev.sigHoldingChanged.connect(self.updateLEDState)
+            conf['active'] = bool(dev.getChanHolding(chan))
+            self._sources[name] = conf
+            self._channelsByName[name] = (dev, chan)
+            self._channelNames[(dev, chan)] = name
 
-            self.leds[name] = (dev, conf['channel'])
-            #get an inital state
-            initState = dev.getChannelValue(chan)
+    def _mkcb(self, dev):
+        return lambda chan, val: self._channelStateChanged(dev, chan, val)
 
-            ledStatusItem = {"name":name, "state": initState, "chan":chan}
-            self.ledState.append(ledStatusItem)
+    def _channelStateChanged(self, dev, channel, value):
+        name = self._channelNames[(dev, channel)]
+        state = bool(value)
+        if self._sources[name]['active'] != state:
+            self._sources[name]['active'] = state
+            self.sigLightChanged.emit(self, name)
 
-        self.sourceState["leds"] = self.ledState
-
-    def updateLEDState(self, channel, value):
-        for x in range(len(self.ledState)):
-            if (self.ledState[x]["chan"] == channel):
-                self.ledState[x]["state"] = value
-
-        self.sourceState["leds"] = self.ledState
-        self.sigLightChanged.emit(self.ledState)    
-
-    def getLEDState(self):
-        self.sourceState = []
-        with self.lock:
-            change = {}
-            for name, conf in self.leds.iteritems():
-                daq, chan = conf
-                val = daq.getChannelValue(chan[1], block=False)
-                self.ledState[name] = val
-
-                if self.ledState.get(name, None) != val:
-                    change[name] = val
-                    self.ledState[name] = val
-
-        self.sourceState["leds"] = self.ledState
-        
-
+    def setSourceActive(self, name, active):
+        dev, chan = self._channelsByName[name]
+        dev.setChanHolding(chan,  float(active))

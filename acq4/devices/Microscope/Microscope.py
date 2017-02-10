@@ -23,7 +23,7 @@ class Microscope(Device, OptomechDevice):
     """
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
-    sigLightChanged = QtCore.Signal()
+    sigLightChanged = QtCore.Signal(object, object)  # self, lightName
     sigObjectiveListChanged = QtCore.Signal()
     sigSurfaceDepthChanged = QtCore.Signal(object)
     
@@ -67,6 +67,9 @@ class Microscope(Device, OptomechDevice):
         ## if there is a light source, configure it here
         if 'lightSource' in config:
             self.lightSource = dm.getDevice(config['lightSource'])
+            self.lightSource.sigLightChanged.connect(self._lightChanged)
+        else:
+            self.lightSource = None
 
         ## If there is a switch device, configure it here
         if 'objectiveSwitch' in config:
@@ -113,40 +116,25 @@ class Microscope(Device, OptomechDevice):
             return
         
         self.setCurrentSubdevice(self.currentObjective)
-        #self.updateDeviceTransform()
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
-    #def updateDeviceTransform(self):
-        #obj = self.getObjective()
-        #self.setDeviceTransform(obj.transform())
-    
     def getObjective(self):
         """Return the currently active Objective."""
         with self.lock:
             if self.currentSwitchPosition not in self.selectedObjectives:
                 return None
             return self.selectedObjectives[self.currentSwitchPosition]
-            #return self.objectives[self.currentSwitchPosition][selected]
 
-    def getLightSource(self):
-        with self.lock:
-            return self.lightSource
-    
     def listObjectives(self):
         """
         Return a list of available objectives. (one objective returned per switch position)
         """
         with self.lock:
             return self.selectedObjectives.values()
-            #l = collections.OrderedDict()
-            #for i in self.selectedObjectives:
-                #l[i] = self.objectives[i][self.selectedObjectives[i]]
-            #return l
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
         iface.objectiveChanged((self.currentObjective, None))
-        #iface.positionChanged({'abs': self.getPosition()})
         return iface
 
     def selectObjective(self, obj):
@@ -164,9 +152,8 @@ class Microscope(Device, OptomechDevice):
         ## used by (preferrably only) GUI interface
         return self.objectives
     
-    #def objectiveTransformChanged(self, obj):
-        #if obj is self.currentObjective:
-            #self.updateDeviceTransform()
+    def _lightChanged(self, light, name):
+        self.sigLightChanged.emit(self, name)
 
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module.

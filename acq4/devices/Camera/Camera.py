@@ -22,6 +22,7 @@ from acq4.pyqtgraph import Vector, SRTTransform3D
 
 from CameraInterface import CameraInterface
 
+
 class Camera(DAQGeneric, OptomechDevice):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles acquisition tasks, scope integration, expose/trigger lines
@@ -86,16 +87,13 @@ class Camera(DAQGeneric, OptomechDevice):
             if isinstance(p, Microscope):
                 self.scopeDev = p
                 self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
+                self.scopeDev.sigLightChanged.connect(self._lightChanged)
                 break
 
         self.transformChanged()
         if self.scopeDev is not None:
             self.objectiveChanged()
-            self.lightSource = self.scopeDev.getLightSource()
-            if self.lightSource is not None:
-                self.lightSource.sigLightChanged.connect(self.lightChanged)
-        
-        
+
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
         self.sensorSize = self.getParam('sensorSize')
@@ -373,20 +371,10 @@ class Camera(DAQGeneric, OptomechDevice):
             self.scopeState['objective'] = obj.name()
             self.scopeState['id'] += 1
 
-    def lightChanged(self):
+    def _lightChanged(self):
         with self.lock:        
-            self.scopeState['lightSourceState'] = self.lightSource.describe()
+            self.scopeState['illumination'] = self.scopeDev.lightSource.describe()
             self.scopeState['id'] += 1
-
-    def getLightState(self):
-        with self.lock:
-            lightState = self.lightSource.getLightSourceState()
-            return lightState
-
-    def getLightSourceDescription(self):
-        with self.lock:
-            lightSourceDescription = self.lightSource.describe()
-            return lightSourceDescription
 
     @staticmethod 
     def makeFrameTransform(region, binning):
@@ -833,7 +821,7 @@ class AcquireThread(Thread):
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
                             'objective': ss.get('objective', None),
                             'deviceTransform': transform,
-                            'lightSource': ss.get('lightSourceState', None)
+                            'illumination': ss.get('illumination', None)
                         }
 
                     ## Copy frame info to info array
