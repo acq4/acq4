@@ -2,6 +2,8 @@
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
+
+
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 #from acq4.devices.Device import *
@@ -19,6 +21,7 @@ from acq4.util import imaging
 from acq4.pyqtgraph import Vector, SRTTransform3D
 
 from CameraInterface import CameraInterface
+
 
 class Camera(DAQGeneric, OptomechDevice):
     """Generic camera device class. All cameras should extend from this interface.
@@ -55,7 +58,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def __init__(self, dm, config, name):
         OptomechDevice.__init__(self, dm, config, name)
-        
+
         self.lock = Mutex(Mutex.Recursive)
         
         # Generate config to use for DAQ 
@@ -68,8 +71,7 @@ class Camera(DAQGeneric, OptomechDevice):
         
         self.camConfig = config
         self.stateStack = []
-        
-        
+                
         if 'scaleFactor' not in self.camConfig:
             self.camConfig['scaleFactor'] = [1., 1.]
         
@@ -85,13 +87,13 @@ class Camera(DAQGeneric, OptomechDevice):
             if isinstance(p, Microscope):
                 self.scopeDev = p
                 self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
+                self.scopeDev.sigLightChanged.connect(self._lightChanged)
                 break
 
         self.transformChanged()
         if self.scopeDev is not None:
             self.objectiveChanged()
-        
-        
+
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
         self.sensorSize = self.getParam('sensorSize')
@@ -255,6 +257,7 @@ class Camera(DAQGeneric, OptomechDevice):
         ps = ss['pixelSize']  ## size of CCD pixel
         info['pixelSize'] = [ps[0] * info['binning'][0], ps[1] * info['binning'][1]]
         info['objective'] = ss.get('objective', None)
+        info['lightSource'] = ss.get('lightSourceState', None)
         info['deviceTransform'] = pg.SRTTransform3D(ss['transform'])
 
         return Frame(frames, info)
@@ -366,6 +369,11 @@ class Camera(DAQGeneric, OptomechDevice):
             obj, oldObj = obj
         with self.lock:
             self.scopeState['objective'] = obj.name()
+            self.scopeState['id'] += 1
+
+    def _lightChanged(self):
+        with self.lock:        
+            self.scopeState['illumination'] = self.scopeDev.lightSource.describe()
             self.scopeState['id'] += 1
 
     @staticmethod 
@@ -771,7 +779,7 @@ class AcquireThread(Thread):
         lastFrameTime = None
         lastFrameId = None
         fps = None
-        
+
         camState = dict(self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
         exposure = camState['exposure']
@@ -785,6 +793,7 @@ class AcquireThread(Thread):
             lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
             scopeState = None
+
             while True:
                 ti = 0
                 now = ptime.time()
@@ -801,20 +810,22 @@ class AcquireThread(Thread):
                     info = camState.copy()
                     
                     ss = self.dev.getScopeState()
+
                     if ss['id'] != scopeState:
                         scopeState = ss['id']
                         ## regenerate frameInfo here
                         ps = ss['pixelSize']  ## size of CCD pixel
                         transform = pg.SRTTransform3D(ss['transform'])
-                        
+
                         frameInfo = {
                             'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
                             'objective': ss.get('objective', None),
                             'deviceTransform': transform,
+                            'illumination': ss.get('illumination', None)
                         }
-                        
+
                     ## Copy frame info to info array
-                    info.update(frameInfo)
+                    info.update(frameInfo)                    
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)
