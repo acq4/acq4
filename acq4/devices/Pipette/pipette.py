@@ -57,6 +57,7 @@ class Pipette(Device, OptomechDevice):
     """
 
     sigTargetChanged = QtCore.Signal(object, object)
+    sigStateChanged = QtCore.Signal()
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)

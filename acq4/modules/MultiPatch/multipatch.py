@@ -29,6 +29,7 @@ class PipetteControl(QtGui.QWidget):
         self.pip = pipette
         self.moving = False
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
+        self.pip.sigStateChanged.connect(self.updatePlots)
         self.moveTimer = QtCore.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
@@ -55,6 +56,13 @@ class PipetteControl(QtGui.QWidget):
 
     def locked(self):
         return self.ui.lockBtn.isChecked()
+
+    def updatePlots(self):
+        t = self.pip.TPData["time"]
+        rss = self.pip.TPData["Rss"]
+        peak = self.pip.TPData["Rpeak"]
+        self.tpPlot.plot(t, rss, clear=True)
+        self.rPlot.plot(t, peak, clear=True)
 
     def positionChanged(self):
         self.moveTimer.start(500)

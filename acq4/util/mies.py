@@ -9,7 +9,7 @@ def __reload__(old):
 class MIES(QtCore.QObject):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
-    dataReady = QtCore.Signal()
+    sigDataReady = QtCore.Signal()
     _bridge = None
     ALLDATA = None
     PEAKRES = 1
@@ -30,30 +30,29 @@ class MIES(QtCore.QObject):
         self.usingZMQ = useZMQ
         self.currentData = None
         self._future = None
+        self._exiting = False
         self.windowName = 'ITC1600_Dev_0'
-        self.updateTimer = QtCore.QTimer()
-        self.updateTimer.timeout.connect(self.getMIESUpdate)
-        self.updateTimer.start(20)
+        self.start()
+
+    def start(self):
+        self._exiting = False
+        if self.usingZMQ:
+            self.getMIESUpdate()
 
     def getMIESUpdate(self):
         if self.usingZMQ:
-            if self._future is None:
-                self._future = self.igor("FFI_ReturnTPValues")
-            if self._future.done():
-                data = self._future.result()[...,0] # dimension hack when return value suddenly changed
-                self._future = None
-                self.processUpdate(data)
+            self._future = self.igor("FFI_ReturnTPValues")
+            self._future.add_done_callback(self.processUpdate)
         else:
             raise RuntimeError("getMIESUpdate not supported in ActiveX")
 
-    def processUpdate(self, data):
+    def processUpdate(self, future):
+        data = future.result()[...,0] # dimension hack when return value suddenly changed
         if (self.currentData is None) or (data[0,0] > self.currentData[0,0]):
             self.currentData = data
-            self.dataReady.emit()
-        elif self.currentData is not None:
-            # debugging an issue
-            print data[:,0]
-            print "{:f}".format(data[0,0])
+            self.sigDataReady.emit()
+        if not self._exiting:
+            QtCore.QTimer.singleShot(20, self.getMIESUpdate)
 
     def getHeadstageData(self, hs, dataIndex=None):
         if self.currentData is None:
@@ -67,7 +66,6 @@ class MIES(QtCore.QObject):
             return ts, d
 
     def resetData(self):
-        self._future = None
         self.currentData = None
 
     def selectHeadstage(self, hs):
@@ -102,6 +100,11 @@ class MIES(QtCore.QObject):
         else:
             return self.igor('PGC_SetAndActivateControlVar', windowName, name_arg, value)
 
+    def quit(self):
+        self._exiting = True
+        if self._future:
+            self._future.cancel()
+
 
 if __name__ == "__main__":
     from PyQt4 import QtGui
@@ -112,9 +115,9 @@ if __name__ == "__main__":
         def __init__(self, parent=None):
             super(W, self).__init__(parent=parent)
             self.mies = MIES.getBridge(True)
-            self.mies.dataReady.connect(self.grabit)
-            self.b = QtGui.QPushButton("grab", parent=self)
-            self.b.clicked.connect(self.mies.getMIESUpdate)
+            self.mies.sigDataReady.connect(self.grabit)
+            self.b = QtGui.QPushButton("stop", parent=self)
+            self.b.clicked.connect(self.mies.exit)
             l = QtGui.QVBoxLayout()
             l.addWidget(self.b)
             self.setLayout(l)
