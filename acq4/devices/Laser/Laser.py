@@ -28,7 +28,7 @@ class Laser(DAQGeneric, OptomechDevice):
 
     Configuration examples:
     
-    Laser-blue:
+    Laser-blue: ### a laser with fixed output power and wavelength, with an external shutter, without a power indicator
         driver: 'Laser'
         config:
             parentDevice: 'Microscope'
@@ -40,7 +40,7 @@ class Laser(DAQGeneric, OptomechDevice):
             alignmentMode:
                 shutter: True
     
-    Laser-UV:
+    Laser-UV: ### a QSwitched laser with an external photodiode pickoff for measuring power and an external shutter
         driver: 'Laser'
         config: 
             parentDevice: 'Microscope'
@@ -59,8 +59,11 @@ class Laser(DAQGeneric, OptomechDevice):
             alignmentMode:
                 qSwitch: False                    ## For alignment, shutter is open but QS is off
                 shutter: True
+            powerMeasureMode:                     ## For measuring the power the qSwitch should be on and the shutter closed.
+                qSwitch: true                     ##    (photodiode power indicator is before shutter in the laser path)
+                shutter: False
             
-    Laser-2p:
+    Laser-2p: ### a tunable wavelength laser that reports its own power and has an external shutter and an external pockels cell
         driver: 'CoherentLaser'
         config: 
             serialPort: 6                         ## serial port connected to laser
@@ -419,7 +422,7 @@ class Laser(DAQGeneric, OptomechDevice):
            
         Use checkPowerValidity(power) to determine whether this level is within the expected range.
         """
-        
+
         if self.hasPowerIndicator:
             ## run a task that checks the power
             daqName =  self.getDAQName('shutter')
@@ -436,10 +439,8 @@ class Laser(DAQGeneric, OptomechDevice):
             dur = 0.1 + (sTime+mTime)
             nPts = int(dur*rate)
             
-            ### create a waveform that flashes the QSwitch(or other way of turning on) the number specified by reps
+            ### create a switch waveform
             waveform = np.zeros(nPts, dtype=np.byte)
-            #for i in range(reps):
-                #waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
             waveform[0.1*rate:-2] = 1
             
             measureMode = self.measurementMode()
@@ -449,40 +450,34 @@ class Laser(DAQGeneric, OptomechDevice):
                 powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
                 daqName: {'numPts': nPts, 'rate': rate}
             }
-            #print "outputPowerCmd: ", cmd
+            
             task = getManager().createTask(cmd)
             task.execute()
             result = task.getResult()
             
-            ## pull out time that laser was on and off so that power can be measured in each state -- discard the settlingTime around each state change
-            #onMask = np.zeros(nPts, dtype=np.byte)
-            #offMask = np.zeros(nPts, dtype=np.byte)
-            #for i in range(reps):
-                #onMask[((i+1)/10+sTime)*rate:((i+1)/10+sTime+mTime)*rate] = 1
-                #offMask[(i/10.+2*sTime+mTime)*rate:(i+1/10.)*rate] = 1
             powerIndTrace = result[powerInd[0]]
             if powerIndTrace is None:
                 raise Exception("No data returned from power indicator")
             laserOn = powerIndTrace[0][0.1*rate:-2].asarray()
             laserOff = powerIndTrace[0][:0.1*rate].asarray()
 
+        
+            powerOn = laserOn.mean()
+            if powerOn < 0:
+                powerOn = 0.0
+            powerOff = laserOff.mean()
+
+            self.setParam(currentPower=powerOn)
+            powerOk = self.checkPowerValidity(powerOn)
+            self.sigOutputPowerChanged.emit(powerOn, powerOk) ## use a signal because device should not talk directly to gui
+            self.updateSamplePower()
+
             t, prob = stats.ttest_ind(laserOn, laserOff)
-            if prob < 0.01: ### if powerOn is statistically different from powerOff
-                powerOn = laserOn.mean()
-                if powerOn < 0:
-                    powerOn = 0.0
-                powerOff = laserOff.mean()
-                #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
-                self.setParam(currentPower=powerOn)
-                powerOk = self.checkPowerValidity(powerOn)
-                self.sigOutputPowerChanged.emit(powerOn, powerOk)
-                self.updateSamplePower()
-                return powerOn
-            else:
+            if prob > 0.01: ### if powerOn is statistically different from powerOff
                 logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='warning')
-                self.setParam(currentPower=0.0)
-                self.updateSamplePower()
-                return 0.0
+                print("WARNING: No %s pulse detected by power indicator %s while measuring Laser.outputPower()" %(self.name(),powerInd[0]))
+
+            return powerOn
 
             
         ## return the power specified in the config file if there's no powerIndicator
