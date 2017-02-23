@@ -273,14 +273,17 @@ class WidgetParameterItem(ParameterItem):
         ParameterItem.optsChanged(self, param, opts)
         
         if 'readonly' in opts:
+            readonly = opts.pop('readonly')
             self.updateDefaultBtn()
             if isinstance(self.widget, (QtGui.QCheckBox,ColorButton)):
-                self.widget.setEnabled(not opts['readonly'])
+                self.widget.setEnabled(not readonly)
         
-        ## If widget is a SpinBox, pass options straight through
+        ## If widget is a SpinBox, pass options straight through <-- this no longer works, SpinBox only accepts some options now
         if isinstance(self.widget, SpinBox):
-            if 'units' in opts and 'suffix' not in opts:
-                opts['suffix'] = opts['units']
+            if 'visible' in opts: ### this should have been taken care of in ParameterItem.optsChanged, and will make SpinBox choke if we leave it in
+                opts.pop('visible') 
+            if 'units' in opts:
+                opts['suffix'] = opts.pop('units')
             self.widget.setOpts(**opts)
             self.updateDisplayLabel()
         
