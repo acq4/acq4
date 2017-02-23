@@ -212,17 +212,23 @@ class PulseParameter(GroupParameter):
 
     def sumChanged(self):
         if self['sum', 'affect'] == 'length':
+            if not self.param('length').writable():
+                raise Exception("Sum cannot affect length; length is a read-only parameter.")
             sign = 1 if self['length'] >= 0 else -1
             if self['amplitude'] == 0:
                 self.param('length').setValue(0, blockSignal=self.lenChanged)
             else:
                 self.param('length').setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
-        else:
+        elif self['sum', 'affect'] == 'amplitude':
+            if not self.param('amplitude').writable():
+                raise Exception("Sum cannot affect amplitude; amplitude is a read-only parameter.")
             sign = 1 if self['amplitude'] >= 0 else -1
             if self['length'] == 0:
                 self.param('amplitude').setValue(0, blockSignal=self.ampChanged)
             else:
                 self.param('amplitude').setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
+        else:
+            raise Exception("%s: Not sure how to handle changing sum." %self.name())
 
     def varName(self):
         name = self.name()
