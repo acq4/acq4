@@ -240,18 +240,21 @@ class PulseParameter(GroupParameter):
         ## If sequence is specified over sum, interpret that a bit differently.
         (sumName, sumSeq) = self.param('sum').compile()
         if sumSeq is not None:
-            if self.sum['affect'] == 'length':
+            #if self.sum['affect'] == 'length':
+            if self.param('sum')['affect'] == 'length':
                 if not self.param('length').writable():
                     raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
                 if lenSeq is not None:
                     raise Exception("%s: Can not sequence over length and sum simultaneously." % self.name())
                 length = "%s / (%s)" % (sumName, amp)
-            else:
+            elif self.param('sum')['affect'] == 'amplitude':
                 if not self.param('amplitude').writable():
                     raise Exception("%s: Can not sequence over amplitude; it is a read-only parameter." % self.name())
                 if ampSeq is not None:
                     raise Exception("%s: Can not sequence over amplitude and sum simultaneously." % self.name())
                 amp = "%s / (%s)" % (sumName, length)
+            else:
+                raise Exception("%s: Not sure how to create sequence for sum." % self.name())
             seq[sumName] = sumSeq
         
         return start, length, amp, seq
