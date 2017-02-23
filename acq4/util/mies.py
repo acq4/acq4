@@ -67,7 +67,7 @@ class MIES(QtCore.QObject):
                 self._updateTPTimes(data)
                 self.sigDataReady.emit(data)
                 nextCallWait = 0
-            except IgorCallError:
+            except (IgorCallError, TypeError):
                 # Test pulse isn't running, let's wait a little longer
                 nextCallWait = 200
             self._TPTimer.start(nextCallWait)
