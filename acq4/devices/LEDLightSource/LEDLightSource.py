@@ -17,7 +17,7 @@ class LEDLightSource(LightSource):
             dev.sigHoldingChanged.connect(self._mkcb(dev))
 
             conf['active'] = bool(dev.getChanHolding(chan))
-            self._sources[name] = conf
+            self.addSource(name, conf)
             self._channelsByName[name] = (dev, chan)
             self._channelNames[(dev, chan)] = name
 
@@ -30,7 +30,9 @@ class LEDLightSource(LightSource):
         if self._sources[name]['active'] != state:
             self._sources[name]['active'] = state
             self.sigLightChanged.emit(self, name)
+            self._updateXkeyLight(name)
 
     def setSourceActive(self, name, active):
         dev, chan = self._channelsByName[name]
         dev.setChanHolding(chan,  float(active))
+
