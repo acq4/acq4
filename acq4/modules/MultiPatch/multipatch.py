@@ -1,5 +1,6 @@
 import os, re
 import numpy as np
+import json
 from PyQt4 import QtGui, QtCore
 
 from acq4.modules.Module import Module
@@ -29,11 +30,15 @@ class PipetteControl(QtGui.QWidget):
         self.pip = pipette
         self.moving = False
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
+        self.pip.sigDataChanged.connect(self.updatePlots)
+        if isinstance(pipette, PatchPipette):
+            self.pip.sigStateChanged.connect(self.stateChanged)
         self.moveTimer = QtCore.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
+        self.ui.stateCombo.activated.connect(self.changeState)
 
         n = re.sub(r'[^\d]+', '', pipette.name())
         self.ui.selectBtn.setText(n)
@@ -43,8 +48,9 @@ class PipetteControl(QtGui.QWidget):
             ch.pipCtrl = self
 
         self.gv = pg.GraphicsLayoutWidget()
-        self.tpPlot = self.gv.addPlot()
-        self.rPlot = self.gv.addPlot()
+        self.leftPlot = self.gv.addPlot()
+        self.rightPlot = self.gv.addPlot()
+        self.rightPlot.setXLink(self.leftPlot.getViewBox())
         self.ui.plotLayout.addWidget(self.gv)
 
     def solo(self):
@@ -55,6 +61,27 @@ class PipetteControl(QtGui.QWidget):
 
     def locked(self):
         return self.ui.lockBtn.isChecked()
+
+    def updatePlots(self):
+        """Update the pipette data plots."""
+        # TODO: Make the information plotted selectable for future
+        #       case where we have more than just Rss and Rpeak
+        t = self.pip.TPData["time"]
+        rss = self.pip.TPData["Rss"]
+        peak = self.pip.TPData["Rpeak"]
+        self.leftPlot.plot(t, rss, clear=True)
+        self.rightPlot.plot(t, peak, clear=True)
+
+    def stateChanged(self, pipette):
+        """Pipette's state changed, reflect that in the UI"""
+        state = pipette.getState()
+        index = self.ui.stateCombo.findText(state)
+        self.ui.stateCombo.setCurrentIndex(index)
+
+    def changeState(self, stateIndex):
+        if isinstance(self.pip, PatchPipette):
+            state = str(self.ui.stateCombo.itemText(stateIndex))
+            self.pip.setState(state)
 
     def positionChanged(self):
         self.moveTimer.start(500)
@@ -90,8 +117,21 @@ class MultiPatchWindow(QtGui.QWidget):
         self.pips = [man.getDevice(name) for name in pipNames]
         self.pips.sort(key=lambda p: int(re.sub(r'[^\d]+', '', p.name())))
 
+        microscopeNames = man.listInterfaces('microscope')
+        if len(microscopeNames) == 1:
+            self.microscope = man.getDevice(microscopeNames[0])
+            self.microscope.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
+        elif len(microscopeNames) == 0:
+            # flying blind?
+            self.microscope = None
+        else:
+            raise AssertionError("Currently only 1 microscope is supported")
+
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
+            pip.sigTargetChanged.connect(self.pipetteTargetChanged)
+            if isinstance(pip, PatchPipette):
+                pip.sigStateChanged.connect(self.pipetteStateChanged)
             ctrl = PipetteControl(pip)
             ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
             ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
@@ -105,6 +145,7 @@ class MultiPatchWindow(QtGui.QWidget):
             ctrl.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
 
             self.pipCtrls.append(ctrl)
+            ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
 
         self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
@@ -138,6 +179,15 @@ class MultiPatchWindow(QtGui.QWidget):
             self.xkdev = None
 
         self.resetHistory()
+
+        for i, pip in enumerate(self.pips):
+            if isinstance(pip, PatchPipette):
+                self.pipetteStateChanged(pip)
+
+        if self.microscope:
+            d = self.microscope.getSurfaceDepth()
+            if d is not None:
+                self.surfaceDepthChanged(d)
 
     def moveIn(self):
         for pip in self.selectedPipettes():
@@ -439,12 +489,35 @@ class MultiPatchWindow(QtGui.QWidget):
 
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
-        self.recordEvent('move_start', pip.pip.name())
+        event = {"device": str(pip.pip.name()),
+                 "event": "move_start"}
+        self.recordEvent(**event)
 
     def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
         pos = pip.pip.globalPosition()
-        self.recordEvent('move_stop', str(pip.pip.name()), pos[0], pos[1], pos[2])
+        event = {"device": str(pip.pip.name()),
+                 "event": "move_stop",
+                 "position": (pos[0], pos[1], pos[2])}
+        self.recordEvent(**event)
+
+    def pipetteTargetChanged(self, pipette, target):
+        event = {"device": str(pipette.name()),
+                 "event": "target_changed",
+                 "target_position": (target[0], target[1], target[2])}
+        self.recordEvent(**event)
+
+    def pipetteStateChanged(self, pipette):
+        event = {"device": str(pipette.name()),
+                 "event": "state_changed",
+                 "state": str(pipette.getState())}
+        self.recordEvent(**event)
+
+    def surfaceDepthChanged(self, depth):
+        event = {"device": str(self.microscope.name()),
+                 "event": "surface_depth_changed",
+                 "surface_depth": depth}
+        self.recordEvent(**event)
 
     def recordToggled(self, rec):
         if self.storageFile is not None:
@@ -457,20 +530,20 @@ class MultiPatchWindow(QtGui.QWidget):
             self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'a')
             self.writeRecords(self.eventHistory)
 
-    def recordEvent(self, *args):
-        self.eventHistory.append(args)
-        self.writeRecords([args])
+    def recordEvent(self, **kwds):
+        kwds["event_time"] = pg.ptime.time()
+        self.eventHistory.append(kwds)
+        self.writeRecords([kwds])
 
     def resetHistory(self):
         self.eventHistory = []
         for pc in self.pipCtrls:
             pip = pc.pip
 
-
     def writeRecords(self, recs):
         if self.storageFile is None:
             return
         for rec in recs:
-            self.storageFile.write('%0.4f,'%pg.ptime.time() + ','.join(map(repr, rec)) + '\n')
+            self.storageFile.write(json.dumps(rec) + ",\n")
         self.storageFile.flush()
 

@@ -6,6 +6,9 @@ import numpy as np
 import subprocess as sp
 import concurrent.futures
 import atexit
+import json
+import zmq
+
 
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -58,14 +61,25 @@ dtypes = {
 }
 
 
+class IgorCallError(Exception):
+    FAILED = 1
+    TIMEDOUT = 2
+    def __init__(self, message, errno=1):
+        self.errno = errno
+        super(IgorCallError, self).__init__(message)
+
+
 class IgorThread(QtCore.QThread):
 
     _newRequest = QtCore.Signal(object)
 
-    def __init__(self):
+    def __init__(self, useZMQ=False):
         QtCore.QThread.__init__(self)
         self.moveToThread(self)
-        self.igor = IgorBridge()
+        if useZMQ:
+            self.igor = ZMQIgorBridge()
+        else:
+            self.igor = IgorBridge()
         self._newRequest.connect(self._processRequest)
         self.start()
         atexit.register(self.quit)
@@ -80,8 +94,11 @@ class IgorThread(QtCore.QThread):
         return self._sendRequest('getVariable', args, kwds)
 
     def _sendRequest(self, req, args, kwds):
-        fut = concurrent.futures.Future()
-        self._newRequest.emit((fut, req, args, kwds))
+        if isinstance(self.igor, ZMQIgorBridge):
+            return getattr(self.igor, req)(*args)
+        else:
+            fut = concurrent.futures.Future()
+            self._newRequest.emit((fut, req, args, kwds))
         return fut
 
     def _processRequest(self, req):
@@ -131,11 +148,26 @@ class IgorBridge(object):
             raise Exception("No Igor process found.")
 
     @tryReconnect
-    def __call__(self, cmd):
+    def __call__(self, cmd, *args, **kwds):
+        """Make an Igor function call.
+        
+        Any keyword arguments are optional parameters.
+        """
+        cmd = self.formatCall(cmd, *args, **kwds)
         err, errmsg, hist, res = self.app.Execute2(1, 0, cmd, 0, "", "", "")
         if err != 0:
             raise RuntimeError("Igor call returned error code %d: %s" % (err, errmsg))
         return res
+
+    def formatCall(self, cmd, *args, **kwds):
+        for kwd, val in kwds.iteritems():
+            if isinstance(val, int):
+                args.append("{}={:d}".format(kwd, val))
+            elif isinstance(val, float):
+                args.append("{}={:f}".format(kwd, val))
+            else:
+                raise TypeError("Invalid value: {}".format(val))
+        return "{}({})".format(cmd, ", ".join(["{}"]*len(args)).format(*args))
 
     @tryReconnect
     def getWave(self, folder, waveName):
@@ -170,6 +202,95 @@ class IgorBridge(object):
                 return complex(r, i)
             else:
                 return r
+
+
+class ZMQIgorBridge(object):
+    """Bridge to Igor via ZMQ DEALER/ROUTER."""
+    _context = zmq.Context()
+
+    _types = {"NT_FP32": np.float32,
+              "NT_FP64": np.float64}
+
+    def __init__(self, host="tcp://localhost", port=5670):
+        super(ZMQIgorBridge, self).__init__()
+        self._unresolvedFutures = {}
+        self._currentMessageID = 0
+        self.address = "{}:{}".format(host, port)
+        self._socket = self._context.socket(zmq.DEALER)
+        self._socket.setsockopt(zmq.IDENTITY, "igorbridge")
+        self._socket.setsockopt(zmq.SNDTIMEO, 1000)
+        self._socket.setsockopt(zmq.RCVTIMEO, 0)
+        self._socket.connect(self.address)
+        self._pollTimer = QtCore.QTimer()
+        self._pollTimer.timeout.connect(self._checkRecv)
+        self._pollTimer.start(100)
+
+    def __call__(self, cmd, *args):
+        # TODO: Handle optional values whenever they become supported in Igor
+        messageID = self._getMessageID()
+        future = concurrent.futures.Future()
+        call = self.formatCall(cmd, params=args, messageID=messageID)
+        try:
+            self._socket.send_multipart(call)
+            self._unresolvedFutures[messageID] = future
+        except zmq.error.Again:
+            self._unresolvedFutures.pop(messageID)
+            future.set_exception(IgorCallError("Send timed out",
+                IgorCallError.TIMEDOUT))
+        return future
+
+    def _checkRecv(self):
+        try:
+            reply = json.loads(self._socket.recv_multipart()[-1])
+            messageID = reply.get("messageID", None)
+            future = self._unresolvedFutures.get(messageID, None)
+            if future is None:
+                raise RuntimeError("No future found for messageID {}".format(messageID))
+            try:
+                reply = self.parseReply(reply)
+                future.set_result(reply)
+            except IgorCallError as e:
+                future.set_exception(e)
+        except zmq.error.Again:
+            pass
+
+    def _getMessageID(self):
+        mid = self._currentMessageID
+        self._currentMessageID += 1
+        return str(mid)
+
+    def formatCall(self, cmd, params, messageID):
+        call = {"version": 1,
+                "messageID": messageID,
+                "CallFunction": {
+                    "name": cmd,
+                    "params": params}
+                }
+        msg = [b"", json.dumps(call).encode()]
+        return msg
+
+    def parseReply(self, reply):
+        err = reply.get("errorCode", {}).get("value", None)
+        if err is None:
+            raise RuntimeError("Invalid response from Igor")
+        elif err != 0:
+            msg = reply.get("errorCode", {}).get("msg", "")
+            raise IgorCallError("Call failed with message: {}".format(msg))
+        else:
+            result = reply.get("result", {})
+            restype = result.get("type", "")
+            val = result.get("value", None)
+            if (restype == "wave") and (val is not None):
+                return self.parseWave(val)
+            else:
+                return val
+
+    def parseWave(self, jsonWave):
+        dtype = self._types.get(jsonWave["type"], np.float)
+        shape = jsonWave["dimension"]["size"]
+        raw = np.array(jsonWave["data"]["raw"], dtype=dtype)
+        return raw.reshape(shape, order="F")
+
 
 
 if __name__ == '__main__':
