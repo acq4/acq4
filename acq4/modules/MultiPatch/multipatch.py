@@ -275,7 +275,7 @@ class MultiPatchWindow(QtGui.QWidget):
         return default
 
     def coarseSearch(self):
-        self.moveSearch(self.module.config.get('coarseSearchDistance', 1000e-6))
+        self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
 
     def fineSearch(self):
         pips = self.selectedPipettes()
