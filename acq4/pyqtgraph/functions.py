@@ -15,7 +15,7 @@ from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, USE_PYSIDE
 from .metaarray import MetaArray
 from . import getConfigOption, setConfigOptions
-from . import debug
+from . import debug, reload
 
 
 
@@ -2353,7 +2353,7 @@ def disconnect(signal, slot):
             signal.disconnect(slot)
             return True
         except TypeError, RuntimeError:
-            slot = getPreviousVersion(slot)
+            slot = reload.getPreviousVersion(slot)
             if slot is None:
                 return False
 
@@ -2370,11 +2370,12 @@ class SignalBlock(object):
         self.slot = slot
 
     def __enter__(self):
-        disconnect(self.signal, self.slot)
+        self.reconnect = disconnect(self.signal, self.slot)
         return self
 
     def __exit__(self, *args):
-        self.signal.connect(self.slot)
+        if self.reconnect:
+            self.signal.connect(self.slot)
 
 
 
