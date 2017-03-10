@@ -60,9 +60,16 @@ cameraDefaults = {
         ('binningX', 1, [1,2,3,4,8,12,16,24,32,48,64,128,256,512]),
         ('binningY', 1, [1,2,3,4,8,12,16,24,32,48,64,128,256,512]),
     ],
+
+    'RetigaR1': [
+        ('READOUT_PORT', 0),  ## Fastest port for R1
+        ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
+        ('binningX', 1, [1,2,4,8,16]),
+        ('binningY', 1, [1,2,4,8,16]),
+    ],
 }
 cameraDefaults['Quantix EEV57  '] = cameraDefaults['Quantix57']  ## different names, same camera.
-
+cameraDefaults['ICX825'] = cameraDefaults['RetigaR1']
 
 
 ### List of parameters we want exposed to the outside
