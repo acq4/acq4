@@ -142,9 +142,9 @@ class MultiClamp(Device):
         
     def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
+        if mode is None:
+            mode = self.mc.getMode()
         with self.stateLock:
-            if mode is None:
-                mode = self.mc.getMode()
             if mode in self.lastState:
                 return self.lastState[mode]
         
