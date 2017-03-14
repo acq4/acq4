@@ -85,7 +85,8 @@ class PositionEncoder(DAQGeneric):
     sigModeChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-		
+        
+        self.encoderName = name
         # Generate config to use for DAQ 
         daqConfig = {}
         
@@ -125,13 +126,13 @@ class PositionEncoder(DAQGeneric):
         #else:
             #self.hasSecondaryChannel = False
         
-        self.enconderType = config.get('PPU', None)
+        self.encoderType = config.get('encoderType', None)
         self.ppu = config.get('PPU', None)
         
-        if self.enconderType == 'linear'
-            self.unit = ['m']
-         elif self.encoderType = 'rotational' :
-             self.unit = ['°']
+        if self.encoderType == 'linear' :
+            self.unit = 'm'
+         elif self.encoderType == 'rotational' :
+             self.unit = '°'
 
         #elif self.version == '200B':
             ## telegraph voltage/output translation from the Axopatch 200 amplifier
@@ -588,7 +589,7 @@ class PositionEncoderDevGui(QtGui.QWidget):
         #self.ppu = config.get('PPU', None)
         
         self.ui.TypeLabel.setText(self.dev.encoderType)
-        self.ui.ResolutionLabel.setText(self.dev.ppu)
+        self.ui.ResolutionLabel.setText(str(self.dev.ppu))
         self.ui.UnitLabel.setText(self.dev.unit)
         
         #self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)

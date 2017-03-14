@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>310</width>
+    <width>293</width>
     <height>172</height>
    </rect>
   </property>
@@ -71,7 +71,7 @@
    <item row="1" column="2">
     <widget class="QLabel" name="label_4">
      <property name="text">
-      <string>per</string>
+      <string>pulses per</string>
      </property>
     </widget>
    </item>
@@ -84,6 +84,17 @@
    </item>
    <item row="1" column="1">
     <widget class="QLabel" name="ResolutionLabel">
+     <property name="font">
+      <font>
+       <stylestrategy>PreferDefault</stylestrategy>
+      </font>
+     </property>
+     <property name="contextMenuPolicy">
+      <enum>Qt::DefaultContextMenu</enum>
+     </property>
+     <property name="layoutDirection">
+      <enum>Qt::RightToLeft</enum>
+     </property>
      <property name="text">
       <string/>
      </property>

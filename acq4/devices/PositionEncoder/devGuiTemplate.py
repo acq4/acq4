@@ -25,7 +25,7 @@ except AttributeError:
 class Ui_encoderDevGui(object):
     def setupUi(self, encoderDevGui):
         encoderDevGui.setObjectName(_fromUtf8("encoderDevGui"))
-        encoderDevGui.resize(310, 172)
+        encoderDevGui.resize(293, 172)
         self.gridLayout = QtGui.QGridLayout(encoderDevGui)
         self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(3)
@@ -54,6 +54,11 @@ class Ui_encoderDevGui(object):
         self.UnitLabel.setObjectName(_fromUtf8("UnitLabel"))
         self.gridLayout.addWidget(self.UnitLabel, 1, 3, 1, 1)
         self.ResolutionLabel = QtGui.QLabel(encoderDevGui)
+        font = QtGui.QFont()
+        font.setStyleStrategy(QtGui.QFont.PreferDefault)
+        self.ResolutionLabel.setFont(font)
+        self.ResolutionLabel.setContextMenuPolicy(QtCore.Qt.DefaultContextMenu)
+        self.ResolutionLabel.setLayoutDirection(QtCore.Qt.RightToLeft)
         self.ResolutionLabel.setText(_fromUtf8(""))
         self.ResolutionLabel.setObjectName(_fromUtf8("ResolutionLabel"))
         self.gridLayout.addWidget(self.ResolutionLabel, 1, 1, 1, 1)
@@ -69,5 +74,5 @@ class Ui_encoderDevGui(object):
         encoderDevGui.setWindowTitle(_translate("encoderDevGui", "Form", None))
         self.label.setText(_translate("encoderDevGui", "Encoder Type ", None))
         self.label_2.setText(_translate("encoderDevGui", "Encoder Resolution", None))
-        self.label_4.setText(_translate("encoderDevGui", "per", None))
+        self.label_4.setText(_translate("encoderDevGui", "pulses per", None))
 
