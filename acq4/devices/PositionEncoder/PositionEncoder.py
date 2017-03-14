@@ -131,8 +131,8 @@ class PositionEncoder(DAQGeneric):
         
         if self.encoderType == 'linear' :
             self.unit = 'm'
-         elif self.encoderType == 'rotational' :
-             self.unit = '°'
+        elif self.encoderType == 'rotational' :
+            self.unit = '°'
 
         #elif self.version == '200B':
             ## telegraph voltage/output translation from the Axopatch 200 amplifier
