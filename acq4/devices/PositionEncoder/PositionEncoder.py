@@ -423,8 +423,10 @@ class PositionEncoderTask(DAQGenericTask):
         #        mode = dev.getMode()
         #    dev.reconfigureSecondaryChannel(mode)
        
-        cmd['daqProtocol']['channelA'] = {'record': True}
-        cmd['daqProtocol']['channelB'] = {'record': True}
+        cmd['daqProtocol']['ChannelA'] = {'record': True}
+        cmd['daqProtocol']['ChannelB'] = {'record': True}
+        cmd['daqProtocol']['counterValue'] = {'record': True}
+        cmd['daqProtocol']['position'] = {'record': True}
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
         self.cmd = cmd
 
@@ -450,7 +452,14 @@ class PositionEncoderTask(DAQGenericTask):
             #return self.dev.getChanScale('secondary')
         #else:
             #raise Exception("No scale for channel %s" % chan)
-            
+   
+    def stop(self,abort):
+        print 'stop'
+    
+    def isDone(self):
+        print 'is done'
+        return True
+    
     def storeResult(self, dirHandle):
         #DAQGenericTask.storeResult(self, dirHandle)
         #dirHandle.setInfo(self.ampState)
@@ -460,7 +469,7 @@ class PositionEncoderTask(DAQGenericTask):
         
 
     
-class PositionEncoderGui(DAQGenericTaskGui):
+class PositionEncoderTaskGui(DAQGenericTaskGui):
     def __init__(self, dev, taskRunner):
         DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
         
@@ -482,8 +491,8 @@ class PositionEncoderGui(DAQGenericTaskGui):
         self.splitter3 = QtGui.QSplitter()
         self.splitter3.setOrientation(QtCore.Qt.Vertical)
         
-        (w1, p1) = self.createChannelWidget('channelA')
-        (w2, p2) = self.createChannelWidget('channelB')
+        (w1, p1) = self.createChannelWidget('ChannelA')
+        (w2, p2) = self.createChannelWidget('ChannelB')
         
         self.chanBWidget = w2
         self.chanAWidget = w1
