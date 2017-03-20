@@ -425,8 +425,8 @@ class PositionEncoderTask(DAQGenericTask):
        
         cmd['daqProtocol']['ChannelA'] = {'record': True}
         cmd['daqProtocol']['ChannelB'] = {'record': True}
-        cmd['daqProtocol']['counterValue'] = {'record': True}
-        cmd['daqProtocol']['position'] = {'record': True}
+        #cmd['daqProtocol']['counterValue'] = {'record': True}
+        #cmd['daqProtocol']['position'] = {'record': True}
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
         self.cmd = cmd
 
@@ -457,6 +457,16 @@ class PositionEncoderTask(DAQGenericTask):
         print 'stop'
     
     def isDone(self):
+        result = self.getResult()
+        stateB = np.array(result['Channel':'ChannelB']).astype(bool)
+        stateA = np.array(result['Channel':'ChannelA']).astype(bool)
+        print stateB
+        seq = (stateA ^ stateB) | stateB << 1
+        #print seq
+        self.cmd['sequence'] = seq
+        #, mean(result['Channel':'ChannelB'])
+        #print self.getResult()
+        #print self.cmd
         print 'is done'
         return True
     
@@ -492,7 +502,7 @@ class PositionEncoderTaskGui(DAQGenericTaskGui):
         self.splitter3.setOrientation(QtCore.Qt.Vertical)
         
         (w1, p1) = self.createChannelWidget('ChannelA')
-        (w2, p2) = self.createChannelWidget('ChannelB')
+        (w2, p2) = self.createChannelWidget('sequence')
         
         self.chanBWidget = w2
         self.chanAWidget = w1
