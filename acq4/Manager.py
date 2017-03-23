@@ -415,7 +415,7 @@ class Manager(QtCore.QObject):
             if name not in self.config['configurations']:
                 raise Exception("Could not find configuration named '%s'" % name)
             cfg = self.config['configurations'].get(name, )
-        self.configure(cfg)
+        self.configure({'storageDir':cfg})
 
     #def __del__(self):
         #self.quit()
