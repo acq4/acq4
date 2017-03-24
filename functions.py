@@ -13,8 +13,9 @@ import ctypes
 import sys, struct
 from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, USE_PYSIDE
+from .metaarray import MetaArray
 from . import getConfigOption, setConfigOptions
-from . import debug
+from . import debug, reload
 
 
 
@@ -373,12 +374,31 @@ def makeArrowPath(headLen=20, tipAngle=20, tailLen=20, tailWidth=3, baseAngle=0)
     path.lineTo(0,0)
     return path
     
-    
+
 def eq(a, b):
-    """The great missing equivalence function: Guaranteed evaluation to a single bool value."""
+    """The great missing equivalence function: Guaranteed evaluation to a single bool value.
+
+    Array arguments are only considered equivalent to objects that have the same type and shape, and where
+    the elementwise comparison returns true for all elements. If both arguments are arrays, then
+    they must have the same shape and dtype to be considered equivalent.
+    """
     if a is b:
         return True
-        
+
+    # Avoid comparing large arrays against scalars; this is expensive and we know it should return False.
+    aIsArr = isinstance(a, (np.ndarray, MetaArray))
+    bIsArr = isinstance(b, (np.ndarray, MetaArray))
+    if (aIsArr or bIsArr) and type(a) != type(b):
+        return False
+
+    # If both inputs are arrays, we can speeed up comparison if shapes / dtypes don't match
+    # NOTE: arrays of dissimilar type should be considered unequal even if they are numerically
+    # equal because they may behave differently when computed on.
+    if aIsArr and bIsArr and (a.shape != b.shape or a.dtype != b.dtype):
+        return False
+
+    # Test for equivalence. 
+    # If the test raises a recognized exception, then return Falase
     try:
         with warnings.catch_warnings(module=np):  # ignore numpy futurewarning (numpy v. 1.10)
             e = a==b
@@ -391,6 +411,7 @@ def eq(a, b):
         print("  a:", str(type(a)), str(a))
         print("  b:", str(type(b)), str(b))
         raise
+    
     t = type(e)
     if t is bool:
         return e
@@ -2332,7 +2353,7 @@ def disconnect(signal, slot):
             signal.disconnect(slot)
             return True
         except TypeError, RuntimeError:
-            slot = getPreviousVersion(slot)
+            slot = reload.getPreviousVersion(slot)
             if slot is None:
                 return False
 
@@ -2349,11 +2370,12 @@ class SignalBlock(object):
         self.slot = slot
 
     def __enter__(self):
-        disconnect(self.signal, self.slot)
+        self.reconnect = disconnect(self.signal, self.slot)
         return self
 
     def __exit__(self, *args):
-        self.signal.connect(self.slot)
+        if self.reconnect:
+            self.signal.connect(self.slot)
 
 
 
