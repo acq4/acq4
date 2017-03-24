@@ -442,6 +442,7 @@ class MultiPatchWindow(QtGui.QWidget):
         bl[2, 2] = 1 if self.ui.calibrateBtn.isChecked() else 0
         bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
         bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
+        bl[7, 2] = 1 if self.ui.recordBtn.isChecked() else 0
         
         self.xkdev.setBacklights(bl, axis=1)
 
@@ -475,6 +476,7 @@ class MultiPatchWindow(QtGui.QWidget):
             (4, 2): self.ui.fastBtn,
             (6, 2): self.ui.homeBtn,
             (5, 0): self.ui.reSealBtn,
+            (7, 2): self.ui.recordBtn,
         }
         action = actions.get(key, None)
         if action is None:
