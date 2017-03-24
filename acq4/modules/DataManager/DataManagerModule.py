@@ -11,8 +11,6 @@ from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar
 
-
-
 class Window(QtGui.QMainWindow):
     
     sigClosed = QtCore.Signal()
@@ -250,7 +248,7 @@ class DataManager(Module):
             self.ui.fileTreeWidget.refresh(parent)  ## fileTreeWidget waits a while before updating; force it to refresh immediately.
             self.ui.fileTreeWidget.select(nd)
             ##self.ui.fileInfo.setCurrentFile(nd)
-            
+
         logMsg("Created new folder: %s" %nd.name(relativeTo=self.baseDir), msgType='status', importance=7)   
         self.manager.setCurrentDir(nd)
 

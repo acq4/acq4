@@ -426,7 +426,8 @@ class MultiPatchWindow(QtGui.QWidget):
         if self.xkdev is None:
             return
         sel = self.selectedPipettes()
-        bl = np.zeros(self.xkdev.keyshape + (2,), dtype='ubyte')
+        # bl = np.zeros(self.xkdev.keyshape + (2,), dtype='ubyte')
+        bl = self.xkdev.getBacklights()
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
             bl[0, i+4, 0] = 1 if ctrl.selected() else 0
