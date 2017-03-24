@@ -258,6 +258,8 @@ class MultiPatchWindow(QtGui.QWidget):
         for ctrl in self.pipCtrls:
             if ctrl.solo():
                 # solo mode
+                if ctrl.locked():
+                    return []
                 return [ctrl.pip]
             if ctrl.selected() and not ctrl.locked():
                 sel.append(ctrl.pip)
