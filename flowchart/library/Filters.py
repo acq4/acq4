@@ -168,7 +168,6 @@ class Gaussian(CtrlNode):
             return pgfn.gaussianFilter(data, sigma)
 
 
-
 class Derivative(CtrlNode):
     """Returns the pointwise derivative of the input"""
     nodeName = 'DerivativeFilter'
