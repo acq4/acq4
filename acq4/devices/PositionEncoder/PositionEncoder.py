@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
+from acq4.devices.DAQGeneric.DaqChannelGui import *
+from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 #from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
@@ -11,7 +13,8 @@ from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from acq4.util.debug import printExc
 from devGuiTemplate import Ui_encoderDevGui
-
+from acq4.pyqtgraph import PlotWidget
+import weakref
 
 class AP200DataMapping(DataMapping):
     def __init__(self, dev, ivModes, chans=None, mode=None):
@@ -189,221 +192,6 @@ class PositionEncoder(DAQGeneric):
     #    return AP200DataMapping(self, self.ivModes, chans, mode )
         
         
-    def setHolding(self, mode=None, value=None, force=False):
-        #print "setHolding", mode, value
-        #global ivModes
-        with self.devLock:
-            currentMode = self.getMode()
-            if mode is None:
-                mode = currentMode
-            ivMode = self.ivModes[mode]  ## determine vc/ic
-                
-            if value is None:
-                value = self.holding[ivMode]
-            else:
-                self.holding[ivMode] = value
-            
-            if ivMode == self.ivModes[currentMode] or force:
-                mapping = self.getMapping(mode=mode)
-                ## override the scale since getChanScale won't necessarily give the correct value
-                ## (we may be about to switch modes)
-                DAQGeneric.setChanHolding(self, 'command', value, mapping=mapping)
-           
-            self.sigHoldingChanged.emit('primary', self.holding.copy())
-            
-    def setChanHolding(self, chan, value=None):
-        if chan == 'command':
-            self.setHolding(value=value)
-        
-    def getHolding(self, mode=None):
-        #global ivModes
-        with self.devLock:
-            if mode is None:
-                mode = self.getMode()
-            ivMode = self.ivModes[mode]  ## determine vc/ic
-            return self.holding[ivMode]
-        
-    def listModes(self):
-        #global modeNames
-        return self.modeNames.values()
-        
-    def setMode(self, mode):
-        """Set the mode of the AxoPatch (by requesting user intervention). Takes care of switching holding levels in I=0 mode if needed."""
-        #global modeAliases
-        startMode = self.getMode()
-        if mode in self.modeAliases:
-            mode = self.modeAliases[mode]
-        if startMode == mode:
-            return
-        
-        startIvMode = self.ivModes[startMode]
-        ivMode = self.ivModes[mode]
-        if (startIvMode == 'vc' and ivMode == 'ic') or (startIvMode == 'ic' and ivMode == 'vc'):
-            ## switch to I=0 first
-            self.requestModeSwitch(self.modeAliases['i=0'])
-            
-        self.setHolding(ivMode, force=True)  ## we're in I=0 mode now, so it's ok to force the holding value.
-        
-        ## TODO:
-        ## If mode switches back the wrong direction, we need to reset the holding value and cancel.
-        self.requestModeSwitch(mode) 
-        
-    def requestModeSwitch(self, mode):
-        """Pop up a dialog asking the user to switch the amplifier mode, wait for change. This function is thread-safe."""
-        #global modeNames
-        with self.modeLock:
-            self.mdCanceled = False
-        app = QtGui.QApplication.instance()
-        msg = 'Please set %s mode switch to %s' % (self.name(), mode)
-
-        self.sigShowModeDialog.emit(msg)
-        
-        #print "Set mode:", mode
-        ## Wait for the mode to change to the one we're waiting for, or for a cancel
-        while True:
-            if QtCore.QThread.currentThread() == app.thread():
-                app.processEvents()
-            else:
-                QtCore.QThread.yieldCurrentThread()
-            if self.modeDialogCanceled():
-                #print "  Caught user cancel"
-                raise CancelException('User canceled mode switch request')
-            currentMode = self.getMode()
-            if currentMode == mode:
-                break
-            if currentMode is None:
-                #print "  Can't determine mode"
-                raise Exception("Can not determine mode of AxoPatch!")
-            time.sleep(0.01)
-            time.sleep(0.2)
-            #print "  ..current:", currentMode
-            
-        #print "  got mode"
-
-        self.sigHideModeDialog.emit()
-        self.sigModeChanged.emit(mode)
-        
-        
-    def showModeDialog(self, msg):
-        with self.modeLock:
-            self.mdCanceled = False
-        self.modeDialog.setText(msg)
-        self.modeDialog.show()
-        self.modeDialog.activateWindow()
-        
-    def hideModeDialog(self):
-        self.modeDialog.hide()
-        
-    def modeDialogCanceled(self):
-        with self.modeLock:
-            return self.mdCanceled
-        
-    def modeDialogClicked(self):
-        ## called when user clicks 'cancel' on the mode dialog
-        self.mdCanceled = True
-        self.modeDialog.hide()
-        
-    def getMode(self):
-        #print "getMode"
-        with self.devLock:
-            #print "  got lock"
-            #global mode_tel, modeNames
-            m = self.readChannel('ModeChannel', raw=True)
-            #print "  read value", m
-            if m is None:
-                return None
-            mode = self.modeNames[np.argmin(np.abs(self.mode_tel-m))]
-            return mode
-    
-    def getLPF(self):
-        with self.devLock:
-            #global lpf_tel, lpf_freq
-            f = self.readChannel('LPFChannel')
-            if f is None:
-                return None
-            return self.lpf_freq[np.argmin(np.abs(self.lpf_tel-f))]
-        
-    def getGain(self):
-        with self.devLock:
-            mode = self.getMode()
-            if mode is None:
-                return None
-            g = self.getGainSwitchValue()
-            return self.interpretGainSwitchValue(g, mode)
-            
-    def interpretGainSwitchValue(self, val, mode):
-        ## convert a gain-switch-position integer (as returned from getGainSwitchValue)
-        ## into an actual gain value
-            #global gain_vm, gain_im, ivModes
-            if val is None:
-                return None
-            if self.ivModes[mode] == 'vc':
-                return self.gain_vm[val]
-            else:
-                return self.gain_im[val]
-        
-        
-    def getGainSwitchValue(self):
-        ## return the integer value corresponding to the current position of the output gain switch
-        #global gain_tel
-        g = self.readChannel('GainChannel', raw=True)
-        if g is None:
-            return None
-        return np.argmin(np.abs(self.gain_tel-g))
-    
-    def getCmdGain(self, mode=None):
-        with self.devLock:
-            if mode is None:
-                mode = self.getMode()
-            #global ivModes
-            ivMode = self.ivModes[mode]
-            if ivMode == 'vc':
-                return 50.0 # in VC mode, sensitivity is 20mV/V; scale is 1/20e-3 = 50
-            else:
-                return 5e8 # in IC mode, sensitivity is 2nA/V; scale is 1/2e-9 = 5e8
-        
-    #def getChanScale(self, chan):
-        #if chan == 'command':
-            #return self.getCmdGain()
-        #elif chan == 'primary':
-            #return self.getGain()
-        #else:
-            #return DAQGeneric.getChanScale(self, chan)
-            #raise Exception("No scale for channel %s" % chan)
-        
-    def getUnits(self):
-        #global ivModes
-        if iv == 'vc':
-            units = ['V', 'A']
-        else:
-            units = ['A', 'V']
-            
-        if chan == 'command':
-            return units[0]
-        elif chan == 'secondary':
-            return units[0]
-        elif chan == 'primary':
-            return units[1]
-        
-    def readChannel(self, ch, **opts):
-        ## this should go away.
-        return self.getChannelValue(ch, **opts)
-        #if ch in self.config:
-            #chOpts = self.config[ch]
-            #dev = self.dm.getDevice(chOpts['device'])
-            #return dev.getChannelValue(chOpts['channel'], chOpts.get('mode', None))
-        #else:
-            #return None
-        
-    def reconfigureSecondaryChannel(self, mode):
-        ## Secondary channel changes depending on which mode we're in.
-        if self.ivModes[mode] == 'vc':
-            if 'SecondaryVCSignal' in self.config:
-                self.reconfigureChannel('secondary', self.config['SecondaryVCSignal'])
-        else:
-            if 'SecondaryICSignal' in self.config:
-                self.reconfigureChannel('secondary', self.config['SecondaryICSignal'])
-        
 class PositionEncoderTask(DAQGenericTask):
     def __init__(self, dev, cmd, parentTask):
         ## make a few changes for compatibility with multiclamp        
@@ -479,10 +267,14 @@ class PositionEncoderTask(DAQGenericTask):
         
 
     
-class PositionEncoderTaskGui(DAQGenericTaskGui):
+class PositionEncoderTaskGui(TaskGui):
     def __init__(self, dev, taskRunner):
-        DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
-        
+        #DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
+        TaskGui.__init__(self, dev, taskRunner)
+        self.dev = dev
+
+        self.plots = weakref.WeakValueDictionary()
+        self.channels = {}
         #self.ivModes = ivModes
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
@@ -501,41 +293,64 @@ class PositionEncoderTaskGui(DAQGenericTaskGui):
         self.splitter3 = QtGui.QSplitter()
         self.splitter3.setOrientation(QtCore.Qt.Vertical)
         
-        (w1, p1) = self.createChannelWidget('ChannelA')
-        (w2, p2) = self.createChannelWidget('sequence')
-        
-        self.chanBWidget = w2
-        self.chanAWidget = w1
-        self.chanBPlot = p2
-        self.chanAPlot = p1
-        
+        p1 = self.createChannelWidget('Quadrature Output')
+        p2 = self.createChannelWidget('Angle')
+        p3 = self.createChannelWidget('Speed')
+
+
+        self.quadrWidget = p1
+        self.angleWidget = p2
+        self.speedWidget = p3
+        #self.chanBPlot = p2
+        #self.chanAPlot = p1
         #self.ctrlWidget = QtGui.QWidget()
         #self.ctrl = Ui_protoCtrl()
         #self.ctrl.setupUi(self.ctrlWidget)
         #self.splitter2.addWidget(self.ctrlWidget)
         
         self.splitter1.addWidget(self.splitter2)
-        self.splitter1.addWidget(self.splitter3)
-        self.splitter2.addWidget(w1)
-        self.splitter2.addWidget(w2)
-        self.splitter3.addWidget(p1)
-        self.splitter3.addWidget(p2)
+        #self.splitter1.addWidget(self.splitter3)
+        self.splitter2.addWidget(p1)
+        self.splitter2.addWidget(p2)
+        self.splitter2.addWidget(p3)
         self.splitter1.setSizes([100, 500])
         
         self.stateGroup = WidgetGroup([
             (self.splitter1, 'splitter1'),
             (self.splitter2, 'splitter2'),
-            (self.splitter3, 'splitter3'),
+            #(self.splitter3, 'splitter3'),
         ])
         
         #self.modeCombo.currentIndexChanged.connect(self.modeChanged)
         #self.modeChanged()
         
-        
+    def createChannelWidget(self,ch):
+        daqName = None
+        p = PlotWidget(self)
+        #conf = self.dev._DGConfig[ch]
+        #units = ''
+        #if 'units' in conf:
+        #    units = conf['units']
+        #print 'units',units
+        #print 'conf', conf
+        p.setLabel('left', text=ch, units=None)
+        self.plots[ch] = p
+
+        p.registerPlot(self.dev.name() + '.' + ch)
+
+        #if conf['type'] in ['ao', 'do']:
+        #w = OutputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
+        #w.sigSequenceChanged.connect(self.sequenceChanged)
+        #elif conf['type'] in ['ai', 'di','ci']:
+        #    w = InputChannelGui(self, ch, conf, p, self.dev, self.taskRunner, daqName)
+        #else:
+        #    raise Exception("Unrecognized device type '%s'" % conf['type'])
+        #self.channels[ch] = w
+        return  p    
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
         state = {}
-        state['daqState'] = DAQGenericTaskGui.saveState(self)
+        state['daqState'] = TaskGui.saveState(self)
         #state['mode'] = self.getMode()
         #state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
         #state['holding'] = self.ctrl.holdingSpin.value()
@@ -548,19 +363,53 @@ class PositionEncoderTaskGui(DAQGenericTaskGui):
         #self.ctrl.holdingCheck.setChecked(state['holdingEnabled'])
         #if state['holdingEnabled']:
         #    self.ctrl.holdingSpin.setValue(state['holding'])
-        return DAQGenericTaskGui.restoreState(self, state['daqState'])
+        return TaskGui.restoreState(self, state['daqState'])
     
     def generateTask(self, params=None):
-        daqTask = DAQGenericTaskGui.generateTask(self, params)
+        #daqTask = DAQGenericTaskGui.generateTask(self, params)
         
+        self.clearRawPlots()
+        pTask = TaskGui.generateTask(self, params)
         task = {
             #'mode': self.getMode(),
-            'daqProtocol': daqTask
+            'posProtocol': pTask
         }
         
             
         return task
-        
+    def handleResult(self,results,params):
+        color1 =QtGui.QColor(100, 100, 100)
+        color2 =QtGui.QColor(0, 100, 100)
+        color3 =QtGui.QColor(100, 100, 0)
+
+        # calculate angle and speed from quadrature sequence
+        chanA = results['Channel':'ChannelA'].asarray()
+        chanB = results['Channel':'ChannelB'].asarray()
+
+        chanAB = chanA.astype(bool)
+        chanBB = chanB.astype(bool)
+
+        seq = (chanAB ^ chanBB) | chanBB << 1
+        diff = (seq[1:] - seq[:-1]) % 4
+        diff[diff==3] = -1
+        angle = np.cumsum(-diff)*360./(2.*4.*360.)
+        time = np.linspace(0, float(50000)/50000., 50000)
+        angleSparse = angle[diff!=0]
+        timeSparse  = time[diff!=0]
+        speed =  (angleSparse[1:]-angleSparse[:-1])/(timeSparse[1:]-timeSparse[:-1])
+
+        self.quadrWidget.plot(chanA,x=time, pen=QtGui.QPen(color1))
+        self.quadrWidget.plot(chanB,x=time, pen=QtGui.QPen(color2))
+        self.angleWidget.plot(y=seq,x=time, pen=QtGui.QPen(color1))
+        self.speedWidget.plot(y=diff, x=time[1:], pen=QtGui.QPen(color1))
+        #self.angleWidget.plot(y=angleSparse,x=timeSparse, pen=QtGui.QPen(color1))
+        #self.speedWidget.plot(y=speed, x=timeSparse[1:], pen=QtGui.QPen(color1))
+
+    def clearRawPlots(self):
+        for p in ['quadrWidget', 'angleWidget', 'speedWidget']:
+            if hasattr(self, p):
+                getattr(self, p).clear()
+    
     #def modeChanged(self):
         ##global ivModes
         #ivm = self.ivModes[self.getMode()]
