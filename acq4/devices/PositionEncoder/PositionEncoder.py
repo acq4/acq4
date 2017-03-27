@@ -400,10 +400,10 @@ class PositionEncoderTaskGui(TaskGui):
 
         self.quadrWidget.plot(chanA,x=time, pen=QtGui.QPen(color1))
         self.quadrWidget.plot(chanB,x=time, pen=QtGui.QPen(color2))
-        self.angleWidget.plot(y=seq,x=time, pen=QtGui.QPen(color1))
-        self.speedWidget.plot(y=diff, x=time[1:], pen=QtGui.QPen(color1))
-        #self.angleWidget.plot(y=angleSparse,x=timeSparse, pen=QtGui.QPen(color1))
-        #self.speedWidget.plot(y=speed, x=timeSparse[1:], pen=QtGui.QPen(color1))
+        #self.angleWidget.plot(y=seq,x=time, pen=QtGui.QPen(color1))
+        #self.speedWidget.plot(y=diff, x=time[1:], pen=QtGui.QPen(color1))
+        self.angleWidget.plot(y=angleSparse,x=timeSparse, pen=QtGui.QPen(color1))
+        self.speedWidget.plot(y=speed, x=timeSparse[1:], pen=QtGui.QPen(color1))
 
     def clearRawPlots(self):
         for p in ['quadrWidget', 'angleWidget', 'speedWidget']:
