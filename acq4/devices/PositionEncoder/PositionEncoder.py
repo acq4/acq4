@@ -323,8 +323,8 @@ class PositionEncoderTaskGui(TaskGui):
         rate   = results._info[-1]['DAQ']['ChannelA']['rate']
         angle = self.dev.calculateAngle(chanA,chanB)
         time = np.linspace(0, float(numPts)/rate, numPts)
-        self.quadrWidget.plot(chanA, pen=QtGui.QPen(color1))
-        self.quadrWidget.plot(chanB, pen=QtGui.QPen(color2))
+        self.quadrWidget.plot(chanA, x=time, pen=QtGui.QPen(color1))
+        self.quadrWidget.plot(chanB, x=time, pen=QtGui.QPen(color2))
         #self.angleWidget.plot(y=seq,x=time, pen=QtGui.QPen(color1))
         #self.speedWidget.plot(y=diff, x=time[1:], pen=QtGui.QPen(color1))
         self.angleWidget.plot(y=angle,x=time, pen=QtGui.QPen(color1))
