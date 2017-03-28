@@ -176,10 +176,10 @@ class PositionEncoderTask(DAQGenericTask):
         
         arr = result.view(np.ndarray)
         arr = np.append(arr, self.dev.bitSequence[np.newaxis, :], axis=0)
-        result._info[0]['cols'].append({'name': 'sequence'})
+        result._info[0]['cols'].append({'name': 'bitSequence', 'units': None})
         
         arr = np.append(arr, self.dev.delta[np.newaxis, :], axis=0)
-        result._info[0]['cols'].append({'name': 'difference'})
+        result._info[0]['cols'].append({'name': 'delta', 'units': None})
         
         arr = np.append(arr, angle[np.newaxis, :], axis=0)
         result._info[0]['cols'].append({'name': 'angle', 'units': 'degrees'})
