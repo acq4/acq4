@@ -14,6 +14,7 @@ from collections import OrderedDict
 from acq4.util.debug import printExc
 from devGuiTemplate import Ui_encoderDevGui
 from acq4.pyqtgraph import PlotWidget
+import acq4.util.metaarray as metaarray
 import weakref
 
 class AP200DataMapping(DataMapping):
@@ -178,6 +179,22 @@ class PositionEncoder(DAQGeneric):
         #    printExc("Error while setting holding value:")
         #    
         dm.declareInterface(name, ['encoder'], self)
+    
+    def calculateAngle(self,chanA,chanB):
+        
+        chanAB = chanA.astype(bool)
+        chanBB = chanB.astype(bool)
+
+        self.seq = (chanAB ^ chanBB) | chanBB << 1
+        self.diff = (self.seq[1:] - self.seq[:-1]) % 4
+        self.diff[self.diff==3] = -1
+        angle = np.cumsum(-self.diff)*360./(2.*4.*self.ppu)
+        
+        #time = np.linspace(0, float(numPts)/rate,numPts)
+        #angleSparse = angle[diff!=0]
+        #timeSparse  = time[diff!=0]
+        #speed =  (angleSparse[1:]-angleSparse[:-1])/(timeSparse[1:]-timeSparse[:-1])
+        return angle
 
     def createTask(self, cmd, parentTask):
         return PositionEncoderTask(self, cmd, parentTask)
@@ -242,20 +259,19 @@ class PositionEncoderTask(DAQGenericTask):
             #raise Exception("No scale for channel %s" % chan)
    
     def stop(self,abort):
-        print 'stop'
+        pass
     
     def isDone(self):
-        result = self.getResult()
-        stateB = np.array(result['Channel':'ChannelB']).astype(bool)
-        stateA = np.array(result['Channel':'ChannelA']).astype(bool)
-        print stateB
-        seq = (stateA ^ stateB) | stateB << 1
+        #result = self.getResult()
+        #stateB = np.array(result['Channel':'ChannelB']).astype(bool)
+        #stateA = np.array(result['Channel':'ChannelA']).astype(bool)
+        #print stateB
+        #seq = (stateA ^ stateB) | stateB << 1
         #print seq
-        self.cmd['sequence'] = seq
+        #self.cmd['sequence'] = seq
         #, mean(result['Channel':'ChannelB'])
         #print self.getResult()
         #print self.cmd
-        print 'is done'
         return True
     
     def storeResult(self, dirHandle):
@@ -265,6 +281,45 @@ class PositionEncoderTask(DAQGenericTask):
         #result._info[-1]['ClampState'] = self.ampState
         dirHandle.writeFile(result, self.dev.name())
         
+    def getResult(self):
+        ## getResult from DAQGeneric, then add in command waveform
+        result = DAQGenericTask.getResult(self)
+
+        chanA = result['Channel':'ChannelA'].asarray()
+        chanB = result['Channel':'ChannelB'].asarray()
+        
+        angle = self.dev.calculateAngle(chanA,chanB)
+        
+        arr = result.view(np.ndarray)
+        arr = np.append(arr, self.dev.seq[np.newaxis, :], axis=0)
+        result._info[0]['cols'].append({'name': 'sequence'})
+        
+        arr = np.append(arr, self.dev.diff[np.newaxis, :], axis=0)
+        result._info[0]['cols'].append({'name': 'difference'})
+        
+        arr = np.append(arr, angle[np.newaxis, :], axis=0)
+        result._info[0]['cols'].append({'name': 'angle', 'units': 'degrees'})
+
+        #arr = np.append(arr, speed[np.newaxis, :], axis=0)
+        #result._info[0]['cols'].append({'name': 'speed'})
+
+        info = {'PPU': self.dev.ppu,
+                'encoderType': self.dev.encoderType,
+                'encodingType': 'x4 encoding',
+                #'expectedPower': self.expectedPower,
+                #'requestedWavelength':self.cmd.get('wavelength', None),
+                #'shutterMode':self.cmd['shutterMode'],
+                #'powerCheckRequested':self.cmd.get('checkPower', False),
+                #'pulsesCmd': self.cmd.get('pulses', None)
+                }
+
+
+        result._info[-1]['PositionEncoder'] = info
+
+        result = metaarray.MetaArray(arr, info=result._info)
+
+        print 'in get result'
+        return results
 
     
 class PositionEncoderTaskGui(TaskGui):
@@ -295,12 +350,12 @@ class PositionEncoderTaskGui(TaskGui):
         
         p1 = self.createChannelWidget('Quadrature Output')
         p2 = self.createChannelWidget('Angle')
-        p3 = self.createChannelWidget('Speed')
+        #p3 = self.createChannelWidget('Speed')
 
 
         self.quadrWidget = p1
         self.angleWidget = p2
-        self.speedWidget = p3
+        #self.speedWidget = p3
         #self.chanBPlot = p2
         #self.chanAPlot = p1
         #self.ctrlWidget = QtGui.QWidget()
@@ -312,7 +367,7 @@ class PositionEncoderTaskGui(TaskGui):
         #self.splitter1.addWidget(self.splitter3)
         self.splitter2.addWidget(p1)
         self.splitter2.addWidget(p2)
-        self.splitter2.addWidget(p3)
+        #self.splitter2.addWidget(p3)
         self.splitter1.setSizes([100, 500])
         
         self.stateGroup = WidgetGroup([
@@ -349,8 +404,8 @@ class PositionEncoderTaskGui(TaskGui):
         return  p    
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
-        state = {}
-        state['daqState'] = TaskGui.saveState(self)
+        state = self.currentState()
+        state['devState'] = TaskGui.saveState(self)
         #state['mode'] = self.getMode()
         #state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
         #state['holding'] = self.ctrl.holdingSpin.value()
@@ -363,7 +418,9 @@ class PositionEncoderTaskGui(TaskGui):
         #self.ctrl.holdingCheck.setChecked(state['holdingEnabled'])
         #if state['holdingEnabled']:
         #    self.ctrl.holdingSpin.setValue(state['holding'])
-        return TaskGui.restoreState(self, state['daqState'])
+        self.stateGroup.setState(state)
+        if 'devState' in state:
+            TaskGui.restoreState(self, state['devState'])
     
     def generateTask(self, params=None):
         #daqTask = DAQGenericTaskGui.generateTask(self, params)
@@ -374,42 +431,36 @@ class PositionEncoderTaskGui(TaskGui):
             #'mode': self.getMode(),
             'posProtocol': pTask
         }
-        
-            
         return task
+
     def handleResult(self,results,params):
         color1 =QtGui.QColor(100, 100, 100)
         color2 =QtGui.QColor(0, 100, 100)
-        color3 =QtGui.QColor(100, 100, 0)
+        #color3 =QtGui.QColor(100, 100, 0)
 
         # calculate angle and speed from quadrature sequence
         chanA = results['Channel':'ChannelA'].asarray()
         chanB = results['Channel':'ChannelB'].asarray()
-
-        chanAB = chanA.astype(bool)
-        chanBB = chanB.astype(bool)
-
-        seq = (chanAB ^ chanBB) | chanBB << 1
-        diff = (seq[1:] - seq[:-1]) % 4
-        diff[diff==3] = -1
-        angle = np.cumsum(-diff)*360./(2.*4.*360.)
-        time = np.linspace(0, float(50000)/50000., 50000)
-        angleSparse = angle[diff!=0]
-        timeSparse  = time[diff!=0]
-        speed =  (angleSparse[1:]-angleSparse[:-1])/(timeSparse[1:]-timeSparse[:-1])
-
-        self.quadrWidget.plot(chanA,x=time, pen=QtGui.QPen(color1))
-        self.quadrWidget.plot(chanB,x=time, pen=QtGui.QPen(color2))
+        
+        numPts = results._info[-1]['DAQ']['ChannelA']['numPts']
+        rate   = results._info[-1]['DAQ']['ChannelA']['rate']
+        angle = self.dev.calculateAngle(chanA,chanB)
+        time = np.linspace(0, float(numPts)/rate, numPts)
+        self.quadrWidget.plot(chanA, pen=QtGui.QPen(color1))
+        self.quadrWidget.plot(chanB, pen=QtGui.QPen(color2))
         #self.angleWidget.plot(y=seq,x=time, pen=QtGui.QPen(color1))
         #self.speedWidget.plot(y=diff, x=time[1:], pen=QtGui.QPen(color1))
-        self.angleWidget.plot(y=angleSparse,x=timeSparse, pen=QtGui.QPen(color1))
-        self.speedWidget.plot(y=speed, x=timeSparse[1:], pen=QtGui.QPen(color1))
+        self.angleWidget.plot(y=angle,x=time, pen=QtGui.QPen(color1))
+        #self.speedWidget.plot(y=speed, x=timeSparse[1:], pen=QtGui.QPen(color1))
 
     def clearRawPlots(self):
-        for p in ['quadrWidget', 'angleWidget', 'speedWidget']:
+        for p in ['quadrWidget', 'angleWidget']:
             if hasattr(self, p):
                 getattr(self, p).clear()
     
+    def currentState(self):
+        return self.stateGroup.state()
+
     #def modeChanged(self):
         ##global ivModes
         #ivm = self.ivModes[self.getMode()]
