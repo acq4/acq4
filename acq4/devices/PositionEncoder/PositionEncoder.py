@@ -225,8 +225,8 @@ class PositionEncoderTaskGui(TaskGui):
         self.splitter3 = QtGui.QSplitter()
         self.splitter3.setOrientation(QtCore.Qt.Vertical)
         
-        p1 = self.createChannelWidget('Quadrature Output')
-        p2 = self.createChannelWidget('Angle')
+        p1 = self.createChannelWidget('Quadrature Output (TTL)')
+        p2 = self.createChannelWidget('Angle (degrees)')
         #p3 = self.createChannelWidget('Speed')
 
 
