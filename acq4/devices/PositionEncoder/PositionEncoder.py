@@ -17,51 +17,6 @@ from acq4.pyqtgraph import PlotWidget
 import acq4.util.metaarray as metaarray
 import weakref
 
-class AP200DataMapping(DataMapping):
-    def __init__(self, dev, ivModes, chans=None, mode=None):
-        ## mode can be provided:
-        ##   - during __init__
-        ##   - explicitly when calling map functions
-        ##   - implicitly when calling map functions (uses device's current mode)
-        
-        self.dev = dev
-        self.mode = mode
-        self.ivModes = ivModes
-        self.gainSwitch = self.dev.getGainSwitchValue()
-        
-    def setMode(self, mode):
-        self.mode = mode
-            
-    def getGain(self, chan, mode, switch=None):
-        if switch == None:
-            switch = self.gainSwitch
-        if mode is None:
-            if self.mode is None:
-                mode = self.dev.getMode()
-            else:
-                mode = self.mode
-        if chan != 'command':
-            return self.dev.interpretGainSwitchValue(switch, mode)
-        else:
-            #global ivModes
-            ivMode = self.ivModes[mode]
-            if ivMode == 'vc':
-                return 50.0 # in VC mode, sensitivity is 20mV/V; scale is 1/20e-3 = 50
-            else:
-                return 5e8 # in IC mode, sensitivity is 2nA/V; scale is 1/2e-9 = 5e8
-        
-    def mapToDaq(self, chan, data, mode=None):
-        gain = self.getGain(chan, mode)
-        return data * gain
-        
-        
-    def mapFromDaq(self, chan, data, mode=None):
-        gain = self.getGain(chan, mode)
-        return data / gain
-        
-    
-    
-    
     
 class PositionEncoder(DAQGeneric):
     """Device class for optical position encoders : linear or rotational.
@@ -99,36 +54,6 @@ class PositionEncoder(DAQGeneric):
                 raise Exception("PositionEncoder: configuration must have ChannelA and ChannelB information.")
             daqConfig[ch]  = config[ch].copy()
         
-        ##    daqConfig['gain'] = {'type': 'ai', 'channel': config['GainChannel']}
-        ##if 'LPFChannel' in config:
-        ##    daqConfig['LPF'] = {'type': 'ai', 'channel': config['LPFChannel'], 'units': 'Hz'}
-        #if 'ScaledSignal' in config:
-            ##daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
-            #daqConfig['primary'] = config['ScaledSignal']
-            #if config['ScaledSignal'].get('type', None) != 'ai':
-                #raise Exception("AxoPatch200: ScaledSignal configuration must have type:'ai'")
-        #if 'Command' in config:
-            ##daqConfig['command'] = {'type': 'ao', 'channel': config['Command']}
-            #daqConfig['command'] = config['Command']
-            #if config['Command'].get('type', None) != 'ao':
-                #raise Exception("AxoPatch200: ScaledSignal configuration must have type:'ao'")
-            
-        ### Note that both of these channels can be present, but we will only ever record from one at a time.
-        ### Usually, we'll record from "I OUTPUT" in current clamp and "10 Vm OUTPUT" in voltage clamp.
-        #if 'SecondaryVCSignal' in config: 
-            #self.hasSecondaryChannel = True
-            ##daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryVCSignal']}
-            #daqConfig['secondary'] = config['SecondaryVCSignal']
-            #if config['SecondaryVCSignal'].get('type', None) != 'ai':
-                #raise Exception("AxoPatch200: SecondaryVCSignal configuration must have type:'ai'")
-        #elif 'SecondaryICSignal' in config:
-            #self.hasSecondaryChannel = True
-            ##daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryICSignal']}
-            #daqConfig['secondary'] = config['SecondaryICSignal']
-            #if config['SecondaryICSignal'].get('type', None) != 'ai':
-                #raise Exception("AxoPatch200: SecondaryICSignal configuration must have type:'ai'")
-        #else:
-            #self.hasSecondaryChannel = False
         
         self.encoderType = config.get('encoderType', None)
         self.ppu = config.get('PPU', None)
@@ -138,21 +63,6 @@ class PositionEncoder(DAQGeneric):
         elif self.encoderType == 'rotational' :
             self.unit = '°'
 
-        #elif self.version == '200B':
-            ## telegraph voltage/output translation from the Axopatch 200 amplifier
-            #self.mode_tel = np.array([6, 4, 3, 2, 1])
-            #self.modeNames = OrderedDict([(0, 'V-Clamp'), (2, 'I=0'), (4, 'I-Clamp Fast'), (3, 'I-Clamp Normal'), (1, 'Track'), ])
-            #self.ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I=0':'ic', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
-            #self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
-            #self.lpf_freq[-1] = 100.0  # 200B's highest LPF value is 100kHz instead of 50.
-        #else:
-            #raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % version)
-
-        #self.holding = {
-            #'vc': config.get('vcHolding', -0.05),
-            #'ic': config.get('icHolding', 0.0)
-        #}
-        
         self.config = config
         self.modeLock = Mutex(Mutex.Recursive)   ## protects self.mdCanceled
         self.devLock = Mutex(Mutex.Recursive)    ## protects self.holding, possibly self.config, ..others, perhaps?
@@ -160,24 +70,7 @@ class PositionEncoder(DAQGeneric):
         
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
-        #self.modeDialog = QtGui.QMessageBox()
-        #self.modeDialog.hide()
-        #self.modeDialog.setModal(False)
-        #self.modeDialog.setWindowTitle("Mode Switch Request")
-        #self.modeDialog.addButton(self.modeDialog.Cancel)
-        #self.modeDialog.buttonClicked.connect(self.modeDialogClicked)
-        
-        #self.sigShowModeDialog.connect(self.showModeDialog)
-        #self.sigHideModeDialog.connect(self.hideModeDialog)
-        
-        
         self.edgeCounter = 0
-        
-        #try:
-        #    self.setHolding()
-        #except:
-        #    printExc("Error while setting holding value:")
-        #    
         dm.declareInterface(name, ['encoder'], self)
     
     def calculateAngle(self,chanA,chanB):
@@ -185,10 +78,10 @@ class PositionEncoder(DAQGeneric):
         chanAB = chanA.astype(bool)
         chanBB = chanB.astype(bool)
 
-        self.seq = (chanAB ^ chanBB) | chanBB << 1
-        self.diff = (self.seq[1:] - self.seq[:-1]) % 4
-        self.diff[self.diff==3] = -1
-        angle = np.cumsum(-self.diff)*360./(2.*4.*self.ppu)
+        self.bitSequence = (chanAB ^ chanBB) | chanBB << 1
+        self.delta = (self.bitSequence[1:] - self.bitSequence[:-1]) % 4
+        self.delta[self.delta==3] = -1
+        angle = np.cumsum(-self.delta)*360./(2.*4.*self.ppu)
         
         #time = np.linspace(0, float(numPts)/rate,numPts)
         #angleSparse = angle[diff!=0]
@@ -262,16 +155,6 @@ class PositionEncoderTask(DAQGenericTask):
         pass
     
     def isDone(self):
-        #result = self.getResult()
-        #stateB = np.array(result['Channel':'ChannelB']).astype(bool)
-        #stateA = np.array(result['Channel':'ChannelA']).astype(bool)
-        #print stateB
-        #seq = (stateA ^ stateB) | stateB << 1
-        #print seq
-        #self.cmd['sequence'] = seq
-        #, mean(result['Channel':'ChannelB'])
-        #print self.getResult()
-        #print self.cmd
         return True
     
     def storeResult(self, dirHandle):
@@ -291,10 +174,10 @@ class PositionEncoderTask(DAQGenericTask):
         angle = self.dev.calculateAngle(chanA,chanB)
         
         arr = result.view(np.ndarray)
-        arr = np.append(arr, self.dev.seq[np.newaxis, :], axis=0)
+        arr = np.append(arr, self.dev.bitSequence[np.newaxis, :], axis=0)
         result._info[0]['cols'].append({'name': 'sequence'})
         
-        arr = np.append(arr, self.dev.diff[np.newaxis, :], axis=0)
+        arr = np.append(arr, self.dev.delta[np.newaxis, :], axis=0)
         result._info[0]['cols'].append({'name': 'difference'})
         
         arr = np.append(arr, angle[np.newaxis, :], axis=0)
@@ -306,20 +189,13 @@ class PositionEncoderTask(DAQGenericTask):
         info = {'PPU': self.dev.ppu,
                 'encoderType': self.dev.encoderType,
                 'encodingType': 'x4 encoding',
-                #'expectedPower': self.expectedPower,
-                #'requestedWavelength':self.cmd.get('wavelength', None),
-                #'shutterMode':self.cmd['shutterMode'],
-                #'powerCheckRequested':self.cmd.get('checkPower', False),
-                #'pulsesCmd': self.cmd.get('pulses', None)
                 }
-
 
         result._info[-1]['PositionEncoder'] = info
 
         result = metaarray.MetaArray(arr, info=result._info)
 
-        print 'in get result'
-        return results
+        return result
 
     
 class PositionEncoderTaskGui(TaskGui):
@@ -460,41 +336,6 @@ class PositionEncoderTaskGui(TaskGui):
     
     def currentState(self):
         return self.stateGroup.state()
-
-    #def modeChanged(self):
-        ##global ivModes
-        #ivm = self.ivModes[self.getMode()]
-        #w = self.cmdWidget
-        
-        #if ivm == 'vc':
-            #scale = 1e-3
-            #cmdUnits = 'V'
-            #inpUnits = 'A'
-        #else:
-            #scale = 1e-12
-            #cmdUnits = 'A'
-            #inpUnits = 'V'
-            
-        #self.inputWidget.setUnits(inpUnits)
-        #self.cmdWidget.setUnits(cmdUnits)
-        #self.cmdWidget.setMeta('y', minStep=scale, step=scale*10, value=0.)
-        #self.inputPlot.setLabel('left', units=inpUnits)
-        #self.cmdPlot.setLabel('left', units=cmdUnits)
-        ##w.setScale(scale)
-        #for s in w.getSpins():
-            #s.setOpts(minStep=scale)
-                
-        #self.cmdWidget.updateHolding()
-    
-    #def getMode(self):
-    #    return str(self.modeCombo.currentText())
-
-    #def getChanHolding(self, chan):
-    #    if chan == 'command':
-    #        return self.dev.getHolding(self.getMode())
-    #    else:
-    #        raise Exception("Can't get holding value for channel %s" % chan)
-            
 
         
 class PositionEncoderDevGui(QtGui.QWidget):
