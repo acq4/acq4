@@ -80,6 +80,7 @@ class PositionEncoder(DAQGeneric):
 
         self.bitSequence = (chanAB ^ chanBB) | chanBB << 1
         self.delta = (self.bitSequence[1:] - self.bitSequence[:-1]) % 4
+        self.delta = np.concatenate((np.array([0]),self.delta))
         self.delta[self.delta==3] = -1
         angle = np.cumsum(-self.delta)*360./(2.*4.*self.ppu)
         
