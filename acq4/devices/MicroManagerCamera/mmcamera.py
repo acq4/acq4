@@ -246,12 +246,21 @@ class MicroManagerCamera(Camera):
 
     def setParam(self, param, value, autoCorrect=True, autoRestart=True):
         return self.setParams({param: value}, autoCorrect=autoCorrect, autoRestart=autoRestart)
-
+    
+    def setRoi(self,val):
+        try:
+            self.mmc.setROI(*val)
+        except:
+            self.cameraSupportsROIs = False
+        else:
+            self.cameraSupportsROIs = True
+            
     def _setParam(self, param, value, autoCorrect=True):
         if param == 'region':
             value = (value[0], value[1], value[2], value[3])
             self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*value)
+            #self.mmc.setROI(*value)
+            self.setRoi(value)
             return
 
         if param.startswith('region'):
@@ -265,7 +274,8 @@ class MicroManagerCamera(Camera):
             elif param[-1] == 'H':
                 rgn[3] = value
             self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*rgn)
+            #self.mmc.setROI(*rgn)
+            self.setRoi(rgn)
             return
 
         if param.startswith('binning'):
