@@ -73,7 +73,7 @@ class PositionEncoder(DAQGeneric):
         self.edgeCounter = 0
         dm.declareInterface(name, ['encoder'], self)
     
-    def calculateAngle(self,chanA,chanB):
+    def calculateProgress(self,chanA,chanB):
         
         chanAB = chanA.astype(bool)
         chanBB = chanB.astype(bool)
@@ -102,9 +102,10 @@ class PositionEncoder(DAQGeneric):
         
 class PositionEncoderTask(DAQGenericTask):
     def __init__(self, dev, cmd, parentTask):
+        self.dev = dev
         if 'daqProtocol' not in cmd:
             cmd['daqProtocol'] = {}
-              
+        
         cmd['daqProtocol']['ChannelA'] = {'record': True}
         cmd['daqProtocol']['ChannelB'] = {'record': True}
         
@@ -131,7 +132,7 @@ class PositionEncoderTask(DAQGenericTask):
         chanA = result['Channel':'ChannelA'].asarray()
         chanB = result['Channel':'ChannelB'].asarray()
         
-        angle = self.dev.calculateAngle(chanA,chanB)
+        progress = self.dev.calculateProgress(chanA,chanB)
         
         arr = result.view(np.ndarray)
         arr = np.append(arr, self.dev.bitSequence[np.newaxis, :], axis=0)
@@ -140,8 +141,13 @@ class PositionEncoderTask(DAQGenericTask):
         arr = np.append(arr, self.dev.delta[np.newaxis, :], axis=0)
         result._info[0]['cols'].append({'name': 'delta', 'units': None})
         
-        arr = np.append(arr, angle[np.newaxis, :], axis=0)
-        result._info[0]['cols'].append({'name': 'angle', 'units': 'degrees'})
+        arr = np.append(arr, progress[np.newaxis, :], axis=0)
+        
+        if self.dev.encoderType == 'rotational' :
+            result._info[0]['cols'].append({'name': 'angle', 'units': self.dev.unit})
+        elif self.dev.encoderType == 'linear' :
+            result._info[0]['cols'].append({'name': 'distance', 'units': self.dev.unit})
+        
 
 
         info = {'PPU': self.dev.ppu,
@@ -239,11 +245,11 @@ class PositionEncoderTaskGui(TaskGui):
         
         numPts = results._info[-1]['DAQ']['ChannelA']['numPts']
         rate   = results._info[-1]['DAQ']['ChannelA']['rate']
-        angle = self.dev.calculateAngle(chanA,chanB)
+        progress = self.dev.calculateProgress(chanA,chanB)
         time = np.linspace(0, float(numPts)/rate, numPts)
         self.quadrWidget.plot(chanA, x=time, pen=QtGui.QPen(color1))
         self.quadrWidget.plot(chanB, x=time, pen=QtGui.QPen(color2))
-        self.angleWidget.plot(y=angle,x=time, pen=QtGui.QPen(color1))
+        self.angleWidget.plot(y=progress,x=time, pen=QtGui.QPen(color1))
 
     def clearRawPlots(self):
         for p in ['quadrWidget', 'angleWidget']:
