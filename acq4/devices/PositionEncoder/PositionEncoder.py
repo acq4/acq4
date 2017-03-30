@@ -62,6 +62,8 @@ class PositionEncoder(DAQGeneric):
             self.unit = 'm'
         elif self.encoderType == 'rotational' :
             self.unit = 'degrees'
+        else:
+            raise Exception("PositionEncoder: encoderType must be either linear or rotational in the device configuration.")
 
         self.config = config
         self.modeLock = Mutex(Mutex.Recursive)   ## protects self.mdCanceled
@@ -188,7 +190,7 @@ class PositionEncoderTaskGui(TaskGui):
         p1 = self.createChannelWidget('Quadrature Output (TTL)')
         if self.dev.encoderType == 'rotational':
             p2 = self.createChannelWidget('Angle (degrees)')
-        elif self.dev.encoderType == 'rotational':
+        elif self.dev.encoderType == 'linear':
             p2 = self.createChannelWidget('Distance (m)')
 
         self.quadrWidget = p1
