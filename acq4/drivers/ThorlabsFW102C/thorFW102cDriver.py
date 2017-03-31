@@ -25,8 +25,18 @@ class FilterWheelDriver(SerialDevice):
     def __init__(self, p, baud=115200):
         #self.fws = {}
         #self.paramTable = OrderedDict()
-        
-        SerialDevice.__init__(self, port=p, baudrate=baud)
+        timeout = 1. # in sec
+        start = time.time()
+        sleep = 100e-6  # initial sleep is 100 us
+        # filterwheel initiation in a loop as the wheel requires multiple initiation tries after it
+        # has been powered off
+        while time.time()-start < timeout:
+            SerialDevice.__init__(self, port=p, baudrate=baud)
+            if self.serial == None:
+                sleep = min(0.05, 2*sleep) # wait a bit longer next timeout
+            else:
+                break
+            time.sleep(sleep)
         
     def getPos(self):
         """Reads and returns the current filterwheel position """
