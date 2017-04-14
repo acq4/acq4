@@ -25,18 +25,14 @@ class FilterWheelDriver(SerialDevice):
     def __init__(self, p, baud=115200):
         #self.fws = {}
         #self.paramTable = OrderedDict()
-        timeout = 1. # in sec
-        start = time.time()
-        sleep = 100e-6  # initial sleep is 100 us
-        # filterwheel initiation in a loop as the wheel requires multiple initiation tries after it
-        # has been powered off
-        while time.time()-start < timeout:
-            SerialDevice.__init__(self, port=p, baudrate=baud)
-            if self.serial == None:
-                sleep = min(0.05, 2*sleep) # wait a bit longer next timeout
-            else:
-                break
-            time.sleep(sleep)
+        SerialDevice.__init__(self, port=p, baudrate=baud)
+        # first function call after power off of the filterwheel returns error, subsequent calls succeed
+        try:
+            pC = self.getPostCount()
+        except:
+            pass
+        else:
+            pass
         
     def getPos(self):
         """Reads and returns the current filterwheel position """
@@ -171,7 +167,7 @@ class FilterWheelDriver(SerialDevice):
         
 if __name__ == '__main__':
     print "Testing ThorLabs FW102C motorized filter wheel ..."
-    fw = filterWheelDriverClass(port=3)
+    fw = FilterWheelDriver(3)
     print 'pos a :', fw.getPos()
     print 'pos. count:', fw.getPosCount()
     print 'move to pos 2'
