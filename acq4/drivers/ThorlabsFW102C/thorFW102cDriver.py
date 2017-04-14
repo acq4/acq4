@@ -28,7 +28,7 @@ class FilterWheelDriver(SerialDevice):
         SerialDevice.__init__(self, port=p, baudrate=baud)
         # first function call after power off of the filterwheel returns error, subsequent calls succeed
         try:
-            pC = self.getPostCount()
+            pC = self.getPosCount()
         except:
             pass
         else:
