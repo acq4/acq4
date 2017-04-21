@@ -15,6 +15,8 @@ class MarkersCanvasItem(CanvasItem):
     _typeName = "Markers"
     
     def __init__(self, **kwds):
+        kwds.pop('viewRect', None)
+        
         item = pg.ItemGroup()
         opts = {'scalable': False, 'rotatable': False, 'movable': False}
         opts.update(kwds)        

@@ -15,6 +15,8 @@ class MultiPatchLogCanvasItem(CanvasItem):
     _typeName = "Multipatch Log"
     
     def __init__(self, handle, **kwds):
+        kwds.pop('viewRect', None)
+        
         self.data = handle.read()
         self.groupitem = pg.ItemGroup()
 

@@ -36,6 +36,8 @@ class Canvas(OrigCanvas):
         if item is None:
             if type is None:
                 raise ValueError("Must provide either item or type argument.")
+            vr = self.view.viewRect()
+            opts['viewRect'] = vr
             item = items.getItemType(type)(**opts)
         else:
             if len(opts) > 0:
