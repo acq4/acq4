@@ -532,7 +532,7 @@ class MultiPatchWindow(QtGui.QWidget):
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
-            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'a')
+            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
 
     def recordEvent(self, **kwds):

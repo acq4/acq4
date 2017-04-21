@@ -11,11 +11,11 @@ class MultiPatchLog(object):
             self.read(filename)
 
     def read(self, file):
-        for line in open(file, 'r').readlines():
+        for line in open(file, 'rb').readlines():
             # parse line
             if line.startswith('{'):
                 # json format
-                event = json.loads(line.rstrip(',\n'))
+                event = json.loads(line.rstrip(',\r\n'))
 
                 # just to cover a bug; remove after updating legacy log files
                 if isinstance(event['event_time'], basestring):
