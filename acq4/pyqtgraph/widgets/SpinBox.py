@@ -143,7 +143,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         """
         #print opts
         for k in opts:
-            if k == 'bounds' or k == 'range':
+            if k == 'bounds':
                 self.setMinimum(opts[k][0], update=False)
                 self.setMaximum(opts[k][1], update=False)
             elif k == 'min':
