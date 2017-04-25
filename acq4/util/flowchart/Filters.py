@@ -11,7 +11,7 @@ class ExpDeconvolve(CtrlNode):
     """Exponential deconvolution filter."""
     nodeName = 'ExpDeconvolve'
     uiTemplate = [
-        ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
+        ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'bounds': [0.0, None], 'suffix': 's', 'siPrefix': True})
     ]
     
     def processData(self, data):
@@ -33,7 +33,7 @@ class ExpReconvolve(CtrlNode):
     """Exponential reconvolution filter. Only works with MetaArrays that were previously deconvolved."""
     nodeName = 'ExpReconvolve'
     #uiTemplate = [
-        #('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
+        #('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'bounds': [0.0, None], 'suffix': 's', 'siPrefix': True})
     #]
     
     def processData(self, data):

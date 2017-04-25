@@ -352,9 +352,9 @@ class CaEventFitter(EventFitter):
             ('plotFits', 'check', {'value': True}),
             ('plotGuess', 'check', {'value': False}),
             ('plotEvents', 'check', {'value': False}),        
-            ('Amplitude_UpperBound', 'spin', {'value':0.2, 'step':0.1, 'minStep':1e-4, 'dec':True, 'range':[0, None]}),
-            ('RiseTau_UpperBound', 'spin', {'value':0.3, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'}),
-            ('DecayTau_UpperBound', 'spin', {'value':2, 'step':0.1, 'minStep':1e-6, 'dec':True, 'range':[0, None], 'siPrefix':True, 'suffix':'s'})
+            ('Amplitude_UpperBound', 'spin', {'value':0.2, 'step':0.1, 'minStep':1e-4, 'dec':True, 'bounds':[0, None]}),
+            ('RiseTau_UpperBound', 'spin', {'value':0.3, 'step':0.1, 'minStep':1e-6, 'dec':True, 'bounds':[0, None], 'siPrefix':True, 'suffix':'s'}),
+            ('DecayTau_UpperBound', 'spin', {'value':2, 'step':0.1, 'minStep':1e-6, 'dec':True, 'bounds':[0, None], 'siPrefix':True, 'suffix':'s'})
         ]    
     
     def process(self, waveform, events, display=True):
@@ -749,8 +749,8 @@ class EventMasker(CtrlNode):
     Accepts a list of regions or a list of times (use padding to give width to each time point)"""
     nodeName = "EventMasker"
     uiTemplate = [
-        ('prePadding', 'spin', {'value': -2e-3, 'step': 1e-3, 'range': [None, 0], 'siPrefix': True, 'suffix': 's'}),
-        ('postPadding', 'spin', {'value': 1e-3, 'step': 1e-3, 'range': [0, None], 'siPrefix': True, 'suffix': 's'}),
+        ('prePadding', 'spin', {'value': -2e-3, 'step': 1e-3, 'bounds': [None, 0], 'siPrefix': True, 'suffix': 's'}),
+        ('postPadding', 'spin', {'value': 1e-3, 'step': 1e-3, 'bounds': [0, None], 'siPrefix': True, 'suffix': 's'}),
         #('prePadding', 'intSpin', {'min': 0, 'max': 1e9}),
         #('postPadding', 'intSpin', {'min': 0, 'max': 1e9}),
     ]
