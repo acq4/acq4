@@ -10,7 +10,7 @@ class Threshold(CtrlNode):
     nodeName = 'ThresholdDetect'
     uiTemplate = [
         ('direction', 'combo', {'values': ['rising', 'falling'], 'index': 0}),
-        ('threshold', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('threshold', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'dec': True, 'bounds': [None, None], 'siPrefix': True}),
     ]
     
     def __init__(self, name, **opts):
@@ -31,7 +31,7 @@ class StdevThreshold(CtrlNode):
     
     nodeName = 'StdevThreshold'
     uiTemplate = [
-        ('threshold', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('threshold', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True}),
     ]
     
     def __init__(self, name, **opts):
@@ -48,8 +48,8 @@ class ZeroCrossingEvents(CtrlNode):
     nodeName = 'ZeroCrossing'
     uiTemplate = [
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 100000}),
-        ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
-        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True}),
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True}),
         ('eventLimit', 'intSpin', {'value': 400, 'min': 1, 'max': 1e9}),
     ]
     
@@ -66,17 +66,17 @@ class ThresholdEvents(PlottingCtrlNode):
     """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
     nodeName = 'ThresholdEvents'
     uiTemplate = [
-        ('baseline', 'spin', {'value':0, 'step':1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Blue line -- Set the baseline to measure the minPeak and threshold from'}),
-        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Yellow line -- Events must reach this far from baseline to be detected.'}),
-        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True, 'tip': 'Green line -- Events are detected only if they cross this threshold (distance from baseline).'}),
+        ('baseline', 'spin', {'value':0, 'step':1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True, 'tip': 'Blue line -- Set the baseline to measure the minPeak and threshold from'}),
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True, 'tip': 'Yellow line -- Events must reach this far from baseline to be detected.'}),
+        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True, 'tip': 'Green line -- Events are detected only if they cross this threshold (distance from baseline).'}),
         ('display', 'check', {'value':True, 'tip':'If checked display dragable lines for baseline, minPeak and threshold'}),
         #('index', 'combo', {'values':['start','peak'], 'index':0}), 
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9, 'tip': 'Events must contain this many samples to be detected.'}),
-        ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'bounds': [None, None], 'siPrefix': True}),
         ('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9, 'tip': 'Limits the number of events that may be detected in a single trace. This prevents runaway processes due to over-sensitive detection criteria.'}),
-        ('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that occur too quickly following another event.'}),
+        ('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that occur too quickly following another event.'}),
         ('adjustTimes', 'check', {'value': True, 'tip': 'If False, then event times are reported where the trace crosses threshold. If True, the event time is adjusted to estimate when the trace would have crossed 0.'}),
-        ('reverseTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that 1) have the opposite sign of the event immediately prior and 2) occur within the given time window after the prior event. This is useful for ignoring rebound signals.'}),
+        ('reverseTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [0,None], 'siPrefix': True, 'suffix': 's', 'tip': 'Ignore events that 1) have the opposite sign of the event immediately prior and 2) occur within the given time window after the prior event. This is useful for ignoring rebound signals.'}),
     ]
 
     def __init__(self, name, **opts):
@@ -242,23 +242,23 @@ class EventFilter(CtrlNode):
         #('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9}),
         #('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's'}),
         ('fitAmplitude', 'check', {'value': False}),
-        ('minFitAmp', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
-        ('maxFitAmp', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('minFitAmp', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'bounds': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('maxFitAmp', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'bounds': [None,None], 'siPrefix': True, 'hidden': True}),
         ('fitDecayTau', 'check', {'value': False}),
-        ('minFitDecayTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
-        ('maxFitDecayTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('minFitDecayTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('maxFitDecayTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
         ('fitRiseTau', 'check', {'value': False}),
-        ('minFitRiseTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
-        ('maxFitRiseTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('minFitRiseTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('maxFitRiseTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
         ('fitFractionalError', 'check', {'value': False}),
-        ('minFitFractionalError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
-        ('maxFitFractionalError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('minFitFractionalError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'bounds': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('maxFitFractionalError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'bounds': [None,None], 'siPrefix': True, 'hidden': True}),
         ('fitLengthOverDecay', 'check', {'value': False}),
-        ('minFitLengthOverDecay', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
-        ('maxFitLengthOverDecay', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('minFitLengthOverDecay', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'bounds': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('maxFitLengthOverDecay', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'bounds': [None,None], 'siPrefix': True, 'hidden': True}),
         ('fitTime', 'check', {'value': False}),
-        ('minFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
-        ('maxFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('minFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('maxFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'bounds': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
         ('region', 'combo', {'values': ['all']}),
     ]
     
