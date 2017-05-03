@@ -146,6 +146,9 @@ class UMP(object):
             dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUMP_MAX_MANIPULATORS)
         self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUMP_MAX_MANIPULATORS)
 
+        self._ump_has_axis_count = hasattr(self.lib, 'ump_get_axis_count_ext')
+        self._axis_counts = {}
+
     def sdk_version(self):
         """Return version of UMP SDK.
         """
@@ -172,6 +175,15 @@ class UMP(object):
             finally:
                 self.set_timeout(old_timeout)
         return devs
+
+    def axis_count(self, dev):
+        if not self._ump_has_axis_count:
+            return 4
+        c = self._axis_counts.get(dev, None)
+        if c is None:
+            c = self.call('get_axis_count_ext', dev)
+            self._axis_counts[dev] = c
+        return c
 
     def call(self, fn, *args):
         # print "%s%r" % (fn, args)
@@ -236,7 +248,8 @@ class UMP(object):
         xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
         timeout = c_int(timeout)
         r = self.call('get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe])
-        return [x.value for x in xyzwe[:4]]
+        n_axes = self.axis_count(dev)
+        return [x.value for x in xyzwe[:n_axes]]
 
     def goto_pos(self, dev, pos, speed, block=False):
         """Request the specified device to move to an absolute position (in nm).
