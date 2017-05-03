@@ -1,7 +1,7 @@
-import os, sys, ctypes, atexit, time, threading
+import os, sys, ctypes, atexit, time, threading, platform
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
-                    c_byte, c_ubyte, c_void_p, c_char, c_char_p, byref,
-                    POINTER, pointer, Structure)
+                    c_byte, c_ubyte, c_void_p, c_char, c_char_p, c_longlong,
+                    byref, POINTER, pointer, Structure)
 
 path = os.path.abspath(os.path.dirname(__file__))
 if sys.platform == 'win32':
@@ -10,12 +10,17 @@ if sys.platform == 'win32':
 else:
     UMP_LIB = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
 
+SOCKET = c_int
+if sys.platform == 'win32' and platform.architecture()[0] == '64bit':
+    SOCKET = c_longlong
+
 LIBUMP_MAX_MANIPULATORS = 254
 LIBUMP_MAX_LOG_LINE_LENGTH = 256
 LIBUMP_DEF_TIMEOUT = 20
 LIBUMP_DEF_BCAST_ADDRESS = "169.254.255.255"
 LIBUMP_DEF_GROUP = 0
 LIBUMP_MAX_MESSAGE_SIZE = 1502
+LIBUMP_TIMEOUT = -3
 
 
 class sockaddr_in(Structure):
@@ -40,31 +45,66 @@ class ump_positions(Structure):
     ]
 
             
-class ump_state(Structure):
-    _fields_ = [
-        ("last_received_time", c_ulong),
-        ("socket", c_int),
-        ("own_id", c_int),
-        ("message_id", c_int),
-        ("last_device_sent", c_int),
-        ("last_device_received", c_int),
-        ("retransmit_count", c_int),
-        ("refresh_time_limit", c_int),
-        ("last_error", c_int),
-        ("last_os_errno", c_int),
-        ("timeout", c_int),
-        ("udp_port", c_int),
-        ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
-        ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
-        ("cu_address", sockaddr_in),
-        ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
-        ("laddr", sockaddr_in),
-        ("raddr", sockaddr_in),
-        ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
-        ("verbose", c_int),
-        ("log_func_ptr", log_func_ptr),
-        ("log_print_arg", c_void_p),
-    ]
+UMP_LIB.ump_get_version.restype = c_char_p
+UMP_VERSION = UMP_LIB.ump_get_version()
+
+if UMP_VERSION >= "v0.600":
+    class ump_state(Structure):
+        _fields_ = [
+            ("last_received_time", c_ulong),
+            ("socket", SOCKET),
+            ("own_id", c_int),
+            ("message_id", c_int),
+            ("last_device_sent", c_int),
+            ("last_device_received", c_int),
+            ("retransmit_count", c_int),
+            ("refresh_time_limit", c_int),
+            ("last_error", c_int),
+            ("last_os_errno", c_int),
+            ("timeout", c_int),
+            ("udp_port", c_int),
+            ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
+            ("drive_status", c_int * LIBUMP_MAX_MANIPULATORS),
+            ("drive_status_id", c_ushort * LIBUMP_MAX_MANIPULATORS),
+            ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
+            ("cu_address", sockaddr_in),
+            ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
+            ("laddr", sockaddr_in),
+            ("raddr", sockaddr_in),
+            ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
+            ("verbose", c_int),
+            ("log_func_ptr", log_func_ptr),
+            ("log_print_arg", c_void_p),
+        ]
+else:
+    class ump_state(Structure):
+        _fields_ = [
+            ("last_received_time", c_ulong),
+            ("socket", SOCKET),
+            ("own_id", c_int),
+            ("message_id", c_int),
+            ("last_device_sent", c_int),
+            ("last_device_received", c_int),
+            ("retransmit_count", c_int),
+            ("refresh_time_limit", c_int),
+            ("last_error", c_int),
+            ("last_os_errno", c_int),
+            ("timeout", c_int),
+            ("udp_port", c_int),
+            ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
+            ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
+            ("cu_address", sockaddr_in),
+            ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
+            ("laddr", sockaddr_in),
+            ("raddr", sockaddr_in),
+            ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
+            ("verbose", c_int),
+            ("log_func_ptr", log_func_ptr),
+            ("log_print_arg", c_void_p),
+        ]
+
+
+
 
 
 class UMPError(Exception):
@@ -96,8 +136,19 @@ class UMP(object):
         self._timeout = 200
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
+
+        # ump_recv provides better support when working with multiple manipulators, but
+        # it may not be available depending on the driver version
+        self._have_ump_recv = hasattr(self.lib, 'ump_recv')
+
         self.h = None
         self.open()
+
+    def sdk_version(self):
+        """Return version of UMP SDK.
+        """
+        self.lib.ump_get_version.restype = ctypes.c_char_p
+        return self.lib.ump_get_version()
         
     def list_devices(self, max_id=16):
         """Return a list of all connected device IDs.
@@ -121,6 +172,7 @@ class UMP(object):
         return devs
 
     def call(self, fn, *args):
+        # print "%s%r" % (fn, args)
         with self.lock:
             if self.h is None:
                 raise TypeError("UMP is not open.")
@@ -130,11 +182,13 @@ class UMP(object):
             if rval < 0:
                 err = self.lib.ump_last_error(self.h)
                 errstr = self.lib.ump_errorstr(err)
+                # print "   -!", errstr
                 if err == -1:
                     oserr = self.lib.ump_last_os_errno(self.h)
                     raise UMPError("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
                     raise UMPError("UMP Error %d: %s" % (err, errstr), err, None)
+            # print "   ->", rval
             return rval
 
     def set_timeout(self, timeout):
@@ -152,7 +206,7 @@ class UMP(object):
             raise TypeError("UMP is already open.")
         addr = ctypes.create_string_buffer(address)
         ptr = self.lib.ump_open(addr, c_uint(self._timeout), c_int(LIBUMP_DEF_GROUP))
-        if ptr == 0:
+        if ptr <= 0:
             raise RuntimeError("Error connecting to UMP:", self.lib.ump_errorstr(ptr))
         self.h = pointer(ump_state.from_address(ptr))
         atexit.register(self.close)
@@ -180,7 +234,7 @@ class UMP(object):
         xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
         timeout = c_int(timeout)
         r = self.call('get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe])
-        return [x.value for x in xyzwe[:r]]
+        return [x.value for x in xyzwe[:4]]
 
     def goto_pos(self, dev, pos, speed, block=False):
         """Request the specified device to move to an absolute position (in nm).
@@ -239,7 +293,7 @@ class UMP(object):
     def recv(self):
         """Receive one position or status update packet and return the ID
         of the device that sent the packet.
-        
+
         Raises UMPError if the recv times out.
         
         Note: packets arrive from the manipulators rapidly while they are
@@ -247,14 +301,21 @@ class UMP(object):
         if this method is not called frequently enough (alternatively, use
         recv_all at a slower rate).
         """
-        msg = (c_char * LIBUMP_MAX_MESSAGE_SIZE)()
-        dev = c_int()
-        try:
-            self.call('recv', byref(msg), byref(dev))
-        except UMPError as exc:
-            if exc.errno != -5:
-                raise
-        return dev.value
+        if self._have_ump_recv:
+            msg = (c_char * LIBUMP_MAX_MESSAGE_SIZE)()
+            dev = c_int()
+            try:
+                self.call('recv', byref(msg), byref(dev))
+            except UMPError as exc:
+                if exc.errno != -5:
+                    raise
+            return dev.value
+        else:
+            count = self.call('receive', 0)
+            if count == 0:
+                errstr = self.lib.ump_errorstr(LIBUMP_TIMEOUT)
+                raise UMPError(errstr, LIBUMP_TIMEOUT, None)
+            return None
 
     def recv_all(self):
         """Receive all queued position/status update packets and return a list
@@ -272,7 +333,7 @@ class UMP(object):
                         if exc.errno == -3:
                             # timeout; no packets remaining
                             break
-                    if d > 0:
+                    if d is None or d > 0:
                         devs.add(d)
                     
             finally:

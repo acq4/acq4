@@ -8,6 +8,7 @@ ump = UMP.get_ump()
 devids = ump.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 
+print "SDK version:", ump.sdk_version()
 print "Found device IDs:", devids
 
 def print_pos(timeout=None):
