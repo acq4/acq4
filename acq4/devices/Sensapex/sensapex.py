@@ -42,7 +42,14 @@ class Sensapex(Stage):
         self._internalTransform = Transform3D(tr)
         self._internalInvTransform = self._internalTransform.inverted()[0]
         
+        all_devs = UMP.get_ump().list_devices()
+        if self.devid not in all_devs:
+            raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
         self.dev = SensapexDevice(self.devid)
+        # force cache update for this device.
+        # This should also verify that we have a valid device ID
+        self.dev.get_pos()
+
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
 
@@ -85,6 +92,8 @@ class Sensapex(Stage):
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
+            # using timeout=0 firces read from cache (the monitor thread ensures
+            # these values are up to date)
             pos = self._internalTransform.map(self.dev.get_pos(timeout=0)[:3])
             if self._lastPos is None:
                 dif = 1
@@ -166,7 +175,6 @@ class MonitorThread(Thread):
                         if err.errno == -3:
                             # ignore timeouts
                             continue
-                
                 for devid in devids:
                     dev = devices.get(devid, None)
                     if dev is not None:
