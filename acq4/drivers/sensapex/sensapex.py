@@ -1,4 +1,5 @@
 import os, sys, ctypes, atexit, time, threading, platform
+import numpy as np
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure)
@@ -137,12 +138,13 @@ class UMP(object):
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
 
-        # ump_recv provides better support when working with multiple manipulators, but
-        # it may not be available depending on the driver version
-        self._have_ump_recv = hasattr(self.lib, 'ump_recv')
-
         self.h = None
         self.open()
+
+        # view cached position and state data as a numpy array
+        self._positions = np.frombuffer(self.h.contents.last_positions, 
+            dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUMP_MAX_MANIPULATORS)
+        self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUMP_MAX_MANIPULATORS)
 
     def sdk_version(self):
         """Return version of UMP SDK.
@@ -285,11 +287,6 @@ class UMP(object):
         """
         self.call('cu_set_active', dev, int(active))
 
-    #def receive(self, timelimit=0):
-        #"""Receive and cache position updates for all manipulators.
-        #"""
-        #return self.call('receive', timelimit)
-
     def recv(self):
         """Receive one position or status update packet and return the ID
         of the device that sent the packet.
@@ -301,21 +298,12 @@ class UMP(object):
         if this method is not called frequently enough (alternatively, use
         recv_all at a slower rate).
         """
-        if self._have_ump_recv:
-            msg = (c_char * LIBUMP_MAX_MESSAGE_SIZE)()
-            dev = c_int()
-            try:
-                self.call('recv', byref(msg), byref(dev))
-            except UMPError as exc:
-                if exc.errno != -5:
-                    raise
-            return dev.value
-        else:
-            count = self.call('receive', 0)
-            if count == 0:
-                errstr = self.lib.ump_errorstr(LIBUMP_TIMEOUT)
-                raise UMPError(errstr, LIBUMP_TIMEOUT, None)
-            return None
+        # MUST use timelimit=0 to ensure at most one packet is received.
+        count = self.call('receive', 0)
+        if count == 0:
+            errstr = self.lib.ump_errorstr(LIBUMP_TIMEOUT)
+            raise UMPError(errstr, LIBUMP_TIMEOUT, None)
+        return self.h.contents.last_device_received
 
     def recv_all(self):
         """Receive all queued position/status update packets and return a list
