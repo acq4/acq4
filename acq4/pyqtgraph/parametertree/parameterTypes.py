@@ -281,7 +281,10 @@ class WidgetParameterItem(ParameterItem):
         ## If widget is a SpinBox, pass options straight through <-- this no longer works, SpinBox only accepts some options now
         if isinstance(self.widget, SpinBox):
             if 'visible' in opts: ### this should have been taken care of in ParameterItem.optsChanged, and will make SpinBox choke if we leave it in
-                opts.pop('visible') 
+                opts.pop('visible')
+            if 'children' in opts:
+                #print "debuggg....", self, self.widget, self.param.name(), self.param.value(), opts['children']
+                opts.pop('children')
             if 'units' in opts:
                 opts['suffix'] = opts.pop('units')
             self.widget.setOpts(**opts)
