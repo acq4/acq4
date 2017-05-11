@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 sys.path.append(os.path.join(os.path.dirname(__file__), '..\\..\\..\\'))
 
 import pvcam
@@ -24,3 +25,12 @@ def listParams():
         v = str(cam.getParam(p))
         print p, " "*(20-len(p)), v, " "*(30-len(v)), params[p]
 listParams()
+
+cam.acquire(frames=10)
+cam.start()
+
+time.sleep(5)
+print "buffer shape aftter 5 seconds: ", cam.buf.shape
+print "last frame acquired: ", cam.lastFrame()
+
+cam.stop()
