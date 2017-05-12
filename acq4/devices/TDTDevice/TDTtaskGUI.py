@@ -2,9 +2,10 @@ from PyQt4 import QtCore, QtGui
 from acq4.devices.Device import TaskGui
 from acq4.pyqtgraph.parametertree.ParameterTree import ParameterTree
 from acq4.util.generator.StimParamSet import SeqParameter
-from acq4.util.generator.SeqParamSet import SeqEvalError
 import acq4.util.units as units
 import sys
+import numpy as np
+import acq4.util.functions as fn
 
 class TDTTaskGui(TaskGui):
     
@@ -22,11 +23,23 @@ class TDTTaskGui(TaskGui):
         self.attParam = SimpleSequenceParamSet(name='Attenuation', type='int', limits=[0,120], expanded=True, value=30, units='dB')
         self.paramTree.addParameters(self.attParam)
 
-        #self.attParam.sigTreeStateChanged.connect(self.attParamsChanged)
+        self.attParam.sigSequenceChanged.connect(self.sequenceChanged)
+
+    def sequenceChanged(self, paramSet, sequence):
+        self.sequence = sequence
+        self.sigSequenceChanged.emit(self.dev.name())
 
     def generateTask(self, params=None):
-        print "TDTTaskGui.generateTask:", params
-        return {'PA5.1': {'attenuation': self.attParam['default']}}
+        
+        if params is None or 'attenuation' not in params:
+            attenuation = self.attParam.value()
+        else:
+            attenuation = self.sequence[params['attenuation']]
+        
+        task = {'PA5.1': {'attenuation': attenuation}}
+        #print "TDT_Taskgui:", task
+        return task
+
         
 
     
@@ -47,6 +60,8 @@ class TDTTaskGui(TaskGui):
 
 class SimpleSequenceParamSet(SeqParameter):
 
+    sigSequenceChanged = QtCore.Signal(object, object) ## (self, sequence)
+
     def __init__(self, **args):
         SeqParameter.__init__(self, **args)
 
@@ -58,13 +73,19 @@ class SimpleSequenceParamSet(SeqParameter):
         for k in ['range', 'list']:
             self.visibleParams[k].append('values')
 
-        self.sigTreeStateChanged.connect(self.treeStateChanged)
+        for name in ['start', 'stop', 'steps', 'log spacing', 'randomize', 'list', 'sequence']:
+            self.param(name).sigValueChanged.connect(self.sequenceParameterChanged)
 
-    def treeStateChanged(self):
-        SeqParameter.treeStateChanged(self)
-        self.compile
-        with self.treeChangeBlocker():
-            self.param('values').setOpts(value=str(seq))
+        #self.param('values').sigValueChanged.connect(self.sequenceChanged)
+
+    def sequenceParameterChanged(self, *args):
+        #SeqParameter.treeStateChanged(self, param, changes)
+        default, seq = self.compile()
+        self.param('values').setValue(str(seq))
+        self.sequenceChanged(seq)
+
+    def sequenceChanged(self, sequence):
+        self.sigSequenceChanged.emit(self, sequence)
 
     def compile(self):
         name = self.name()
@@ -74,8 +95,10 @@ class SimpleSequenceParamSet(SeqParameter):
         if mode == 'off':
             seq = []
         elif mode == 'range':
-            start = self.evalStr('start')
-            stop = self.evalStr('stop')
+            #start = self.evalStr('start')
+            start = self['start']
+            #stop = self.evalStr('stop')
+            stop = self['stop']
             nPts = self['steps']
             if self['log spacing']:
                 seq = fn.logSpace(start, stop, nPts)
@@ -83,8 +106,8 @@ class SimpleSequenceParamSet(SeqParameter):
                 seq = np.linspace(start, stop, nPts)
         elif mode == 'list':
             seq = list(self.evalStr('list'))
-        elif mode == 'eval':
-            seq = self.evalStr('expression')
+        #elif mode == 'eval':
+        #    seq = self.evalStr('expression')
         else:
             raise Exception('Unknown sequence mode %s' % mode)
         
@@ -97,14 +120,16 @@ class SimpleSequenceParamSet(SeqParameter):
         except:
             raise Exception("Parameter %s generated invalid sequence: %s" % (name, str(seq)))
 
-        self.param('values').setOpts(value=str(seq))
+        self.param('values').setOpts(value=str(seq), blockSignal=True)
 
         return default, seq
 
     def evalStr(self, name):
         try:
+            #print "evalStr:", name, self[name], type(self[name]), type(self.evalLocals)
             s = eval(self[name], self.evalLocals)
         except:
+            print "Error evaluating %s parameter : %s" % (name, self[name])
             #raise SeqEvalError(name, sys.exc_info()[1])
             raise
         return s
