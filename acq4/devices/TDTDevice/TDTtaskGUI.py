@@ -18,6 +18,7 @@ class TDTTaskGui(TaskGui):
         #self.attenSpin.setMinimum(0)
         #self.attenSpin.setValue(30)
         #self.layout.addWidget(self.attenSpin)
+        self.sequence = []
         self.paramTree = ParameterTree()
         self.layout.addWidget(self.paramTree)
         self.attParam = SimpleSequenceParamSet(name='Attenuation', type='int', limits=[0,120], expanded=True, value=30, units='dB')
@@ -46,7 +47,8 @@ class TDTTaskGui(TaskGui):
     def listSequence(self):
         """Return an OrderedDict of sequence parameter names and values {name: [val1, val2, val3]}"""
         #print "TDT compile:", self.attParam.compile()
-        return {'attenuation': self.attParam.compile()[1]}
+        #return {'attenuation': self.attParam.compile()[1]}
+        return {'attenuation': self.sequence}
 
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
@@ -120,7 +122,7 @@ class SimpleSequenceParamSet(SeqParameter):
         except:
             raise Exception("Parameter %s generated invalid sequence: %s" % (name, str(seq)))
 
-        self.param('values').setOpts(value=str(seq), blockSignal=True)
+        #self.param('values').setOpts(value=str(seq), blockSignal=True)
 
         return default, seq
 
