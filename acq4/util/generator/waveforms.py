@@ -354,7 +354,7 @@ def cos2gat(risfall=10.0, start=0.0, stop=500.0, **kwds):
 
     return d
 
-def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds):
+def tonePip(freq= 1000.0, risfall=10e-3, start=0.0, stop=500.0e-3, base=0.0, **kwds):
     rate = kwds['rate']
     nPts = kwds['nPts']
     warnings = kwds['warnings']
@@ -545,7 +545,7 @@ def narrowbandNoise(fC, bandwidth, start=0.0, stop=None, **kwds):
     w = w + sm
     return w
 
-def NBNStim(fC=16000.0, bandwidth=4000.0, risfall=2.5-3, tdur=200e-3, tipi=150e-3, nstim=20, delay=0,**kwds): 
+def NBNStim(fC=16000.0, bandwidth=4000.0, risfall=2.5e-3, tdur=200e-3, tipi=150e-3, nstim=20, delay=0,**kwds): 
     rate = kwds['rate']
     nPts = kwds['nPts']
     warnings = kwds['warnings']
