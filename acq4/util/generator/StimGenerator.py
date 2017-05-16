@@ -16,7 +16,7 @@ from PyQt4 import QtCore, QtGui
 from collections import OrderedDict
 import acq4.util.functions as fn
 from GeneratorTemplate import *
-import waveforms
+import waveforms, soundStimWaveforms
 from acq4.util.debug import *
 
 #from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
@@ -62,6 +62,7 @@ class StimGenerator(QtGui.QWidget):
         
         ## variables that are added into the function evaluation namespace.
         self.extraParams = {}
+        self.functionNameSpaces = [waveforms, soundStimWaveforms]
         
         ## Simple stim generator
         self.stimParams = StimParamSet()
@@ -88,6 +89,9 @@ class StimGenerator(QtGui.QWidget):
         self.ui.advancedBtn.toggled.connect(self.updateWidgets)
         self.ui.forceAdvancedBtn.clicked.connect(self.forceAdvancedClicked)
         self.ui.forceSimpleBtn.clicked.connect(self.forceSimpleClicked)
+
+    def addFunctionNamespace(self, module):
+        self.functionNameSpaces.append(module)
 
     def setEvalNames(self, **kargs):
         """Make variables accessible for use by evaluated functions."""
@@ -393,8 +397,9 @@ class StimGenerator(QtGui.QWidget):
         ns = {'np': np}
         kwargs = {'rate': self.rate, 'nPts': self.nPts, 'warnings': []}
         # copy in all waveform functions with some keyword arguments filled in
-        for name,fn in waveforms.allFunctions().items():
-            ns[name] = functools.partial(fn, **kwargs)
+        for functionDef in self.functionNameSpaces:
+            for name,fn in functionDef.allFunctions().items():
+                ns[name] = functools.partial(fn, **kwargs)
         
         # add current sequence parameter values into namespace
         seq = self.paramSpace()
