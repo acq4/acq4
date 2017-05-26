@@ -181,8 +181,8 @@ def sineAM(fC=16000.0, fM=10.0, risfall=2e-3, tdur=200e-3, tipi=150e-3, nstim=20
         perC=float(1/fC)
         start=(icount)*(tdur+tipi)+delay
         stop=(tdur+tipi)*icount+tdur+delay
-        sineC=sineWave(perC,1,0,start,stop,0, **kwds)
-        sineM=1+0.7*sineWave(perM,1,0,start,stop,0, **kwds)
+        sineC=waveforms.sineWave(perC,1,0,start,stop,0, **kwds)
+        sineM=1+0.7*waveforms.sineWave(perM,1,0,start,stop,0, **kwds)
         d=d+cos2gat(risfall,start,stop, **kwds)*(sineC)*(sineM)
     return d
 
@@ -238,7 +238,7 @@ def narrowbandNoise(fC, bandwidth, start=0.0, stop=None, **kwds):
     high = (fC+(bandwidth/2.0))/nyq
     BW = [low,high]
     b, a = signal.butter(4,BW,'band', False, output='ba')
-    BBN = noise(0, 1, start, stop, **kwds)
+    BBN = waveforms.noise(0, 1, start, stop, **kwds)
     #print 'filter creation complete'
     if BBN.ndim == 1:
         sm = np.mean(BBN)
