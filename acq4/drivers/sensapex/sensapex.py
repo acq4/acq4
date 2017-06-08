@@ -251,16 +251,19 @@ class UMP(object):
         n_axes = self.axis_count(dev)
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, block=False):
+    def goto_pos(self, dev, pos, speed, block=False, simultaneous=True):
         """Request the specified device to move to an absolute position (in nm).
         
         *speed* is given in um/sec.
         
         If *block* is True, then this method only returns after ``is_busy()``
         return False.
+
+        If *simultaneous* is True, then all axes begin moving at the same time.
         """
         pos = list(pos) + [0] * (4-len(pos))
-        args = [c_int(int(x)) for x in [dev] + pos + [speed]]
+        mode = int(bool(simultaneous))  # all axes move simultaneously
+        args = [c_int(int(x)) for x in [dev] + pos + [speed, mode]]
         with self.lock:
             self.call('goto_position_ext', *args)
             self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
