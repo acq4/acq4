@@ -502,7 +502,7 @@ class ROIPlotter(QtGui.QWidget):
             self.lastPlotTime = now
             
         for r in self.ROIs:
-            if isinstance(r['roi'], RulerROI):
+            if isinstance(r['roi'], pg.graphicsItems.ROI.RulerROI):
                 continue
             d = r['roi'].getArrayRegion(frame.data(), imageItem, axes=(0,1))
             prof.mark('get array rgn')
