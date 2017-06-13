@@ -18,11 +18,12 @@ axonDefs = CParser(
     os.path.join(d, 'AxMultiClampMsg.h'), 
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'AxMultiClampMsg.h.cache'),
+    macros={'EXPORT':''}, ## needed for reading version 2.2.0.1 headers (64bit)
     #verbose=True
 )
 
-if platform.architecture()[0] != '32bit':
-    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
+#if platform.architecture()[0] != '32bit':
+#    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
 axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
 
 
