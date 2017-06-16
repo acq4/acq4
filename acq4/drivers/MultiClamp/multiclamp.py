@@ -57,7 +57,8 @@ class MultiClampChannel:
         if self.debug:
             print "MCChannel.setCallback called. callback:", cb
         with self.lock:
-            print "    lock acquired (setCallback)"
+            if self.debug:
+                print "    lock acquired (setCallback)"
             self.callback = cb
         
     def getState(self):
@@ -65,7 +66,8 @@ class MultiClampChannel:
             print "MCChannel.getState called."
             print "     lock1:", self.lock
         with self.lock:
-            print "     lock acquired (getState)"
+            if self.debug:
+                print "     lock acquired (getState)"
             return self.state
 
 
