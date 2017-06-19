@@ -323,7 +323,7 @@ class ScientificaGUI(StageInterface):
         self.psLayout = QtGui.QGridLayout()
         self.psGroup.setLayout(self.psLayout)
         self.speedLabel = QtGui.QLabel('Speed')
-        self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
+        self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, bounds=[1e-6, 10e-3])
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)
 

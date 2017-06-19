@@ -27,9 +27,11 @@ from ..graphicsItems.LinearRegionItem import *
 from ..graphicsItems.InfiniteLine import *
 from ..graphicsItems.ViewBox import *
 from ..graphicsItems.VTickGroup import VTickGroup
+from ..graphicsItems.GradientEditorItem import addGradientListToDocstring
 from .. import ptime as ptime
 from .. import debug as debug
 from ..SignalProxy import SignalProxy
+from .. import getConfigOption
 
 try:
     from bottleneck import nanmin, nanmax
@@ -212,9 +214,10 @@ class ImageView(QtGui.QWidget):
         """
         Set the image to be displayed in the widget.
         
-        ================== =======================================================================
+        ================== ===========================================================================
         **Arguments:**
-        img                (numpy array) the image to be displayed.
+        img                (numpy array) the image to be displayed. See :func:`ImageItem.setImage` and
+                           *notes* below.
         xvals              (numpy array) 1D array of z-axis values corresponding to the first axis
                            in a 3D image. For video, this array should contain the time of each 
                            frame.
@@ -237,6 +240,18 @@ class ImageView(QtGui.QWidget):
                            all image channels, and 'rgb' or 'rgba', which provide individual
                            controls for each channel.
         ================== =======================================================================
+
+        **Notes:**        
+        
+        For backward compatibility, image data is assumed to be in column-major order (column, row).
+        However, most image data is stored in row-major order (row, column) and will need to be
+        transposed before calling setImage()::
+        
+            imageview.setImage(imagedata.T)
+            
+        This requirement can be changed by the ``imageAxisOrder``
+        :ref:`global configuration option <apiref_config>`.
+        
         """
         profiler = debug.Profiler()
         
@@ -255,28 +270,22 @@ class ImageView(QtGui.QWidget):
         if levelMode is not None:
             self.ui.histogram.setLevelMode(levelMode)
         
-        if xvals is not None:
-            self.tVals = xvals
-        elif hasattr(img, 'xvals'):
-            try:
-                self.tVals = img.xvals(0)
-            except:
-                self.tVals = np.arange(img.shape[0])
-        else:
-            self.tVals = np.arange(img.shape[0])
-        
         profiler()
         
         if axes is None:
+            x,y = (0, 1) if self.imageItem.axisOrder == 'col-major' else (1, 0)
+            
             if img.ndim == 2:
-                self.axes = {'t': None, 'x': 0, 'y': 1, 'c': None}
+                self.axes = {'t': None, 'x': x, 'y': y, 'c': None}
             elif img.ndim == 3:
+                # Ambiguous case; make a guess
                 if img.shape[2] <= 4:
-                    self.axes = {'t': None, 'x': 0, 'y': 1, 'c': 2}
+                    self.axes = {'t': None, 'x': x, 'y': y, 'c': 2}
                 else:
-                    self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
+                    self.axes = {'t': 0, 'x': x+1, 'y': y+1, 'c': None}
             elif img.ndim == 4:
-                self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
+                # Even more ambiguous; just assume the default
+                self.axes = {'t': 0, 'x': x+1, 'y': y+1, 'c': 3}
             else:
                 raise Exception("Can not interpret image with dimensions %s" % (str(img.shape)))
         elif isinstance(axes, dict):
@@ -290,6 +299,18 @@ class ImageView(QtGui.QWidget):
             
         for x in ['t', 'x', 'y', 'c']:
             self.axes[x] = self.axes.get(x, None)
+        axes = self.axes
+
+        if xvals is not None:
+            self.tVals = xvals
+        elif axes['t'] is not None:
+            if hasattr(img, 'xvals'):
+                try:
+                    self.tVals = img.xvals(axes['t'])
+                except:
+                    self.tVals = np.arange(img.shape[axes['t']])
+            else:
+                self.tVals = np.arange(img.shape[axes['t']])
 
         profiler()
 
@@ -391,6 +412,7 @@ class ImageView(QtGui.QWidget):
         self.scene.clear()
         del self.image
         del self.imageDisp
+        super(ImageView, self).close()
         self.setParent(None)
         
     def keyPressEvent(self, ev):
@@ -472,7 +494,7 @@ class ImageView(QtGui.QWidget):
         
     def setCurrentIndex(self, ind):
         """Set the currently displayed frame index."""
-        self.currentIndex = np.clip(ind, 0, self.getProcessedImage().shape[0]-1)
+        self.currentIndex = np.clip(ind, 0, self.getProcessedImage().shape[self.axes['t']]-1)
         self.updateImage()
         self.ignoreTimeLine = True
         self.timeLine.setValue(self.tVals[self.currentIndex])
@@ -559,6 +581,7 @@ class ImageView(QtGui.QWidget):
 
         # Extract image data from ROI
         axes = (self.axes['x'], self.axes['y'])
+
         data, coords = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes, returnMappedCoords=True)
         if data is None:
             return
@@ -686,12 +709,21 @@ class ImageView(QtGui.QWidget):
         
         if autoHistogramRange:
             self.ui.histogram.setHistogramRange(self.levelMin, self.levelMax)
-            
-        if self.axes['t'] is None:
-            self.imageItem.updateImage(image)
+        
+        # Transpose image into order expected by ImageItem
+        if self.imageItem.axisOrder == 'col-major':
+            axorder = ['t', 'x', 'y', 'c']
         else:
+            axorder = ['t', 'y', 'x', 'c']
+        axorder = [self.axes[ax] for ax in axorder if self.axes[ax] is not None]
+        image = image.transpose(axorder)
+            
+        # Select time index
+        if self.axes['t'] is not None:
             self.ui.roiPlot.show()
-            self.imageItem.updateImage(image[self.currentIndex])
+            image = image[self.currentIndex]
+            
+        self.imageItem.updateImage(image)
             
             
     def timeIndex(self, slider):
@@ -768,4 +800,21 @@ class ImageView(QtGui.QWidget):
         if self.menu is None:
             self.buildMenu()
         self.menu.popup(QtGui.QCursor.pos())
-        
+
+    def setColorMap(self, colormap):
+        """Set the color map. 
+
+        ============= =========================================================
+        **Arguments**
+        colormap      (A ColorMap() instance) The ColorMap to use for coloring 
+                      images.
+        ============= =========================================================
+        """
+        self.ui.histogram.gradient.setColorMap(colormap)
+
+    @addGradientListToDocstring()
+    def setPredefinedGradient(self, name):
+        """Set one of the gradients defined in :class:`GradientEditorItem <pyqtgraph.graphicsItems.GradientEditorItem>`.
+        Currently available gradients are:   
+        """
+        self.ui.histogram.gradient.loadPreset(name)

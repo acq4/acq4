@@ -24,10 +24,3 @@ class Canvas(OrigCanvas):
         citem = bestType(handle=fh, **opts)
         self.addItem(citem)
         return citem
-        #if fh.isFile():
-            #if fh.shortName()[-4:] == '.svg':
-                #return self.addSvg(fh, **opts)
-            #else:
-                #return self.addImage(fh, **opts)
-        #else:
-            #return self.addScan(fh, **opts)

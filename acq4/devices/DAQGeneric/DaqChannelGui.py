@@ -129,7 +129,7 @@ class OutputChannelGui(DaqChannelGui):
         
         if self.config['type'] == 'ao':
             for s in self.getSpins():
-                s.setOpts(dec=True, range=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
+                s.setOpts(dec=True, bounds=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
 
         self.daqUI.sigChanged.connect(self.daqChanged)
         self.ui.waveGeneratorWidget.sigDataChanged.connect(self.updateWaves)
