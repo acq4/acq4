@@ -591,10 +591,13 @@ class CameraTaskResult:
     
     def asArray(self):
         with self.lock:
-            if self._arr is None:
-                #data = self._frames
-                if len(self._frames) > 0:
-                    self._arr = concatenate([f.data()[newaxis,...] for f in self._frames])
+            if self._arr is None and len(self._frames) > 0:
+                f0 = self._frames[0].data()
+                self._arr = np.empty((len(self._frames),) + f0.shape, f0.dtype)
+                for i,f in enumerate(self._frames):
+                    self._arr[i] = f.data()
+                    f._data = self._arr[i]  # delete old frame data
+                gc.collect()  # make sure all that memory is cleared out.
         return self._arr
     
     def asMetaArray(self):
