@@ -53,7 +53,6 @@ class MultiClampChannel:
         }
         
     def setCallback(self, cb):
-        #caller = inspect.getouterframes(inspect.currentframe())[1][3]
         if self.debug:
             print "MCChannel.setCallback called. callback:", cb
         with self.lock:
@@ -63,15 +62,9 @@ class MultiClampChannel:
         
     def getState(self):
         if self.debug:
-            print "MCChannel.getState called."
-            print "     lock1:", self.lock
+            print "MCChannel.getState called. caller:", inspect.getouterframes(inspect.currentframe())[1][3]
         with self.lock:
-            if self.debug:
-                print "     lock acquired (getState)"
             return self.state
-
-
-        return state
 
     def getMode(self):
         if self.debug:
