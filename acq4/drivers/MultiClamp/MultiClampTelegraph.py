@@ -6,7 +6,7 @@ import struct, os, threading, time, weakref
 from acq4.util.clibrary import *
 #from Mutex import *
 
-DEBUG=True
+DEBUG=False
 if DEBUG:
     print("MultiClampTelegraph Debug:", DEBUG)
 __all__ = ['MultiClampTelegraph', 'wmlib']
@@ -187,6 +187,11 @@ class MultiClampTelegraph:
         if msg == wmlib.WM_COPYDATA:
             data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
             if data.dwData == self.msgIds['REQUEST']:
+                if self.debug:
+                    print "    COPYDATASTRUCT.dwData (ULONG_PTR, a memory address):", data.dwData ### ULONG_PTR should be a 64-bit number on 64-bit machines, and a 32-bit number on 32-bit machines
+                    print "    COPYDATASTRUCT.cbData (DWORD, the size (in bytes) of data pointed to by lpData):", data.cbData
+                    print "    COPYDATASTRUCT.lpData (PVOID, a pointer to the data to be passed): ", data.lpData
+
                 data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
                 #### Make sure packet is for the correct device!
                 devID = self.mkDevId({'com': data.uComPortID, 'dev': data.uAxoBusID, 'chan': data.uChannelID, 'model': data.uHardwareType, 'sn': data.szSerialNumber})
