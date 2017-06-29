@@ -38,8 +38,8 @@ def winDefs(verbose=False, architecture=None):
             architecture = '64bit'
         else:
             architecture = '32bit'
-    
-    print "Getting winDefs for %s" %architecture
+    if verbose:
+        print "Getting winDefs for %s" %architecture
 
     if architecture == '32bit':
         macros = {'_WIN32': '','_MSC_VER': '800', 'CONST': 'const', 'NO_STRICT': None}
