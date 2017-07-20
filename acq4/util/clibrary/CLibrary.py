@@ -26,7 +26,7 @@ def find_lib(name, paths=[], dirHints=[]):
 
     searchPaths = paths
 
-    for directory in ['PROGRAMFILES', 'PROGRAMFILES(X86)']:
+    for directory in ['PROGRAMFILES', 'PROGRAMFILES(X86)', 'SYSTEMDRIVE']:
         p = os.environ.get(directory, None)
         if p is not None:
             for d in dirHints:
