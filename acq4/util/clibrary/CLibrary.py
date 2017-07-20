@@ -12,13 +12,14 @@ function calling based on C header definitions.
 from ctypes import *
 import sys, os
 
-def find_lib(name, paths=[]):
+def find_lib(name, paths=[], dirHints=[]):
     """Search through likely directories to find non-system dlls. Return the first filepath that is found.
 
     **Arguments** 
     =============   ==============================================
     name            (str) The name of the file to look for.
     paths           (list)(optional) A list of directory paths to search. 
+    dirHints        (list)(optional) A list of directory names within ProgramFiles or ProgramFiles(x86) to search first. Used to reduce search time.
 
     Directories are searched in the order specified in paths, then in 'ProgramFiles', then 'ProgramFiles(x86)'
     """
@@ -28,6 +29,8 @@ def find_lib(name, paths=[]):
     for directory in ['PROGRAMFILES', 'PROGRAMFILES(X86)']:
         p = os.environ.get(directory, None)
         if p is not None:
+            for d in dirHints:
+                searchPaths.append(os.path.join(p, d))
             searchPaths.append(p)
     
     for path in searchPaths:

@@ -27,7 +27,7 @@ axonDefs = CParser(
 
 #if platform.architecture()[0] != '32bit':
 #    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
-libPath = find_lib('AxMultiClampMsg.dll')
+libPath = find_lib('AxMultiClampMsg.dll', dirHints=['Molecular Devices'])
 #axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
 axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
 
