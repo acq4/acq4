@@ -18,7 +18,7 @@ d = os.path.dirname(__file__)
 
 # Load telegraph definitions
 teleDefs = CParser(
-    os.path.join(d, 'MultiClampBroadcastMsg.hpp'),
+    #os.path.join(d, 'MultiClampBroadcastMsg.hpp'),
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'MultiClampBroadcastMsg.hpp.cache'),
     verbose=DEBUG
@@ -31,7 +31,7 @@ wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 ## Naturally we can't use the same set of definitions for the 700A and 700B.
 ax700ADefs = CParser(
-    os.path.join(d, 'MCTelegraphs.hpp'),
+    #os.path.join(d, 'MCTelegraphs.hpp'),
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
     verbose=DEBUG

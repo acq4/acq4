@@ -18,7 +18,7 @@ windowsDefs = winDefs()  #verbose=True)
 # Load AxMultiClampMsg header
 d = os.path.dirname(__file__)
 axonDefs = CParser(
-    os.path.join(d, 'AxMultiClampMsg.h'), 
+    #os.path.join(d, 'AxMultiClampMsg.h'), 
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'AxMultiClampMsg.h.cache'),
     macros={'EXPORT':''}, ## needed for reading version 2.2.0.x headers (64bit)
