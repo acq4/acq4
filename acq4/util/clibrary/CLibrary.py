@@ -10,7 +10,17 @@ function calling based on C header definitions.
 
 
 from ctypes import *
-import sys
+import sys, os
+
+def find_lib(name):
+    """Search through likely directories to find non-system dlls. Return a list of filepaths."""
+    searchPaths = [os.environ['PROGRAMFILES'], os.environ['PROGRAMFILES(X86)']]
+    result = []
+    for path in searchPaths:
+        for root, dirs, files in os.walk(path):
+            if name in files:
+                result.append(os.path.join(root, name))
+    return result
 
 
 class CLibrary:
