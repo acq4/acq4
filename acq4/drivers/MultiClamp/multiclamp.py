@@ -21,14 +21,15 @@ axonDefs = CParser(
     os.path.join(d, 'AxMultiClampMsg.h'), 
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'AxMultiClampMsg.h.cache'),
-    macros={'EXPORT':''}, ## needed for reading version 2.2.0.1 headers (64bit)
+    macros={'EXPORT':''}, ## needed for reading version 2.2.0.x headers (64bit)
     verbose=DEBUG
 )
 
 #if platform.architecture()[0] != '32bit':
 #    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
-axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
-
+libPath = find_lib('AxMultiClampMsg.dll')
+#axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
+axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
 
 class MultiClampChannel:
     """Class used to run MultiClamp commander functions for a specific channel.
