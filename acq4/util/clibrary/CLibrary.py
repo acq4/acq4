@@ -38,7 +38,7 @@ def find_lib(name, paths=[], dirHints=[]):
             if name in files:
                 return os.path.join(root, name)
 
-    
+    raise Exception('Could not find file named "%s". Searched recursively in %s.' % (name, str(searchPaths)))
 
 
 class CLibrary:
