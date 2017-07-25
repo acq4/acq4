@@ -29,6 +29,8 @@ axonDefs = CParser(
 #    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
 
 libPath = find_lib('AxMultiClampMsg.dll', dirHints=['Molecular Devices', 'Axon'])
+### the 700B software default location is C:/ProgramFiles or ProgramFiles(x86)/Molecular Devices
+### the 700A software default location seems to be C:/Axon
 
 #axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
 axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
