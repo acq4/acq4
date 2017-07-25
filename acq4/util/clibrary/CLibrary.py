@@ -10,10 +10,10 @@ function calling based on C header definitions.
 
 
 from ctypes import *
-import sys, os
+import sys, os, platform
 
 def find_lib(name, paths=[], dirHints=[]):
-    """Search through likely directories to find non-system dlls. Return the first filepath that is found.
+    """Search through likely directories to find non-system dlls. Return the first filepath that is found. Currently only supported on Windows.
 
     **Arguments** 
     =============   ==============================================
@@ -23,6 +23,9 @@ def find_lib(name, paths=[], dirHints=[]):
 
     Directories are searched in the order specified in paths, then in 'ProgramFiles', then 'ProgramFiles(x86)'
     """
+
+    if platform.system() != 'Windows':
+        raise Exception("CLibrary.find_lib is currently only supported on Windows machines. Sorry.")
 
     searchPaths = paths
 
