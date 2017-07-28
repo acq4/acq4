@@ -36,7 +36,9 @@ def find_lib(name, paths=[], dirHints=[]):
 
         if p is not None:
             for d in dirHints:
-                searchPaths.append(os.path.join(p, d))
+                path = os.path.join(p,d)
+                if os.path.exists(path):
+                    searchPaths.append(path)
             searchPaths.append(p)
     
     for path in searchPaths:
