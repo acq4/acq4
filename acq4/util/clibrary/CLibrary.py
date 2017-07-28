@@ -31,6 +31,9 @@ def find_lib(name, paths=[], dirHints=[]):
 
     for directory in ['PROGRAMFILES', 'PROGRAMFILES(X86)', 'SYSTEMDRIVE']:
         p = os.environ.get(directory, None)
+        if directory == 'SYSTEMDRIVE': ## fixes bug(feature?) where os.join doesn't insert slashes between c: and whatever you're trying to join
+            p = os.path.join(p, os.sep)
+
         if p is not None:
             for d in dirHints:
                 searchPaths.append(os.path.join(p, d))
