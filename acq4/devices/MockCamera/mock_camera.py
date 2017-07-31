@@ -179,7 +179,7 @@ class MockCamera(Camera):
             pos = pg.Point(cell['x'], cell['y'])
             imgPos = tr.map(pos)
             start = (int(imgPos.x()), int(imgPos.y()))
-            stop = (start[0]+w, start[1]+w)
+            stop = (int(start[0]+w), int(start[1]+w))
             val = cell['intensity'] * cell['value'] * self.getParam('exposure')
             data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
         

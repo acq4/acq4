@@ -1,0 +1,33 @@
+pos: (0.0, 0.0)
+connects: [('MeasureRMP', 'rmp', 'MergeData', 'rmp'), ('Input', 'dataIn', 'ReadData', 'fh'), ('MergeData', 'output', 'Output', 'results'), ('ColumnSelect', 'primary', 'MeasureRMP', 'data'), ('ReadData', 'data', 'ColumnSelect', 'In')]
+terminals:
+    dataIn:
+        multi: False
+        io: 'in'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+    results:
+        multi: False
+        io: 'out'
+        renamable: False
+        multiable: False
+        removable: False
+        optional: False
+bypass: False
+inputNode:
+    terminals:
+        dataIn:
+            multi: False
+            io: 'out'
+            renamable: False
+            multiable: False
+            removable: False
+            optional: False
+    pos: (-150.0, 0.0)
+    bypass: False
+nodes: [{'state': {'text': "# Access inputs as args['input_name']\n#return {'output': None} ## one key per output terminal\n\noutput = {}\n#print args, type(args)\n\nfor k, v in args.iteritems():\n\t#print k, v\n\tif type(v) != type({}):\n\t\toutput[k] = v\n\telse:\n\t\tfor k2, v2 in v:\n\t\t\toutput[k2] = v2\n\nreturn {'output':output}\n   ", 'terminals': OrderedDict([('output', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False}), ('rmp', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False})]), 'pos': (350.8392112294831, 6.569566345116257), 'bypass': False}, 'pos': (350.8392112294831, 6.569566345116257), 'class': 'PythonEval', 'name': 'MergeData'}, {'state': {'columns': ['primary'], 'pos': (-151.76189645184985, 216.3933297460611), 'bypass': False}, 'pos': (-151.76189645184985, 216.3933297460611), 'class': 'ColumnSelect', 'name': 'ColumnSelect'}, {'state': {'text': "# Access inputs as args['input_name']\n#return {'output': None} ## one key per output terminal\n\nfh=args['fh']\ndata = fh.read()\n\nreturn {'data': data}", 'terminals': OrderedDict([('fh', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False}), ('data', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False})]), 'pos': (-150.16197396247946, 107.98737752189933), 'bypass': False}, 'pos': (-150.16197396247946, 107.98737752189933), 'class': 'PythonEval', 'name': 'ReadData'}, {'state': {'text': "# Access inputs as args['input_name']\n#return {'output': None} ## one key per output terminal\n\ndata = args['data']\n\nrmp = data[:100].mean() ## take the average of the first hundred points\n\nreturn {'rmp': rmp}", 'terminals': OrderedDict([('data', {'multi': False, 'io': 'in', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False}), ('rmp', {'multi': False, 'io': 'out', 'renamable': True, 'multiable': True, 'removable': False, 'optional': False})]), 'pos': (59.688407750652715, 215.58005934528228), 'bypass': False}, 'pos': (59.688407750652715, 215.58005934528228), 'class': 'PythonEval', 'name': 'MeasureRMP'}]
+outputNode:
+    pos: (465.0938913581077, 7.319433607009728)
+    bypass: False
