@@ -62,8 +62,8 @@ cameraDefaults = {
     ],
 
     'RetigaR1': [
-        ('READOUT_PORT', 0),  ## Fastest port for R1
-        ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
+        ('READOUT_PORT', 0),
+        ('SPDTAB_INDEX', 2),
         ('binningX', 1, [1,2,4,8,16]),
         ('binningY', 1, [1,2,4,8,16]),
     ],
