@@ -10,7 +10,7 @@ DEBUG=False ## Global flag for debugging hangups
 if DEBUG:
     print "MultiClamp driver debug:", DEBUG
 
-__all__ = ['MultiClamp', 'axlib', 'wmlib']
+__all__ = ['MultiClamp', 'axlib', 'getAxlib', 'wmlib']
 
 ## Load windows definitions
 windowsDefs = winDefs()  #verbose=True)
@@ -18,23 +18,46 @@ windowsDefs = winDefs()  #verbose=True)
 # Load AxMultiClampMsg header
 d = os.path.dirname(__file__)
 axonDefs = CParser(
-    #os.path.join(d, 'AxMultiClampMsg.h'), 
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'AxMultiClampMsg.h.cache'),
     macros={'EXPORT':''}, ## needed for reading version 2.2.0.x headers (64bit)
     verbose=DEBUG
 )
 
-#if platform.architecture()[0] != '32bit':
-#    raise RuntimeError("MultiClamp API can only be accessed from 32-bit process!")
-
-libPath = find_lib('AxMultiClampMsg.dll', dirHints=['Molecular Devices', 'Axon'])
-print "Using MultiClamp DLL at ", libPath
 ### the 700B software default location is C:/ProgramFiles or ProgramFiles(x86)/Molecular Devices
 ### the 700A software default location seems to be C:/Axon
+searchPaths = [
+    'C:\\Program Files\\Molecular Devices',
+    'C:\\Program Files (x86)\\Molecular Devices',
+    'C:\\Program Files\\Axon',
+    'C:\\Program Files (x86)\\Axon',
+    'C:\\Axon',
+]
 
-#axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
-axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
+
+axlib = None
+def getAxlib(libPath=None):
+    """Return the handle to the axon library (CLibrary instance).
+
+    If libPath is specified, then it must give the location of the AxMultiClampMsg.dll
+    file that should be loaded. Otherwise, a predefined set of paths will be searched.
+
+    Note: if you want to specify the DLL file using libPath, then this function must
+    be called before MultiClamp.instance().
+    """
+    global axlib
+    if axlib is None:
+        if libPath is None:
+            libPath = find_lib('AxMultiClampMsg.dll', paths=searchPaths)
+        if not os.path.isfile(libPath):
+            raise ValueError('MultiClamp DLL file "%s" does not exist' % libPath)
+        print "Using MultiClamp DLL at ", libPath
+
+        axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
+        initializeGlobals()
+
+    return axlib
+
 
 class MultiClampChannel:
     """Class used to run MultiClamp commander functions for a specific channel.
@@ -227,6 +250,14 @@ class MultiClamp:
     """
     INSTANCE = None
     
+    @classmethod
+    def instance(cls):
+        if cls.INSTANCE is None:
+            # make sure dll has been initialized first
+            getAxlib()
+            cls.INSTANCE = cls()
+        return cls.INSTANCE
+    
     def __init__(self, debug=DEBUG):
         self.debug = debug
         if debug:
@@ -252,10 +283,6 @@ class MultiClamp:
         if self.telegraph is not None:
             self.telegraph.quit()
         MultiClamp.INSTANCE = None
-    
-    @staticmethod
-    def instance():
-        return MultiClamp.INSTANCE
     
     def getChannel(self, channel, callback=None):
         """Return a MultiClampChannel object for the specified device/channel. The
@@ -389,137 +416,136 @@ class MultiClamp:
 
 
 
+def initializeGlobals():
+    global MODELS, MODE_LIST, MODE_LIST_INV, PRI_OUT_MODE_LIST, SEC_OUT_MODE_LIST
+    global PRI_OUT_MODE_LIST_INV, SEC_OUT_MODE_LIST_INV, NAME_MAPS, INV_NAME_MAPS
+    global SIGNAL_MAP
 
-## Crapton of stuff to remember that is not provided by header files
+    ## Crapton of stuff to remember that is not provided by header files
 
-def invertDict(d):
-    return dict([(x[1], x[0]) for x in d.items()])
+    def invertDict(d):
+        return dict([(x[1], x[0]) for x in d.items()])
 
-MODELS = {
-    axlib.HW_TYPE_MC700A: 'MC700A',
-    axlib.HW_TYPE_MC700B: 'MC700B'
-}
+    MODELS = {
+        axlib.HW_TYPE_MC700A: 'MC700A',
+        axlib.HW_TYPE_MC700B: 'MC700B'
+    }
 
-MODE_LIST = {
-    "VC": axlib.MODE_VCLAMP,
-    "IC": axlib.MODE_ICLAMP,
-    "I=0": axlib.MODE_ICLAMPZERO,
-}
-MODE_LIST_INV = invertDict(MODE_LIST) 
+    MODE_LIST = {
+        "VC": axlib.MODE_VCLAMP,
+        "IC": axlib.MODE_ICLAMP,
+        "I=0": axlib.MODE_ICLAMPZERO,
+    }
+    MODE_LIST_INV = invertDict(MODE_LIST) 
 
-## Extract all signal names from library
-PRI_OUT_MODE_LIST = {}
-SEC_OUT_MODE_LIST = {}
-for k in axlib['values']:
-    if k[:18] == 'MCCMSG_PRI_SIGNAL_':
-        PRI_OUT_MODE_LIST[k[11:]] = axlib('values', k)
-    elif k[:18] == 'MCCMSG_SEC_SIGNAL_':
-        SEC_OUT_MODE_LIST[k[11:]] = axlib('values', k)
-PRI_OUT_MODE_LIST_INV = invertDict(PRI_OUT_MODE_LIST)
-SEC_OUT_MODE_LIST_INV = invertDict(SEC_OUT_MODE_LIST)
-
-
-NAME_MAPS = {
-    'SetMode': MODE_LIST,
-    'SetPrimarySignal': PRI_OUT_MODE_LIST,
-    'SetSecondarySignal': SEC_OUT_MODE_LIST
-}
-INV_NAME_MAPS = {
-    'GetMode': MODE_LIST_INV,
-    'GetPrimarySignal': PRI_OUT_MODE_LIST_INV,
-    'GetSecondarySignal': SEC_OUT_MODE_LIST_INV
-}
+    ## Extract all signal names from library
+    PRI_OUT_MODE_LIST = {}
+    SEC_OUT_MODE_LIST = {}
+    for k in axlib['values']:
+        if k[:18] == 'MCCMSG_PRI_SIGNAL_':
+            PRI_OUT_MODE_LIST[k[11:]] = axlib('values', k)
+        elif k[:18] == 'MCCMSG_SEC_SIGNAL_':
+            SEC_OUT_MODE_LIST[k[11:]] = axlib('values', k)
+    PRI_OUT_MODE_LIST_INV = invertDict(PRI_OUT_MODE_LIST)
+    SEC_OUT_MODE_LIST_INV = invertDict(SEC_OUT_MODE_LIST)
 
 
+    NAME_MAPS = {
+        'SetMode': MODE_LIST,
+        'SetPrimarySignal': PRI_OUT_MODE_LIST,
+        'SetSecondarySignal': SEC_OUT_MODE_LIST
+    }
+    INV_NAME_MAPS = {
+        'GetMode': MODE_LIST_INV,
+        'GetPrimarySignal': PRI_OUT_MODE_LIST_INV,
+        'GetSecondarySignal': SEC_OUT_MODE_LIST_INV
+    }
 
-## Build a map for connecting signal strings from telegraph headers to signal values from axon headers.
-##  Note: Completely retarded.
+    ## Build a map for connecting signal strings from telegraph headers to signal values from axon headers.
+    ##  Note: Completely retarded.
 
-SIGNAL_MAP = {
-    axlib.HW_TYPE_MC700A: {
-        'VC': {
-            'PRI': {
-                "Membrane Potential": "VC_MEMBPOTENTIAL",
-                "Membrane Current": "VC_MEMBCURRENT",
-                "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
-                "Bath Potential": "VC_AUXILIARY1"
+    SIGNAL_MAP = {
+        axlib.HW_TYPE_MC700A: {
+            'VC': {
+                'PRI': {
+                    "Membrane Potential": "VC_MEMBPOTENTIAL",
+                    "Membrane Current": "VC_MEMBCURRENT",
+                    "Pipette Potential": "VC_PIPPOTENTIAL",
+                    "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                    "Bath Potential": "VC_AUXILIARY1"
+                },
+                'SEC': {
+                    "Membrane plus Offset Potential": "VC_MEMBPOTENTIAL",
+                    "Membrane Current": "VC_MEMBCURRENT",
+                    "Pipette Potential": "VC_PIPPOTENTIAL",
+                    "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                    "Bath Potential": "VC_AUXILIARY1"
+                }   
             },
-            'SEC': {
-                "Membrane plus Offset Potential": "VC_MEMBPOTENTIAL",
-                "Membrane Current": "VC_MEMBCURRENT",
-                "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
-                "Bath Potential": "VC_AUXILIARY1"
-            }   
-        },
-        'IC': {
-            'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
-                "Command Current": "VC_MEMBPOTENTIAL",
-                "Membrane Current": "VC_MEMBCURRENT",
-                "Membrane Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
-                "Bath Potential": "VC_AUXILIARY1"
-                #"Command Current": "IC_CMDCURRENT",
-                #"Membrane Current": "IC_MEMBCURRENT",
-                #"Membrane Potential": "IC_MEMBPOTENTIAL",
-                #"100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
-                #"Bath Potential": "IC_AUXILIARY1"
-            },
-            'SEC': {
-                "Command Current": "IC_CMDCURRENT",
-                "Membrane Current": "IC_MEMBCURRENT",
-                "Membrane plus Offset Potential": "IC_MEMBPOTENTIAL",
-                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
-                "Bath Potential": "IC_AUXILIARY1"
-            }
-        }
-    },
-        
-    axlib.HW_TYPE_MC700B: {
-        'VC': {
-            'PRI': {
-                "Membrane Current": "VC_MEMBCURRENT",
-                "Membrane Potential": "VC_MEMBPOTENTIAL",
-                "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
-                "External Command Potential": "VC_EXTCMDPOTENTIAL",
-                "Auxiliaryl": "VC_AUXILIARY1",
-                "Auxiliary2": "VC_AUXILIARY2",
-            },
-            'SEC': {
-                "Membrane Current":"VC_MEMBCURRENT" ,
-                "Membrane Potential": "VC_MEMBPOTENTIAL",
-                "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
-                "External Command Potential": "VC_EXTCMDPOTENTIAL",
-                "Auxiliaryl": "VC_AUXILIARY1",
-                "Auxiliary2": "VC_AUXILIARY2",
+            'IC': {
+                'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
+                    "Command Current": "VC_MEMBPOTENTIAL",
+                    "Membrane Current": "VC_MEMBCURRENT",
+                    "Membrane Potential": "VC_PIPPOTENTIAL",
+                    "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                    "Bath Potential": "VC_AUXILIARY1"
+                    #"Command Current": "IC_CMDCURRENT",
+                    #"Membrane Current": "IC_MEMBCURRENT",
+                    #"Membrane Potential": "IC_MEMBPOTENTIAL",
+                    #"100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                    #"Bath Potential": "IC_AUXILIARY1"
+                },
+                'SEC': {
+                    "Command Current": "IC_CMDCURRENT",
+                    "Membrane Current": "IC_MEMBCURRENT",
+                    "Membrane plus Offset Potential": "IC_MEMBPOTENTIAL",
+                    "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                    "Bath Potential": "IC_AUXILIARY1"
+                }
             }
         },
-        'IC': {
-            'PRI': {
-                "Membrane Potential": "IC_MEMBPOTENTIAL",
-                "Membrane Current": "IC_MEMBCURRENT",
-                "Command Current": "IC_CMDCURRENT",
-                "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
-                "External Command Current": "IC_EXTCMDCURRENT",
-                "Auxiliary1": "IC_AUXILIARY1",
-                "Auxiliary2": "IC_AUXILIARY2",
+            
+        axlib.HW_TYPE_MC700B: {
+            'VC': {
+                'PRI': {
+                    "Membrane Current": "VC_MEMBCURRENT",
+                    "Membrane Potential": "VC_MEMBPOTENTIAL",
+                    "Pipette Potential": "VC_PIPPOTENTIAL",
+                    "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                    "External Command Potential": "VC_EXTCMDPOTENTIAL",
+                    "Auxiliaryl": "VC_AUXILIARY1",
+                    "Auxiliary2": "VC_AUXILIARY2",
+                },
+                'SEC': {
+                    "Membrane Current":"VC_MEMBCURRENT" ,
+                    "Membrane Potential": "VC_MEMBPOTENTIAL",
+                    "Pipette Potential": "VC_PIPPOTENTIAL",
+                    "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                    "External Command Potential": "VC_EXTCMDPOTENTIAL",
+                    "Auxiliaryl": "VC_AUXILIARY1",
+                    "Auxiliary2": "VC_AUXILIARY2",
+                }
             },
-            'SEC': {
-                "Membrane Potential": "IC_MEMBPOTENTIAL",
-                "Membrane Current": "IC_MEMBCURRENT",
-                "Pipette Potential": "IC_PIPPOTENTIAL",
-                "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
-                "External Command Current": "IC_EXTCMDCURRENT",
-                "Auxiliary1": "IC_AUXILIARY1",
-                "Auxiliary2": "IC_AUXILIARY2",
+            'IC': {
+                'PRI': {
+                    "Membrane Potential": "IC_MEMBPOTENTIAL",
+                    "Membrane Current": "IC_MEMBCURRENT",
+                    "Command Current": "IC_CMDCURRENT",
+                    "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                    "External Command Current": "IC_EXTCMDCURRENT",
+                    "Auxiliary1": "IC_AUXILIARY1",
+                    "Auxiliary2": "IC_AUXILIARY2",
+                },
+                'SEC': {
+                    "Membrane Potential": "IC_MEMBPOTENTIAL",
+                    "Membrane Current": "IC_MEMBCURRENT",
+                    "Pipette Potential": "IC_PIPPOTENTIAL",
+                    "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                    "External Command Current": "IC_EXTCMDCURRENT",
+                    "Auxiliary1": "IC_AUXILIARY1",
+                    "Auxiliary2": "IC_AUXILIARY2",
+                }
             }
         }
     }
-}
     
-
-### Create instance of driver class
-MultiClamp(debug=DEBUG)
