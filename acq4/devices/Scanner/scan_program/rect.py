@@ -21,7 +21,8 @@ class RectScanComponent(ScanProgramComponent):
     def __init__(self, scanProgram=None):
         ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
-        
+        print('recscan INIT')
+
     def samplingChanged(self):
         self.ctrl.update()
 
@@ -348,7 +349,7 @@ class RectScan(SystemSolver):
         r = r[...,np.newaxis]
         q = (v*r).sum(axis=0)  # order is now (row, column, xy)
         q += self.scanOrigin.reshape(1,1,2)
-        
+
         # Convert via mapping (usually to mirror voltages)
         # xy = q.reshape(q.shape[0]*q.shape[1], 2)
         # pg.plot(xy[:,0], xy[:,1])
@@ -364,14 +365,14 @@ class RectScan(SystemSolver):
         # first check that this array is long enough
         if array.shape[0] < offset + shape[0] * stride[0]:
             print self
-            raise Exception("Array is too small to contain the specified rectangle scan. Available: %d Required: %d" % (array.shape[0], shape[0] * stride[0]))
+            raise Exception("Array is too small to contain the specified rectangle scan.\nAvailable: %d Required: %d\nAdjust Task Duration." % (array.shape[0], shape[0] * stride[0]))
         
         # select the target sub-array
         target = pg.subArray(array, offset, shape, stride)
-        
+
         # copy data into array (one copy per frame)
         target[:] = qm[np.newaxis, ...]
-        
+
     def writeLaserMask(self, array):
         """
         Write 1s into the array in the active region of the scan.

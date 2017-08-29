@@ -13,10 +13,10 @@ class LineScanComponent(ScanProgramComponent):
     """
     type = 'line'
     
-    def __init__(self, scanProgram):
+    def __init__(self, scanProgram=None):
         ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = LineScanControl(self)
-
+ 
     def ctrlParameter(self):
         """
         The Parameter (see acq4.pyqtgraph.parametertree) set used to allow the 
@@ -125,10 +125,10 @@ class LineScanControl(QtCore.QObject):
     
     def __init__(self, component):
         QtCore.QObject.__init__(self)
-        self.name = component.name
+#        self.name = component.name
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
-        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True, children=[
+        self.params = pTypes.SimpleParameter(name='line_scan', type='bool', value=True, removable=True, renamable=True, children=[
             dict(name='Length', type='float', value=1e-5, suffix='m', siPrefix=True, bounds=[1e-6, None], step=1e-6),
             dict(name='startTime', type='float', value=5e-2, suffix='s', siPrefix=True, bounds=[0., None], step=1e-2),
             dict(name='sweepSpeed', type='float', value=1e-6, suffix='m/ms', siPrefix=True, bounds=[1e-8, None], minStep=5e-7, step=0.5, dec=True),
@@ -161,27 +161,28 @@ class LineScanControl(QtCore.QObject):
         return self.params
     
     def update(self):
-        pts = self.roi.listPoints()
         scanTime = 0.
-        interScanFlag = False
-        for k in xrange(len(pts)): # loop through the list of points
-            k2 = k + 1
-            if k2 > len(pts)-1:
-                k2 = 0
-            dist = (pts[k]-pts[k2]).length()
-            if interScanFlag is False:
-                scanTime += dist/(self.params['sweepSpeed']*1000.)
-            else:
-                scanTime += dist/(self.params['interSweepSpeed']*1000.)
-            interScanFlag = not interScanFlag
-        self.params['endTime'] = self.params['startTime']+(self.params['nScans']*scanTime)
+        for seg in self.roi.segments: # loop through multiline segments
+            pts = seg.listPoints()
+            interScanFlag = False
+            for k in xrange(len(pts)): # loop through the list of points
+                k2 = k + 1
+                if k2 > len(pts)-1:
+                    k2 = 0
+                dist = (pts[k]-pts[k2]).length()
+                if interScanFlag is False:
+                    scanTime += dist/(self.params['sweepSpeed']*1000.)
+                else:
+                    scanTime += dist/(self.params['interSweepSpeed']*1000.)
+                interScanFlag = not interScanFlag
+            self.params['endTime'] = self.params['startTime']+(self.params['nScans']*scanTime)
         self.setVisible(self.params.value())
     
     def updateFromROI(self):
         self.update()
         
     def generateTask(self):
-        points=self.roi.listPoints() # in local coordinates local to roi.
+        points = [seg.listPoints() for set in self.roi.segments] # in local coordinates local to roi.
         points = [self.roi.mapToView(p) for p in points] # convert to view points (as needed for scanner)
         points = [(p.x(), p.y()) for p in points]   ## make sure we can write this data to HDF5 eventually..
         return {'type': self.name, 'active': self.isActive(), 'points': points, 'startTime': self.params['startTime'], 'sweepSpeed': self.params['sweepSpeed'], 
