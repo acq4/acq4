@@ -58,7 +58,7 @@ class MultiClamp(Device):
                     MultiClamp.proc.close()
                     MultiClamp.proc = None
                     raise
-            mc = self.proc.mc_mod.MultiClamp.instance()
+            mcmod = self.proc.mc_mod
         else:
             if MultiClamp.proc not in (None, False):
                 raise Exception("Already connected to multiclamp via remote process; cannot connect locally at the same time.")
@@ -67,15 +67,22 @@ class MultiClamp(Device):
                 MultiClamp.proc = False
 
             try:
-                from acq4.drivers.MultiClamp import MultiClamp as MultiClampDriver
+                import acq4.drivers.MultiClamp as MultiClampDriver
             except RuntimeError as exc:
                 if "32-bit" in exc.message:
                     raise Exception("MultiClamp commander does not support access by 64-bit processes. To circumvent this problem, "
                                     "Use the 'pythonExecutable' device configuration option to connect via a 32-bit python instead.")
                 else:
                     raise
-            mc = MultiClampDriver.instance()
+            mcmod = MultiClampDriver
 
+        # Ask driver to use a specific DLL if specified in config
+        dllPath = self.config.get('dllPath', None)
+        if dllPath is not None:
+            mcmod.getAxlib(dllPath)
+
+        # Create driver instance
+        mc = mcmod.MultiClamp.instance()
 
         # get a handle to our specific multiclamp channel
         if executable is not None:

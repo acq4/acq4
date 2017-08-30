@@ -13,7 +13,7 @@ import sys, re, os
 __all__ = ['winDefs', 'CParser']
 
 
-def winDefs(verbose=False):
+def winDefs(verbose=False, architecture=None):
     """Convenience function. Returns a parser which loads a selection of windows headers included with 
     CParser. These definitions can either be accessed directly or included before parsing
     another file like this:
@@ -22,16 +22,42 @@ def winDefs(verbose=False):
     Definitions are pulled from a selection of header files included in Visual Studio
     (possibly not legal to distribute? Who knows.), some of which have been abridged
     because they take so long to parse. 
+    
+    ==============  ==================================================================
+    **Arguments:**
+    *verbose*       If true, prints a lot of debugging info. Default is False.
+    *architecture*  Specify '32bit' or '64bit' to get an headers parsed as 
+                    either 32 or 64-bit. If unspecified, we use sys.maxsize to 
+                    determine whether to interpret headers for 32 or 64 bits.
+    ==============  ==================================================================
     """
     headerFiles = ['WinNt.h', 'WinDef.h', 'WinBase.h', 'BaseTsd.h', 'WTypes.h', 'WinUser.h']
+
+    if architecture is None:
+        if sys.maxsize > 2**32:
+            architecture = '64bit'
+        else:
+            architecture = '32bit'
+    if verbose:
+        print "Getting winDefs for %s" %architecture
+
+    if architecture == '32bit':
+        macros = {'_WIN32': '','_MSC_VER': '800', 'CONST': 'const', 'NO_STRICT': None}
+        cache = 'WinDefs_32bit.cache'
+    elif architecture == '64bit':
+        macros = {'_WIN64': '', 'CONST': 'const', 'NO_STRICT': None}
+        cache = 'WinDefs_64bit.cache'
+    else:
+        raise Exception("Not sure how to return headers for '%s' architecture; valid arguments are '32bit', '64bit', or None." % architecture)
+
     d = os.path.dirname(__file__)
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
         types={'__int64': ('long long')},
-        macros={'_WIN32': '', '_MSC_VER': '800', 'CONST': 'const', 'NO_STRICT': None},
+        macros=macros,
         processAll=False
     )
-    p.processAll(cache=os.path.join(d, 'headers', 'WinDefs.cache'), noCacheWarning=True, verbose=verbose)
+    p.processAll(cache=os.path.join(d, 'headers', cache), noCacheWarning=True, verbose=verbose)
     return p
 
 

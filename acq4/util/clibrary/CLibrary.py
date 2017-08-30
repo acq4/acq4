@@ -10,7 +10,43 @@ function calling based on C header definitions.
 
 
 from ctypes import *
-import sys
+import sys, os, platform
+
+def find_lib(name, paths=[], dirHints=[]):
+    """Search through likely directories to find non-system dlls. Return the first filepath that is found. Currently only supported on Windows.
+
+    **Arguments** 
+    =============   ==============================================
+    name            (str) The name of the file to look for.
+    paths           (list)(optional) A list of directory paths to search. 
+    dirHints        (list)(optional) A list of directory names within ProgramFiles or ProgramFiles(x86) to search first. Used to reduce search time.
+
+    Directories are searched in the order specified in paths, then in 'ProgramFiles', then 'ProgramFiles(x86)'
+    """
+
+    if platform.system() != 'Windows':
+        raise Exception("CLibrary.find_lib is currently only supported on Windows machines. Sorry.")
+
+    searchPaths = paths
+
+    for directory in ['PROGRAMFILES', 'PROGRAMFILES(X86)', 'SYSTEMDRIVE']:
+        p = os.environ.get(directory, None)
+        if directory == 'SYSTEMDRIVE': ## fixes bug(feature?) where os.join doesn't insert slashes between c: and whatever you're trying to join
+            p = os.path.join(p, os.sep)
+
+        if p is not None:
+            for d in dirHints:
+                path = os.path.join(p,d)
+                if os.path.exists(path):
+                    searchPaths.append(path)
+            searchPaths.append(p)
+    
+    for path in searchPaths:
+        for root, dirs, files in os.walk(path):
+            if name in files:
+                return os.path.join(root, name)
+
+    raise Exception('Could not find file named "%s". Searched recursively in %s.' % (name, str(searchPaths)))
 
 
 class CLibrary:
