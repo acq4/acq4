@@ -330,12 +330,11 @@ class Imager(Module):
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get('detectors', [config.get('detector')])
         
-        self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
-        self.attenuatorChannel = config['attenuator'][1]
-        
         self.laserMonitor = QtCore.QTimer()
         self.laserMonitor.timeout.connect(self.updateLaserInfo)
-        self.laserMonitor.start(3000)
+        ival = self.config.get('powerCheckInterval', 3.0)
+        if ival is not False:
+            self.laserMonitor.start(ival*1000)
         
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
@@ -867,9 +866,12 @@ class Imager(Module):
         duration = float(samples) / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
-        pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
-        pcell[:] = scanParams['Pockels']
-        pcell[-1] = 0
+        laserCmd = {'shutterMode': 'open'}
+        if self.laserDev.hasPCell:
+            pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
+            pcell[:] = scanParams['Pockels']
+            pcell[-1] = 0
+            laserCmd['pCell'] = {'command': pcell}
 
         # Look up device names
         pdDevice, pdChannel = scanParams['Photodetector']
@@ -889,10 +891,7 @@ class Imager(Module):
                 'yCommand' : vscan[:, 1],
                 'program': program, 
                 },
-            self.laserDev.name(): {
-                'pCell': {'command': pcell},
-                'shutterMode': 'open',
-                },
+            self.laserDev.name(): laserCmd,
             pdDevice: {
                 pdChannel: {'record': True},
             },
