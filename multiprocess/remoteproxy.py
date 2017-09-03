@@ -466,10 +466,7 @@ class RemoteEventHandler(object):
             return req
             
         if callSync == 'sync':
-            try:
-                return req.result()
-            except NoResultError:
-                return req
+            return req.result()
         
     def close(self, callSync='off', noCleanup=False, **kwds):
         try:
@@ -572,6 +569,10 @@ class RemoteEventHandler(object):
             self.proxies[ref] = proxy._proxyId
     
     def deleteProxy(self, ref):
+        if self.send is None:
+            # this can happen during shutdown
+            return
+
         with self.proxyLock:
             proxyId = self.proxies.pop(ref)
             
