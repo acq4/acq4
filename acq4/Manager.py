@@ -14,10 +14,6 @@ The class is responsible for:
 
 import os, sys, gc
 
-## install global exception handler for others to hook into.
-import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
-exceptionHandling.setTracebackClearing(True)
-
 import time, atexit, weakref
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.util.reload as reload
@@ -26,14 +22,11 @@ from .util import DataManager, ptime, configfile
 from .Interfaces import *
 from .util.Mutex import Mutex
 from .util.debug import *
+from .util import debug
 import getopt, glob
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from .LogWindow import LogWindow
 from .util.HelpfulException import HelpfulException
-
-
-LOG = None
 
 
 ### All other modules can use this function to get the manager instance
@@ -42,74 +35,10 @@ def getManager():
         raise Exception("No manager created yet")
     return Manager.single
 
+
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
-    # preserve old log window
-    global LOG
-    LOG = old['LOG']
-    
-def logMsg(msg, **kwargs):
-    """msg: the text of the log message
-       msgTypes: user, status, error, warning (status is default)
-       importance: 0-9 (0 is low importance, 9 is high, 5 is default)
-       other supported keywords:
-          exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
-          docs: a list of strings where documentation related to the message can be found
-          reasons: a list of reasons (as strings) for the message
-          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
-       Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
-        """
-    global LOG
-    if LOG is not None:
-        try:
-            LOG.logMsg(msg, **kwargs)
-        except:
-            print "Error logging message:"
-            print "    " + "\n    ".join(msg.split("\n"))
-            print "    " + str(kwargs)
-            sys.excepthook(*sys.exc_info())
-    else:
-        print "Can't log message; no log created yet."
-        #print args
-        print kwargs
-        
-    
-def logExc(msg, *args, **kwargs):
-    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
-    global LOG
-    if LOG is not None:
-        try:
-            LOG.logExc(msg, *args, **kwargs)
-        except:
-            print "Error logging exception:"
-            print "    " + "\n    ".join(msg.split("\n"))
-            print "    " + str(kwargs)
-            sys.excepthook(*sys.exc_info())
-    else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
-
-blockLogging = False
-def exceptionCallback(*args):
-    ## Called whenever there is an unhandled exception.
-    
-    ## unhandled exceptions generate an error message by default, but this
-    ## can be overridden by raising HelpfulException(msgType='...')
-    global blockLogging
-    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
-        try:
-            blockLogging = True
-            logMsg("Unexpected error: ", exception=args, msgType='error')
-        except:
-            print "Error: Exception could no be logged."
-            original_excepthook(*sys.exc_info())
-        finally:
-            blockLogging = False
-exceptionHandling.register(exceptionCallback)        
-
-
 
 
 class Manager(QtCore.QObject):
@@ -153,9 +82,7 @@ class Manager(QtCore.QObject):
             if Manager.CREATED:
                 raise Exception("Manager object already created!")
             
-            global LOG
-            LOG = LogWindow(self)
-            self.logWindow = LOG
+            self.logWindow = debug.createLogWindow(self)
             
             self.documentation = Documentation()
             

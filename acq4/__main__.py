@@ -12,6 +12,7 @@ if __package__ is None:
 from .pyqtgraph.Qt import QtGui, QtCore
 
 from .Manager import *
+from .util.debug import installExceptionHandler
 from numpy import *
 
 # Pull some args out
@@ -31,6 +32,9 @@ else:
 ## Enable stack trace output when a crash is detected
 from .util.debug import enableFaulthandler
 enableFaulthandler()
+
+# Enable exception handling
+installExceptionHandler()
 
 ## Initialize Qt
 app = pg.mkQApp()
