@@ -29,6 +29,7 @@ def createLogWindow(manager):
     global LOG_UI
     assert LOG_UI is None
     LOG_UI = LogWindow(manager)
+    return LOG_UI
 
 
 def printExc(msg='', indent=4, prefix='|', msgType='error'):
