@@ -159,7 +159,6 @@ class Manager(QtCore.QObject):
                 if setStorageDir is not None:
                     self.setCurrentDir(setStorageDir)
                 if loadManager:
-                    #mm = self.loadModule(module='Manager', name='Manager', config={})
                     self.showGUI()
                     self.createWindowShortcut('F1', self.gui.win)
                 for m in loadModules:
@@ -168,7 +167,6 @@ class Manager(QtCore.QObject):
                     except:
                         if not loadManager:
                             self.showGUI()
-                            #self.loadModule(module='Manager', name='Manager', config={})
                         raise
                         
             except:
@@ -182,11 +180,7 @@ class Manager(QtCore.QObject):
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")
             
-        #win = QtGui.QApplication.instance().activeWindow()
         win = self.modules[self.modules.keys()[0]].window()
-        #if win is None:   ## Breaks on some systems..
-            #raise Exception("No GUI windows created during startup, exiting now.")
-        #print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.abortShortcut = QtGui.QShortcut(QtGui.QKeySequence('Esc'), win)
@@ -196,9 +190,6 @@ class Manager(QtCore.QObject):
         self.quitShortcut.activated.connect(self.quit)
         self.abortShortcut.activated.connect(self.sigAbortAll)
         self.reloadShortcut.activated.connect(self.reloadAll)
-    
-        
-        #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
     def _getConfigFile(self):
         ## search all the default locations to find a configuration file.
@@ -402,11 +393,32 @@ class Manager(QtCore.QObject):
         with self.lock:
             return self.devices.keys()
 
-    def loadModule(self, module, name, config=None, forceReload=False):
-        """Create a new instance of an acq4 module. For this to work properly, there must be 
-        a python module called acq4.modules.moduleName which contains a class called moduleName.
-        Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
-        should have anticipated."""
+    def loadModule(self, module, name, config=None, forceReload=False, importMod=None, execPath=None):
+        """Create a new instance of an acq4 module. 
+        
+        Note: "module" here refers to a user interface module, not a Python
+        module.
+
+        Parameters
+        ----------
+        module : str
+            The name of the module *class* to instantiate. The class must either
+            be defined by ACQ4 (in acq4.modules) or the importMod or execPath
+            arguments may be used to specify the location of the module class.
+        name : str
+            The name to assign to the newly instantiated module
+        config : dict | None
+            Configuration options to pass to the module constructor
+        importMod : str
+            Optional name of a module to import that will define the required
+            module class. This is the recommended way to load custom modules.
+        execPath : str
+            Optional name of a python file to exec, from which the module class
+            definition will be acquired. This is a simple way to load custom
+            modules, but is discouraged relative to using *importMod*.
+        forceReload : bool
+            Deprecated.
+        """
         
         print 'Loading module "%s" as "%s"...' % (module, name)
         with self.lock:
@@ -415,34 +427,27 @@ class Manager(QtCore.QObject):
             if config is None:
                 config = {}
         
-        #print "  import"
-        mod = __import__('acq4.modules.%s' % module, fromlist=['*'])
-        #if forceReload:
-            ### Reload all .py files in module's directory
-            #modDir = os.path.join('lib', 'modules', module)
-            #files = glob.glob(os.path.join(modDir, '*.py'))
-            #files = [os.path.basename(f[:-3]) for f in files]
-            #for f in [module, '__init__']:
-                #if f in files:  ## try to rearrange so we load in correct order
-                    #files.remove('__init__')
-                    #files.append('__init__')
-            #modName = 'acq4.modules.' + module
-            #modNames = [modName + '.' + m for m in files] + [modName]
-            #print "RELOAD", modNames
-            #for m in modNames:
-                #if m in sys.modules:
-                    #reload(sys.modules[m])
-            #mod = __import__('acq4.modules.%s' % module, fromlist=['*'])
-            
-        modclass = getattr(mod, module)
-        #print "  create"
+        if importMod is not None:
+            pymod = __import__(importMod, fromlist=['*'])
+            modclass = getattr(pymod, module)
+        elif execPath is not None:
+            modDir = os.path.dirname(execPath)
+            sys.path.insert(0, modDir)
+            try:
+                globs = {}
+                exec(open(execPath, 'rb').read(), globs)
+                modclass = globs[module]
+            finally:
+                sys.path.pop(0)
+        else:
+            pymod = __import__('acq4.modules.%s' % module, fromlist=['*'])
+            modclass = getattr(pymod, module)
+                
         mod = modclass(self, name, config)
-        #print "  emit"
         with self.lock:
             self.modules[name] = mod
             
         self.sigModulesChanged.emit()
-        #print "  return"
         return mod
         
         
@@ -502,8 +507,12 @@ class Manager(QtCore.QObject):
         while mName in self.modules:
             mName = "%s_%d" % (name, n)
             n += 1
+
+        # Allow mechanisms for importing custom modules
+        execPath = conf.get('exec', None)
+        importMod = conf.get('import', None)
             
-        mod = self.loadModule(mod, mName, config, forceReload=forceReload)
+        mod = self.loadModule(mod, mName, config, forceReload=forceReload, execPath=execPath, importMod=importMod)
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
