@@ -27,6 +27,7 @@ import getopt, glob
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
 from .util.HelpfulException import HelpfulException
+from . import __version__
 
 
 ### All other modules can use this function to get the manager instance
@@ -144,7 +145,7 @@ class Manager(QtCore.QObject):
             self.configDir = os.path.dirname(configFile)
             self.readConfig(configFile)
             
-            logMsg('ACQ4 started.', importance=9)
+            logMsg('ACQ4 version %s started.' % __version__, importance=9)
             
             Manager.CREATED = True
             Manager.single = self
