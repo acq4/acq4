@@ -13,6 +13,8 @@ if __package__ is None:
 from . import pyqtgraph as pg
 from .pyqtgraph.Qt import QtGui, QtCore
 from .Manager import Manager
+from .util.debug import installExceptionHandler
+
 
 # Pull some args out
 if "--profile" in sys.argv:
@@ -27,18 +29,24 @@ else:
     callgraph = False
 
 
-
 ## Enable stack trace output when a crash is detected
 from .util.debug import enableFaulthandler
 enableFaulthandler()
+
 
 ## Prevent Windows 7 from grouping ACQ4 windows under a single generic python icon in the taskbar
 if sys.platform == 'win32':
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('ACQ4')
 
+
+# Enable exception handling
+installExceptionHandler()
+
+
 ## Initialize Qt
 app = pg.mkQApp()
+
 
 ## Disable garbage collector to improve stability. 
 ## (see pyqtgraph.util.garbage_collector for more information)
@@ -62,9 +70,6 @@ if man.configFile.endswith(os.path.join('example', 'default.cfg')):
     mbox.setStandardButtons(mbox.Ok)
     mbox.exec_()
 
-
-## for debugging with pdb
-#QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop unless running in interactive mode.
 from . import pyqtgraph as pg
@@ -125,5 +130,3 @@ else:
         app.exec_()
         pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
                    # this avoids otherwise irritating exit crashes.
-    
-    

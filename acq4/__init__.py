@@ -1,6 +1,19 @@
+import os, sys
+
 __version__ = '0.9.2'
 
-import os, sys
+
+# If we are running from a git repo, generate a more descriptive version number 
+from .util.gitversion import getGitVersion
+
+try:
+    gitv = getGitVersion('acq4', os.path.join(os.path.dirname(__file__), '..'))
+    if gitv is not None:
+        __version__ = gitv
+except Exception:
+    pass
+
+
 
 # Set up a list of paths to search for configuration files 
 # (used if no config is explicitly specified)

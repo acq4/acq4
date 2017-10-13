@@ -6,6 +6,9 @@ import struct, os, threading, time, weakref
 from acq4.util.clibrary import *
 #from Mutex import *
 
+DEBUG=False
+if DEBUG:
+    print("MultiClampTelegraph Debug:", DEBUG)
 __all__ = ['MultiClampTelegraph', 'wmlib']
 
 ## Load windows definitions
@@ -15,10 +18,10 @@ d = os.path.dirname(__file__)
 
 # Load telegraph definitions
 teleDefs = CParser(
-    os.path.join(d, 'MultiClampBroadcastMsg.hpp'),
+    #os.path.join(d, 'MultiClampBroadcastMsg.hpp'),
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'MultiClampBroadcastMsg.hpp.cache'),
-    #verbose=True
+    verbose=DEBUG
 ) 
 
 ##  Windows Messaging API 
@@ -28,34 +31,40 @@ wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 ## Naturally we can't use the same set of definitions for the 700A and 700B.
 ax700ADefs = CParser(
-    os.path.join(d, 'MCTelegraphs.hpp'),
+    #os.path.join(d, 'MCTelegraphs.hpp'),
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
+    verbose=DEBUG
 )
 
 class MultiClampTelegraph:
     """Class for receiving 'telegraph' packets from MultiClamp commander. 
     This class is automatically invoked by MultiClamp."""
 
-    def __init__(self, channels, callback):
+    def __init__(self, channels, callback, debug=DEBUG):
         """Create a telegraph thread that opens connections to the devices listed in 
         'channels' and reports changes to the devices through 'callback'. 
         """
+        self.debug = debug
+        if self.debug:
+            print "Initializing MultiClampTelegraph"
         #self.devices = dict([(self.mkDevId(d), [d, None]) for d in devices])
         ## remember index of each device for communicating through callback
         self.channels = channels
         self.devIndex = dict([(self.mkDevId(channels[k]), k) for k in channels])  
         #print "DEV index:", self.devIndex
         self.callback = callback
-        self.lock = threading.RLock()
+        self.lock = threading.RLock(verbose=debug)
         #self.lock = Mutex(Mutex.Recursive)
-        self.thread = threading.Thread()
+        self.thread = threading.Thread(name="MultiClampTelegraph")
         self.thread.run = self.messageLoop
         self.startMessageThread()
         
     def mkDevId(self, desc):
         """Create a device ID used for communicating via telegraph"""
         #print "mkDevId", desc
+        if self.debug:
+            print "MultiClampTelegraph.mkDevId called."
         if desc['model'] == 0:
             return desc['com'] | (desc['dev'] << 8) | (desc['chan'] << 16)
         elif desc['model'] == 1:
@@ -67,6 +76,8 @@ class MultiClampTelegraph:
         self.quit()
         
     def quit(self):
+        if self.debug:
+            print "MultiClampTelegraph.quit called."
         if self.thread.isAlive():
             self.stopMessageThread()
             self.thread.join(5.0)
@@ -74,11 +85,15 @@ class MultiClampTelegraph:
             print "WARNING: Failed to stop MultiClamp telegraph thread."
         
     def startMessageThread(self):
+        if self.debug:
+            print "MultiClampTelegraph.startMessageThread called."
         with self.lock:
             self.stopThread = False
             self.thread.start()
 
     def stopMessageThread(self):
+        if self.debug:
+            print "MultiClampTelegraph.stopMessageThread called."
         with self.lock:
             self.stopThread = True
         
@@ -87,14 +102,21 @@ class MultiClampTelegraph:
         #with self.lock:
             #self.devices[devID][1] = state
         #print("update state:", devID, self.devIndex[devID])
+        if self.debug:
+            print "MultiClampTelegraph.updateState called."
         self.emit('update', self.devIndex[devID], state)
         
     def emit(self, *args):
         """Send a message via the registered callback function"""
+        if self.debug:
+            print "MultiClampTelegraph.emit called."
         with self.lock:
             self.callback(*args)
         
     def messageLoop(self):
+
+        if self.debug:
+            print "MultiClampTelegraph.messageLoop called."
         # create hidden window for receiving messages (how silly is this?)
         self.createWindow()
         self.registerMessages()
@@ -117,7 +139,6 @@ class MultiClampTelegraph:
                     break
                 else:
                     msg = ret[0].message
-                    #print "message loop got msg", msg
                     if msg == self.msgIds['RECONNECT']:
                         devID = ret[0].lParam
                         if devID in self.devIndex:
@@ -135,6 +156,8 @@ class MultiClampTelegraph:
             time.sleep(0.1)
 
     def createWindow(self):
+        if self.debug:
+            print "MultiClampTelegraph.createWindow called."
         self.wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(self.wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")
         ret = wmlib.RegisterClassA(self.wndClass)
         #print "Register class:", ret()
@@ -158,18 +181,21 @@ class MultiClampTelegraph:
     def wndProc(self, hWnd, msg, wParam, lParam):
         """Callback function executed by windows when a message has arrived."""
         #print "Window event:", msg
+        if self.debug:
+            print "MultiClampTelegraph.wndProc called."
+
         if msg == wmlib.WM_COPYDATA:
-            #print "  copydatastruct", lParam
             data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
             if data.dwData == self.msgIds['REQUEST']:
-                #print "  got update from MCC"
-                
+                if self.debug:
+                    print "    COPYDATASTRUCT.dwData (ULONG_PTR, a memory address):", data.dwData ### ULONG_PTR should be a 64-bit number on 64-bit machines, and a 32-bit number on 32-bit machines
+                    print "    COPYDATASTRUCT.cbData (DWORD, the size (in bytes) of data pointed to by lpData):", data.cbData
+                    print "    COPYDATASTRUCT.lpData (PVOID, a pointer to the data to be passed): ", data.lpData
+
                 data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
-                #print wmlib.MC_TELEGRAPH_DATA._fields_
                 #### Make sure packet is for the correct device!
                 devID = self.mkDevId({'com': data.uComPortID, 'dev': data.uAxoBusID, 'chan': data.uChannelID, 'model': data.uHardwareType, 'sn': data.szSerialNumber})
                 if not devID in self.devIndex:
-                    #print "rejected update for", devID
                     return False
                 
                 #for f in data._fields_:
@@ -182,6 +208,8 @@ class MultiClampTelegraph:
                 mode = ['VC', 'IC', 'I=0'][data.uOperatingMode]
                 
                 if data.uHardwareType == wmlib.MCTG_HW_TYPE_MC700A:
+                    if self.debug:
+                        print "  processing MC700A mode", mode
                     if mode == 'VC':
                         priSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_VC_LONG_NAMES'][data.uScaledOutSignal]
                         secSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_VC_LONG_NAMES_RAW'][data.uRawOutSignal]
@@ -235,16 +263,23 @@ class MultiClampTelegraph:
 
 
     def getWindowsError(self):
+        if self.debug:
+            print "MultiClampTelegraph.getWindowsError called."
         return windll.kernel32.GetLastError()
 
 
     def registerMessages(self):
+        if self.debug:
+            print "MultiClampTelegraph.registerMessages called."
         self.msgIds = {}
         for m in ['OPEN', 'CLOSE', 'REQUEST', 'BROADCAST', 'RECONNECT', 'ID']:
             self.msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', 'MCTG_' + m + '_MESSAGE_STR'))()
         self.msgIds['COMMAND'] = wmlib.RegisterWindowMessageA(wmlib('values', 'MC_COMMAND_MESSAGE_STR'))()
 
     def post(self, msg, val):
+        if self.debug:
+            print "MultiClampTelegraph.post called."
+            print "      msg:", msg, "    val:", val
         ret = wmlib.PostMessageA(wmlib.HWND_BROADCAST, self.msgIds[msg], self.hWnd, val)
         if ret() == 0:
             raise Exception("Error during post.", self.getWindowsError())
