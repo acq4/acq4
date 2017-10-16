@@ -1,1 +1,1 @@
-from .sensapex import UMP, SensapexDevice
+from .sensapex import UMP, SensapexDevice, UMPError
