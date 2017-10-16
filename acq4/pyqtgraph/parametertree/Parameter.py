@@ -264,6 +264,7 @@ class Parameter(QtCore.QObject):
         try:
             if blockSignal is not None:
                 self.sigValueChanged.disconnect(blockSignal)
+            value = self._interpretValue(value)
             if self.opts['value'] == value:
                 return value
             self.opts['value'] = value
@@ -273,6 +274,9 @@ class Parameter(QtCore.QObject):
                 self.sigValueChanged.connect(blockSignal)
             
         return value
+
+    def _interpretValue(self, v):
+        return v
 
     def value(self):
         """
@@ -321,7 +325,8 @@ class Parameter(QtCore.QObject):
         If blockSignals is True, no signals will be emitted until the tree has been completely restored. 
         This prevents signal handlers from responding to a partially-rebuilt network.
         """
-        childState = state.get('children', [])
+        state = state.copy()
+        childState = state.pop('children', [])
         
         ## list of children may be stored either as list or dict.
         if isinstance(childState, dict):
