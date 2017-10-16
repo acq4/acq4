@@ -15,8 +15,9 @@ from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, USE_PYSIDE
 from .metaarray import MetaArray
 from . import getConfigOption, setConfigOptions
-from . import debug, reload
+from . import debug
 from .reload import getPreviousVersion 
+from .metaarray import MetaArray
 
 
 Colors = {
@@ -748,8 +749,7 @@ def subArray(data, offset, shape, stride):
     the input in the example above to have shape (10, 7) would cause the
     output to have shape (2, 3, 7).
     """
-    #data = data.flatten()
-    data = data[offset:]
+    data = np.ascontiguousarray(data)[offset:]
     shape = tuple(shape)
     extraShape = data.shape[1:]
 
@@ -2437,7 +2437,7 @@ def disconnect(signal, slot):
             signal.disconnect(slot)
             return True
         except TypeError, RuntimeError:
-            slot = reload.getPreviousVersion(slot)
+            slot = getPreviousVersion(slot)
             if slot is None:
                 return False
 
