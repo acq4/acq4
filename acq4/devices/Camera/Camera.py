@@ -93,6 +93,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.transformChanged()
         if self.scopeDev is not None:
             self.objectiveChanged()
+            self._lightChanged()
 
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
@@ -372,7 +373,9 @@ class Camera(DAQGeneric, OptomechDevice):
             self.scopeState['id'] += 1
 
     def _lightChanged(self):
-        with self.lock:        
+        with self.lock:
+            if self.scopeDev.lightSource is None:
+                return
             self.scopeState['illumination'] = self.scopeDev.lightSource.describe()
             self.scopeState['id'] += 1
 
