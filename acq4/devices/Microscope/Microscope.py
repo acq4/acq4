@@ -35,7 +35,7 @@ class Microscope(Device, OptomechDevice):
         self.currentObjective = None
         self._focusDevice = None
         self._positionDevice = None
-        self._surfaceDepth = None
+        self._surfaceDepth = 0.0
         
         self.objectives = collections.OrderedDict()
         ## Format of self.objectives is:
