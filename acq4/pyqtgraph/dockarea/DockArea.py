@@ -360,6 +360,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
                 self._printAreaState(ch, indent+1)
 
 
+
 class TempAreaWindow(QtGui.QWidget):
     def __init__(self, area, **kwargs):
         QtGui.QWidget.__init__(self, **kwargs)
