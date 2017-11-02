@@ -1,0 +1,7 @@
+laserCombo: 'Laser-UV'
+simulateShutter: False
+cameraCombo: 'Camera'
+minDist: 0.0005
+minTime: 10.0
+items: [{'angle': 0, 'pos': (5.791919176059937e-05, 5.253363229848342e-05), 'size': (3.900144882032546e-05, 3.900144882032546e-05)}]
+spotSize: 9.75036220508e-06
