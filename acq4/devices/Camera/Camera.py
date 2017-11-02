@@ -244,14 +244,24 @@ class Camera(DAQGeneric, OptomechDevice):
         #time.sleep(0.1)
         self.acqThread.stop(block=block)
         
-    def acquireFrames(self, n=1):
+    def acquireFrames(self, n=1, stack=True):
         """Immediately acquire and return a specific number of frames.
 
         This method blocks until all frames are acquired and may not be supported by all camera
         types.
+
+        All frames are returned stacked within a single Frame instance, as a 3D or 4D array.
+
+        If *stack* is False, then the first axis is dropped and the resulting data will instead be
+        2D or 3D.
         """
+        if n > 1 and not stack:
+            raise ValueError("Using stack=False is only allowed when n==1.")
+
         # TODO: Add a non-blocking mode that returns a Future.
         frames = self._acquireFrames(n)
+        if not stack:
+            frames = frames[0]
 
         info = dict(self.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         ss = self.getScopeState()
@@ -485,16 +495,7 @@ class CameraTask(DAQGenericTask):
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel']['device']
             self.__startOrder = [daqName], []
-            #startOrder.remove(name)
-            #startOrder.insert(startOrder.index(daqName)+1, name)
             prof.mark('conf 1')
-        
-        ## If we are not triggering the daq, request that we start before everyone else
-        ## (no need to stop, we will simply record frames as they are collected)
-        #else:
-            #startOrder.remove(name)
-            #startOrder.insert(0, name)
-            #prof.mark('conf 2')
             
         ## We want to avoid this if at all possible since it may be very expensive
         if restart:
@@ -525,7 +526,6 @@ class CameraTask(DAQGenericTask):
         if disconnect:   ## Must be done only after unlocking mutex
             self.dev.acqThread.disconnectCallback(self.newFrame)
 
-        
     def start(self):
         ## arm recording
         self.frames = []
@@ -537,8 +537,7 @@ class CameraTask(DAQGenericTask):
             
         ## Last I checked, this does nothing. It should be here anyway, though..
         DAQGenericTask.start(self)
-        
-        
+    
     def isDone(self):
         ## If camera stopped, then probably there was a problem and we are finished.
         if not self.dev.isRunning():
@@ -576,6 +575,7 @@ class CameraTask(DAQGenericTask):
             data, info = result[k]
             if data is not None:
                 dh.writeFile(data, k, info=info)
+
 
 class CameraTaskResult:
     def __init__(self, task, frames, daqResult):

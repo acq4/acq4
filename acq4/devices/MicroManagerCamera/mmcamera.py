@@ -91,6 +91,8 @@ class MicroManagerCamera(Camera):
             self.acqBuffer = None
 
     def _acquireFrames(self, n=1):
+        if self.isRunning():
+            self.stop()
         self.mmc.setCameraDevice(self.camName)
         self.mmc.startSequenceAcquisition(n, 0, True)
         frames = []
