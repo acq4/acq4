@@ -1,5 +1,6 @@
 from ..Pipette import Pipette
 from PyQt4 import QtCore
+from ...Manager import getManager
 
 
 class PatchPipette(Pipette):
@@ -16,10 +17,12 @@ class PatchPipette(Pipette):
     sigStateChanged = QtCore.Signal(object)
 
     def __init__(self, deviceManager, config, name):
-        # self.clamp = config.pop('clampDevice')
+        self._clampName = config.pop('clampDevice')
+        self._clampDevice = None
 
         Pipette.__init__(self, deviceManager, config, name)
         self.state = "out"
+        self.active = False
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -77,3 +80,17 @@ class PatchPipette(Pipette):
         * longer wait time if needed
         """
 
+    def setActive(self, active):
+        self.active = active
+
+    def clampDevice(self):
+        if self._clampDevice is None:
+            if self._clampName is None:
+                return None
+            self._clampDevice = getManager().getDevice(self._clampName)
+        return self._clampDevice
+
+    def autoPipetteOffset(self):
+        clamp = self.clampDevice()
+        if clamp is not None:
+            clamp.autoPipetteOffset()

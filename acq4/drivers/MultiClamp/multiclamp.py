@@ -236,6 +236,10 @@ class MultiClampChannel:
             print "MCChannel.select called."
         self.mc.call('SelectMultiClamp', **self.axonDesc)
 
+    def autoPipetteOffset(self):
+        self.select()
+        self.mc.call('AutoPipetteOffset')
+
 
 class MultiClamp:
     """Class used to interface with remote multiclamp server.
