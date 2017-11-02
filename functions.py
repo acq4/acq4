@@ -15,8 +15,8 @@ from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, USE_PYSIDE
 from .metaarray import MetaArray
 from . import getConfigOption, setConfigOptions
-from . import debug, reload
-from .reload import getPreviousVersion 
+from . import debug
+from .metaarray import MetaArray
 
 
 Colors = {
@@ -748,8 +748,7 @@ def subArray(data, offset, shape, stride):
     the input in the example above to have shape (10, 7) would cause the
     output to have shape (2, 3, 7).
     """
-    #data = data.flatten()
-    data = data[offset:]
+    data = np.ascontiguousarray(data)[offset:]
     shape = tuple(shape)
     extraShape = data.shape[1:]
 
