@@ -569,6 +569,8 @@ class Laser(DAQGeneric, OptomechDevice):
                     else:
                         power = self.params['currentPower']
                     transmission = self.params['scopeTransmission']
+                    if transmission is None:
+                        raise Exception('Power transmission has not been calibrated for "%s" with the current optics and wavelength.' % self.name())
                     #transmission = 0.1
                 powerCmd = cmd['switchWaveform']*power*transmission
             else:
