@@ -21,7 +21,6 @@ class RectScanComponent(ScanProgramComponent):
     def __init__(self, scanProgram=None):
         ScanProgramComponent.__init__(self, scanProgram)
         self.ctrl = RectScanControl(self)
-        print('recscan INIT')
 
     def samplingChanged(self):
         self.ctrl.update()
