@@ -19,7 +19,7 @@ from acq4.util.functions import strncmp
 from acq4.util.configfile import *
 import time
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import SignalProxy, ProgressDialog
+from acq4.pyqtgraph import SignalProxy, BusyCursor
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
@@ -608,11 +608,10 @@ class DirHandle(FileHandle):
         
         if sortMode == 'date':
             ## Sort files by creation time
-            with ProgressDialog("Reading directory data...", maximum=len(files), cancelText=None) as dlg:
+            with BusyCursor():
                 for f in files:
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
-                    dlg += 1
             files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             ## show directories first when sorting alphabetically.
