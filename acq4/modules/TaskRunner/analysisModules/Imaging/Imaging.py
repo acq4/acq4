@@ -35,7 +35,7 @@ class ImagingModule(AnalysisModule):
                 dict(name='subpixel', type='bool', value=False),
                 ]),
             dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
-            dict(name='display', type='bool', value=True),
+            dict(name='display', type='bool', value=True, tip='Display image on Camera Window'),
             dict(name='scanProgram', type='list', values=[]),
             ])
         self.ptree.setParameters(self.params, showTop=False)

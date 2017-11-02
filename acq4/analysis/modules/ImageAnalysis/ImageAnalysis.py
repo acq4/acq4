@@ -146,7 +146,8 @@ class ImageAnalysis(AnalysisModule):
         dh = dh[0]
         
         if dh.isFile():
-            self.background = dh.read()[np.newaxis,...].astype(float)
+            # self.background = dh.read()[np.newaxis,...].astype(float)
+            self.background = dh.read() #.astype(float)
             self.background /= self.background.max()
             return
         

@@ -217,15 +217,6 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.settlingSpin.setValue(sTime)
         if mTime is not None:
             self.ui.measurementSpin.setValue(mTime)
-            
-    
-    #def measurementSpinChanged(self, value):
-        #pass
-    
-    #def settlingSpinChanged(self, value):
-        #pass
-        
-
 
     def samplePowerChanged(self, power):
         if power is None:
