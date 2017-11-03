@@ -104,7 +104,7 @@ class LaserDevGui(QtGui.QWidget):
         #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
-        self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
+        self.ui.checkPowerBtn.clicked.connect(lambda: self.dev.outputPower(forceUpdate=True))
         self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
         
         self.ui.GDDEnableCheck.toggled.connect(self.GDDEnableToggled)

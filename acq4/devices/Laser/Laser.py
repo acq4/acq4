@@ -15,6 +15,7 @@ from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph as pg
 import acq4.util.metaarray as metaarray
 from acq4.devices.NiDAQ.nidaq import NiDAQ
+import acq4.util.ptime as ptime
 
 
 class Laser(DAQGeneric, OptomechDevice):
@@ -106,9 +107,12 @@ class Laser(DAQGeneric, OptomechDevice):
             'scopeTransmission': None, ## percentage of output power that is transmitted to slice
             'tolerance': 10.0, ## in %
             'useExpectedPower': True,
-            'powerAlert': True ## set True if you want changes in output power to raise an error
-            }
+            'powerAlert': True, ## set True if you want changes in output power to raise an error
+            'powerUpdateInterval': config.get('powerUpdateInterval', 60),  # Time in seconds before power must be measured again (if requested)
+        }
         
+        self._lastPowerMeasureTime = None
+
         daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
         if 'powerIndicator' in config:
             self.hasPowerIndicator = True
@@ -249,11 +253,8 @@ class Laser(DAQGeneric, OptomechDevice):
         
         return vals['transmission']
             
-            
     def opticStateChanged(self, change):
         self.updateSamplePower()
-        
-    
     
     def createTask(self, cmd, parentTask):
         return LaserTask(self, cmd, parentTask)
@@ -407,19 +408,37 @@ class Laser(DAQGeneric, OptomechDevice):
                 calList.append((opticState, wavelength, trans, power, date))
         return calList
         
-    def outputPower(self):
+    def outputPower(self, forceUpdate=False):
         """
         Return the output power of the laser in Watts.
         
         The power returned does not account for the effects of pockels cell, shutter, etc.
         This information is determined in one of a few ways:
+
            1. The laser directly reports its power output (function needs to be reimplemented in subclass)
            2. A photodiode receves a small fraction of the beam and reports an estimated power
            3. The output power is specified in the config file
            
         Use checkPowerValidity(power) to determine whether this level is within the expected range.
+
+        Subsequent calls to outputPower() may return a cached value (the maximum age of this value is
+        determined by the powerUpdateInterval config parameter). Use forceUpdate=True to ignore any
+        cached values.
         """
-        
+        now = ptime.time()
+        needUpdate = (
+            forceUpdate is True or 
+            self.params['currentPower'] is None or 
+            self._lastPowerMeasureTime is None or 
+            now - self._lastPowerMeasureTime > self.params['powerUpdateInterval']
+        )
+
+        if needUpdate:
+            self.params['currentPower'] = self._measurePower()
+            self._lastPowerMeasureTime = ptime.time()
+        return self.params['currentPower']
+
+    def _measurePower(self):
         if self.hasPowerIndicator:
             ## run a task that checks the power
             daqName =  self.getDAQName('shutter')
@@ -451,7 +470,7 @@ class Laser(DAQGeneric, OptomechDevice):
             }
             #print "outputPowerCmd: ", cmd
             task = getManager().createTask(cmd)
-            task.execute()
+            task.execute(processEvents=False)  # disable event processing to prevent recurrent requests
             result = task.getResult()
             
             ## pull out time that laser was on and off so that power can be measured in each state -- discard the settlingTime around each state change
@@ -483,15 +502,10 @@ class Laser(DAQGeneric, OptomechDevice):
                 self.setParam(currentPower=0.0)
                 self.updateSamplePower()
                 return 0.0
-
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
-            power = self.config.get('power', None)
-            if power is None:
-                return None
-            else:
-                return power
+            return self.config.get('power', None)
 
     def updateSamplePower(self):
         ## Report new sample power given the current state of the laser
