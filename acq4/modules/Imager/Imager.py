@@ -232,7 +232,7 @@ class Imager(Module):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
         self.win.show()
-        self.win.setWindowTitle('Multiphoton Imager V 1.01')
+        self.win.setWindowTitle('Multiphoton Imager')
         self.win.resize(500, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
@@ -769,13 +769,22 @@ class Imager(Module):
         self.takeImage()
         
     def startVideoClicked(self, mode):
+        self.start(mode)
+
+    def stopVideoClicked(self):
+        self.stop()
+
+    def isRunning(self):
+        return self.imagingThread.isRunning()
+
+    def start(self, mode=None):
         if mode is not None:
             self.loadModeSettings(VideoModes[mode])
         self.updateImagingProtocol()
         self.imagingCtrl.acquisitionStarted()
         self.imagingThread.startVideo()
 
-    def stopVideoClicked(self):
+    def stop(self):
         self.imagingThread.stopVideo()
 
     def videoStopped(self):
@@ -815,6 +824,9 @@ class Imager(Module):
 
     def setFocusDepth(self, depth):
         return self.scannerDev.setFocusDepth(depth)
+
+    def getFocusDevice(self):
+        return self.scannerDev.getFocusDevice()
 
     def takeImage(self, allowBlanking=True):
         """

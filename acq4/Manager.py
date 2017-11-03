@@ -706,7 +706,7 @@ class Manager(QtCore.QObject):
         if self.taskLock.tryLock(10e3):
             return True
         else:
-            raise Exception("Times out waiting for task reservation system")
+            raise Exception("Timed out waiting for task reservation system")
         
     def unlockReserv(self):
         """Unlock reservation system"""
