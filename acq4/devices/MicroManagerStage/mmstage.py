@@ -15,38 +15,72 @@ class MicroManagerStage(Stage):
 
     """
     def __init__(self, man, config, name):
-        # can specify 
-
-
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         self.speedToMeters = .001
         self.mmc = getMMCorePy()
-        self.stageName = self.mmc.getXYStageDevice()
-        self.zName = config['micromanagerZName']
+
+        self._mmDeviceNames = {'xy': None, 'z': None}
+        self._mmSerialPortNames = {'xy': None, 'z': None}
+        self._axes = []
+
+        # Configure XY and Z stages separately
+        if 'xyStage' not in config and 'zStage' not in config:
+            raise Exception("Micromanager stage configuration myst have 'xyStage', 'zStage', or both.")
+        allAdapters = self.mmc.getDeviceAdapterNames()
+        for axes in ('xy', 'z'):
+
+            # sanity check for MM adapter and device name
+            stageCfg = config.get(axes + 'Stage', None)
+            if stageCfg is None:
+                continue
+            self._axes.append(axes)
+
+            adapterName = stageCfg['mmAdapterName']
+            if adapterName not in allAdapters:
+                raise ValueError("Adapter name '%s' is not valid. Options are: %s" % (adapterName, allAdapters))
+            mmDeviceName = stageCfg.get('mmDeviceName', None)
+            allDevices = self.mmc.getAvailableDevices(adapterName)
+            if mmDeviceName not in allDevices:
+                raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (mmDeviceName, adapterName, allDevices))
+
+            # Load this device
+            devName = str(name) + '_' + axes
+            self._mmDeviceNames[axes] = devName
+            self.mmc.loadDevice(devName, adapterName, mmDeviceName)
+
+            # Set up serial port if needed
+            if 'serial' in stageCfg:
+                # Z stage may use the same serial port as XY stage
+                if stageCfg['serial']['port'] == 'shared':
+                    if axes != 'z':
+                        raise Exception('Shared serial port only allowed for Z axis.')
+                    if 'xyStage' not in config:
+                        raise Exception('Shared serial port requires xyStage.')
+                    portName = self._mmDeviceNames['xy'] + '_port'
+                    self.mmc.setProperty(devName, 'Port', portName)
+                    self._mmSerialPortNames[axes] = portName
+                else:
+                    portName = devName + "_port"
+                    self.mmc.loadDevice(portName, "SerialManager", str(stageCfg['serial']['port']))
+                    if 'baud' in stageCfg['serial']:
+                        self.mmc.setProperty(portName, 'BaudRate', stageCfg['serial']['baud'])
+                    self.mmc.setProperty(devName, 'Port', portName)
+                    self.mmc.initializeDevice(portName)
+                    self._mmSerialPortNames[axes] = portName
+
+            self.mmc.initializeDevice(devName)
+
         self._lastMove = None
         self._focusDevice = self
-        self.userSpeed = np.asarray(self.mmc.getProperty(self.stageName, 'Speed-S')).astype(float)*self.speedToMeters
+        # self.userSpeed = np.asarray(self.mmc.getProperty(self._mmDeviceName, 'Speed-S')).astype(float) * self.speedToMeters
         man.sigAbortAll.connect(self.abort)
 
         Stage.__init__(self, man, config, name)
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
+        time.sleep(1.0)
         self.getPosition(refresh=True)
-
-        # set any extra parameters specified in the config
-        # params = config.get('params', {})
-        # for param, val in params.items():
-        #     if param == 'currents':
-        #         assert len(val) == 2
-        #         self.dev.setCurrents(*val)
-        #     elif param == 'axisScale':
-        #         assert len(val) == 3
-        #         for i, x in enumerate(val):
-        #             self.dev.setAxisScale(i, x)
-        #     else:
-        #         self.dev.setParam(param, val)
-
         
         # thread for polling position changes
         self.monitor = MonitorThread(self)
@@ -57,28 +91,40 @@ class MicroManagerStage(Stage):
         if 'capabilities' in self.config:
             return self.config['capabilities']
         else:
+            haveXY = 'xy' in self._axes
+            haveZ = 'z' in self._axes
             return {
-                'getPos': (True, True, True),
-                'setPos': (True, True, True),
+                'getPos': (haveXY, haveXY, haveZ),
+                'setPos': (haveXY, haveXY, haveZ),
                 'limits': (False, False, False),
             }
 
     def stop(self):
-        """Stop the manipulator immediately.
+        """Stop the manipulator.
+
+        If the manipulator is currently in use elsewhere, this method blocks until it becomes available.
         """
         with self.lock:
-            self.mmc.stop(self.stageName)
-            if self._lastMove is not None:
-                self._lastMove._stopped()
-            self._lastMove = None
+            for ax in self._axes:
+                self.mmc.stop(self._mmDeviceNames[ax])
+                if self._lastMove is not None:
+                    self._lastMove._stopped()
+                    self._lastMove = None
 
     def abort(self):
         """Stop the manipulator immediately.
+
+        This method asks the manipulator to stop even if it is being accessed elsewhere.
+        This can cause communication errors, but may be preferred if stopping immediately is critical.
         """
-        self.mmc.stop(self.stageName)
-        if self._lastMove is not None:
-            self._lastMove._stopped()
-            self._lastMove = None
+        for ax in self._axes:
+            try:
+                self.mmc.stop(self._mmDeviceNames[ax])
+                if self._lastMove is not None:
+                    self._lastMove._stopped()
+                    self._lastMove = None
+            except:
+                printExc("Error stopping axis %s:" % ax)
 
     def setUserSpeed(self, v):
         """Set the maximum speed of the stage (m/sec) when under manual control.
@@ -87,15 +133,18 @@ class MicroManagerStage(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.mmc.setProperty(self.stageName, 'Speed-S',v / self.speedToMeters)
+        self.mmc.setProperty(self._mmDeviceName, 'Speed-S', v / self.speedToMeters)
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = [0.,0.,0.]
-            pos[0] = self.mmc.getXPosition(self.stageName)*self.scale[0]
-            pos[1] = self.mmc.getYPosition(self.stageName)*self.scale[1]
-            pos[2] = self.mmc.getPosition(self.zName)*self.scale[2]
+            pos = [0., 0., 0.]
+            if 'xy' in self._axes:
+                pos[0] = self.mmc.getXPosition(self._mmDeviceNames['xy']) * self.scale[0]
+                pos[1] = self.mmc.getYPosition(self._mmDeviceNames['xy']) * self.scale[1]
+            if 'z' in self._axes:
+                pos[2] = self.mmc.getPosition(self._mmDeviceNames['z']) * self.scale[2]
+
             if pos != self._lastPos:
                 self._lastPos = pos
                 emit = True
@@ -119,20 +168,25 @@ class MicroManagerStage(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _setPosition(self,value):
-        # set z position ONLY!
-        pos = self._getPosition()
-
-        return self._move([pos[0], pos[1], value], None, None, None,  zOnlyIn = True)
-
-    def _move(self, abs, rel, speed, linear, zOnlyIn = False):
+    def _move(self, abs, rel, speed, linear):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
+
             pos = self._toAbsolutePosition(abs, rel)
+
+            # Decide which axes to move
+            moveXY = True
+            if abs is not None:
+                moveZ = abs[2] is not None
+                moveXY = abs[0] is not None and abs[1] is not None
+            else:
+                moveZ = rel[2] is not None
+                moveXY = rel[0] is not None and rel[1] is not None
+
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, zOnly=zOnlyIn)
+            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveX=moveZ)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -141,17 +195,8 @@ class MicroManagerStage(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """
-        print("no startMoving command in micromanager stage...")
+        raise Exception("MicroManager stage does not support startMoving() function.")
 
-    def focusDevice(self):
-        if self._focusDevice is None:
-            p = self
-            while True:
-                if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
-                    self._focusDevice = p
-                    break
-                p = p.parentDevice()
-        return self._focusDevice
 
 
 class MonitorThread(Thread):
@@ -205,17 +250,17 @@ class MonitorThread(Thread):
 class MicroManagerMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a micromanager stage.
     """
-    def __init__(self, dev, pos, speed, userSpeed,zOnly=False):
+    def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
         self._errorMSg = None
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.lock:
-            if not zOnly:
-                self.dev.mmc.setXYPosition(self.dev.stageName, pos[0:1])
-            self.dev.mmc.setPosition(self.dev.zName,pos[2])
-
+            if moveXY:
+                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[0:1])
+            if moveXY:
+                self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
@@ -235,9 +280,12 @@ class MicroManagerMoveFuture(MoveFuture):
                 return -1
             else:
                 return 1
-        if self.dev.mmc.deviceBusy(self.dev.stageName):
-            # Still moving
-            return 0
+
+        for ax in self._axes:
+            if self.dev.mmc.deviceBusy(self.dev._mmDeviceNames[ax]):
+                # Still moving
+                return 0
+
         # did we reach target?
         pos = self.dev._getPosition()
         dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
@@ -274,23 +322,3 @@ class MicroManagerMoveFuture(MoveFuture):
 class MicroManagerGUI(StageInterface):
     def __init__(self, dev, win):
         StageInterface.__init__(self, dev, win)
-
-        # # Insert Scientifica-specific controls into GUI
-        # self.zeroBtn = QtGui.QPushButton('Zero position')
-        # self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-        # self.nextRow += 1
-
-        # self.psGroup = QtGui.QGroupBox('Rotary Controller')
-        # self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-        # self.nextRow += 1
-
-        # self.psLayout = QtGui.QGridLayout()
-        # self.psGroup.setLayout(self.psLayout)
-        # self.speedLabel = QtGui.QLabel('Speed')
-        # self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, bounds=[1e-6, 10e-3])
-        # self.psLayout.addWidget(self.speedLabel, 0, 0)
-        # self.psLayout.addWidget(self.speedSpin, 0, 1)
-
-        # self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-        # self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
-
