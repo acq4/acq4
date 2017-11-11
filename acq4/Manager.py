@@ -82,6 +82,9 @@ class Manager(QtCore.QObject):
         try:
             if Manager.CREATED:
                 raise Exception("Manager object already created!")
+
+            Manager.CREATED = True
+            Manager.single = self
             
             self.logWindow = debug.createLogWindow(self)
             
@@ -147,9 +150,6 @@ class Manager(QtCore.QObject):
             
             logMsg('ACQ4 version %s started.' % __version__, importance=9)
             
-            Manager.CREATED = True
-            Manager.single = self
-            
             ## Act on options if they were specified..
             try:
                 for name in loadConfigs:
@@ -176,6 +176,9 @@ class Manager(QtCore.QObject):
                 
         except:
             printExc("Error while configuring Manager:")
+            Manager.CREATED = False
+            Manager.single = None
+            
         finally:
             if len(self.modules) == 0:
                 self.quit()
