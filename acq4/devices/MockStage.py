@@ -20,10 +20,22 @@ class MockStage(Device, OptomechDevice):
         dm.declareInterface(name, ['stage'], self)
         
         # Global key press handling
-        self._installedFilters = []
+        self.modifierScales = {
+            QtCore.Qt.Key_Control: 4.0,
+            QtCore.Qt.Key_Alt: 0.25,
+            QtCore.Qt.Key_Shift: 0.1,
+        }
+        self.keyDirections = np.array([
+            [0, 0, 1],
+            [0, 1, 0],
+            [0, 0, -1],
+            [-1, 0, 0],
+            [0, -1, 0],
+            [1, 0, 0],
+        ])
         self._directionKeys = set()
-        man = getManager()
-        man.sigModulesChanged.connect(self._installEventFilters)
+        self._modifiers = set()
+        QtCore.QCoreApplication.instance().installEventFilter(self)
 
     def updatePosition(self):
         if np.all(self.speed == 0):
@@ -47,50 +59,40 @@ class MockStage(Device, OptomechDevice):
     def deviceInterface(self, win):
         return MockStageInterface(self, win)
 
-    def _installEventFilters(self):
-        # check for new module windows and install key event filters
-        man = getManager()
-        for modname in man.listModules():
-            mod = man.getModule(modname)
-            if mod not in self._installedFilters:
-                w = mod.window()
-                if w is None:
-                    continue
-                w.installEventFilter(self)
-                self._installedFilters.append(mod)
-
     def eventFilter(self, obj, ev):
         if ev.type() not in (QtCore.QEvent.KeyPress, QtCore.QEvent.KeyRelease, QtCore.QEvent.ShortcutOverride):
             return False
         if ev.isAutoRepeat():
             return False
-        key = ev.text()
+        
+        key = str(ev.text()).lower()
         keys = self.config.get('keys')
-        if key == '' or key not in keys:
+        if key != '' and key in keys:
+            direction = keys.index(key)
+            if ev.type() == QtCore.QEvent.KeyRelease:
+                self._directionKeys.discard(direction)
+            else:
+                self._directionKeys.add(direction)
+        elif ev.key() in self.modifierScales:
+            if ev.type() == QtCore.QEvent.KeyRelease:
+                self._modifiers.discard(ev.key())
+            else:
+                self._modifiers.add(ev.key())
+        else:
             return False
         
-        direction = keys.index(key)
-        if ev.type() == QtCore.QEvent.KeyRelease:
-            self._directionKeys.remove(direction)
-        else:
-            self._directionKeys.add(direction)
-            
-        self._updateKeySpeed(ev.modifiers())
+        self._updateKeySpeed()
         return True
 
-    def _updateKeySpeed(self, mods):
+    def _updateKeySpeed(self):
         s = 100e-6
-        vecs = np.array([
-            [0, 0, s],
-            [0, s, 0],
-            [0, 0, -s],
-            [-s, 0, 0],
-            [0, -s, 0],
-            [s, 0, 0],
-        ])
+        for mod in self._modifiers:
+            s = s * self.modifierScales[mod]
+        
         vec = np.array([0, 0, 0])
-        for key in self._pressedKeys:
-            vec = vec + vecs[key]
+        for key in self._directionKeys:
+            vec = vec + self.keyDirections[key] * s
+        
         self.setSpeed(vec)
         
 
