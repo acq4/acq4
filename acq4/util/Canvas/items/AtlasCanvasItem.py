@@ -20,12 +20,13 @@ class AtlasCanvasItem(CanvasItem):
     def __init__(self, **kwds):
         kwds.pop('viewRect', None)
         
-        self.atlas = CCFAtlasData(resolution=50)
-        self.atlasView = AtlasSliceView()
-        self.atlasView.set_data(self.atlas)
+        with pg.BusyCursor():
+            self.atlas = CCFAtlasData()
+            self.atlasView = AtlasSliceView()
+            self.atlasView.set_data(self.atlas)
         
         item = self.atlasView.img2
-        opts = {'scalable': False, 'rotatable': True, 'movable': True}
+        opts = {'scalable': True, 'rotatable': True, 'movable': True}
         opts.update(kwds)        
         CanvasItem.__init__(self, item, **opts)
         
@@ -51,6 +52,8 @@ class AtlasCanvasItem(CanvasItem):
         self.sliceLayout.addWidget(self.sliceGraphicsView, 0, 0)
         self.sliceView = self.sliceGraphicsView.addViewBox()
         self.sliceView.addItem(self.atlasView.img1)
+        self.sliceView.autoRange()
+        self.sliceView.setAspectLocked(True)
         self.sliceView.addItem(self.atlasView.line_roi)
         self.sliceLayout.addWidget(self.atlasView.zslider, 1, 0)
         self.sliceLayout.addWidget(self.atlasView.angle_slider, 2, 0)
