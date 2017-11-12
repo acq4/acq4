@@ -10,7 +10,7 @@ from acq4.util.metaarray import *
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
-
+from acq4.util import micromanager
 
 # Micromanager does not standardize trigger modes across cameras,
 # so we use this dict to translate the modes of various cameras back
@@ -35,23 +35,9 @@ class MicroManagerCamera(Camera):
     * mmDeviceName
     """
     def __init__(self, manager, config, name):
-        try:
-            import MMCorePy
-        except ImportError:
-            if sys.platform != 'win32':
-                raise
-            # MM does not install itself to standard path. User should take care of this,
-            # but we can make a guess..
-            path = config.get('path', 'C:\\Program Files\\Micro-Manager-1.4')
-            sys.path.append(path)
-            os.environ['PATH'] = os.environ['PATH'] + ';' + path
-            try:
-                import MMCorePy
-            finally:
-                sys.path.pop()
-
         self.camName = str(name)  # we will use this name as the handle to the MM camera
-        self.mmc = MMCorePy.CMMCore()
+        mmpath = config.get('path')
+        self.mmc = micromanager.getMMCorePy(mmpath)
 
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes

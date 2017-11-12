@@ -90,7 +90,7 @@ class Scientifica(SerialDevice):
                     devs[s.getDescription()] = com
                     s.close()
                 except Exception:
-                    printExc("Error while initializing Scientifica device at %s:" % com)
+                    printExc("Error while initializing Scientifica device at %s (the device at this port will not be available):" % com)
 
         cls.availableDevices = devs
 
