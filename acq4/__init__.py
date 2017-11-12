@@ -76,6 +76,9 @@ pg.renamePyc(modDir)
 
 ## Install a simple message handler for Qt errors:
 def messageHandler(msgType, msg):
+    # ignore harmless ibus messages on linux
+    if 'ibus-daemon' in msg:
+        return
     import traceback
     print("Qt Error: (traceback follows)")
     print(msg)
