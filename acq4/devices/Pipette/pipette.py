@@ -74,7 +74,8 @@ class Pipette(Device, OptomechDevice):
             'showCameraModuleUI': config.get('showCameraModuleUI', True),
         }
         parent = self.parentDevice()
-        assert isinstance(parent, Stage)
+        if not isinstance(parent, Stage):
+            raise Exception("Pipette device requires some type of translation stage as its parent.")
         self.pitch = parent.pitch * np.pi / 180.
         self._camInterfaces = weakref.WeakKeyDictionary()
 
