@@ -1,0 +1,76 @@
+# -*- coding: utf-8 -*-
+import weakref
+from PyQt4 import QtCore, QtGui
+from .CanvasItem import CanvasItem
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.graphicsItems.TargetItem
+from .itemtypes import registerItemType
+
+from aiccf.ui import AtlasSliceView
+from aiccf.data import CCFAtlasData
+
+
+class AtlasCanvasItem(CanvasItem):
+    """
+    Canvas item used for displaying common coordinate framework atlas data.
+    
+    """
+    _typeName = "Atlas"
+    
+    def __init__(self, **kwds):
+        kwds.pop('viewRect', None)
+        
+        with pg.BusyCursor():
+            self.atlas = CCFAtlasData()
+            self.atlasView = AtlasSliceView()
+            self.atlasView.set_data(self.atlas)
+        
+        item = self.atlasView.img2
+        opts = {'scalable': True, 'rotatable': True, 'movable': True}
+        opts.update(kwds)        
+        CanvasItem.__init__(self, item, **opts)
+        
+        self.__ctrl = QtGui.QWidget()
+        self.__layout = QtGui.QGridLayout()
+        self.__ctrl.setLayout(self.__layout)
+        self.__layout.setContentsMargins(0, 0, 0, 0)
+        self.__layout.addWidget(self.atlasView.displayCtrl, 0, 0)
+        self.__layout.addWidget(self.atlasView.labelTree, 1, 0)
+        
+        self.showSliceBtn = QtGui.QPushButton("Show slice")
+        self.showSliceBtn.setCheckable(True)
+        self.__layout.addWidget(self.showSliceBtn, 2, 0)
+        self.showSliceBtn.toggled.connect(self.showSliceToggled)
+
+        self.layout.addWidget(self.__ctrl, self.layout.rowCount(), 0, 1, 2)
+        
+        # Set up window for selecting slice plane
+        self.sliceWidget = QtGui.QWidget()
+        self.sliceLayout = QtGui.QGridLayout()
+        self.sliceWidget.setLayout(self.sliceLayout)
+        self.sliceGraphicsView = pg.GraphicsLayoutWidget()
+        self.sliceLayout.addWidget(self.sliceGraphicsView, 0, 0)
+        self.sliceView = self.sliceGraphicsView.addViewBox()
+        self.sliceView.addItem(self.atlasView.img1)
+        self.sliceView.autoRange()
+        self.sliceView.setAspectLocked(True)
+        self.sliceView.addItem(self.atlasView.line_roi)
+        self.sliceLayout.addWidget(self.atlasView.zslider, 1, 0)
+        self.sliceLayout.addWidget(self.atlasView.angle_slider, 2, 0)
+        self.sliceWidget.resize(800, 800)
+
+    def showSliceToggled(self):
+        self.sliceWidget.setVisible(self.showSliceBtn.isChecked())
+
+    @classmethod
+    def checkFile(cls, fh):
+        return 0
+
+    def saveState(self, **kwds):
+        return self.atlas.save_state()
+
+    def restoreState(self, state):
+        self.atlas.restore_state(state)
+
+
+registerItemType(AtlasCanvasItem)
