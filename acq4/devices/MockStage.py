@@ -4,6 +4,7 @@ from acq4.Manager import getManager
 from acq4.devices.Stage import Stage, MoveFuture
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.Qt import QtGui, QtCore
+from acq4.pyqtgraph import ptime
 
 
 class MockStage(Stage):
@@ -16,7 +17,8 @@ class MockStage(Stage):
         self._lastMove = None
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self._updatePosition)
-        self._posUpdateInterval = 100e-3
+        self._posUpdateInterval = 30e-3
+        self._lastUpdate = None
         dm.declareInterface(name, ['stage'], self)
         
         # Global key press handling
@@ -51,13 +53,15 @@ class MockStage(Stage):
     def _updatePosition(self):
         if np.all(self.__speed == 0):
             self.timer.stop()
-        self._setPosition(self.__pos + self.__speed * self._posUpdateInterval)
+        now = ptime.time()
+        dt = now - self._lastUpdate
+        self._lastUpdate = now
+        self._setPosition(self.__pos + self.__speed * dt)
         
     def _setPosition(self, pos):
         self.__pos = np.array(pos)
         tr = pg.SRTTransform3D()
         tr.translate(pos)
-        self.setDeviceTransform(tr)
         self.posChanged(pos)
 
     def _move(self, abs, rel, speed, linear):
@@ -93,7 +97,7 @@ class MockStage(Stage):
         return False
 
     def _updateKeySpeed(self):
-        s = 400e-6
+        s = 1000e-6
         for mod in self._modifiers:
             s = s * self.modifierScales[mod]
         
@@ -128,6 +132,7 @@ class MockStage(Stage):
         if np.all(vel==0):
             self.timer.stop()
         self.__speed[:len(vel)] = vel
+        self._lastUpdate = ptime.time()
         self.timer.start(int(self._posUpdateInterval * 1000))
 
 

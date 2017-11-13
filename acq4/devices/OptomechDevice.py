@@ -309,10 +309,6 @@ class OptomechDevice(object):
         with self.__lock:
             self.__transform = pg.SRTTransform3D(tr)
             self.invalidateCachedTransforms()
-        #print "setDeviceTransform", self
-        #print "   -> emit sigTransformChanged"
-        #import traceback
-        #traceback.print_stack()
         
         self.sigTransformChanged.emit(self)
 
