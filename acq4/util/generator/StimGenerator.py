@@ -343,7 +343,7 @@ class StimGenerator(QtGui.QWidget):
         ps = self.paramSpace()
         
         #l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
-        l = [(k, ps[k][1]) for k in ps.keys() if ps[k][1] != None]
+        l = [(k, ps[k][1]) for k in ps.keys() if ps[k][1] is not None]
         d = OrderedDict(l)
         
         ## d should look like: { 'param1': [val1, val2, ...],  ...  }

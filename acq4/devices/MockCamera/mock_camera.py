@@ -90,8 +90,8 @@ class MockCamera(Camera):
         
         ## generate list of mock cells
         cells = np.zeros(20, dtype=[('x', float), ('y', float), ('size', float), ('value', float), ('rate', float), ('intensity', float), ('decayTau', float)])
-        cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=100e-6)
-        cells['y'] = np.random.normal(size=cells.shape, scale=100e-6)
+        cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=-1.5e-3)
+        cells['y'] = np.random.normal(size=cells.shape, scale=100e-6, loc=4.4e-3)
         cells['size'] = np.random.normal(size=cells.shape, scale=2e-6, loc=10e-6)
         cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * 1.0
         cells['intensity'] = np.random.uniform(size=cells.shape, low=1000, high=10000)
@@ -225,29 +225,29 @@ class MockCamera(Camera):
         data += bg * (exp * 10)
         prof()
         
-        ### update cells
-        #spikes = np.random.poisson(min(dt, 0.4) * self.cells['rate'])
-        #self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
-        #self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
-        #data[data<0] = 0
+        ## update cells
+        spikes = np.random.poisson(min(dt, 0.4) * self.cells['rate'])
+        self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
+        self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
+        data[data<0] = 0
         
-        ## draw cells
-        #px = (self.pixelVectors()[0]**2).sum() ** 0.5
+        # draw cells
+        px = (self.pixelVectors()[0]**2).sum() ** 0.5
         
-        ## Generate transform that maps grom global coordinates to image coordinates
-        #cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
-        ## note we use binning=(1,1) here because the image is downsampled later.
-        #frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
-        #tr = pg.SRTTransform(frameTr * cameraTr)
+        # Generate transform that maps grom global coordinates to image coordinates
+        cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
+        # note we use binning=(1,1) here because the image is downsampled later.
+        frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
+        tr = pg.SRTTransform(frameTr * cameraTr)
         
-        #for cell in self.cells:
-            #w = cell['size'] / px
-            #pos = pg.Point(cell['x'], cell['y'])
-            #imgPos = tr.map(pos)
-            #start = (int(imgPos.x()), int(imgPos.y()))
-            #stop = (int(start[0]+w), int(start[1]+w))
-            #val = cell['intensity'] * cell['value'] * self.getParam('exposure')
-            #data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
+        for cell in self.cells:
+            w = cell['size'] / px
+            pos = pg.Point(cell['x'], cell['y'])
+            imgPos = tr.map(pos)
+            start = (int(imgPos.x()), int(imgPos.y()))
+            stop = (int(start[0]+w), int(start[1]+w))
+            val = cell['intensity'] * cell['value'] * self.getParam('exposure')
+            data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
         
         # Binning
         if bin[0] > 1:

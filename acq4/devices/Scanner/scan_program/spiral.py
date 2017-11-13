@@ -211,8 +211,8 @@ class SpiralScanControl(QtCore.QObject):
     
     def _arrayIndexes(self):
         rate = self.component().program().sampleRate
-        npts = self.params['duration'] * rate
-        start = self.params['startTime'] * rate
+        npts = int(self.params['duration'] * rate)
+        start = int(self.params['startTime'] * rate)
         return start, npts
 
     def scanMask(self):

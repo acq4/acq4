@@ -94,7 +94,7 @@ class BgSubtractCtrl(QtGui.QWidget):
             self.bgFrameCount += 1
     
         img = frame.getImage().astype(np.float32)
-        if self.requestBgReset or self.backgroundFrame == None or self.backgroundFrame.shape != img.shape:
+        if self.requestBgReset or self.backgroundFrame is None or self.backgroundFrame.shape != img.shape:
             self.requestBgReset = False
             self.backgroundFrame = img
             self.needFrameUpdate.emit()
