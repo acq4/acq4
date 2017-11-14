@@ -349,46 +349,11 @@ def tonePip(freq= 1000.0, risfall=10.0, start=0.0, stop=500.0, base=0.0, **kwds)
         raise Exception("Stop argument must be a number")
     amplitude=np.pi/2
     linramp=amplitude+sawWave(risfall*ms,amplitude,0,0,risfall*ms, 0, **kwds)+pulse(risfall*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds)
-#    d=linramp
     cos2gat=(np.cos(linramp))**2
     d=cos2gat
-#    d=cos2gat*sineWave(float(1/freq),1,0,0,stop*ms,0, **kwds)
-    per=1/freq
-#    d=sineWave(per,1,0,0,stop,0, **kwds)
-    #sineWave(period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0, **kwds)
-#    d=np.cos(amplitude+sawWave(risfall*ms,amplitude,0,0,risfall*ms, 0, **kwds)+pulse(risfall*ms,(stop-risfall)*ms,amplitude, **kwds)-sawWave(risfall*ms,amplitude,0,(stop-risfall)*ms,stop*ms, **kwds))**2*sineWave(float(1/freq), **kwds)
+    per=float(1/freq)
+    d=cos2gat*sineWave(per,1,0,0,stop*ms,0, **kwds)
     return d
-    # linramp=np.pi/2+sawWave(risfall*us,np.pi/2,0,0,risfall*us)+pulse(risfall*us,(stop-risfall)*us,np.pi/2)-sawWave(risfall*us,np.pi/2,0,(stop-risfall)*us,stop*us)
-    # cos2gat=np.cos(linramp)**2
-    # d=cos2gat*sineWave(1/freq)
-
-    #np.cos(1.5707963+sawWave(0.0025,1.5707963,0,0,0.0025)+pulse(0.0025,0.0475,1.5707963)-sawWave(0.0025,1.5707963,0,0.0475,0.05))**2*sineWave(0.002)
-    #np.cos(1.5707963+sawWave(0.2,1.5707963,0,0,0.2)+pulse(0.2,1.8,1.5707963)-sawWave(0.2,1.5707963,0,1.8,2))**2*sineWave(.002)
-
-    # ## initialize array
-        # d = np.empty(nPts)
-        # d[:] = base
-        
-        # ## Define start and end points
-        # if start is None:
-        #     start = 0
-        # else:
-        #     start = int(start * rate)
-        # if stop is None:
-        #     stop = nPts-1
-        # else:
-        #     stop = int(stop * rate)
-            
-        # if stop > nPts-1:
-        #     WARNING += "WARNING: Function is longer than generated waveform\n"    
-        #     stop = nPts-1
-            
-        # cycleTime = int(period * rate)
-        # if cycleTime < 10:
-        #     WARNING += 'Warning: Period is less than 10 samples\n'
-        
-        # #d[start:stop] = np.fromfunction(lambda i: amplitude * np.sin(phase * 2.0 * np.pi + i * 2.0 * np.pi / (period * rate)), (stop-start,))
-        # d[start:stop] = amplitude * np.sin(phase * 2.0 * np.pi + np.arange(stop-start) * 2.0 * np.pi / (period * rate))
-        # return d
+    
         
 _allFuncs = dict([(k, v) for k, v in globals().items() if callable(v)])
