@@ -33,7 +33,6 @@ class TDTDevice(Device):
         Device.__init__(self, dm, config, name)
         self.config = config
         ## make local copy of device handle
-    	print "TDT activated!"
         
     def createTask(self, cmd, parentTask):
         return TDTTask(self, cmd, parentTask)
