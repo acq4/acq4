@@ -427,7 +427,7 @@ class MoveFuture(object):
         return None
         
     def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, been interrupted, or the
+        """Block until the move has completed, has been interrupted, or the
         specified timeout has elapsed.
 
         If *updates* is True, process Qt events while waiting.

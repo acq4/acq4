@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
+import time
 import numpy as np
 from acq4.Manager import getManager
 from acq4.devices.Stage import Stage, MoveFuture
+from acq4.util.Thread import Thread
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.Qt import QtGui, QtCore
 from acq4.pyqtgraph import ptime
+from acq4.util.Mutex import Mutex
 
 
 class MockStage(Stage):
@@ -12,13 +15,11 @@ class MockStage(Stage):
     def __init__(self, dm, config, name):
         Stage.__init__(self, dm, config, name)
         
-        self.__pos = np.array([0., 0., 0.])
-        self.__speed = np.array([0., 0., 0.])
         self._lastMove = None
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self._updatePosition)
-        self._posUpdateInterval = 30e-3
-        self._lastUpdate = None
+        self.stageThread = MockStageThread()
+        self.stageThread.positionChanged.connect(self.posChanged)
+        self.stageThread.start()
+        
         dm.declareInterface(name, ['stage'], self)
         
         # Global key press handling
@@ -37,7 +38,10 @@ class MockStage(Stage):
         ])
         self._directionKeys = set()
         self._modifiers = set()
-        QtCore.QCoreApplication.instance().installEventFilter(self)
+        if 'keys' in config:
+            QtCore.QCoreApplication.instance().installEventFilter(self)
+        self._quit = False
+        dm.sigAbortAll.connect(self.abort)
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -50,28 +54,22 @@ class MockStage(Stage):
                 'limits': (False, False, False),
             }
 
-    def _updatePosition(self):
-        if np.all(self.__speed == 0):
-            self.timer.stop()
-        now = ptime.time()
-        dt = now - self._lastUpdate
-        self._lastUpdate = now
-        self._setPosition(self.__pos + self.__speed * dt)
-        
-    def _setPosition(self, pos):
-        self.__pos = np.array(pos)
-        tr = pg.SRTTransform3D()
-        tr.translate(pos)
-        self.posChanged(pos)
-
     def _move(self, abs, rel, speed, linear):
+        """Called by base stage class when the user requests to move to an
+        absolute or relative position.
+        """
         with self.lock:
+            self._interruptMove()
             pos = self._toAbsolutePosition(abs, rel)
             speed = self._interpretSpeed(speed)
             self._lastMove = MockMoveFuture(self, pos, speed)
             return self._lastMove
 
     def eventFilter(self, obj, ev):
+        """Catch key press/release events used for driving the stage.
+        """
+        #if self._quit:
+            #return False
         if ev.type() not in (QtCore.QEvent.KeyPress, QtCore.QEvent.KeyRelease, QtCore.QEvent.ShortcutOverride):
             return False
         if ev.isAutoRepeat():
@@ -108,16 +106,22 @@ class MockStage(Stage):
         self.startMoving(vec)
 
     def stop(self):
-        self.abort()
-
+        with self.lock:
+            self.abort()
+    
     def abort(self):
-        self.timer.stop()
+        self._interruptMove()
+        self.stageThread.stop()
+        
+    def _interruptMove(self):
+        if self._lastMove is not None and not self._lastMove.isDone():
+            self._lastMove._interrupted = True
 
     def setUserSpeed(self, v):
         pass
 
     def _getPosition(self):
-        return self.__pos.copy()
+        return self.stageThread.getPosition()
 
     def targetPosition(self):
         with self.lock:
@@ -129,25 +133,29 @@ class MockStage(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """
-        if np.all(vel==0):
-            self.timer.stop()
-        self.__speed[:len(vel)] = vel
-        self._lastUpdate = ptime.time()
-        self.timer.start(int(self._posUpdateInterval * 1000))
-
-
-
+        with self.lock:
+            self._interruptMove()
+            vel1 = np.zeros(3)
+            vel1[:len(vel)] = vel
+            self.stageThread.setVelocity(vel1)
+        
+    def quit(self):
+        self.abort()
+        self.stageThread.quit()
+        self._quit = True
+        
 
 class MockMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a mock manipulator.
     """
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
-        self._interrupted = False
-        self._errorMSg = None
+        self.targetPos = pos
         self._finished = False
-
-        self.dev._setPosition(pos)
+        self._interrupted = False
+        self._errorMsg = None
+        
+        self.dev.stageThread.setTarget(self, pos, speed)
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
@@ -155,14 +163,106 @@ class MockMoveFuture(MoveFuture):
         return self._interrupted
 
     def isDone(self):
-        """Return True if the move is complete.
+        """Return True if the move is complete or was interrupted.
         """
-        return True
+        return self._finished or self._interrupted
 
     def errorMessage(self):
         return self._errorMsg
 
 
+class MockStageThread(Thread):
+    """Thread used to simulate stage hardware.
+    
+    It is necessary for this to be in a thread because some stage users will
+    block while waiting for a stage movement to complete.
+    """
+    
+    positionChanged = QtCore.Signal(object)
+    
+    def __init__(self):
+        self.pos = np.zeros(3)
+        self.target = None
+        self.speed = None
+        self.velocity = None
+        self.quit = False
+        self.lock = Mutex()
+        self.interval = 30e-3
+        self.lastUpdate = None
+        self.currentMove = None
+        Thread.__init__(self)
+        
+    def start(self):
+        self.quit = False
+        self.lastUpdate = ptime.time()
+        Thread.start(self)
+        
+    def stop(self):
+        with self.lock:
+            self.target = None
+            self.speed = None
+            self.velocity = None
+            
+    def quit(self):
+        with self.lock:
+            self.quit = True
+            
+    def setTarget(self, future, target, speed):
+        """Begin moving toward a target position.
+        """
+        with self.lock:
+            self.currentMove = future
+            self.target = target
+            self.speed = speed
+            self.velocity = None
+    
+    def setVelocity(self, vel):
+        with self.lock:
+            self.currentMove = None
+            self.target = None
+            self.speed = None
+            self.velocity = vel
+    
+    def getPosition(self):
+        with self.lock:
+            return self.pos.copy()
+    
+    def run(self):
+        lastUpdate = ptime.time()
+        while True:
+            with self.lock:
+                if self.quit:
+                    break
+                target = self.target
+                speed = self.speed
+                velocity = self.velocity
+                currentMove = self.currentMove
+                pos = self.pos
+                
+            now = ptime.time()
+            dt = now - lastUpdate
+            lastUpdate = now
+            
+            if target is not None:
+                dif = target - pos
+                dist = np.linalg.norm(dif)
+                stepDist = speed * dt
+                if stepDist >= dist:
+                    self._setPosition(target)
+                    self.currentMove._finished = True
+                    self.stop()
+                else:
+                    unit = dif / dist
+                    step = unit * stepDist
+                    self._setPosition(pos + step)
+            elif self.velocity is not None and not np.all(velocity == 0):
+                self._setPosition(pos + velocity * dt)
+                
+            time.sleep(self.interval)
+    
+    def _setPosition(self, pos):
+        self.pos = np.array(pos)
+        self.positionChanged.emit(pos)
 
 
 #class MockStageInterface(QtGui.QWidget):
