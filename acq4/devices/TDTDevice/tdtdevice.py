@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from acq4.util.debug import *
 from tdt import *    
 from acq4.devices.Device import *
 import time, traceback, sys, threading
@@ -23,10 +22,7 @@ from .TDTtaskGUI import TDTTaskGui
 #    97656.25, 195312.5];
 
 class TDTDevice(Device):
-    """
-    Config options:
-        defaultAIMode: 'mode'  # mode to use for ai channels by default ('rse', 'nrse', or 'diff')
-    """
+
     threads = {}
 
     def __init__(self, dm, config, name):
@@ -38,7 +34,8 @@ class TDTDevice(Device):
         return TDTTask(self, cmd, parentTask)
 
     def taskInterface(self, task):
-        """Return a widget with a UI to put in the task rack"""
+        """Return a widget with a UI to put in the task rack.
+        Currently only has options for attenuation."""
         return TDTTaskGui(self, task)        
 
     def initThread(self):
