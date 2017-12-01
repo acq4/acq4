@@ -426,9 +426,10 @@ class DAQGenericTask(DeviceTask):
         ## Collect data and info for each channel in the command
         result = {}
         for ch in self.bufferedChannels:
-            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
-            result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert
-            result[ch]['units'] = self.getChanUnits(ch)
+            if self._DAQCmd[ch].get('record', True):
+                result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
+                result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert
+                result[ch]['units'] = self.getChanUnits(ch)
         
         if len(result) > 0:
             meta = result[result.keys()[0]]['info']

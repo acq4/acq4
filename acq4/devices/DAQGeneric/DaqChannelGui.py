@@ -199,6 +199,8 @@ class OutputChannelGui(DaqChannelGui):
             prot['holding'] = state['holdingSpin']
         if state['functionCheck']:
             prot['command'] = self.getSingleWave(params)
+        if not state['storeWaveCheck']:
+            prot['record'] = False
             
         return prot
     

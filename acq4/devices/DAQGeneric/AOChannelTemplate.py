@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AOChannelTemplate.ui'
 #
-# Created: Sun Feb 22 13:29:01 2015
-#      by: PyQt4 UI code generator 4.10.4
+# Created: Fri Dec  1 15:06:51 2017
+#      by: PyQt4 UI code generator 4.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(529, 353)
+        Form.resize(321, 206)
         self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setMargin(0)
@@ -36,6 +36,7 @@ class Ui_Form(object):
         font.setBold(True)
         font.setWeight(75)
         self.groupBox.setFont(font)
+        self.groupBox.setTitle(_fromUtf8(""))
         self.groupBox.setCheckable(False)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.groupBox)
@@ -103,6 +104,14 @@ class Ui_Form(object):
         self.displayCheck.setChecked(True)
         self.displayCheck.setObjectName(_fromUtf8("displayCheck"))
         self.horizontalLayout.addWidget(self.displayCheck)
+        self.storeWaveCheck = QtGui.QCheckBox(self.frame)
+        font = QtGui.QFont()
+        font.setBold(False)
+        font.setWeight(50)
+        self.storeWaveCheck.setFont(font)
+        self.storeWaveCheck.setChecked(True)
+        self.storeWaveCheck.setObjectName(_fromUtf8("storeWaveCheck"))
+        self.horizontalLayout.addWidget(self.storeWaveCheck)
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.waveGeneratorWidget = StimGenerator(self.frame)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
@@ -124,11 +133,11 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(_translate("Form", "Form", None))
-        self.groupBox.setTitle(_translate("Form", "GroupBox", None))
         self.preSetCheck.setText(_translate("Form", "Pre-set", None))
         self.holdingCheck.setText(_translate("Form", "Holding", None))
         self.functionCheck.setText(_translate("Form", "Enable Function", None))
         self.displayCheck.setText(_translate("Form", "Display", None))
+        self.storeWaveCheck.setText(_translate("Form", "Store Waveform", None))
 
 from acq4.pyqtgraph import SpinBox, GroupBox
 from acq4.util.generator.StimGenerator import StimGenerator
