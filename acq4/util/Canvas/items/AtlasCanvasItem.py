@@ -20,8 +20,8 @@ class AtlasCanvasItem(CanvasItem):
     def __init__(self, **kwds):
         kwds.pop('viewRect', None)
         
+        self.atlas = CCFAtlasData()
         with pg.BusyCursor():
-            self.atlas = CCFAtlasData()
             self.atlasView = AtlasSliceView()
             self.atlasView.set_data(self.atlas)
         
@@ -34,8 +34,8 @@ class AtlasCanvasItem(CanvasItem):
         self.__layout = QtGui.QGridLayout()
         self.__ctrl.setLayout(self.__layout)
         self.__layout.setContentsMargins(0, 0, 0, 0)
-        self.__layout.addWidget(self.atlasView.displayCtrl, 0, 0)
-        self.__layout.addWidget(self.atlasView.labelTree, 1, 0)
+        self.__layout.addWidget(self.atlasView.display_ctrl, 0, 0)
+        self.__layout.addWidget(self.atlasView.label_tree, 1, 0)
         
         self.showSliceBtn = QtGui.QPushButton("Show slice")
         self.showSliceBtn.setCheckable(True)
