@@ -15,6 +15,7 @@ from collections import OrderedDict
 import atexit
 import traceback
 import time
+import six
 modDir = os.path.dirname(__file__)
 sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
 
@@ -293,7 +294,7 @@ class QCameraClass:
     def convertUnitsToAcq4(self, param, value):
         if param in self.unitConversionDict:
             #print "        0 convertUnits: param:", param, "value:", value
-            if type(value) in [type(1),type(1.0),type(1L)]:
+            if type(value) in list(six.integer_types) + [float]:
                 #print "        1 convertUnits: param:", param, "value:", value*self.unitConversionDict[param]
                 return value*self.unitConversionDict[param]
             elif type(value) == list:
