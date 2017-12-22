@@ -2548,13 +2548,13 @@ class pbm_ImageAnalysis(AnalysisModule):
             npad = x.shape[axis] + y.shape[axis]
             if axis == 1:
                 if x.shape[0] != y.shape[0]:
-                    raise ValueError, "Arrays should have the same length!"
+                    raise ValueError("Arrays should have the same length!")
                 xanom = (x - x.mean(axis=1)[:,None])
                 yanom = (y - y.mean(axis=1)[:,None])
                 varxy = np.sqrt((xanom*xanom).sum(1) * (yanom*yanom).sum(1))[:,None]
             else:
                 if x.shape[1] != y.shape[1]:
-                    raise ValueError, "Arrays should have the same width!"
+                    raise ValueError("Arrays should have the same width!")
                 xanom = (x - x.mean(axis=0))
                 yanom = (y - y.mean(axis=0))
                 varxy = np.sqrt((xanom*xanom).sum(0) * (yanom*yanom).sum(0))
