@@ -6,6 +6,8 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
+import six
+
 from PyQt4 import QtCore
 import traceback
 import acq4.pyqtgraph as pg
@@ -73,7 +75,7 @@ class ThreadsafeWrapper(object):
     def __wrap_object__(self, obj):
         if not self.__TSOrecursive__:
             return obj
-        if obj.__class__ in [int, float, str, unicode, tuple]:
+        if obj.__class__ in [int, float, str, six.text_type, tuple]:
             return obj
         if id(obj) not in self.__TSOwrapped_objs__:
             self.__TSOwrapped_objs__[id(obj)] = threadsafe(obj, recursive=self.__TSOrecursive__, reentrant=self.__TSOreentrant__)
@@ -92,7 +94,7 @@ def threadsafe(obj, *args, **kargs):
     """Return a thread-safe wrapper around obj. (see ThreadsafeWrapper)
     args and kargs are passed directly to ThreadsafeWrapper.__init__()
     This factory function is necessary for wrapping special methods (like __getitem__)"""
-    if type(obj) in [int, float, str, unicode, tuple, type(None), bool]:
+    if type(obj) in [int, float, str, six.text_type, tuple, type(None), bool]:
         return obj
     clsName = 'Threadsafe_' + obj.__class__.__name__
     attrs = {}

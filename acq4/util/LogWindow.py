@@ -18,6 +18,7 @@ from acq4.util.Mutex import Mutex
 import numpy as np
 from acq4.pyqtgraph import FileDialog
 from acq4.util.debug import printExc
+import six
 import weakref
 import re
 
@@ -190,7 +191,7 @@ class LogWindow(QtGui.QMainWindow):
 
         
     def textEntered(self):
-        msg = unicode(self.wid.ui.input.text())
+        msg = six.text_type(self.wid.ui.input.text())
         if msg == '!!':
             self.makeError1()
         elif msg == '##':
@@ -444,7 +445,7 @@ class LogWidget(QtGui.QWidget):
             child = tree.topLevelItem(1).child(i)
             if tree.topLevelItem(1).checkState(0) or child.checkState(0):
                 text = child.text(0)
-                self.typeFilters.append(unicode(text))
+                self.typeFilters.append(six.text_type(text))
             
         self.importanceFilter = self.ui.importanceSlider.value()
     

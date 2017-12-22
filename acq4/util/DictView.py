@@ -3,6 +3,9 @@ from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
 
+import six
+
+
 class DictView(QtGui.QTreeWidget):
     def __init__(self, data, parent=None):
         QtGui.QTreeWidget.__init__(self, parent)
@@ -24,7 +27,7 @@ class DictView(QtGui.QTreeWidget):
         
     def mkNode(self, name, v):
         if type(v) is list and len(v) > 0 and isinstance(v[0], dict):
-            inds = map(unicode, range(len(v)))
+            inds = map(six.text_type, range(len(v)))
             v = OrderedDict(zip(inds, v))
         if isinstance(v, dict):
             #print "\nadd tree", k, v
@@ -34,7 +37,7 @@ class DictView(QtGui.QTreeWidget):
                 node.addChild(newNode)
         else:
             #print "\nadd value", k, str(v)
-            node = QtGui.QTreeWidgetItem([unicode(name), unicode(v)])
+            node = QtGui.QTreeWidgetItem([six.text_type(name), six.text_type(v)])
         return node
         
     def close(self):

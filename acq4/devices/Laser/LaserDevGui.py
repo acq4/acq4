@@ -5,6 +5,7 @@ from .devTemplate import Ui_Form
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
+import six
 import time
 
 
@@ -183,7 +184,7 @@ class LaserDevGui(QtGui.QWidget):
     def wavelengthComboChanged(self):
         if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."
             return # not selected
-        text = unicode(self.ui.wavelengthCombo.currentText())
+        text = six.text_type(self.ui.wavelengthCombo.currentText())
         wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
         if wl is not None:
             if len(wl) == 1:
@@ -261,7 +262,7 @@ class LaserDevGui(QtGui.QWidget):
                 self.ui.calibrateBtn.setEnabled(False)
                 self.ui.calibrateBtn.setText('Calibrating...')
                 #scope = str(self.ui.microscopeCombo.currentText())
-                powerMeter = unicode(self.ui.meterCombo.currentText())
+                powerMeter = six.text_type(self.ui.meterCombo.currentText())
                 mTime = self.ui.measurementSpin.value()
                 sTime = self.ui.settlingSpin.value()
                 self.dev.calibrate(powerMeter, mTime, sTime)

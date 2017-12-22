@@ -9,6 +9,7 @@ from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 from . import DeviceTemplate
 from collections import OrderedDict
+import six
 
 
 class DataMapping:
@@ -28,7 +29,7 @@ class DataMapping:
         self.offset = {}
         if chans is None:
             chans = device.listChannels()
-        if type(chans) in [str, unicode]:
+        if type(chans) in six.string_types:
             chans = [chans]
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)

@@ -509,7 +509,7 @@ class SqliteDatabase:
                     if t in [QtCore.QVariant.Double]:
                         val = val.toDouble()[0]
                     elif t == QtCore.QVariant.String:
-                        val = unicode(val.toString())
+                        val = six.text_type(val.toString())
                     elif t == QtCore.QVariant.ByteArray:
                         val = val.toByteArray()
                         

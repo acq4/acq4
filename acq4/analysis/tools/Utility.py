@@ -34,6 +34,7 @@ then call Utils.xxxxx()
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import six
 import sys, re, os
 import numpy
 import numpy.ma as ma
@@ -352,7 +353,7 @@ def flatten(l, ltypes=(list, tuple)):
 
 def unique(seq, keepstr=True):
   t = type(seq)
-  if t in (str, unicode):
+  if t in six.string_types:
     t = (list, ''.join)[bool(keepstr)]
   seen = []
   return t(c for c in seq if not (c in seen or seen.append(c)))
