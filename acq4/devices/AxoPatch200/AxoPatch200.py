@@ -75,7 +75,7 @@ class AxoPatch200(DAQGeneric):
     sigModeChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
-		
+        
         # Generate config to use for DAQ 
         daqConfig = {}
         

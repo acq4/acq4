@@ -83,10 +83,10 @@ def run(cmd):
         vm.play(vc._ref_amp1, dt)
 
         syn.onset = 400. #ms
-        syn.tau	= 1.5 # ms
+        syn.tau    = 1.5 # ms
         syn.gmax = 0.04 # umho
         syn.e = -7.0 # mV
-        #syn.i	---	nA
+        #syn.i    ---    nA
         
     else:
         sys.stderr.write("Unknown mode '%s'" % sys.argv[1])
