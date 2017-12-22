@@ -957,7 +957,7 @@ class TaskThread(Thread):
             if self.paramSpace is None:
                 try:
                     self.runOnce()
-                except Exception, e:
+                except Exception as e:
                     if e.args[0] != 'stop':
                         raise
             else:

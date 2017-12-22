@@ -132,7 +132,7 @@ def savitzky_golay(data, kernel = 11, order = 4):
     try:
             kernel = abs(int(kernel))
             order = abs(int(order))
-    except ValueError, msg:
+    except ValueError as msg:
         raise ValueError("kernel and order have to be of type int (floats will be converted).")
     if kernel % 2 != 1 or kernel < 1:
         raise TypeError("kernel size must be a positive odd number, was: %d" % kernel)
@@ -807,7 +807,7 @@ def ffind(path, shellglobs=None, namefs=None, relative=True):
         if not relative: fileList = map(os.path.abspath, fileList)
         if namefs:
             for ff in namefs: fileList = filter(ff, fileList)
-    except Exception, e: raise ScriptError(str(e))
+    except Exception as e: raise ScriptError(str(e))
     return(fileList)
 
 

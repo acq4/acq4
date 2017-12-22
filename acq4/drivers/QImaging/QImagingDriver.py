@@ -364,13 +364,13 @@ class QCameraClass:
                             table = (c_ulong *32)()
                             r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                        except QCamFunctionError, err: ###if sparse table doesn't work try getting a RangeTable
+                        except QCamFunctionError as err: ###if sparse table doesn't work try getting a RangeTable
                             if err.value == 1:  
                                 min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise 
-                except QCamFunctionError, err:
+                except QCamFunctionError as err:
                     if err.value == 1: pass    
                     else: raise
         #for x in lib('enums', 'QCam_ParamS32'):
@@ -381,13 +381,13 @@ class QCameraClass:
                             table = (c_long *32)()
                             r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                        except QCamFunctionError, err:
+                        except QCamFunctionError as err:
                             if err.value == 1:
                                 min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise
-                except QCamFunctionError, err:
+                except QCamFunctionError as err:
                     if err.value == 1: pass
                     else: raise
         #for x in lib('enums', 'QCam_Param64'):
@@ -398,13 +398,13 @@ class QCameraClass:
                             table = (c_ulonglong *32)()
                             r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                        except QCamFunctionError, err:
+                        except QCamFunctionError as err:
                             if err.value == 1:  ## qerrNotSupported
                                 min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise
-                except QCamFunctionError, err:
+                except QCamFunctionError as err:
                     if err.value == 1:  pass
                     else: raise
         #print "      parameters are retrieved."
@@ -496,7 +496,7 @@ class QCameraClass:
             try:
                 a = self.call(lib.GetInfo, self.handle, getattr(lib, x))
                 self.cameraInfo[x] = a[2]
-            except QCamFunctionError, err:
+            except QCamFunctionError as err:
                 if err.value == 1:
                     #print "No info for: ", x
                     pass

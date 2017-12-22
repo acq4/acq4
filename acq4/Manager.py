@@ -90,7 +90,7 @@ class Manager(QtCore.QObject):
             if argv is not None:
                 try:
                     opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:nD', ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=', 'disable=', 'no-manager', 'disable-all'])
-                except getopt.GetoptError, err:
+                except getopt.GetoptError as err:
                     print str(err)
                     print """
     Valid options are:

@@ -76,7 +76,7 @@ class SequenceRunner:
         ## Run parameter space recursive loop
         try:
             self.nloop(func=func)
-        except Exception, e:
+        except Exception as e:
             ## If the loop exited due to a break command, that's fine.
             ## Otherwise, re-raise the exception
             if len(e.args) < 1 or e.args[0] != 'break':
@@ -98,7 +98,7 @@ class SequenceRunner:
                     ret = func(**params)
                 else:
                     ret = func(params)
-            except Exception, e:
+            except Exception as e:
                 if len(e.args) > 0 and e.args[0] == 'stop':
                     stop = True
                     if len(e.args) > 1:
@@ -123,7 +123,7 @@ class SequenceRunner:
                 ind2 = ind + [i]
                 try:
                     self.nloop(ind2, func=func)
-                except Exception, e:
+                except Exception as e:
                     if len(e.args) > 0 and e.args[0] == 'break':
                         if e.args[1] <= 1:
                             break

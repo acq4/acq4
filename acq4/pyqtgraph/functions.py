@@ -2352,7 +2352,7 @@ def disconnect(signal, slot):
         try:
             signal.disconnect(slot)
             return True
-        except TypeError, RuntimeError:
+        except TypeError as RuntimeError:
             slot = reload.getPreviousVersion(slot)
             if slot is None:
                 return False

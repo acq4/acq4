@@ -71,7 +71,7 @@ class PVCam(Camera):
                     self.cam.setParam('ringSize', self.ringSize)
                     self.acqBuffer = self.cam.start()
                 break
-            except Exception, e:
+            except Exception as e:
                 if len(e.args) == 2 and (e.args[1] in (15, 41)):
                     printRingSize = True
                     self.ringSize = int(self.ringSize * 0.9)
