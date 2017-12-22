@@ -263,7 +263,7 @@ class Manager(QtCore.QObject):
                     logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
-        elif key == 'defaultCompression':
+                elif key == 'defaultCompression':
                     comp = cfg['defaultCompression']
                     try:
                         if isinstance(comp, tuple):
