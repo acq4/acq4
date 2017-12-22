@@ -1,5 +1,6 @@
 from __future__ import print_function
 import six
+from six.moves import range
 
 from .database import *
 from acq4.util import DataManager
@@ -658,7 +659,7 @@ class AnalysisDatabase(SqliteDatabase):
             data = data[0]
             
         if isinstance(data, np.ndarray):
-            for i in xrange(len(data.dtype)):
+            for i in range(len(data.dtype)):
                 name = data.dtype.names[i]
                 typ = data.dtype[i].kind
                 if typ == 'i':
@@ -671,7 +672,7 @@ class AnalysisDatabase(SqliteDatabase):
                     if typ == 'O': ## check to see if this is a pointer to a string
                         allStr = 0
                         allHandle = 0
-                        for i in xrange(len(data)):
+                        for i in range(len(data)):
                             val = data[i][name]
                             if val is None or isinstance(val, six.string_types):
                                 allStr += 1

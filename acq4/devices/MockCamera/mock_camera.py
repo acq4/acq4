@@ -4,6 +4,7 @@ from __future__ import with_statement
 from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
 import six
+from six.moves import range
 import time, sys, traceback
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
@@ -309,7 +310,7 @@ def mandelbrot(w=500, h=None, maxIter=20, xRange=(-2.0, 1.0), yRange=(-1.2, 1.2)
     z0.imag = y
     z = z0.copy()
 
-    for i in xrange(maxIter):
+    for i in range(maxIter):
         z = z[mask]
         z0 = z0[mask]
         xInd = xInd[mask]

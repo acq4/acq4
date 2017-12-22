@@ -1,5 +1,6 @@
 from __future__ import print_function
 import six
+from six.moves import range
 
 
 """
@@ -484,7 +485,7 @@ class SqliteDatabase:
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(recs)):
+        for i in range(1, len(recs)):
             arr[i] = tuple(recs[i].values())
         prof.mark('converted to array')
         prof.finish()

@@ -4,6 +4,7 @@ from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
 import numpy as np
+from six.moves import range
 #import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 
 class Map:
@@ -240,7 +241,7 @@ class Map:
         spots = self.sPlotItem.points()
         colors = []
         with pg.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), 0, len(spots)) as dlg:
-            for i in xrange(len(spots)):
+            for i in range(len(spots)):
                 s = spots[i]
                 data = []
                 sources = s.data()['sites']

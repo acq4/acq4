@@ -32,6 +32,7 @@ class Analyze75(FileType):
 import numpy as np
 import os
 import six
+from six.moves import range
 from six.moves import reduce
 
 dataTypes = {
@@ -339,7 +340,7 @@ def shortToByte(data, dMin=None, dMax=None):
         lut[int(diff*i):int(diff*(i+1))] = i
     lut[diff*255:] = 255
     d2 = np.empty(data.shape, dtype=np.ubyte)
-    for i in xrange(data.shape[0]):
+    for i in range(data.shape[0]):
         d2[i] = lut[data[i]]
     return d2
 

@@ -9,6 +9,7 @@ import acq4.util.advancedTypes as advancedTypes
 import acq4.util.debug as debug
 from PyQt4 import QtCore
 import six
+from six.moves import range
 import sqlite3
 
 class SqliteDatabase:
@@ -442,7 +443,7 @@ class SqliteDatabase:
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(recs)):
+        for i in range(1, len(recs)):
             arr[i] = tuple(recs[i].values())
         prof.mark('converted to array')
         prof.finish()
@@ -591,7 +592,7 @@ class TableData:
         #print rec1, dtype
         arr = np.empty(len(self), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(self)):
+        for i in range(1, len(self)):
             arr[i] = tuple(self[i].values())
         return arr
             
@@ -685,7 +686,7 @@ class TableData:
         
         
     def __iter__(self):
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             yield self[i]
 
     def __len__(self):

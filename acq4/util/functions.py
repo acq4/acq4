@@ -16,6 +16,7 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 
 import six
 
+from six.moves import range
 import sys
 import os, re, math, time, threading, decimal
 from acq4.util.metaarray import *
@@ -1703,7 +1704,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
                 continue
         if offTimes[-1] < onTimes[-1]:
             onTimes = onTimes[:-1]
-        for i in xrange(len(onTimes)):
+        for i in range(len(onTimes)):
             hits.append((onTimes[i], offTimes[i]))
     
     ## sort hits  ## NOTE: this can be sped up since we already know how to interleave the events..
@@ -1832,7 +1833,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
     if xvals is not None:
         events['time'] = xvals[events['index']]
         
-    #for i in xrange(len(events)):
+    #for i in range(len(events)):
         #print events[i]['time'], events[i]['peak']
 
     return events

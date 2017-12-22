@@ -9,6 +9,7 @@ import collections
 import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
 import six
+from six.moves import range
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -254,7 +255,7 @@ class SqliteDatabase:
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(recs)):
+        for i in range(1, len(recs)):
             arr[i] = tuple(recs[i].values())
         return arr
 
@@ -494,7 +495,7 @@ class AnalysisDatabase(SqliteDatabase):
             data = data[0]
             
         if isinstance(data, np.ndarray):
-            for i in xrange(len(data.dtype)):
+            for i in range(len(data.dtype)):
                 name = data.dtype.names[i]
                 typ = data.dtype[i].kind
                 if typ == 'i':

@@ -1185,7 +1185,7 @@ class PSPReversal(AnalysisModule):
             print('script is not for PSPReversal (found %s)', self.script['module'])
             return False
         all_found = True
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        trailingchars = [c for c in map(chr, range(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for c in self.script['Cells']:
             if self.script['Cells'][c]['include'] is False:
                 continue
@@ -1222,7 +1222,7 @@ class PSPReversal(AnalysisModule):
         self.textout = ('Script File: {:<32s}'.format(self.script_name))
         settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        trailingchars = [c for c in map(chr, range(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for cell in self.script['Cells']:
             thiscell = self.script['Cells'][cell]
             if thiscell['include'] is False:  # skip this cell

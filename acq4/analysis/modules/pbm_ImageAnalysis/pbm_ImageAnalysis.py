@@ -49,6 +49,7 @@ from acq4.analysis.tools import PlotHelpers as PH  # matlab plotting helpers
 from acq4.util import functions as FN
 from acq4.util.HelpfulException import HelpfulException
 from acq4.devices.Scanner.scan_program import rect
+from six.moves import range
 
 try:
     import cv2
@@ -1222,8 +1223,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             plotTitle = 'All-Spikes-Triggered Fluorescence'
         self.calculateAllROIs()
         N = len(onsetSpikes)
-        avCaF = [[0]*N for i in xrange(self.nROI)]
-        avCaT = [[0]*N for i in xrange(self.nROI)]
+        avCaF = [[0]*N for i in range(self.nROI)]
+        avCaT = [[0]*N for i in range(self.nROI)]
 
         for roi in range(0, self.nROI):
             i = 0
@@ -2903,8 +2904,8 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.smc_S = SMC.forward(self.smc_V, self.smc_P)
             cbar = np.zeros(self.smc_P.V.T)
             nbar = np.zeros(self.smc_P.V.T)
-            for t in xrange(self.smc_P.V.T):
-                for i in xrange(self.smc_P.V.Nparticles):
+            for t in range(self.smc_P.V.T):
+                for i in range(self.smc_P.V.Nparticles):
                     weight = self.smc_S.w_f[i,t]
                     cbar[t] += weight * self.smc_S.C[i,t]
                     nbar[t] += weight * self.smc_S.n[i,t]
@@ -3021,7 +3022,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             print("Common boundaries:",i0,i1,j0,j1)
 
             #cut the list elements:
-            for i in xrange(N):
+            for i in range(N):
                 outstack[i] = outstack[i][i0:i1,j0:j1]
 
         for i in range(self.imageData.shape[0]):

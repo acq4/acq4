@@ -105,6 +105,7 @@ import scipy.misc
 import scipy.interpolate
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.console
+from six.moves import range
 import user
 import acq4.pyqtgraph.multiprocess as mp
 import os
@@ -327,7 +328,7 @@ class PoissonScore:
             #count = np.zeros(tableShape[1:], dtype=float)
             #for i, t in enumerate(tVals):
                 #n = nev[i]
-                #for j in xrange(int(n)):
+                #for j in range(int(n)):
                     #if j%1000==0:
                         #print t, j
                     #ev = [{'time': poissonProcess(rate, t)}]
@@ -394,7 +395,7 @@ class PoissonScore:
                     count = np.zeros(tableShape[1:], dtype=float)
                     for i, t in enumerate(tVals):
                         n = nev[i] / tasker.numWorkers()
-                        for j in xrange(int(n)):
+                        for j in range(int(n)):
                             if j%1000==0:
                                 print(t, j)
                                 tasker.process()
@@ -419,7 +420,7 @@ class PoissonScore:
         scores = np.empty(n)
         mapped = np.empty(n)
         ev = []
-        for i in xrange(len(scores)):
+        for i in range(len(scores)):
             ev.append(cls.generateRandom(rate, tMax, reps))
             scores[i] = cls.score(ev[-1], rate, tMax=tMax, normalize=False)
             mapped[i] = cls.mapScore(scores[i], np.mean(rate)*tMax*reps)
@@ -696,7 +697,7 @@ class PoissonRepeatScore:
                     count = np.zeros(tableShape[1:], dtype=float)
                     for i, t in enumerate(tVals):
                         n = nev[i]
-                        for j in xrange(int(n)):
+                        for j in range(int(n)):
                             if j%1000==0:
                                 print(t, j)
                             ev = cls.generateRandom(rate=rate, tMax=t, reps=reps[-1])
@@ -739,7 +740,7 @@ class PoissonRepeatScore:
         #scores = np.empty(n)
         #mapped = np.empty(n)
         #ev = []
-        #for i in xrange(len(scores)):
+        #for i in range(len(scores)):
             #ev.append([{'time': poissonProcess(rate, tmax)}])
             #scores[i] = cls.score(ev[-1], rate, tMax=tmax)
         
@@ -752,7 +753,7 @@ class PoissonRepeatScore:
         scores = np.empty(n)
         mapped = np.empty(n)
         ev = []
-        for i in xrange(len(scores)):
+        for i in range(len(scores)):
             ev.append(cls.generateRandom(rate, tMax, reps))
             scores[i] = cls.score(ev[-1], rate, tMax=tMax, normalize=False)
             mapped[i] = cls.mapScore(scores[i], rate*tMax*reps)
@@ -1221,7 +1222,7 @@ if __name__ == '__main__':
 #trials = 1000000
 
 ## create a series of poisson event trains with n=1
-##ev1 = np.vstack([poissonProcess(rate=rate, n=1) for i in xrange(trials)])
+##ev1 = np.vstack([poissonProcess(rate=rate, n=1) for i in range(trials)])
 ##mpi1 = np.array([maxPoissonImp(e, rate) for e in ev1])
 
 
@@ -1233,7 +1234,7 @@ if __name__ == '__main__':
 #mpp = []
 #nval = np.array([2,3,5,8,12,17,23,30])
 #for n in nval:
-    #ev2 = np.vstack([poissonProcess(rate=rate, n=n) for i in xrange(trials)])
+    #ev2 = np.vstack([poissonProcess(rate=rate, n=n) for i in range(trials)])
     ##pi2 = np.array([poissonImp(n, e[-1], rate) for e in ev2])
     ##mpi2 = np.array([maxPoissonImp(e, rate) for e in ev2])
     ##mpi20 = mpi2[mpi2[:,1]==0][:,0]
@@ -1365,7 +1366,7 @@ if __name__ == '__main__':
     #d1 = np.random.poisson(rate, size=100000)
     #h1 = np.histogram(d1, bins=range(d1.max()+1))
 
-    #d2 = np.array([len(poissonProcess(rate, 1)) for i in xrange(100000)])
+    #d2 = np.array([len(poissonProcess(rate, 1)) for i in range(100000)])
     #h2 = np.histogram(d2, bins=range(d2.max()+1))
 
     #plt.plot(h2[1][1:], h2[0], pen='g', symbolSize=3)

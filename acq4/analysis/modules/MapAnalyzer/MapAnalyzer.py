@@ -66,6 +66,7 @@ import acq4.analysis.modules.Photostim.Scan as Scan
 from acq4.analysis.modules.Photostim.Map import Map
 import acq4.analysis.tools.poissonScore as poissonScore
 import acq4.util.flowchart.EventDetection as FCEventDetection
+from six.moves import range
 
 
 class MapAnalyzer(AnalysisModule):
@@ -597,7 +598,7 @@ class SpontRateAnalyzer:
             self.params['Constant Rate'] = rate
         else:
             filtered = np.empty(len(spontRate))
-            for i in xrange(len(spontRate)):
+            for i in range(len(spontRate)):
                 now = sites['start'][i]
                 window = self.params['Filter Window']
                 start = now - window

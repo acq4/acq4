@@ -14,6 +14,7 @@ from ..Stage import Stage
 from .DeviceGui import ScannerDeviceGui
 from .TaskGui import ScannerTaskGui
 from .scan_program import ScanProgram 
+from six.moves import range
 
 class Scanner(Device, OptomechDevice):
     
@@ -353,7 +354,7 @@ class ScannerTask(DeviceTask):
         npts = int(10e-3 / dt)
         ons -= npts
         mask = np.zeros(len(laser), dtype=bool)
-        for i in xrange(len(ons)):
+        for i in range(len(ons)):
             on = max(0, ons[i])
             mask[on:offs[i]] = True
         

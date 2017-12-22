@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+from six.moves import range
+
 from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
@@ -499,7 +502,7 @@ class Photostim(AnalysisModule):
             with pg.ProgressDialog("Preparing data for %s" % scan.name(), 0, len(spots)+1) as dlg:
                 
                 ## collect events and stats from all spots in the scan
-                for i in xrange(len(spots)):
+                for i in range(len(spots)):
                     s = spots[i]
                     fh = self.dataModel.getClampFile(s.data())
                     try:

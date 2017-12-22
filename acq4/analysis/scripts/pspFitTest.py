@@ -3,6 +3,7 @@ import scipy.optimize as opt
 import scipy.weave
 import numpy as np
 import os, sys, user, time
+from six.moves import range
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'util'))
 sys.path.append(path)
@@ -500,7 +501,7 @@ def errorSurface(axes=[3, 0], v1=None, v2=None, bounds=None, noise=0.0, n=5000):
     
     inds = np.indices(err.shape).reshape((len(axes), err.size))
     
-    for i in xrange(inds.shape[1]):
+    for i in range(inds.shape[1]):
         ind = tuple(inds[:,i])
         v2a = v2[:]
         for j in range(len(axes)):

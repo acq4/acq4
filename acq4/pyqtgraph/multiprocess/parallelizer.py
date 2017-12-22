@@ -116,7 +116,7 @@ class Parallelize(object):
         
         ## break up tasks into one set per worker
         workers = self.workers
-        chunks = [[] for i in xrange(workers)]
+        chunks = [[] for i in range(workers)]
         i = 0
         for i in range(len(self.tasks)):
             chunks[i%workers].append(self.tasks[i])

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+from six.moves import range
+
 from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 import acq4.pyqtgraph as pg
@@ -91,7 +94,7 @@ class ScatterPlotter(QtGui.QSplitter):
             #print "scatter plot:", len(data['output']), "pts"
             
             ### TODO: if 'fitTime' is not available, we should fall back to 'index'
-            pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['fitTime'])} for i in xrange(len(data['output']))]
+            pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['fitTime'])} for i in range(len(data['output']))]
             plot.setPoints(pts)
             #print pts
             self.scans[scan][2] = True  ## plot is valid
