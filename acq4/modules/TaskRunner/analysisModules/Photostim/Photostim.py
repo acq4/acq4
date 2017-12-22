@@ -3,7 +3,7 @@ from __future__ import print_function
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
-from PhotostimTemplate import Ui_Form
+from .PhotostimTemplate import Ui_Form
 import numpy as np
 import scipy.ndimage
 from acq4.util.metaarray import MetaArray

@@ -91,5 +91,5 @@ def messageHandler(msgType, msg):
     
 pg.QtCore.qInstallMsgHandler(messageHandler)
 
-from Manager import getManager
+from .Manager import getManager
 

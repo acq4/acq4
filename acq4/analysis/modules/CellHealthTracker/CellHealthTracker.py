@@ -7,7 +7,7 @@ from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
 import acq4.util.functions as fn
-import CellHealthCtrlTemplate
+from . import CellHealthCtrlTemplate
 from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys

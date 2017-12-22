@@ -4,7 +4,7 @@ from ctypes import *
 import ctypes
 import struct, os, threading, platform, atexit, inspect
 from acq4.util.clibrary import *
-from MultiClampTelegraph import *
+from .MultiClampTelegraph import *
 from acq4.util.debug import *
 
 DEBUG=False ## Global flag for debugging hangups

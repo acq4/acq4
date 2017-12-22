@@ -5,8 +5,8 @@ from acq4.Manager import getManager, logExc, logMsg
 from acq4.util.Mutex import Mutex
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
-from LaserDevGui import LaserDevGui
-from LaserTaskGui import LaserTaskGui
+from .LaserDevGui import LaserDevGui
+from .LaserTaskGui import LaserTaskGui
 import os
 import time
 import numpy as np

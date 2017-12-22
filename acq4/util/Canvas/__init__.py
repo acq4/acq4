@@ -2,6 +2,6 @@
 from __future__ import print_function
 from acq4.pyqtgraph.canvas import *
 from .Canvas import Canvas
-from items import *
+from .items import *
 #from ScanCanvasItem import *
 #from CellCanvasItem import *

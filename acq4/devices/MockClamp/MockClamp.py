@@ -11,7 +11,7 @@ import numpy as np
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from acq4.util.debug import printExc
-from devTemplate import *
+from .devTemplate import *
 import subprocess, pickle, os
 import acq4.pyqtgraph.multiprocess as mp
 

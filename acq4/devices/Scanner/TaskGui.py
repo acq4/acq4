@@ -3,7 +3,7 @@ from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 import random
 import numpy as np
-import optimize ## for determining random scan patterns
+from . import optimize ## for determining random scan patterns
 import os, sys
 
 import acq4.pyqtgraph as pg
@@ -14,7 +14,7 @@ from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
-from TaskTemplate import Ui_Form
+from .TaskTemplate import Ui_Form
 from .scan_program import ScanProgram, ScanProgramPreview
 
 ### Error IDs:

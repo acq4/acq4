@@ -1,6 +1,6 @@
 from __future__ import print_function
 from PyQt4 import QtGui, QtCore
-from devicePagetemplate import *
+from .devicePagetemplate import *
 
 class DevicePageWidget(QtGui.QWidget):
     def __init__(self, w):

@@ -1,6 +1,6 @@
 from __future__ import print_function
 import os
-from AnalysisModule import *
+from .AnalysisModule import *
 
 mdir = os.path.split(__file__)[0]
 MODULES = []

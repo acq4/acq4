@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from DeviceTemplate import Ui_Form
+from .DeviceTemplate import Ui_Form
 import time, os, sys, gc
 from PyQt4 import QtCore, QtGui
 #from acq4.pyqtgraph.graphicsItems import ImageItem

@@ -8,7 +8,7 @@ d2 = os.path.split(d1)[0]
 sys.path.extend([d1, d2])
 
 from acq4.util.DirTreeWidget import *
-from DirTreeLoader import *
+from .DirTreeLoader import *
 from acq4.util.DataManager import *
 from PyQt4 import QtCore,QtGui
 

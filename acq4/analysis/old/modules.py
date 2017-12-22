@@ -10,8 +10,8 @@ from acq4.pyqtgraph.PlotWidget import *
 from acq4.pyqtgraph.functions import *
 from acq4.pyqtgraph.widgets import *
 from acq4.util.Canvas import Canvas
-from UncagingControlTemplate import *
-from StdpCtrlTemplate import *
+from .UncagingControlTemplate import *
+from .StdpCtrlTemplate import *
 from PyQt4 import QtCore, QtGui
 from acq4.util.functions import *
 from SpinBox import *
@@ -92,7 +92,7 @@ class cellROI(ROI):
 
         
 
-from EventDetectionCtrlTemplate import *
+from .EventDetectionCtrlTemplate import *
 
 class EventMatchWidget(QtGui.QSplitter):
     def __init__(self):
@@ -2070,7 +2070,7 @@ class STDPWindow(UncagingWindow):
     #    pspRgn = data[0]['Time': q:(q+self.stdpCtrl.durationSpin.value()/1000.0)]
     #    amp = pspRgn.max() - base.mean()
     #    return time, amp
-from AnalysisPlotWindowTemplate import *
+from .AnalysisPlotWindowTemplate import *
     
 class AnalysisPlotWindow(QtGui.QMainWindow):
     def __init__(self):

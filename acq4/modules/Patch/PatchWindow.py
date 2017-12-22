@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from PatchTemplate import *
+from .PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget

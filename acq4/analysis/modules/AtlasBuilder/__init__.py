@@ -1,2 +1,2 @@
 from __future__ import print_function
-from AtlasBuilder import *
+from .AtlasBuilder import *

@@ -11,7 +11,7 @@ cacheFile = os.path.join(modDir, 'NIDAQmx_headers_%s.cache' % sys.platform)
 
 DEFS = clibrary.CParser(headerFiles, cache=cacheFile, types={'__int64': ('long long')}, verbose=False)
 
-import SuperTask
+from . import SuperTask
 
 class MockNIDAQ:
     def __init__(self):

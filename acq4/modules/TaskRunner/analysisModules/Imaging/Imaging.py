@@ -4,7 +4,7 @@ from __future__ import division
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
-from imagingTemplate import Ui_Form
+from .imagingTemplate import Ui_Form
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn

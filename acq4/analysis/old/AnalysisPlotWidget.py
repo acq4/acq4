@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 from acq4.pyqtgraph.PlotWidget import *
-from AnalysisPlotWidgetTemplate import *
+from .AnalysisPlotWidgetTemplate import *
 import exceptions
 
 class AnalysisPlotWidget(QtGui.QWidget):

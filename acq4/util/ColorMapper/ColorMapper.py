@@ -9,7 +9,7 @@ import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import SpinBox
 from acq4.pyqtgraph import GradientWidget
 import numpy as np
-import CMTemplate
+from . import CMTemplate
 import os
 import acq4.util.configfile as configfile
 

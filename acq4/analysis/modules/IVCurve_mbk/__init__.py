@@ -1,2 +1,2 @@
 from __future__ import print_function
-from IVCurve import IVCurve
+from .IVCurve import IVCurve

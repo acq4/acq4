@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from PyQt4 import QtCore, QtGui
-from TaskTemplate import *
+from .TaskTemplate import *
 from acq4.devices.Device import TaskGui
 from acq4.util.debug import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup

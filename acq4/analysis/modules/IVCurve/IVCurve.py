@@ -35,7 +35,7 @@ import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import acq4.analysis.tools.ScriptProcessor as ScriptProcessor
-import ctrlTemplate
+from . import ctrlTemplate
 import pprint
 import time
 
@@ -1011,8 +1011,8 @@ class IVCurve(AnalysisModule):
             print('jthr, j150, len(spikeShape): ', jthr, j150, len(self.spikeShape))
             print('1 ', self.spikeShape[jthr][0]['current']*1e12)
             print('2 ', self.spikeShape[j150+1][0]['current']*1e12)
-            print(' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeShape[jthr][0]['current']*1e12, end=" ")
-                        self.spikeShape[j150][0]['current']*1e12, self.spikeShape[j150+1][0]['current']*1e12)
+            print(' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeShape[jthr][0]['current']*1e12,
+                  self.spikeShape[j150][0]['current']*1e12, self.spikeShape[j150+1][0]['current']*1e12))
             j150 = jthr + 1
         if len(self.spikeShape[j150]) >= 1 and self.spikeShape[j150][0]['halfwidth'] is not None:
             self.analysis_summary['AP1_Latency'] = (self.spikeShape[j150][0]['AP_Latency'] - self.spikeShape[j150][0]['tstart'])*1e3

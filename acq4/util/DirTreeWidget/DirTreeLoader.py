@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import six
 
-from DirTreeTemplate import Ui_Form
+from .DirTreeTemplate import Ui_Form
 from PyQt4 import QtGui,QtCore
 from acq4.util.debug import *
 import acq4.util.DataManager as DataManager

@@ -273,4 +273,4 @@ class Ui_MainWindow(object):
         self.dockWidget.setWindowTitle(_translate("MainWindow", "Analysis", None))
 
 from acq4.pyqtgraph import SpinBox
-from ParamList import ParamList
+from .ParamList import ParamList

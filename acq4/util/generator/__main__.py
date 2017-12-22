@@ -8,7 +8,7 @@ import acq4.util.SequenceRunner as SequenceRunner
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
-from StimGenerator import *
+from .StimGenerator import *
 app = QtGui.QApplication([])
 sg = StimGenerator()
 sg.show()

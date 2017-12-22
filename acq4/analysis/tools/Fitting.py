@@ -712,7 +712,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
 if __name__ == "__main__":
 #    import matplotlib.pyplot as pyplot
     import timeit
-    import Fitting
+    from . import Fitting
     import matplotlib as MP
     MP.use('Qt4Agg')
     ################## Do not modify the following code 

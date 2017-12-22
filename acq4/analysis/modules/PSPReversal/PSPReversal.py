@@ -31,9 +31,9 @@ standard_font = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 #from acq4.analysis.modules.PSPReversal.ctrlTemplate import ctrlTemplate
-import ctrlTemplate
-import resultsTemplate
-import scriptTemplate
+from . import ctrlTemplate
+from . import resultsTemplate
+from . import scriptTemplate
 #import acq4.analysis.modules.PSPReversal.ctrlTemplate as ctrlTemplate
 #import acq4.analysis.modules.PSPReversal.resultsTemplate as resultsTemplate
 #import acq4.analysis.modules.PSPReversal.scriptTemplate as scriptTemplate

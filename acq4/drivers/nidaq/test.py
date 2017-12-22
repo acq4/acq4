@@ -10,14 +10,14 @@ modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, '..', '..', '..'))
 utilPath = os.path.join(acq4Path, 'lib', 'util')
 sys.path = [acq4Path, utilPath] + sys.path
-from nidaq import LIB as lib
+from .nidaq import LIB as lib
 import acq4.util.ptime as ptime
 
 
 if sys.argv[-1] == 'mock':
-    from mock import NIDAQ as n
+    from .mock import NIDAQ as n
 else:
-    from nidaq import NIDAQ as n
+    from .nidaq import NIDAQ as n
 
 
 print("Assert num devs > 0:")

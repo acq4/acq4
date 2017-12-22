@@ -9,7 +9,7 @@ if __name__ == "__main__":
     sys.path = [os.path.join(d,'lib','util')] + sys.path + [d]
 
 from PyQt4 import QtGui, QtCore
-import LogWidgetTemplate
+from . import LogWidgetTemplate
 from acq4.pyqtgraph import FeedbackButton
 import acq4.util.configfile as configfile
 from acq4.util.DataManager import DirHandle

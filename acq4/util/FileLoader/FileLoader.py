@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import template
+from . import template
 from PyQt4 import QtCore, QtGui
 from acq4.util.HelpfulException import HelpfulException
 from acq4.Manager import logMsg, logExc, getManager

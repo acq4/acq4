@@ -1,6 +1,6 @@
 from __future__ import print_function
 from PyQt4 import QtCore, QtGui
-from Device import Device
+from .Device import Device
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 import collections

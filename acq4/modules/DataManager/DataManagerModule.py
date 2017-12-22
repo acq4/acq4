@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from DataManagerTemplate import *
+from .DataManagerTemplate import *
 from acq4.modules.Module import *
 from acq4.util.DataManager import *
 import os, re, sys, time
 from acq4.util.debug import *
-import FileAnalysisView
+from . import FileAnalysisView
 from acq4.LogWindow import LogButton, LogWindow
-import FileLogView
+from . import FileLogView
 from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar

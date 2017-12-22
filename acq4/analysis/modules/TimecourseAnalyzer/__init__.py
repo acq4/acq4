@@ -1,2 +1,2 @@
 from __future__ import print_function
-from TimecourseAnalyzer import TimecourseAnalyzer
+from .TimecourseAnalyzer import TimecourseAnalyzer

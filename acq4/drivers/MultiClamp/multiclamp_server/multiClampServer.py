@@ -1,6 +1,6 @@
 from __future__ import print_function
 import socket, threading, sys, re, types
-import axonmc
+from . import axonmc
 
 
 

@@ -39,7 +39,7 @@ import PIL as Image
 from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
-import ctrlTemplate
+from . import ctrlTemplate
 import ctrlROIsTemplate
 import ctrlAnalysisTemplate
 import ctrlPhysiologyTemplate

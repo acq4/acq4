@@ -2,7 +2,7 @@
 from __future__ import print_function
 from collections import OrderedDict
 from acq4.pyqtgraph.Qt import QtCore, QtGui
-from CanvasItem import CanvasItem
+from .CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
 import acq4.pyqtgraph as pg

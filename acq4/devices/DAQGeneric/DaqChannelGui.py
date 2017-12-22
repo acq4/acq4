@@ -2,7 +2,7 @@
 from __future__ import print_function
 
 from PyQt4 import QtGui, QtCore
-import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
+from . import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from acq4.util.SequenceRunner import *
 import numpy
 import weakref

@@ -4,7 +4,7 @@ from __future__ import print_function
 from six.moves import reduce
 
 from acq4.modules.Module import *
-from TaskRunnerTemplate import *
+from .TaskRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 import acq4.util.DirTreeWidget as DirTreeWidget
 import acq4.util.configfile as configfile
@@ -15,7 +15,7 @@ from acq4.util.Thread import Thread
 from acq4.Manager import getManager, logMsg, logExc
 from acq4.util.debug import *
 import acq4.util.ptime as ptime
-import analysisModules
+from . import analysisModules
 import time, gc
 import sys, os
 from acq4.util.HelpfulException import HelpfulException

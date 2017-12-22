@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import six
 
-from FileInfoViewTemplate import *
+from .FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
 from acq4.util.DataManager import DirHandle
 import acq4.Manager as Manager

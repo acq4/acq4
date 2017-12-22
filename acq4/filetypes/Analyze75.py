@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from FileType import *
+from .FileType import *
 import numpy as np
 from acq4.util.metaarray import MetaArray
 

@@ -1,7 +1,7 @@
 from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
-from devTemplate import Ui_Form
+from .devTemplate import Ui_Form
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat

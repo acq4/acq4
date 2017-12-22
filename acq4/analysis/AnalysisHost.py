@@ -4,7 +4,7 @@ from __future__ import print_function
 import six
 
 from PyQt4 import QtCore, QtGui
-import modules
+from . import modules
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.Manager
 #from acq4.LogWindow import LogButton

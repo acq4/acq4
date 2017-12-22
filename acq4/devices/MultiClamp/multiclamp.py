@@ -9,8 +9,8 @@ from acq4.pyqtgraph import multiprocess
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
-from DeviceGui import *
-from taskGUI import *
+from .DeviceGui import *
+from .taskGUI import *
 from acq4.util.debug import *
 
 

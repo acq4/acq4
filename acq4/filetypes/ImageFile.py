@@ -64,7 +64,7 @@ if Image.VERSION == '1.1.6':
 
 from numpy import array, ndarray
 from acq4.util.metaarray import MetaArray as MA
-from FileType import *
+from .FileType import *
 
 #import libtiff
 #from PyQt4 import QtCore, QtGui

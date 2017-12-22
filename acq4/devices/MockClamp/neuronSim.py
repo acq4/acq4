@@ -9,8 +9,8 @@ import sys, os
 for nrnpath in ['/usr/local/nrn/lib/python']:
     if os.path.isdir(nrnpath):
         sys.path.append(nrnpath)
-from neuron import h
-import neuron
+from .neuron import h
+from . import neuron
 
 # try to load extra mechanisms
 for name in ('i386', 'x86_64'):

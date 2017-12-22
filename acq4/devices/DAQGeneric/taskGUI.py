@@ -2,8 +2,8 @@
 from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 import sys
-from TaskTemplate import *
-from DaqChannelGui import *
+from .TaskTemplate import *
+from .DaqChannelGui import *
 from acq4.devices.Device import TaskGui
 from acq4.util.SequenceRunner import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup

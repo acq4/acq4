@@ -2,7 +2,7 @@
 from __future__ import print_function
 
 from acq4.Manager import getManager
-from AnalyzerTemplate import *
+from .AnalyzerTemplate import *
 from acq4.util.flowchart import *
 from PyQt4 import QtGui, QtCore
 from acq4.util.DirTreeWidget import DirTreeLoader

@@ -9,7 +9,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
 import os, time
-import devTemplate
+from . import devTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from copy import deepcopy

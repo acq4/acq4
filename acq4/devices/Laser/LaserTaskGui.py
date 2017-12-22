@@ -4,7 +4,7 @@ from acq4.pyqtgraph import PlotWidget
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
 from acq4.pyqtgraph.functions import siFormat
-import taskTemplate
+from . import taskTemplate
 from acq4.util.HelpfulException import HelpfulException
 
 #from FeedbackButton import FeedbackButton

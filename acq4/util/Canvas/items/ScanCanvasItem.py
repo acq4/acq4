@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from PyQt4 import QtCore, QtGui
-from CanvasItem import CanvasItem
-from ImageCanvasItem import ImageCanvasItem
-import ScanCanvasItemTemplate
+from .CanvasItem import CanvasItem
+from .ImageCanvasItem import ImageCanvasItem
+from . import ScanCanvasItemTemplate
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np

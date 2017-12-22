@@ -2,9 +2,9 @@
 from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
-from Map import Map
+from .Map import Map
 import acq4.util.DatabaseGui as DatabaseGui
-import MapCtrlTemplate
+from . import MapCtrlTemplate
 from acq4.Manager import logMsg, logExc
 import acq4.pyqtgraph as pg
 import os

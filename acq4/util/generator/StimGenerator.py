@@ -16,13 +16,13 @@ import numpy as np
 from PyQt4 import QtCore, QtGui
 from collections import OrderedDict
 import acq4.util.functions as fn
-from GeneratorTemplate import *
-import waveforms
+from .GeneratorTemplate import *
+from . import waveforms
 from acq4.util.debug import *
 
 #from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
-from StimParamSet import StimParamSet
-from SeqParamSet import SequenceParamSet
+from .StimParamSet import StimParamSet
+from .SeqParamSet import SequenceParamSet
 import six
 
 import acq4.util.units as units

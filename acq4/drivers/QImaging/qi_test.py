@@ -8,7 +8,7 @@ sys.path.append(os.path.join(d, '../../util'))
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from acq4.pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
-from QImagingDriver import *
+from .QImagingDriver import *
 import atexit
 
 

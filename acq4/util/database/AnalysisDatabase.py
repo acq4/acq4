@@ -83,7 +83,7 @@ class AnalysisDatabase(SqliteDatabase):
             raise Exception("A .version_upgrade for %s already exists. Please delete or rename it" %dbFile)
         if version is None:
             prog = ProgressDialog("Converting database...")
-            from AnalysisDatabase_ver0 import AnalysisDatabase as AnalysisDatabaseOld
+            from .AnalysisDatabase_ver0 import AnalysisDatabase as AnalysisDatabaseOld
             oldDb = AnalysisDatabaseOld(dbFile)
             newDb = AnalysisDatabase(newFileName, self.dataModel(), oldDb.baseDir())
             

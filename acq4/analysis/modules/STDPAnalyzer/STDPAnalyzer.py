@@ -3,12 +3,12 @@ from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
 from acq4.analysis.AnalysisModule import AnalysisModule
-import STDPControlTemplate, STDPPlotsTemplate
+from . import STDPControlTemplate, STDPPlotsTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
-import STDPFileLoader
+from . import STDPFileLoader
 
 class STDPAnalyzer(AnalysisModule):
 

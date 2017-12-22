@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.modules.Module import *
-from PatchWindow import *
+from .PatchWindow import *
 import os
 from PyQt4 import QtGui
 

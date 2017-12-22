@@ -11,7 +11,7 @@ import numpy as np
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from acq4.util.debug import printExc
-from devGuiTemplate import *
+from .devGuiTemplate import *
 
 
 

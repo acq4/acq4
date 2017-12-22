@@ -1,2 +1,2 @@
 from __future__ import print_function
-from Camera import *
+from .Camera import *

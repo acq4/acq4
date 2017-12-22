@@ -4,7 +4,7 @@ from acq4.util.debug import *
     
 from acq4.devices.Device import *
 import time, traceback, sys
-from taskGUI import *
+from .taskGUI import *
 #from numpy import byte
 import numpy
 #from scipy.signal import resample, bessel, lfilter

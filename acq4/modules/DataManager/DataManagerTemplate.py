@@ -193,6 +193,6 @@ class Ui_MainWindow(object):
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.analysisTab), _translate("MainWindow", "Analysis", None))
         self.logDock.setWindowTitle(_translate("MainWindow", "Current Log", None))
 
-from FileInfoView import FileInfoView
+from .FileInfoView import FileInfoView
 from acq4.util.DirTreeWidget import DirTreeWidget
-from FileDataView import FileDataView
+from .FileDataView import FileDataView

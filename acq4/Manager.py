@@ -93,7 +93,7 @@ class Manager(QtCore.QObject):
                     opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:nD', ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=', 'disable=', 'no-manager', 'disable-all'])
                 except getopt.GetoptError as err:
                     print(str(err))
-                    print """
+                    print("""
     Valid options are:
         -c --config=       Configuration file to load
         -a --config-name=  Named configuration to load
@@ -103,7 +103,7 @@ class Manager(QtCore.QObject):
         -n --no-manager    Do not load manager module
         -d --disable=      Disable the device specified
         -D --disable-all   Disable all devices
-    """
+    """)
                     raise
             else:
                 opts = []

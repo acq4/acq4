@@ -7,7 +7,7 @@ import time, sys
 
 sys.path.append('../../util')
 sys.path.append('../..')
-from nidaq import NiDAQ
+from .nidaq import NiDAQ
 from acq4.pyqtgraph.graphicsWindows import *
 from acq4.pyqtgraph.functions import mkPen
 pw = PlotWindow()

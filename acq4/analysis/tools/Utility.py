@@ -235,8 +235,8 @@ def SignalFilter_LPFBessel(signal, LPF, samplefreq, NPole=8, reduce=False, bidir
         if LPF <= samplefreq/2.0:
             reduction = int(samplefreq/LPF)
     if debugFlag is True:
-        print("signalfilter: samplef: %f  wn: %f,  lpf: %f, NPoles: %d " % ()
-           sf, wn, flpf, NPole)
+        print("signalfilter: samplef: %f  wn: %f,  lpf: %f, NPoles: %d " % (
+              sf, wn, flpf, NPole))
     filter_b,filter_a=spSignal.bessel(
             NPole,
             wn,

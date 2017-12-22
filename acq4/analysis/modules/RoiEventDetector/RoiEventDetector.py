@@ -4,7 +4,7 @@ from acq4.analysis.modules.EventDetector.EventDetector import EventDetector
 from acq4.pyqtgraph.metaarray import MetaArray
 import acq4.pyqtgraph as pg
 import numpy as np
-import CtrlTemplate
+from . import CtrlTemplate
 from acq4.pyqtgraph.Qt import QtGui, QtCore
 
 

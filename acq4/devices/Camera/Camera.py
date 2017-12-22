@@ -11,15 +11,15 @@ from PyQt4 import QtCore
 import time
 from numpy import *
 from acq4.util.metaarray import *
-from taskGUI import *
-from deviceGUI import *
+from .taskGUI import *
+from .deviceGUI import *
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 from acq4.util import imaging
 from acq4.pyqtgraph import Vector, SRTTransform3D
 
-from CameraInterface import CameraInterface
+from .CameraInterface import CameraInterface
 
 class Camera(DAQGeneric, OptomechDevice):
     """Generic camera device class. All cameras should extend from this interface.

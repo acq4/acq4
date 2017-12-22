@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.modules.Module import *
-from CameraWindow import CameraWindow
+from .CameraWindow import CameraWindow
 import os
 from PyQt4 import QtGui
 

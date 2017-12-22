@@ -1,2 +1,2 @@
 from __future__ import print_function
-from MapAnalyzer import MapAnalyzer
+from .MapAnalyzer import MapAnalyzer

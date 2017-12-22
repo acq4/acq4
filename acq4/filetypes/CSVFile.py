@@ -3,7 +3,7 @@ from __future__ import print_function
 
 from acq4.util.metaarray import MetaArray as MA
 from numpy import ndarray, loadtxt
-from FileType import *
+from .FileType import *
 
 #class MetaArray(FileType):
     #@staticmethod

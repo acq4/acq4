@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from PyQt4 import QtCore, QtGui
-import atlasCtrlTemplate
+from . import atlasCtrlTemplate
 import acq4.pyqtgraph as pg
 from acq4.util.debug import Profiler
 

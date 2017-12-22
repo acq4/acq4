@@ -7,7 +7,7 @@ import acq4.pyqtgraph as pg
 from acq4.util.metaarray import MetaArray
 import numpy as np
 
-import ctrlTemplate
+from . import ctrlTemplate
 
 class AtlasBuilder(AnalysisModule):
     def __init__(self, host):

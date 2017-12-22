@@ -11,9 +11,9 @@ import acq4.util.ColorMapper as ColorMapper
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 from acq4.util.HelpfulException import HelpfulException
-from Scan import Scan, loadScanSequence
-from DBCtrl import DBCtrl
-from ScatterPlotter import ScatterPlotter
+from .Scan import Scan, loadScanSequence
+from .DBCtrl import DBCtrl
+from .ScatterPlotter import ScatterPlotter
 from acq4.util.Canvas import items
 import acq4.util.Canvas as Canvas
 import acq4.util.functions as fn

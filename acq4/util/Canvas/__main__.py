@@ -2,7 +2,7 @@ from __future__ import print_function
 
 
 if __name__ == '__main__':
-    import items
+    from . import items
     app = QtGui.QApplication([])
     w1 = QtGui.QMainWindow()
     c1 = Canvas(name="Canvas1")

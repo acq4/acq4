@@ -1,2 +1,2 @@
 from __future__ import print_function
-from Scanner import *
+from .Scanner import *

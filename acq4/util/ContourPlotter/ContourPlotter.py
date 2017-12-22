@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.widgets.SpinBox import SpinBox
 from acq4.pyqtgraph.widgets.ColorButton import ColorButton
-import ContourPlotterTemplate
+from . import ContourPlotterTemplate
 
 
 
