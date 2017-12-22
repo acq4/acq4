@@ -42,7 +42,7 @@ class ForkedIterator(m.Process):
                 raise Exception("Remote process has ended (and pipe is empty). (exit code %d)" % self.exitcode)
         except IOError as (errno, strerror):
             if errno == 4:   ## blocking read was interrupted; try again.
-                return self.next()
+                return next(self)
             else:
                 raise
         if isinstance(x, StopRemoteIteration):

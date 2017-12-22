@@ -1450,10 +1450,10 @@ class IVCurve(AnalysisModule):
         our lists, and a clearflag. Used to overplot different data.
         """
         n = self.keep_analysis_count
-        pen = self.color_list.next()
+        pen = next(self.color_list)
         filledbrush = pen
         emptybrush = None
-        symbol = self.symbol_list.next()
+        symbol = next(self.symbol_list)
         if n == 0:
             clearFlag = True
         else:

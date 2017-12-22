@@ -722,7 +722,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.bkgdpos = None
             self.timepos = 0
             self.roilist = []
-            firstline = csvfile.next()
+            firstline = next(csvfile)
             allcsvdata.append(firstline)
         return allcsvdata
 

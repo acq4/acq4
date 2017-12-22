@@ -238,7 +238,7 @@ class SqliteDatabase:
 
     def _queryToDict(self, q):
         res = []
-        while q.next():
+        while next(q):
             res.append(self._readRecord(q.record()))
         return res
 

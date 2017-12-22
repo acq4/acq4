@@ -403,7 +403,7 @@ def mkData(v, power=1, noise=5e-12, length=5e-3, rate=400e3, downsample=40):
 def mkDataSet(psp, **kargs):
     ## Make an array of data sets from an array of PSP parameters
     it = np.ndindex(psp.shape[:-1])
-    firstInd = it.next()
+    firstInd = next(it)
     first = psp[firstInd]
     x, sample = mkData(first, **kargs)
     data = np.empty(psp.shape[:-1] + sample.shape)

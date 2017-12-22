@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+from six.moves import reduce
+
 from acq4.modules.Module import *
 from TaskRunnerTemplate import *
 from PyQt4 import QtGui, QtCore

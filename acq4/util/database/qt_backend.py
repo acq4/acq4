@@ -467,7 +467,7 @@ class SqliteDatabase:
     def _queryToDict(self, q):
         prof = debug.Profiler("_queryToDict", disabled=True)
         res = []
-        while q.next():
+        while next(q):
             res.append(self._readRecord(q.record()))
         return res
 

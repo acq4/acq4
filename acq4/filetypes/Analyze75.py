@@ -31,6 +31,7 @@ class Analyze75(FileType):
 import numpy as np
 import os
 import six
+from six.moves import reduce
 
 dataTypes = {
     0: None,
