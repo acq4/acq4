@@ -12,6 +12,7 @@ import devTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
+import six
 
 
 class SutterMP285(Device, OptomechDevice):
@@ -34,7 +35,7 @@ class SutterMP285(Device, OptomechDevice):
 
         self.scale = config.pop('scale', (1, 1, 1))
         # Interpret "COM1" as port 0
-        if isinstance(self.port, basestring) and self.port.lower()[:3] == 'com':
+        if isinstance(self.port, six.string_types) and self.port.lower()[:3] == 'com':
             self.port = int(self.port[3:]) - 1
         
         self.baud = config.get('baud', 9600)   ## 9600 is probably factory default

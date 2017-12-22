@@ -22,6 +22,7 @@ from acq4.util.debug import *
 #from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 from StimParamSet import StimParamSet
 from SeqParamSet import SequenceParamSet
+import six
 
 import acq4.util.units as units
 
@@ -303,7 +304,7 @@ class StimGenerator(QtGui.QWidget):
                 #self.ui.advancedBtn.setChecked(True)
                 self.ui.functionText.setPlainText(state['function'])
             if 'params' in state:
-                if isinstance(state['params'], basestring):  ## for backward compatibility
+                if isinstance(state['params'], six.string_types):  ## for backward compatibility
                     state['params'] = seqListParse(state['params'])
                 #self.ui.advancedBtn.setChecked(True)
                 #self.ui.paramText.setPlainText(state['params'])

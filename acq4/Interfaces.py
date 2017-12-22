@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import six
+
 import weakref
 from acq4.util.Mutex import *
 
@@ -21,7 +24,7 @@ class InterfaceDirectory(QtCore.QObject):
         with self.lock:
             #self.objList[name] = obj
         
-            if isinstance(types, basestring):
+            if isinstance(types, six.string_types):
                 types = [types]
             for t in types:
                 if t in self.typeList and name in self.typeList[t] and obj is not self.typeList[t][name]:
@@ -87,7 +90,7 @@ class InterfaceDirectory(QtCore.QObject):
             if types is None:
                 types = self.typeList.keys()
                 #return dict([(k, dict(v)) for k,v in self.typeList.iteritems()])
-            elif isinstance(types, basestring):
+            elif isinstance(types, six.string_types):
                 return self.typeList.get(types, {}).keys()
                 
             ints = {}

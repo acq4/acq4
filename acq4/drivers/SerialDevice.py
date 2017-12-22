@@ -1,6 +1,9 @@
 import serial, time, sys
 import logging
 
+import six
+
+
 class TimeoutError(Exception):
     """Raised when a serial communication times out.
 
@@ -59,7 +62,7 @@ class SerialDevice(object):
         if sys.platform.startswith('win'):
             if isinstance(port, int):
                 port = 'com%d' % (port+1)
-            elif isinstance(port, basestring) and port.lower()[:3] == 'com':
+            elif isinstance(port, six.string_types) and port.lower()[:3] == 'com':
                 port = port.lower()
         return port
 

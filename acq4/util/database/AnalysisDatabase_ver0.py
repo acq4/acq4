@@ -7,6 +7,7 @@ import acq4.util.DataManager as DataManager
 import collections
 import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
+import six
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -71,7 +72,7 @@ class SqliteDatabase:
     def select(self, table, fields='*', sql='', toDict=True, toArray=False):
         """fields should be a list of field names"""
         if fields != '*':
-            if isinstance(fields, basestring):
+            if isinstance(fields, six.string_types):
                 fields = fields.split(',')
             qf = []
             for f in fields:
@@ -510,7 +511,7 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, basestring):
+                elif isinstance(v, six.string_types):
                     typ = 'text'
                 else:
                     typ = 'blob'

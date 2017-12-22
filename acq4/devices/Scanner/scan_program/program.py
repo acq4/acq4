@@ -2,6 +2,7 @@
 import numpy as np
 from collections import OrderedDict
 import importlib
+import six
 
 import acq4.pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
@@ -71,7 +72,7 @@ class ScanProgram:
         may also be used to install new component types at runtime.
         """
         ## called when "Add Control.." combo is changed
-        if isinstance(component, basestring):
+        if isinstance(component, six.string_types):
             component = COMPONENTS[component](self)
         
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)

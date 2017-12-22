@@ -12,6 +12,9 @@ function calling based on C header definitions.
 from ctypes import *
 import sys, os, platform
 
+import six
+
+
 def find_lib(name, paths=[], dirHints=[]):
     """Search through likely directories to find non-system dlls. Return the first filepath that is found. Currently only supported on Windows.
 
@@ -256,7 +259,7 @@ class CLibrary:
             ## apply pointers and arrays
             while len(mods) > 0:
                 m = mods.pop(0)
-                if isinstance(m, basestring):  ## pointer or reference
+                if isinstance(m, six.string_types):  ## pointer or reference
                     if m[0] == '*' or m[0] == '&':
                         for i in m:
                             cls = POINTER(cls)
@@ -379,7 +382,7 @@ class CFunction:
         """Return the ctype required for the specified argument.
         arg can be either an integer  or the name of the argument.
         """
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             arg = self.argInds[arg]
         return self.lib._ctype(self.sig[1][arg][1])
     

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import six
+
 from PyQt4 import QtCore, QtGui
 import modules
 import acq4.pyqtgraph.dockarea as dockarea
@@ -50,7 +53,7 @@ class AnalysisHost(QtGui.QMainWindow):
             if pos is None:
                 pos = ()
             #print d, pos
-            if isinstance(pos, basestring):
+            if isinstance(pos, six.string_types):
                 pos = (pos,)
             self.dockArea.addDock(d, *pos)
         self.elements = elems

@@ -7,6 +7,7 @@ import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
 import acq4.util.debug as debug
 from PyQt4 import QtCore
+import six
 import sqlite3
 
 class SqliteDatabase:
@@ -111,9 +112,9 @@ class SqliteDatabase:
         """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
-            #if isinstance(columns, basestring):
+            #if isinstance(columns, six.string_types):
                 #columns = columns.split(',')
-            if not isinstance(columns, basestring):
+            if not isinstance(columns, six.string_types):
                 qf = []
                 for f in columns:
                     if f == '*':
@@ -301,7 +302,7 @@ class SqliteDatabase:
         (see sqlite 'CREATE INDEX')
         """
         ine = "IF NOT EXISTS" if ifNotExist else ""
-        if isinstance(columns, basestring):
+        if isinstance(columns, six.string_types):
             columns = [columns]
         name = table + '__' + '_'.join(columns)
         colStr = quoteList(columns)
@@ -350,7 +351,7 @@ class SqliteDatabase:
         where = self._prepareData(table, where)[0]
         conds = []
         for k,v in where.iteritems():
-            if isinstance(v, basestring):
+            if isinstance(v, six.string_types):
                 conds.append('"%s"=\'%s\'' % (k, v))
             else:
                 conds.append('"%s"=%s' % (k,v))
@@ -594,7 +595,7 @@ class TableData:
         return arr
             
     def __getitem__array(self, arg):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             return self.data[arg]
         elif isinstance(arg, int):
             return collections.OrderedDict([(k, self.data[k][arg]) for k in self.columnNames()])
@@ -606,7 +607,7 @@ class TableData:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
             
     def __getitem__list(self, arg):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             return [d.get(arg, None) for d in self.data]
         elif isinstance(arg, int):
             return self.data[arg]
@@ -619,7 +620,7 @@ class TableData:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
         
     def __getitem__dict(self, arg):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             return self.data[arg]
         elif isinstance(arg, int):
             return collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()])
@@ -638,7 +639,7 @@ class TableData:
             self.data[arg] = val
 
     def __setitem__list(self, arg, val):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             if len(val) != len(self.data):
                 raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data)))
             for i, rec in enumerate(self.data):
@@ -652,7 +653,7 @@ class TableData:
             raise TypeError(type(arg))
         
     def __setitem__dict(self, arg, val):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             if len(val) != len(self.data[arg]):
                 raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data[arg])))
             self.data[arg] = val
@@ -667,7 +668,7 @@ class TableData:
 
     def _orderArgs(self, args):
         ## return args in (int, str) order
-        if isinstance(args[0], basestring):
+        if isinstance(args[0], six.string_types):
             return (args[1], args[0])
         else:
             return args
@@ -745,7 +746,7 @@ def parseColumnDefs(defs, keyOrder=None):
                 ret[k] = toDict(v)
             elif isinstance(v, dict):
                 ret[k] = v
-            elif isinstance(v, basestring):
+            elif isinstance(v, six.string_types):
                 ret[k] = {'Type': v}
             else:
                 raise Exception("Invalid column-list specification: %s" % str(defs))

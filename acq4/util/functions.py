@@ -12,6 +12,9 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 
 
 """
+
+import six
+
 import sys
 import os, re, math, time, threading, decimal
 from acq4.util.metaarray import *
@@ -2207,7 +2210,7 @@ def suggestDType(x, singleValue=False):
         return float
     elif isinstance(x, int) or isinstance(x, long):
         return int
-    #elif isinstance(x, basestring):  ## don't try to guess correct string length; use object instead.
+    #elif isinstance(x, six.string_types):  ## don't try to guess correct string length; use object instead.
         #return '<U%d' % len(x)
     else:
         return object

@@ -4,6 +4,7 @@ from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 import collections
 import numpy as np
+import six
 
 class OptomechDevice(object):
     """
@@ -132,7 +133,7 @@ class OptomechDevice(object):
                 self.__parent.sigGlobalSubdeviceTransformChanged.disconnect(self.__parentSubdeviceTransformChanged)
                 self.__parent.sigGlobalSubdeviceChanged.disconnect(self.__parentSubdeviceChanged)
                 self.__parent.sigGlobalSubdeviceListChanged.disconnect(self.__parentSubdeviceListChanged)
-            if isinstance(parent, basestring):
+            if isinstance(parent, six.string_types):
                 parent = self.__devManager.getDevice(parent)
             
             parent.sigGlobalTransformChanged.connect(self.__parentDeviceTransformChanged)
@@ -472,7 +473,7 @@ class OptomechDevice(object):
                 return None
             elif hasattr(dev, 'implements') and dev.implements('OptomechDevice'):
                 return dev
-            elif isinstance(dev, basestring):
+            elif isinstance(dev, six.string_types):
                 return self.__subdevices[dev]
             else:
                 raise Exception("Invalid argument: %s" % str(dev))
@@ -485,7 +486,7 @@ class OptomechDevice(object):
         if dev is None:
             dev = self.__subdevice
             return {self.name(): dev}
-        if isinstance(dev, basestring):
+        if isinstance(dev, six.string_types):
             return {self.name(): self.__subdevices[dev]}
             
     def setCurrentSubdevice(self, dev):

@@ -3,6 +3,7 @@ from PyQt4 import QtGui, QtCore
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.multiprocess as mp
+import six
 import time, os
 import acq4.util.Canvas as Canvas
 import collections
@@ -484,7 +485,7 @@ class Scan(QtCore.QObject):
         pen = pg.mkPen(pen)
         
         items = []
-        if isinstance(fh, basestring):
+        if isinstance(fh, six.string_types):
             fh = self.source()[fh]
         if fh.isDir():
             fh = self.dataModel.getClampFile(fh)

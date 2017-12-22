@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import six
+
 from DirTreeTemplate import Ui_Form
 from PyQt4 import QtGui,QtCore
 from acq4.util.debug import *
@@ -12,7 +15,7 @@ class DirTreeLoader(QtGui.QWidget):
         QtGui.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        if isinstance(baseDir, basestring):
+        if isinstance(baseDir, six.string_types):
             baseDir = DataManager.getDirHandle(baseDir, create=create)
         self.baseDir = baseDir
         self.currentFile = None

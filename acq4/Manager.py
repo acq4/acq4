@@ -14,6 +14,7 @@ The class is responsible for:
 
 import os, sys, gc
 
+import six
 import time, atexit, weakref
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.util.reload as reload
@@ -633,7 +634,7 @@ class Manager(QtCore.QObject):
             except TypeError:
                 pass
             
-        if isinstance(d, basestring):
+        if isinstance(d, six.string_types):
             self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DataManager.DirHandle):
             self.currentDir = d
@@ -675,7 +676,7 @@ class Manager(QtCore.QObject):
         Set the base directory for data storage. 
         """
         with self.lock:
-            if isinstance(d, basestring):
+            if isinstance(d, six.string_types):
                 self.baseDir = self.dirHandle(d, create=False)
             elif isinstance(d, DataManager.DirHandle):
                 self.baseDir = d
@@ -862,7 +863,7 @@ class Task:
 
     @staticmethod
     def getDevName(obj):
-        if isinstance(obj, basestring):
+        if isinstance(obj, six.string_types):
             return obj
         elif isinstance(obj, Device):
             return obj.name()

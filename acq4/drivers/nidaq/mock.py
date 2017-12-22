@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import six
 import sys, time, os
 import numpy as np
 import acq4.util.clibrary as clibrary
@@ -90,7 +91,7 @@ class MockNIDAQ:
             'chanperline': self.lib.Val_ChanPerLine,
             'chanforalllines': self.lib.Val_ChanForAllLines
         }
-        if isinstance(mode, basestring):
+        if isinstance(mode, six.string_types):
             mode = mode.lower()
             mode = modes.get(mode, None)
         return mode

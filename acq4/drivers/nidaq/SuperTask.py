@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import six
 import time
 from numpy import *
 import acq4.util.ptime as ptime  ## platform-independent precision timing
@@ -62,7 +63,7 @@ class SuperTask:
                 mode = self.daq.Val_RSE
             elif typ in ['di', 'do']:
                 mode = self.daq.Val_ChanPerLine
-        elif isinstance(mode, basestring):
+        elif isinstance(mode, six.string_types):
             # decide which modes are allowed for this channel
             if typ == 'ai':
                 allowed = ['RSE', 'NRSE', 'Diff', 'PseudoDiff']

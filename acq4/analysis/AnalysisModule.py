@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import six
+
 from PyQt4 import QtCore, QtGui
 import acq4.pyqtgraph as pg
 import acq4.util.FileLoader as FileLoader
@@ -67,7 +70,7 @@ class AnalysisModule(QtCore.QObject):
                 self._elements_[name] = Element(name, args=el)
             elif isinstance(el, dict):
                 self._elements_[name] = Element(name, args=el)
-            elif isinstance(el, basestring):
+            elif isinstance(el, six.string_types):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             

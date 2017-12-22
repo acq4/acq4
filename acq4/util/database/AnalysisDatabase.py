@@ -1,3 +1,5 @@
+import six
+
 from .database import *
 from acq4.util import DataManager
 from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
@@ -510,7 +512,7 @@ class AnalysisDatabase(SqliteDatabase):
         If no relationships are found, return None.
         """
         def strlower(x):  # convert strings to lower, everything else stays the same
-            if isinstance(x, basestring):
+            if isinstance(x, six.string_types):
                 return x.lower()
             return x
             
@@ -607,7 +609,7 @@ class AnalysisDatabase(SqliteDatabase):
         """
         if isinstance(dh, DataManager.DirHandle):
             typeName = self.dataModel().dirType(dh)
-        elif isinstance(dh, basestring):
+        elif isinstance(dh, six.string_types):
             typeName = dh
         else:
             raise TypeError(type(dh))
@@ -670,7 +672,7 @@ class AnalysisDatabase(SqliteDatabase):
                         allHandle = 0
                         for i in xrange(len(data)):
                             val = data[i][name]
-                            if val is None or isinstance(val, basestring):
+                            if val is None or isinstance(val, six.string_types):
                                 allStr += 1
                             elif val is None or isinstance(val, DataManager.FileHandle):
                                 allHandle += 1
@@ -687,7 +689,7 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, basestring):
+                elif isinstance(v, six.string_types):
                     typ = 'text'
                 elif isinstance(v, DataManager.FileHandle):
                     typ = 'file'

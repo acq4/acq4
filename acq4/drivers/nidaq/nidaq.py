@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import six
 import sys, re, types, ctypes, os, time
 import ctypes
 from numpy import *
@@ -155,7 +156,7 @@ class _NIDAQ:
             'chanperline': LIB.Val_ChanPerLine,
             'chanforalllines': LIB.Val_ChanForAllLines
         }
-        if isinstance(mode, basestring):
+        if isinstance(mode, six.string_types):
             mode = mode.lower()
             mode = modes.get(mode, None)
         return mode
@@ -433,7 +434,7 @@ class Task:
                 #mode = LIB.Val_RSE
             #elif typ in ['di', 'do']:
                 #mode = LIB.Val_ChanPerLine
-        #elif isinstance(mode, basestring):
+        #elif isinstance(mode, six.string_types):
             #modes = {
                 #'rse': LIB.Val_RSE,
                 #'nrse': LIB.Val_NRSE,

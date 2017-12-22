@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import six
+
 from PyQt4 import QtCore, QtGui
 from acq4.Manager import getManager
 import acq4.pyqtgraph.parametertree as parametertree
@@ -24,7 +27,7 @@ class InterfaceCombo(QtGui.QComboBox):
             self.setTypes(types)
         
     def setTypes(self, types):
-        if isinstance(types, basestring):
+        if isinstance(types, six.string_types):
             types = [types]
         self.types = types
         self.updateList()

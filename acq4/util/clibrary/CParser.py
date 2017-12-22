@@ -10,6 +10,9 @@ signatures from C files (preferrably header files).
 
 import sys, re, os
 
+import six
+
+
 __all__ = ['winDefs', 'CParser']
 
 
@@ -1066,7 +1069,7 @@ class CParser():
         ## declarations, but that should not be too difficult to implement..
         #print "Eval:", toks
         try:
-            if isinstance(toks, basestring):
+            if isinstance(toks, six.string_types):
                 #print "  as string"
                 val = self.eval(toks, None, self.defs['values'])
             elif toks.arrayValues != '':
@@ -1164,7 +1167,7 @@ class CParser():
             for t in fd:
                 typ = fd[t]
                 for k in typ:
-                    if isinstance(name, basestring):
+                    if isinstance(name, six.string_types):
                         if k == name:
                             res.append((f, t))
                     else:

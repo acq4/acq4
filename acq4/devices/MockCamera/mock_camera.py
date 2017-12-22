@@ -2,6 +2,7 @@
 from __future__ import with_statement
 from acq4.devices.Camera import Camera, CameraTask
 from PyQt4 import QtCore
+import six
 import time, sys, traceback
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
@@ -202,7 +203,7 @@ class MockCamera(Camera):
         if params is None:
             return self.paramRanges
         else:
-            if isinstance(params, basestring):
+            if isinstance(params, six.string_types):
                 return self.paramRanges[params]
                 
             out = OrderedDict()

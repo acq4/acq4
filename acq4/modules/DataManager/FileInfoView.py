@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import six
+
 from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
 from acq4.util.DataManager import DirHandle
@@ -102,7 +105,7 @@ class FileInfoView(QtGui.QWidget):
                 #s = configfile.genString(info[f])
             else:
                 s = str(info[f])
-                if isinstance(f, basestring) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
+                if isinstance(f, six.string_types) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
                     try:
                         t0 = file.parent().info()['__timestamp__']
                         dt = " [elapsed = %0.3f s]" % (info[f] - t0)

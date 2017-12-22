@@ -1,3 +1,6 @@
+import six
+
+
 """
 Deprecated class based on QtSql; new implementation uses builtin sqlite3 package.
 """
@@ -132,9 +135,9 @@ class SqliteDatabase:
         """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
-            #if isinstance(columns, basestring):
+            #if isinstance(columns, six.string_types):
                 #columns = columns.split(',')
-            if not isinstance(columns, basestring):
+            if not isinstance(columns, six.string_types):
                 qf = []
                 for f in columns:
                     if f == '*':
@@ -322,7 +325,7 @@ class SqliteDatabase:
         (see sqlite 'CREATE INDEX')
         """
         ine = "IF NOT EXISTS" if ifNotExist else ""
-        if isinstance(columns, basestring):
+        if isinstance(columns, six.string_types):
             columns = [columns]
         name = table + '__' + '_'.join(columns)
         colStr = quoteList(columns)
@@ -392,7 +395,7 @@ class SqliteDatabase:
         where = self._prepareData(table, where)[0]
         conds = []
         for k,v in where.iteritems():
-            if isinstance(v, basestring):
+            if isinstance(v, six.string_types):
                 conds.append('"%s"=\'%s\'' % (k, v))
             else:
                 conds.append('"%s"=%s' % (k,v))

@@ -18,7 +18,7 @@ class Analyze75(FileType):
         
     @classmethod
     def read(cls, fileHandle):
-        if isinstance(fileHandle, basestring):
+        if isinstance(fileHandle, six.string_types):
             fn = fileHandle
         else:
             fn = fileHandle.name()
@@ -30,6 +30,7 @@ class Analyze75(FileType):
 ## Function for reading NiFTI-1 and ANALYZE 7.5 image formats  (.nii and .hdr/.img files)
 import numpy as np
 import os
+import six
 
 dataTypes = {
     0: None,
@@ -213,7 +214,7 @@ def parseNii(headerFH, imgFile):
     shape = m.dim[1:m.dim[0]+1]
     size = (m.bitpix / 8) * reduce(lambda a,b: a*b, shape)
     dtype = niiDataTypes[m.datatype]
-    if isinstance(dtype, basestring):
+    if isinstance(dtype, six.string_types):
         raise Exception("Data type not supported: %s"% dtype)
     #print "Dimensions:", dim[0]
     #print "Data shape:", shape
