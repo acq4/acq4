@@ -1802,7 +1802,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
             t1, t2 = hits[i]
             
             ln = t2-t1
-            evData = data1[t1:t2]
+            evData = data1[int(t1):int(t2)]
             sum = evData.sum()
             if len(evData) == 0:
                 mask[i] = False

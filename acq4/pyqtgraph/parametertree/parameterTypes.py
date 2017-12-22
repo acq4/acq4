@@ -4,10 +4,11 @@ from .Parameter import Parameter, registerParameterType
 from .ParameterItem import ParameterItem
 from ..widgets.SpinBox import SpinBox
 from ..widgets.ColorButton import ColorButton
+from ..colormap import ColorMap
 #from ..widgets.GradientWidget import GradientWidget ## creates import loop
 from .. import pixmaps as pixmaps
 from .. import functions as fn
-import os
+import os, sys
 from ..pgcollections import OrderedDict
 
 class WidgetParameterItem(ParameterItem):
@@ -108,7 +109,7 @@ class WidgetParameterItem(ParameterItem):
                 if k in opts:
                     defs[k] = opts[k]
             if 'limits' in opts:
-                defs['bounds'] = opts['limits']
+                defs['min'], defs['max'] = opts['limits']
             w = SpinBox()
             w.setOpts(**defs)
             w.sigChanged = w.sigValueChanged
@@ -122,6 +123,7 @@ class WidgetParameterItem(ParameterItem):
             self.hideWidget = False
         elif t == 'str':
             w = QtGui.QLineEdit()
+            w.setStyleSheet('border: 0px')
             w.sigChanged = w.editingFinished
             w.value = lambda: asUnicode(w.text())
             w.setValue = lambda v: w.setText(asUnicode(v))
@@ -279,12 +281,15 @@ class WidgetParameterItem(ParameterItem):
         
         ## If widget is a SpinBox, pass options straight through
         if isinstance(self.widget, SpinBox):
+            # send only options supported by spinbox
+            sbOpts = {}
             if 'units' in opts and 'suffix' not in opts:
-                opts['suffix'] = opts['units']
-            self.widget.setOpts(**opts)
+                sbOpts['suffix'] = opts['units']
+            for k,v in opts.items():
+                if k in self.widget.opts:
+                    sbOpts[k] = v
+            self.widget.setOpts(**sbOpts)
             self.updateDisplayLabel()
-        
-        
         
             
 class EventProxy(QtCore.QObject):
@@ -295,8 +300,6 @@ class EventProxy(QtCore.QObject):
         
     def eventFilter(self, obj, ev):
         return self.callback(obj, ev)
-
-        
 
 
 class SimpleParameter(Parameter):
@@ -322,6 +325,26 @@ class SimpleParameter(Parameter):
         state = Parameter.saveState(self, *args, **kwds)
         state['value'] = fn.colorTuple(self.value())
         return state
+        
+    def _interpretValue(self, v):
+        fn = {
+            'int': int,
+            'float': float,
+            'bool': bool,
+            'str': asUnicode,
+            'color': self._interpColor,
+            'colormap': self._interpColormap,
+        }[self.opts['type']]
+        return fn(v)
+    
+    def _interpColor(self, v):
+        return fn.mkColor(v)
+    
+    def _interpColormap(self, v):
+        if not isinstance(v, ColorMap):
+            raise TypeError("Cannot set colormap parameter from object %r" % v)
+        return v
+            
         
     
 registerParameterType('int', SimpleParameter, override=True)

@@ -334,10 +334,15 @@ class CameraModuleInterface(QtCore.QObject):
         """
         return None
 
-    def takeImage(self):
+    def takeImage(self, closeShutter=None):
         """Request the imaging device to acquire a single frame.
+
+        The optional closeShutter argument is used to tell laser scanning devices whether
+        to close their shutter after imaging. Cameras can simply ignore this option.
         """
-        raise NotImplementedError()
+        # Note: this is a bit kludgy. 
+        # Would be nice to have a more natural way of handling this..
+        raise NotImplementedError(str(self))
 
     def quit(self):
         """Called when the interface is removed from the camera module or when
@@ -359,32 +364,6 @@ class PlotROI(pg.ROI):
     def __init__(self, pos, size):
         pg.ROI.__init__(self, pos, size=size, removable=True)
         self.addScaleHandle([1, 1], [0, 0])
-
-class RulerROI(pg.LineSegmentROI):
-    def paint(self, p, *args):
-        pg.LineSegmentROI.paint(self, p, *args)
-        h1 = self.handles[0]['item'].pos()
-        h2 = self.handles[1]['item'].pos()
-        p1 = p.transform().map(h1)
-        p2 = p.transform().map(h2)
-
-        vec = pg.Point(h2) - pg.Point(h1)
-        length = vec.length()
-        angle = vec.angle(pg.Point(1, 0))
-
-        pvec = p2 - p1
-        pvecT = pg.Point(pvec.y(), -pvec.x())
-        pos = 0.5 * (p1 + p2) + pvecT * 40 / pvecT.length()
-
-        p.resetTransform()
-
-        txt = pg.siFormat(length, suffix='m') + '\n%0.1f deg' % angle
-        p.drawText(QtCore.QRectF(pos.x()-50, pos.y()-50, 100, 100), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, txt)
-
-    def boundingRect(self):
-        r = pg.LineSegmentROI.boundingRect(self)
-        pxw = 50 * self.pixelLength(pg.Point([1, 0]))
-        return r.adjusted(-50, -50, 50, 50)
 
 
 class ROIPlotter(QtGui.QWidget):
@@ -471,7 +450,7 @@ class ROIPlotter(QtGui.QWidget):
             roi = pg.PolyLineROI(pts, closed=True, removable=True)
         elif roiType == 'ruler':
             pts = [center, center+pg.Point(size[0], size[1])]
-            roi = RulerROI(pts, removable=True)
+            roi = pg.graphicsItems.ROI.RulerROI(pts, removable=True)
         else:
             raise ValueError("Invalid ROI type %s" % roiType)
 
@@ -529,7 +508,7 @@ class ROIPlotter(QtGui.QWidget):
             self.lastPlotTime = now
             
         for r in self.ROIs:
-            if isinstance(r['roi'], RulerROI):
+            if isinstance(r['roi'], pg.graphicsItems.ROI.RulerROI):
                 continue
             d = r['roi'].getArrayRegion(frame.data(), imageItem, axes=(0,1))
             prof.mark('get array rgn')
@@ -754,12 +733,15 @@ class SequencerThread(Thread):
         prot = self.prot
         maxIter = prot['timelapseCount']
         interval = prot['timelapseInterval']
+        dev = self.prot['imager'].getDevice()
 
         depths = prot['zStackValues']
         iter = 0
         while True:
             start = time.time()
 
+            running = dev.isRunning()
+            dev.stop()
             self.holdImagerFocus(True)
             self.openShutter(True)   # don't toggle shutter between stack frames
             try:
@@ -784,6 +766,8 @@ class SequencerThread(Thread):
             finally:
                 self.openShutter(False)
                 self.holdImagerFocus(False)
+                if running:
+                    dev.start()
 
             iter += 1
             if maxIter == 0 or iter >= maxIter:
@@ -826,10 +810,17 @@ class SequencerThread(Thread):
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.
         """
-        imager = self.prot['imager'].getDevice().setFocusHolding(hold)
+        idev = self.prot['imager'].getDevice()
+        fdev = idev.getFocusDevice()
+        if fdev is None:
+            raise Exception("Device %s is not connected to a focus controller." % idev)
+        if hasattr(fdev, 'setHolding'):
+            fdev.setHolding(hold)
 
     def openShutter(self, open):
-        imager = self.prot['imager'].getDevice().openShutter(open)
+        idev = self.prot['imager'].getDevice()
+        if hasattr(idev, 'openShutter'):
+            idev.openShutter(open)
 
     def getFrame(self):
         # request next frame
@@ -837,13 +828,16 @@ class SequencerThread(Thread):
         with self.lock:
             # clear out any previously received frames
             self._frame = None
-        imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
 
-        # wait for frame to arrive
-        self.sleep(until='frame')
-        with self.lock:
-            frame = self._frame
-            self._frame = None
+        frame = imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
+
+        if frame is None:
+            # wait for frame to arrive by signal
+            # (camera and LSM imagers behave differently here; this behavior needs to be made consistent)
+            self.sleep(until='frame')
+            with self.lock:
+                frame = self._frame
+                self._frame = None
         return frame
 
     def recordFrame(self, frame, iter, depthIndex):

@@ -130,13 +130,6 @@ class PhotostimModule(AnalysisModule):
     def cameraModule(self):
         return self.ui.cameraModCombo.getSelectedObj()
         
-    def cameraDevice(self):
-        camMod = self.cameraModule()
-        if 'camDev' in camMod.config:
-            return camMod.config['camDev']
-        else:
-            return None
-
     def clampDevice(self):
         return str(self.ui.clampDevCombo.currentText())
         
@@ -167,10 +160,6 @@ class Task:
         Task.z += 1
         
     def addFrame(self, frame):
-        camDev = self.ui().cameraDevice()
-        if camDev is None:
-            print("Warning: No camera module selected in uncaging analysis dock.")
-            return  
         clampDev = self.ui().clampDevice()
         scannerDev = self.ui().scannerDevice()
         data = {

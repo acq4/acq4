@@ -311,10 +311,6 @@ class OptomechDevice(object):
         with self.__lock:
             self.__transform = pg.SRTTransform3D(tr)
             self.invalidateCachedTransforms()
-        #print "setDeviceTransform", self
-        #print "   -> emit sigTransformChanged"
-        #import traceback
-        #traceback.print_stack()
         
         self.sigTransformChanged.emit(self)
 
@@ -542,7 +538,29 @@ class OptomechDevice(object):
         devs = list(state.keys())
         devs.sort()
         return tuple([dev + "__" + state[dev] for dev in devs])
-        
+
+    def getFocusDepth(self):
+        return self.mapToGlobal([0, 0, 0])[2]
+
+    def setFocusDepth(self, depth, speed='slow'):
+        dev = self.getFocusDevice()
+        if dev is None:
+            raise Exception("Device %s is not connected to a focus controller." % dev)
+        dz = depth - self.getFocusDepth()
+        dpos = dev.globalPosition()
+        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2]+dz], speed)
+
+    def getFocusDevice(self):
+        """Return the device that provides focus capabilities for this device.
+        """
+        dev = self.parentDevice()
+        from .Stage import Stage
+        while dev is not None:
+            if isinstance(dev, Stage) and dev.capabilities()['setPos'][2]:
+                return dev
+            dev = dev.parentDevice()
+        return None
+
         
 class DeviceTreeItemGroup(pg.ItemGroup):
     """

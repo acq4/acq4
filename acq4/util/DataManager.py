@@ -20,7 +20,7 @@ from acq4.util.functions import strncmp
 from acq4.util.configfile import *
 import time
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import SignalProxy, ProgressDialog
+from acq4.pyqtgraph import SignalProxy, BusyCursor
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
@@ -207,10 +207,25 @@ class FileHandle(QtCore.QObject):
             if relativeTo == self:
                 path = ''
             elif relativeTo is not None:
-                rpath = relativeTo.name()
-                if not self.isGrandchildOf(relativeTo):
-                    raise Exception("Path %s is not child of %s" % (path, rpath))
-                return path[len(os.path.join(rpath, '')):]
+                commonParent = relativeTo
+                pcount = 0
+                while True:
+                    if self is commonParent or self.isGrandchildOf(commonParent):
+                        break
+                    else:
+                        pcount += 1
+                        commonParent = commonParent.parent()
+                        if commonParent is None:
+                            raise Exception("No relative path found from %s to %s." % (relativeTo.name(), self.name()))
+                rpath = path[len(os.path.join(commonParent.name(), '')):]
+                if pcount == 0:
+                    return rpath
+                else:
+                    ppath = os.path.join(*(['..'] * pcount))
+                    if rpath != '':
+                        return os.path.join(ppath, rpath)
+                    else:
+                        return ppath
             return path
         
     def shortName(self):
@@ -404,7 +419,7 @@ class FileHandle(QtCore.QObject):
         """Return true if this files is anywhere in the tree beneath grandparent."""
         gname = os.path.join(abspath(grandparent.name()), '')
         return abspath(self.name())[:len(gname)] == gname
-    
+
     def write(self, data, **kwargs):
         self.parent().writeFile(data, self.shortName(), **kwargs)
         
@@ -594,11 +609,10 @@ class DirHandle(FileHandle):
         
         if sortMode == 'date':
             ## Sort files by creation time
-            with ProgressDialog("Reading directory data...", maximum=len(files), cancelText=None) as dlg:
+            with BusyCursor():
                 for f in files:
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
-                    dlg += 1
             files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             ## show directories first when sorting alphabetically.

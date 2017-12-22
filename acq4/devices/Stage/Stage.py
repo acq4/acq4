@@ -22,7 +22,7 @@ class Stage(Device, OptomechDevice):
 
     sigPositionChanged = QtCore.Signal(object)
     sigLimitsChanged = QtCore.Signal(object)
-    sigSwitchChanged = QtCore.Signal(object, object)
+    sigSwitchChanged = QtCore.Signal(object, object)  # self, {switch_name: value, ...}
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -428,7 +428,7 @@ class MoveFuture(object):
         return None
         
     def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, been interrupted, or the
+        """Block until the move has completed, has been interrupted, or the
         specified timeout has elapsed.
 
         If *updates* is True, process Qt events while waiting.

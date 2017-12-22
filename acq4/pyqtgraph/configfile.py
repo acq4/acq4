@@ -144,7 +144,6 @@ def parseString(lines, start=0):
             local['QtCore'] = QtCore
             local['ColorMap'] = ColorMap
             local['datetime'] = datetime
-            
             # Needed for reconstructing numpy arrays
             local['array'] = numpy.array
             for dtype in ['int8', 'uint8', 

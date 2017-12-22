@@ -29,6 +29,7 @@ import getopt, glob
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
 from .util.HelpfulException import HelpfulException
+from . import __version__
 
 
 ### All other modules can use this function to get the manager instance
@@ -83,6 +84,9 @@ class Manager(QtCore.QObject):
         try:
             if Manager.CREATED:
                 raise Exception("Manager object already created!")
+
+            Manager.CREATED = True
+            Manager.single = self
             
             self.logWindow = debug.createLogWindow(self)
             
@@ -146,10 +150,7 @@ class Manager(QtCore.QObject):
             self.configDir = os.path.dirname(configFile)
             self.readConfig(configFile)
             
-            logMsg('ACQ4 started.', importance=9)
-            
-            Manager.CREATED = True
-            Manager.single = self
+            logMsg('ACQ4 version %s started.' % __version__, importance=9)
             
             ## Act on options if they were specified..
             try:
@@ -177,6 +178,9 @@ class Manager(QtCore.QObject):
                 
         except:
             printExc("Error while configuring Manager:")
+            Manager.CREATED = False
+            Manager.single = None
+            
         finally:
             if len(self.modules) == 0:
                 self.quit()
@@ -707,7 +711,7 @@ class Manager(QtCore.QObject):
         if self.taskLock.tryLock(10e3):
             return True
         else:
-            raise Exception("Times out waiting for task reservation system")
+            raise Exception("Timed out waiting for task reservation system")
         
     def unlockReserv(self):
         """Unlock reservation system"""

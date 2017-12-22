@@ -10,11 +10,13 @@ Procedure for unit-testing with images:
 
        $ PYQTGRAPH_AUDIT=1 python pyqtgraph/graphicsItems/tests/test_PlotCurveItem.py
 
-   Any failing tests will
-   display the test results, standard image, and the differences between the
-   two. If the test result is bad, then press (f)ail. If the test result is
-   good, then press (p)ass and the new image will be saved to the test-data
-   directory.
+   Any failing tests will display the test results, standard image, and the
+   differences between the two. If the test result is bad, then press (f)ail.
+   If the test result is good, then press (p)ass and the new image will be
+   saved to the test-data directory.
+   
+   To check all test results regardless of whether the test failed, set the
+   environment variable PYQTGRAPH_AUDIT_ALL=1.
 
 3. After adding or changing test images, create a new commit:
 
@@ -42,7 +44,7 @@ Procedure for unit-testing with images:
 # pyqtgraph should be tested against. When adding or changing test images,
 # create and push a new tag and update this variable. To test locally, begin
 # by creating the tag in your ~/.pyqtgraph/test-data repository.
-testDataTag = 'test-data-6'
+testDataTag = 'test-data-7'
 
 
 import time
@@ -59,7 +61,7 @@ if sys.version[0] >= '3':
 else:
     import httplib
     import urllib
-from ..Qt import QtGui, QtCore, QtTest
+from ..Qt import QtGui, QtCore, QtTest, QT_LIB
 from .. import functions as fn
 from .. import GraphicsLayoutWidget
 from .. import ImageItem, TextItem
@@ -162,6 +164,8 @@ def assertImageApproved(image, standardFile, message=None, **kwargs):
 
     # If the test image does not match, then we go to audit if requested.
     try:
+        if stdImage is None:
+            raise Exception("No reference image saved for this test.")
         if image.shape[2] != stdImage.shape[2]:
             raise Exception("Test result has different channel count than standard image"
                             "(%d vs %d)" % (image.shape[2], stdImage.shape[2]))
@@ -212,7 +216,7 @@ def assertImageApproved(image, standardFile, message=None, **kwargs):
 
 
 def assertImageMatch(im1, im2, minCorr=None, pxThreshold=50.,
-                       pxCount=0, maxPxDiff=None, avgPxDiff=None,
+                       pxCount=-1, maxPxDiff=None, avgPxDiff=None,
                        imgDiff=None):
     """Check that two images match.
 
@@ -234,7 +238,8 @@ def assertImageMatch(im1, im2, minCorr=None, pxThreshold=50.,
     pxThreshold : float
         Minimum value difference at which two pixels are considered different
     pxCount : int or None
-        Maximum number of pixels that may differ
+        Maximum number of pixels that may differ. Default is 0 for Qt4 and 
+        1% of image size for Qt5.
     maxPxDiff : float or None
         Maximum allowed difference between pixels
     avgPxDiff : float or None
@@ -247,6 +252,14 @@ def assertImageMatch(im1, im2, minCorr=None, pxThreshold=50.,
     assert im1.shape[2] == 4
     assert im1.dtype == im2.dtype
 
+    if pxCount == -1:
+        if QT_LIB == 'PyQt5':
+            # Qt5 generates slightly different results; relax the tolerance
+            # until test images are updated.
+            pxCount = int(im1.shape[0] * im1.shape[1] * 0.01)
+        else:
+            pxCount = 0
+    
     diff = im1.astype(float) - im2.astype(float)
     if imgDiff is not None:
         assert np.abs(diff).sum() <= imgDiff

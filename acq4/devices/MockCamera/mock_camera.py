@@ -15,14 +15,28 @@ import scipy
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
 
+
 class MockCamera(Camera):
     
-    def __init__(self, *args, **kargs):
+    def __init__(self, manager, config, name):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
         self.ringSize = 100
         self.frameId = 0
-        self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
-        self.bgData = mandelbrot(w=4000, maxIter=60).astype(np.float32)
+        self.noise = np.random.normal(size=10000000, loc=100, scale=10)  ## pre-generate noise for use in images
+        
+        if 'images' in config:
+            self.bgData = {}
+            self.bgInfo = {}
+            for obj, filename in config['images'].items():
+                file = manager.fileHandle(filename)
+                ma = file.read()
+                self.bgData[obj] = ma.asarray()
+                self.bgInfo[obj] = file.info().deepcopy()
+                self.bgInfo[obj]['depths'] = ma.xvals(0)
+        else:
+            self.bgData = mandelbrot(w=4000, maxIter=60).astype(np.float32)
+            self.bgInfo = None
+        
         self.background = None
         
         self.params = OrderedDict([
@@ -68,7 +82,7 @@ class MockCamera(Camera):
         sig[sig<0] = 0
         self.signal = sig
         
-        Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
+        Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
         self.lastIndex = None
@@ -79,8 +93,8 @@ class MockCamera(Camera):
         
         ## generate list of mock cells
         cells = np.zeros(20, dtype=[('x', float), ('y', float), ('size', float), ('value', float), ('rate', float), ('intensity', float), ('decayTau', float)])
-        cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=100e-6)
-        cells['y'] = np.random.normal(size=cells.shape, scale=100e-6)
+        cells['x'] = np.random.normal(size=cells.shape, scale=100e-6, loc=-1.5e-3)
+        cells['y'] = np.random.normal(size=cells.shape, scale=100e-6, loc=4.4e-3)
         cells['size'] = np.random.normal(size=cells.shape, scale=2e-6, loc=10e-6)
         cells['rate'] = np.random.lognormal(size=cells.shape, mean=0, sigma=1) * 1.0
         cells['intensity'] = np.random.uniform(size=cells.shape, low=1000, high=10000)
@@ -105,29 +119,71 @@ class MockCamera(Camera):
         s = np.random.randint(len(self.noise)-n)
         d = self.noise[s:s+n]
         d.shape = shape
-        return d.copy()
+        return np.abs(d)
         
     def getBackground(self):
         if self.background is None:
             w,h = self.params['sensorSize']
-            
             tr = self.globalTransform()
-            tr = pg.SRTTransform(tr)
-            m = QtGui.QTransform()
-            m.scale(3e6, 3e6)
-            m.translate(0.0005, 0.0005)
-            tr = tr * m
             
-            origin = tr.map(pg.Point(0,0))
-            x = (tr.map(pg.Point(1,0)) - origin)
-            y = (tr.map(pg.Point(0,1)) - origin)
-            origin = np.array([origin.x(), origin.y()])
-            x = np.array([x.x(), x.y()])
-            y = np.array([y.x(), y.y()])
-            
-            ## slice fractal from pre-rendered data
-            vectors = (x,y)
-            self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1), order=1)
+            if isinstance(self.bgData, dict):
+                # select data based on objective
+                obj = self.getObjective()
+                data = self.bgData[obj]
+                info = self.bgInfo[obj]
+                px = info['pixelSize']
+                pz = info['depths'][1] - info['depths'][0]
+                
+                m = pg.QtGui.QMatrix4x4()
+                pos = info['transform']['pos']
+                m.scale(1/px[0], 1/px[1], 1/pz)
+                m.translate(-pos[0], -pos[1], -info['depths'][0])
+                
+                tr2 = m * tr
+                origin = tr2.map(pg.Vector(0, 0, 0))
+                #print(origin)
+                origin = [int(origin.x()), int(origin.y()), origin.z()]
+                
+                ## slice data
+                camRect = QtCore.QRect(origin[0], origin[1], w, h)
+                dataRect = QtCore.QRect(0, 0, data.shape[1], data.shape[2])
+                overlap = camRect.intersected(dataRect)
+                tl = overlap.topLeft() - camRect.topLeft()
+                
+                z = origin[2]
+                z1 = np.floor(z)
+                z2 = np.ceil(z)
+                s = (z-z1) / (z2-z1)
+                z1 = int(np.clip(z1, 0, data.shape[0]-1))
+                z2 = int(np.clip(z2, 0, data.shape[0]-1))
+                src1 = data[z1, overlap.left():overlap.left()+overlap.width(), overlap.top():overlap.top()+overlap.height()]
+                src2 = data[z2, overlap.left():overlap.left()+overlap.width(), overlap.top():overlap.top()+overlap.height()]
+                src = src1 * (1-s) + src2 * s
+                
+                bg = np.empty((w, h), dtype=data.dtype)
+                bg[:] = 100
+                bg[tl.x():tl.x()+overlap.width(), tl.y():tl.y()+overlap.height()] = src
+                self.background = bg
+                #vectors = ([1, 0, 0], [0, 1, 0])
+                #self.background = pg.affineSlice(data, (w,h), origin, vectors, (1, 2, 0), order=1)
+            else:
+                tr = pg.SRTTransform(tr)
+                m = QtGui.QTransform()
+                
+                m.scale(3e6, 3e6)
+                m.translate(0.0005, 0.0005)
+                tr = tr * m
+                
+                origin = tr.map(pg.Point(0,0))
+                x = (tr.map(pg.Point(1,0)) - origin)
+                y = (tr.map(pg.Point(0,1)) - origin)
+                origin = np.array([origin.x(), origin.y()])
+                x = np.array([x.x(), x.y()])
+                y = np.array([y.x(), y.y()])
+                
+                ## slice fractal from pre-rendered data
+                vectors = (x,y)
+                self.background = pg.affineSlice(self.bgData, (w,h), origin, vectors, (0,1), order=1)
             
         return self.background
         
@@ -144,8 +200,9 @@ class MockCamera(Camera):
         
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
-        now = ptime.time()
+        prof = pg.debug.Profiler(disabled=True)
         
+        now = ptime.time()
         dt = now - self.lastFrameTime
         exp = self.getParam('exposure')
         bin = self.getParam('binning')
@@ -153,25 +210,34 @@ class MockCamera(Camera):
         nf = int(dt * fps)
         if nf == 0:
             return []
+        self.lastFrameTime = now + exp
         
+        prof()
         region = self.getParam('region') 
+        prof()
         bg = self.getBackground()[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
+        prof()
+        
+        # Start with noise
+        shape = region[2:]
+        data = self.getNoise(shape)
+        #data = np.zeros(shape, dtype=float)
+        prof()
+        
+        # Add specimen
+        data += bg * (exp * 10)
+        prof()
         
         ## update cells
         spikes = np.random.poisson(min(dt, 0.4) * self.cells['rate'])
         self.cells['value'] *= np.exp(-dt / self.cells['decayTau'])
         self.cells['value'] = np.clip(self.cells['value'] + spikes * 0.2, 0, 1)
-        shape = region[2:]
-        self.lastFrameTime = now + exp
-        data = self.getNoise(shape)
         data[data<0] = 0
         
-        data += bg * (exp*1000)
-        
-        ## draw cells
+        # draw cells
         px = (self.pixelVectors()[0]**2).sum() ** 0.5
         
-        ## Generate transform that maps grom global coordinates to image coordinates
+        # Generate transform that maps grom global coordinates to image coordinates
         cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
         # note we use binning=(1,1) here because the image is downsampled later.
         frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
@@ -186,14 +252,19 @@ class MockCamera(Camera):
             val = cell['intensity'] * cell['value'] * self.getParam('exposure')
             data[max(0,start[0]):max(0,stop[0]), max(0,start[1]):max(0,stop[1])] += val
         
-        data = fn.downsample(data, bin[0], axis=0)
-        data = fn.downsample(data, bin[1], axis=1)
+        # Binning
+        if bin[0] > 1:
+            data = fn.downsample(data, bin[0], axis=0)
+        if bin[1] > 1:
+            data = fn.downsample(data, bin[1], axis=1)
         data = data.astype(np.uint16)
+        prof()
         
         self.frameId += 1
         frames = []
         for i in range(nf):
             frames.append({'data': data, 'time': now + (i / fps), 'id': self.frameId})
+        prof()
         return frames
             
                 

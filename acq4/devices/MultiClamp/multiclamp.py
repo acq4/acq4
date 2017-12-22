@@ -244,6 +244,9 @@ class MultiClamp(Device):
             scale = 1.0 / s
             #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
+
+    def autoPipetteOffset(self):
+        self.mc.autoPipetteOffset()
         
     def listSignals(self, mode):
         return self.mc.listSignals(mode)

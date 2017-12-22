@@ -739,7 +739,7 @@ class RegionLabeler(Node):
             if len(m) == 0:
                 rgn = ''
             else:
-                rgn = names[m[0]]
+                rgn = names[int(m[0])]
             output[i] = tuple(events[i]) + (rgn,)
         
         return {'output': output}

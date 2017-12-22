@@ -4,7 +4,7 @@ PyQtGraph - Scientific Graphics and GUI Library for Python
 www.pyqtgraph.org
 """
 
-__version__ = '0.9.10'
+__version__ = '0.10.0'
 
 ### import all the goodies and add some helper functions for easy CLI use
 
@@ -304,7 +304,10 @@ def cleanup():
     ## ALL QGraphicsItems must have a scene before they are deleted.
     ## This is potentially very expensive, but preferred over crashing.
     ## Note: this appears to be fixed in PySide as of 2012.12, but it should be left in for a while longer..
-    if QtGui.QApplication.instance() is None:
+    app = QtGui.QApplication.instance()
+    if app is None or not isinstance(app, QtGui.QApplication):
+        # app was never constructed is already deleted or is an
+        # QCoreApplication/QGuiApplication and not a full QApplication
         return
     import gc
     s = QtGui.QGraphicsScene()

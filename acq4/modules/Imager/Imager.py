@@ -233,7 +233,7 @@ class Imager(Module):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
         self.win.show()
-        self.win.setWindowTitle('Multiphoton Imager V 1.01')
+        self.win.setWindowTitle('Multiphoton Imager')
         self.win.resize(500, 900) # make the window big enough to use on a large monitor...
 
         self.w1 = QtGui.QSplitter() # divide l, r
@@ -331,12 +331,11 @@ class Imager(Module):
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get('detectors', [config.get('detector')])
         
-        self.attenuatorDev = self.manager.getDevice(config['attenuator'][0])
-        self.attenuatorChannel = config['attenuator'][1]
-        
         self.laserMonitor = QtCore.QTimer()
         self.laserMonitor.timeout.connect(self.updateLaserInfo)
-        self.laserMonitor.start(3000)
+        ival = self.config.get('powerCheckInterval', 3.0)
+        if ival is not False:
+            self.laserMonitor.start(ival*1000)
         
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
@@ -771,13 +770,22 @@ class Imager(Module):
         self.takeImage()
         
     def startVideoClicked(self, mode):
+        self.start(mode)
+
+    def stopVideoClicked(self):
+        self.stop()
+
+    def isRunning(self):
+        return self.imagingThread.isRunning()
+
+    def start(self, mode=None):
         if mode is not None:
             self.loadModeSettings(VideoModes[mode])
         self.updateImagingProtocol()
         self.imagingCtrl.acquisitionStarted()
         self.imagingThread.startVideo()
 
-    def stopVideoClicked(self):
+    def stop(self):
         self.imagingThread.stopVideo()
 
     def videoStopped(self):
@@ -818,11 +826,9 @@ class Imager(Module):
     def setFocusDepth(self, depth):
         return self.scannerDev.setFocusDepth(depth)
 
-    def setFocusHolding(self, hold):
-        dev = self.scannerDev.getFocusDevice()
-        if hasattr(dev, 'setHolding'):
-            dev.setHolding(hold)
-        
+    def getFocusDevice(self):
+        return self.scannerDev.getFocusDevice()
+
     def takeImage(self, allowBlanking=True):
         """
         Take an image using the scanning system and PMT, and return with the data.
@@ -868,9 +874,12 @@ class Imager(Module):
         duration = float(samples) / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
-        pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
-        pcell[:] = scanParams['Pockels']
-        pcell[-1] = 0
+        laserCmd = {'shutterMode': 'open'}
+        if self.laserDev.hasPCell:
+            pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
+            pcell[:] = scanParams['Pockels']
+            pcell[-1] = 0
+            laserCmd['pCell'] = {'command': pcell}
 
         # Look up device names
         pdDevice, pdChannel = scanParams['Photodetector']
@@ -890,10 +899,7 @@ class Imager(Module):
                 'yCommand' : vscan[:, 1],
                 'program': program, 
                 },
-            self.laserDev.name(): {
-                'pCell': {'command': pcell},
-                'shutterMode': 'open',
-                },
+            self.laserDev.name(): laserCmd,
             pdDevice: {
                 pdChannel: {'record': True},
             },

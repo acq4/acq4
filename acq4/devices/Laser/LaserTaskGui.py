@@ -84,7 +84,7 @@ class LaserTaskGui(DAQGenericTaskGui):
             
         ## catch self.powerWidget.sigDataChanged and connect it to functions that calculate and plot raw shutter and qswitch traces
         self.powerWidget.sigDataChanged.connect(self.powerCmdChanged)
-        self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
+        self.ui.checkPowerBtn.clicked.connect(lambda: self.dev.outputPower(forceUpdate=True))
         self.dev.sigOutputPowerChanged.connect(self.laserPowerChanged)
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         
