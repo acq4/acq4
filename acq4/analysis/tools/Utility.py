@@ -307,7 +307,7 @@ def long_Eval(line):
             continue
         if (c is ',' or c is '}') and colonFound and not inpunct and not inquote: # separator is ','
             r = eval('{%s}' % sp)
-            u[r.keys()[0]] = r[r.keys()[0]]
+            u[list(r.keys())[0]] = r[list(r.keys())[0]]
             colonFound = False
             sp = ''
             continue

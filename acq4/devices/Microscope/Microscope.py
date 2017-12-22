@@ -55,7 +55,7 @@ class Microscope(Device, OptomechDevice):
         ## Keep track of the objective currently in use for each position
         ## Format is: { switchPosition1: objective1,  ... }
         self.selectedObjectives = collections.OrderedDict(
-            [(i, self.objectives[i].values()[0]) for i in self.objectives]
+            [(i, list(self.objectives[i].values())[0]) for i in self.objectives]
         )
         for obj in self.selectedObjectives.values():
             self.addSubdevice(obj)
@@ -347,7 +347,7 @@ class ScopeGUI(QtGui.QWidget):
             ## For each objective, create a set of widgets for selecting and updating.
             c = QtGui.QComboBox()
             r = QtGui.QRadioButton(i)
-            #first = self.objList[i].keys()[0]
+            #first = list(self.objList[i].keys())[0]
             #first = self.objList[i][first]
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)

@@ -800,7 +800,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if self.downSample <= 0:
             self.downSample = 1 # same as "none"
         totframes = int(np.ceil(sh[0]/self.downSample))
-        imageTimes = info[0].values()[1]
+        imageTimes = list(info[0].values())[1]
         dt = np.mean(np.diff(imageTimes))
         print '\n'
         print '*'*80

@@ -270,7 +270,7 @@ class SqliteDatabase:
         
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
-        return q[0].values()[0]
+        return list(q[0].values())[0]
 
     def replace(self, *args, **kargs):
         return self.insert(*args, replaceOnConflict=True, **kargs)

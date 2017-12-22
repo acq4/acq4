@@ -130,7 +130,7 @@ class EventFitter(CtrlNode):
                     item2 = pg.PlotDataItem(x=xVals[i], y=eventData[i], pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
-                #plot = self.plot.connections().keys()[0].node().getPlot()
+                #plot = list(self.plot.connections().keys())[0].node().getPlot()
                 #plot.addItem(item)
             
         self.outputData = output
@@ -406,7 +406,7 @@ class CaEventFitter(EventFitter):
                     item2 = pg.PlotDataItem(x=xVals[i], y=eventData[i], pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
-                #plot = self.plot.connections().keys()[0].node().getPlot()
+                #plot = list(self.plot.connections().keys())[0].node().getPlot()
                 #plot.addItem(item)
             
         self.outputData = output

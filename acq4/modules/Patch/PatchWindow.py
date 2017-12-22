@@ -415,7 +415,7 @@ class PatchThread(Thread):
             with self.lock:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
-                daqName = clamp.listChannels().values()[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
+                daqName = list(clamp.listChannels().values())[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
                 clampName = self.clampName
                 self.paramsUpdated = True
             

@@ -431,7 +431,7 @@ class DAQGenericTask(DeviceTask):
             result[ch]['units'] = self.getChanUnits(ch)
         
         if len(result) > 0:
-            meta = result[result.keys()[0]]['info']
+            meta = result[list(result.keys())[0]]['info']
             rate = meta['rate']
             nPts = meta['numPts']
             ## Create an array of time values

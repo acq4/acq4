@@ -425,7 +425,7 @@ class MultiClampTask(DeviceTask):
     def getResult(self):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
-        #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
+        #self.state['startTime'] = self.daqTasks[list(self.daqTasks.keys())[0]].getStartTime()
         with self.dev.lock:
             channels = self.getUsedChannels()
             #print channels
@@ -491,7 +491,7 @@ class MultiClampTask(DeviceTask):
             if 'command' in taskInfo:
                 del taskInfo['command']
             info[-1]['Protocol'] = taskInfo
-            info[-1]['startTime'] = result[result.keys()[0]]['info']['startTime']
+            info[-1]['startTime'] = result[list(result.keys())[0]]['info']['startTime']
             
             marr = MetaArray(arr, info=info)
                 

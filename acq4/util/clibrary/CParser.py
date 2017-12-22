@@ -461,7 +461,7 @@ class CParser():
                         continue
                     try:
                         self.remDef('macros', macroName.strip())
-                        #self.macroListString = '|'.join(self.defs['macros'].keys() + self.defs['fnmacros'].keys())
+                        #self.macroListString = '|'.join(list(self.defs['macros'].keys()) + self.defs['fnmacros'].keys())
                         #self.updateMacroDefns()
                     except:
                         if sys.exc_info()[0] is not KeyError:
@@ -541,7 +541,7 @@ class CParser():
         ## regex is faster than pyparsing.
         ## Matches quoted strings and macros
         
-        ##names = self.defs['macros'].keys() + self.defs['fnmacros'].keys()
+        ##names = list(self.defs['macros'].keys()) + self.defs['fnmacros'].keys()
         #if len(self.macroListString) == 0:
             #self.macroRegex = None
         #else:

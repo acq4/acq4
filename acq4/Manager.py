@@ -181,7 +181,7 @@ class Manager(QtCore.QObject):
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")
             
-        win = self.modules[self.modules.keys()[0]].window()
+        win = self.modules[list(self.modules.keys())[0]].window()
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.abortShortcut = QtGui.QShortcut(QtGui.QKeySequence('Esc'), win)
@@ -783,7 +783,7 @@ class Manager(QtCore.QObject):
                 print "Requesting all modules shut down.."
                 logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
-                    m = self.modules.keys()[0]
+                    m = list(self.modules.keys())[0]
                     print "    %s" % m
                     
                     self.unloadModule(m)
