@@ -492,7 +492,7 @@ class PSPReversal(AnalysisModule):
                 return
         dh = dh[0]  # only the first file
         self.sequence = self.dataModel.listSequenceParams(dh)
-        keys = self.sequence.keys()
+        keys = list(self.sequence.keys())
         leftseq = [str(x) for x in self.sequence[keys[0]]]
         if len(keys) > 1:
             rightseq = [str(x) for x in self.sequence[keys[1]]]

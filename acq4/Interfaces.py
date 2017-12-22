@@ -66,9 +66,9 @@ class InterfaceDirectory(QtCore.QObject):
         """Remove all occurrences of object from the interface directory"""
         changedTypes = set()
         
-        for typeName, objList in self.typeList.iteritems():
+        for typeName, objList in self.typeList.items():
             rem = []
-            for objName, obj2 in objList.iteritems():
+            for objName, obj2 in objList.items():
                 if obj is obj2:
                     rem.append(objName)
                     changedTypes.add(typeName)
@@ -88,14 +88,14 @@ class InterfaceDirectory(QtCore.QObject):
         """
         with self.lock:
             if types is None:
-                types = self.typeList.keys()
+                types = list(self.typeList.keys())
                 #return dict([(k, dict(v)) for k,v in self.typeList.iteritems()])
             elif isinstance(types, six.string_types):
-                return self.typeList.get(types, {}).keys()
+                return list(self.typeList.get(types, {}).keys())
                 
             ints = {}
             for t in types:
-                ints[t] = self.typeList.get(t, {}).keys()
+                ints[t] = list(self.typeList.get(t, {}).keys())
                 #for n in self.typeList.get(t, []):
                     #ints.append(n)
             return ints

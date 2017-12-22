@@ -54,7 +54,7 @@ class RoiEventDetector(EventDetector):
     
     def addVirtualFiles(self, fh):
         name = fh.name(relativeTo=self.fileLoader.baseDir())
-        self.fileLoader.addVirtualFiles(self.data[name].keys(), parentName=name)
+        self.fileLoader.addVirtualFiles(list(self.data[name].keys()), parentName=name)
     
     def selectedFileChanged(self, item):
         data = self.data[str(item.parent().text(0))][str(item.text(0))]
@@ -165,7 +165,7 @@ class RoiEventDetector(EventDetector):
             node = nodes[name]
             d = {}
             if hasattr(node, 'ctrls'):
-                for k, v in node.ctrls.iteritems():
+                for k, v in node.ctrls.items():
                     if type(v) == type(QtGui.QCheckBox()):
                         d[k] = v.isChecked()
                     elif type(v) == type(QtGui.QComboBox()):

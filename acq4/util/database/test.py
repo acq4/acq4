@@ -11,7 +11,7 @@ def testDataRetrieval():
     """
     db = SqliteDatabase()
     db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob, 'other' other)")
-    columns = db.tableSchema('t').keys()
+    columns = list(db.tableSchema('t').keys())
     print columns
 
 

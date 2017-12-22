@@ -150,7 +150,7 @@ def cleanAxes(axl):
     if type(axl) is not list:
         axl = [axl]
     for ax in axl:
-        for loc, spine in ax.spines.iteritems():
+        for loc, spine in ax.spines.items():
             if loc in ['left', 'bottom']:
                 pass
             elif loc in ['right', 'top']:

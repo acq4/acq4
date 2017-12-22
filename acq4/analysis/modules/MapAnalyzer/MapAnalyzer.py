@@ -230,7 +230,7 @@ class MapAnalyzer(AnalysisModule):
         del d2['ProtocolDir']
         
         mapper = self.getElement('Color Mapper')
-        mapper.setArgList(d2.keys())
+        mapper.setArgList(list(d2.keys()))
         
         return mapper.getColor(d2)
         

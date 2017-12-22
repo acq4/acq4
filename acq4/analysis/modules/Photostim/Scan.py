@@ -43,7 +43,7 @@ def loadScanSequence(fh, host):
     
         
     ret = []
-    for key, subDirs in scans.iteritems():
+    for key, subDirs in scans.items():
         if len(scans) > 1:
             name = key
             sname = fh.shortName() + '.' + key
@@ -223,7 +223,7 @@ class Scan(QtCore.QObject):
         if self.statExample is None:
             return None
         else:
-            return self.statExample.keys()
+            return list(self.statExample.keys())
 
     
     def lockStats(self, lock=True):

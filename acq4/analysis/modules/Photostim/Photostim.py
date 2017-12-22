@@ -361,7 +361,7 @@ class Photostim(AnalysisModule):
         table.setData(stats)
         if stats is None:
             return
-        self.mapper.setArgList(stats.keys())
+        self.mapper.setArgList(list(stats.keys()))
         
     #def getCurrentStats(self):
         #stats = self.flowchart.output()['dataOut']

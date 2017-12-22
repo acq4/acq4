@@ -325,7 +325,7 @@ class Manager(QtCore.QObject):
         """Return a list of the named configurations available"""
         with self.lock:
             if 'configurations' in self.config:
-                return self.config['configurations'].keys()
+                return list(self.config['configurations'].keys())
             else:
                 return []
 
@@ -387,12 +387,12 @@ class Manager(QtCore.QObject):
             name = str(name)
             if name not in self.devices:
                 #print self.devices
-                raise Exception("No device named %s. Options are %s" % (name, str(self.devices.keys())))
+                raise Exception("No device named %s. Options are %s" % (name, str(list(self.devices.keys()))))
             return self.devices[name]
 
     def listDevices(self):
         with self.lock:
-            return self.devices.keys()
+            return list(self.devices.keys())
 
     def loadModule(self, module, name, config=None, forceReload=False, importMod=None, execPath=None):
         """Create a new instance of an acq4 module. 
@@ -455,7 +455,7 @@ class Manager(QtCore.QObject):
     def listModules(self):
         """List names of currently loaded modules. """
         with self.lock:
-            return self.modules.keys()[:]
+            return list(self.modules.keys())
 
     def getDirOfSelectedFile(self):
         """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
@@ -485,14 +485,14 @@ class Manager(QtCore.QObject):
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
         with self.lock:
-            return self.definedModules.keys()
+            return list(self.definedModules.keys())
 
 
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
         with self.lock:
             if name not in self.definedModules:
-                print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
+                print "Module '%s' is not defined. Options are: %s" % (name, str(list(self.definedModules.keys())))
                 return
             conf = self.definedModules[name]
         
@@ -846,7 +846,7 @@ class Task:
         
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
         #print "Task command", command
-        self.devNames = command.keys()
+        self.devNames = list(command.keys())
         self.devNames.remove('protocol')
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
         

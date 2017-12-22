@@ -150,7 +150,7 @@ class MultiClampTaskGui(TaskGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, list(params.keys()))
 
         # Plot all waves but disable auto-range first to improve performance.
         autoRange = self.ui.bottomPlotWidget.getViewBox().autoRangeEnabled()

@@ -74,7 +74,7 @@ def init():
 
     labelData = label._info[-1]['labels']
     d = dict([(x['id'], x) for x in labelData])
-    keys = d.keys()
+    keys = list(d.keys())
     keys.sort()
     for k in keys:
         addLabel(d[k])
@@ -181,7 +181,7 @@ def itemChanged(*args):
     
 def writeMeta():
     meta = []
-    for k, v in labelInfo.iteritems():
+    for k, v in labelInfo.items():
         meta.append( {
             'id': k,
             'name': str(v['item'].text(1)),
@@ -230,7 +230,7 @@ def renderLabels(z, sl=None, overlay=False):
     img.fill(0)
     val = ui.labelSlider.value()/128.
     
-    for k, v in labelInfo.iteritems():
+    for k, v in labelInfo.items():
         if not v['item'].checkState(0) == QtCore.Qt.Checked:
             continue
         c = pg.colorTuple(v['btn'].color())

@@ -202,7 +202,7 @@ class LaserTaskGui(DAQGenericTaskGui):
             params[k] = range(len(ps[k]))
         ## get power waveforms
         waves = []
-        runSequence(lambda p: waves.append(self.powerWidget.getSingleWave(p)), params, params.keys()) ## appends waveforms for the entire parameter space to waves
+        runSequence(lambda p: waves.append(self.powerWidget.getSingleWave(p)), params, list(params.keys())) ## appends waveforms for the entire parameter space to waves
         
         for w in waves:
             if w is not None:

@@ -43,7 +43,7 @@ def checkLru(lru):
     assert [(1, 1), (2, 2)] == list(lru.iteritems(accessTime=True))
 
     lru.clear()
-    assert [] == list(lru.iteritems())
+    assert [] == list(lru.items())
 
 
 if __name__ == '__main__':

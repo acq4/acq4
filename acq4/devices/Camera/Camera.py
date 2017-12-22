@@ -195,7 +195,7 @@ class Camera(DAQGeneric, OptomechDevice):
         for k in params.keys():    ## remove non-writable parameters
             if not params[k][1]:
                 del params[k]
-        params = self.getParams(params.keys())
+        params = self.getParams(list(params.keys()))
         params['isRunning'] = self.isRunning()
         #print "Camera: pushState", name, params
         self.stateStack.append((name, params))

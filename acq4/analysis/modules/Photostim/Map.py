@@ -33,7 +33,7 @@ class Map:
         self.spots = []          ## holds all data {pos, size, [(scan, dh), ...]};  used to construct scatterplotitem
         self.sPlotItem = pg.ScatterPlotItem(pxMode=False, pen=(50,50,50))
         
-        self.header = self.mapFields.keys()[2:]
+        self.header = list(self.mapFields.keys())[2:]
         
         self.item = QtGui.QTreeWidgetItem([""] * len(self.header))
         self.item.setFlags(QtCore.Qt.ItemIsSelectable| QtCore.Qt.ItemIsEditable| QtCore.Qt.ItemIsEnabled)
@@ -121,7 +121,7 @@ class Map:
                 rec = self.generateDefaults(scan)
                 for i in range(2, len(self.mapFields)):
                     ind = i-2
-                    key = self.mapFields.keys()[i]
+                    key = list(self.mapFields.keys())[i]
                     if key in rec and str(self.item.text(ind)) == '':
                         self.item.setText(ind, str(rec[key]))
 

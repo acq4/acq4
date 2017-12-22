@@ -412,7 +412,7 @@ def showCell(**kwds):
         p = (rec['right'], rec['anterior'], rec['dorsal'])
         evSpots[p] = None
         
-    pos = np.array(evSpots.keys())
+    pos = np.array(list(evSpots.keys()))
     atlasPoints.setData(pos=pos, )
     
     

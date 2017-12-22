@@ -143,10 +143,10 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
         yield None, None
     
     ## set up meta-info for sequence axes
-    seqShape = tuple([len(p) for p in params.itervalues()])
+    seqShape = tuple([len(p) for p in params.values()])
     info = [[] for i in range(len(seqShape))]
     i = 0
-    for k,v in params.iteritems():
+    for k,v in params.items():
         info[i] = {'name': k, 'values': np.array(v)}
         i += 1
     

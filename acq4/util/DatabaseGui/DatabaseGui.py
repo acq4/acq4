@@ -54,7 +54,7 @@ class DatabaseGui(QtGui.QWidget):
         self.generateTableLists()
         
     def generateTableLists(self):
-        for l, c in self.tableWidgets.itervalues():
+        for l, c in self.tableWidgets.values():
             self.ui.tableArea.layout().removeWidget(l)
             self.ui.tableArea.layout().removeWidget(c)
         self.tableWidgets = {}
@@ -62,7 +62,7 @@ class DatabaseGui(QtGui.QWidget):
         if self.db is None or self.tables is None:
             return
             
-        for ident, default in self.tables.iteritems():
+        for ident, default in self.tables.items():
             label = QtGui.QLabel(ident)
             combo = QtGui.QComboBox()
             combo.setEditable(True)

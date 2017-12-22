@@ -203,7 +203,7 @@ class SqliteDatabase:
             records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
             p.mark("prepared data")
 
-            columns = records.keys()
+            columns = list(records.keys())
             insert = "INSERT"
             if replaceOnConflict:
                 insert += " OR REPLACE"
@@ -288,7 +288,7 @@ class SqliteDatabase:
         columns = parseColumnDefs(columns)
         
         columnStr = []
-        for name, conf in columns.iteritems():
+        for name, conf in columns.items():
             columnStr.append('"%s" %s %s' % (name, conf['Type'], conf.get('Constraints', '')))
         columnStr = ','.join(columnStr)
 
@@ -324,7 +324,7 @@ class SqliteDatabase:
         """
         if self.tables is None:
             self._readTableList()
-        return self.tables.keys()
+        return list(self.tables.keys())
  
     def removeTable(self, table):
         self('DROP TABLE "%s"' % table)
@@ -350,7 +350,7 @@ class SqliteDatabase:
             
         where = self._prepareData(table, where)[0]
         conds = []
-        for k,v in where.iteritems():
+        for k,v in where.items():
             if isinstance(v, six.string_types):
                 conds.append('"%s"=\'%s\'' % (k, v))
             else:
@@ -450,7 +450,7 @@ class SqliteDatabase:
     def _readRecord(self, rec):
         prof = debug.Profiler("_readRecord", disabled=True)
         data = collections.OrderedDict()
-        names = rec.keys()
+        names = list(rec.keys())
         for i in range(len(rec)):
             val = rec[i]
             name = names[i]
@@ -541,7 +541,7 @@ class TableData:
         elif isinstance(data, list):
             self.mode = 'list'
         elif isinstance(data, dict):
-            types = set(map(type, data.values()))
+            types = set(map(type, list(data.values())))
             ## dict may be a dict-of-lists or a single record
             types -= set([list, np.ndarray]) ## if dict contains any non-sequence values, it is probably a single record.
             if len(types) != 0:
@@ -623,12 +623,12 @@ class TableData:
         if isinstance(arg, six.string_types):
             return self.data[arg]
         elif isinstance(arg, int):
-            return collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()])
+            return collections.OrderedDict([(k, v[arg]) for k, v in self.data.items()])
         elif isinstance(arg, tuple):
             arg = self._orderArgs(arg)
             return self.data[arg[1]][arg[0]]
         elif isinstance(arg, slice):
-            return TableData(collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()]))
+            return TableData(collections.OrderedDict([(k, v[arg]) for k, v in self.data.items()]))
         else:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
 
@@ -680,7 +680,7 @@ class TableData:
         return TableData([rec.copy() for rec in self.data])
         
     def copy_dict(self):
-        return TableData({k:v[:] for k,v in self.data.iteritems()})
+        return TableData({k:v[:] for k,v in self.data.items()})
         
         
     def __iter__(self):
@@ -700,13 +700,13 @@ class TableData:
         elif self.mode == 'list':
             if len(self.data) == 0:
                 return []
-            return self.data[0].keys()  ## all records must have all keys. 
+            return list(self.data[0].keys())  ## all records must have all keys. 
             #names = set()
             #for row in self.data:
                 #names.update(row.keys())
             #return list(names)
         elif self.mode == 'dict':
-            return self.data.keys()
+            return list(self.data.keys())
             
     def keys(self):
         return self.columnNames()
@@ -741,7 +741,7 @@ def parseColumnDefs(defs, keyOrder=None):
         
     if isinstance(defs, dict):
         ret = collections.OrderedDict()
-        for k, v in defs.iteritems():
+        for k, v in defs.items():
             if isSequence(v):
                 ret[k] = toDict(v)
             elif isinstance(v, dict):

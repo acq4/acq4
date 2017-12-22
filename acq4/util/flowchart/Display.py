@@ -24,7 +24,7 @@ class EventListPlotter(CtrlNode):
         
     def colorChanged(self):
         c = self.ctrls['color'].color()
-        for i in self.items.itervalues():
+        for i in self.items.values():
             i.setPen(c)
         
     def process(self, events, display=True):

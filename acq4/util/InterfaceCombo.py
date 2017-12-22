@@ -47,7 +47,7 @@ class InterfaceCombo(QtGui.QComboBox):
             self.blockSignals(True)
             self.clear()
             man = getManager()
-            for typ,intList in ints.iteritems():
+            for typ,intList in ints.items():
                 for name in intList:
                     obj = man.getInterface(typ, name)
                     if obj in objects:
@@ -129,7 +129,7 @@ class InterfaceParameter(ptypes.ListParameter):
         ints = self.dir.listInterfaces(self.opts['interfaceTypes'])
         if isinstance(ints, dict):
             interfaces = []
-            for i in ints.itervalues():
+            for i in ints.values():
                 interfaces.extend(i)
         else:
             interfaces = ints

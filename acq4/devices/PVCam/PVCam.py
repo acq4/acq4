@@ -195,7 +195,7 @@ class PVCam(Camera):
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         with self.camLock:
             return self.cam.getParams(params)
 

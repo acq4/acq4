@@ -1802,7 +1802,7 @@ class STDPWindow(UncagingWindow):
         t.setColumnCount(3)
         t.setRowCount(len(data))
         for i in range(len(data)):
-            k = data.keys()[i]
+            k = list(data.keys())[i]
             v = data[k]
             i1 = QtGui.QTableWidgetItem(k)
             t.setItem(i, 0, i1)

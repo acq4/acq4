@@ -102,7 +102,7 @@ def peekMsg():
     else:
         msg = ret[0]
         if msg.message in msgIds.values():
-            print "Peeked Message:", msgIds.keys()[msgIds.values().index(msg.message)]
+            print "Peeked Message:", list(msgIds.keys())[list(msgIds.values()).index(msg.message)]
         else:
             print "Peeked Message:", msg.message
         return msg

@@ -49,7 +49,7 @@ class SqliteDatabase:
                 raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
             for d in data:
                 #print len(d)
-                for k, v in d.iteritems():
+                for k, v in d.items():
                     q.bindValue(':'+k, v)
                     #print k, v, type(v)
                 #print "==execute with bound data=="
@@ -111,7 +111,7 @@ class SqliteDatabase:
         ## Rememember that _prepareData may change the number of columns!
         records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns)
         
-        fields = records[0].keys()
+        fields = list(records[0].keys())
         insert = "INSERT"
         if replaceOnConflict:
             insert += " OR REPLACE"
@@ -161,7 +161,7 @@ class SqliteDatabase:
         if isinstance(fields, list):
             fieldStr = ','.join(fields)
         elif isinstance(fields, dict):
-            fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.iteritems()])
+            fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.items()])
         self('CREATE TABLE %s (%s) %s' % (table, fieldStr, sql))
         self._readTableList()
 
@@ -405,7 +405,7 @@ class AnalysisDatabase(SqliteDatabase):
             table = self.dirTypeName(handle)
             
         if not self.hasTable(table):
-            fields = acq4.Manager.getManager().suggestedDirFields(handle).keys()
+            fields = list(acq4.Manager.getManager().suggestedDirFields(handle).keys())
             for k in info:
                 if k not in fields:
                     fields.append(k)
@@ -475,7 +475,7 @@ class AnalysisDatabase(SqliteDatabase):
         return [x['Table'] for x in res]
     
     def listTables(self):
-        return self.tables.keys()
+        return list(self.tables.keys())
         
     def takeOwnership(self, table, owner):
         self.insert("DataTableOwners", {'Table': table, "Owner": owner})
@@ -506,7 +506,7 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'blob'
                 fields[name] = typ
         elif isinstance(data, dict):
-            for name, v in data.iteritems():
+            for name, v in data.items():
                 if functions.isFloat(v):
                     typ = 'real'
                 elif functions.isInt(v):

@@ -230,7 +230,7 @@ class AxoPatch200(DAQGeneric):
         
     def listModes(self):
         #global modeNames
-        return self.modeNames.values()
+        return list(self.modeNames.values())
         
     def setMode(self, mode):
         """Set the mode of the AxoPatch (by requesting user intervention). Takes care of switching holding levels in I=0 mode if needed."""

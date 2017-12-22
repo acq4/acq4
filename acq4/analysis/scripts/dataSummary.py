@@ -347,7 +347,7 @@ class DataSummary():
                     if 'devices' not in dh.info().keys():
                         protocolok = False  # can't parse protocol device...
                         continue
-                    devices = dh.info()['devices'].keys()  # try to get clamp devices from another location
+                    devices = list(dh.info()['devices'].keys())  # try to get clamp devices from another location
                     #print dir(self.dataModel)
                     for kc in self.dataModel.knownClampNames():
                         if kc in devices:
@@ -470,7 +470,7 @@ class DataSummary():
         :return nothing:
         """
         self.sequence = self.dataModel.listSequenceParams(dh)
-        keys = self.sequence.keys()
+        keys = list(self.sequence.keys())
         leftseq = [str(x) for x in self.sequence[keys[0]]]
         if len(keys) > 1:
             rightseq = [str(x) for x in self.sequence[keys[1]]]

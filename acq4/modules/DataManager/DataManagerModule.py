@@ -87,7 +87,7 @@ class DataManager(Module):
         conf = self.manager.config['folderTypes']
         #print "folderTypes:", self.manager.config['folderTypes'].keys()
         self.ui.newFolderList.clear()
-        self.ui.newFolderList.addItems(['New...', 'Folder'] + conf.keys())
+        self.ui.newFolderList.addItems(['New...', 'Folder'] + list(conf.keys()))
         
     def baseDirChanged(self):
         dh = self.manager.getBaseDir()

@@ -44,9 +44,9 @@ class Microscope(Device, OptomechDevice):
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
         
-        for k1,objs in config['objectives'].iteritems():  ## Set default values for each objective
+        for k1,objs in config['objectives'].items():  ## Set default values for each objective
             self.objectives[k1] = collections.OrderedDict()
-            for k2,o in objs.iteritems():
+            for k2,o in objs.items():
                 obj = Objective(o, self, (k1, k2))
                 self.objectives[k1][k2] = obj
                 #obj.sigTransformChanged.connect(self.objectiveTransformChanged)
@@ -95,7 +95,7 @@ class Microscope(Device, OptomechDevice):
         """Selects the objective currently in position *index*"""
         index = str(index)
         if index not in self.selectedObjectives:
-            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(self.objectives.keys())))
+            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(list(self.objectives.keys()))))
             
         ## determine new objective, return early if there is no change
         ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
@@ -126,7 +126,7 @@ class Microscope(Device, OptomechDevice):
         Return a list of available objectives. (one objective returned per switch position)
         """
         with self.lock:
-            return self.selectedObjectives.values()
+            return list(self.selectedObjectives.values())
             #l = collections.OrderedDict()
             #for i in self.selectedObjectives:
                 #l[i] = self.objectives[i][self.selectedObjectives[i]]
@@ -426,7 +426,7 @@ class ScopeGUI(QtGui.QWidget):
             obj.sigTransformChanged.connect(self.updateSpins)
         
     def updateSpins(self):
-        for k, w in self.objWidgets.iteritems():
+        for k, w in self.objWidgets.items():
             (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
             offset = obj.offset()

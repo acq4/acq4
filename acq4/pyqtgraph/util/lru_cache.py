@@ -101,7 +101,7 @@ class LRUCache(object):
             
         
         def _resizeTo(self):
-            ordered = sorted(self._dict.itervalues(), key=operator.itemgetter(2))[:self.resizeTo]
+            ordered = sorted(self._dict.values(), key=operator.itemgetter(2))[:self.resizeTo]
             for i in ordered:
                 del self._dict[i[0]]
                 
@@ -114,8 +114,8 @@ class LRUCache(object):
             ============= ======================================================
             '''
             if accessTime:
-                for x in sorted(self._dict.itervalues(), key=operator.itemgetter(2)):
+                for x in sorted(self._dict.values(), key=operator.itemgetter(2)):
                     yield x[0], x[1]
             else:
-                for x in self._dict.iteritems():
+                for x in self._dict.items():
                     yield x[0], x[1]

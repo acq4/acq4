@@ -284,7 +284,7 @@ class DAQGenericTask(DeviceTask):
         
         prof = Profiler('DAQGenericTask.configure', disabled=True)
         #self.daqTasks = {}
-        self.mapping = self.dev.getMapping(chans=self._DAQCmd.keys())  ## remember the mapping so we can properly translate data after it has been returned
+        self.mapping = self.dev.getMapping(chans=list(self._DAQCmd.keys()))  ## remember the mapping so we can properly translate data after it has been returned
         
         
         self.initialState = {}

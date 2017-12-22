@@ -169,7 +169,7 @@ class Laser(DAQGeneric, OptomechDevice):
                 self.powerHistoryCount = 1
             else:
                 self.powerHistoryCount = len(ph)
-                self.params['expectedPower'] = ph.values()[-1]['expectedPower']
+                self.params['expectedPower'] = list(ph.values())[-1]['expectedPower']
                 return ph
                 
     def appendPowerHistory(self, power):

@@ -24,7 +24,7 @@ class CameraDeviceGui(QtGui.QWidget):
         
         params = []
         
-        for k, p in self.params.iteritems():
+        for k, p in self.params.items():
             try:
                 val = self.dev.getParam(k)
             except:
@@ -153,14 +153,14 @@ class CameraDeviceGui(QtGui.QWidget):
     def paramsChanged(self, params):
         #print "Camera param changed:", params
         ## Called when state of camera has changed
-        for p in params.keys()[:]:  ## flatten out nested dicts
+        for p in list(params.keys()):  ## flatten out nested dicts
             if isinstance(params[p], dict):
                 for k in params[p]:
                     params[k] = params[p][k]
         
         try:   ## need to ignore tree-change signals while updating it.
             self.paramSet.sigTreeStateChanged.disconnect(self.stateChanged)
-            for k, v in params.iteritems():
+            for k, v in params.items():
                 self.paramSet[k] = v
                 for p2 in self.params[k][3]:    ## Update bounds if needed
                     newBounds = self.dev.listParams([p2])[p2][0]

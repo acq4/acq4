@@ -141,7 +141,7 @@ class SuperTask:
             try:
                 self.taskInfo[key]['cache'] = concatenate(waves)
             except:
-                print "Input shapes for %s:" % ','.join(self.channelInfo.keys())
+                print "Input shapes for %s:" % ','.join(list(self.channelInfo.keys()))
                 for w in waves:
                     print w.shape
                 raise
@@ -167,7 +167,7 @@ class SuperTask:
         clkSource = None
         if len(self.tasks) == 0:
             raise Exception("No tasks to configure.")
-        keys = self.tasks.keys()
+        keys = list(self.tasks.keys())
         self.numPts = nPts
         self.rate = rate
         
@@ -241,7 +241,7 @@ class SuperTask:
         self.result = None
         ## TODO: Reserve all hardware needed before starting tasks
         
-        keys = self.tasks.keys()
+        keys = list(self.tasks.keys())
         ## move clock task key to the end
         if self.clockSource in keys:
             #print "  Starting %s last" % str(tt) 

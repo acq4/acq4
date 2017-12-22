@@ -201,7 +201,7 @@ class _PVCamClass:
         if allParams:
             return [p[2][6:] for p in HEADERS.find(re.compile('PARAM_.*'))]
         else:
-            return self.paramTable.keys()
+            return list(self.paramTable.keys())
     
     def paramFromString(self, p):
         """Return the driver's param ID for the given parameter name."""
@@ -308,7 +308,7 @@ class _CameraClass:
         })
         
         ## Generate list of all remote parameter names
-        self.remoteParamNames = self.paramAttrs.keys()
+        self.remoteParamNames = list(self.paramAttrs.keys())
         for k in self.localParamNames:
             self.remoteParamNames.remove(k)
         
@@ -391,7 +391,7 @@ class _CameraClass:
                     params[p] = self.paramAttrs[p]
                 except KeyError:
                     #print self.paramAttrs.keys()
-                    raise Exception("No parameter named '%s'. Params are:" % (p, str(self.paramAttrs.keys())))
+                    raise Exception("No parameter named '%s'. Params are:" % (p, str(list(self.paramAttrs.keys()))))
                 
             if unList:
                 return params[plist[0]]
@@ -423,7 +423,7 @@ class _CameraClass:
         """Set the values of multiple parameters. Format may be {name: value, ...} or [(name, value), ...]"""
         newVals = OrderedDict()
         if isinstance(params, dict):
-            plist = params.items()
+            plist = list(params.items())
         else:
             plist = params
             
@@ -476,7 +476,7 @@ class _CameraClass:
             try:
                 value = getattr(LIB, value)
             except:
-                raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(self.pvcam.defs.keys())))
+                raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(list(self.pvcam.defs.keys()))))
 
         
         #print "   PVCam setParam lookup param"
@@ -892,7 +892,7 @@ class _CameraClass:
                     vals = (minval, maxval, stepval)
             elif typ == LIB.TYPE_ENUM:
                 #vals = self.getEnumList(p)[0]
-                vals = self.enumTable[p][0].keys()
+                vals = list(self.enumTable[p][0].keys())
             elif typ == LIB.TYPE_BOOLEAN:
                 vals = [True, False]
             else:

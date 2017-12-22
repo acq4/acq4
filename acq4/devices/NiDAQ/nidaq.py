@@ -81,7 +81,7 @@ class NiDAQ(Device):
         ## take care of any channel-value-set requests that arrived while the device was locked
         try:
             self.delayedSet.lock()
-            for chan, val in self.delayedSet.iteritems():
+            for chan, val in self.delayedSet.items():
                 #print "Set delayed:", chan, val
                 self.setChannelValue(chan, val, ignoreLock=True)
             self.delayedSet.clear()

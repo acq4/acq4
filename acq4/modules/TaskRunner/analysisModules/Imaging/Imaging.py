@@ -156,7 +156,7 @@ class ImagingModule(AnalysisModule):
         # Update list so user can select program component
         supportedTypes = ['rect']
         progs = dict([(prog['name'], prog) for prog in progs if prog['type'] in supportedTypes])
-        self.params.child('scanProgram').setLimits(progs.keys())
+        self.params.child('scanProgram').setLimits(list(progs.keys()))
         selectedProg = self.params['scanProgram']
         if selectedProg not in progs:
             return

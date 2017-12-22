@@ -117,7 +117,7 @@ class Fitting():
         self.fitSum2Err = 0
 
     def getFunctions(self):
-        return(self.fitfuncmap.keys())
+        return(list(self.fitfuncmap.keys()))
 
     def exp0eval(self, p, x, y=None, C = None, sumsq = False):
         """

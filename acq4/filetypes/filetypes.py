@@ -90,7 +90,7 @@ def listFileTypes():
                 getFileType(typ)
             except:
                 debug.printExc("Error loading file type library '%s':" % typ)
-    return KNOWN_FILE_TYPES.keys()
+    return list(KNOWN_FILE_TYPES.keys())
 
 ## initialize:
 listFileTypes()

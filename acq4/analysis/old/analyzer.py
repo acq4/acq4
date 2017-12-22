@@ -81,7 +81,7 @@ class Analyzer(QtGui.QMainWindow):
     
     def dumpProtocol(self):
         state = {'docks': {}}
-        for name, d in self.dockItems.iteritems():
+        for name, d in self.dockItems.items():
             s = {'type': d['type']}
             if 'widget' in d and hasattr(d['widget'], 'saveState'):
                 s['state'] = d['widget'].saveState()
@@ -98,7 +98,7 @@ class Analyzer(QtGui.QMainWindow):
         return True
         
     def newProtocol(self):
-        for name, d in self.dockItems.iteritems():
+        for name, d in self.dockItems.items():
             self.removeDockWidget(d['dock'])
             d['dock'].setObjectName('')
         self.ui.dockList.clear()
@@ -118,7 +118,7 @@ class Analyzer(QtGui.QMainWindow):
         self.flowchart.restoreState(state['flowchart'])
         
         ## recreate docks
-        for name, d in state['docks'].iteritems():
+        for name, d in state['docks'].items():
             fn = getattr(self, 'add'+d['type'])
             fn(name, d.get('state', None))
         

@@ -166,9 +166,9 @@ class TaskRunner(Module):
         devList = self.manager.listDevices()
         
         if task is not None:
-            protList = task.devices.keys()
+            protList = list(task.devices.keys())
         elif self.currentTask is not None:
-            protList = self.currentTask.devices.keys()
+            protList = list(self.currentTask.devices.keys())
         else:
             protList = []
             
@@ -614,7 +614,7 @@ class TaskRunner(Module):
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
             with pg.ProgressDialog("Generating task commands..", 0, pLen) as progressDlg:
                 self.lastQtProcessTime = ptime.time()
-                prot = runSequence(lambda p: self.generateTask(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
+                prot = runSequence(lambda p: self.generateTask(dh, p, progressDlg), paramInds, list(paramInds.keys()), linkedParams=linkedParams)
             if dh is not None:
                 dh.flushSignals()  ## do this now rather than later when task is running
             
@@ -645,7 +645,7 @@ class TaskRunner(Module):
         prot['protocol']['storeData'] = store
         if store:
             if params != {}:
-                name = '_'.join(map(lambda i: '%03d'%i, params.values()))
+                name = '_'.join(map(lambda i: '%03d'%i, list(params.values())))
                 #print "mkdir", name
                 info = params.copy()
                 info['dirType'] = 'Protocol'
@@ -837,7 +837,7 @@ class Task:
             self.conf['windowState'] = QtCore.QByteArray.fromPercentEncoding(self.conf['windowState'])
             
             self.devices = conf['devices']
-            self.enabled = self.devices.keys()
+            self.enabled = list(self.devices.keys())
         else:
             self.fileName = None
             self.enabled = []
@@ -961,7 +961,7 @@ class TaskThread(Thread):
                     if e.args[0] != 'stop':
                         raise
             else:
-                runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys())
+                runSequence(self.runOnce, self.paramSpace, list(self.paramSpace.keys()))
             
         except:
             self.task = None  ## free up this memory

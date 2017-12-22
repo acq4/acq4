@@ -41,7 +41,7 @@ class DBCtrl(QtGui.QWidget):
         self.ui.scanTree.setDragEnabled(False)
         
         
-        labels = Map.mapFields.keys()[2:]
+        labels = list(Map.mapFields.keys())[2:]
         self.ui.mapTable.setHeaderLabels(labels)
         self.ui.mapTable.itemChanged.connect(self.mapItemChanged)
         

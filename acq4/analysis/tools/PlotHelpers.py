@@ -20,7 +20,7 @@ def nice_plot(ax, spines, position = 10, axesoff = False):
            using a calbar instead of an axes: calbar = [x0, y0, xs, ys]
            inserting a reference line (grey, 3pt dashed, 0.5pt, at refline = y position)
     """
-    for loc, spine in ax.spines.iteritems():
+    for loc, spine in ax.spines.items():
         if loc in spines:
             spine.set_position(('outward', position)) # outward by 10 points
         else:
@@ -49,7 +49,7 @@ def noaxes(ax):
 
 
 def cleanAxes(ax):
-    for loc, spine in ax.spines.iteritems():
+    for loc, spine in ax.spines.items():
         if loc in ['left', 'bottom']:
             pass
         elif loc in ['right', 'top']:
@@ -77,7 +77,7 @@ def update_font(ax):
     ax.tick_params(axis = 'both', labelsize = 9)
 
 def adjust_spines(ax, spines, direction = 'outward', distance=5, smart=False):
-    for loc, spine in ax.spines.iteritems():
+    for loc, spine in ax.spines.items():
         if loc in spines:
             spine.set_position((direction,distance)) # outward by 10 points
             if smart:

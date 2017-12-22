@@ -44,7 +44,7 @@ class AnalysisHost(QtGui.QMainWindow):
         self.mod = modules.load(modName, self)
         
         elems = self.mod.listElements()
-        for name, el in elems.iteritems():
+        for name, el in elems.items():
             w = self.mod.getElement(name, create=True)
             d = dockarea.Dock(name=name, size=el.size())
             if w is not None:

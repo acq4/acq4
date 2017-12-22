@@ -34,25 +34,25 @@ class MockNIDAQ:
         return getattr(self.lib, attr)
 
     def listAIChannels(self, dev):
-        return self.devs[dev]['aiChans'].keys()
+        return list(self.devs[dev]['aiChans'].keys())
     
     def listAOChannels(self, dev):
-        return self.devs[dev]['aoChans'].keys()
+        return list(self.devs[dev]['aoChans'].keys())
 
     def listDILines(self, dev):
-        return self.devs[dev]['lines'].keys()
+        return list(self.devs[dev]['lines'].keys())
 
     def listDIPorts(self, dev):
-        return self.devs[dev]['ports'].keys()
+        return list(self.devs[dev]['ports'].keys())
 
     def listDOLines(self, dev):
-        return self.devs[dev]['lines'].keys()
+        return list(self.devs[dev]['lines'].keys())
 
     def listDOPorts(self, dev):
-        return self.devs[dev]['ports'].keys()
+        return list(self.devs[dev]['ports'].keys())
     
     def listDevices(self):
-        return self.devs.keys()
+        return list(self.devs.keys())
 
     def createTask(self, *args):
         return self

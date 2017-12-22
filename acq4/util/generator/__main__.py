@@ -31,7 +31,7 @@ def plotData():
 
     global seqPlots
     seqPlots = []
-    SequenceRunner.runSequence(lambda p: seqPlots.append(sg.getSingle(rate, nPts, p)), params, params.keys())
+    SequenceRunner.runSequence(lambda p: seqPlots.append(sg.getSingle(rate, nPts, p)), params, list(params.keys()))
     
     for i, w in enumerate(seqPlots):
         if w is not None:

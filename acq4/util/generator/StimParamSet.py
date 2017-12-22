@@ -264,7 +264,7 @@ class PulseParameter(GroupParameter):
         return fnStr, seq
         
     def setState(self, state):
-        for k, v in state.iteritems():
+        for k, v in state.items():
             if k == 'type':
                 continue
             self.param(k).setState(v)

@@ -952,7 +952,7 @@ class CParser():
 
     def processFunction(self, s, l, t):
         if self.verbose:
-            print "FUNCTION", t, t.keys()
+            print "FUNCTION", t, list(t.keys())
         
         try:
             (name, decl) = self.processType(t.type, t.decl[0])
@@ -1011,7 +1011,7 @@ class CParser():
                     typ = m[0].type
                     val = self.evalExpr(m)
                     if self.verbose:
-                        print "    member:", m, m[0].keys(), m[0].declList
+                        print "    member:", m, list(m[0].keys()), m[0].declList
                     if len(m[0].declList) == 0:  ## anonymous member
                         struct.append((None, [typ], None))
                     for d in m[0].declList:

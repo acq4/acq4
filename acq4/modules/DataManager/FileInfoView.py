@@ -57,7 +57,7 @@ class FileInfoView(QtGui.QWidget):
         
         ## Decide on the list of fields to display
         info = file.info()
-        infoKeys = info.keys()
+        infoKeys = list(info.keys())
         #fields = OrderedDict()
         fields = self.manager.suggestedDirFields(file)
             

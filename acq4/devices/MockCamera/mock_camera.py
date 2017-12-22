@@ -232,11 +232,11 @@ class MockCamera(Camera):
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         vals = OrderedDict()
         for k in params:
             if k in self.groupParams:
-                vals[k] = self.getParams(self.groupParams[k]).values()
+                vals[k] = list(self.getParams(self.groupParams[k]).values())
             else:
                 vals[k] = self.params[k]
         return vals

@@ -273,7 +273,7 @@ class AnalysisDatabase(SqliteDatabase):
             
         records = []
         colTuples = []
-        for name, col in columns.iteritems():
+        for name, col in columns.items():
             rec = {'Column': name, 'Table': table, 'Link': None, 'Constraints': None}
             rec.update(col)
             
@@ -356,7 +356,7 @@ class AnalysisDatabase(SqliteDatabase):
                 ts = self.tableSchema(table)
                 config = self.getColumnConfig(table)
                 
-                for colName, col in columns.iteritems():
+                for colName, col in columns.items():
                     colType = col['Type']
                     if colName not in ts:  ## <-- this is a case-insensitive operation
                         if ignoreUnknownColumns:
@@ -386,7 +386,7 @@ class AnalysisDatabase(SqliteDatabase):
         
         with self.transaction():
             ## Ask manager what columns we think should go with this directory
-            columns = acq4.Manager.getManager().suggestedDirFields(dirHandle).keys()
+            columns = list(acq4.Manager.getManager().suggestedDirFields(dirHandle).keys())
             
             ## Add in any other columns present
             #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want
@@ -434,7 +434,7 @@ class AnalysisDatabase(SqliteDatabase):
             
             ## find all directory columns, make sure linked directories are present in DB
             conf = self.getColumnConfig(table)
-            for colName, col in conf.iteritems():
+            for colName, col in conf.items():
                 if col['Type'].startswith('directory'):
                     #pTable = col['Link']
                     pType = col['Type'].lstrip('directory:')
@@ -476,12 +476,12 @@ class AnalysisDatabase(SqliteDatabase):
             self(cmd)
             
             ## Create column config records for this view
-            colNames = self.tableSchema(viewName).keys()
+            colNames = list(self.tableSchema(viewName).keys())
             colDesc = []
             colIndex = 0
             for table in tables:
                 cols = self.getColumnConfig(table)
-                for col, config in cols.iteritems():
+                for col, config in cols.items():
                     config = config.copy()
                     config['Column'] = colNames[colIndex]
                     config['Table'] = viewName
@@ -684,7 +684,7 @@ class AnalysisDatabase(SqliteDatabase):
                         typ = 'blob'
                 columns[name] = typ
         elif isinstance(data, dict):
-            for name, v in data.iteritems():
+            for name, v in data.items():
                 if functions.isFloat(v):
                     typ = 'real'
                 elif functions.isInt(v):
@@ -711,7 +711,7 @@ class AnalysisDatabase(SqliteDatabase):
         config = self.getColumnConfig(table)
         
         ## convert file/dir handles
-        for column, conf in config.iteritems():
+        for column, conf in config.items():
             if column not in data.columnNames():
                 continue
             
@@ -759,7 +759,7 @@ class AnalysisDatabase(SqliteDatabase):
         
         data = TableData(data).copy()  ## have to copy here since we might be changing some values
         dataCols = set(data.columnNames())
-        for colName, colConf in config.iteritems():
+        for colName, colConf in config.items():
             if colName not in dataCols:
                 continue
             

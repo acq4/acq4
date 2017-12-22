@@ -120,7 +120,7 @@ class ChR2():
             print '1'
             reps = fh.parent().info()['protocol']['conf']['repetitions'] # fh.info()[('protocol', 'repetitions')]
             print '2'
-            print fh.info().keys()
+            print list(fh.info().keys())
             print fh.info()
             try:
                 pulseDurIndex = fh.info()['Laser-Blue', 'Shutter.duration']

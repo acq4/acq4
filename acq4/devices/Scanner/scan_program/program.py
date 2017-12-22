@@ -388,7 +388,7 @@ class ScanProgramCtrlGroup(pTypes.GroupParameter):
             'name': 'Program Controls',
             'type': 'group',
             'addText': "Add Control..",
-            'addList': COMPONENTS.keys(),
+            'addList': list(COMPONENTS.keys()),
             'autoIncrementName': True,
         }
         pTypes.GroupParameter.__init__(self, **opts)

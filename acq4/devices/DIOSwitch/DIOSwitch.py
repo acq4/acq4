@@ -14,7 +14,7 @@ class DIOSwitch(Device):
         self.config = config
         self.lock = Mutex.Mutex()
         self.daqs = {}
-        for name, conf in config['channels'].iteritems():
+        for name, conf in config['channels'].items():
             #daq = conf[0]
             #chan = conf[1]
             dev = dm.getDevice(conf['device'])
@@ -35,7 +35,7 @@ class DIOSwitch(Device):
     def poll(self):
         with self.lock:
             change = {}
-            for name, conf in self.daqs.iteritems():
+            for name, conf in self.daqs.items():
                 daq, chan = conf
                 val = daq.getChannelValue(chan, block=False)
                 if val is False: ## device is busy; try again later
@@ -74,7 +74,7 @@ class DevGui(QtGui.QWidget):
         self.update(None, state)
         
     def update(self, sw, change):
-        for name, val in change.iteritems():
+        for name, val in change.items():
             if val:
                 self.labels[name].setText('ON')
             else:

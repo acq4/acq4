@@ -123,7 +123,7 @@ class MultiClampChannel:
         ## perform return value mapping for a few specific functions
         if fn in INV_NAME_MAPS:
             if v not in INV_NAME_MAPS[fn]:
-                raise Exception("Return from %s was %s; expected one of %s." % (fn, v, INV_NAME_MAPS[fn].keys()))
+                raise Exception("Return from %s was %s; expected one of %s." % (fn, v, list(INV_NAME_MAPS[fn].keys())))
             v = INV_NAME_MAPS[fn][v]
             
         ## Silly workaround--MC700A likes to tell us that secondary signal gain is 0
@@ -142,7 +142,7 @@ class MultiClampChannel:
         ## Perform value mapping for a few functions (SetMode, SetPrimarySignal, SetSecondarySignal)
         if fn in NAME_MAPS:
             if value not in NAME_MAPS[fn]:
-                raise Exception("Argument to %s must be one of %s" % (fn, NAME_MAPS[fn].keys()))
+                raise Exception("Argument to %s must be one of %s" % (fn, list(NAME_MAPS[fn].keys())))
             value = NAME_MAPS[fn][value]
         #print fn, value
         self.mc.call(fn, value)
@@ -228,7 +228,7 @@ class MultiClampChannel:
         if mode == 'I=0':
             mode = 'IC'
         model = self.desc['model']
-        return (SIGNAL_MAP[model][mode]['PRI'].keys(), SIGNAL_MAP[model][mode]['SEC'].keys())
+        return (list(SIGNAL_MAP[model][mode]['PRI'].keys()), list(SIGNAL_MAP[model][mode]['SEC'].keys()))
 
     def select(self):
         """Select this channel for parameter get/set"""
@@ -310,7 +310,7 @@ class MultiClamp:
         These strings should be used to identify the same channel across invocations."""
         if self.debug:
             print "MCDriver.listChannels called."
-        return self.channels.keys()
+        return list(self.channels.keys())
     
     def connect(self):
         """(re)create connection to commander."""

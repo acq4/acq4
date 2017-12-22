@@ -2222,7 +2222,7 @@ def suggestRecordDType(x, singleRecord=False):
     when a single cell contains a sequence as its value.
     """
     dt = []
-    for k, v in x.iteritems():
+    for k, v in x.items():
         dt.append((k, suggestDType(v, singleValue=singleRecord)))
     return dt
     
@@ -2242,7 +2242,7 @@ def isInt(x):
 def find(data, val, op='==', arrayOp='all', axis=0, useWeave=True):
     operands = {'==': 'eq', '!=': 'ne', '<': 'lt', '>': 'gt', '<=': 'le', '>=': 'ge'}
     if op not in operands:
-        raise Exception("Operand '%s' is not supported. Options are: %s" % (str(op), str(operands.keys())))
+        raise Exception("Operand '%s' is not supported. Options are: %s" % (str(op), str(list(operands.keys()))))
     ## fallback for when weave is not available
     if not useWeave:
         axes = range(data.ndim)

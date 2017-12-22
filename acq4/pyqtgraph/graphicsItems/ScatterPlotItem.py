@@ -171,7 +171,7 @@ class SymbolAtlas(object):
             width = 0
 
         # sort symbols by height
-        symbols = sorted(rendered.keys(), key=lambda x: rendered[x].shape[1], reverse=True)
+        symbols = sorted(list(rendered.keys()), key=lambda x: rendered[x].shape[1], reverse=True)
 
         self.atlasRows = []
 

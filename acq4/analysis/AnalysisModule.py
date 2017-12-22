@@ -65,7 +65,7 @@ class AnalysisModule(QtCore.QObject):
               It does NOT create the actual element widgets; this happens 
               when getElement(..., create=True) is called.
         """
-        for name, el in self._elements_.iteritems():
+        for name, el in self._elements_.items():
             if isinstance(el, tuple):
                 self._elements_[name] = Element(name, args=el)
             elif isinstance(el, dict):
@@ -80,7 +80,7 @@ class AnalysisModule(QtCore.QObject):
         Default quit function calls close() on all elements.
         Module may return False to indicate that it is not ready to quit.
         """
-        for el in self._elements_.itervalues():
+        for el in self._elements_.values():
             if hasattr(el, 'close'):
                 el.close()
         #self.logBtn.close()

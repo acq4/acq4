@@ -374,7 +374,7 @@ class IVCurve(AnalysisModule):
         if reset:
             for regkey, reg in self.regions.items():  # initialize region states
                 self.show_or_hide(lrregion=regkey, forcestate=reg['shstate'])
-        for reg in self.regions.itervalues():
+        for reg in self.regions.values():
             for s in ['start', 'stop']:
                 reg[s].setSuffix(' ' + reg['units'])
         self.regions_exist = True
@@ -403,7 +403,7 @@ class IVCurve(AnalysisModule):
                 return
         dh = dh[0]  # only the first file
         sequence = self.dataModel.listSequenceParams(dh)
-        keys = sequence.keys()
+        keys = list(sequence.keys())
         leftseq = [str(x) for x in sequence[keys[0]]]
         if len(keys) > 1:
             rightseq = [str(x) for x in sequence[keys[1]]]
@@ -910,7 +910,7 @@ class IVCurve(AnalysisModule):
         if printSpikeInfo:
             pp = pprint.PrettyPrinter(indent=4)
             for m in sorted(self.spikeShape.keys()):
-                print '----\nTrace: %d  has %d APs' % (m, len(self.spikeShape[m].keys()))
+                print '----\nTrace: %d  has %d APs' % (m, len(list(self.spikeShape[m].keys())))
                 for n in sorted(self.spikeShape[m].keys()):
                     pp.pprint(self.spikeShape[m][n])
         self.analysis_summary['spikes'] = self.spikeShape  # save in the summary dictionary too       

@@ -90,7 +90,7 @@ class SqliteDatabase:
             else:
                 for d in data:
                     #print len(d)
-                    for k, v in d.iteritems():
+                    for k, v in d.items():
                         q.bindValue(':'+k, v)
                         #print k, v, type(v)
                     p.mark("bound values for record")
@@ -226,7 +226,7 @@ class SqliteDatabase:
             records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
             p.mark("prepared data")
 
-            columns = records.keys()
+            columns = list(records.keys())
             insert = "INSERT"
             if replaceOnConflict:
                 insert += " OR REPLACE"
@@ -311,7 +311,7 @@ class SqliteDatabase:
         columns = parseColumnDefs(columns)
         
         columnStr = []
-        for name, conf in columns.iteritems():
+        for name, conf in columns.items():
             columnStr.append('"%s" %s %s' % (name, conf['Type'], conf.get('Constraints', '')))
         columnStr = ','.join(columnStr)
 
@@ -347,7 +347,7 @@ class SqliteDatabase:
         """
         if self.tables is None:
             self._readTableList()
-        return self.tables.keys()
+        return list(self.tables.keys())
  
     def removeTable(self, table):
         self('DROP TABLE "%s"' % table)
@@ -394,7 +394,7 @@ class SqliteDatabase:
             
         where = self._prepareData(table, where)[0]
         conds = []
-        for k,v in where.iteritems():
+        for k,v in where.items():
             if isinstance(v, six.string_types):
                 conds.append('"%s"=\'%s\'' % (k, v))
             else:

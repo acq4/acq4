@@ -454,7 +454,7 @@ class OptomechDevice(object):
     
     def listSubdevices(self):
         with self.__lock:
-            return self.__subdevices.values()
+            return list(self.__subdevices.values())
 
     def getSubdevice(self, dev=None):
         """
@@ -538,7 +538,7 @@ class OptomechDevice(object):
         This may be used as a key for storing/retrieving calibration data.
         """
         state = self.treeSubdeviceState()
-        devs = state.keys()
+        devs = list(state.keys())
         devs.sort()
         return tuple([dev + "__" + state[dev] for dev in devs])
         
@@ -584,7 +584,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         
         
     def transformChanged(self, sender, device):
-        for subdev, items in self.groups[device].iteritems():
+        for subdev, items in self.groups[device].items():
             tr = pg.SRTTransform(device.deviceTransform(subdev))
             for item in items:
                 item.setTransform(tr)
@@ -651,7 +651,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
     def getGroups(self, device):
         """Return a list of all item groups for the given device"""
         groups = []
-        for subdev, items in self.groups[device].iteritems():
+        for subdev, items in self.groups[device].items():
             groups.extend(items)
         return groups
     

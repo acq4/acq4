@@ -384,7 +384,7 @@ class LogWidget(QtGui.QWidget):
         self.entryArray = self.entryArrayBuffer[:]
                                    
         i = 0
-        for k,v in log.iteritems():
+        for k,v in log.items():
             v['id'] = k[9:]  ## record unique ID to facilitate HTML generation (javascript needs this ID)
             self.entries.append(v)
             self.entryArray[i] = np.array([(i, v.get('importance', 5), v.get('msgType', 'status'), v.get('currentDir', ''), v.get('entryId', v['id']))], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100'), ('entryId', 'int32')])

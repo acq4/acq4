@@ -172,7 +172,7 @@ class MapConvolver(QtGui.QWidget):
                spacing - the size of each pixel in the returned grid (default is 5um)
             """
         #arr = data
-        arr = afn.convertPtsToSparseImage(data, params.keys(), spacing)
+        arr = afn.convertPtsToSparseImage(data, list(params.keys()), spacing)
         
                                        
         ## convolve image using either given kernel or gaussian kernel with sigma=sigma

@@ -315,7 +315,7 @@ class MicroManagerCamera(Camera):
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         return dict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):

@@ -516,7 +516,7 @@ class QCameraClass:
         """Get a list of parameter values. Return a dictionary of name: value pairs"""
         vals = OrderedDict()
         if params is None:
-            params = self.paramAttrs.keys()
+            params = list(self.paramAttrs.keys())
         
         s = self.readSettings()
         for param in params:
@@ -555,7 +555,7 @@ class QCameraClass:
         
         
         if asList:
-            return vals.values()
+            return list(vals.values())
         else:
             return vals
 
@@ -606,7 +606,7 @@ class QCameraClass:
         state = self.getParams(['binning', 'region'])
         
         ## will also see whether there are actually any changes to make
-        current = self.getParams(params.keys())
+        current = self.getParams(list(params.keys()))
         changed = False
         #changedKeys = []  ## keys for parameters that have changed 
                           ### (this is not necessarily the same as params)
@@ -736,7 +736,7 @@ class QCameraClass:
         #ret = {}
         #for x in params:
             #ret[x] = self.getParam(x)
-        ret = self.getParams(self.getParams(params.keys()))
+        ret = self.getParams(self.getParams(list(params.keys())))
         self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
         #if not autoRestart:
@@ -904,7 +904,7 @@ if __name__ == '__main__':
     cam = qcd.getCamera(cams[0])
     print "Opened camera 0."
     params = cam.listParams()
-    print "Parameters available:", params.keys()
+    print "Parameters available:", list(params.keys())
     qcd.quit()
     
 #loadDriver()

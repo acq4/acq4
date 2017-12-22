@@ -220,7 +220,7 @@ class OutputChannelGui(DaqChannelGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys()) ## appends waveforms for the entire parameter space to waves
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, list(params.keys())) ## appends waveforms for the entire parameter space to waves
 
         autoRange = self.plot.getViewBox().autoRangeEnabled()
         self.plot.enableAutoRange(x=False, y=False)

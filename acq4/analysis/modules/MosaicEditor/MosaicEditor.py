@@ -316,7 +316,7 @@ class MosaicEditor(AnalysisModule):
 
     def getLoadedFiles(self):
         """Return a list of all file handles that have been loaded"""
-        return self.items.values()
+        return list(self.items.values())
 
     def clear(self, ask=True):
         """Remove all loaded data and reset to the default state.

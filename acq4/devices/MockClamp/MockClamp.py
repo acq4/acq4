@@ -354,7 +354,7 @@ class MockClampDevGui(QtGui.QWidget):
         }
         self.updateStatus()
             
-        for v in self.modeRadios.itervalues():
+        for v in self.modeRadios.values():
             v.toggled.connect(self.modeRadioChanged)
         self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingChanged)
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingChanged)
@@ -383,13 +383,13 @@ class MockClampDevGui(QtGui.QWidget):
             self.ui.icHoldingSpin.blockSignals(False)
             
     def devModeChanged(self, mode):
-        for r in self.modeRadios.itervalues():
+        for r in self.modeRadios.values():
             r.blockSignals(True)
         #self.ui.modeCombo.blockSignals(True)
         #self.ui.modeCombo.setCurrentIndex(self.ui.modeCombo.findText(mode))
         self.modeRadios[mode].setChecked(True)
         #self.ui.modeCombo.blockSignals(False)
-        for r in self.modeRadios.itervalues():
+        for r in self.modeRadios.values():
             r.blockSignals(False)
         
     def vcHoldingChanged(self):
@@ -402,7 +402,7 @@ class MockClampDevGui(QtGui.QWidget):
         try:
             if not m:
                 return
-            for mode, r in self.modeRadios.iteritems():
+            for mode, r in self.modeRadios.items():
                 if r.isChecked():
                     self.dev.setMode(mode)
         except CancelException:
