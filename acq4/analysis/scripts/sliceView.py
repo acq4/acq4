@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import acq4.pyqtgraph as pg
 import numpy as np
 import acq4.pyqtgraph.opengl as gl 
@@ -219,7 +220,7 @@ def showMap(dh=None):
     name += "   Direct n spikes: " + str(rec['DirectNSpikes'])
     name += "\nSpont Ex Decay: %s   Spont In Decay: %s" % (str(rec['SpontExDecay1']), str(rec['SpontInDecay']))
     name += "\nExcitatory input" if (rec['EvokedExDecay'] is not None or rec['EvokedExAmp'] is not None) else ""
-    print rec
+    print(rec)
     #name += '\nDirect Slow Decay: %s %s' % (str(rec['DirectAreaGT0']), str(rec['DirectAreaGT0']))
     
     
@@ -257,7 +258,7 @@ def exportAll():
                     name = day.shortName() + "_" + sl.shortName() + "_" + cell.shortName() + ".svg"
                     ex = pg.exporters.SVGExporter.SVGExporter(v.scene())
                     ex.export(name)
-                    print name
+                    print(name)
                     
                     if dlg.wasCanceled():
                         raise Exception("export cancelled")
@@ -281,7 +282,7 @@ def exportAllMaps():
             name = 'map_' + day.shortName() + "_" + sl.shortName() + "_" + cell.shortName() + ".svg"
             ex = pg.exporters.SVGExporter.SVGExporter(v.scene())
             ex.export(name)
-            print name
+            print(name)
             
             if dlg.wasCanceled():
                 raise Exception("export cancelled")

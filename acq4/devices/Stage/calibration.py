@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import scipy.stats, scipy.optimize
 import acq4.pyqtgraph as pg

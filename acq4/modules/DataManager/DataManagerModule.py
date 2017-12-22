@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from DataManagerTemplate import *
 from acq4.modules.Module import *
 from acq4.util.DataManager import *

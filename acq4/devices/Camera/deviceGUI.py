@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #from DevTemplate import Ui_Form
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.pyqtgraph.parametertree import * 
@@ -58,7 +59,7 @@ class CameraDeviceGui(QtGui.QWidget):
                 #    w = QtGui.QCheckBox()
                 #    w.setChecked(val)
                 else:
-                    print "    Ignoring parameter '%s': %s" % (k, str(p))
+                    print("    Ignoring parameter '%s': %s" % (k, str(p)))
                     continue
             
                 #self.stateGroup.addWidget(w, k)

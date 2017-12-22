@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import six
 import sys, re, types, ctypes, os, time
 import ctypes
@@ -109,8 +110,8 @@ class _NIDAQ:
             msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error())
             raise NIDAQError(errCode, msg)
         elif errCode > 0:
-            print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
-            print self.error(errCode)
+            print("NiDAQ Warning while running function '%s%s'" % (func, str(args)))
+            print(self.error(errCode))
             
         if returnValue is not None:  ## If a specific return value was indicated, return it now
             return ret[returnValue]
@@ -126,7 +127,7 @@ class _NIDAQ:
         try:
             return getattr(self.nidaq, func)(*args, **kargs)
         except:
-            print func, args
+            print(func, args)
             raise
         
     def error(self, errCode=None):

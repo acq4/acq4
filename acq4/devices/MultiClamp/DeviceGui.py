@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from RackTemplate import *
 from PyQt4 import QtCore, QtGui
 import acq4.pyqtgraph as pg

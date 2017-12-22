@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 __author__ = 'pbmanis'
 
 """
@@ -114,7 +115,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
         dircontents = glob.glob(os.path.join(slicedir.name(), 'cell_*'))
         for d in dircontents:
                 self.processCellClicked(sel = d)
-        print '\nAnalysis of Slice completed'
+        print('\nAnalysis of Slice completed')
 
     def processCellClicked(self, sel=None):
         """
@@ -122,7 +123,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
         our protocol selector, process the protocol for this cell.
 
         """
-        print 'ProcessCell received a request for: ', sel
+        print('ProcessCell received a request for: ', sel)
 
         if sel is None or sel is False: # called from gui - convert handle to str for consistency
             sel = self.fileLoader.ui.dirTree.selectedFiles()[0].name() # select the cell
@@ -133,14 +134,14 @@ class ChR2TraceAnalyzer(AnalysisModule):
             for d in dircontents:
                 self.fileLoader.loadFile([self.dataManager().dm.getDirHandle(d)])
                 self.processProtocolClicked()
-            print "\nAnalysis of cell completed"
+            print("\nAnalysis of cell completed")
             return
         dircontents = glob.glob(os.path.join(sel, 'Laser-Blue*'))
         if dircontents != []:
             for d in dircontents:
                 self.fileLoader.loadFile([self.dataManager().dm.getDirHandle(d)])
                 self.processProtocolClicked()
-            print "\nAnalysis of cell completed"
+            print("\nAnalysis of cell completed")
             return
 
     def fileLoaded(self, dh):
@@ -193,7 +194,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
             name = 'Scatter Plot%s' % i
             pl.append(self.getElement(name, create=False))
             self.ChR2.plotSummary(plotWidget=pl)
-        print '\nAnalysis of protocol finished'
+        print('\nAnalysis of protocol finished')
 
     def outputChanged(self):
         if self.processCheck.isChecked():

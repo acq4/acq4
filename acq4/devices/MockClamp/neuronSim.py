@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 Use NEURON to simulate a simple cell for testing with MockClamp
 """
@@ -14,7 +15,7 @@ import neuron
 # try to load extra mechanisms
 for name in ('i386', 'x86_64'):
     mechlib = os.path.join(os.path.dirname(__file__), name + '/.libs/libnrnmech.so')
-    print "NEURON load:", mechlib
+    print("NEURON load:", mechlib)
     if os.path.isfile(mechlib):
         h.nrn_load_dll(mechlib)
 
@@ -130,7 +131,7 @@ if __name__ == '__main__':
     dt = 1e-4
     tb = np.arange(0, npts*dt, dt)
     for i, v in enumerate(x):
-        print 'V: ', v
+        print('V: ', v)
         cmd[i, x1:x2] = v*1e-3
         opts = {
             'mode': 'vc',

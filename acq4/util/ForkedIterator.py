@@ -1,3 +1,4 @@
+from __future__ import print_function
 import multiprocessing as m
 import time
 import numpy
@@ -71,5 +72,5 @@ if __name__ == '__main__':
     
     fg = ForkedIterator(gen, 10)
     for x in fg:
-        print x
+        print(x)
     

@@ -57,7 +57,7 @@ def test_reload():
     v3 = (reload_test.C, reload_test.C.sig, reload_test.C.fn, reload_test.C.fn.__func__, c.sig, c.fn, c.fn.__func__)
 
     for i in range(len(old)):
-        print id(old[i]), id(new1[i]), id(new2[i]), old[i], new1[i]
+        print(id(old[i]), id(new1[i]), id(new2[i]), old[i], new1[i])
 
     cfn1 = pg.reload.getPreviousVersion(c.fn)
     cfn2 = pg.reload.getPreviousVersion(cfn1)

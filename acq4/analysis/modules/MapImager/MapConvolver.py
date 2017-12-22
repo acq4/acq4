@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 #import acq4.Manager
 import acq4.pyqtgraph as pg

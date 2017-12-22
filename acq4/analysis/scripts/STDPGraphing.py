@@ -1,3 +1,4 @@
+from __future__ import print_function
 import pyqtgraph as pg
 import numpy as np
 
@@ -69,7 +70,7 @@ def writeCSV(data, group, filename, baseDir):
             try:
                 f.write('%s,%s,,'%(d[i]['time'], d[i]['normalizedPspSlope']))
             except IndexError:
-                print "skipping index %i for Cell %s"%(i, c.name())
+                print("skipping index %i for Cell %s"%(i, c.name()))
                 f.write(',,,')
         f.write('\n')
 

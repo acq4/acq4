@@ -1,3 +1,4 @@
+from __future__ import print_function
 from acq4.util.FileLoader import FileLoader
 from PyQt4 import QtCore, QtGui
 

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys, os
 if __name__ == '__main__':
     d = os.path.dirname(__file__)
@@ -22,7 +23,7 @@ if os.path.isdir(sdkDir):
     headerDir = sdkDir
 else:
     headerDir = modDir
-print headerDir
+print(headerDir)
 p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
 
 if sys.platform == 'darwin':
@@ -304,7 +305,7 @@ class QCameraClass:
                 #print "        3 convertUnits: param:", param, "value:", (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])
                 return (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])  
             else:
-                print "qcam.convertUnitsToAcq4 does not know how to convert value of type ", type(value)
+                print("qcam.convertUnitsToAcq4 does not know how to convert value of type ", type(value))
         else: 
             #print "%s not in unitConversionDict." %param, "Value = ", value
             return value
@@ -618,8 +619,8 @@ class QCameraClass:
                 if params[x] == current[x]:
                     continue
             except:
-                print "PARAMS:", params
-                print "CURRENT:", current
+                print("PARAMS:", params)
+                print("CURRENT:", current)
                 raise
             
             if x == 'ringSize':
@@ -628,7 +629,7 @@ class QCameraClass:
                 continue
             if x == 'qprmImageFormat':
                 if params[x] != 'qfmtMono16':
-                    print "QCam driver currently only supports the 'qfmtMono16' image format."
+                    print("QCam driver currently only supports the 'qfmtMono16' image format.")
                     continue
             #print "changed param", x, current[x], params[x]
             changed = True
@@ -656,7 +657,7 @@ class QCameraClass:
                             value = max(allowableValues)
                     elif type(allowableValues) == list:
                         if value not in allowableValues:
-                            print "%s not an allowable value for QImaging camera. Allowable values are %s" %(value, allowableValues)
+                            print("%s not an allowable value for QImaging camera. Allowable values are %s" %(value, allowableValues))
             #print "     4 value:", value
             
             
@@ -869,7 +870,7 @@ class QCameraClass:
         #for x in args[0]:
             #dict[x] = self.getParam(x)
         #print "Set params to:", dict
-        print "Queued settings have been changed. (Message from queueSettings callback). Settings:", args
+        print("Queued settings have been changed. (Message from queueSettings callback). Settings:", args)
 
     def stop(self):
 
@@ -897,14 +898,14 @@ class QCameraClass:
         return a 
         
 if __name__ == '__main__':
-    print "Testing QCam driver..."
+    print("Testing QCam driver...")
     qcd = QCamDriverClass()
     cams = qcd.listCameras()
-    print "Found cameras:", cams
+    print("Found cameras:", cams)
     cam = qcd.getCamera(cams[0])
-    print "Opened camera 0."
+    print("Opened camera 0.")
     params = cam.listParams()
-    print "Parameters available:", list(params.keys())
+    print("Parameters available:", list(params.keys()))
     qcd.quit()
     
 #loadDriver()

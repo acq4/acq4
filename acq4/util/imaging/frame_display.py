@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from acq4 import pyqtgraph as pg
 from .contrast_ctrl import ContrastCtrl

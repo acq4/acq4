@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 For combining photostimulation maps across cells and displaying against 3D atlas.
 
@@ -85,7 +86,7 @@ class MapCombiner(AnalysisModule):
         db = self.dataManager().currentDatabase()
         self.tableName = 'map_site_view'
         if not db.hasTable(self.tableName):
-            print "Creating DB views."
+            print("Creating DB views.")
             db.createView(self.tableName, ['map_sites', 'photostim_maps', 'dirtable_cell', 'cochlearnucleus_protocol', 'cochlearnucleus_cell'])
             ## view creation SQL:
             ## select * from map_sites 

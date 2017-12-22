@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
+from __future__ import print_function
 """
 PlotHelpers.py
 
@@ -128,8 +129,8 @@ def calbar(ax, calbar = None, axesoff = True, orient = 'left'):
                 horizontalalignment = 'right', verticalalignment = 'center',
                 fontsize = 11)
         else:
-            print "PlotHelpers.py: I did not understand orientation: %s" % (orient)
-            print "plotting as if set to left... "
+            print("PlotHelpers.py: I did not understand orientation: %s" % (orient))
+            print("plotting as if set to left... ")
             ax.plot([calbar[0], calbar[0], calbar[0]+calbar[2]], 
                 [calbar[1]+calbar[3], calbar[1], calbar[1]],
                 color = 'k', linestyle = '-', linewidth = 1.5)

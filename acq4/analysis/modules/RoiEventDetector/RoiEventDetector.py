@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, re, zipfile
 from acq4.analysis.modules.EventDetector.EventDetector import EventDetector
 from acq4.pyqtgraph.metaarray import MetaArray
@@ -136,7 +137,7 @@ class RoiEventDetector(EventDetector):
         ## read all old lines
         with open(self.storageFile, 'r') as f:
             lines = f.readlines()
-            print "# of old lines:", len(lines)
+            print("# of old lines:", len(lines))
             
         ## overwrite file, then write lines back in if they aren't ones we want to delete
         with open(self.storageFile, 'w') as f:

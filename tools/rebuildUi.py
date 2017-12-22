@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from __future__ import print_function
 """
 Rebuild the Ui files
 Note: If the system complains about not finding PyQt4 from pyuic, and you are using
@@ -36,4 +37,4 @@ for ui in uifiles:
     py = os.path.splitext(ui)[0] + '.py'
     if not os.path.exists(py) or os.stat(py).st_mtime < os.stat(ui).st_mtime:
         os.system('%s %s > %s' % (uic, ui, py))
-        print py
+        print(py)

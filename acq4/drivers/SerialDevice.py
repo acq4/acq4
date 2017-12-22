@@ -1,3 +1,4 @@
+from __future__ import print_function
 import serial, time, sys
 import logging
 
@@ -182,7 +183,7 @@ class SerialDevice(object):
         time.sleep(0.1)
         d += self.readAll()
         if len(d) > 0:
-            print self, "Warning: discarded serial data ", repr(d)
+            print(self, "Warning: discarded serial data ", repr(d))
         return d
 
     def getPort(self):
@@ -201,10 +202,10 @@ if __name__ == '__main__':
     try:
         port, baud = sys.argv[1:3]
     except:
-        print "Usage: python -i SerialDevice port baudrate"
+        print("Usage: python -i SerialDevice port baudrate")
         os._exit(1)
 
     sd = SerialDevice(port=port, baudrate=baud)
-    print ""
-    print "Serial port opened and available as 'sd'."
-    print "Try using sd.write(...), sd.readAll(), and sd.read(length, term, timeout)"
+    print("")
+    print("Serial port opened and available as 'sd'.")
+    print("Try using sd.write(...), sd.readAll(), and sd.read(length, term, timeout)")

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys, time
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(path)
@@ -7,12 +8,12 @@ import acq4.pyqtgraph as pg
 
 
 if len(sys.argv) < 2:
-    print "Usage:  python test.py device\n  (device may be com3, /dev/ttyACM0, etc.)"
+    print("Usage:  python test.py device\n  (device may be com3, /dev/ttyACM0, etc.)")
     sys.exit(1)
 
 mfc = MFC1(sys.argv[1])
 
-print "pos:", mfc.position()
+print("pos:", mfc.position())
 
 def plot_motion():
     win = pg.GraphicsWindow()
@@ -37,7 +38,7 @@ def plot_motion():
         pos = mfc.position()
         if not started and now - start > 0.2:
             move = pos + 20000
-            print "move:", move
+            print("move:", move)
             mfc.move(move)
             started = True
         if now - start > 2:
@@ -54,4 +55,4 @@ def plot_motion():
     p4.plot(t, dx, clear=True)
     p4.plot(t, dxt, pen='g')
 
-    print "Final:", mfc.position()
+    print("Final:", mfc.position())

@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from FileTreeWidget import *
 from acq4.DataManager import *

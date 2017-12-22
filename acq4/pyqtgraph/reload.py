@@ -15,10 +15,10 @@ Does NOT:
  - update references to any module-level objects
    ie, this does not reload correctly:
        from module import someObject
-       print someObject
+       print(someObject)
    ..but you can use this instead: (this works even for the builtin reload)
        import module
-       print module.someObject
+       print(module.someObject)
 """
 
 

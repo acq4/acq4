@@ -1,3 +1,4 @@
+from __future__ import print_function
 import six
 
 from .database import *
@@ -87,7 +88,7 @@ class AnalysisDatabase(SqliteDatabase):
             newDb = AnalysisDatabase(newFileName, self.dataModel(), oldDb.baseDir())
             
             dirTypes = ['Day', 'Experiment', 'Slice', 'Cell', 'Site', 'Protocol', 'ProtocolSequence']
-            print oldDb.listTables()
+            print(oldDb.listTables())
             for table in dirTypes:
                 if not oldDb.hasTable(table):
                     continue
@@ -96,7 +97,7 @@ class AnalysisDatabase(SqliteDatabase):
                     try:
                         newDb.addDir(dh)
                     except:
-                        print "Can't add directory %s from old DB:" % dh.name()
+                        print("Can't add directory %s from old DB:" % dh.name())
                         debug.printExc()
                     
             total = len(oldDb.select('Photostim_events')) + len(oldDb.select('Photostim_sites'))
@@ -792,7 +793,7 @@ class AnalysisDatabase(SqliteDatabase):
                         try:
                             files.append(f.name(relativeTo=self.baseDir()))
                         except:
-                            print "f:", f
+                            print("f:", f)
                             raise
                 data[colName] = files
 

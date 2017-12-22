@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from .. import AnalysisModule
 from acq4.Manager import getManager
 from PyQt4 import QtGui
@@ -47,7 +48,7 @@ class PatchAnalysisModule(AnalysisModule):
         Rm = testVoltage / steadyStateCurrent
         Ra = testVoltage / peakCurrent
 
-        print Rm, Ra, testVoltage, steadyStateCurrent, peakCurrent
+        print(Rm, Ra, testVoltage, steadyStateCurrent, peakCurrent)
         
         self.rmLabel.setText(u"Membrane Resistance: %0.2f MΩ" % (Rm/1e6))
         self.raLabel.setText(u"Access Resistance: %0.2f MΩ" % (Ra/1e6))

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import six
 
 
@@ -79,7 +80,7 @@ class SqliteDatabase:
             data = TableData(data)
             res = []
             if not q.prepare(cmd):
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
             p.mark("Prepared query")
             if batch:
@@ -206,7 +207,7 @@ class SqliteDatabase:
         indicating progress. This *must* be used inside a for loop::
         
             for n,nmax in db.iterInsert(table, data):
-                print "Insert %d%% complete" % (100. * n / nmax)
+                print("Insert %d%% complete" % (100. * n / nmax))
         
         Use the chunkSize argument to determine how many records are inserted per iteration.
         See insert() for a description of all other options.
@@ -380,7 +381,7 @@ class SqliteDatabase:
             ret = fn(cmd)
         if not ret:
             if cmd is not None:
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
             else:
                 raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
@@ -455,7 +456,7 @@ class SqliteDatabase:
                         if k.lower() != 'rowid':
                             if k not in schema:
                                 raise Exception("Column '%s' not present in table '%s'" % (k, table))
-                            print "Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                            print("Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k]))))
             if batch:
                 for k in newData:
                     newData[k].append(newRec.get(k, None))

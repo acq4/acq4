@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 import sys
 from acq4.devices.Device import TaskGui
@@ -322,7 +323,7 @@ class MultiClampTaskGui(TaskGui):
             ind = c.findText(s)
             if ind == -1:
                 for i in range(c.count()):
-                    print c.itemText(i)
+                    print(c.itemText(i))
                 raise Exception('Signal "%s" does not exist' % s)
             c.setCurrentIndex(ind)
         

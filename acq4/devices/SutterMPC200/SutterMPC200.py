@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time
 from PyQt4 import QtGui, QtCore
 from ..Stage import Stage, MoveFuture

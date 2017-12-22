@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 DataManager.py - DataManager, FileHandle, and DirHandle classes 
 Copyright 2010  Luke Campagnola
@@ -473,7 +474,7 @@ class DirHandle(FileHandle):
                     fd.close()
                     log = map(lambda l: eval(l.strip()), lines)
                 except:
-                    print "****************** Error reading log file %s! *********************" % logf
+                    print("****************** Error reading log file %s! *********************" % logf)
                     raise
             
             if recursive > 0:
@@ -757,7 +758,7 @@ class DirHandle(FileHandle):
                 try:
                     del index[fileName]
                 except:
-                    print type(index)
+                    print(type(index))
                     raise
                 self._writeIndex(index, lock=False)
                 self.emitChanged('meta', fileName)
@@ -788,7 +789,7 @@ class DirHandle(FileHandle):
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))
             except:
-                print self.path, name
+                print(self.path, name)
                 raise
             return os.path.exists(fn)
 
@@ -828,7 +829,7 @@ class DirHandle(FileHandle):
                     self._index = readConfigFile(indexFile)
                     self._indexMTime = os.path.getmtime(indexFile)
                 except:
-                    print "***************Error while reading index file %s!*******************" % indexFile
+                    print("***************Error while reading index file %s!*******************" % indexFile)
                     raise
             return self._index
         
@@ -855,7 +856,7 @@ class DirHandle(FileHandle):
         changed = False
         for f in ind:
             if not self.exists(f):
-                print "File %s is no more, removing from index." % (os.path.join(self.name(), f))
+                print("File %s is no more, removing from index." % (os.path.join(self.name(), f)))
                 del ind[f]
                 changed = True
         if changed:

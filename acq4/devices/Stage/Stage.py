@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtTest
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *

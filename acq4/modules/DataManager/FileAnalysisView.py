@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #import acq4.util.PySideImporter  ## Use PySide instead of PyQt
+from __future__ import print_function
 
 from PyQt4 import QtCore, QtGui
 import os

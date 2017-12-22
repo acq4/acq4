@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from acq4.modules.Module import *
 import sys, re, os, time, traceback

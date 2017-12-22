@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 import numpy as np
 import acq4.pyqtgraph as pg
@@ -53,7 +54,7 @@ def loadScanSequence(fh, host):
         scan = Scan(host, fh, subDirs, name=sname, itemName=name)
         ret.append(scan)
     
-    print ret
+    print(ret)
     return ret
 
             
@@ -292,7 +293,7 @@ class Scan(QtCore.QObject):
                 color = self.host.getColor(stats)
                 tasker.result.append((i, color, stats, events))
                 
-        print "recolor took %0.2fsec" % (time.time() - start)
+        print("recolor took %0.2fsec" % (time.time() - start))
         
         ## Collect all results, store to caches, and recolor spots
         for i, color, stats, events in result:
@@ -321,7 +322,7 @@ class Scan(QtCore.QObject):
             try:
                 stats = self.host.processStats(events, spot)
             except:
-                print events
+                print(events)
                 raise
             
             ## NOTE: Cache update must be taken care of elsewhere if this function is run in a parallel process!

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time
 
 import sys, os
@@ -87,4 +88,4 @@ dll.QCam_ReadSettingsFromCam(cam.handle, byref(s))
 #time.sleep(1.0)
 v = c_ulong()
 dll.QCam_GetParam(byref(s), lib.qprmBinning, byref(v))
-print v.value
+print(v.value)

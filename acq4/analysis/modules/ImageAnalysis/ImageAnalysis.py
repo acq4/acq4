@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
@@ -164,8 +165,8 @@ class ImageAnalysis(AnalysisModule):
             try:
                 ind = d.info()[('Clamp1', 'amp')]
             except:
-                print d
-                print d.info()
+                print(d)
+                print(d.info())
                 raise
             img = d['Camera/frames.ma'].read()
             images[ind].append(img)

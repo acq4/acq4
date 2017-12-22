@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Mutex.py -  Stand-in extension of Qt's QMutex class
 Copyright 2010  Luke Campagnola

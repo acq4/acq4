@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Main ACQ4 invocation script
 Copyright 2010  Luke Campagnola
@@ -81,7 +82,7 @@ timer.start(1000)
 
 
 if interactive:
-    print "Interactive mode; not starting event loop."
+    print("Interactive mode; not starting event loop.")
     
     ## import some things useful on the command line
     from .util.debug import *
@@ -95,7 +96,7 @@ if interactive:
     try:
         import readline
     except ImportError:
-        print "Module readline not available."
+        print("Module readline not available.")
     else:
         import rlcompleter
         readline.parse_and_bind("tab: complete")
@@ -105,7 +106,7 @@ if interactive:
         try:
             import readline
         except ImportError:
-            print "Module readline not available."
+            print("Module readline not available.")
         else:
             readline.write_history_file(historyPath)
     atexit.register(save_history)

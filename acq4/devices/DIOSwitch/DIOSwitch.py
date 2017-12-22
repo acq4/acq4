@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Device import *
 from PyQt4 import QtCore, QtGui
 import acq4.util.Mutex as Mutex

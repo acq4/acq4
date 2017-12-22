@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 import acq4.analysis.modules.EventDetector as EventDetector
@@ -140,7 +141,7 @@ class Photostim(AnalysisModule):
             return
         fh = fhl[0]
         if fh is not None and fh.isDir():
-            print Scan.describe(self.dataModel, fh)
+            print(Scan.describe(self.dataModel, fh))
 
 
     def baseDirChanged(self, dh):
@@ -201,7 +202,7 @@ class Photostim(AnalysisModule):
             parent = canvas.addGroup(fh.shortName())
         else:
             parent = None
-        print parent
+        print(parent)
         for scan in scans:
             canvasItem = scan.canvasItem()
             if parent is not None:
@@ -295,7 +296,7 @@ class Photostim(AnalysisModule):
                 try:
                     scan, fh = points[i][:2]
                 except:
-                    print points[i]
+                    print(points[i])
                     raise
                 
                 if len(points[i]) == 3:
@@ -320,15 +321,15 @@ class Photostim(AnalysisModule):
                 except:
                     for i in range(1,len(evList)):
                         if len(evList[i].dtype) != len(evList[i-1].dtype):
-                            print "Cannot concatenate; event lists have different dtypes:"
-                            print evList[i].dtype
-                            print evList[i-1].dtype
+                            print("Cannot concatenate; event lists have different dtypes:")
+                            print(evList[i].dtype)
+                            print(evList[i-1].dtype)
                         else:
                             for j in range(len(evList[i].dtype)):
                                 if evList[i-1].dtype[j] != evList[i].dtype[j]:
                                     for l in evList:
-                                        print l
-                                    print "Warning: can not concatenate--field '%s' has inconsistent types %s, %s  (data printed above)" % (evList[i].dtype.names[j], str(evList[i-1].dtype[j]), str(evList[i].dtype[j]))
+                                        print(l)
+                                    print("Warning: can not concatenate--field '%s' has inconsistent types %s, %s  (data printed above)" % (evList[i].dtype.names[j], str(evList[i-1].dtype[j]), str(evList[i].dtype[j])))
                     raise
         finally:
             QtGui.QApplication.restoreOverrideCursor()
@@ -394,7 +395,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
-        print "Process Events:", fh
+        print("Process Events:", fh)
         ret = self.detector.process(fh)
         return ret
         
@@ -505,7 +506,7 @@ class Photostim(AnalysisModule):
                         ev = scan.getEvents(fh)['events']
                         events.append(ev)
                     except:
-                        print fh, scan.getEvents(fh)
+                        print(fh, scan.getEvents(fh))
                         raise
                     st = scan.getStats(s.data())
                     stats.append(st)

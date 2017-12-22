@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 IVCurve: Analysis module that analyzes current-voltage and firing
 relationships from current clamp data.
@@ -496,7 +497,7 @@ class IVCurve(AnalysisModule):
             self.bridgeCorrection = bridge
             self.ctrl.IVCurve_bridge.setValue(self.bridgeCorrection)
             #for i in range(self.Clamps.traces.shape[0]):
-            print '******** Doing bridge correction: ', self.bridgeCorrection
+            print('******** Doing bridge correction: ', self.bridgeCorrection)
             self.Clamps.traces = self.Clamps.traces - (self.bridgeCorrection * self.Clamps.cmd_wave)
         else:
             br = self.ctrl.IVCurve_bridge.value()*1e6
@@ -637,7 +638,7 @@ class IVCurve(AnalysisModule):
                 #print 'set threshold to %f' % float(presets['SpikeThreshold'])
             if 'bridgeCorrection' in presets.keys():
                 self.bridgeCorrection = presets['bridgeCorrection']
-                print '####### BRIDGE CORRRECTION #######: ', self.bridgeCorrection
+                print('####### BRIDGE CORRRECTION #######: ', self.bridgeCorrection)
             else:
                 self.bridgeCorrection = 0.
         self.get_window_analysisPars()
@@ -716,7 +717,7 @@ class IVCurve(AnalysisModule):
         
         self.script_name = self.Script.read_script()
         if self.script_name is None:
-            print 'Failed to read script'
+            print('Failed to read script')
             self.ctrl.IVCurve_ScriptName.setText('None')
             return
         self.ctrl.IVCurve_ScriptName.setText(os.path.basename(self.script_name))
@@ -753,8 +754,8 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['FI_Curve'] = None
         # print '***** analyzing Spikes'
         if self.Clamps.data_mode not in self.dataModel.ic_modes or self.Clamps.time_base is None:
-            print ('IVCurve::analyzeSpikes: Cannot count spikes, ' +
-                   'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ', self.dataModel.ic_modes, 'tx is: ', self.tx)
+            print('IVCurve::analyzeSpikes: Cannot count spikes, ' +
+                  'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ', self.dataModel.ic_modes, 'tx is: ', self.tx)
             self.spikecount = []
             self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w',
                              symbolSize=6, symbolPen='b',
@@ -833,8 +834,8 @@ class IVCurve(AnalysisModule):
                 continue
             trspikes = OrderedDict()
             if printSpikeInfo:
-                print np.array(self.Clamps.values)
-                print len(self.Clamps.traces)
+                print(np.array(self.Clamps.values))
+                print(len(self.Clamps.traces))
             (rmp[i], r2) = Utility.measure('mean', self.Clamps.time_base, self.Clamps.traces[i],
                                            0.0, self.Clamps.tstart)            
             (iHold[i], r2) = Utility.measure('mean', self.Clamps.time_base, self.Clamps.cmd_wave[i],
@@ -910,7 +911,7 @@ class IVCurve(AnalysisModule):
         if printSpikeInfo:
             pp = pprint.PrettyPrinter(indent=4)
             for m in sorted(self.spikeShape.keys()):
-                print '----\nTrace: %d  has %d APs' % (m, len(list(self.spikeShape[m].keys())))
+                print('----\nTrace: %d  has %d APs' % (m, len(list(self.spikeShape[m].keys()))))
                 for n in sorted(self.spikeShape[m].keys()):
                     pp.pprint(self.spikeShape[m][n])
         self.analysis_summary['spikes'] = self.spikeShape  # save in the summary dictionary too       
@@ -1005,12 +1006,12 @@ class IVCurve(AnalysisModule):
  
         (jthr, j150) = self.getIVCurrentThresholds()  # get the indices for the traces we need to pull data from
         if jthr == j150:
-            print '\n%s:' % self.filename
-            print 'Threshold current T and 1.5T the same: using next up value for j150'
-            print 'jthr, j150, len(spikeShape): ', jthr, j150, len(self.spikeShape)
-            print '1 ', self.spikeShape[jthr][0]['current']*1e12
-            print '2 ', self.spikeShape[j150+1][0]['current']*1e12
-            print ' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeShape[jthr][0]['current']*1e12,
+            print('\n%s:' % self.filename)
+            print('Threshold current T and 1.5T the same: using next up value for j150')
+            print('jthr, j150, len(spikeShape): ', jthr, j150, len(self.spikeShape))
+            print('1 ', self.spikeShape[jthr][0]['current']*1e12)
+            print('2 ', self.spikeShape[j150+1][0]['current']*1e12)
+            print(' >> Threshold current: %8.3f   1.5T current: %8.3f, next up: %8.3f' % (self.spikeShape[jthr][0]['current']*1e12, end=" ")
                         self.spikeShape[j150][0]['current']*1e12, self.spikeShape[j150+1][0]['current']*1e12)
             j150 = jthr + 1
         if len(self.spikeShape[j150]) >= 1 and self.spikeShape[j150][0]['halfwidth'] is not None:
@@ -1119,7 +1120,7 @@ class IVCurve(AnalysisModule):
         self.analysis_summary['tau'] = self.tau*1.e3
         tautext = 'Mean Tau: %8.1f'
         if printWindow:
-            print tautext % (meantau * 1e3)
+            print(tautext % (meantau * 1e3))
         self.show_tau_plot()
 
     def show_tau_plot(self):
@@ -1265,7 +1266,7 @@ class IVCurve(AnalysisModule):
         rgnss = self.regions['lrwin1']['region'].getRegion()
         r1 = rgnss[1]
         if rgnss[1] == rgnss[0]:
-            print 'Steady-state regions have no width; using 100 msec. window for ss '
+            print('Steady-state regions have no width; using 100 msec. window for ss ')
             r1 = rgnss[0] + 0.1
         self.ctrl.IVCurve_ssTStart.setValue(rgnss[0] * 1.0e3)
         self.ctrl.IVCurve_ssTStop.setValue(r1 * 1.0e3)
@@ -1279,7 +1280,7 @@ class IVCurve(AnalysisModule):
         threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
         ntr = len(self.Clamps.traces)
         if not self.spikes_counted:
-            print 'updatess: spikes not counted yet? '
+            print('updatess: spikes not counted yet? ')
             self.analyzeSpikes()
             
         # spikecount = np.zeros(ntr)
@@ -1368,7 +1369,7 @@ class IVCurve(AnalysisModule):
             threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
             ntr = len(self.Clamps.traces)
             if not self.spikes_counted:
-                print 'update_pkAnalysis: spikes not counted'
+                print('update_pkAnalysis: spikes not counted')
                 self.analyzeSpikes()
             spikecount = np.zeros(ntr)
             # for i in range(ntr):
@@ -1685,7 +1686,7 @@ class IVCurve(AnalysisModule):
         ltxt = ltxt.replace('\n', ' ').replace('\r', '')  # remove line breaks
         ltxt = htxt + ltxt
         if printnow:
-            print ltxt
+            print(ltxt)
         
         if copytoclipboard:
             clipb = QtGui.QApplication.clipboard()
@@ -1820,7 +1821,7 @@ class IVCurve(AnalysisModule):
                         raise HelpfulException("Scan store canceled by user.", msgType='status')
         #db.close()
         #db.open()
-        print "Updated record for ", self.loaded.name()
+        print("Updated record for ", self.loaded.name())
 
     # ---- Helpers ----
     # Some of these would normally live in a pyqtgraph-related module, but are

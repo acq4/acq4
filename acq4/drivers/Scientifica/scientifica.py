@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
@@ -39,7 +40,7 @@ class Scientifica(SerialDevice):
     Examples::
 
         dev = Scientifica('com4')
-        print dev.getPos()
+        print(dev.getPos())
         dev.moveTo([10e-3, 0, 0], 'fast')
 
         # search for device with this description

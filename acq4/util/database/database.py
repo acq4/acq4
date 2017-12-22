@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import numpy as np
 import pickle, re, os
 import acq4.Manager
@@ -183,7 +184,7 @@ class SqliteDatabase:
         indicating progress. This *must* be used inside a for loop::
         
             for n,nmax in db.iterInsert(table, data):
-                print "Insert %d%% complete" % (100. * n / nmax)
+                print("Insert %d%% complete" % (100. * n / nmax))
         
         Use the chunkSize argument to determine how many records are inserted per iteration.
         See insert() for a description of all other options.
@@ -413,7 +414,7 @@ class SqliteDatabase:
                         if k.lower() != 'rowid':
                             if k not in schema:
                                 raise Exception("Column '%s' not present in table '%s'" % (k, table))
-                            print "Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                            print("Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k]))))
             if batch:
                 for k in newData:
                     newData[k].append(newRec.get(k, None))
@@ -508,10 +509,10 @@ class Transaction:
                 self.db('ROLLBACK TRANSACTION TO %s' % self.name)
                 self.db.tables = None  ## make sure we are forced to re-read the table list after the rollback.
             except Exception:
-                print "WARNING: Error occurred during transaction and rollback failed."
+                print("WARNING: Error occurred during transaction and rollback failed.")
                 
         if self.db._transactions[-1] is not self:
-            print self, self.db._transactions
+            print(self, self.db._transactions)
             raise Exception('Tried to exit transaction before another nested transaction has finished.')
         self.db._transactions.pop(-1)
 

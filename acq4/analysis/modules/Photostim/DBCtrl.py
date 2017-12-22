@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
 from Map import Map
@@ -256,7 +257,7 @@ class DBCtrl(QtGui.QWidget):
         db('Delete from Photostim_events where ProtocolDir=%i' %protocolID)
         db('Delete from Photostim_sites where ProtocolDir=%i' %protocolID)
         #db('Delete from DirTable_Protocol where Dir="%s"' %dh)## don't delete the protocol, because other things like atlas tables reference the protocol, only delete from tables we own
-        print "Removed data for %s" %dh
+        print("Removed data for %s" %dh)
         
         
     

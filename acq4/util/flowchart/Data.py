@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.pyqtgraph.flowchart.Node import Node
 from PyQt4 import QtGui, QtCore
 from acq4.util.DirTreeWidget import *

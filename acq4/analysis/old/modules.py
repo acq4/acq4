@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.Manager import getManager
 from acq4.util.metaarray import *
 from acq4.pyqtgraph.ImageView import *
@@ -314,7 +315,7 @@ class EventMatchWidget(QtGui.QSplitter):
             ## Find events
             eventList = self.findEvents(ppd)
             if len(eventList) > 200:
-                print "Warning--detected %d events; only showing first 200." % len(eventList)
+                print("Warning--detected %d events; only showing first 200." % len(eventList))
             eventList = eventList[:200]   ## Only take first 200 events to avoid overload
             events.append(eventList)
             
@@ -565,7 +566,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 avgSpot.sourceItems.append(item)
                 
             else:
-                print "Skipping directory %s" %d.name()
+                print("Skipping directory %s" %d.name())
         self.analysisCache = self.analysisCache[:appendIndex]    
         self.z += 1
         
@@ -726,7 +727,7 @@ class UncagingWindow(QtGui.QMainWindow):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             spont = self.analysisCache['preChargeNeg'].mean()
-            print "spont activity:", spont
+            print("spont activity:", spont)
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -966,7 +967,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def generateEventTable(self, rostral=None):
         if rostral not in ['right', 'left']:
-            print "Rostral orientation must be specified. Options: 'right', 'left'. Enter orientation as if the pia were horizontal at the top of the image."
+            print("Rostral orientation must be specified. Options: 'right', 'left'. Enter orientation as if the pia were horizontal at the top of the image.")
             return
         
         table = zeros((len(self.scanItems)*10), dtype=[ ## create a buffer space of 20 events per trace (maybe need more?)
@@ -1663,7 +1664,7 @@ class STDPWindow(UncagingWindow):
         
         ## Analyze pre and post traces for events
         if preSearchStart is None or postSearchStart is None:
-            print "Could not determine start time for PSP search; will not calculate stats.", preSearchStart, postSearchStart
+            print("Could not determine start time for PSP search; will not calculate stats.", preSearchStart, postSearchStart)
         else:
             for j in range(len(self.epspStats)):
                 i = self.epspStats[j]['currentTracesIndex']
@@ -2004,9 +2005,9 @@ class STDPWindow(UncagingWindow):
             g = ndimage.gaussian_filter(h[0].astype(float32), 2)
             i = argwhere(g > g.max()/3)
             if len(i) < 1:
-                print "Coundn't find %s search start." % period
-                print "Event times:", events
-                print "histogram:", g
+                print("Coundn't find %s search start." % period)
+                print("Event times:", events)
+                print("histogram:", g)
                 return None
             i = i[0,0]
             start = h[1][i]
@@ -2093,7 +2094,7 @@ class AnalysisPlotWindow(QtGui.QMainWindow):
         self.show()
         
     def loadData(self):
-        print "loadData() called."
+        print("loadData() called.")
         self.ui.tracePlot.clearPlots()
         
         if self.ui.dataSourceCombo.currentText() == 'data manager':

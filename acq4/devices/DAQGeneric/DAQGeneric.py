@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Device import *
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex
@@ -444,8 +445,8 @@ class DAQGenericTask(DeviceTask):
             try:
                 arr = np.concatenate(chanList)
             except:
-                print chanList
-                print [a.shape for a in chanList]
+                print(chanList)
+                print([a.shape for a in chanList])
                 raise
             
             daqState = OrderedDict()

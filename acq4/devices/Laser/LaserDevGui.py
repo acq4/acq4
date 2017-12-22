@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
 from devTemplate import Ui_Form
@@ -191,7 +192,7 @@ class LaserDevGui(QtGui.QWidget):
                 self.ui.wavelengthSpin.setValue(wl[0])
                 gddValue = self.ui.GDDSpin.setValue(wl[1])
             else:
-                print 'bad entry in devices.cfg for wavelength, GDD value'
+                print('bad entry in devices.cfg for wavelength, GDD value')
     #def microscopeChanged(self):
         #pass
     

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import math
 from acq4.pyqtgraph.debug import Profiler
@@ -77,7 +78,7 @@ def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, prin
     ## calculate probability of seeing a spontaneous event in time window
     p = 1-np.exp(-spontRate*timeWindow)
     if printProcess:
-        print "======  Spontaneous Probability: %f =======" % p
+        print("======  Spontaneous Probability: %f =======" % p)
     #prof.mark('calculated spontaneous probability')
         
     ## for each spot, calculate the probability of having the events in nearby spots occur randomly
@@ -94,12 +95,12 @@ def bendelsSpatialCorrelationAlgorithm(data, radius, spontRate, timeWindow, prin
             for j in range(nEventSpots, nSpots+1):
                 a = ((p**j)*((1-p)**(nSpots-j))*math.factorial(nSpots))/(math.factorial(j)*math.factorial(nSpots-j))
                 if printProcess:
-                    print "        Prob for %i events: %f     Total: %f" %(j, a, prob+a)
+                    print("        Prob for %i events: %f     Total: %f" %(j, a, prob+a))
                 prob += a
             table[nEventSpots, nSpots] = prob
             #prof.mark('calculate')
         if printProcess: ## for debugging
-            print "    %i out of %i spots had events. Probability: %f" %(nEventSpots, nSpots, prob)
+            print("    %i out of %i spots had events. Probability: %f" %(nEventSpots, nSpots, prob))
         x['prob'] = prob
         
         
@@ -154,12 +155,12 @@ def spatialCorrelationAlgorithm_ZScore(data, radius, printProcess=False, eventsK
             for j in range(nEventSpots, nSpots+1):
                 a = ((p**j)*((1-p)**(nSpots-j))*math.factorial(nSpots))/(math.factorial(j)*math.factorial(nSpots-j))
                 if printProcess:
-                    print "        Prob for %i events: %f     Total: %f" %(j, a, prob+a)
+                    print("        Prob for %i events: %f     Total: %f" %(j, a, prob+a))
                 prob += a
             table[nEventSpots, nSpots] = prob
             #prof.mark('calculate')
         if printProcess: ## for debugging
-            print "    %i out of %i spots had events. Probability: %f" %(nEventSpots, nSpots, prob)
+            print("    %i out of %i spots had events. Probability: %f" %(nEventSpots, nSpots, prob))
         x['prob'] = prob
         
         

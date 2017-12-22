@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time
 import traceback
 import sys, os
@@ -255,13 +256,13 @@ class LogWindow(QtGui.QMainWindow):
     
     def makeErrorLogExc(self):
         try:
-            print y
+            print(y)
         except:
             self.logExc('This is the message sent to logExc', msgType='error')
     
     def makeError2(self):
         try:
-            print y
+            print(y)
         except:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["reason one", "reason 2"], docs=['what, you expect documentation?'])
@@ -714,7 +715,7 @@ class LogWidget(QtGui.QWidget):
         try:
             tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
         except:
-            print "\n"+str(tb)+"\n"
+            print("\n"+str(tb)+"\n")
             raise
         return re.sub(" ", "&nbsp;", ("").join(map(self.cleanText, tb)))[:-1]
         #tb = [self.cleanText(strip(x)) for x in tb]
@@ -807,7 +808,7 @@ class LogWidget(QtGui.QWidget):
     def makeError2(self):
         ### just for testing error logging
         try:
-            print y
+            print(y)
         except:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["reason one", "reason 2"], docs=['what, you expect documentation?'])
@@ -824,7 +825,7 @@ class LogWidget(QtGui.QWidget):
                 try:
                     tb = self.entries[self.entryArray[self.entryArray['entryId']==(int(url[4:]))]['index']]['tracebackHtml']
                 except:
-                    print "requested index %d, but only %d entries exist." % (int(url[4:])-1, len(self.entries))
+                    print("requested index %d, but only %d entries exist." % (int(url[4:])-1, len(self.entries)))
                     raise
             cursor.insertHtml(tb)
 

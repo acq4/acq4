@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
@@ -359,7 +360,7 @@ class PatchWindow(QtGui.QMainWindow):
                 try:
                     data[:, k+s] = self.analysisData[k+s][sl]
                 except:
-                    print data.shape, data[:, k+s].shape, len(self.analysisData[k+s][sl])
+                    print(data.shape, data[:, k+s].shape, len(self.analysisData[k+s][sl]))
                     raise
                 
         return data

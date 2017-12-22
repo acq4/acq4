@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import os, pickle 
 import numpy as np
 import acq4.pyqtgraph as pg
@@ -392,7 +393,7 @@ class ScannerTask(DeviceTask):
     def stop(self, abort=False):
         if abort:
             with self.abortLock:
-                print "Abort!"
+                print("Abort!")
                 self.aborted = True
         with self.dev.lock:
             for t in self.daqTasks:

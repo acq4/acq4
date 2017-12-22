@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from TaskTemplate import *
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
@@ -108,7 +109,7 @@ class CameraTaskGui(DAQGenericTaskGui):
         state = self.stateGroup.state()
         if state['displayCheck']:
             if result is None or len(result.frames()) == 0:
-                print "No images returned from camera task."
+                print("No images returned from camera task.")
                 self.ui.imageView.clear()
             else:
                 frameTimes, precise = result.frameTimes()

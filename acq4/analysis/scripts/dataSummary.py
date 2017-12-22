@@ -1,3 +1,4 @@
+from __future__ import print_function
 __author__ = 'pbmanis'
 """
 dataSummary: This script reads all of the data files in a given directory, and prints out top level information
@@ -64,8 +65,8 @@ class DataSummary():
             h.write(self.coldefs + '\n')
             h.close()
         else:
-            print 'Base Directory: ', basedir
-            print self.coldefs
+            print('Base Directory: ', basedir)
+            print(self.coldefs)
             
         self.InvestigateProtocols = False  # set True to check out the protocols in detail
         self.tw = {}  # for notes
@@ -189,10 +190,10 @@ class DataSummary():
                     if thisfile[0:10] in self.daylist:
                         days.append(thisfile)
         if self.monitor:
-            print 'Days reported: ', days
+            print('Days reported: ', days)
         for day in days:
             if self.monitor:
-                print 'processing day: %s' % day
+                print('processing day: %s' % day)
             self.daystring = '%s \t' % (day)
             dh = DataManager.getDirHandle(os.path.join(self.basedir, day), create=False)
             dx = self.dataModel.getDayInfo(dh)
@@ -333,7 +334,7 @@ class DataSummary():
                 if np == 0:
                     self.cell_summary(dh)
                 if self.monitor:
-                    print 'Investigating Protocol: %s', dh.name()
+                    print('Investigating Protocol: %s', dh.name())
                 dirs = dh.subDirs()
                 protocolok = True  # assume that protocol is ok
                 modes = []
@@ -455,7 +456,7 @@ class DataSummary():
 
     def outputString(self, ostring):
         if self.outputMode == 'terminal':
-            print ostring
+            print(ostring)
         else:
             h = open(self.outFilename, 'a')  # append mode
             h.write(ostring + '\n')

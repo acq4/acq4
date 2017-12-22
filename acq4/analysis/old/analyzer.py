@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from acq4.Manager import getManager
 from AnalyzerTemplate import *
@@ -189,7 +190,7 @@ class Analyzer(QtGui.QMainWindow):
             item.addChild(i2)
 
     def dataSourceChanged(self):
-        print "data source changed!"
+        print("data source changed!")
         result = self.dataSource.results
         self.flowchart.setInput(dataIn=result)
 

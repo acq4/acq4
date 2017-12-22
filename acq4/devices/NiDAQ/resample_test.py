@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import scipy.signal
 from numpy import *
 import numpy
@@ -35,7 +36,7 @@ def run(ds):
         d1 = data.copy()
         t = time.clock()
         d2 = NiDAQ.downsample(d1, ds, method=m)
-        print "Method %d: %f" % (i, time.clock()-t)
+        print("Method %d: %f" % (i, time.clock()-t))
         p = pw.plot(y=d2, x=linspace(0, len(d2)*ds, len(d2)), pen=mkPen(c))
         p.setZValue(10000)
         #pw.plot(d2, pen=mkPen(colors[i-1]))

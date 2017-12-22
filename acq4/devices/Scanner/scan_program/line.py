@@ -1,3 +1,4 @@
+from __future__ import print_function
 import weakref
 import numpy as np
 import acq4.pyqtgraph as pg

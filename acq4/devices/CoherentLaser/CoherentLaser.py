@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Laser import *
 #import serial, struct
 from acq4.drivers.Coherent import *

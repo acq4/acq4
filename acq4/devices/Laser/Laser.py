@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 #import configfile
 from acq4.Manager import getManager, logExc, logMsg
@@ -594,7 +595,7 @@ class Laser(DAQGeneric, OptomechDevice):
             for i in a:
                 start = i-delayPts
                 if start < 0:
-                    print start, delayPts, i
+                    print(start, delayPts, i)
                     raise HelpfulException("Shutter takes %g seconds to open. Power pulse cannot be started before then." %delay)
                 shutterCmd[start:i+1] = 1
             daqCmd['shutter'] = shutterCmd

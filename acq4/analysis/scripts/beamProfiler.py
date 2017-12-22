@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore
 import acq4.Manager
 import acq4.util.imageAnalysis as imageAnalysis
@@ -31,8 +32,8 @@ def measure():
         fit = imageAnalysis.fitGaussian2D(img, [100, w/2., h/2., w/4., 0])
         # convert sigma to full width at 1/e
         fit[0][3] *= 2 * 2**0.5
-        print "WIDTH:", fit[0][3] * frame.info()['pixelSize'][0] * 1e6, "um"
-        print " fit:", fit
+        print("WIDTH:", fit[0][3] * frame.info()['pixelSize'][0] * 1e6, "um")
+        print(" fit:", fit)
     else:
         global frames
         frames = []

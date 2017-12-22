@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from acq4.pyqtgraph.flowchart.library.common import *
 from acq4.pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine

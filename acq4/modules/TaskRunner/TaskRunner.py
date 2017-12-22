@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from six.moves import reduce
 
@@ -1013,11 +1014,11 @@ class TaskThread(Thread):
         prof.mark('pause')
         
         if type(cmd) is not dict:
-            print "========= TaskRunner.runOnce cmd: =================="
-            print cmd
-            print "========= TaskRunner.runOnce params: =================="
-            print "Params:", params
-            print "==========================="
+            print("========= TaskRunner.runOnce cmd: ==================")
+            print(cmd)
+            print("========= TaskRunner.runOnce params: ==================")
+            print("Params:", params)
+            print("===========================")
             raise Exception("TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
         
         task = self.dm.createTask(cmd)
@@ -1067,9 +1068,9 @@ class TaskThread(Thread):
         except:
             ## Make sure the task is fully stopped if there was a failure at any point.
             #printExc("\nError during task execution:")
-            print "\nStopping task.."
+            print("\nStopping task..")
             task.stop(abort=True)
-            print ""
+            print("")
             raise HelpfulException("\nError during task execution:", sys.exc_info())
         finally:
             with self.lock:

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Device import *
 from acq4.pyqtgraph.SignalProxy import SignalProxy
@@ -141,7 +142,7 @@ class MouseThread(Thread):
                     
                 bytesWaiting = self.sp.inWaiting()
                 if bytesWaiting < 3:  ## More bytes have not arrived, probably there is data corruption!
-                    print "WARNING: possible corrupt data from serial mouse."
+                    print("WARNING: possible corrupt data from serial mouse.")
                     self.sp.read(bytesWaiting)
                     
                 elif self.sp.inWaiting() >= 3: ## at least one packet is available.

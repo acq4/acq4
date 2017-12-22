@@ -1,3 +1,4 @@
+from __future__ import print_function
 import scipy.optimize as opt
 import scipy.weave
 import numpy as np
@@ -71,7 +72,7 @@ def testMany(nReps=1000):
 
     global fits2, times2
     fits2, times2 = fitDataSet(xVals, data, fitPsp, guess=guess, bounds=bounds)
-    print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
+    print("Mean fit computation time: %0.2fms" % (times.mean() * 1000))
     
     p = pg.plot()
     p.setLabel('left', 'amplitude', units='A')
@@ -92,9 +93,9 @@ def testMany(nReps=1000):
 
 def testFit(title, psp, data, xVals, fitFn, *args, **kargs):
     global fits, times
-    print "Running fit test", title
+    print("Running fit test", title)
     fits, times = fitDataSet(xVals, data, fitFn, *args, **kargs)
-    print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
+    print("Mean fit computation time: %0.2fms" % (times.mean() * 1000))
     
     ## compute fractional error
     psp2 = psp.copy()
@@ -138,7 +139,7 @@ def pspFunc(v, x, risePower=1.0):
     try:
         out = v[0] / maxVal * pspInnerFunc(x-v[1], v[2], v[3], risePower)
     except:
-        print v[2], v[3], maxVal, x.shape, x.dtype
+        print(v[2], v[3], maxVal, x.shape, x.dtype)
         raise
     return out
 
@@ -173,7 +174,7 @@ def normalize(fn):
         #y = np.concatenate([y, y2])
         
         if any(np.isinf(guess)) or any(np.isnan(guess)):
-            print "NAN guess:", guess
+            print("NAN guess:", guess)
         
         ## run the fit on normalized data
         fit = fn(x, y, guess, bounds, risePower)
@@ -361,8 +362,8 @@ def fitPspSlsqpExtraAxes(x, y, guess, bounds, risePower=1.0):
     guess = np.append(guess, [0,0]) ## add extra axes to help gradient search
     bounds = np.append(bounds, bounds[0:1]+bounds[1:2], axis=0)
     bounds = np.append(bounds, bounds[1:2]+bounds[2:3], axis=0)
-    print guess
-    print bounds
+    print(guess)
+    print(bounds)
     def errFn(v, x, y, risePower):
         fit = (v[0]+v[4]) * pspInnerFunc(x-(v[1]+v[4]+v[5]), v[2]+v[5], v[3], risePower)
         err = abs(y - fit) * (fit + 1.0)
@@ -462,7 +463,7 @@ def showTemplates(v):
         vi = v[i]
         if len(vi) > 4:
             vi = processExtraVars(vi)
-            print "Convert v:", v[i], " => ", vi
+            print("Convert v:", v[i], " => ", vi)
         p.plot(x=x, y=pspFunc(vi, x), pen=(i, v.shape[0]*1.5))
         
 

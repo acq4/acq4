@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -187,7 +188,7 @@ class Camera(DAQGeneric, OptomechDevice):
     def noFrameWarning(self, time):
         # display a warning message that no camera frames have arrived.
         # This method is only here to allow PVCam to display some useful information.
-        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+        print("Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff)
     
     def pushState(self, name=None):
         #print "Camera: pushState", name
@@ -625,7 +626,7 @@ class CameraTaskResult:
                     try:
                         times = array([f.info()['time'] for f in self._frames])
                     except:
-                        print f
+                        print(f)
                         raise
                     times -= times[0]
                 else:
@@ -795,7 +796,7 @@ class AcquireThread(Thread):
                     if lastFrameId is not None:
                         drop = frames[0]['id'] - lastFrameId - 1
                         if drop > 0:
-                            print "WARNING: Camera dropped %d frames" % drop
+                            print("WARNING: Camera dropped %d frames" % drop)
                         
                     ## Build meta-info for this frame(s)
                     info = camState.copy()

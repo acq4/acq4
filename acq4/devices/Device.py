@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time, traceback, sys, weakref
 from PyQt4 import QtCore, QtGui
 from acq4.util.Mutex import Mutex
@@ -69,9 +70,9 @@ class Device(QtCore.QObject):
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                print "Timeout waiting for device lock for %s" % self.name()
-                print "  Device is currently locked from:"
-                print self._lock_tb_
+                print("Timeout waiting for device lock for %s" % self.name())
+                print("  Device is currently locked from:")
+                print(self._lock_tb_)
                 raise Exception("Timed out waiting for device lock for %s" % self.name())
         else:
             l = self._lock_.tryLock()

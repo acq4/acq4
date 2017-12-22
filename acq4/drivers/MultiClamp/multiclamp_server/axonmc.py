@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from ctypes import *
 import sys, re, types, ctypes, os
 import cheader
@@ -90,10 +91,10 @@ class _MULTICLAMP:
                     arg = c_double(arg)
                 elif fsig[2][1][0] == 'BOOL':
                     if arg:
-                        print "Interpreting parameter as c_int(1)"
+                        print("Interpreting parameter as c_int(1)")
                         arg = c_int(1)
                     else:
-                        print "Interpreting parameter as c_int(0)"
+                        print("Interpreting parameter as c_int(0)")
                         arg = c_int(0)
                 elif fsig[2][1][0] == 'UINT':
                     arg = c_uint(self.nameToInt(arg, f))
@@ -127,7 +128,7 @@ class _MULTICLAMP:
         try:
             return getattr(self.mc, func)(*args)
         except:
-            print func, args
+            print(func, args)
             raise
         
     def error(self, errCode):

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Simple Hodgkin-Huxley simulator for Python. VERY slow.
 Includes Ih from Destexhe 1993 [disabled]
@@ -205,7 +206,7 @@ if __name__ == '__main__':
     dt = 1e-4
     tb = np.arange(0, npts*dt, dt)
     for i, v in enumerate(x):
-        print 'V: ', v
+        print('V: ', v)
         cmd[i, x1:x2] = v*1e-3
         opts = {
             'mode': 'vc',

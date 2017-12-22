@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time, weakref, collections
 import numpy as np
 from PyQt4 import QtGui, QtCore

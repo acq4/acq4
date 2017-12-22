@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread

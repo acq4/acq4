@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from Device import Device
 from acq4.util.Mutex import Mutex
@@ -105,7 +106,7 @@ class OptomechDevice(object):
                     self.setParentDevice(config['parentDevice'])
                 except Exception as ex:
                     if "No device named" in ex.message:
-                        print "Cannot set parent device %s; no device by that name." % config['parentDevice']
+                        print("Cannot set parent device %s; no device by that name." % config['parentDevice'])
                     else:
                         raise
             if 'transform' in config:

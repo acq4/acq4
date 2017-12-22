@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 import os, sys
 d = os.path.split(os.path.abspath(__file__))[0]
@@ -19,16 +20,16 @@ dh = dm.getDirHandle(d)['testDir']
 
 class Loader(DirTreeLoader):
     def new(self):
-        print "NEW"
+        print("NEW")
         return True
         
     def save(self, fh):
         open(fh.name(), 'w').write("SAVED")
-        print "SAVED"
+        print("SAVED")
         return True
     
     def load(self, fh):
-        print "LOADED:", open(fh.name()).read()
+        print("LOADED:", open(fh.name()).read())
         return True
         
 

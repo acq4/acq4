@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.OptomechDevice import *
 from acq4.devices.Stage import Stage
 from deviceTemplate import Ui_Form

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import scipy.ndimage
 import numpy as np
 from PyQt4 import QtCore, QtGui

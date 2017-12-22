@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from collections import OrderedDict
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from CanvasItem import CanvasItem
@@ -232,7 +233,7 @@ class ImageFilterWidget(QtGui.QWidget):
             snstate = snode.saveState()
         else:
             snstate = None
-        print snstate
+        print(snstate)
         
         self.fc.clear()
         
@@ -293,7 +294,7 @@ class ImageFilterWidget(QtGui.QWidget):
         if snstate is not None:
             snode = self.fc.nodes().get('Slice', None)
             if snode is not None:
-                print "restore!"
+                print("restore!")
                 snode.restoreState(snstate)
         
     def setInput(self, img):

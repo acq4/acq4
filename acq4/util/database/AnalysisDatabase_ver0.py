@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtSql, QtCore
 import numpy as np
 import pickle, re, os
@@ -45,7 +46,7 @@ class SqliteDatabase:
         else:
             res = []
             if not q.prepare(cmd):
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
             for d in data:
                 #print len(d)
@@ -179,7 +180,7 @@ class SqliteDatabase:
             ret = query.exec_(cmd)
         if not ret:
             if cmd is not None:
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
             else:
                 raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
@@ -231,7 +232,7 @@ class SqliteDatabase:
                     if k.lower() != 'rowid':
                         if k not in schema:
                             raise Exception("Field '%s' not present in table '%s'" % (k, table))
-                        print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                        print("Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k]))))
             newData.append(newRec)
         #print "new data:", newData
         return newData
@@ -545,7 +546,7 @@ class AnalysisDatabase(SqliteDatabase):
         return True
 
 if __name__ == '__main__':
-    print "Avaliable DB drivers:", list(QtSql.QSqlDatabase.drivers())
+    print("Avaliable DB drivers:", list(QtSql.QSqlDatabase.drivers()))
 
     db = SqliteDatabase()
     db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob)")
@@ -557,14 +558,14 @@ if __name__ == '__main__':
     for name, val in vals:
         db('delete from t')
         db.insert('t', int=val, real=val, text=val, blob=val)
-        print "Insert %s (%s):" % (name, repr(val))
-        print "  ", db.select('t')[0]
+        print("Insert %s (%s):" % (name, repr(val)))
+        print("  ", db.select('t')[0])
         
-    print "Table extraction test:"
+    print("Table extraction test:")
     for name, val in vals:
         #db('delete from t')
         db.insert('t', int=val, real=val, text=val, blob=val)
         #print "Insert %s (%s):" % (name, repr(val))
         #print "  ", db.select('t')[0]
-    print db.select('t', toArray=True)
+    print(db.select('t', toArray=True))
     

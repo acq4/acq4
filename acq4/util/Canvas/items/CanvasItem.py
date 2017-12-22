@@ -1,3 +1,4 @@
+from __future__ import print_function
 from acq4.pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
 
 

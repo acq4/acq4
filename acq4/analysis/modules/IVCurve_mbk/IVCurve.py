@@ -1,6 +1,7 @@
 ##Needs to:
 ##    output set of parameters: Ih current, rectification, FI plots (and analysis based on)
 ##    load IV directory, plot raw data, sends data to a function(flowchart) which returns a list of parameters. 
+from __future__ import print_function
 
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule

@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 from PyQt4 import QtGui, QtCore
 from collections import OrderedDict
@@ -180,7 +181,7 @@ class STDPAnalyzer(AnalysisModule):
                 for i, protoDir in enumerate(f.ls()):
                     df = self.dataModel.getClampFile(f[protoDir])
                     if df is None:
-                        print 'Error in reading data file %s' % f.name()
+                        print('Error in reading data file %s' % f.name())
                         break
                     data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
@@ -216,7 +217,7 @@ class STDPAnalyzer(AnalysisModule):
                 for i, protoDir in enumerate(f.ls()):
                     df = self.dataModel.getClampFile(f[protoDir])
                     if df is None:
-                        print 'Error in reading data file %s' % f.name()
+                        print('Error in reading data file %s' % f.name())
                         break
                     data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
@@ -657,8 +658,8 @@ class STDPAnalyzer(AnalysisModule):
                 try:
                     x = pr1[0] # no points inside 
                 except:
-                    print self.analysisResults['time']
-                    print 'starttime: ', postStart
+                    print(self.analysisResults['time'])
+                    print('starttime: ', postStart)
                     msg = 'Recording is shorter than needed for analysis window\n'
                     msg += 'Max rec time: %8.3f sec, window starts at %8.3f sec' % (np.max
                         (self.analysisResults['time']), 60.*postwin[0])

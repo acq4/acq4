@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtGui, QtCore
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
@@ -103,7 +104,7 @@ class CellHealthTracker(AnalysisModule):
         try:
             data = f.read()
         except:
-            print f
+            print(f)
             raise
         #print f.info()
         time = f.info()['__timestamp__']
@@ -203,7 +204,7 @@ class CellHealthTracker(AnalysisModule):
         method = str(self.ctrl.methodCombo.currentText())
         #print method
         if method == "Simple Ohm's law":
-            print 'using simple method'
+            print('using simple method')
             if pulseAmp < 0:
                 RsPeak = data['primary'].min()
             else:

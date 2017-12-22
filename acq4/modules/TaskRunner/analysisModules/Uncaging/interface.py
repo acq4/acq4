@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from PyQt4 import QtCore, QtGui
@@ -172,7 +173,7 @@ class Task:
     def addFrame(self, frame):
         camDev = self.ui().cameraDevice()
         if camDev is None:
-            print "Warning: No camera module selected in uncaging analysis dock."
+            print("Warning: No camera module selected in uncaging analysis dock.")
             return  
         clampDev = self.ui().clampDevice()
         scannerDev = self.ui().scannerDevice()

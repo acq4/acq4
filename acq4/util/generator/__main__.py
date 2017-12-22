@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys, user
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(md, '..'))

@@ -2,6 +2,7 @@
 #import CtrlTemplate
 #import acq4.pyqtgraph.WidgetGroup
 #import acq4.util.advancedTypes as advancedTypes
+from __future__ import print_function
 import collections
 import acq4.analysis.atlas.Atlas as Atlas
 import os

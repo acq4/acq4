@@ -1,3 +1,4 @@
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 import acq4.Manager
 import acq4.pyqtgraph as pg
@@ -111,7 +112,7 @@ if 'events' not in locals():
     
 
 
-    print "Reading cell list..."
+    print("Reading cell list...")
     
     #import os, pickle
     #md = os.path.abspath(os.path.split(__file__)[0])
@@ -127,7 +128,7 @@ if 'events' not in locals():
     ## create views that link cell information to events/sites
     db = man.getModule('Data Manager').currentDatabase()
     if not db.hasTable(siteView):
-        print "Creating DB views."
+        print("Creating DB views.")
         db.createView(siteView, ['photostim_sites', 'DirTable_Protocol', 'DirTable_Cell'])  ## seems to be unused.
     if not db.hasTable(eventView):
         db.createView(eventView, ['photostim_events', 'DirTable_Protocol', 'DirTable_Cell'])
@@ -140,7 +141,7 @@ if 'events' not in locals():
     for c in cells:
         cellCombo.addItem(c.name(relativeTo=man.baseDir))
     #cellSpin.setMaximum(len(cells)-1)
-    print "Done."
+    print("Done.")
 
     
     
@@ -158,9 +159,9 @@ def loadCell(cell, reloadData=False):
     nEv = 0
     positionCache = {}
     tcache = {}
-    print "Loading all events for cell", cell
+    print("Loading all events for cell", cell)
     tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
-    print tot, "total events.."
+    print(tot, "total events..")
     
     with pg.ProgressDialog('Loading event data...', maximum=tot, wait=0) as dlg:
         for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitTimeToPeak', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'CellType', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True, chunkSize=200):
@@ -394,7 +395,7 @@ def showCell(**kwds):
         pg.siFormat(np.median(ev3['fitDecayTau']), error=np.std(ev3['fitDecayTau']), space=False, suffix='s'),
         pg.siFormat(np.median(ev3['fitAmplitude']), error=np.std(ev3['fitAmplitude']), space=False, suffix='A'),
         sri)
-    print re.sub(r'<[^>]+>', '', title)
+    print(re.sub(r'<[^>]+>', '', title))
     
     pw1.setTitle(title)
 

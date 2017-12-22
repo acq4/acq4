@@ -1,3 +1,4 @@
+from __future__ import print_function
 import serial, struct, time, collections
 
 class TimeoutError(Exception):
@@ -26,7 +27,7 @@ class Coherent(object):
         try:
             return float(v)
         except:
-            print v, type(v)
+            print(v, type(v))
             raise
     
     def getWavelength(self):
@@ -117,7 +118,7 @@ class Coherent(object):
         time.sleep(0.1)
         d += self.read()
         if len(d) > 0:
-            print "Sutter MP285: Warning: tossed data ", repr(d)
+            print("Sutter MP285: Warning: tossed data ", repr(d))
         return d
     
     def read(self):
@@ -186,5 +187,5 @@ class Coherent(object):
 
 if __name__ == '__main__':
     c = Coherent(port=4, baud=19200)
-    print "Power:", c.getPower()
-    print "Wavelength:", c.getWavelength()
+    print("Power:", c.getPower())
+    print("Wavelength:", c.getWavelength())

@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 Low-level serial communication for Trinamic TMCM-140-42-SE controller
 (used internally for the Thorlabs MFC1)

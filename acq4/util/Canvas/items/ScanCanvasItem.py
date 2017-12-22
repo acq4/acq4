@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 from ImageCanvasItem import ImageCanvasItem
@@ -184,7 +185,7 @@ class ScanCanvasItem(CanvasItem):
         dh = self.opts['handle']
         dirs = [dh[d] for d in dh.subDirs()]
         if 'Camera' not in dirs[0].subDirs():
-            print "No image data for this scan."
+            print("No image data for this scan.")
             return
         
         spotFrame = self.ui.spotFrameSpin.value()

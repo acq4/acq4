@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Device import *
 from acq4.Manager import logMsg
@@ -97,7 +98,7 @@ class MultiClamp(Device):
             if time.time() - start > 10:
                 raise Exception("Timed out waiting for first update from multi clamp commander.")
         
-        print "Created MultiClamp device", self.config['channelID']
+        print("Created MultiClamp device", self.config['channelID'])
 
         ## set configured holding values
         if 'vcHolding' in self.config:
@@ -482,7 +483,7 @@ class MultiClampTask(DeviceTask):
                 arr = concatenate(chanList)
             except:
                 for a in chanList:
-                    print a.shape
+                    print(a.shape)
                 raise
             
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]

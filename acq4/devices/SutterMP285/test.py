@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import serial, struct, time, sys, collections
 sp = serial.Serial(3, baudrate=19200, bytesize=serial.EIGHTBITS)
-print "Opened", sp.portstr
+print("Opened", sp.portstr)
 
 ## convert byte to signed byte
 def sint(x):
@@ -14,7 +15,7 @@ def getPos():
     #time.sleep(0.1)
     #d += read()
     if len(d) > 0:
-        print "Warning: tossed data ", repr(d)
+        print("Warning: tossed data ", repr(d))
     
     ## request position
     sp.write('c\r')
@@ -30,14 +31,14 @@ def getPos():
         if len(packet) == 13 and packet[-1] == '\r':  ## got a whole packet and nothing else is coming..
             break
         elif len(packet) > 12:
-            print "Corrupt packet!"
-            print "    data:", repr(packet)
+            print("Corrupt packet!")
+            print("    data:", repr(packet))
         #print '.'
         time.sleep(0.1) # 10ms loop time
         c += 0.1
     #print repr(packet)
     if len(packet) != 13:
-        print "  bad packet:", repr(packet)
+        print("  bad packet:", repr(packet))
         return
     pos = [packet[-13:-9], packet[-9:-5], packet[-5:-1]]
     pos = [struct.unpack('l', x)[0] for x in pos]    #print repr(x), repr(y)
@@ -59,14 +60,14 @@ def setPos(x, y, block=True):
     while block:
         s = read()
         if len(s) > 0:
-            print "return:", repr(s)
+            print("return:", repr(s))
             break
     if block:
         dt = time.time()-t
-        print "time: %g" % (dt)
+        print("time: %g" % (dt))
         p2 = getPos()
-        print p1, p2
-        print "spd: %gmm/s" % ( ((p2[0]-p1[0])**2+(p2[1]-p1[1])**2)**0.5 *1e-4 / dt )
+        print(p1, p2)
+        print("spd: %gmm/s" % ( ((p2[0]-p1[0])**2+(p2[1]-p1[1])**2)**0.5 *1e-4 / dt ))
 
         
 def setVel(v, step=False, block=True):
@@ -75,13 +76,13 @@ def setVel(v, step=False, block=True):
         v = 2**14
     if step:
         v = v | 0x8000
-    print "new vel: 0x%x" % v 
+    print("new vel: 0x%x" % v)
     cmd = 'V' + struct.pack('H', v) + '\r'
     sp.write(cmd)
     while block:
         s = read()
         if len(s) > 0:
-            print "return:", repr(s)
+            print("return:", repr(s))
             break
     
 def stat():
@@ -95,7 +96,7 @@ def stat():
     params = collections.OrderedDict()
     for i,n in enumerate(paramNames):
         params[n] = vals[i]
-    print params
+    print(params)
     
 def stop():
     sp.write('\3')

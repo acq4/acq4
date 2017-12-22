@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Description:
     
@@ -240,7 +241,7 @@ class MapAnalyzer(AnalysisModule):
         
     def update(self):
         if not self.analysisValid:
-            print "Updating analysis.."
+            print("Updating analysis..")
             map = self.currentMap
             if map is None:
                 return
@@ -283,7 +284,7 @@ class MapAnalyzer(AnalysisModule):
             self.colorsValid = True
         
     def invalidate(self):
-        print "invalidate."
+        print("invalidate.")
         self.analysisValid = False
         self.colorsValid = False
 
@@ -441,9 +442,9 @@ class MapAnalyzer(AnalysisModule):
                 for k in list(fields.keys()) + list(recs[i].keys()):
                     spot['data'][k] = recs[i].get(k, None)
             self.analysisValid = True
-            print "reloaded analysis from DB", self.currentMap.rowID
+            print("reloaded analysis from DB", self.currentMap.rowID)
         else:
-            print "analysis incomplete:", len(recs), len(self.currentMap.spots)
+            print("analysis incomplete:", len(recs), len(self.currentMap.spots))
         
         
         

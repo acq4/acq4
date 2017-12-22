@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 pbm_ImageAnalysis is an analysis module for ACQ4.
 This module provides:
@@ -290,16 +291,16 @@ class pbm_ImageAnalysis(AnalysisModule):
     def processData(self):
         self.normData = []
         self.imageData = []
-        print 'in processData...'
+        print('in processData...')
         for img in self.rawData:
-            print 'doing image processdata'
+            print('doing image processdata')
             n = np.empty(img.shape, dtype=img.dtype)
             for i in range(img.shape[0]):
                 n[i] = self.imageView.normalize(img[i])
             self.normData.append(n)
             
             imgSet = {'procMean': n.mean(axis=0), 'procStd': n.std(axis=0)}
-            print 'appending...'
+            print('appending...')
             self.imageData.append(imgSet)
             
     def updateAnalysis(self):
@@ -350,7 +351,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         #     dsp = self.dataModel.listSequenceParams(dh[0])
         dlh = self.fileLoaderInstance.selectedFiles()
         if self.ctrl.ImagePhys_PhysROIPlot.isChecked():
-            print 'multiple file load, for # of files: ', len(dlh)
+            print('multiple file load, for # of files: ', len(dlh))
             self.makePhysROIPlot(dh, dlh)
         else:
             if len(dlh) > 1:
@@ -392,7 +393,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         try:
             self.loadSingleFile(dh)
         except:
-            print 'problem loading data... skipping'
+            print('problem loading data... skipping')
             self.plotCount += 1
             return
         self.unbleachImage()
@@ -536,8 +537,8 @@ class pbm_ImageAnalysis(AnalysisModule):
                 try:
                     ind = d.info()[('Clamp1', 'amp')]
                 except:
-                    print 'unable to read clamp data from : ', d
-                    print d.info()
+                    print('unable to read clamp data from : ', d)
+                    print(d.info())
                     raise
                 img = d['Camera/frames.ma'].read()
                 images[ind].append(img)
@@ -627,7 +628,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 #            print sdt, lpf
             if 1./sdt < lpf/2.:   # force nyquist happiness
                 lpf = 0.5/sdt
-                print 'reset lpf to ', lpf
+                print('reset lpf to ', lpf)
             filtdata = Utility.SignalFilter_LPFBessel(self.pmtData.asarray()[0], lpf, 1.0/sdt, NPole=4, bidir=True)
             return filtdata
         #    img = self.rs.extractImage(filtdata, offset=lag, subpixel=subpixel)
@@ -772,7 +773,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.imageScaleUnit = 'um'
             sf = 1.0e6
         else:
-            print 'Old File without full scaling information on image, setting to defaults of pixels.'
+            print('Old File without full scaling information on image, setting to defaults of pixels.')
             sh = self.imageData.shape
             region = [0, 0, sh[1], sh[2]] # make region from image data directly [x0,y0,y1,y1]
             px = [1.0, 1.0] # scaling is now in pixels directly
@@ -802,11 +803,11 @@ class pbm_ImageAnalysis(AnalysisModule):
         totframes = int(np.ceil(sh[0]/self.downSample))
         imageTimes = list(info[0].values())[1]
         dt = np.mean(np.diff(imageTimes))
-        print '\n'
-        print '*'*80
-        print 'File %s\n   Contains %d frames of %d x %d' % (dh.name(), sh[0], sh[1], sh[2])
-        print '   (would downsample to %d frames at downsample = %d ' % (totframes, self.downSample)
-        print 'Frame rate is: %12.5f s per frame or %8.2f Hz' % (dt, 1.0/dt)
+        print('\n')
+        print('*'*80)
+        print('File %s\n   Contains %d frames of %d x %d' % (dh.name(), sh[0], sh[1], sh[2]))
+        print('   (would downsample to %d frames at downsample = %d ' % (totframes, self.downSample))
+        print('Frame rate is: %12.5f s per frame or %8.2f Hz' % (dt, 1.0/dt))
         
     def tryDownSample(self, dh):
         imt = MetaArray(file=dh.name()) # , subset=(slice(block_pos,block_pos+block_size),slice(None), slice(None)))
@@ -821,7 +822,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if nlastblock > 0:
             nbigblocks += 1
         nframesperblock = bigblock/self.downSample
-        print 'Reducing from %d frames to %d frames, downsample = %d ' % (sh[0], outframes, self.downSample)
+        print('Reducing from %d frames to %d frames, downsample = %d ' % (sh[0], outframes, self.downSample))
         imt_out = np.empty((outframes, sh[1], sh[2]), dtype=np.float32)
         tfr = 0
 #        nfr = 0
@@ -839,7 +840,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                     pass
                 if bb == nbigblocks-1:
                     nframesperblock = int(np.floor(nlastblock/self.downSample))
-                    print "reading last block of short..."
+                    print("reading last block of short...")
                 for fr in range(nframesperblock):
                     dlg.setLabelText("Reading block %d of %d" % (tfr, outframes))
                     block_pos = fr * self.downSample
@@ -851,7 +852,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                         try:
                             imt_out[tfr] = img[block_pos,:,:]
                         except:
-                            print 'Failing!!! fr: %d   blockpos: %d  bb: %d' % (fr, block_pos, bb)
+                            print('Failing!!! fr: %d   blockpos: %d  bb: %d' % (fr, block_pos, bb))
                     dlg += 1
                     tfr += 1
 #                    nfr = tfr*self.downSample
@@ -917,10 +918,10 @@ class pbm_ImageAnalysis(AnalysisModule):
             pass
         
     def loadRatioImage(self):
-        print 'loading ratio image'
+        print('loading ratio image')
         dh = self.fileLoaderInstance.selectedFiles()
         self.ratioImage = dh[0].read()[np.newaxis,...].astype('float')
-        print self.ratioImage
+        print(self.ratioImage)
         #self.background /= self.background.max()
         if self.ratioImage is None:
             self.dataState['ratioLoaded'] = False
@@ -973,9 +974,9 @@ class pbm_ImageAnalysis(AnalysisModule):
             self.normalizeImage()  # another normalization
         if method == 4:
             self.slowFilterImage()  # slow filtering normalization: (F-Fslow)/Fslow on pixel basis over time
-        print 'normalize method: ', method
-        print self.dataState['ratioLoaded']
-        print self.useRatio
+        print('normalize method: ', method)
+        print(self.dataState['ratioLoaded'])
+        print(self.useRatio)
         if method == 4:  # g/r ratio  - future: requires image to be loaded (hooks in place, no code yet)
             if self.dataState['ratioLoaded'] and self.useRatio:
                 self.GRFFImage() # convert using the ratio
@@ -1004,7 +1005,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         nframes = image_sh[0]
 #        xsize = image_sh[1]
 #        ysize = image_sh[2]
-        print 'Writing tiff images to %s\n' % (tiffpath)
+        print('Writing tiff images to %s\n' % (tiffpath))
         #print dir(Image.Image)
         for i in range(0, nframes):
             ai = Image.Image.fromarray(self.imageData[i, :, :]*8192.0)
@@ -1076,7 +1077,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         HPF = self.ctrlROIFunc.ImagePhys_ImgHPF.value()
         LPF = self.ctrlROIFunc.ImagePhys_ImgLPF.value()  # 100.0
         if LPF < 4.0*HPF:
-            print "please make lpf/hpf further apart in frequency"
+            print("please make lpf/hpf further apart in frequency")
             return
         dt = np.mean(np.diff(self.imageTimes))
         samplefreq = 1.0/dt
@@ -1138,7 +1139,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         ywithinBurstMarks = thr*0.8*spikescale
         self.makeSpikePointers(spikes=(sptimes, yspmarks), spikespk=(sptimes, self.physData[sppts]),
             bursts = (bList, yburstMarks, ywithinBurstMarks))
-        print 'spikes detected: %d' % (len(sptimes))
+        print('spikes detected: %d' % (len(sptimes)))
 
     def makeSpikePointers(self, spikes=None, spikespk=None, bursts=None):
         # add scatterplot items to physiology trace  - these start out empty, but we can replace
@@ -1328,7 +1329,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
         mean = scipy.stats.nanmean(self.IXC_Strength.flatten())
         std = scipy.stats.nanstd(self.IXC_Strength.flatten())
-        print 'Mean XC: %f   std: %f' % (mean, std)
+        print('Mean XC: %f   std: %f' % (mean, std))
         if self.use_MPL:
             self.checkMPL()
             (self.MPLFig, self.MPL_plots) = PL.subplots(num="Image Analysis", nrows=1, ncols=1,
@@ -1414,13 +1415,13 @@ class pbm_ImageAnalysis(AnalysisModule):
 
 
     def printDistStrength(self):
-        print '\n\n----------------------------------\nROI Distance Map\nFile: %s  '% self.currentFileName
-        print 'roi1\troi2\td (um)\t R'
+        print('\n\n----------------------------------\nROI Distance Map\nFile: %s  '% self.currentFileName)
+        print('roi1\troi2\td (um)\t R')
         sh = self.ROIDistanceMap.shape
         for i in range(0, sh[0]):
             for j in range(i+1, sh[1]):
-                print '%d\t%d\t%8.0f\t%6.3f' % (i, j, self.ROIDistanceMap[i, j], self.IXC_Strength[i, j])
-        print '-------------------------------\n'
+                print('%d\t%d\t%8.0f\t%6.3f' % (i, j, self.ROIDistanceMap[i, j], self.IXC_Strength[i, j]))
+        print('-------------------------------\n')
 
     def NetworkGraph(self):
         """
@@ -1820,7 +1821,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         measure the distances between all possible pairs of ROIs, store result in matrix...
         The distances are scaled into microns or pixels.
         """
-        print 'Calculating ROI to ROI distances'
+        print('Calculating ROI to ROI distances')
         nd = len(self.AllRois)
         self.ROIDistanceMap = np.empty((nd, nd))  # could go sparse, but this is simple...
         self.ROIDistanceMap.fill(np.nan)
@@ -1851,7 +1852,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         """Save the ROI information (locations) to a disk file."""
         self.calculateAllROIs()
         if self.FData == []:
-            print 'self.FData is empty!'
+            print('self.FData is empty!')
             return
         sh = np.shape(self.FData)
         data = np.empty((sh[0]+2, sh[1]))
@@ -2054,7 +2055,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             for k in range(0, imshape[0]):
                 z, u, r, s = np.linalg.lstsq(A, self.imageData[k,:,:].reshape(imshape[1]*imshape[2], 1))
                 if k == 0:
-                    print z
+                    print(z)
                 self.tc_bleach[k] = z[0]
                 self.tc_offset[k] = z[1]
 
@@ -2235,7 +2236,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             regthresh[nregs] = t
             nregs += 1
 
-        print 'Regions detected: %d' % (nregs)
+        print('Regions detected: %d' % (nregs))
 
         # clean up the final regions - accept only those whose centers are more than
         # "diag" of an ROI apart.
@@ -2268,7 +2269,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             candidates[p] = (finalregions[neighbors[k]], allth[k]) # candidates will have only the keys that are picked.
             for n in neighbors:
                 excluded.append(n) # add these to the excluded list
-        print 'Found %d ROIs' % (len(candidates))
+        print('Found %d ROIs' % (len(candidates)))
 
     # next we verify that there are no close ROI pairs left:
     # this may not be needed, but sometimes with the pairwise-comparison, it is
@@ -2305,7 +2306,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                     continue
                 excluded.append(neighbors[i])
                 nc.pop(n) # remove the duplicates
-        print 'Reduced to %d ROIs' % (len(nc))
+        print('Reduced to %d ROIs' % (len(nc)))
         candidates = nc.copy()
 
         self.oldROIs = self.AllRois
@@ -2347,10 +2348,10 @@ class pbm_ImageAnalysis(AnalysisModule):
         Mellon and Tuong NeuroImage 47: 1331, 2009 """
 
         if self.dataState['bleachCorrection'] is False:
-            print 'No Bleaching done, copy rawdata to image'
+            print('No Bleaching done, copy rawdata to image')
             self.imageData = self.rawData.copy() # just copy over without a correction        print 'Normalizing'
         if self.dataState['Normalized'] is True and self.dataState['bleachCorrection'] is True:
-            print 'Data is already Normalized, type = %s ' % (self.dataState['NType'])
+            print('Data is already Normalized, type = %s ' % (self.dataState['NType']))
             return
         else:
             self.imageData = self.rawData.copy() # just start over with the raw data...
@@ -2360,7 +2361,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         t_targetSmooth = 0.25 # secs
         t_subSmooth = 0.5 # secs
         dt  = np.mean(np.diff(self.imageTimes))
-        print dt
+        print(dt)
         n_delay = t_delay/dt
         n_targetSmooth = int(t_targetSmooth/dt)
         n_subSmooth = int(t_subSmooth/dt)
@@ -2391,17 +2392,17 @@ class pbm_ImageAnalysis(AnalysisModule):
         of using the starting images as the baseline
         """
         if self.dataState['bleachCorrection'] is False:
-            print 'No Bleaching done, copy rawdata to image'
+            print('No Bleaching done, copy rawdata to image')
             self.imageData = self.rawData.copy() # just copy over without a correction        print 'Normalizing'
         if self.dataState['Normalized'] is True and self.dataState['bleachCorrection'] is True:
-            print 'Data is already Normalized, type = %s ' % (self.dataState['NType'])
+            print('Data is already Normalized, type = %s ' % (self.dataState['NType']))
             return
         else:
             self.imageData = self.rawData.copy() # just start over with the raw data...
         meanimage = np.mean(self.imageData, axis=0)
         #meanimage = scipy.ndimage.filters.gaussian_filter(meanimage, (3,3))
         sh = meanimage.shape
-        print 'mean image shape: ', sh
+        print('mean image shape: ', sh)
         for i in range(len(self.imageData)):
             self.imageData[i,:,:] = 1.0+(self.imageData[i,:,:] - meanimage)/meanimage
 #        imstd = np.std(self.imageData, axis=0)
@@ -2419,10 +2420,10 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def MediandFFImage(self, data=None):
         if self.dataState['bleachCorrection'] is False:
-            print 'No Bleaching done, copy rawdata to image'
+            print('No Bleaching done, copy rawdata to image')
             self.imageData = self.rawData.copy() # just copy over without a correction        print 'Normalizing'
         if self.dataState['Normalized'] is True and self.dataState['bleachCorrection'] is True:
-            print 'Data is already Normalized, type = %s ' % (self.dataState['NType'])
+            print('Data is already Normalized, type = %s ' % (self.dataState['NType']))
             return
         else:
             self.imageData = self.rawData.copy() # just start over with the raw data...
@@ -2434,7 +2435,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         else:
             lpf = 20.0
         imm = Utility.SignalFilter_LPFButter(imm, lpf, samplefreq, NPole = 8)
-        print np.amin(imm), np.amax(imm)
+        print(np.amin(imm), np.amax(imm))
         for i in range(len(self.imageData)):
             self.imageData[i,:,:] = 1.0+(self.imageData[i,:,:] - imm[i])/imm[i]
 
@@ -2448,10 +2449,10 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def StandarddFFImage(self, baseline = False):
         if self.dataState['bleachCorrection'] is False:
-            print 'No Bleach Corrections: copying rawdata to image'
+            print('No Bleach Corrections: copying rawdata to image')
             self.imageData = self.rawData.copy() # just copy over without a correction
         if self.dataState['Normalized'] is True and self.dataState['bleachCorrection'] is True:
-            print 'Data is already Normalized, type = %s ' % (self.dataState['NType'])
+            print('Data is already Normalized, type = %s ' % (self.dataState['NType']))
             return
         else:
             self.imageData = self.rawData.copy()  # start over with the raw data...
@@ -2480,15 +2481,15 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.paintImage()
 
     def GRRatioImage(self):
-        print 'Doing G/R Ratio calculation'
+        print('Doing G/R Ratio calculation')
         if self.dataState['bleachCorrection'] is False:
-            print 'No Bleaching done, copy rawdata to image'
+            print('No Bleaching done, copy rawdata to image')
             self.imageData = self.rawData.copy() # just copy over without a correction        print 'Normalizing'
         if self.dataState['ratioLoaded'] is False:
-            print 'NO ratio image loaded - so try again'
+            print('NO ratio image loaded - so try again')
             return
         if self.dataState['Normalized'] is True and self.dataState['bleachCorrection'] is True:
-            print 'Data is already Normalized, type = %s ' % (self.dataState['NType'])
+            print('Data is already Normalized, type = %s ' % (self.dataState['NType']))
             return
         else:
             self.imageData = self.rawData.copy() # just start over with the raw data...
@@ -2663,7 +2664,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     def Analog_Xcorr_Individual(self, FData = None, dt = None, plottype = 'traces'):
         """ compute and display the individual cross correlations between pairs of traces
             in the data set"""
-        print 'Calculating cross-correlations between all ROIs'
+        print('Calculating cross-correlations between all ROIs')
         self.use_MPL = self.ctrlImageFunc.IAFuncs_MatplotlibCheckBox.checkState()
         self.calculateAllROIs()
         if self.ROIDistanceMap == []:
@@ -2824,7 +2825,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if len(sh) == 4:
             self.imageData = np.squeeze(self.imageData)
             sh = np.shape(self.imageData)
-        print '**********************************\nImage shape: ', sh
+        print('**********************************\nImage shape: ', sh)
         self.imagePeriod = 6.0  # image period in seconds.
         w = 2.0 * np.pi * self.imagePeriod
         # identify an interpolation for the image for one cycle of time
@@ -2835,22 +2836,22 @@ class pbm_ImageAnalysis(AnalysisModule):
         ndt = self.imagePeriod/n_cycle
         i_times = np.arange(0, n_period*n_cycle*ndt, ndt) # interpolation times
         n_times = np.arange(0, n_cycle*ndt, ndt)  # just one cycle
-        print "dt: %f maxt: %f # images %d" % (dt, maxt, len(self.imageTimes))
-        print "# full per: %d  pts/cycle: %d  ndt: %f #i_times: %d" % (n_period, n_cycle, ndt, len(i_times))
+        print("dt: %f maxt: %f # images %d" % (dt, maxt, len(self.imageTimes)))
+        print("# full per: %d  pts/cycle: %d  ndt: %f #i_times: %d" % (n_period, n_cycle, ndt, len(i_times)))
         B = np.zeros([sh[1], sh[2], n_period, n_cycle])
         #for i in range(0, sh[1]):
     #            for j in range(0, sh[2]):
     #                B[i,j,:] = np.interp(i_times, self.times, self.imageData[:,i,j])
         B = self.imageData[range(0, n_period*n_cycle),:,:]
-        print 'new image shape: ', np.shape(self.imageData)
-        print "B shape: ", np.shape(B)
+        print('new image shape: ', np.shape(self.imageData))
+        print("B shape: ", np.shape(B))
         C = np.reshape(B, (n_cycle, n_period, sh[1], sh[2]))
-        print 'C: ', np.shape(C)
+        print('C: ', np.shape(C))
         D = np.mean(C, axis=1)
-        print "D: ", np.shape(D)
+        print("D: ", np.shape(D))
         sh = np.shape(D)
         A = np.zeros((sh[0], 2), float)
-        print "A: ", np.shape(A)
+        print("A: ", np.shape(A))
         A[:, 0] = np.sin(w*n_times)
         A[:, 1] = np.cos(w*n_times)
         sparse = 1
@@ -2888,13 +2889,13 @@ class pbm_ImageAnalysis(AnalysisModule):
             dt = 1.0/30.0 # fake it... 30 frames per second
         else:
             dt = np.mean(np.diff(self.imageTimes))
-        print "Mean time between frames: %9.4f" % (dt)
+        print("Mean time between frames: %9.4f" % (dt))
         if self.BFData is []:
-            print "No baseline corrected data to use!!!"
+            print("No baseline corrected data to use!!!")
             return
 #        dataIDString = 'smc_'
         for roi in range(0, self.nROI):
-            print "ROI: %d" % (roi)
+            print("ROI: %d" % (roi))
             # normalized the data:
             ndat = (self.BFData[roi,:] - np.min(self.BFData[roi,:]))/np.max(self.BFData[roi,:])
             self.smc_V = SMC.Variables(ndat, dt)
@@ -2907,13 +2908,13 @@ class pbm_ImageAnalysis(AnalysisModule):
                     weight = self.smc_S.w_f[i,t]
                     cbar[t] += weight * self.smc_S.C[i,t]
                     nbar[t] += weight * self.smc_S.n[i,t]
-            print "ROI: %d cbar: " % (roi)
-            print cbar
-            print "ROI: %dnbar: " % (roi)
-            print nbar
+            print("ROI: %d cbar: " % (roi))
+            print(cbar)
+            print("ROI: %dnbar: " % (roi))
+            print(nbar)
 #            MPlots.PlotLine(self.plots[roi], self.imageTimes, cbar, color = 'black',
 #                            dataID = ('%s%d' % (dataIDString, roi)))
-        print "finis"
+        print("finis")
 
 # Use matlab to do the analysis with J. Vogelstein's code, store result on disk
     def smc_AnalyzeMatlab(self):
@@ -2939,7 +2940,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         for i in range(0,shd[0]):
             timage = (255*self.imageData[i,:,:]/maximg).astype('uint8')
             affineMat = cv2.estimateRigidTransform(refimg, timage, False)
-            print timage.shape, self.imageData[i].shape
+            print(timage.shape, self.imageData[i].shape)
             self.imageData[i,:,:] = cv2.warpAffine(timage, affineMat, dsize=timage.shape, borderMode = cv2.BORDER_REPLICATE).astype('float32')*maximg/255.
             #x = scipy.ndimage.interpolation.affine_transform(self.imageData[i,:,:], affineMat[0:2,0:2] )
         self.updateAvgStdImage()
@@ -2977,7 +2978,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         imgi = 0  # use first image as reference
         N = len(imgstack)
         if imgi < 0 or imgi >= N:
-            print "Invalid index: %d not in 0 - %d" %(imgi, N)
+            print("Invalid index: %d not in 0 - %d" %(imgi, N))
             return None
         #end if
 
@@ -2985,7 +2986,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
 #        sh = a.shape
         thresh = np.mean(a)*1.25
-        print "threshold is set to: %.3f" % thresh
+        print("threshold is set to: %.3f" % thresh)
 
         #initialize result stack:
         outstack = []
@@ -3004,7 +3005,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                 x = x[0] - (c.shape[0]/2 -1)
                 y = y[0] - (c.shape[1]/2 -1)
             img2 = ImageP.shift(img, x, y)
-            print 'n: %d shift: x %f y %f' % (imgN, x, y)
+            print('n: %d shift: x %f y %f' % (imgN, x, y))
             outstack.append(img2)
             indx = indx * (img2 > 0)
             imgN = imgN + 1
@@ -3017,7 +3018,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             j0 = iy.min()
             j1 = iy.max()+1
 
-            print "Common boundaries:",i0,i1,j0,j1
+            print("Common boundaries:",i0,i1,j0,j1)
 
             #cut the list elements:
             for i in xrange(N):

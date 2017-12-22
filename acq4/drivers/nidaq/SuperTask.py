@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import six
 import time
 from numpy import *
@@ -141,9 +142,9 @@ class SuperTask:
             try:
                 self.taskInfo[key]['cache'] = concatenate(waves)
             except:
-                print "Input shapes for %s:" % ','.join(list(self.channelInfo.keys()))
+                print("Input shapes for %s:" % ','.join(list(self.channelInfo.keys())))
                 for w in waves:
-                    print w.shape
+                    print(w.shape)
                 raise
         return self.taskInfo[key]['cache']
         
@@ -155,7 +156,7 @@ class SuperTask:
                 try:
                     self.tasks[k].write(d)
                 except:
-                    print "Error while writing data to task '%s':" % str(k)
+                    print("Error while writing data to task '%s':" % str(k))
                     raise
                 self.taskInfo[k]['dataWritten'] = True
         

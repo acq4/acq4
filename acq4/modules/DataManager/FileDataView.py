@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from PyQt4 import QtCore, QtGui
 from acq4.util.DataManager import *
@@ -61,7 +62,7 @@ class FileDataView(QtGui.QSplitter):
                     try:
                         self.widgets[0].setImage(data, autoRange=False)
                     except:
-                        print "widget types:", map(type, self.widgets)
+                        print("widget types:", map(type, self.widgets))
                         raise
                 else:
                     self.clear()

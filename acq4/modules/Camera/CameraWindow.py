@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 import time, types, os.path, re, sys, weakref
 from collections import OrderedDict
@@ -156,8 +157,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.interfaces[name].quit()
 
     def _removeInterface(self, iface):
-        print "======== remove", iface
-        print self.interfaces
+        print("======== remove", iface)
+        print(self.interfaces)
         name = None
         if isinstance(iface, CameraModuleInterface):
             for k,v in self.interfaces.items():
@@ -770,7 +771,7 @@ class SequencerThread(Thread):
                             break
                         except RuntimeError:
                             if i == 4:
-                                print "Did not reach focus after 5 iterations (%g != %g)" % (self.prot['imager'].getDevice().getFocusDepth(), depths[depthIndex])
+                                print("Did not reach focus after 5 iterations (%g != %g)" % (self.prot['imager'].getDevice().getFocusDepth(), depths[depthIndex]))
 
                     frame = self.getFrame()
                     self.recordFrame(frame, iter, depthIndex)

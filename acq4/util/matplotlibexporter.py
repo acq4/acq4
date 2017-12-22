@@ -1,3 +1,4 @@
+from __future__ import print_function
 __author__ = 'pbmanis'
 """
 Copyright 2014  Paul Manis and Luke Campagnola
@@ -75,7 +76,7 @@ def matplotlibExport(gridlayout=None, title=None):
     # escape filename information so it can be rendered by removing
     # common characters that trip up latex...:
     escs = re.compile('[\\\/_]')
-    print title
+    print(title)
     if title is not None:
         tiname = '%r' % title
         tiname = re.sub(escs, cleanRepl, tiname)[1:-1]

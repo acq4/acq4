@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 StimGenerator.py -  Stimulus waveform generator + Qt widget
 Copyright 2010  Luke Campagnola
@@ -406,7 +407,7 @@ class StimGenerator(QtGui.QWidget):
                 try:
                     ns[k] = float(seq[k][1][params[k]])
                 except IndexError:
-                    print "Requested value %d for param %s, but only %d in the param list." % (params[k], str(k), len(seq[k][1]))
+                    print("Requested value %d for param %s, but only %d in the param list." % (params[k], str(k), len(seq[k][1])))
                     raise
             else:  ## just use single value
                 ns[k] = float(seq[k][0])

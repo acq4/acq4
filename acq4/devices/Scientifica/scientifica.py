@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time
 import numpy as np
 from PyQt4 import QtGui, QtCore

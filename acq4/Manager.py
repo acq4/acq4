@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Manager.py -  Defines main Manager class for ACQ4
 Copyright 2010  Luke Campagnola
@@ -91,7 +92,7 @@ class Manager(QtCore.QObject):
                 try:
                     opts, args = getopt.getopt(argv, 'c:a:m:b:s:d:nD', ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=', 'disable=', 'no-manager', 'disable-all'])
                 except getopt.GetoptError as err:
-                    print str(err)
+                    print(str(err))
                     print """
     Valid options are:
         -c --config=       Configuration file to load
@@ -136,7 +137,7 @@ class Manager(QtCore.QObject):
                 elif o in ['-D', '--disable-all']:
                     self.disableAllDevs = True
                 else:
-                    print "Unhandled option", o, a
+                    print("Unhandled option", o, a)
             
             ## Read in configuration file
             if configFile is None:
@@ -215,7 +216,7 @@ class Manager(QtCore.QObject):
             
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
-        print "============= Starting Manager configuration from %s =================" % configFile
+        print("============= Starting Manager configuration from %s =================" % configFile)
         logMsg("Starting Manager configuration from %s" % configFile)
         cfg = configfile.readConfigFile(configFile)
             
@@ -223,7 +224,7 @@ class Manager(QtCore.QObject):
         self.configure(cfg)
 
         self.configFile = configFile
-        print "\n============= Manager configuration complete =================\n"
+        print("\n============= Manager configuration complete =================\n")
         logMsg('Manager configuration complete.')
         
     def configure(self, cfg):
@@ -235,10 +236,10 @@ class Manager(QtCore.QObject):
                 if key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
-                            print "    --> Ignoring device '%s' -- disabled by request" % k
+                            print("    --> Ignoring device '%s' -- disabled by request" % k)
                             logMsg("    --> Ignoring device '%s' -- disabled by request" % k)
                             continue
-                        print "  === Configuring device '%s' ===" % k
+                        print("  === Configuring device '%s' ===" % k)
                         logMsg("  === Configuring device '%s' ===" % k)
                         try:
                             conf = cfg['devices'][k]
@@ -248,7 +249,7 @@ class Manager(QtCore.QObject):
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)
-                    print "=== Device configuration complete ==="
+                    print("=== Device configuration complete ===")
                     logMsg("=== Device configuration complete ===")
                             
                 ## Copy in new module definitions
@@ -258,7 +259,7 @@ class Manager(QtCore.QObject):
                         
                 ## set new storage directory
                 elif key == 'storageDir':
-                    print "=== Setting base directory: %s ===" % cfg['storageDir']
+                    print("=== Setting base directory: %s ===" % cfg['storageDir'])
                     logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
@@ -274,7 +275,7 @@ class Manager(QtCore.QObject):
                     except Exception:
                         raise Exception("'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
                         
-                    print "=== Setting default HDF5 compression: %s ===" % comp
+                    print("=== Setting default HDF5 compression: %s ===" % comp)
                     import acq4.pyqtgraph.metaarray as ma
                     ma.MetaArray.defaultCompression = comp
 
@@ -292,7 +293,7 @@ class Manager(QtCore.QObject):
                     elif cfg[key] is False:
                         self.logWindow.disablePopups(False)
                     else:
-                        print "Warning: ignored config option 'disableErrorPopups'; value must be either True or False." 
+                        print("Warning: ignored config option 'disableErrorPopups'; value must be either True or False.")
                     
                 elif key == 'defaultMouseMode':
                     mode = cfg[key].lower()
@@ -301,7 +302,7 @@ class Manager(QtCore.QObject):
                     elif mode == 'threebutton':
                         pg.setConfigOption('leftButtonPan', True)
                     else:
-                        print "Warning: ignored config option 'defaultMouseMode'; value must be either 'oneButton' or 'threeButton'." 
+                        print("Warning: ignored config option 'defaultMouseMode'; value must be either 'oneButton' or 'threeButton'.")
                 elif key == 'useOpenGL':
                     pg.setConfigOption('useOpenGL', cfg[key])
                     
@@ -421,7 +422,7 @@ class Manager(QtCore.QObject):
             Deprecated.
         """
         
-        print 'Loading module "%s" as "%s"...' % (module, name)
+        print('Loading module "%s" as "%s"...' % (module, name))
         with self.lock:
             if name in self.modules:
                 raise Exception('Module already exists with name "%s"' % name)
@@ -492,7 +493,7 @@ class Manager(QtCore.QObject):
         """Load a module and configure as defined in the config file"""
         with self.lock:
             if name not in self.definedModules:
-                print "Module '%s' is not defined. Options are: %s" % (name, str(list(self.definedModules.keys())))
+                print("Module '%s' is not defined. Options are: %s" % (name, str(list(self.definedModules.keys()))))
                 return
             conf = self.definedModules[name]
         
@@ -517,7 +518,7 @@ class Manager(QtCore.QObject):
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
-        print "Loaded module '%s'" % mName
+        print("Loaded module '%s'" % mName)
 
     
     def moduleHasQuit(self, mod):
@@ -557,9 +558,9 @@ class Manager(QtCore.QObject):
         #path = os.path.split(os.path.abspath(__file__))[0]
         #path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
-        print "\n---- Reloading all libraries under %s ----" % path
+        print("\n---- Reloading all libraries under %s ----" % path)
         reload.reloadAll(prefix=path, debug=True)
-        print "Done reloading.\n"
+        print("Done reloading.\n")
         logMsg("Reloaded all libraries under %s." %path, msgType='status')
         
     def createWindowShortcut(self, keys, win):
@@ -780,11 +781,11 @@ class Manager(QtCore.QObject):
             ld = len(self.devices)
             with pg.ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
-                print "Requesting all modules shut down.."
+                print("Requesting all modules shut down..")
                 logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = list(self.modules.keys())[0]
-                    print "    %s" % m
+                    print("    %s" % m)
                     
                     self.unloadModule(m)
                     #print "Unloaded mod %s, modules left:" % m
@@ -797,9 +798,9 @@ class Manager(QtCore.QObject):
                     dlg.setValue(lm-len(self.modules))
                 #pdb.set_trace()
                     
-                print "Requesting all devices shut down.."
+                print("Requesting all devices shut down..")
                 for d in self.devices:
-                    print "    %s" % d
+                    print("    %s" % d)
                     try:
                         self.devices[d].quit()
                     except:
@@ -808,11 +809,11 @@ class Manager(QtCore.QObject):
                     dlg.setValue(lm+ld-len(self.devices))
                     
                     
-                print "Closing windows.."
+                print("Closing windows..")
                 QtGui.QApplication.instance().closeAllWindows()
                 QtGui.QApplication.instance().processEvents()
             #print "  done."
-            print "\n    ciao."
+            print("\n    ciao.")
         QtGui.QApplication.quit()
         #pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
                     # this avoids otherwise irritating exit crashes.
@@ -837,9 +838,9 @@ class Task:
         try:
             self.cfg = command['protocol']
         except:
-            print "================== Manager Task.__init__ command: ================="
-            print command
-            print "==========================================================="
+            print("================== Manager Task.__init__ command: =================")
+            print(command)
+            print("===========================================================")
             raise Exception("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
         self.id = Task.id
         Task.id += 1
@@ -1243,7 +1244,7 @@ class Task:
             
             # If no nodes are ready, then there must be a cycle in the graph
             if len(ready) == 0:
-                print deps
+                print(deps)
                 raise Exception("Cannot resolve requested device configure/start order.")
             
             # sort by branch cost
@@ -1317,7 +1318,7 @@ class QtDocumentation(QtCore.QObject):
         QtCore.QTimer.singleShot(1000, self.expandToc)
         
     def activateId(self, id):
-        print "activate:", id
+        print("activate:", id)
         self.show()
         self.write('activateIdentifier %s\n' % id)
         
@@ -1333,8 +1334,8 @@ class QtDocumentation(QtCore.QObject):
         self.process.close()
 
     def processFinished(self):
-        print "Doc viewer exited:", self.process.exitCode()
-        print str(self.process.readAllStandardError())    
+        print("Doc viewer exited:", self.process.exitCode())
+        print(str(self.process.readAllStandardError()))
     
     
     

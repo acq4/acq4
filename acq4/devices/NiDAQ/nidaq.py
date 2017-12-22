@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.util.debug import *
     
 from acq4.devices.Device import *
@@ -32,7 +33,7 @@ class NiDAQ(Device):
         else:
             from acq4.drivers.nidaq.nidaq import NIDAQ
             self.n = NIDAQ
-        print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
+        print("Created NiDAQ handle, devices are %s" % repr(self.n.listDevices()))
         self.delayedSet = Mutex.threadsafe({})
     
     def createTask(self, cmd, parentTask):

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import socket, threading, sys, re, types
 import axonmc
 
@@ -19,10 +20,10 @@ def main():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('', port))
     s.listen(1)
-    print "Listening on port", port
+    print("Listening on port", port)
     while True:
         conn, addr = s.accept()
-        print "Connected to", addr[0]
+        print("Connected to", addr[0])
         t = WorkThread(conn, addr, mc, lock)
         t.start()
     
@@ -40,16 +41,16 @@ class WorkThread(threading.Thread):
             cmd = self.readline()
             if cmd is None:
                 break
-            print self.addr[0], "req:", cmd[:-1]
+            print(self.addr[0], "req:", cmd[:-1])
             try:
                 resp = [1] + self.processCmd(cmd)
             except:
                 resp = [0] + list(sys.exc_info()[1].args)
             resp = ','.join(map(str, resp))
-            print self.addr[0], "response:", resp
+            print(self.addr[0], "response:", resp)
             self.conn.sendall(resp + '\n')
         self.conn.close()
-        print "Closing connection to", self.addr[0]
+        print("Closing connection to", self.addr[0])
                 
     def processCmd(self, cmd):
         ## Parse out function name and arguments
@@ -76,7 +77,7 @@ class WorkThread(threading.Thread):
                     args.append(float(a))
                 else:
                     args.append(int(a))
-        print "%s call: %s(%s)" % (self.addr[0], fn, str(args))
+        print("%s call: %s(%s)" % (self.addr[0], fn, str(args)))
         
         ## Run function
         self.lock.acquire()
@@ -97,7 +98,7 @@ class WorkThread(threading.Thread):
             c = self.conn.recv(1)
             if c == '':
                 if len(l) > 0:
-                    print self.addr[0], "Connection closing with incomplete command:", l
+                    print(self.addr[0], "Connection closing with incomplete command:", l)
                 return None
             l += c
             if l[-1] == '\n':

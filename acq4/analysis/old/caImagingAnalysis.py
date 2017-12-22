@@ -1,5 +1,6 @@
 #!/usr/bin/python -i
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import sys, os, re
 from glob import glob
 #sys.path = ['/home/lcampagn/work/manis_lab/code/libs'] + sys.path
@@ -132,7 +133,7 @@ try:
     fd.close()
     exec(inf)
 except:
-    print "Warning: could not open info file"
+    print("Warning: could not open info file")
 
 
 ## Find file names
@@ -271,7 +272,7 @@ def enhanceCells(img, radius=2.0):
     ## Create a 'center-surround' mask to enhance cell bodies
     im2 = img - (img.max()+img.min())*0.5
     c2 = c - c.max()*0.5
-    print im2.shape, c2.shape
+    print(im2.shape, c2.shape)
     mask = correlate(im2, c2)
     #showImg(mask, title='correlation mask')
     

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 fileio.py -  FileType helper functions
 Copyright 2010  Luke Campagnola

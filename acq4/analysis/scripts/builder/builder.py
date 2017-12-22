@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys, os
 md = os.path.abspath(os.path.split(__file__)[0])
 sys.path = [os.path.join(md, '..', '..', 'util')] + sys.path
@@ -261,7 +262,7 @@ def renderStack(overlay=True):
             stack[z] = renderLabels(z)
             if overlay:  ## multiply colors, not alpha.
                 stack[z][..., :3] *= displayData[z].mean(axis=2)[..., np.newaxis].astype(float)/256.
-            print z
+            print(z)
         dlg += 1
         if dlg.wasCanceled():
             raise Exception("Stack render canceled.")
@@ -279,7 +280,7 @@ def renderVolume(stack, alpha=0.3, loss=0.01):
         im[mask] += szm[...,:3] * alphaChan
         #im[mask] *= (1.0-alpha)
         #im[mask] += sz[mask] * alpha
-        print z
+        print(z)
     return im
 
 def updateLabelImage(sl=None):

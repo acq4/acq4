@@ -1,3 +1,4 @@
+from __future__ import print_function
 import serial, struct, time, collections, threading
 from ..SerialDevice import SerialDevice
 
@@ -397,16 +398,16 @@ if __name__ == '__main__':
     #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()
-        print "<mp285> x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
+        print("<mp285> x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6))
         
     def ipos():
         p = s.getImmediatePos()
-        print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
+        print("x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6))
         
     def stat():
         st = s.stat()
         for k in st:
-            print "%s:%s%s" % (k, " "*(15-len(k)), str(st[k]))
+            print("%s:%s%s" % (k, " "*(15-len(k)), str(st[k])))
             
     def monitor():
         while True:
@@ -423,7 +424,7 @@ if __name__ == '__main__':
         s.setPos([pos[0]+dist, pos[1], pos[2]], timeout=runtime*2)
         s.setPos(pos, timeout=runtime*2)
         dt = 0.5*(time.clock()-t)
-        print "%d: dt=%0.2gs, dx=%0.2gm, %0.2f mm/s" % (int(speed), dt, dist, dist*1e3/dt)
+        print("%d: dt=%0.2gs, dx=%0.2gm, %0.2f mm/s" % (int(speed), dt, dist, dist*1e3/dt))
         
     def saw(dx, dz, zstep=5e-6):
         p1 = s.getPos()
@@ -433,7 +434,7 @@ if __name__ == '__main__':
         
         n = int(dz/zstep)
         for i in range(n):
-            print "step:", i
+            print("step:", i)
             s.setPos(p2)
             s.setPos(p1)
             if i < n-1:

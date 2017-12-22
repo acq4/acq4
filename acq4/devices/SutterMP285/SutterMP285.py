@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
@@ -307,7 +308,7 @@ class SutterMP285Thread(Thread):
             #print "Discarding %d bytes" % self.sp.inWaiting()
             #self.sp.read(self.sp.inWaiting())
         #import wingdbstub
-        print "  Starting MP285 thread: 0x%x" % int(QtCore.QThread.currentThreadId())
+        print("  Starting MP285 thread: 0x%x" % int(QtCore.QThread.currentThreadId()))
         #import sip
         #print "    also known as 0x%x" % sip.unwrapinstance(self)
         velocity = np.array([0,0,0])

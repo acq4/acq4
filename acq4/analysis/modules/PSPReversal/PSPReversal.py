@@ -1,4 +1,5 @@
 #  -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 PSPReversal: Analysis module that analyzes the current-voltage relationships
 relationships of PSPs from voltage clamp data.
@@ -60,11 +61,11 @@ def trace_calls_and_returns(frame, event, arg, indent=[0]):
         return
     if event == 'call':
         indent[0] += 1
-        print '%sCall to %s on line %s of %s' % ("   " * indent[0], func_name, line_no, filename)
+        print('%sCall to %s on line %s of %s' % ("   " * indent[0], func_name, line_no, filename))
        # print '%s   args: %s ' % ("   " * indent[0], arg)  # only gets return args...
         return trace_calls_and_returns
     elif event == 'return':
-        print '%s%s => %s' % ("   " * indent[0], func_name, arg)
+        print('%s%s => %s' % ("   " * indent[0], func_name, arg))
         indent[0] -= 1
     return
 
@@ -616,8 +617,8 @@ class PSPReversal(AnalysisModule):
                 # Check if no clamp file for this iteration of the protocol
                 # (probably the protocol was stopped early)
                 if data_file_handle is None:
-                    print ('PSPReversal::loadFileRequested: ',
-                           'Missing data in %s, element: %d' % (directory_name, i))
+                    print('PSPReversal::loadFileRequested: ',
+                          'Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
                 print("Error loading data for protocol %s:"
@@ -685,7 +686,7 @@ class PSPReversal(AnalysisModule):
         #    i += 1
         #sys.settrace(trace_calls_and_returns)
         if traces is None or len(traces) == 0:
-            print "PSPReversal::loadFileRequested: No data found in this run..."
+            print("PSPReversal::loadFileRequested: No data found in this run...")
             return False
         if self.amp_settings['WCCompValid']:
             if self.amp_settings['WCEnabled'] and self.amp_settings['CompEnabled']:
@@ -1151,7 +1152,7 @@ class PSPReversal(AnalysisModule):
 
         self.script = configfile.readConfigFile(self.script_name)
         if self.script is None:
-            print 'failed to read script'
+            print('failed to read script')
             return
 #        print 'script ok:', self.script
         fh = open(self.script_name)  # read the raw text file too
@@ -1181,7 +1182,7 @@ class PSPReversal(AnalysisModule):
         :return: False if cannot find files; True if all are found
         """
         if self.script['module'] != 'PSPReversal':
-            print 'script is not for PSPReversal (found %s)', self.script['module']
+            print('script is not for PSPReversal (found %s)', self.script['module'])
             return False
         all_found = True
         trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
@@ -1202,8 +1203,8 @@ class PSPReversal(AnalysisModule):
                 #if file_ok:
                 #    print('File found: {:s}'.format(fullpath))
                 if not file_ok:
-                    print '  current dataManager self.dm points to file: ', dm_selected_file
-                    print '  and file not found was: ', fullpath
+                    print('  current dataManager self.dm points to file: ', dm_selected_file)
+                    print('  and file not found was: ', fullpath)
                     all_found = False
                 #else:
                 #    print 'file found ok: %s' % fullpath
@@ -1246,7 +1247,7 @@ class PSPReversal(AnalysisModule):
                 self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFileRequested([dh]):  # note: must pass a list
-                    print 'failed to load requested file: ', fullpath
+                    print('failed to load requested file: ', fullpath)
                     continue  # skip bad sets of records...
                 apptext(('Protocol: {:<s} <br>Manipulation: {:<s}'.format(pr, thiscell['manip'][p])))
                 self.analysis_summary['Drugs'] = thiscell['manip'][p]
@@ -1274,7 +1275,7 @@ class PSPReversal(AnalysisModule):
                 self.print_formatted_script_output(script_header)
                 script_header = False
         self.auto_updater = True # restore function
-        print '\nDone'
+        print('\nDone')
 
     def get_window_analysisPars(self):
         """
@@ -1339,11 +1340,11 @@ class PSPReversal(AnalysisModule):
                 thiswin = thiscell[winmode]
                 r = self.regions[lrwinx]['mode'].findText(thiswin)
                 if r >= 0:
-                    print 'setting %s mode to %s ' % (win, thiswin)
+                    print('setting %s mode to %s ' % (win, thiswin))
                     self.regions[lrwinx]['mode'].setCurrentIndex(r)
                     self.analysis_parameters[lrwinx]['mode'] = thiswin
                 else:
-                    print '%s analysis mode not recognized: %s' % (win, thiswin)
+                    print('%s analysis mode not recognized: %s' % (win, thiswin))
             else:
                 r = self.regions[lrwinx]['mode'].findText(self.analysis_parameters[lrwinx]['mode'])
                 if r >= 0:
@@ -1352,10 +1353,10 @@ class PSPReversal(AnalysisModule):
 
     def print_script_output(self):
         """
-        print a clean version of the results to the terminal
+        print(a clean version of the results to the terminal)
         :return:
         """
-        print self.remove_html_markup(self.textout)
+        print(self.remove_html_markup(self.textout))
 
     def copy_script_output(self):
         """
@@ -1386,7 +1387,7 @@ class PSPReversal(AnalysisModule):
             print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
             for k in data_template.keys():
                 print('{:<s}\t'.format(k)),
-            print ''
+            print('')
         ltxt = ''
         ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
 
@@ -1395,7 +1396,7 @@ class PSPReversal(AnalysisModule):
                 ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
             else:
                 ltxt += '<   >\t'
-        print ltxt
+        print(ltxt)
         if copytoclipboard:
             clipb = QtGui.QApplication.clipboard()
             clipb.clear(mode=clipb.Clipboard )
@@ -1495,16 +1496,16 @@ class PSPReversal(AnalysisModule):
             r0 = self.analysis_parameters['lrwin0']['times'] #regions['lrwin0']['region'].getRegion()
             tx = ma.masked_inside(tx1, r0[0], r0[1])  #
             if tx.mask.all():  # handle case where win1 is entirely inside win2
-                print 'update_win_analysis: Window 1 is entirely inside Window 0: No analysis possible'
-                print 'rgninfo: ', rgninfo
-                print 'r0: ', r0
+                print('update_win_analysis: Window 1 is entirely inside Window 0: No analysis possible')
+                print('rgninfo: ', rgninfo)
+                print('r0: ', r0)
                 return 'bad window1/0 relationship'
             data1 = ma.array(data1, mask=ma.resize(ma.getmask(tx), data1.shape))
             self.txm = ma.compressed(tx)  # now compress tx as well
             self.win1fits = None  # reset the fits
 
         if data1.shape[1] == 0 or data1.shape[0] == 1:
-            print 'no data to analyze?'
+            print('no data to analyze?')
             return 'no data'  # skip it
         commands = np.array(self.values)  # get clamp specified command levels
         if self.data_mode in self.ic_modes:
@@ -1558,7 +1559,7 @@ class PSPReversal(AnalysisModule):
         if mode in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
             self.measure[winraw_i] = self.measure[window]  # save raw measured current before corrections
         elif mode not in ['Mean-Win1', 'Mean-Linear', 'Mean-Poly2', 'Sum-Win1']:
-            print 'update_win_analysis: Mode %s is not recognized (1)' % mode
+            print('update_win_analysis: Mode %s is not recognized (1)' % mode)
             return 'bad mode'
         else:
             pass
@@ -1580,7 +1581,7 @@ class PSPReversal(AnalysisModule):
             self.measure[winraw_i] = np.sum(data1, axis=1)
             self.measure[window] = np.sum(data1 - u[:, np.newaxis], axis=1)
         elif mode not in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
-            print 'update_win_analysis: Mode %s is not recognized (2)' % mode
+            print('update_win_analysis: Mode %s is not recognized (2)' % mode)
             return 'bad mode'
         else:
             pass
@@ -1589,7 +1590,7 @@ class PSPReversal(AnalysisModule):
             self.measure[window] = self.measure[window] - self.measure['rmp']
         if len(self.nospk) >= 1 and self.data_mode in self.ic_modes:
             # Steady-state IV where there are no spikes
-            print 'update_win_analysis: Removing traces with spikes from analysis'
+            print('update_win_analysis: Removing traces with spikes from analysis')
             self.measure[window] = self.measure[window][self.nospk]
             if len(self.measure[windowsd]) > 0:
                 self.measure[windowsd] = self.measure[windowsd][self.nsopk]
@@ -1849,7 +1850,7 @@ class PSPReversal(AnalysisModule):
                                    symbolPen=pen, symbolBrush=emptybrush)
                 self.rmp_plot.setLabel('bottom', 'Spikes')
             else:
-                print 'Selected RMP x axis mode not known: %s' % mode
+                print('Selected RMP x axis mode not known: %s' % mode)
 
     def update_spike_plots(self):
         """

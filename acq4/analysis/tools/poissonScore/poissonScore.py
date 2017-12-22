@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 Description:
     
@@ -385,7 +386,7 @@ class PoissonScore:
         if os.path.exists(cacheFile):
             norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(tableShape)
         else:
-            print "Generating %s ..." % cacheFile
+            print("Generating %s ..." % cacheFile)
             norm = np.empty(tableShape)
             counts = []
             with mp.Parallelize(counts=counts) as tasker:
@@ -395,7 +396,7 @@ class PoissonScore:
                         n = nev[i] / tasker.numWorkers()
                         for j in xrange(int(n)):
                             if j%1000==0:
-                                print t, j
+                                print(t, j)
                                 tasker.process()
                             ev = cls.generateRandom(rate=rate, tMax=t, reps=1)
                             
@@ -424,7 +425,7 @@ class PoissonScore:
             mapped[i] = cls.mapScore(scores[i], np.mean(rate)*tMax*reps)
         
         for j in [1,2,3,4]:
-            print "  %d: %f" % (10**j, (mapped>10**j).sum() / float(n))
+            print("  %d: %f" % (10**j, (mapped>10**j).sum() / float(n)))
         return ev, scores, mapped
         
     @classmethod
@@ -687,7 +688,7 @@ class PoissonRepeatScore:
         if os.path.exists(cacheFile):
             norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(tableShape)
         else:
-            print "Generating %s ..." % cacheFile
+            print("Generating %s ..." % cacheFile)
             norm = np.empty(tableShape)
             counts = []
             with mp.Parallelize(tasks=[0,1], counts=counts) as tasker:
@@ -697,7 +698,7 @@ class PoissonRepeatScore:
                         n = nev[i]
                         for j in xrange(int(n)):
                             if j%1000==0:
-                                print t, j
+                                print(t, j)
                             ev = cls.generateRandom(rate=rate, tMax=t, reps=reps[-1])
                             for m in reps:
                                 score = cls.score(ev[:m], rate, normalize=False)
@@ -757,7 +758,7 @@ class PoissonRepeatScore:
             mapped[i] = cls.mapScore(scores[i], rate*tMax*reps)
         
         for j in [1,2,3,4]:
-            print "  %d: %f" % (10**j, (mapped>10**j).sum() / float(n))
+            print("  %d: %f" % (10**j, (mapped>10**j).sum() / float(n)))
         return ev, scores, mapped
         
     @classmethod

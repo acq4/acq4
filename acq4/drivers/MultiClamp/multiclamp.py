@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from ctypes import *
 import ctypes
 import struct, os, threading, platform, atexit, inspect
@@ -8,7 +9,7 @@ from acq4.util.debug import *
 
 DEBUG=False ## Global flag for debugging hangups
 if DEBUG:
-    print "MultiClamp driver debug:", DEBUG
+    print("MultiClamp driver debug:", DEBUG)
 
 __all__ = ['MultiClamp', 'axlib', 'getAxlib', 'wmlib']
 
@@ -51,7 +52,7 @@ def getAxlib(libPath=None):
             libPath = find_lib('AxMultiClampMsg.dll', paths=searchPaths)
         if not os.path.isfile(libPath):
             raise ValueError('MultiClamp DLL file "%s" does not exist' % libPath)
-        print "Using MultiClamp DLL at ", libPath
+        print("Using MultiClamp DLL at ", libPath)
 
         axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
         initializeGlobals()
@@ -65,7 +66,7 @@ class MultiClampChannel:
     def __init__(self, mc, desc, debug=DEBUG):
         self.debug = debug
         if debug:
-            print "Creating MultiClampChannel"
+            print("Creating MultiClampChannel")
         self.mc = mc
         self.desc = desc
         self.state = None
@@ -83,39 +84,39 @@ class MultiClampChannel:
         
     def setCallback(self, cb):
         if self.debug:
-            print "MCChannel.setCallback called. callback:", cb
+            print("MCChannel.setCallback called. callback:", cb)
         with self.lock:
             if self.debug:
-                print "    lock acquired (setCallback)"
+                print("    lock acquired (setCallback)")
             self.callback = cb
         
     def getState(self):
         if self.debug:
-            print "MCChannel.getState called. caller:", inspect.getouterframes(inspect.currentframe())[1][3]
+            print("MCChannel.getState called. caller:", inspect.getouterframes(inspect.currentframe())[1][3])
         with self.lock:
             return self.state
 
     def getMode(self):
         if self.debug:
-            print "MCChannel.getMode called."
+            print("MCChannel.getMode called.")
         with self.lock:
             return self.state['mode']
 
     def updateState(self, state):
         """Called by MultiClamp when changes have occurred in MCC."""
         if self.debug:
-            print "MCChannel.updateState called."
+            print("MCChannel.updateState called.")
         with self.lock:
             self.state = state
             cb = self.callback
         if cb is not None:
             if self.debug:
-                print "   calling callback:", cb
+                print("   calling callback:", cb)
             cb(state)
 
     def getParam(self, param):
         if self.debug:
-            print "MCChannel.getParam called. param:", param
+            print("MCChannel.getParam called. param:", param)
         self.select()
         fn = 'Get' + param
         v = self.mc.call(fn)[1]
@@ -135,7 +136,7 @@ class MultiClampChannel:
     def setParam(self, param, value):
 
         if self.debug:
-            print "MCChannel.setParam called. param: %s   value: %s" % (str(param), str(value))
+            print("MCChannel.setParam called. param: %s   value: %s" % (str(param), str(value)))
         self.select()
         fn = "Set" + param
         
@@ -189,7 +190,7 @@ class MultiClampChannel:
         prevent that call from working correctly."""
 
         if self.debug:
-            print "MCChannel.setSignal called."
+            print("MCChannel.setSignal called.")
         model = self.desc['model']
         priMap = ['PRI', 'SEC']
         
@@ -233,7 +234,7 @@ class MultiClampChannel:
     def select(self):
         """Select this channel for parameter get/set"""
         if self.debug:
-            print "MCChannel.select called."
+            print("MCChannel.select called.")
         self.mc.call('SelectMultiClamp', **self.axonDesc)
 
 
@@ -261,7 +262,7 @@ class MultiClamp:
     def __init__(self, debug=DEBUG):
         self.debug = debug
         if debug:
-            print "Creating MultiClamp driver object"
+            print("Creating MultiClamp driver object")
         self.telegraph = None
         if MultiClamp.INSTANCE is not None:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
@@ -291,17 +292,17 @@ class MultiClamp:
         to the multiclamp state."""
 
         if self.debug:
-            print "MCDriver.getChannel called. Channel: %s    callback: %s" %(str(channel), str(callback)) 
+            print("MCDriver.getChannel called. Channel: %s    callback: %s" %(str(channel), str(callback)))
             caller = inspect.getouterframes(inspect.currentframe())[1][3]
             #caller = "nevermind"
-            print "      caller:", caller
+            print("      caller:", caller)
         if channel not in self.channels:
             raise Exception("No channel with description '%s'. Options are %s" % (str(channel), str(self.listChannels())))
             
         ch = self.channels[channel]
         if callback is not None:
             if self.debug:
-                print "   setting callback:", str(callback)
+                print("   setting callback:", str(callback))
             ch.setCallback(callback)
         return ch
     
@@ -309,14 +310,14 @@ class MultiClamp:
         """Return a list of strings used to identify all devices/channels.
         These strings should be used to identify the same channel across invocations."""
         if self.debug:
-            print "MCDriver.listChannels called."
+            print("MCDriver.listChannels called.")
         return list(self.channels.keys())
     
     def connect(self):
         """(re)create connection to commander."""
         #print "connect to commander.."
         if self.debug:
-            print "MCDriver.connect called."
+            print("MCDriver.connect called.")
         with self.lock:
             if self.handle is not None:
                 #print "   disconnect first"
@@ -332,7 +333,7 @@ class MultiClamp:
     def disconnect(self):
         """Destroy connection to commander"""
         if self.debug:
-            print "MCDriver.disconnect called."
+            print("MCDriver.disconnect called.")
         with self.lock:
             if self.handle is not None and axlib is not None:
                 axlib.DestroyObject(self.handle)
@@ -340,7 +341,7 @@ class MultiClamp:
     
     def findDevices(self):
         if self.debug:
-            print "MCDriver.findDevices called."
+            print("MCDriver.findDevices called.")
         while True:
             ch = self.findMultiClamp()
             if ch is None:
@@ -359,7 +360,7 @@ class MultiClamp:
 
     def findMultiClamp(self):
         if self.debug:
-            print "MCDriver.findMultiClamp called."
+            print("MCDriver.findMultiClamp called.")
         if len(self.channels) == 0:
             fn = 'FindFirstMultiClamp'
         else:
@@ -379,7 +380,7 @@ class MultiClamp:
 
     def call(self, fName, *args, **kargs):   ## call is only used for functions that return a bool error status and have a pnError argument passed by reference.
         if self.debug:
-            print "MC_driver.call called. fName:", fName
+            print("MC_driver.call called. fName:", fName)
         with self.lock:
             ret = axlib('functions', fName)(self.handle, *args, **kargs)
         if ret() == 0:
@@ -387,13 +388,13 @@ class MultiClamp:
             self.raiseError("Error while running function  %s\n      Error:" % funcStr, ret['pnError'])
         
         if self.debug:
-            print "     %s returned." % fName
+            print("     %s returned." % fName)
         return ret
     
     def raiseError(self, msg, err):
         if self.debug:
-            print "MCDriver.raiseError called:"
-            print "    ", msg
+            print("MCDriver.raiseError called:")
+            print("    ", msg)
         raise Exception(err, msg + " " + self.errString(err))
 
     def errString(self, err):
@@ -405,7 +406,7 @@ class MultiClamp:
 
     def telegraphMessage(self, msg, chID=None, state=None):
         if self.debug:
-            print "MCDriver.telegraphMessage called. msg:", msg
+            print("MCDriver.telegraphMessage called. msg:", msg)
         if msg == 'update':
             self.channels[chID].updateState(state)
         elif msg == 'reconnect':

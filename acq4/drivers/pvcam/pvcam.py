@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 import six
 
@@ -270,7 +271,7 @@ class _CameraClass:
         try:
             self.paramAttrs['GAIN_INDEX'][0] = self.paramAttrs['GAIN_INDEX'][0][:2] + (1,)    ## why did they set the step value to 0? Who knows?
         except KeyError:
-            print self.paramAttrs
+            print(self.paramAttrs)
             raise Exception("'GAIN_INDEX' missing from camera parameters. Try restarting your camera.")
         
         ## define standard dependencies
@@ -352,13 +353,13 @@ class _CameraClass:
         
         
         if camType in cameraDefaults:
-            print "Loading default settings for", camType
+            print("Loading default settings for", camType)
             camDefaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults[camType]])
             camRanges = dict([(p[0], p[2:]) for p in cameraDefaults[camType]])
             defaults.update(camDefaults)
             ranges.update(camRanges)
         else:
-            print "Warning--camera model '%s' is unrecognized; default settings may be incorrect." % camType
+            print("Warning--camera model '%s' is unrecognized; default settings may be incorrect." % camType)
         
         for k,v in ranges.items():
             #print self.paramAttrs[k], k, v
@@ -706,7 +707,7 @@ class _CameraClass:
             return None
         index = (frame - self.buf.ctypes.data) / self.frameSize
         if index < 0 or index > (self.buf.shape[0]-1):
-            print "Warning: lastFrame got %d!" % index
+            print("Warning: lastFrame got %d!" % index)
             return None
         return index
 
@@ -774,8 +775,8 @@ class _CameraClass:
             return self._getParam(param, LIB.ATTR_AVAIL) > 0
         except:
             sys.excepthook(*sys.exc_info())
-            print "=============================================="
-            print "Error checking availability of parameter %s" % param
+            print("==============================================")
+            print("Error checking availability of parameter %s" % param)
             return False
             
     def _assertParamAvailable(self, param):

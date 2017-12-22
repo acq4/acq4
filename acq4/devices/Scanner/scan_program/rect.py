@@ -1,4 +1,5 @@
 # -*- coding: utf8 -*-
+from __future__ import print_function
 
 from __future__ import division
 import weakref
@@ -363,7 +364,7 @@ class RectScan(SystemSolver):
         ### select target array based on offset, shape, and stride. 
         # first check that this array is long enough
         if array.shape[0] < offset + shape[0] * stride[0]:
-            print self
+            print(self)
             raise Exception("Array is too small to contain the specified rectangle scan. Available: %d Required: %d" % (array.shape[0], shape[0] * stride[0]))
         
         # select the target sub-array
@@ -419,7 +420,7 @@ class RectScan(SystemSolver):
         stride = self.imageStride
 
         if subpixel and fracOffset != 0:
-            print fracOffset
+            print(fracOffset)
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
         else:

@@ -444,7 +444,7 @@ class TableWidgetItem(QtGui.QTableWidgetItem):
             return
         
         import traceback
-        print "====================", self.text()
+        print("====================", self.text())
         traceback.print_stack()
         try:
 

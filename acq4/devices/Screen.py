@@ -1,3 +1,4 @@
+from __future__ import print_function
 from acq4.devices.Device import *
 from PyQt4 import QtGui, QtCore
 
