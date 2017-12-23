@@ -2,6 +2,9 @@ from __future__ import print_function
 import re, json
 
 
+import six
+
+
 class MultiPatchLog(object):
     def __init__(self, filename=None):
         self._devices = {}
@@ -19,7 +22,7 @@ class MultiPatchLog(object):
                 event = json.loads(line.rstrip(',\r\n'))
 
                 # just to cover a bug; remove after updating legacy log files
-                if isinstance(event['event_time'], basestring):
+                if isinstance(event['event_time'], six.string_types):
                     event['event_time'] = float(event['event_time'].rstrip(','))
             else:
                 # this covers the original multipatch log format; remove after updating all legacy log files
