@@ -174,7 +174,7 @@ class MapCombiner(AnalysisModule):
         
         data = self.params.param('Filter').process(data)
         
-        exec self.filterText.toPlainText()
+        exec(self.filterText.toPlainText())
         self.filtered = selected
         cells = set(self.filtered['cell'])
         self.cellList.clear()
