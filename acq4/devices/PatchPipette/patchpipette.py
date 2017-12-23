@@ -1,3 +1,4 @@
+from __future__ import print_function
 from ..Pipette import Pipette
 from PyQt4 import QtCore
 from ...Manager import getManager

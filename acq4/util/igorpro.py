@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import win32com.client
 import pywintypes

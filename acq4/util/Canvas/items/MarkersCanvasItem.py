@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import weakref
 from PyQt4 import QtCore, QtGui
 from .CanvasItem import CanvasItem

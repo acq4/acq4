@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.pyqtgraph.Qt import QtCore, QtGui, QtSvg
 import acq4.pyqtgraph as pg
 from CanvasItem import CanvasItem

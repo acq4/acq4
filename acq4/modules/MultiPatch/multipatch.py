@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, re
 import numpy as np
 import json

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys, time
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
@@ -8,8 +9,8 @@ ump = UMP.get_ump()
 devids = ump.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 
-print "SDK version:", ump.sdk_version()
-print "Found device IDs:", devids
+print("SDK version:", ump.sdk_version())
+print("Found device IDs:", devids)
 
 def print_pos(timeout=None):
     line = ""
@@ -21,7 +22,7 @@ def print_pos(timeout=None):
             pos = str(err.args[0])
         pos = pos + " " * (30 - len(pos))
         line += "%d:  %s" % (i, pos)
-    print line
+    print(line)
 
 #print_pos()
 
@@ -63,6 +64,6 @@ while True:
     for id in sorted(list(devs.keys())):
         line += "   %d: %s busy: %s" % (id, devs[id].get_pos(timeout=0), devs[id].is_busy())
     line += "                           \r"
-    print line,
+    print(line, end=" ")
     sys.stdout.flush()
     time.sleep(0.01)

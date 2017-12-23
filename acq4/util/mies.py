@@ -1,3 +1,4 @@
+from __future__ import print_function
 from igorpro import IgorThread, IgorCallError
 from PyQt4 import QtCore
 
@@ -137,7 +138,7 @@ if __name__ == "__main__":
             self.setLayout(l)
 
         def printit(self, data):
-            print data
+            print(data)
 
     app = pg.mkQApp()
     w = W()

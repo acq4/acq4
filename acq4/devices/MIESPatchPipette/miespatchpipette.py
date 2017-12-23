@@ -1,3 +1,4 @@
+from __future__ import print_function
 from ..PatchPipette import PatchPipette
 from acq4.util.mies import MIES
 import numpy as np
