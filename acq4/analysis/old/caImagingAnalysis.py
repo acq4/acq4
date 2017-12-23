@@ -45,7 +45,7 @@ def loadImageDir(dirName=None):
     # Generate list of files, sort
     files = os.listdir(dirName)
     files.sort()
-    files = filter(lambda f: os.path.splitext(f)[1][1:] in IMAGE_EXTENSIONS, files)
+    files = [f for f in files if os.path.splitext(f)[1][1:] in IMAGE_EXTENSIONS]
     files = [os.path.join(dirName, f) for f in files]
     return loadImageList(files)
 

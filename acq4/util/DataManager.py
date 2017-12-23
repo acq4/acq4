@@ -509,7 +509,7 @@ class DirHandle(FileHandle):
         """Return a list of string names for all sub-directories."""
         with self.lock:
             ls = self.ls()
-            subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
+            subdirs = [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
             return subdirs
     
     def incrementFileName(self, fileName, useExt=True):
@@ -520,7 +520,7 @@ class DirHandle(FileHandle):
         else:
             ext = ''
         regex = re.compile(fileName + r'_(\d+)')
-        files = filter(lambda f: regex.match(f), files)
+        files = [f for f in files if regex.match(f)]
         if len(files) > 0:
             files.sort()
             maxVal = int(regex.match(files[-1]).group(1)) + 1

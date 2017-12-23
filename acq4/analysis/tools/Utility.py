@@ -802,13 +802,13 @@ def ffind(path, shellglobs=None, namefs=None, relative=True):
                 matched = []
                 for pattern in shellglobs:
                     filterf = lambda s: fnmatch.fnmatchcase(s, pattern)
-                    matched.extend(filter(filterf, files))
+                    matched.extend(list(filter(filterf, files)))
                 fileList.extend(['%s%s%s' % (dir, os.sep, f) for f in matched])
             else:
                 fileList.extend(['%s%s%s' % (dir, os.sep, f) for f in files])
         if not relative: fileList = map(os.path.abspath, fileList)
         if namefs:
-            for ff in namefs: fileList = filter(ff, fileList)
+            for ff in namefs: fileList = list(filter(ff, fileList))
     except Exception as e: raise ScriptError(str(e))
     return(fileList)
 

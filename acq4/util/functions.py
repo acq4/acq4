@@ -2489,8 +2489,8 @@ def cmd(func, n, time):
 
 
 def inpRes(data, v1Range, v2Range):
-    r1 = filter(lambda r: r['Time'] > v1Range[0] and r['Time'] < v1Range[1], data)
-    r2 = filter(lambda r: r['Time'] > v2Range[0] and r['Time'] < v2Range[1], data)
+    r1 = [r for r in data if r['Time'] > v1Range[0] and r['Time'] < v1Range[1]]
+    r2 = [r for r in data if r['Time'] > v2Range[0] and r['Time'] < v2Range[1]]
     v1 = mean([r['voltage'] for r in r1])
     v2 = min(smooth([r['voltage'] for r in r2], 10))
     c1 = mean([r['current'] for r in r1])

@@ -877,7 +877,7 @@ class _CameraClass:
         for r in rem:
             if r in plist:
                 plist.remove(r)
-        plist = filter(self.paramAvailable, plist)
+        plist = list(filter(self.paramAvailable, plist))
         if len(plist) == 0:
             raise Exception('PVCam reported that camera %s has no parameters (this is bad; try restarting your camera)' % self.name)
         params = OrderedDict()
