@@ -160,7 +160,7 @@ class _PVCamClass:
         return cams
 
     def getCamera(self, cam):
-        if not self.cams.has_key(cam):
+        if cam not in self.cams:
             self.cams[cam] = _CameraClass(cam, self)
         return self.cams[cam]
     
@@ -823,7 +823,7 @@ class _CameraClass:
                 LIB.ATTR_COUNT: LIB.TYPE_UNS32,
                 LIB.ATTR_TYPE: LIB.TYPE_UNS16
             }
-            if typs.has_key(attr):
+            if attr in typs:
                 typ = typs[attr]
             else:
                 typ = self.getParamType(param)
@@ -950,7 +950,7 @@ def mkCObj(typ, value=None):
         LIB.TYPE_VOID_PTR: c_void_p,
         LIB.TYPE_VOID_PTR_PTR: c_void_p
     }
-    if not typs.has_key(typ):
+    if typ not in typs:
         raise Exception("Unknown type %d" % typ)
     if value is None:
         return typs[typ]()

@@ -522,7 +522,7 @@ class LogWidget(QtGui.QWidget):
             return
         
         for entry in entries:
-            if not self.cache.has_key(id(entry)):
+            if id(entry) not in self.cache:
                 self.cache[id(entry)] = self.generateEntryHtml(entry)
                 
                 ## determine message color:
@@ -577,9 +577,9 @@ class LogWidget(QtGui.QWidget):
         reasons = ""
         docs = ""
         exc = ""
-        if entry.has_key('reasons'):
+        if 'reasons' in entry:
             reasons = self.formatReasonStrForHTML(entry['reasons'])
-        if entry.has_key('docs'):
+        if 'docs' in entry:
             docs = self.formatDocsStrForHTML(entry['docs'])
         if entry.get('exception', None) is not None:
             exc = self.formatExceptionForHTML(entry, entryId=entry['id'])
@@ -675,11 +675,11 @@ class LogWidget(QtGui.QWidget):
         messages = [text]
         #print "\n", messages, "\n"
         
-        if exception.has_key('reasons'):
+        if 'reasons' in exception:
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
             text += reasons
             #self.displayText(reasons, entry, color, clean=False)
-        if exception.has_key('docs'):
+        if 'docs' in exception:
             docs = self.formatDocsStrForHTML(exception['docs'])
             #self.displayText(docs, entry, color, clean=False)
             text += docs
@@ -687,7 +687,7 @@ class LogWidget(QtGui.QWidget):
         traceback = [self.formatTracebackForHTML(exception['traceback'], count)]
         text = [text]
         
-        if exception.has_key('oldExc'):
+        if 'oldExc' in exception:
             exc, tb, msgs = self.formatExceptionForHTML(entry, exception['oldExc'], count=count+1)
             text.extend(exc)
             messages.extend(msgs)
@@ -779,7 +779,7 @@ class LogWidget(QtGui.QWidget):
         for e in self.displayedEntries:
             doc += self.cache[id(e)]
         for e in self.displayedEntries:
-            if e.has_key('tracebackHtml'):
+            if 'tracebackHtml' in e:
                 doc = re.sub(r'<a href="exc:%s">(<[^>]+>)*Show traceback %s(<[^>]+>)*</a>'%(str(e['id']), str(e['id'])), e['tracebackHtml'], doc)
             
             

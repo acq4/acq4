@@ -664,7 +664,7 @@ class DirHandle(FileHandle):
             if not self.isManaged():
                 return {}
             index = self._readIndex()
-            if index.has_key(file):
+            if file in index:
                 return index[file]
             else:
                 return {}
@@ -700,7 +700,7 @@ class DirHandle(FileHandle):
             self._childChanged()
             
             ## Write meta-info
-            if not info.has_key('__timestamp__'):
+            if '__timestamp__' not in info:
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
             self.emitChanged('children', fileName)
@@ -734,9 +734,9 @@ class DirHandle(FileHandle):
             
             self._childChanged()
             ## Write meta-info
-            if not info.has_key('__object_type__'):
+            if '__object_type__' not in info:
                 info['__object_type__'] = fileType
-            if not info.has_key('__timestamp__'):
+            if '__timestamp__' not in info:
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
             self.emitChanged('children', fileName)

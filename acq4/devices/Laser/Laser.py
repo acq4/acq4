@@ -397,7 +397,7 @@ class Laser(DAQGeneric, OptomechDevice):
         """Return a list of available calibrations."""
         calList = []
         index = self.getCalibrationIndex()
-        if index.has_key('pCellCalibration'):
+        if 'pCellCalibration' in index:
             index.pop('pCellCalibration')
         #self.microscopes.append(scope)
         for opticState in index:

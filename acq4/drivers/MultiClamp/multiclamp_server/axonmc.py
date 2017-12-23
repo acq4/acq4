@@ -195,7 +195,7 @@ class _MULTICLAMP:
             HW_TYPE_MC700B: 'MC700B'
         }
         d = self.devices[devID]
-        if models.has_key(d['model']):
+        if d['model'] in models:
             model = models[d['model']]
         else:
             model = 'UNKNOWN'

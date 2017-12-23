@@ -114,7 +114,7 @@ class AtlasCtrlWidget(QtGui.QWidget):
             name = dh.name(relativeTo=base)
         self.ui.sliceLabel.setText(name)
         
-        if dh.info().get('atlas', {}).has_key(self.atlas.name()):
+        if self.atlas.name() in dh.info().get('atlas', {}):
             self.loadState()
         #else:
         #    self.updateAtlas()

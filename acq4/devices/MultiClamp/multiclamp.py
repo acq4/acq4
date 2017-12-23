@@ -351,7 +351,7 @@ class MultiClampTask(DeviceTask):
             #prof.mark('    Multiclamp: set gains')
 
 
-            if self.cmd.has_key('parameters'):
+            if 'parameters' in self.cmd:
                 self.dev.mc.setParams(self.cmd['parameters'])
 
             #prof.mark('    Multiclamp: set params')
@@ -363,7 +363,7 @@ class MultiClampTask(DeviceTask):
             
             #prof.mark('    Multiclamp: get state')
             
-            if self.cmd.has_key('recordState') and self.cmd['recordState'] is True:
+            if 'recordState' in self.cmd and self.cmd['recordState'] is True:
                 exState = self.dev.mc.getParams(MultiClampTask.recordParams)
                 self.state['ClampParams'] = {}
                 for k in exState:

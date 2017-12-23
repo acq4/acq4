@@ -131,7 +131,7 @@ class QCamDriverClass:
     
     def getCamera(self, cam):
         #print "QIdriver: getting camera...."
-        if not self.cams.has_key(cam):
+        if cam not in self.cams:
             #print "    creating camera class..."
             self.cams[cam] = QCameraClass(cam, self)
             #print "    camera class created for cam: %s" %cam

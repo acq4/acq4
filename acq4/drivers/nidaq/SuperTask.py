@@ -48,7 +48,7 @@ class SuperTask:
     def getTask(self, chan, typ=None):
         """Return the task which should be used for this channel and i/o type. Creates the task if needed."""
         key = self.getTaskKey(chan, typ)
-        if not self.tasks.has_key(key):
+        if key not in self.tasks:
             self.tasks[key] = self.daq.createTask()
             self.taskInfo[key] = {'cache': None, 'chans': [], 'dataWritten': False}
         return self.tasks[key]
