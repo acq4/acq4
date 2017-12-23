@@ -150,7 +150,7 @@ def savitzky_golay(data, kernel = 11, order = 4):
     half_window = (window_size-1) // 2
     # precompute the offset values for better performance
     offsets = range(-half_window, half_window+1)
-    offset_data = zip(offsets, m)
+    offset_data = list(zip(offsets, m))
     smooth_data = list()
     # temporary data, with padded zeros (since we want the same length after smoothing)
     #data = numpy.concatenate((numpy.zeros(half_window), data, numpy.zeros(half_window)))

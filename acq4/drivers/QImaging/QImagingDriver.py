@@ -588,7 +588,7 @@ class QCameraClass:
         ### Unpack grouped params
         for x in params.keys():
             if x in self.groupParams:
-                tuples = zip(self.groupParams[x], params[x])
+                tuples = list(zip(self.groupParams[x], params[x]))
                 #newDict = {}
                 for y in tuples:
                     params[y[0]]= y[1]

@@ -566,7 +566,7 @@ class SpontRateAnalyzer:
         ##   events - record array of event data. Must have fields 'protocolDir', 'fitTime'
         ##   sites  - record array with 'protocolDir', 'start', and 'stop' fields. Sorted by start.
         
-        self.timeMarker.setTimes(zip(sites['start'], sites['stop']))
+        self.timeMarker.setTimes(list(zip(sites['start'], sites['stop'])))
         
         ## filter events by pre-region
         stimTime = self.params['Stop Time']

@@ -444,7 +444,7 @@ class _CameraClass:
         Normally, camera parameters that do not need to be set (because they are already) will be ignored. However, this can be
         overridden with forceSet."""
         if paramName in self.groupParams:
-            return self.setParams(zip(self.groupParams[paramName], value))
+            return self.setParams(list(zip(self.groupParams[paramName], value)))
         
         ## If this is an enum parameter, convert string values to int before setting
         if paramName in self.enumTable:
@@ -864,7 +864,7 @@ class _CameraClass:
             if typ != LIB.TYPE_ENUM:
                 continue
             enum = self.getEnumList(n)
-            enums[n] = (dict(zip(enum[0], enum[1])), dict(zip(enum[1], enum[0])))
+            enums[n] = (dict(list(zip(enum[0], enum[1]))), dict(list(zip(enum[1], enum[0]))))
             paramId = self.pvcam.paramFromString(n)
             enums[paramId] = enums[n]
             
