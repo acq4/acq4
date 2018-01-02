@@ -21,6 +21,7 @@ import sys, os
 from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph as pg
 from acq4.util.StatusBar import StatusBar
+from functools import reduce
 
 
 class Window(QtGui.QMainWindow):

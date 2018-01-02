@@ -32,7 +32,7 @@ class ForkedIterator(m.Process):
     def __iter__(self):
         return self
         
-    def next(self):
+    def __next__(self):
         try:
             x = self.p1.recv()
             #print "recv:", x
