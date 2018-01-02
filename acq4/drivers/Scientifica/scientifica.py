@@ -1,7 +1,7 @@
-from __future__ import print_function
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
+from __future__ import print_function
 from __future__ import division
 import serial, struct, time, collections, re
 import numpy as np
@@ -99,6 +99,8 @@ class Scientifica(SerialDevice):
         self.lock = RLock()
 
         if name is not None:
+            if isinstance(name, str):
+                name = name.encode()
             assert port is None, "May not specify both name and port."
             if self.availableDevices is None:
                 self.enumerateDevices()
@@ -135,7 +137,7 @@ class Scientifica(SerialDevice):
                     # try again because prior communication at a different baud rate may have garbled serial communication.
                     sci = self.send('scientifica', timeout=1.0)
 
-                if sci != 'Y519':
+                if sci != b'Y519':
                     # Device responded, not scientifica.
                     raise ValueError("Received unexpected response from device at %s. (Is this a scientifica device?)" % port)
                 connected = True
@@ -165,8 +167,8 @@ class Scientifica(SerialDevice):
     def send(self, msg, timeout=5):
         with self.lock:
             self.write(msg + '\r')
-            result = self.readUntil('\r', timeout=timeout)[:-1]
-            if result.startswith('E,'):
+            result = self.readUntil(b'\r', timeout=timeout)[:-1]
+            if result.startswith(b'E,'):
                 errno = int(result.strip()[2:])
                 exc = RuntimeError("Received error %d from Scientifica controller (request: %r)" % (errno, msg))
                 exc.errno = errno
@@ -174,7 +176,7 @@ class Scientifica(SerialDevice):
             return result
 
     def getFirmwareVersion(self):
-        return self.send('DATE').partition(' ')[2].partition('\t')[0]
+        return self.send('DATE').partition(b' ')[2].partition(b'\t')[0]
 
     def getType(self):
         """Return a string indicating the type of the device, or the type's numerical value
@@ -189,7 +191,7 @@ class Scientifica(SerialDevice):
             '3.11': 'slicescope', '3.12': 'condenser', '3.13': 'mmbp', '3.14': 'ivm_manipulator', '3.15': 'custom',
             '3.16': 'extended_patchstar', '3.17': 'ivm_mini',
         }
-        typ = self.send('type')
+        typ = self.send('type').decode()
         return types.get(typ, typ)
 
     def getDescription(self):
@@ -212,10 +214,10 @@ class Scientifica(SerialDevice):
             ## request position
             if self._version < 3:
                 packet = self.send('POS')
-                return [int(x) / 10. for x in packet.split('\t')]
+                return [int(x) / 10. for x in packet.split(b'\t')]
             else:
                 packet = self.send('P')
-                return [int(x) / 100. for x in packet.split('\t')]
+                return [int(x) / 100. for x in packet.split(b'\t')]
 
     _param_commands = {
         'maxSpeed': ('TOP', 'TOP %f', float),
@@ -418,7 +420,7 @@ class Scientifica(SerialDevice):
 
             # Send move command
             self.write(b'ABS %d %d %d\r' % tuple(pos))
-            self.readUntil('\r')
+            self.readUntil(b'\r')
 
     def zeroPosition(self):
         """Reset the stage coordinates to (0, 0, 0) without moving the stage.
@@ -428,7 +430,7 @@ class Scientifica(SerialDevice):
     def getCurrents(self):
         """Return a tuple of the (run, standby) current values.
         """
-        c = re.split(r'\s+', self.send('CURRENT'))
+        c = re.split(br'\s+', self.send('CURRENT'))
         return (int(c[0]), int(c[1]))
 
     def setCurrents(self, run, standby):

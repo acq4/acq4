@@ -132,7 +132,7 @@ class _MULTICLAMP:
             raise
         
     def error(self, errCode):
-        buf = create_string_buffer('\0' * 256)
+        buf = create_string_buffer(b'\0' * 256)
         try:
             self._call('MCCMSG_BuildErrorText', self.handle, errCode, buf, c_int(256))
             return str(buf.value)
@@ -142,7 +142,7 @@ class _MULTICLAMP:
 
 
     def findMultiClamp(self):
-        serial = create_string_buffer('\0'*16)
+        serial = create_string_buffer(b'\0'*16)
         model = c_uint(0)
         port = c_uint(0)
         devID = c_uint(0)
