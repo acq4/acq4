@@ -29,7 +29,7 @@ def showImg(data=None, parent=None, title='', copy=True):
         fileName = fileDialog()
         title = fileName
         data = loadImg(fileName)
-    elif type(data) is types.StringType:
+    elif isinstance(data, str):
         title = data
         data = loadImg(data)
     title = "Image %d: %s" % (len(images), title)
