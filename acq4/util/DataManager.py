@@ -487,7 +487,7 @@ class DirHandle(FileHandle):
                     fd = open(logf, 'r')
                     lines = fd.readlines()
                     fd.close()
-                    log = map(lambda l: eval(l.strip()), lines)
+                    log = [eval(l.strip()) for l in lines]
                 except:
                     print("****************** Error reading log file %s! *********************" % logf)
                     raise
@@ -591,7 +591,7 @@ class DirHandle(FileHandle):
             files = self.lsCache[sortMode]
             
             if normcase:
-                ret = map(os.path.normcase, files)
+                ret = list(map(os.path.normcase, files))
                 return ret
             else:
                 ret = files[:]

@@ -716,7 +716,7 @@ class RegionLabeler(Node):
     def process(self, events, regions, display=True):
         terms = list(regions.keys())
         names = [term.node().name() for term in terms]
-        maxLen = max(map(len, names))
+        maxLen = max(list(map(len, names)))
         dtype = [(n, events[n].dtype) for n in events.dtype.names]
         output = np.empty(len(events), dtype=dtype + [('region', '|S%d'%maxLen)])
         

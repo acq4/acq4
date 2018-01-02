@@ -128,7 +128,7 @@ def unpackID(i):
 
 msgs = getMsgs()
 ids = [m.lParam for m in msgs if m.message==msgIds['ID']]
-print("Devices available:", map(unpackID, ids))
+print("Devices available:", list(map(unpackID, ids)))
 
 for i in ids:
     post(msgIds['OPEN'], i)

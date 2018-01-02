@@ -571,7 +571,7 @@ class PoissonRepeatScore:
         if len(ev2) == 0:
             return 1.0
         
-        ev = map(np.sort, ev)
+        ev = list(map(np.sort, ev))
         pp = np.empty((len(ev), len(ev2)))
         for i, trial in enumerate(ev):
             nVals = []

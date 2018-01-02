@@ -299,7 +299,7 @@ class TaskRunner(Module):
             tot = 0
         else:
             psi = [len(i[2]) for i in items]
-            ps = map(str, psi)
+            ps = list(map(str, psi))
             tot = reduce(lambda x,y: x*y, psi)
             self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
             self.ui.seqTimeLabel.setText('%0.3f sec' % (period*tot))
@@ -649,7 +649,7 @@ class TaskRunner(Module):
         prot['protocol']['storeData'] = store
         if store:
             if params != {}:
-                name = '_'.join(map(lambda i: '%03d'%i, list(params.values())))
+                name = '_'.join(['%03d'%i for i in list(params.values())])
                 #print "mkdir", name
                 info = params.copy()
                 info['dirType'] = 'Protocol'

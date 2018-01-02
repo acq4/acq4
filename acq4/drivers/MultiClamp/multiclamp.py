@@ -388,7 +388,7 @@ class MultiClamp:
         with self.lock:
             ret = axlib('functions', fName)(self.handle, *args, **kargs)
         if ret() == 0:
-            funcStr = "%s(%s)" % (fName, ', '.join(map(str, args) + ["%s=%s" % (k, str(kargs[k])) for k in kargs]))
+            funcStr = "%s(%s)" % (fName, ', '.join(list(map(str, args)) + ["%s=%s" % (k, str(kargs[k])) for k in kargs]))
             self.raiseError("Error while running function  %s\n      Error:" % funcStr, ret['pnError'])
         
         if self.debug:

@@ -723,7 +723,7 @@ class AnalysisDatabase(SqliteDatabase):
                 linkTable = conf['Link']
                 handles = dict([(rid, self.getDir(linkTable, rid)) for rid in rids if rid is not None])
                 handles[None] = None
-                data[column] = map(handles.get, data[column])
+                data[column] = list(map(handles.get, data[column]))
                     
             elif conf.get('Type', None) == 'file':
                 def getHandle(name):
@@ -736,7 +736,7 @@ class AnalysisDatabase(SqliteDatabase):
                             sep = '/'
                         name = name.replace(sep, os.sep) ## make sure file handles have an operating-system-appropriate separator (/ for Unix, \ for Windows)
                         return self.baseDir()[name]
-                data[column] = map(getHandle, data[column])
+                data[column] = list(map(getHandle, data[column]))
                 
         prof.mark("converted file/dir handles")
                 
@@ -784,7 +784,7 @@ class AnalysisDatabase(SqliteDatabase):
                     rowids[dh] = rid
                     
                 ## convert dirhandles to rowids
-                data[colName] = map(rowids.get, handles)
+                data[colName] = list(map(rowids.get, handles))
             elif colConf.get('Type', None) == 'file':
                 ## convert filehandles to strings
                 files = []

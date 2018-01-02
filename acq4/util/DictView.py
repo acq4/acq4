@@ -27,7 +27,7 @@ class DictView(QtGui.QTreeWidget):
         
     def mkNode(self, name, v):
         if type(v) is list and len(v) > 0 and isinstance(v[0], dict):
-            inds = map(six.text_type, range(len(v)))
+            inds = list(map(six.text_type, range(len(v))))
             v = OrderedDict(zip(inds, v))
         if isinstance(v, dict):
             #print "\nadd tree", k, v

@@ -45,7 +45,7 @@ class LineScanComponent(ScanProgramComponent):
         between successive points. 
         Interscan intervals are green on the line, scan intervals are white
         """
-        pts = map(pg.Point, cmd['points'])
+        pts = list(map(pg.Point, cmd['points']))
         startPos = pts[0]                
         stopPos = pts[-1]
         

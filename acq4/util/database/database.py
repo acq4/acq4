@@ -693,7 +693,7 @@ class TableData:
         if self.mode == 'array' or self.mode == 'list':
             return len(self.data)
         else:
-            return max(map(len, self.data.values()))
+            return max(list(map(len, self.data.values())))
 
     def columnNames(self):
         """returns column names in no particular order"""
