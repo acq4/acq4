@@ -161,7 +161,7 @@ class IgorBridge(object):
         return res
 
     def formatCall(self, cmd, *args, **kwds):
-        for kwd, val in kwds.iteritems():
+        for kwd, val in kwds.items():
             if isinstance(val, int):
                 args.append("{}={:d}".format(kwd, val))
             elif isinstance(val, float):
