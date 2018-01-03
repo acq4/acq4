@@ -104,7 +104,7 @@ class SerialDevice(object):
     
     def write(self, data):
         """Write *data* to the serial port"""
-        if isinstance(data, str):
+        if sys.version > '3' and isinstance(data, str):
             data = data.encode()
         logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
@@ -178,7 +178,7 @@ class SerialDevice(object):
                 packet += self.read(1, timeout=timeout-elapsed)
             except TimeoutError:
                 raise TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
-            
+
             if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet
 
