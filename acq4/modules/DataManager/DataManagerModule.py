@@ -43,8 +43,7 @@ class DataManager(Module):
         w = self.ui.splitter.width()
         self.ui.splitter.setSizes([int(w*0.4), int(w*0.6)])
         self.ui.logDock.hide()
-        self.dialog = FileDialog()
-        self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+        self.dialog = None
         self.ui.fileTreeWidget.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         ## Load values into GUI
         #self.model = DMModel(self.manager.getBaseDir())
@@ -58,7 +57,6 @@ class DataManager(Module):
         ## Make all connections needed
         self.ui.selectDirBtn.clicked.connect(self.showFileDialog)
         self.ui.setCurrentDirBtn.clicked.connect(self.setCurrentClicked)
-        self.dialog.filesSelected.connect(self.setBaseDir)
         self.manager.sigBaseDirChanged.connect(self.baseDirChanged)
         self.manager.sigCurrentDirChanged.connect(self.currentDirChanged)
         self.manager.sigConfigChanged.connect(self.updateNewFolderList)
@@ -149,6 +147,10 @@ class DataManager(Module):
 
     def showFileDialog(self):
         bd = self.manager.getBaseDir()
+        if self.dialog is None:
+            self.dialog = FileDialog()
+            self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+            self.dialog.filesSelected.connect(self.setBaseDir)
         if bd is not None:
             self.dialog.setDirectory(bd.name())
         self.dialog.show()
