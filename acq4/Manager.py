@@ -232,10 +232,22 @@ class Manager(QtCore.QObject):
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
         
-        for key in cfg:
+        for key, val in cfg.items():
             try:
+                # Handle custom import / exec
+                if key == 'imports':
+                    if isinstance(val, str):
+                        val = [val]
+                    for mod in val:
+                        __import__(mod)
+                elif key == 'execFiles':
+                    if isinstance(val, str):
+                        val = [val]
+                    for pyfile in val:
+                        exec(open(pyfile, 'rb').read())
+                
                 ## configure new devices
-                if key == 'devices':
+                elif key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
                             print "    --> Ignoring device '%s' -- disabled by request" % k
@@ -265,7 +277,7 @@ class Manager(QtCore.QObject):
                     logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
-		elif key == 'defaultCompression':
+                elif key == 'defaultCompression':
                     comp = cfg['defaultCompression']
                     try:
                         if isinstance(comp, tuple):
