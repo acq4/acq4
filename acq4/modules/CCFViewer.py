@@ -5,6 +5,8 @@ from PyQt4 import QtGui, QtCore
 class CCFViewer(Module):
     """Displays data from Allen Institute Common Coordinate Framework (CCF).
 
+    Requires aiccf, which is available at github.com/AllenInstitute/ccfviewer
+
     This is mainly used for looking at virtual slices of the mouse brain
     to determine optimal slicing angles, and for estimating the anatomical
     location of a slice from images. 

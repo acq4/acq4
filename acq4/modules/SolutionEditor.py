@@ -4,6 +4,14 @@ from PyQt4 import QtGui, QtCore
 
 class SolutionEditor(Module):
     """Manages a database of experimental reagents, solutions, and recipes.
+
+    Requires pycsf, which is available at github.com/AllenInstitute/pycsf
+
+    Configuration options:
+
+    * recipeFile : location of a recipe file to load by default. It is recommended to 
+      keep this file under git revision control. If not specified, then the default
+      databse will be loaded.
     """
     def __init__(self, manager, name, config):
         from pycsf.editor import SolutionEditorWindow
