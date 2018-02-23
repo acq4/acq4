@@ -3,6 +3,11 @@ from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph import DataTreeWidget
 
 class TaskMonitor(Module):
+    """Simple module that displays information about tasks submitted to the manager
+    and the results they generate.
+
+    Useful for debugging issues in task generation and execution.
+    """
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.man = manager
