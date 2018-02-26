@@ -187,7 +187,7 @@ class MockStageThread(Thread):
         self.target = None
         self.speed = None
         self.velocity = None
-        self.quit = False
+        self._quit = False
         self.lock = Mutex()
         self.interval = 30e-3
         self.lastUpdate = None
@@ -195,7 +195,7 @@ class MockStageThread(Thread):
         Thread.__init__(self)
         
     def start(self):
-        self.quit = False
+        self._quit = False
         self.lastUpdate = ptime.time()
         Thread.start(self)
         
@@ -207,7 +207,7 @@ class MockStageThread(Thread):
             
     def quit(self):
         with self.lock:
-            self.quit = True
+            self._quit = True
             
     def setTarget(self, future, target, speed):
         """Begin moving toward a target position.
@@ -233,7 +233,7 @@ class MockStageThread(Thread):
         lastUpdate = ptime.time()
         while True:
             with self.lock:
-                if self.quit:
+                if self._quit:
                     break
                 target = self.target
                 speed = self.speed
