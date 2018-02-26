@@ -11,6 +11,9 @@ class CCFViewer(Module):
     to determine optimal slicing angles, and for estimating the anatomical
     location of a slice from images. 
     """
+    moduleDisplayName = "CCF Viewer"
+    moduleCategory = "Utilities"
+
     def __init__(self, manager, name, config):
         from aiccf.data import CCFAtlasData
         from aiccf.viewer import AtlasViewer

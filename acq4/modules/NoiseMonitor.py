@@ -11,6 +11,9 @@ import acq4.pyqtgraph as pg
 class NoiseMonitor(Module):
     """ Used to monitor electrical noise over long time periods.
     """
+    moduleDisplayName = "Noise Monitor"
+    moduleCategory = "Utilities"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         

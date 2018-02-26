@@ -2,6 +2,14 @@
 from PyQt4 import QtCore
 
 class Module(QtCore.QObject):
+
+    # User-readable name for this module
+    moduleDisplayName = None
+
+    # Override this class attribute to have this module appear
+    # under different category sections in the manager window's module list
+    moduleCategory = None
+
     def __init__(self, manager, name, config):
         QtCore.QObject.__init__(self)
         self.name = name

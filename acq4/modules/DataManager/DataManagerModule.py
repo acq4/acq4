@@ -21,6 +21,8 @@ class Window(QtGui.QMainWindow):
         self.sigClosed.emit()
 
 class DataManager(Module):
+    moduleDisplayName = "Data Manager"
+    moduleCategory = "Acquisition"
     
     sigAnalysisDbChanged = QtCore.Signal()
     

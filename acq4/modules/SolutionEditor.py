@@ -13,6 +13,9 @@ class SolutionEditor(Module):
       keep this file under git revision control. If not specified, then the default
       databse will be loaded.
     """
+    moduleDisplayName = "Solution Editor"
+    moduleCategory = "Utilities"
+
     def __init__(self, manager, name, config):
         from pycsf.editor import SolutionEditorWindow
         from pycsf.core import SolutionDatabase

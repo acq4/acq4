@@ -15,19 +15,15 @@ def getModuleClass(name):
         raise KeyError('No registered module class named "%s"' % name)
 
 
-def registerModuleClass(modclass, name):
+def registerModuleClass(modclass):
     """Register a module class.
 
-    This makes it possible for the ACQ4 Manager to instantiate modules by name.
-
-    Parameters
-    ----------
-    modclass : Module subclass
-        The new module type to register.
-    name : str
-        The name of the module class.
+    This makes it possible for the ACQ4 Manager to instantiate modules by name,
+    and also causes the module to be displayed in the manager window's list of
+    loadable modules.
     """
     global MODULE_CLASSES
+    name = modclass.__name__
     if name in MODULE_CLASSES:
         raise KeyError('Module class named "%s" is already registered' % name)
     MODULE_CLASSES[name] = modclass
@@ -54,4 +50,4 @@ def registerBuiltinClasses():
             f = f[:-3]
         mod = import_module('acq4.modules.' + f)
         cls = getattr(mod, f)
-        registerModuleClass(cls, f)
+        registerModuleClass(cls)

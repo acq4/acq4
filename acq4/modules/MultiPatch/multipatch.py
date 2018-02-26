@@ -13,6 +13,9 @@ from .pipetteTemplate import Ui_PipetteControl
 
 
 class MultiPatch(Module):
+    moduleDisplayName = "MultiPatch"
+    moduleCategory = "Acquisition"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         

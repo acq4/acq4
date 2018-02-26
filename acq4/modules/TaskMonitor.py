@@ -8,6 +8,9 @@ class TaskMonitor(Module):
 
     Useful for debugging issues in task generation and execution.
     """
+    moduleDisplayName = "Task Monitor"
+    moduleCategory = "Utilities"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.man = manager

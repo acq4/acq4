@@ -450,7 +450,7 @@ class Manager(QtCore.QObject):
         with self.lock:
             return self.devices.keys()
 
-    def loadModule(self, moduleClassName, name, config=None, forceReload=False, importMod=None, execPath=None):
+    def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
         """Create a new instance of an user interface module. 
 
         Parameters
@@ -459,18 +459,27 @@ class Manager(QtCore.QObject):
             The name of the module *class* to instantiate. The class must have been
             registered by calling acq4.modules.registerModuleClass(). See
             acq4.modules.MODULE_CLASSES for access to all available module classes.
-        name : str
-            The name to assign to the newly instantiated module
+        name : str or None
+            The name to assign to the newly instantiated module. If None, then the class
+            name is used instead. Module names are automatically modified to avoid name
+            collision with previously loaded modules.
         config : dict | None
             Configuration options to pass to the module constructor
         """
+        if name is None:
+            name = moduleClassName
+
+        ## Find an unused name for this module
+        baseName = name
+        n = 0
+        while name in self.modules:
+            name = "%s_%d" % (baseName, n)
+            n += 1
+
+        if config is None:
+            config = {}
         
         print 'Loading module "%s" as "%s"...' % (moduleClassName, name)
-        with self.lock:
-            if name in self.modules:
-                raise Exception('Module already exists with name "%s"' % name)
-            if config is None:
-                config = {}
         
         # deprecated args
         if importMod is not None:
@@ -519,7 +528,7 @@ class Manager(QtCore.QObject):
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
         with self.lock:
-            return self.definedModules.keys()
+            return self.definedModules.copy()
 
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
@@ -535,25 +544,17 @@ class Manager(QtCore.QObject):
         else:
             config = {}
             
-        ## Find an unused name for this module
-        mName = name
-        n = 0
-        while mName in self.modules:
-            mName = "%s_%d" % (name, n)
-            n += 1
-
         # Allow mechanisms for importing custom modules
         execPath = conf.get('exec', None)
         importMod = conf.get('import', None)
             
-        mod = self.loadModule(mod, mName, config, forceReload=forceReload, execPath=execPath, importMod=importMod)
+        mod = self.loadModule(mod, name, config, forceReload=forceReload, execPath=execPath, importMod=importMod)
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
-        print "Loaded module '%s'" % mName
+        print "Loaded module '%s'" % mod.name
     
     def moduleHasQuit(self, mod):
-        
         with self.lock:
             if mod.name in self.modules:
                 del self.modules[mod.name]
