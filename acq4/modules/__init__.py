@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from importlib import import_module
 import os
+from ..util.debug import printExc
 
 
 MODULE_CLASSES = OrderedDict()
@@ -48,6 +49,9 @@ def registerBuiltinClasses():
             continue
         if f[-3:] == '.py':
             f = f[:-3]
-        mod = import_module('acq4.modules.' + f)
-        cls = getattr(mod, f)
-        registerModuleClass(cls)
+        try:
+            mod = import_module('acq4.modules.' + f)
+            cls = getattr(mod, f)
+            registerModuleClass(cls)
+        except Exception:
+            printExc('Error while registering builtin module class from %s' % ff)
