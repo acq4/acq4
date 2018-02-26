@@ -29,7 +29,7 @@ class DataMapping:
         self.offset = {}
         if chans is None:
             chans = device.listChannels()
-        if type(chans) in six.string_types:
+        if isinstance(chans, six.string_types):
             chans = [chans]
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
