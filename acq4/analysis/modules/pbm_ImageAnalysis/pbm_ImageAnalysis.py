@@ -3075,8 +3075,8 @@ class pbm_ImageAnalysis(AnalysisModule):
         records = {}
         for col in data.dtype.names:
             records[col] = data[col]
-        records['ProtocolSequenceDir'] = map(seqs.get, data['SourceFile'])
-        records['ProtocolDir'] = map(prots.get, data['SourceFile'])
+        records['ProtocolSequenceDir'] = list(map(seqs.get, data['SourceFile']))
+        records['ProtocolDir'] = list(map(prots.get, data['SourceFile']))
 
         p.mark("record list assembled")
 

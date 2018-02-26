@@ -62,7 +62,7 @@ class FileDataView(QtGui.QSplitter):
                     try:
                         self.widgets[0].setImage(data, autoRange=False)
                     except:
-                        print("widget types:", map(type, self.widgets))
+                        print("widget types:", list(map(type, self.widgets)))
                         raise
                 else:
                     self.clear()

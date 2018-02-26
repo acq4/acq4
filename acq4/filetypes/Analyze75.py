@@ -4,6 +4,8 @@ from __future__ import print_function
 from .FileType import *
 import numpy as np
 from acq4.util.metaarray import MetaArray
+from functools import reduce
+
 
 class Analyze75(FileType):
     extensions = ['.nii', '.hdr']   ## list of extensions handled by this class

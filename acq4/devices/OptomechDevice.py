@@ -105,7 +105,7 @@ class OptomechDevice(object):
                 try:
                     self.setParentDevice(config['parentDevice'])
                 except Exception as ex:
-                    if "No device named" in ex.message:
+                    if "No device named" in ex.args[0]:
                         print("Cannot set parent device %s; no device by that name." % config['parentDevice'])
                     else:
                         raise

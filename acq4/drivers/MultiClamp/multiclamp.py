@@ -371,7 +371,7 @@ class MultiClamp:
             fn = 'FindNextMultiClamp'
             
         try:
-            serial = create_string_buffer('\0'*16)
+            serial = create_string_buffer(b'\0'*16)
             ret = self.call(fn, pszSerialNum=serial, uBufSize=16)
         except:
             if sys.exc_info()[1][0] == 6000:  ## We have reached the end of the device list
@@ -388,7 +388,7 @@ class MultiClamp:
         with self.lock:
             ret = axlib('functions', fName)(self.handle, *args, **kargs)
         if ret() == 0:
-            funcStr = "%s(%s)" % (fName, ', '.join(map(str, args) + ["%s=%s" % (k, str(kargs[k])) for k in kargs]))
+            funcStr = "%s(%s)" % (fName, ', '.join(list(map(str, args)) + ["%s=%s" % (k, str(kargs[k])) for k in kargs]))
             self.raiseError("Error while running function  %s\n      Error:" % funcStr, ret['pnError'])
         
         if self.debug:
@@ -403,7 +403,7 @@ class MultiClamp:
 
     def errString(self, err):
         try:
-            return axlib.BuildErrorText(self.handle, err, create_string_buffer('\0'*256), 256)['sTxtBuf']
+            return axlib.BuildErrorText(self.handle, err, create_string_buffer(b'\0'*256), 256)['sTxtBuf'].decode()
         except:
             sys.excepthook(*sys.exc_info())
             return "<could not generate error message>"

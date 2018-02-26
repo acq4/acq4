@@ -21,7 +21,7 @@ class MIESPatchPipette(PatchPipette):
         """Got the signal from MIES that data is available, update"""
         TPDict = self.parseTPData(TPArray)
         if TPDict:
-            for key, timeseries in self.TPData.iteritems():
+            for key, timeseries in self.TPData.items():
                 timeseries.append(TPDict[key])
             self.sigDataChanged.emit()
 

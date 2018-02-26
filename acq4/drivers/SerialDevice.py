@@ -104,6 +104,8 @@ class SerialDevice(object):
     
     def write(self, data):
         """Write *data* to the serial port"""
+        if isinstance(data, str):
+            data = data.encode()
         logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
 
@@ -134,7 +136,7 @@ class SerialDevice(object):
         # Note: pyserial's timeout mechanism is broken (specifically, calling setTimeout can cause 
         # serial data to be lost) so we implement our own in readWithTimeout().
         start = time.time()
-        packet = ''
+        packet = b''
         # Interval between serial port checks is adaptive:
         #   * start with very short interval for low-latency reads
         #   * iteratively increase interval duration to reduce CPU usage on long reads
@@ -157,6 +159,9 @@ class SerialDevice(object):
         If *minBytes* is given, then this number of bytes will be read without checking for *term*.
         Returns the entire packet including *term*.
         """
+        if isinstance(term, str):
+            term = term.encode()
+
         start = time.time()
 
         if minBytes > 0:
@@ -173,8 +178,8 @@ class SerialDevice(object):
                 packet += self.read(1, timeout=timeout-elapsed)
             except TimeoutError:
                 raise TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
+            
             if len(packet) > minBytes and packet[-len(term):] == term:
-
                 return packet
 
     def clearBuffer(self):

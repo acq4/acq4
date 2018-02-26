@@ -54,7 +54,7 @@ class SequenceRunner:
         Example: 
           setParameterSpace({'x': linspace(0.2, 0.8, 10), 't': logSpace(0.01, 1.0, 20), 'iter': arange(0, 10), 'option': 7})
         """
-        if type(params) is not types.DictType:
+        if not isinstance(params, dict):
             raise Exception("Parameter specification must be a dict like {'param_name': [params], ...}")
         self._params = params
 
@@ -171,7 +171,7 @@ class SequenceRunner:
             else:
                 params = self._params[i]
                 
-            if type(params) not in (types.ListType, types.TupleType):
+            if not isinstance(params, (list, tuple)):
                 params = [params]
             self._paramSpace[i] = params
         
@@ -184,9 +184,9 @@ class SequenceRunner:
             if dtype is None:
                 dtype = ret.dtype
             shapeExtra = ret.shape
-        elif type(ret) is types.FloatType:
+        elif isinstance(ret, float):
             dtype = float
-        elif type(ret) is types.IntType:
+        elif isinstance(ret, int):
             dtype = int
         else:
             dtype = object

@@ -153,7 +153,7 @@ class _PVCamClass:
             else:
                 raise Exception("Error getting number of cameras: %s" % self.error(err))
         for i in range(nCams):
-            cName = create_string_buffer('\0' * LIB.CAM_NAME_LEN)
+            cName = create_string_buffer(b'\0' * LIB.CAM_NAME_LEN)
             if LIB.cam_get_name(i, cName)() < 1:
                 raise Exception("Error getting name for camera %d: %s" % (i, self.error()))
             cams.append(cName.value)
@@ -181,7 +181,7 @@ class _PVCamClass:
     def error(self, erno=None):
         if erno is None:
             erno = LIB.error_code()()
-        err = create_string_buffer('\0'*LIB.ERROR_MSG_LEN)
+        err = create_string_buffer(b'\0'*LIB.ERROR_MSG_LEN)
         LIB.error_message(erno, err)
         return "%d: %s" % (erno, err.value)
 
@@ -344,7 +344,7 @@ class _CameraClass:
         return self.pvcam.call(fn, *args, **kargs)
 
     def initCam(self, params=None):
-        buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
+        buf = create_string_buffer(b'\0' * LIB.CCD_NAME_LEN)
         camType = self.call('get_param', self.hCam, LIB.PARAM_CHIP_NAME, LIB.ATTR_CURRENT, buf)[3]
         
         ## Implement default settings for this camera model
@@ -754,7 +754,7 @@ class _CameraClass:
             ret = self.call('pl_enum_str_length', self.hCam, param, i)
             #ret = LIB.pl_enum_str_length(self.hCam, param, i)
             slen = ret[3]
-            strn = create_string_buffer('\0' * (slen))
+            strn = create_string_buffer(b'\0' * (slen))
             val = c_int()
             self.call('pl_get_enum_param', self.hCam, param, i, byref(val), strn, c_ulong(slen))
             #LIB.pl_get_enum_param(self.hCam, param, i, byref(val), strn, c_ulong(slen))

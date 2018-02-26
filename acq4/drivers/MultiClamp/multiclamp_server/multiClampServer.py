@@ -88,7 +88,7 @@ class WorkThread(threading.Thread):
             raise
         self.lock.release()
         
-        if type(ret) is not types.ListType:
+        if not isinstance(ret, list):
             ret = [ret]
         return ret
 

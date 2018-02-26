@@ -513,8 +513,8 @@ class RectScan(SystemSolver):
         # print p0, p1, p2
         # print acs, dx, dy
 
-        localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
-        globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
+        localPts = list(map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]])) # w and h of data of image in pixels.
+        globalPts = list(map(pg.Vector, [p0, p1, p2, [0,0,1]]))
         m = pg.solve3DTransform(localPts, globalPts)
         m[:,2] = m[:,3]
         m[2] = m[3]

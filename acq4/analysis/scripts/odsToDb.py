@@ -45,7 +45,7 @@ def splitCsv3(x):
     ## extract 3 comma-separated values
     if x is None or x == '-' or '?' in x:
         return None, None, None
-    return map(float, x.strip().split(','))
+    return list(map(float, x.strip().split(',')))
     
 def toInt(x):
     if not isinstance(x, float) and (x is None or x == '-' or '?' in x):

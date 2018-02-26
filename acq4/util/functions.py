@@ -490,7 +490,7 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     print("Doing %d iterations" % nit)
     
     spow = 2.0
-    scales = map(lambda x: 1.0 / spow**x, range(nit-1,-1,-1))
+    scales = [1.0 / spow**x for x in range(nit-1,-1,-1)]
     imScale = [[None, None]] * nit
     imScale[-1] = [im1, im2]
     time2 = time.clock()

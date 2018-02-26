@@ -1,5 +1,8 @@
 from __future__ import print_function
-import sys, os, time
+import sys, os, time, logging
+
+#logging.basicConfig(level=logging.DEBUG)
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from acq4.drivers.Scientifica import Scientifica
