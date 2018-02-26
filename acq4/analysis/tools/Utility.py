@@ -352,11 +352,11 @@ def flatten(l, ltypes=(list, tuple)):
 # flatten()
 
 def unique(seq, keepstr=True):
-  t = type(seq)
-  if t in six.string_types:
-    t = (list, ''.join)[bool(keepstr)]
-  seen = []
-  return t(c for c in seq if not (c in seen or seen.append(c)))
+    t = type(seq)
+    if isinstance(seq, six.string_types):
+        t = (list, ''.join)[bool(keepstr)]
+    seen = []
+    return t(c for c in seq if not (c in seen or seen.append(c)))
 
 ######################
 # Frequently used analysis routines

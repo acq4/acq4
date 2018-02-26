@@ -18,11 +18,12 @@ Requirements
   * python 2.7
   * PyQt 4.9+
   * numpy, scipy
+  * six
   * h5py
   * optional:
       * pyopengl
       * pyserial
-      * pyparsing
+      * pyparsing 2.0.3  (later versions do not work)
       * pillow
 
 
