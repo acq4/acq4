@@ -7,8 +7,12 @@ import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.graphicsItems.TargetItem
 from .itemtypes import registerItemType
 
-from aiccf.ui import AtlasSliceView
-from aiccf.data import CCFAtlasData
+try:
+    from aiccf.ui import AtlasSliceView
+    from aiccf.data import CCFAtlasData
+    HAVE_AICCF = True
+except ImportError:
+    HAVE_AICCF = False
 
 
 class AtlasCanvasItem(CanvasItem):
@@ -19,6 +23,8 @@ class AtlasCanvasItem(CanvasItem):
     _typeName = "Atlas"
     
     def __init__(self, **kwds):
+        if not HAVE_AICCF:
+            raise Exception("This item requires the aiccf module, but it could not be imported.")
         kwds.pop('viewRect', None)
         
         self.atlas = CCFAtlasData()

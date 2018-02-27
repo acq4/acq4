@@ -18,7 +18,7 @@ class PatchPipette(Pipette):
     sigStateChanged = QtCore.Signal(object)
 
     def __init__(self, deviceManager, config, name):
-        self._clampName = config.pop('clampDevice')
+        self._clampName = config.pop('clampDevice', None)
         self._clampDevice = None
 
         Pipette.__init__(self, deviceManager, config, name)

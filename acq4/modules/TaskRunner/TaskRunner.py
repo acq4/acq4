@@ -62,6 +62,8 @@ class Loader(DirTreeWidget.DirTreeLoader):
         
         
 class TaskRunner(Module):
+    moduleDisplayName = "Task Runner"
+    moduleCategory = "Acquisition"
     
     sigTaskPaused = QtCore.Signal()
     sigTaskFinished = QtCore.Signal()       ## emitted when the task thread exits (end of task, end of sequence, or exit due to error)

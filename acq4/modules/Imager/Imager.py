@@ -229,6 +229,9 @@ class TileControl(pg.ROI):
 
 
 class Imager(Module):
+    moduleDisplayName = "2P Imager"
+    moduleCategory = "Acquisition"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...

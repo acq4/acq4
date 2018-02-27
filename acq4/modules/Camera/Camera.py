@@ -6,6 +6,9 @@ import os
 from PyQt4 import QtGui
 
 class Camera(Module):
+    moduleDisplayName = "Camera"
+    moduleCategory = "Acquisition"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = CameraWindow(self)

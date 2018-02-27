@@ -8,8 +8,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from acq4.drivers.Scientifica import Scientifica
 
 if len(sys.argv) < 2:
-	print("Usage: python -i test.py com4 [9600|38400]\n       python -i test.py PatchStar1")
-	sys.exit(-1)
+    print("Usage: python -i test.py com4 [9600|38400]\n       python -i test.py PatchStar1")
+    sys.exit(-1)
 
 baudrate = int(sys.argv[2]) if len(sys.argv) > 2 else None
 devname = sys.argv[1]

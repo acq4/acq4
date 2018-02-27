@@ -11,6 +11,9 @@ import numpy as np
 EDITOR = "pykate {fileName}:{lineNum}"
 
 class Console(Module):
+    moduleDisplayName = "Console"
+    moduleCategory = "Utilities"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.manager = manager
@@ -44,7 +47,8 @@ class Console(Module):
         self.win.setCentralWidget(self.cw)
         self.win.setWindowTitle('ACQ4 Console')
         self.win.show()
-        
+
+
 ## reimplement history save/restore methods
 class ConsoleWidget(console.ConsoleWidget):
     def __init__(self, *args, **kargs):

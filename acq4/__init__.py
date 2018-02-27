@@ -46,9 +46,10 @@ if 'PyQt4' in sys.modules:
         try:
             v = sip.getapi(api)
             if v != 2:
-                raise Exception("ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\" _before_ importing PyQt4." % (api, v))
-            else:
-                set_api = False
+                print("WARNING: ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. "
+                      "Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\""
+                      " _before_ importing PyQt4." % (api, v))
+            set_api = False
         except ValueError:
             set_api = True
 elif 'PySide' in sys.modules:

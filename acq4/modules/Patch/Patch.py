@@ -6,6 +6,9 @@ import os
 from PyQt4 import QtGui
 
 class Patch(Module):
+    moduleDisplayName = "Patch"
+    moduleCategory = "Acquisition"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = PatchWindow(manager, config)
