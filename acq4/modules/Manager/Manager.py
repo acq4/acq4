@@ -95,7 +95,7 @@ class Manager(Module):
             root.addChild(item)
         
         # if a module has no defined configurations, then just give it a default entry without configuration.
-        for name,cls in modules.MODULE_CLASSES.items():
+        for name,cls in modules.getModuleClasses().items():
             if cls is Manager or cls in confMods:
                 continue
             root = self._mkModGrpItem(cls.moduleCategory)

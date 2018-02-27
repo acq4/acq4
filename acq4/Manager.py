@@ -114,9 +114,8 @@ class Manager(QtCore.QObject):
             atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
-            # Load all built-in device and module classes
-            devices.registerBuiltinClasses()
-            modules.registerBuiltinClasses()
+            # Import all built-in module classes
+            modules.importBuiltinClasses()
 
             ## Handle command line options
             loadModules = []
