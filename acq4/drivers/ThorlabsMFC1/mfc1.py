@@ -27,7 +27,7 @@ except ImportError:
 
 from acq4.pyqtgraph import ptime
 
-from .tmcm import TMCM140
+from .tmcm import TMCM140, TMCMError
 
 
 
@@ -43,6 +43,11 @@ class MFC1(object):
     def __init__(self, port, baudrate=9600, **kwds):
         self.lock = RLock(debug=True)
 
+        # Constant that affects ability to seek to encoder position.
+        # Low values (~10) cause a very slow approach to the target encoder position.
+        # High values (~2000) cause the motor to overshoot the target position
+        self.tracking_const = kwds.pop('tracking_const', 400)
+        
         params = dict(
             maximum_current=100,
             maximum_acceleration=1000,
@@ -57,6 +62,9 @@ class MFC1(object):
             stall_detection_threshold=0,
             freewheeling=1,
         )
+
+        optional_params = ['mixed_decay_threshold', 'stall_detection_threshold', 'fullstep_threshold']
+
         for k, v in kwds.items():
             if k not in params:
                 raise NameError("Unknown MFC1 parameter '%s'" % k)
@@ -65,7 +73,17 @@ class MFC1(object):
         self.mcm = TMCM140(port, baudrate)
         self.mcm.stop_program()
         self.mcm.stop()
-        self.mcm.set_params(**params)
+
+        for k,v in params.items():
+            try:
+                self.mcm.set_param(k, v)
+            except TMCMError as err:
+                if err.status == 3 and k in optional_params:
+                    # Some parameters are not supported on all motors; ignore these silently
+                    pass
+                else:
+                    print(k, v)
+                    raise
         self._target_position = self.mcm['encoder_position']
         self.mcm.set_global('gp0', self._target_position)
         self._upload_program()
@@ -92,42 +110,43 @@ class MFC1(object):
             p.command('wait', 0, 0, 1)
 
             # distance = target_position - current_position
-            p.get_param('encoder_position')
-            p.calcx('load')
-            p.get_global('gp0')
-            p.calcx('sub')
-            p.set_global('gp1', 'accum')
+            p.get_param('encoder_position')   # accu = encoder_position
+            p.calcx('load')                   # X = accu
+            p.get_global('gp0')               # accu = gp0  (target position)
+            p.calcx('sub')                    # accu -= X
+            p.set_global('gp1', 'accum')      # gp1 = accu
             
             # if dx is 0, stop motor and program
-            p.comp(0)
-            p.jump('ne', p.count+3)
-            p.set_param('target_speed', 0)
+            p.comp(0)                         
+            p.jump('ne', p.count+3)           # if accu != 0: jump 3 instructions ahead
+            p.set_param('target_speed', 0)    # else: stop here
             p.set_param('actual_speed', 0)
             p.command('stop', 0, 0, 0)
             
-            # calculate distance-to-target where we should begin (de)acccelerating
-            # Tx = speed**2 / 1572 
-            p.get_param('actual_speed')
-            p.calcx('load')
-            p.calcx('mul')
-            p.calc('div', 1400)
+            # calculate distance-to-target where we should begin (de)accelerating
+            # set Tx = speed**2 / tracking_const
+            p.get_param('actual_speed')         # accu = actual_speed
+            p.calcx('load')                     # X = accu
+            p.calcx('mul')                      # accu *= X
+            p.calc('div', self.tracking_const)  # accu /= tracking_const
             
-            p.calcx('swap')  # invert threshold if v < 0
-            p.get_param('actual_speed')
-            p.comp(0)
-            p.calcx('swap')
-            p.jump('ge', p.count+1)
-            p.calc('mul', -1)    
-            p.set_global('gp2', 'accum')
+            # invert threshold if v < 0
+            p.calcx('swap')                     
+            p.get_param('actual_speed')         
+            p.comp(0)                           
+            p.calcx('swap')                     
+            p.jump('ge', p.count+1)             # if actual_speed < 0:  
+            p.calc('mul', -1)                   #   accu *= -1
+            p.set_global('gp2', 'accum')        # gp2 = accu  (distance until decel)
             
             # calculate desired speed
-            p.calcx('swap')
-            p.get_global('gp1')
-            p.calcx('sub')
-            p.calcx('swap')
-            p.get_param('actual_speed')
-            p.calcx('add')
-            p.calc('mul', 2)
+            p.calcx('swap')                     # X = accu
+            p.get_global('gp1')                 # accu = gp1  (distance to target)
+            p.calcx('sub')                      # accu -= X
+            p.calcx('swap')                     # X = accu  (distance_to_target - distance_until_decel)
+            p.get_param('actual_speed')         # accu = actual_speed
+            p.calcx('add')                      # accu += X
+            p.calc('mul', 2)                    # accu *= 2/3
             p.calc('div', 3)
             
             # new_speed = clip(new_speed, -2047, 2047)
