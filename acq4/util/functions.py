@@ -662,7 +662,7 @@ def vibratome(data, start, stop, axes=(0,1)):
     (The data set returned is not guaranteed to hit the stopping point exactly)"""
 
     ## transpose data so x and y are the first 2 axes
-    trAx = range(data.ndim)
+    trAx = list(range(data.ndim))
     trAx.remove(axes[0])
     trAx.remove(axes[1])
     tr1 = tuple(axes) + tuple(trAx)
@@ -784,7 +784,7 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     
 
     ## transpose data so slice axes come first
-    trAx = range(data.ndim)
+    trAx = list(range(data.ndim))
     for x in axes:
         trAx.remove(x)
     tr1 = tuple(axes) + tuple(trAx)
@@ -824,7 +824,7 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         output[ind] = scipy.ndimage.map_coordinates(data[ind], x, **kargs)
     
     
-    tr = range(output.ndim)
+    tr = list(range(output.ndim))
     trb = []
     for i in range(min(axes)):
         ind = tr1.index(i) + (len(shape)-len(axes))
@@ -835,147 +835,6 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
 
     ## Untranspose array before returning
     return output.transpose(tr2)
-    
-    
-    ## old manual method. Might resurrect if performance is an issue..
-    
-    ### x[:, 1,2,3] is the vector indicating the position in data coords for the point [1,2,3] in slice coords
-    ### Note this is the floating-point position, and should not be used for indexing (that's what xi is for)
-    ### so axes are [pos, (slice axes)]
-    
-    
-    
-    ### Location of original values that will contribute to each point
-    ### If there is no interpolation, then we use nearest neighbor.
-    ### If there is interpolation, then each output voxel will be a combination of the nearest 2**ndim voxels
-    ##xi0 = np.floor(x).astype(uint)
-    ##yi0 = np.floor(y).astype(uint)
-    ##xi1 = xi0 + 1
-    ##yi1 = yi0 + 1
-    #if interpolate:
-        #xi = np.empty((2,) + x.shape, dtype=np.intp)
-        #xi[0] = np.floor(x)
-        #xi[1] = xi[0] + 1
-    #else:
-        #xi = np.round(x).astype(np.intp)[np.newaxis,...]
-    ###Now we have added a new axis to the beginning of the array for separating the values on either side of the sample location
-    ### so axes are [+/-, pos, (slice axes)]
-    
-    ### Find out-of-bound values
-    ##ox0 = (xi0 < 0) + (xi0 >= data.shape[0])
-    ##oy0 = (yi0 < 0) + (yi0 >= data.shape[1])
-    ##ox1 = (xi1 < 0) + (xi1 >= data.shape[0])
-    ##oy1 = (yi1 < 0) + (yi1 >= data.shape[1])
-    #sh = list(xi.shape)
-    
-    #sh[1] = 1  ## instead of a vector for each point, we just want a boolean marking bad spots 
-               ### (but leave the axis in anyway for broadcasting compatibility)
-    #ox = np.zeros(tuple(sh), dtype=bool)
-    #for i in range(len(xi.shape[1])):
-        #ox += xi[:,i] < 0
-        #ox += xi[:,i] > data.shape[i]
-    ### axes are [+/-, 1, (slice axes)]
-    
-    ### Make sure these locations are in-bounds so the indexing slice will not barf later
-    ### (just read from 0,0 and then overwrite the values later)
-    ##xi0[ox0] = 0
-    ##xi1[ox1] = 0
-    ##yi0[oy0] = 0
-    ##yi1[oy1] = 0
-    #xi[ox] = 0
-    
-    ### slices needed to pull values from data set
-    ##s00 = [xi0, yi0] + [slice(None)] * (data.ndim-2)
-    ##s10 = [xi1, yi0] + [slice(None)] * (data.ndim-2)
-    ##s01 = [xi0, yi1] + [slice(None)] * (data.ndim-2)
-    ##s11 = [xi1, yi1] + [slice(None)] * (data.ndim-2)
-    
-    ### Actual values from data set
-    ##v00 = data[s00]
-    ##v10 = data[s10]
-    ##v01 = data[s01]
-    ##v11 = data[s11]
-    #if interpolate:
-        ###Should look like this:
-        ##slices[0,1,1] = (xi[0,0], xi[1,1], xi[1,2])
-        ##slices = fromfunction(lambda *inds: tuple([xi[inds[i], i] for i in range(len(inds))]), (2,)*len(shape), dtype=object)
-        
-        ### for each point in the slice, we grab 2**ndim neighboring values from which to interpolate
-        ### v[0,1,1] = data[slices[0,1,1]]
-        
-        #intShape = (2,)*len(axes)  ## shape of interpolation space around each voxel
-        
-        #v = np.empty(intShape + data.shape, dtype=data.dtype)
-        ### axes are [(interp. space), (slice axes), (other axes)]
-        
-        ##c = empty(v.shape, dtype=float)
-        
-        #for inds in np.ndindex(*intShape):  ## iterate over interpolation space
-            #sl = tuple([xi[inds[i], i] for i in range(len(inds))])  ## generate the correct combination of slice values from xi
-            #v[inds] = data[sl]
-            #v[inds][ox] = 0  ## set out-of-bounds values to 0
-            
-            ### create interpolation coefficients 
-            ##dx = x - xi
-            #c = np.ones()
-            #for i in range(len(shape)):
-                #c *= x - xi
-                
-            ### apply interpolation coeff.
-            #v[inds] *= c
-            
-        ### interpolate!
-        #for i in range(len(shape)):
-            #v = v.sum(axis=0)
-    #else:
-        #sl = tuple([xi[0][i] for i in range(len(shape))])
-        #v = data[sl]
-        #v[ox] = 0
-        
-
-    ### Set 0 for all out-of-bound values
-    ##v00[ox0+oy0] = 0
-    ##v10[ox1+oy0] = 0
-    ##v01[ox0+oy1] = 0
-    ##v11[ox1+oy1] = 0
-
-    ### Interpolation coefficients
-    #dx0 = x - xi0
-    #dy0 = y - yi0
-    #dx1 = 1 - dx0
-    #dy1 = 1 - dy0
-    #c00 = dx1 * dy1
-    #c10 = dx0 * dy1
-    #c01 = dx1 * dy0
-    #c11 = dx0 * dy0
-    
-    ### Add un-indexed dimensions into coefficient arrays
-    #c00.shape = c00.shape + (1,)*(data.ndim-2)
-    #c10.shape = c10.shape + (1,)*(data.ndim-2)
-    #c01.shape = c01.shape + (1,)*(data.ndim-2)
-    #c11.shape = c11.shape + (1,)*(data.ndim-2)
-    
-    ### Interpolate!
-    #interpolated = v00*c00 + v10*c10 + v01*c01 + v11*c11
-    
-    ### figure out the reverse transpose order
-    ##tr1 = list(tr1)
-    ##tr1.pop(1)
-    ##tr2 = [None] * len(tr1)
-    ##for i in range(len(tr1)):
-        ##if tr1[i] > 1:
-            ##tr1[i] -= 1
-        ##tr2[tr1[i]] = i
-    ##tr2 = tuple(tr2)
-
-    #tr2 = np.array(tr1)
-    #for i in range(0, len(tr2)):
-        #tr2[tr1[i]] = i
-    #tr2 = tuple(tr2)
-
-
-    ### Untranspose array before returning
-    #return interpolated.transpose(tr2)
 
 
 def volumeSum(data, alpha, axis=0, dtype=None):
@@ -1321,7 +1180,7 @@ def imgDeconvolve(data, div):
 
 def xColumn(data, col):
     """Take a column out of a 2-D MetaArray and turn it into the axis values for axis 1. (Used for correcting older rtxi files)"""
-    yCols = range(0, data.shape[0])
+    yCols = list(range(0, data.shape[0]))
     yCols.remove(col)
     b = data[yCols].copy()
     b._info[1] = data.infoCopy()[0]['cols'][col]
@@ -2083,7 +1942,7 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
 
 
 def tauiness(data, win, step=10):
-    ivals = range(0, len(data)-win-1, int(win/step))
+    ivals = list(range(0, len(data)-win-1, int(win/step)))
     xvals = data.xvals(0)
     result = np.empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
@@ -2247,7 +2106,7 @@ def find(data, val, op='==', arrayOp='all', axis=0, useWeave=True):
         raise Exception("Operand '%s' is not supported. Options are: %s" % (str(op), str(list(operands.keys()))))
     ## fallback for when weave is not available
     if not useWeave:
-        axes = range(data.ndim)
+        axes = list(range(data.ndim))
         axes.remove(axis)
         axes = [axis] + axes
         d2 = data.transpose(axes)
