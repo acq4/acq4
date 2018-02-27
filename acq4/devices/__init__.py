@@ -11,6 +11,8 @@ def getDeviceClass(name):
     devClasses = getDeviceClasses()
 
     # If we don't recognize the class name, try importing from builtin devices
+    # Note: eventually it would be nice if all device classes can be safely/cheaply
+    # imported at startup, rather than dynamically importing them.
     if name not in devClasses:
         try:
             import_module('acq4.devices.' + name)

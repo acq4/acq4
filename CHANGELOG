@@ -1,4 +1,4 @@
-acq4-0.9.3 (unreleased)
+acq4-0.10 (unreleased)
 
     API / behavior changes:
         Disabled HDF5 compression by default--lzf is not readable by most HDF5 libraries, and gzip is too slow. 
@@ -8,24 +8,33 @@ acq4-0.9.3 (unreleased)
             trigger), it is necessary to set {'protocol': {'timeout': None}}. Note that the TaskRunner
             disables the default timeout for exactly this reason.
     New Features:
-        Timelapse + z-stack in camera module
-        Motorized focus control interface in camera module
-        Support for tracking and controlling micromanipulators from camera module
-        Support for Scientifica PatchStar manipulators
-        Spiral scanning for single-cell photostimulation
-        Panic button: ESC key global shortcut closes shutters, stops stage/manipulator, aborts all tasks, etc.
+        New MultiPatch module for synchronous control / calibration / monitoring of multiple manipulators
+        Added Solution Editor module for designing ACSF/internal recipes
+        Added CCF Viewer module for making virtual slices from mouse brain atlas
+        Camera module:
+            Timelapse + z-stack in camera module
+            Motorized focus control interface in camera module
+            Support for tracking and controlling micromanipulators from camera module
+        Device support:
+            Support for all MicroManager-controlled cameras and stages
+            Support for Scientifica PatchStar manipulators
+            Spiral scanning for single-cell photostimulation
+            MultiClamp can be used with 64-bit Python (either using 64-bit MCC, or by remote connection to a separate 32-bit Python)
+            Support for Thorlabs MFC-1 focus controller using ROE-200 unused z-axis
+            Support for Sensapex uMp manipulators / stages
+            Added motion support to MPC200 device
         Overhaul of 2p Imager module:
             Uses services provided by scanner to provide raster scanning, which makes the behavior more consistent 
             with task runner.
             Shares image display code and user interface with cameras to make imaging consistent across device types
-        MultiClamp can be used with 64-bit Python (by remote connection to a separate 32-bit Python)
-        Support for Thorlabs MFC-1 focus controller using ROE-200 unused z-axis
+        Panic button: ESC key global shortcut closes shutters, stops stage/manipulator, aborts all tasks, etc.
         Added export option to ImageView
         Added new online analysis module for photostimulation (replaces old Uncaging module)
         Added support for controlling bidirectional filtering by NiDAQ device
         NoiseMonitor module for tracking long-term changes in electrical noise
-        Added motion support to MPC200 device
         Objectives now have z-offset
+        Manager now shows all available modules, not just those that appear in the configuration files
+        Much easier to build extensions to acq4, and much easier to import acq4 into other projects
     Bugfixes:
         Fixed issues with Scanner grid controls in TaskRunner
         Fixed issues with MultiClamp starting with wrong state in TaskRunner
