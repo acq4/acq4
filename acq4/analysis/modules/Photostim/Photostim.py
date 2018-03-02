@@ -3,7 +3,7 @@
 from six.moves import range
 
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 import acq4.analysis.modules.EventDetector as EventDetector
 from acq4.pyqtgraph.flowchart import *
@@ -48,25 +48,25 @@ class Photostim(AnalysisModule):
         
         ## color mapper
         self.mapper = ColorMapper.ColorMapper(filePath=os.path.join(modPath, "colormaps"))
-        self.mapCtrl = QtGui.QWidget()
-        self.mapLayout = QtGui.QVBoxLayout()
+        self.mapCtrl = Qt.QWidget()
+        self.mapLayout = Qt.QVBoxLayout()
         self.mapCtrl.setLayout(self.mapLayout)
-        self.mapLayout.splitter = QtGui.QSplitter()
-        self.mapLayout.splitter.setOrientation(QtCore.Qt.Vertical)
+        self.mapLayout.splitter = Qt.QSplitter()
+        self.mapLayout.splitter.setOrientation(Qt.Qt.Vertical)
         self.mapLayout.splitter.setContentsMargins(0,0,0,0)
         self.mapLayout.addWidget(self.mapLayout.splitter)
         self.mapLayout.splitter.addWidget(self.analysisCtrl)
-        #self.mapLayout.splitter.addWidget(QtGui.QSplitter())
+        #self.mapLayout.splitter.addWidget(Qt.QSplitter())
         self.mapLayout.splitter.addWidget(self.mapper)
         #self.mapLayout.splitter.addWidget(self.recolorBtn)
         
-        self.recolorLayout = QtGui.QHBoxLayout()
-        self.recolorWidget = QtGui.QWidget()
+        self.recolorLayout = Qt.QHBoxLayout()
+        self.recolorWidget = Qt.QWidget()
         self.mapLayout.splitter.addWidget(self.recolorWidget)
         self.recolorWidget.setLayout(self.recolorLayout)
-        self.recolorBtn = QtGui.QPushButton('Recolor')
+        self.recolorBtn = Qt.QPushButton('Recolor')
         self.recolorLayout.addWidget(self.recolorBtn)
-        self.recolorParallelCheck = QtGui.QCheckBox('Parallel')
+        self.recolorParallelCheck = Qt.QCheckBox('Parallel')
         self.recolorParallelCheck.setChecked(True)
         self.recolorLayout.addWidget(self.recolorParallelCheck)
         
@@ -252,7 +252,7 @@ class Photostim(AnalysisModule):
     def scanPointClicked(self, plotItem, points):
         try:
             point = points[0]
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             #print "clicked:", point.data()
             plot = self.getElement("Data Plot")
             plot.clear()
@@ -262,7 +262,7 @@ class Photostim(AnalysisModule):
             self.detector.loadFileRequested(fh)
             #self.dbCtrl.scanSpotClicked(fh)
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
             
         
     def mapPointClicked(self, scan, points):
@@ -283,7 +283,7 @@ class Photostim(AnalysisModule):
         #raise Exception('blah')
         #print points
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
             plot.clear()
             eTable = self.getElement("Event Table")
@@ -335,7 +335,7 @@ class Photostim(AnalysisModule):
                                     print("Warning: can not concatenate--field '%s' has inconsistent types %s, %s  (data printed above)" % (evList[i].dtype.names[j], str(evList[i-1].dtype[j]), str(evList[i].dtype[j])))
                     raise
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
     
     
     def detectorStateChanged(self):

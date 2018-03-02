@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import weakref
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from .CanvasItem import CanvasItem
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.graphicsItems.TargetItem
@@ -37,14 +37,14 @@ class AtlasCanvasItem(CanvasItem):
         opts.update(kwds)        
         CanvasItem.__init__(self, item, **opts)
         
-        self.__ctrl = QtGui.QWidget()
-        self.__layout = QtGui.QGridLayout()
+        self.__ctrl = Qt.QWidget()
+        self.__layout = Qt.QGridLayout()
         self.__ctrl.setLayout(self.__layout)
         self.__layout.setContentsMargins(0, 0, 0, 0)
         self.__layout.addWidget(self.atlasView.display_ctrl, 0, 0)
         self.__layout.addWidget(self.atlasView.label_tree, 1, 0)
         
-        self.showSliceBtn = QtGui.QPushButton("Show slice")
+        self.showSliceBtn = Qt.QPushButton("Show slice")
         self.showSliceBtn.setCheckable(True)
         self.__layout.addWidget(self.showSliceBtn, 2, 0)
         self.showSliceBtn.toggled.connect(self.showSliceToggled)
@@ -52,8 +52,8 @@ class AtlasCanvasItem(CanvasItem):
         self.layout.addWidget(self.__ctrl, self.layout.rowCount(), 0, 1, 2)
         
         # Set up window for selecting slice plane
-        self.sliceWidget = QtGui.QWidget()
-        self.sliceLayout = QtGui.QGridLayout()
+        self.sliceWidget = Qt.QWidget()
+        self.sliceLayout = Qt.QGridLayout()
         self.sliceWidget.setLayout(self.sliceLayout)
         self.sliceGraphicsView = pg.GraphicsLayoutWidget()
         self.sliceLayout.addWidget(self.sliceGraphicsView, 0, 0)

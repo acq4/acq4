@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from . import SpatialCorrelatorCtrlTemplate
 import math
 from acq4.util.HelpfulException import HelpfulException
@@ -12,12 +12,12 @@ import scipy
 
 
 
-class SpatialCorrelator(QtGui.QWidget):
+class SpatialCorrelator(Qt.QWidget):
     
-    sigOutputChanged = QtCore.Signal(object)
+    sigOutputChanged = Qt.Signal(object)
     
     def __init__(self):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         
         self.ctrl = SpatialCorrelatorCtrlTemplate.Ui_Form()
         self.ctrl.setupUi(self)
@@ -166,7 +166,7 @@ class SpatialCorrelator(QtGui.QWidget):
             #pen = (255, 255, 255)
         #self.setPen(pen)   
         
-        #self.path = QtGui.QPainterPath()
+        #self.path = Qt.QPainterPath()
         #self.spots = spots
         #self.radius = radius
         #if spots is not None:
@@ -191,30 +191,30 @@ class SpatialCorrelator(QtGui.QWidget):
     #def makePath(self):
         #if self.spots is None:
             #return
-        #path = QtGui.QPainterPath()
+        #path = Qt.QPainterPath()
         #for s in self.spots:
             #path.addEllipse(s['xPos'], s['yPos'], self.radius, self.radius)
             
-        ##pps = QtGui.QPainterPathStroker()
+        ##pps = Qt.QPainterPathStroker()
         
         ##self.path = pps.createStroke(path)
         #self.path=path
     
     #def boundingRect(self):
         #if self.spots is None:
-            #return QtCore.QRectF()
+            #return Qt.QRectF()
         ##x = self.spots['xPos'].min()
         ##y = self.spots['yPos'].min()
-        ##return QtCore.QRectF(x,y , self.spots['xPos'].max()-x, self.spots['yPos'].max()-y)
+        ##return Qt.QRectF(x,y , self.spots['xPos'].max()-x, self.spots['yPos'].max()-y)
         ##print "outline.boundingRect: ", self.path.boundingRect()
         #return self.path.boundingRect()
 
     #def paint(self, p, *args):
-        #p.setRenderHint(QtGui.QPainter.Antialiasing)
+        #p.setRenderHint(Qt.QPainter.Antialiasing)
         ##path = self.shape()
         #p.setPen(self.currentPen)
         #p.drawPath(self.path)
-        ##p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        ##p.setPen(Qt.QPen(Qt.QColor(255,0,0)))
         ##p.drawPath(self.shape())
-        #p.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        #p.setPen(Qt.QPen(Qt.QColor(0,0,255)))
         #p.drawRect(self.boundingRect())    

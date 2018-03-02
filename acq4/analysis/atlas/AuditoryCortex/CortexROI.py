@@ -2,7 +2,7 @@ from __future__ import print_function
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.graphicsItems import ROI
 from acq4.pyqtgraph.Point import Point
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import math
 
 
@@ -12,10 +12,10 @@ class CortexROI(ROI.PolyLineROI):
         ROI.PolyLineROI.__init__(self, [[0,0], [2,0], [2,1], [0,1]], pos=pos, closed=True, pen=pg.mkPen(50,50, 255, 200))
         
         ## don't let the user add handles to the sides, only to the top and bottom
-        self.segments[0].setAcceptedMouseButtons(QtCore.Qt.NoButton)
-        #self.segments[1].setAcceptedMouseButtons(QtCore.Qt.NoButton) ## there was a change in PolylineROI that affected the order of segments, so now 0 and 2 are the sides instead of 1 and 3 (2013.12.12)
-        self.segments[2].setAcceptedMouseButtons(QtCore.Qt.NoButton)
-        #self.segments[3].setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        self.segments[0].setAcceptedMouseButtons(Qt.Qt.NoButton)
+        #self.segments[1].setAcceptedMouseButtons(Qt.Qt.NoButton) ## there was a change in PolylineROI that affected the order of segments, so now 0 and 2 are the sides instead of 1 and 3 (2013.12.12)
+        self.segments[2].setAcceptedMouseButtons(Qt.Qt.NoButton)
+        #self.segments[3].setAcceptedMouseButtons(Qt.Qt.NoButton)
 
         if state is not None:
             self.setState(state)
@@ -29,16 +29,16 @@ class CortexROI(ROI.PolyLineROI):
             n = len(handles)
             
             ## set positions of 4 corners
-            self.handles[0]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[0])))
-            self.handles[1]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[n/2-1])))
-            self.handles[2]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[n/2])))
-            self.handles[3]['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[-1])))
+            self.handles[0]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[0])))
+            self.handles[1]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[n/2-1])))
+            self.handles[2]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[n/2])))
+            self.handles[3]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[-1])))
             
             for i in range(1, n/2-1):
-                #self.segmentClicked(self.segments[i-1], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
-                self.segmentClicked(self.segments[i], pos=self.mapFromParent(QtCore.QPointF(*handles[i])))
+                #self.segmentClicked(self.segments[i-1], pos=self.mapFromParent(Qt.QPointF(*handles[i])))
+                self.segmentClicked(self.segments[i], pos=self.mapFromParent(Qt.QPointF(*handles[i])))
             for i, h in enumerate(self.handles):
-                h['item'].setPos(self.mapFromParent(QtCore.QPointF(*handles[i])))
+                h['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[i])))
         finally:
             self.blockSignals(False)
         
@@ -102,7 +102,7 @@ class CortexROI(ROI.PolyLineROI):
         for i, q in enumerate(quads):
             w = abs(Point((q[0]+(q[3]-q[0])/2.)-(q[1]+(q[2]-q[1])/2.)).length())
             widths.append(w)
-            if QtGui.QPolygonF(q).containsPoint(QtCore.QPointF(0., 0.0002), QtCore.Qt.OddEvenFill):
+            if Qt.QPolygonF(q).containsPoint(Qt.QPointF(0., 0.0002), Qt.Qt.OddEvenFill):
                 ind = i
         mids = (quads[ind][0]+(quads[ind][3]-quads[ind][0])/2.),(quads[ind][1]+(quads[ind][2]-quads[ind][1])/2.)
         xPos = -(Point(mids[0]).length()*math.sin(Point(mids[0]).angle(Point(0,1)))*(math.pi/180.))

@@ -2,7 +2,37 @@
 """
 from __future__ import print_function
 import os, sys, importlib, inspect
+
+
+# try importing Qt libraries in order of preference
+for mod in ['PyQt5', 'PyQt4', 'PySide', None]:
+    if mod is None:
+        raise Exception("Could not import any Qt libraries (tried PyQt5, PyQt4, and PySide).")
+    try:
+        importlib.import_module(mod)
+        break
+    except ImportError:
+        pass
+
+
+# If we are using PyQt4, ACQ4 requires API version 2 for QString and QVariant. 
+# Check for those here..
+if 'PyQt4' in sys.modules:
+    import sip
+    for api in ['QString', 'QVariant']:
+        try:
+            v = sip.getapi(api)
+            if v != 2:
+                print("WARNING: ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. "
+                      "Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\""
+                      " _before_ importing PyQt4." % (api, v))
+        except ValueError:
+            sip.setapi(api, 2)
+            print("SIP API", api)
+
+
 from .. import pyqtgraph as pg
+
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions

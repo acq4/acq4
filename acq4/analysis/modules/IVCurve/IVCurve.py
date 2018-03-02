@@ -23,7 +23,7 @@ import functools
 import numpy as np
 import scipy
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 
 # from acq4.util import DataManager
 from acq4.analysis.AnalysisModule import AnalysisModule
@@ -110,13 +110,13 @@ class IVCurve(AnalysisModule):
 
         # --------------graphical elements-----------------
         self._sizeHint = (1280, 900)  # try to establish size of window
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output
-        self.widget = QtGui.QWidget()
-        self.gridLayout = QtGui.QGridLayout()
+        self.widget = Qt.QWidget()
+        self.gridLayout = Qt.QGridLayout()
         self.widget.setLayout(self.gridLayout)
         self.gridLayout.setContentsMargins(4, 4, 4, 4)
         self.gridLayout.setSpacing(1)
@@ -248,20 +248,20 @@ class IVCurve(AnalysisModule):
         if forcestate is not None:
             if forcestate:
                 region['region'].show()
-                region['state'].setChecked(QtCore.Qt.Checked)
+                region['state'].setChecked(Qt.Qt.Checked)
                 region['shstate'] = True
             else:
                 region['region'].hide()
-                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['state'].setChecked(Qt.Qt.Unchecked)
                 region['shstate'] = False
         else:
             if not region['shstate']:
                 region['region'].show()
-                region['state'].setChecked(QtCore.Qt.Checked)
+                region['state'].setChecked(Qt.Qt.Checked)
                 region['shstate'] = True
             else:
                 region['region'].hide()
-                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['state'].setChecked(Qt.Qt.Unchecked)
                 region['shstate'] = False
 
     def displayFISI_ISI(self):
@@ -1136,7 +1136,7 @@ class IVCurve(AnalysisModule):
         self.tau_fits = {}
         for k, whichdata in enumerate(self.whichdata):
             yFit[k] = fitfunc[0](fitPars[k], xFit[k], C=None)  # +self.ivbaseline[whichdata]
-            self.tau_fits[k] = self.data_plot.plot(xFit[k]+self.tauwin[0], yFit[k], pen=pg.mkPen('r', width=2, style=QtCore.Qt.DashLine))
+            self.tau_fits[k] = self.data_plot.plot(xFit[k]+self.tauwin[0], yFit[k], pen=pg.mkPen('r', width=2, style=Qt.Qt.DashLine))
         
     def update_Tauh(self, region=None, printWindow=False):
         """ compute tau (single exponential) from the onset of the markers
@@ -1203,7 +1203,7 @@ class IVCurve(AnalysisModule):
                                                fitPars=initpars)
         if not fpar:
             raise Exception('IVCurve::update_Tauh: tau_h fitting failed - see log')
-        bluepen = pg.mkPen('b', width=2.0, style=QtCore.Qt.DashLine)
+        bluepen = pg.mkPen('b', width=2.0, style=Qt.Qt.DashLine)
         if len(self.tauh_fits.keys()) > 0:
             [self.tauh_fits[k].clear() for k in self.tauh_fits.keys()]
         self.tauh_fits = {}
@@ -1689,7 +1689,7 @@ class IVCurve(AnalysisModule):
             print(ltxt)
         
         if copytoclipboard:
-            clipb = QtGui.QApplication.clipboard()
+            clipb = Qt.QApplication.clipboard()
             clipb.clear(mode=clipb.Clipboard)
             clipb.setText(ltxt, mode=clipb.Clipboard)
 

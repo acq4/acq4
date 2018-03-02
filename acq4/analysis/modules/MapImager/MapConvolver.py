@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 #import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np
@@ -8,20 +8,20 @@ from . import MapConvolverTemplate
 import scipy
 from acq4.analysis.tools import functions as afn
 
-class MapConvolver(QtGui.QWidget):
+class MapConvolver(Qt.QWidget):
     
-    sigOutputChanged = QtCore.Signal(object, object)
-    sigFieldsChanged = QtCore.Signal(object)
+    sigOutputChanged = Qt.Signal(object, object)
+    sigFieldsChanged = Qt.Signal(object)
     
     def __init__(self, parent=None, filePath=None, data=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         
         self.ui = MapConvolverTemplate.Ui_Form()
         self.ui.setupUi(self)
         self.ui.spacingSpin.setOpts(suffix='m', value=5e-6, siPrefix=True, dec=False, step=1e-6)
         
-        self.addBtn = QtGui.QPushButton('Add New')
-        item = QtGui.QTreeWidgetItem()
+        self.addBtn = Qt.QPushButton('Add New')
+        item = Qt.QTreeWidgetItem()
         self.ui.tree.addTopLevelItem(item)
         self.ui.tree.setItemWidget(item, 0, self.addBtn)        
 
@@ -191,10 +191,10 @@ class MapConvolver(QtGui.QWidget):
                 
         return arr
         
-class ConvolverItem(QtGui.QTreeWidgetItem):
+class ConvolverItem(Qt.QTreeWidgetItem):
     def __init__(self, mc):
         self.mc = mc
-        QtGui.QTreeWidgetItem.__init__(self)
+        Qt.QTreeWidgetItem.__init__(self)
         self.paramCombo = pg.ComboBox()
         self.convolutionCombo = pg.ComboBox(items=["Gaussian convolution", "interpolation"], default="Gaussian convolution")
         #self.convolutionCombo.addItems(["Gaussian convolution", "interpolation"])
@@ -202,7 +202,7 @@ class ConvolverItem(QtGui.QTreeWidgetItem):
         self.modeCombo = pg.ComboBox(items=['nearest', 'linear', 'cubic'], default='nearest')
         #self.modeCombo.addItems(['nearest', 'linear', 'cubic'])
         self.modeCombo.setEnabled(False)
-        self.remBtn = QtGui.QPushButton('Remove')
+        self.remBtn = Qt.QPushButton('Remove')
         
         self.remBtn.clicked.connect(self.delete)
         self.paramCombo.currentIndexChanged.connect(self.mc.fieldsChanged)

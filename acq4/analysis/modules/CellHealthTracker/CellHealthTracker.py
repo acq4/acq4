@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
@@ -18,7 +18,7 @@ class CellHealthTracker(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = CellHealthCtrlTemplate.Ui_widget()
         self.ctrl.setupUi(self.ctrlWidget)
         self.ctrlStateGroup = pg.WidgetGroup(self.ctrlWidget)
@@ -167,7 +167,7 @@ class CellHealthTracker(AnalysisModule):
         if fileName is None:
             dh = self.getElement("File Loader").baseDir().name()
             self.fileDialog = FileDialog(None, "Save traces", dh, '*.ma')
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.saveMA)
             return  

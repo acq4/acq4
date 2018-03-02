@@ -3,7 +3,7 @@ from __future__ import print_function
 from __future__ import division
 
 import pickle
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import numpy as np
 import weakref
 
@@ -58,8 +58,8 @@ class Pipette(Device, OptomechDevice):
       in idle mode. Default is 7 mm.
     """
 
-    sigTargetChanged = QtCore.Signal(object, object)
-    sigDataChanged = QtCore.Signal()
+    sigTargetChanged = Qt.Signal(object, object)
+    sigDataChanged = Qt.Signal()
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -493,7 +493,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self._haveTarget = False
 
         self.ui = CamModTemplate()
-        self.ctrl = QtGui.QWidget()
+        self.ctrl = Qt.QWidget()
         self.ui.setupUi(self.ctrl)
 
         cal = dev._stageOrientation
@@ -564,7 +564,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.target.setVisible(not hide and self._haveTarget)
 
     def sceneMouseClicked(self, ev):
-        if ev.button() != QtCore.Qt.LeftButton:
+        if ev.button() != Qt.Qt.LeftButton:
             return
 
         if self.ui.setCenterBtn.isChecked():
@@ -714,7 +714,7 @@ class Axis(pg.ROI):
     """
     def __init__(self, pos, angle, inverty):
         arrow = pg.makeArrowPath(headLen=20, tipAngle=30, tailLen=60, tailWidth=2).translated(-84, 0)
-        tr = QtGui.QTransform()
+        tr = Qt.QTransform()
         tr.rotate(180)
         self._path = tr.map(arrow)
         tr.rotate(90)
@@ -770,10 +770,10 @@ class Axis(pg.ROI):
         if self._bounds is None:
             w, h = self._pxLen
             if w is None:
-                return QtCore.QRectF()
+                return Qt.QRectF()
             w = w * 100
             h = abs(h * 100)
-            self._bounds = QtCore.QRectF(-w, -h, w*2, h*2)
+            self._bounds = Qt.QRectF(-w, -h, w*2, h*2)
         return self._bounds
 
     def setVisible(self, v):

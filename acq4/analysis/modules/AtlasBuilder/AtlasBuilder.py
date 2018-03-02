@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
@@ -13,7 +13,7 @@ class AtlasBuilder(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         

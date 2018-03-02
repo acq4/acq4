@@ -4,16 +4,16 @@ from __future__ import print_function
 import six
 
 from .DirTreeTemplate import Ui_Form
-from PyQt4 import QtGui,QtCore
+from acq4.util import Qt
 from acq4.util.debug import *
 import acq4.util.DataManager as DataManager
 
-class DirTreeLoader(QtGui.QWidget):
+class DirTreeLoader(Qt.QWidget):
     
-    sigCurrentFileChanged = QtCore.Signal(object, object, object)
+    sigCurrentFileChanged = Qt.Signal(object, object, object)
     
     def __init__(self, baseDir, sortMode='alpha', create=False, *args):
-        QtGui.QWidget.__init__(self, *args)
+        Qt.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         if isinstance(baseDir, six.string_types):
@@ -155,7 +155,7 @@ class DirTreeLoader(QtGui.QWidget):
         
     def setCurrentFile(self, handle):
         if self.currentFile is not None:
-            #QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            #Qt.QObject.disconnect(self.currentFile, Qt.SIGNAL('changed'), self.currentFileChanged)
             try:
                 self.currentFile.sigChanged.disconnect(self.currentFileChanged)
             except TypeError:
@@ -167,7 +167,7 @@ class DirTreeLoader(QtGui.QWidget):
         else:
             self.ui.currentLabel.setText(handle.name(relativeTo=self.baseDir))
             self.ui.saveBtn.setEnabled(True)
-            #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            #Qt.QObject.connect(handle, Qt.SIGNAL('changed'), self.currentFileChanged)
             handle.sigChanged.connect(self.currentFileChanged)
             
         self.currentFile = handle

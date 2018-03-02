@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
 import numpy as np
@@ -37,8 +37,8 @@ class Map:
         
         self.header = list(self.mapFields.keys())[2:]
         
-        self.item = QtGui.QTreeWidgetItem([""] * len(self.header))
-        self.item.setFlags(QtCore.Qt.ItemIsSelectable| QtCore.Qt.ItemIsEditable| QtCore.Qt.ItemIsEnabled)
+        self.item = Qt.QTreeWidgetItem([""] * len(self.header))
+        self.item.setFlags(Qt.Qt.ItemIsSelectable| Qt.Qt.ItemIsEditable| Qt.Qt.ItemIsEnabled)
         self.item.map = self
         self.item.setExpanded(True)
         self.rowID = None
@@ -53,7 +53,7 @@ class Map:
             for i in range(len(self.header)):
                 self.item.setText(i, str(rec[self.header[i]]))
             for fh,rowid in scans:
-                item = QtGui.QTreeWidgetItem([fh.shortName()])
+                item = Qt.QTreeWidgetItem([fh.shortName()])
                 #print "Create scan stub:", fh
                 self.stubs.append(ScanStub(fh, item, rowid))  ## rowid can be either a (table, rowid) pair or an integer implying ('ProtocolSequence', rowid)
                 item.handle = fh
@@ -130,7 +130,7 @@ class Map:
             if scan is None:
                 raise Exception("Tried to add None as scan")
             self.scans.append(scan)
-            item = QtGui.QTreeWidgetItem([scan.name()])
+            item = Qt.QTreeWidgetItem([scan.name()])
             item.scan = scan
             self.item.addChild(item)
             self.item.setExpanded(True)
@@ -284,7 +284,7 @@ class Map:
         with pg.ProgressDialog("Loading scans...", 0, len(self.stubs), busyCursor=True) as dlg:
             dlg.setValue(0)
             for stub in self.stubs:
-                QtGui.QApplication.processEvents()
+                Qt.QApplication.processEvents()
                 ### can we load a partial map if one scan fails? (should we?)
                 newScans = self.host.loadScan(stub.dirHandle)
                 if len(newScans) > 1:

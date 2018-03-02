@@ -17,7 +17,7 @@ import os, sys, gc
 
 import six
 import time, atexit, weakref
-from acq4.pyqtgraph.Qt import QtCore, QtGui
+from acq4.util import Qt
 import acq4.util.reload as reload
 
 from .util import DataManager, ptime, configfile
@@ -44,7 +44,7 @@ def __reload__(old):
     Manager.single = old['Manager'].single
 
 
-class Manager(QtCore.QObject):
+class Manager(Qt.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
       - Managing the device rack GUI
@@ -54,14 +54,14 @@ class Manager(QtCore.QObject):
       - Providing unified timestamps
       - Making sure all devices/modules are properly shut down at the end of the program"""
       
-    sigConfigChanged = QtCore.Signal()
-    sigModulesChanged = QtCore.Signal() 
-    sigModuleHasQuit = QtCore.Signal(object) ## (module name)
-    sigCurrentDirChanged = QtCore.Signal(object, object, object) # (file, change, args)
-    sigBaseDirChanged = QtCore.Signal()
-    sigLogDirChanged = QtCore.Signal(object) #dir
-    sigTaskCreated = QtCore.Signal(object, object)  ## for debugger module
-    sigAbortAll = QtCore.Signal()  # User requested abort all tasks via ESC key
+    sigConfigChanged = Qt.Signal()
+    sigModulesChanged = Qt.Signal() 
+    sigModuleHasQuit = Qt.Signal(object) ## (module name)
+    sigCurrentDirChanged = Qt.Signal(object, object, object) # (file, change, args)
+    sigBaseDirChanged = Qt.Signal()
+    sigLogDirChanged = Qt.Signal(object) #dir
+    sigTaskCreated = Qt.Signal(object, object)  ## for debugger module
+    sigAbortAll = Qt.Signal()  # User requested abort all tasks via ESC key
     
     CREATED = False
     single = None
@@ -79,7 +79,7 @@ class Manager(QtCore.QObject):
         self.disableDevs = []
         self.disableAllDevs = False
         self.alreadyQuit = False
-        self.taskLock = Mutex(QtCore.QMutex.Recursive)
+        self.taskLock = Mutex(Qt.QMutex.Recursive)
         
         try:
             if Manager.CREATED:
@@ -112,7 +112,7 @@ class Manager(QtCore.QObject):
             else:
                 opts = []
             
-            QtCore.QObject.__init__(self)
+            Qt.QObject.__init__(self)
             atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
@@ -189,12 +189,12 @@ class Manager(QtCore.QObject):
                 raise Exception("No modules loaded during startup, exiting now.")
             
         win = self.modules[list(self.modules.keys())[0]].window()
-        self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
-        self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
-        self.abortShortcut = QtGui.QShortcut(QtGui.QKeySequence('Esc'), win)
-        self.abortShortcut.setContext(QtCore.Qt.ApplicationShortcut)
-        self.reloadShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+r'), win)
-        self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
+        self.quitShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+q'), win)
+        self.quitShortcut.setContext(Qt.Qt.ApplicationShortcut)
+        self.abortShortcut = Qt.QShortcut(Qt.QKeySequence('Esc'), win)
+        self.abortShortcut.setContext(Qt.Qt.ApplicationShortcut)
+        self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
+        self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
         self.quitShortcut.activated.connect(self.quit)
         self.abortShortcut.activated.connect(self.sigAbortAll)
         self.reloadShortcut.activated.connect(self.reloadAll)
@@ -329,7 +329,7 @@ class Manager(QtCore.QObject):
                 elif key == 'stylesheet':
                     try:
                         css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
-                        QtGui.QApplication.instance().setStyleSheet(css)
+                        Qt.QApplication.instance().setStyleSheet(css)
                     except:
                         raise
                 
@@ -598,8 +598,8 @@ class Manager(QtCore.QObject):
     def createWindowShortcut(self, keys, win):
         ## Note: this is probably not safe to call from other threads.
         try:
-            sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
-            sh.setContext(QtCore.Qt.ApplicationShortcut)
+            sh = Qt.QShortcut(Qt.QKeySequence(keys), win)
+            sh.setContext(Qt.Qt.ApplicationShortcut)
             sh.activated.connect(lambda *args: win.raise_())
         except:
             printExc("Error creating shortcut '%s':" % keys)
@@ -717,7 +717,7 @@ class Manager(QtCore.QObject):
             # if not self.baseDir.isManaged():
             #     self.baseDir.createIndex()
 
-        #self.emit(QtCore.SIGNAL('baseDirChanged'))
+        #self.emit(Qt.SIGNAL('baseDirChanged'))
         self.sigBaseDirChanged.emit()
         self.setCurrentDir(self.baseDir)
 
@@ -799,10 +799,10 @@ class Manager(QtCore.QObject):
         
     def quit(self):
         """Nicely request that all devices and modules shut down"""
-        #app = QtGui.QApplication.instance()
+        #app = Qt.QApplication.instance()
         #def q():
             #print "all windows closed"
-        #QtCore.QObject.connect(app, QtCore.SIGNAL('lastWindowClosed()'), q)
+        #Qt.QObject.connect(app, Qt.SIGNAL('lastWindowClosed()'), q)
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
             self.alreadyQuit = True
             lm = len(self.modules)
@@ -838,11 +838,11 @@ class Manager(QtCore.QObject):
                     
                     
                 print("Closing windows..")
-                QtGui.QApplication.instance().closeAllWindows()
-                QtGui.QApplication.instance().processEvents()
+                Qt.QApplication.instance().closeAllWindows()
+                Qt.QApplication.instance().processEvents()
             #print "  done."
             print("\n    ciao.")
-        QtGui.QApplication.quit()
+        Qt.QApplication.quit()
         #pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
                     # this avoids otherwise irritating exit crashes.
 
@@ -1027,14 +1027,14 @@ class Task:
                 #print "Waiting for all tasks to finish.."
 
                 lastProcess = ptime.time()
-                isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+                isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
                 #print "isGuiThread:", isGuiThread
                 while not self.isDone():
                     now = ptime.time()
                     elapsed = now - self.startTime
                     if isGuiThread:
                         if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
-                            QtGui.QApplication.processEvents()
+                            Qt.QApplication.processEvents()
                             lastProcess = ptime.time()
                         
                     if elapsed < self.cfg['duration']-10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
@@ -1295,34 +1295,34 @@ class Task:
 
 DOC_ROOT = 'http://acq4.org/documentation/'
 
-class Documentation(QtCore.QObject):
+class Documentation(Qt.QObject):
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
 
     def show(self, label=None):
         if label is None:
             url = DOC_ROOT
         else:
             url = DOC_ROOT + label
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+        Qt.QDesktopServices.openUrl(Qt.QUrl(url))
 
 
     def quit(self):
         pass
 
 
-class QtDocumentation(QtCore.QObject):
+class QtDocumentation(Qt.QObject):
     """Encapsulates documentation functionality.
 
     Note: this class is currently out of service in favor of 
     referencing online documentation instead.
     """
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         path = os.path.abspath(os.path.dirname(__file__))
         self.docFile = os.path.normpath(os.path.join(path, '..', 'documentation', 'build', 'qthelp', 'ACQ4.qhc'))
 
-        self.process = QtCore.QProcess()
+        self.process = Qt.QProcess()
         self.process.finished.connect(self.processFinished)
         
 
@@ -1330,7 +1330,7 @@ class QtDocumentation(QtCore.QObject):
         if self.process.state() == self.process.NotRunning:
             self.startProcess()
             if label is not None:
-                QtCore.QTimer.singleShot(2000, lambda: self.activateId(label))
+                Qt.QTimer.singleShot(2000, lambda: self.activateId(label))
                 return
         if label is not None:
             self.activateId(label)
@@ -1344,7 +1344,7 @@ class QtDocumentation(QtCore.QObject):
         if not self.process.waitForStarted():
             output = str(self.process.readAllStandardError())
             raise Exception("Error starting documentation viewer:  " +output)
-        QtCore.QTimer.singleShot(1000, self.expandToc)
+        Qt.QTimer.singleShot(1000, self.expandToc)
         
     def activateId(self, id):
         print("activate:", id)
@@ -1356,7 +1356,7 @@ class QtDocumentation(QtCore.QObject):
         self.write('activateKeyword %s\n' % kwd)
         
     def write(self, data):
-        ba = QtCore.QByteArray(data)
+        ba = Qt.QByteArray(data)
         return self.process.write(ba)
         
     def quit(self):

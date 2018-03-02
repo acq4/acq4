@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 #import configfile
 from acq4.Manager import getManager, logExc, logMsg
 from acq4.util.Mutex import Mutex
@@ -88,9 +88,9 @@ class Laser(DAQGeneric, OptomechDevice):
     { 'pulse': [(0.5*s, 100*uJ), ...] }                     ## (time, pulse energy) pairs
     """
     
-    sigOutputPowerChanged = QtCore.Signal(object, object)  ## power, bool (power within expected range)
-    sigSamplePowerChanged = QtCore.Signal(object)
-    sigWavelengthChanged = QtCore.Signal(object)
+    sigOutputPowerChanged = Qt.Signal(object, object)  ## power, bool (power within expected range)
+    sigSamplePowerChanged = Qt.Signal(object)
+    sigWavelengthChanged = Qt.Signal(object)
     
     def __init__(self, manager, config, name):
         self.config = config
@@ -134,8 +134,8 @@ class Laser(DAQGeneric, OptomechDevice):
         DAQGeneric.__init__(self, manager, daqConfig, name)
         OptomechDevice.__init__(self, manager, config, name)
        
-        self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.variableLock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
+        self.variableLock = Mutex(Qt.QMutex.Recursive)
         self.calibrationIndex = None
         self.pCellCalibration = None
         self.getPowerHistory()

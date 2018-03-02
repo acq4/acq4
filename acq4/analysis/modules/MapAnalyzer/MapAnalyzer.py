@@ -53,7 +53,7 @@ Changes to event detector:
 """
 
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
@@ -83,7 +83,7 @@ class MapAnalyzer(AnalysisModule):
         self.ctrlLayout = pg.LayoutWidget()
         self.ctrl = ptree.ParameterTree(showHeader=False)
         self.ctrlLayout.addWidget(self.ctrl, row=0, col=0)
-        self.recalcBtn = QtGui.QPushButton('Recalculate')
+        self.recalcBtn = Qt.QPushButton('Recalculate')
         self.ctrlLayout.addWidget(self.recalcBtn, row=1, col=0)
         self.storeBtn = pg.FeedbackButton('Store to DB')
         self.ctrlLayout.addWidget(self.storeBtn, row=2, col=0)
@@ -454,7 +454,7 @@ class MapAnalyzer(AnalysisModule):
 #class EventFilterParameterItem(WidgetParameterItem):
     #def __init__(self, param, depth):
         #WidgetParameterItem.__init__(self, param, depth)
-        #self.subItem = QtGui.QTreeWidgetItem()
+        #self.subItem = Qt.QTreeWidgetItem()
         #self.addChild(self.subItem)
         #self.filter = FCEventDetection.EventFilter('eventFilter')
 
@@ -464,7 +464,7 @@ class MapAnalyzer(AnalysisModule):
         #self.setExpanded(True)
         
     #def makeWidget(self):
-        #self.textBox = QtGui.QTextEdit()
+        #self.textBox = Qt.QTextEdit()
         #self.textBox.setMaximumHeight(100)
         #self.textBox.value = lambda: str(self.textBox.toPlainText())
         #self.textBox.setValue = self.textBox.setPlainText
@@ -777,13 +777,13 @@ class EventStatisticsAnalyzer:
         #self.histogram.addItem(self.threshLine)
         #self.threshLine.setPos(self.params['Threshold'])
     
-class RegionMarker(QtCore.QObject):
+class RegionMarker(Qt.QObject):
     """Allows user to specify multiple anatomical regions for classifying cells.
     Region names are written into custom DB columns for each site."""
-    sigRegionChanged = QtCore.Signal(object)
+    sigRegionChanged = Qt.Signal(object)
     
     def __init__(self, canvas):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.params = RegionsParameter(canvas)
         self.params.sigRegionChanged.connect(self.sigRegionChanged)
     
@@ -813,7 +813,7 @@ class RegionMarker(QtCore.QObject):
     
 class RegionsParameter(ptree.types.GroupParameter):
     
-    sigRegionChanged = QtCore.Signal(object)
+    sigRegionChanged = Qt.Signal(object)
     
     def __init__(self, canvas):
         self.canvas = canvas
@@ -870,15 +870,15 @@ class Loader(pg.LayoutWidget):
         self.tree.setHeaderHidden(True)
         self.addWidget(self.tree, 1, 0)
 
-        self.loadBtn = QtGui.QPushButton('Load Map')
+        self.loadBtn = Qt.QPushButton('Load Map')
         self.addWidget(self.loadBtn, 2, 0)
         self.loadBtn.clicked.connect(self.load)
         
-        self.refreshBtn = QtGui.QPushButton('Reload Map List')
+        self.refreshBtn = Qt.QPushButton('Reload Map List')
         self.addWidget(self.refreshBtn, 3, 0)
         self.refreshBtn.clicked.connect(self.populate)
         
-        self.loadedLabel = QtGui.QLabel("Loaded: [none]")
+        self.loadedLabel = Qt.QLabel("Loaded: [none]")
         self.addWidget(self.loadedLabel, 4, 0)
         
         self.populate()
@@ -914,7 +914,7 @@ class Loader(pg.LayoutWidget):
                 dlg += 1
                 if dlg.wasCanceled():
                     raise Exception("User cancelled map list construction; some maps may not be displayed.")
-        self.tree.sortItems(0, QtCore.Qt.AscendingOrder)
+        self.tree.sortItems(0, Qt.Qt.AscendingOrder)
             
     def load(self):
         sel = self.tree.selectedItems()
@@ -944,7 +944,7 @@ class TimelineMarker(pg.GraphicsObject):
             x1,x2 = 0,0
         else:
             x1,x2 = self.xRange
-        return QtCore.QRectF(x1, 0, x2-x1, 1)
+        return Qt.QRectF(x1, 0, x2-x1, 1)
         
     def setTimes(self, times):
         """Times must be a list of (start, end) tuples."""
@@ -953,7 +953,7 @@ class TimelineMarker(pg.GraphicsObject):
             
     def addTimes(self, times):
         for x1, x2 in times:
-            t = QtGui.QGraphicsRectItem(QtCore.QRectF(x1, 0, x2-x1, 1))
+            t = Qt.QGraphicsRectItem(Qt.QRectF(x1, 0, x2-x1, 1))
             t.setParentItem(self)
             t.setPen(self.pen)
             t.setBrush(self.brush)

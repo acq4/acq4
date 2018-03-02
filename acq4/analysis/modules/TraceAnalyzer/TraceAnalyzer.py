@@ -3,7 +3,7 @@ from __future__ import print_function
 """
 """
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
@@ -22,18 +22,18 @@ class TraceAnalyzer(AnalysisModule):
         fcpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         confpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "configs")
         
-        self.confWidget = QtGui.QWidget()
+        self.confWidget = Qt.QWidget()
         self.confLoader = ConfLoader(self, confpath)
         self.fileLoader = DataLoader(self, host.dataManager())
-        self.addPlotBtn = QtGui.QPushButton('Add Plot')
-        self.processWidget = QtGui.QWidget()
-        self.processLayout = QtGui.QHBoxLayout()
+        self.addPlotBtn = Qt.QPushButton('Add Plot')
+        self.processWidget = Qt.QWidget()
+        self.processLayout = Qt.QHBoxLayout()
         self.processWidget.setLayout(self.processLayout)
-        self.processBtn = QtGui.QPushButton('Process')
-        self.processCheck = QtGui.QCheckBox('Auto')
+        self.processBtn = Qt.QPushButton('Process')
+        self.processCheck = Qt.QCheckBox('Auto')
         self.processLayout.addWidget(self.processBtn)
         self.processLayout.addWidget(self.processCheck)
-        self.confLayout = QtGui.QGridLayout()
+        self.confLayout = Qt.QGridLayout()
         self.confWidget.setLayout(self.confLayout)
         self.confLayout.addWidget(self.confLoader, 0, 0)
         self.confLayout.addWidget(self.addPlotBtn, 1, 0)
@@ -134,7 +134,7 @@ class DataLoader(FileLoader):
             handle = dh[fileName]
             self.loaded.append(handle)
             #name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-            item = QtGui.QTreeWidgetItem([fileName])
+            item = Qt.QTreeWidgetItem([fileName])
             item.file = handle
             self.ui.fileTree.addTopLevelItem(item)
         self.sigFileLoaded.emit(dh)

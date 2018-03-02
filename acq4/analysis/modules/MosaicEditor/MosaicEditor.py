@@ -13,7 +13,7 @@ import scipy.stats
 import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
 from acq4.analysis.AnalysisModule import AnalysisModule
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from .MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
@@ -54,7 +54,7 @@ class MosaicEditor(AnalysisModule):
         
         self._addTypes = OrderedDict()
 
-        self.ctrl = QtGui.QWidget()
+        self.ctrl = Qt.QWidget()
         self.ui = Ui_Form()
         self.ui.setupUi(self.ctrl)
         self.atlas = None
@@ -84,23 +84,23 @@ class MosaicEditor(AnalysisModule):
             self.ui.atlasCombo.addItem(a)
         
         # Add buttons to the canvas control panel    
-        self.btnBox = QtGui.QWidget()
-        self.btnLayout = QtGui.QGridLayout()
+        self.btnBox = Qt.QWidget()
+        self.btnLayout = Qt.QGridLayout()
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
         self.btnBox.setLayout(self.btnLayout)
         l = self.canvas.ui.gridLayout
         l.addWidget(self.btnBox, l.rowCount(), 0, 1, l.columnCount())
 
-        self.addCombo = QtGui.QComboBox()
+        self.addCombo = Qt.QComboBox()
         self.addCombo.currentIndexChanged.connect(self._addItemChanged)
         self.btnLayout.addWidget(self.addCombo, 0, 0, 1, 2)
         self.addCombo.addItem('Add item..')
 
-        self.saveBtn = QtGui.QPushButton("Save ...")
+        self.saveBtn = Qt.QPushButton("Save ...")
         self.saveBtn.clicked.connect(self.saveClicked)
         self.btnLayout.addWidget(self.saveBtn, 1, 0)
 
-        self.clearBtn = QtGui.QPushButton("Clear All")
+        self.clearBtn = Qt.QPushButton("Clear All")
         self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
         self.btnLayout.addWidget(self.clearBtn, 1, 1)
 
@@ -242,7 +242,7 @@ class MosaicEditor(AnalysisModule):
         May provide either *item* which is a CanvasItem or QGraphicsItem instance, or
         *type* which is a string specifying the type of item to create and add.
         """
-        if isinstance(item, QtGui.QGraphicsItem):
+        if isinstance(item, Qt.QGraphicsItem):
             return self.canvas.addGraphicsItem(item, **kwds)
         else:
             return self.canvas.addItem(item, type, **kwds)
@@ -371,9 +371,9 @@ class MosaicEditor(AnalysisModule):
         before clearing. If the user declines, then this method returns False.
         """
         if ask and len(self.items) > 0:
-            response = QtGui.QMessageBox.question(self.clearBtn, "Warning", "Really clear all items?", 
-                QtGui.QMessageBox.Ok|QtGui.QMessageBox.Cancel)
-            if response != QtGui.QMessageBox.Ok:
+            response = Qt.QMessageBox.question(self.clearBtn, "Warning", "Really clear all items?", 
+                Qt.QMessageBox.Ok|Qt.QMessageBox.Cancel)
+            if response != Qt.QMessageBox.Ok:
                 return False
             
         self.canvas.clear()
@@ -457,7 +457,7 @@ class MosaicEditor(AnalysisModule):
         else:
             path = self.lastSaveFile
                 
-        filename = QtGui.QFileDialog.getSaveFileName(None, "Save mosaic file", path, "Mosaic files (*.mosaic)")
+        filename = Qt.QFileDialog.getSaveFileName(None, "Save mosaic file", path, "Mosaic files (*.mosaic)")
         if filename == '':
             return
         if not filename.endswith('.mosaic'):

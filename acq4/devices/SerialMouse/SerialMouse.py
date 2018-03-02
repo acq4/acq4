@@ -10,13 +10,13 @@ from acq4.util.Thread import Thread
 
 class SerialMouse(Device):
     
-    sigSwitchChanged = QtCore.Signal(object, object)
-    sigPositionChanged = QtCore.Signal(object)
+    sigSwitchChanged = Qt.Signal(object, object)
+    sigPositionChanged = Qt.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.port = config['port']
         self.scale = config['scale']
         self.pos = [0, 0]
@@ -44,7 +44,7 @@ class SerialMouse(Device):
         self.mThread.stop(block=True)
         
     def posChanged(self, data):
-        #QtCore.pyqtRemoveInputHook()
+        #Qt.pyqtRemoveInputHook()
         #pdb.set_trace()
         #print "Mouse: posChanged"
         with self.lock:
@@ -53,7 +53,7 @@ class SerialMouse(Device):
             rel = [data['rel'][0] * self.scale, data['rel'][1] * self.scale]
             ab = self.pos[:]
         #print "Mouse: posChanged emit.."
-        #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
+        #self.emit(Qt.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
         self.sigPositionChanged.emit({'rel': rel, 'abs': ab})
         #print "Mouse: posChanged done"
 
@@ -68,7 +68,7 @@ class SerialMouse(Device):
                 if btns[i] != self.buttons[i]:
                     change[i] = btns[i]
                     self.buttons[i] = btns[i]
-        #self.emit(QtCore.SIGNAL('switchChanged'), change)
+        #self.emit(Qt.SIGNAL('switchChanged'), change)
         self.sigSwitchChanged.emit(self, change)
         #print "Mouse: btnChanged done"
         
@@ -92,14 +92,14 @@ class SerialMouse(Device):
     def deviceInterface(self, win):
         return SMInterface(self, win)
     
-class SMInterface(QtGui.QLabel):
+class SMInterface(Qt.QLabel):
     def __init__(self, dev, win):
-        QtGui.QLabel.__init__(self)
+        Qt.QLabel.__init__(self)
         self.win = win
         self.dev = dev
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        #Qt.QObject.connect(self.dev, Qt.SIGNAL('positionChanged'), self.update)
         self.dev.sigPositionChanged.connect(self.update)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('switchChanged'), self.update)
+        #Qt.QObject.connect(self.dev, Qt.SIGNAL('switchChanged'), self.update)
         self.dev.sigSwitchChanged.connect(self.update)
         self.update()
         
@@ -112,12 +112,12 @@ class SMInterface(QtGui.QLabel):
     
 class MouseThread(Thread):
     
-    sigButtonChanged = QtCore.Signal(object)
-    sigPositionChanged = QtCore.Signal(object)
+    sigButtonChanged = Qt.Signal(object)
+    sigPositionChanged = Qt.Signal(object)
     
     def __init__(self, dev, startState=None):
         Thread.__init__(self)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.dev = dev
         self.port = self.dev.port
         if startState is None:
@@ -152,11 +152,11 @@ class MouseThread(Thread):
                         tdy += dy
                     self.pos = [self.pos[0] + tdx, self.pos[1] + tdy]
                     if tdx != 0 or tdy != 0:
-                        #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
+                        #self.emit(Qt.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
                         self.sigPositionChanged.emit({'rel': (tdx, tdy), 'abs': self.pos})
                     if b0 != self.btns[0] or b1 != self.btns[1]:
                         self.btns = [b0, b1]
-                        #self.emit(QtCore.SIGNAL('buttonChanged'), self.btns)
+                        #self.emit(Qt.SIGNAL('buttonChanged'), self.btns)
                         self.sigButtonChanged.emit(self.btns)
                         
             self.lock.lock()

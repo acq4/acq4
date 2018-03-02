@@ -3,24 +3,24 @@
 from six.moves import range
 
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.TreeWidget as TreeWidget
 import acq4.util.flowchart.EventDetection as FCEventDetection
 import acq4.util.debug as debug
 
-class ScatterPlotter(QtGui.QSplitter):
+class ScatterPlotter(Qt.QSplitter):
     ### Draws scatter plots, allows the user to pick which data is used for x and y axes.
-    sigClicked = QtCore.Signal(object, object)
+    sigClicked = Qt.Signal(object, object)
     
     def __init__(self):
-        QtGui.QSplitter.__init__(self)
-        self.setOrientation(QtCore.Qt.Horizontal)
+        Qt.QSplitter.__init__(self)
+        self.setOrientation(Qt.Qt.Horizontal)
         self.plot = pg.PlotWidget()
         self.addWidget(self.plot)
-        self.ctrl = QtGui.QWidget()
+        self.ctrl = Qt.QWidget()
         self.addWidget(self.ctrl)
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = Qt.QVBoxLayout()
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
@@ -31,8 +31,8 @@ class ScatterPlotter(QtGui.QSplitter):
         self.filter = FCEventDetection.EventFilter('eventFilter')
         self.layout.addWidget(self.filter.ctrlWidget())
         
-        self.xCombo = QtGui.QComboBox()
-        self.yCombo = QtGui.QComboBox()
+        self.xCombo = Qt.QComboBox()
+        self.yCombo = Qt.QComboBox()
         self.layout.addWidget(self.xCombo)
         self.layout.addWidget(self.yCombo)
         
@@ -46,7 +46,7 @@ class ScatterPlotter(QtGui.QSplitter):
 
     def itemChanged(self, item, col):
         gi = self.scans[item.scan][0]
-        if item.checkState(0) == QtCore.Qt.Checked:
+        if item.checkState(0) == Qt.Qt.Checked:
             gi.show()
         else:
             gi.hide()
@@ -58,7 +58,7 @@ class ScatterPlotter(QtGui.QSplitter):
         self.updateAll()
 
     def addScan(self, scanDict):
-        plot = pg.ScatterPlotItem(pen=QtGui.QPen(QtCore.Qt.NoPen), brush=pg.mkBrush((255, 255, 255, 100)))
+        plot = pg.ScatterPlotItem(pen=Qt.QPen(Qt.Qt.NoPen), brush=pg.mkBrush((255, 255, 255, 100)))
         self.plot.addItem(plot)
         plot.sigClicked.connect(self.plotClicked)
         
@@ -66,8 +66,8 @@ class ScatterPlotter(QtGui.QSplitter):
             scanDict = {'key':scanDict}
         #print "Adding:", scan.name
         for scan in scanDict.values():
-            item = QtGui.QTreeWidgetItem([scan.name()])
-            item.setCheckState(0, QtCore.Qt.Checked)
+            item = Qt.QTreeWidgetItem([scan.name()])
+            item.setCheckState(0, Qt.Qt.Checked)
             item.scan = scan
             self.scanList.addTopLevelItem(item)
             self.scans[scan] = [plot, item, False]
@@ -107,7 +107,7 @@ class ScatterPlotter(QtGui.QSplitter):
 
     def updateAll(self):
         for s in self.scans:
-            if self.scans[s][1].checkState(0) == QtCore.Qt.Checked:
+            if self.scans[s][1].checkState(0) == Qt.Qt.Checked:
                 self.updateScan(s)
     
     def updateColumns(self, scan):

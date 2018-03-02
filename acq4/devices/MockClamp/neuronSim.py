@@ -116,8 +116,8 @@ def run(cmd):
 #
 if __name__ == '__main__':
     import pyqtgraph as pg
-    from pyqtgraph.Qt import QtGui
-    app = QtGui.QApplication([])
+    from acq4.util import Qt
+    app = Qt.QApplication([])
     win = pg.GraphicsWindow()
     win.resize(1000,600)
     win.setWindowTitle('Testing hhSim.py')
@@ -141,5 +141,5 @@ if __name__ == '__main__':
         data[i,:] = run(opts)
         p.plot(tb, data[i])
 
-    QtGui.QApplication.instance().exec_()
+    Qt.QApplication.instance().exec_()
     

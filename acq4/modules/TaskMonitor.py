@@ -1,6 +1,6 @@
 from __future__ import print_function
 from acq4.modules.Module import Module
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.pyqtgraph import DataTreeWidget
 
 class TaskMonitor(Module):
@@ -15,8 +15,8 @@ class TaskMonitor(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         self.man = manager
-        self.win = QtGui.QMainWindow()
-        self.cw = QtGui.QSplitter()
+        self.win = Qt.QMainWindow()
+        self.cw = Qt.QSplitter()
         self.taskTree = DataTreeWidget()
         self.resultTree = DataTreeWidget()
         self.win.setCentralWidget(self.cw)
@@ -25,7 +25,7 @@ class TaskMonitor(Module):
         self.win.show()
         self.win.setWindowTitle('Task Monitor')
         self.man.sigTaskCreated.connect(self.showTask)
-        self.taskTimer = QtCore.QTimer()
+        self.taskTimer = Qt.QTimer()
         self.taskTimer.timeout.connect(self.checkResult)
         
     def showTask(self, cmd, task):

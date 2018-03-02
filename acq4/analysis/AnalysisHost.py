@@ -3,14 +3,14 @@ from __future__ import print_function
 
 import six
 
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from . import modules
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.Manager
 #from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
 
-class AnalysisHost(QtGui.QMainWindow):
+class AnalysisHost(Qt.QMainWindow):
     """Window for hosting analysis widgets.
     Provides:
      - File / DB access for module
@@ -20,7 +20,7 @@ class AnalysisHost(QtGui.QMainWindow):
     """
     
     def __init__(self, dataManager=None, dataModel=None, module=None):
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         self.dm = dataManager
         self.dataModel = dataModel
         self.mod = None

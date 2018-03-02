@@ -2,7 +2,7 @@
 from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Camera import Camera, CameraTask
-from PyQt4 import QtCore
+from acq4.util import Qt
 import six
 from six.moves import range
 import time, sys, traceback
@@ -134,7 +134,7 @@ class MockCamera(Camera):
                 px = info['pixelSize']
                 pz = info['depths'][1] - info['depths'][0]
                 
-                m = pg.QtGui.QMatrix4x4()
+                m = Qt.QMatrix4x4()
                 pos = info['transform']['pos']
                 m.scale(1/px[0], 1/px[1], 1/pz)
                 m.translate(-pos[0], -pos[1], -info['depths'][0])
@@ -145,8 +145,8 @@ class MockCamera(Camera):
                 origin = [int(origin.x()), int(origin.y()), origin.z()]
                 
                 ## slice data
-                camRect = QtCore.QRect(origin[0], origin[1], w, h)
-                dataRect = QtCore.QRect(0, 0, data.shape[1], data.shape[2])
+                camRect = Qt.QRect(origin[0], origin[1], w, h)
+                dataRect = Qt.QRect(0, 0, data.shape[1], data.shape[2])
                 overlap = camRect.intersected(dataRect)
                 tl = overlap.topLeft() - camRect.topLeft()
                 
@@ -168,7 +168,7 @@ class MockCamera(Camera):
                 #self.background = pg.affineSlice(data, (w,h), origin, vectors, (1, 2, 0), order=1)
             else:
                 tr = pg.SRTTransform(tr)
-                m = QtGui.QTransform()
+                m = Qt.QTransform()
                 
                 m.scale(3e6, 3e6)
                 m.translate(0.0005, 0.0005)

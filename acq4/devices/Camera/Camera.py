@@ -9,7 +9,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 #from acq4.devices.Device import *
 from acq4.devices.Microscope import Microscope
-from PyQt4 import QtCore
+from acq4.util import Qt
 import time
 from numpy import *
 from acq4.util.metaarray import *
@@ -51,11 +51,11 @@ class Camera(DAQGeneric, OptomechDevice):
             CLEAR_MODE: 'CLEAR_PRE_SEQUENCE'  ## Overlap mode for QuantEM
     """
 
-    sigCameraStopped = QtCore.Signal()
-    sigCameraStarted = QtCore.Signal()
-    sigShowMessage = QtCore.Signal(object)  # (string message)
-    sigNewFrame = QtCore.Signal(object)  # (frame data)
-    sigParamsChanged = QtCore.Signal(object)
+    sigCameraStopped = Qt.Signal()
+    sigCameraStarted = Qt.Signal()
+    sigShowMessage = Qt.Signal(object)  # (string message)
+    sigNewFrame = Qt.Signal(object)  # (frame data)
+    sigParamsChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
         OptomechDevice.__init__(self, dm, config, name)
@@ -338,8 +338,8 @@ class Camera(DAQGeneric, OptomechDevice):
         If globalCoords==False, return in local coordinates.
         """
         size = self.getParam('sensorSize')
-        bounds = QtGui.QPainterPath()
-        bounds.addRect(QtCore.QRectF(0, 0, *size))
+        bounds = Qt.QPainterPath()
+        bounds.addRect(Qt.QRectF(0, 0, *size))
         if globalCoords:
             return pg.SRTTransform(self.globalTransform()).map(bounds)
         else:
@@ -709,8 +709,8 @@ class CameraTaskResult:
         
 class AcquireThread(Thread):
     
-    sigNewFrame = QtCore.Signal(object)
-    sigShowMessage = QtCore.Signal(object)
+    sigNewFrame = Qt.Signal(object)
+    sigShowMessage = Qt.Signal(object)
     
     def __init__(self, dev):
         Thread.__init__(self)
@@ -764,7 +764,7 @@ class AcquireThread(Thread):
     #    with self.lock:
     #        self.state[param] = value
     #    if start:
-    #        #self.start(QtCore.QThread.HighPriority)
+    #        #self.start(Qt.QThread.HighPriority)
     #        self.start()
     #    
     
@@ -910,6 +910,6 @@ class AcquireThread(Thread):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-            #self.start(QtCore.QThread.HighPriority)
+            #self.start(Qt.QThread.HighPriority)
             self.start()
 

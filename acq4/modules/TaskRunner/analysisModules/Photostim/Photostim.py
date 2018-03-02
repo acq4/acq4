@@ -2,7 +2,7 @@
 from __future__ import print_function
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from .PhotostimTemplate import Ui_Form
 import numpy as np
 import scipy.ndimage
@@ -76,8 +76,8 @@ class PhotostimModule(AnalysisModule):
         p = Task(name, self)
         self.currentTask = p
         self.tasks[name] = p
-        item = QtGui.QListWidgetItem(name)
-        item.setCheckState(QtCore.Qt.Checked)
+        item = Qt.QListWidgetItem(name)
+        item.setCheckState(Qt.Qt.Checked)
         self.ui.taskList.addItem(item)
         self.ui.taskList.setCurrentItem(item)
 
@@ -112,7 +112,7 @@ class PhotostimModule(AnalysisModule):
             
     def itemClicked(self, item):
         task = self.tasks[str(item.text())]
-        if item.checkState() == QtCore.Qt.Checked:
+        if item.checkState() == Qt.Qt.Checked:
             task.show()
         else:
             task.hide()
@@ -244,7 +244,7 @@ class Task:
         # generate spot color from analysis
         color = self.ui().ui.colorMapper.map(results)
 
-        return QtGui.QColor(*color[0])
+        return Qt.QColor(*color[0])
         
         
     def __del__(self):

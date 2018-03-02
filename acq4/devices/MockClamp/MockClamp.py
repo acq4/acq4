@@ -5,7 +5,7 @@ from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.util.Mutex import Mutex
 #from acq4.devices.Device import *
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import time
 import numpy as np
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
@@ -21,7 +21,7 @@ modeNames = ['vc', 'i=0', 'ic']
 
 class MockClamp(DAQGeneric):
     
-    sigModeChanged = QtCore.Signal(object)
+    sigModeChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
 
@@ -222,22 +222,22 @@ class MockClampTaskGui(DAQGenericTaskGui):
     def __init__(self, dev, taskRunner):
         DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
         
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
         self.setLayout(self.layout)
         
-        self.splitter1 = QtGui.QSplitter()
-        self.splitter1.setOrientation(QtCore.Qt.Horizontal)
+        self.splitter1 = Qt.QSplitter()
+        self.splitter1.setOrientation(Qt.Qt.Horizontal)
         self.layout.addWidget(self.splitter1)
         
-        self.splitter2 = QtGui.QSplitter()
-        self.splitter2.setOrientation(QtCore.Qt.Vertical)
-        self.modeCombo = QtGui.QComboBox()
+        self.splitter2 = Qt.QSplitter()
+        self.splitter2.setOrientation(Qt.Qt.Vertical)
+        self.modeCombo = Qt.QComboBox()
         self.splitter2.addWidget(self.modeCombo)
         self.modeCombo.addItems(self.dev.listModes())
         
-        self.splitter3 = QtGui.QSplitter()
-        self.splitter3.setOrientation(QtCore.Qt.Vertical)
+        self.splitter3 = Qt.QSplitter()
+        self.splitter3.setOrientation(Qt.Qt.Vertical)
         
         (w1, p1) = self.createChannelWidget('primary')
         (w2, p2) = self.createChannelWidget('command')
@@ -339,9 +339,9 @@ class MockClampTaskGui(DAQGenericTaskGui):
             
 
         
-class MockClampDevGui(QtGui.QWidget):
+class MockClampDevGui(Qt.QWidget):
     def __init__(self, dev):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         self.ui = Ui_MockClampDevGui()
         self.ui.setupUi(self)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from collections import OrderedDict
-from acq4.pyqtgraph.Qt import QtCore, QtGui
+from acq4.util import Qt
 from .CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
@@ -32,7 +32,7 @@ class ImageCanvasItem(CanvasItem):
         item = None
         self.data = None
         
-        if isinstance(image, QtGui.QGraphicsItem):
+        if isinstance(image, Qt.QGraphicsItem):
             item = image
         elif isinstance(image, np.ndarray):
             self.data = image
@@ -79,12 +79,12 @@ class ImageCanvasItem(CanvasItem):
             item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
 
-        self.splitter = QtGui.QSplitter()
-        self.splitter.setOrientation(QtCore.Qt.Vertical)
+        self.splitter = Qt.QSplitter()
+        self.splitter.setOrientation(Qt.Qt.Vertical)
         self.layout.addWidget(self.splitter, self.layout.rowCount(), 0, 1, 2)
         
         self.filterGroup = pg.GroupBox("Image Filter")
-        fgl = QtGui.QGridLayout()
+        fgl = Qt.QGridLayout()
         fgl.setContentsMargins(3, 3, 3, 3)
         fgl.setSpacing(1)
         self.filterGroup.setLayout(fgl)
@@ -99,17 +99,17 @@ class ImageCanvasItem(CanvasItem):
         # addWidget arguments: row, column, rowspan, colspan 
         self.splitter.addWidget(self.histogram)
 
-        self.imgModeCombo = QtGui.QComboBox()
+        self.imgModeCombo = Qt.QComboBox()
         self.imgModeCombo.addItems(['SourceOver', 'Overlay', 'Plus', 'Multiply'])
         self.layout.addWidget(self.imgModeCombo, self.layout.rowCount(), 0, 1, 1)
         self.imgModeCombo.currentIndexChanged.connect(self.imgModeChanged)
         
-        self.autoBtn = QtGui.QPushButton("Auto")
+        self.autoBtn = Qt.QPushButton("Auto")
         self.autoBtn.setCheckable(True)
         self.autoBtn.setChecked(True)
         self.layout.addWidget(self.autoBtn, self.layout.rowCount()-1, 1, 1, 1)
 
-        self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
+        self.timeSlider = Qt.QSlider(Qt.Qt.Horizontal)
         self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
         self.timeSlider.valueChanged.connect(self.timeChanged)
 
@@ -146,7 +146,7 @@ class ImageCanvasItem(CanvasItem):
 
     def imgModeChanged(self):
         mode = str(self.imgModeCombo.currentText())
-        self.graphicsItem().setCompositionMode(getattr(QtGui.QPainter, 'CompositionMode_' + mode))
+        self.graphicsItem().setCompositionMode(getattr(Qt.QPainter, 'CompositionMode_' + mode))
 
     def filterStateChanged(self):
         self.updateImage()
@@ -195,14 +195,14 @@ class ImageCanvasItem(CanvasItem):
 registerItemType(ImageCanvasItem)
 
 
-class ImageFilterWidget(QtGui.QWidget):
+class ImageFilterWidget(Qt.QWidget):
     
-    sigStateChanged = QtCore.Signal()
+    sigStateChanged = Qt.Signal()
     
     def __init__(self):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
@@ -210,7 +210,7 @@ class ImageFilterWidget(QtGui.QWidget):
         self.btns = OrderedDict()
         row, col = 0, 0
         for name in ['Mean', 'Max', 'Max w/Gaussian', 'Max w/Median', 'Edge']:
-            btn = QtGui.QPushButton(name)
+            btn = Qt.QPushButton(name)
             self.btns[name] = btn
             btn.setCheckable(True)
             self.layout.addWidget(btn, row, col)
@@ -222,7 +222,7 @@ class ImageFilterWidget(QtGui.QWidget):
         
         # show flowchart control panel inside a collapsible group box
         self.fcGroup = pg.GroupBox('Filter Settings')
-        fgl = QtGui.QVBoxLayout()
+        fgl = Qt.QVBoxLayout()
         self.fcGroup.setLayout(fgl)
         fgl.setContentsMargins(0, 0, 0, 0)
         self.layout.addWidget(self.fcGroup, row+1, 0, 1, 2)

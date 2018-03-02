@@ -2,7 +2,7 @@
 from __future__ import print_function
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from .UncagingTemplate import Ui_Form
 #from acq4.pyqtgraph import ImageItem
 from numpy import *
@@ -80,8 +80,8 @@ class UncagingModule(AnalysisModule):
         p = Task(name, self)
         self.currentTask = p
         self.tasks[name] = p
-        item = QtGui.QListWidgetItem(name)
-        item.setCheckState(QtCore.Qt.Checked)
+        item = Qt.QListWidgetItem(name)
+        item.setCheckState(Qt.Qt.Checked)
         self.ui.taskList.addItem(item)
         self.ui.taskList.setCurrentItem(item)
 
@@ -117,7 +117,7 @@ class UncagingModule(AnalysisModule):
             
     def itemClicked(self, item):
         task = self.tasks[str(item.text())]
-        if item.checkState() == QtCore.Qt.Checked:
+        if item.checkState() == Qt.Qt.Checked:
             task.show()
         else:
             task.hide()
@@ -128,7 +128,7 @@ class UncagingModule(AnalysisModule):
             sp.recalculate(allFrames=True)
 
     def quit(self):
-        #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #Qt.QObject.disconnect(getManager(), Qt.SIGNAL('modulesChanged'), self.fillModuleList)
         #getManager().sigModulesChanged.disconnect(self.fillModuleList)
         AnalysisModule.quit(self)
         for p in self.tasks.values():
@@ -223,7 +223,7 @@ class Task:
         for (i, p, s) in self.items[1:]:
             c = i.brush().color()
             c.setAlpha(self.state['alphaSlider'])
-            i.setBrush(QtGui.QBrush(c))
+            i.setBrush(Qt.QBrush(c))
             
 
     def recalculate(self, allFrames=False):
@@ -268,9 +268,9 @@ class Task:
                 #self.img = clip(self.img + (newImg.astype(uint16)), 0, 255)
             #else:
             alpha = self.state['alphaSlider']
-            spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-0.5, -0.5, 1, 1))
-            spot.setBrush(QtGui.QBrush(QtGui.QColor(r*255, g*255, b*255, alpha)))
-            spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            spot = Qt.QGraphicsEllipseItem(Qt.QRectF(-0.5, -0.5, 1, 1))
+            spot.setBrush(Qt.QBrush(Qt.QColor(r*255, g*255, b*255, alpha)))
+            spot.setPen(Qt.QPen(Qt.Qt.NoPen))
             p = f['scanner']['position']
             s = f['scanner']['spotSize']
             self.items.append([spot, p, [s, s]])

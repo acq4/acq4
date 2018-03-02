@@ -193,7 +193,7 @@ class EventFitter(CtrlNode):
     def eventFilter(self, obj, event):
         if self.selectedFit is None:
             return False
-        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Delete:
+        if event.type() == Qt.QEvent.KeyPress and event.key() == Qt.Qt.Key_Delete:
             self.deleteSelected()
             return True
         return False
@@ -590,7 +590,7 @@ class StatsCalculator(Node):
         ])
         
         self.ui = pg.CheckTable(list(self.funcs.keys()))
-        #QtCore.QObject.connect(self.ui, QtCore.SIGNAL('stateChanged'), self.update)
+        #Qt.QObject.connect(self.ui, Qt.SIGNAL('stateChanged'), self.update)
         self.ui.sigStateChanged.connect(self.update)
         
     def ctrlWidget(self):

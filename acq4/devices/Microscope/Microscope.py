@@ -23,17 +23,17 @@ class Microscope(Device, OptomechDevice):
       automatically to all rigidly-connected child devices.
     """
     
-    sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
-    sigLightChanged = QtCore.Signal(object, object)  # self, lightName
-    sigObjectiveListChanged = QtCore.Signal()
-    sigSurfaceDepthChanged = QtCore.Signal(object)
+    sigObjectiveChanged = Qt.Signal(object) ## (objective, lastObjective)
+    sigLightChanged = Qt.Signal(object, object)  # self, lightName
+    sigObjectiveListChanged = Qt.Signal()
+    sigSurfaceDepthChanged = Qt.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
         self.config = config
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.switchDevice = None
         self.currentSwitchPosition = None
         self.currentObjective = None
@@ -166,7 +166,7 @@ class Microscope(Device, OptomechDevice):
 
         This method requires a device that provides focus position feedback.
         """
-        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0)).z()
+        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
 
     def setFocusDepth(self, z, speed='fast'):
         """Set the z-position of the focal plane.
@@ -197,7 +197,7 @@ class Microscope(Device, OptomechDevice):
     def globalPosition(self):
         """Return the global position of the scope's center axis at the focal plane.
         """
-        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0))        
+        return self.mapToGlobal(Qt.QVector3D(0, 0, 0))        
 
     def setGlobalPosition(self, pos, speed='fast'):
         """Move the microscope such that its center axis is at a specified global position.
@@ -254,8 +254,8 @@ class Microscope(Device, OptomechDevice):
 
 class Objective(OptomechDevice):
     
-    #class SignalProxyObject(QtCore.QObject):
-        #sigTransformChanged = QtCore.Signal(object) ## self
+    #class SignalProxyObject(Qt.QObject):
+        #sigTransformChanged = Qt.Signal(object) ## self
     
     def __init__(self, config, scope, key):
         #self.__sigProxy = Objective.SignalProxyObject()
@@ -325,12 +325,12 @@ class Objective(OptomechDevice):
 
 
 
-class ScopeGUI(QtGui.QWidget):
+class ScopeGUI(Qt.QWidget):
     """Microscope GUI displayed in Manager window.
     Shows selection of objectives and allows scale/offset to be changed for each."""
     
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
         self.dev.sigObjectiveChanged.connect(self.objectiveChanged)
@@ -344,8 +344,8 @@ class ScopeGUI(QtGui.QWidget):
         row = 1
         for i in self.objList:
             ## For each objective, create a set of widgets for selecting and updating.
-            c = QtGui.QComboBox()
-            r = QtGui.QRadioButton(i)
+            c = Qt.QComboBox()
+            r = Qt.QRadioButton(i)
             #first = list(self.objList[i].keys())[0]
             #first = self.objList[i][first]
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
@@ -443,8 +443,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def __init__(self, dev, mod):
         CameraModuleInterface.__init__(self, dev, mod)
 
-        self.ctrl = QtGui.QWidget()
-        self.layout = QtGui.QGridLayout()
+        self.ctrl = Qt.QWidget()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
 
@@ -459,7 +459,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         # Note: this is placed here because there is currently no better place.
         # Ideally, the sample orientation, height, and anatomical identity would be contained 
         # in a Sample or Slice object elsewhere..
-        self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
+        self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 

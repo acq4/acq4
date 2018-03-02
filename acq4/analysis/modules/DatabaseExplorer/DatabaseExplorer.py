@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 #import acq4.analysis.modules.EventDetector as EventDetector
 #import MapCtrlTemplate
@@ -32,15 +32,15 @@ class DatabaseExplorer(AnalysisModule):
         
 
         
-class DBCtrl(QtGui.QWidget):
+class DBCtrl(Qt.QWidget):
     
     def __init__(self, host, identity):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.host = host
         self.dm = host.dataManager()
         self.db = self.dm.currentDatabase()
         
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = Qt.QVBoxLayout()
         self.setLayout(self.layout)
         self.dbgui = DatabaseGui.DatabaseGui(dm=self.dm, tables={})
 
@@ -49,10 +49,10 @@ class DBCtrl(QtGui.QWidget):
         for name in ['getTableName', 'getDb']:
             setattr(self, name, getattr(self.dbgui, name))
             
-class PlotCtrl(QtGui.QWidget):
+class PlotCtrl(Qt.QWidget):
     
     def __init__(self, host, identity):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.host = host
         self.dm = host.dataManager()
         

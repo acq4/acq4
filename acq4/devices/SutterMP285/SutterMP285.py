@@ -18,15 +18,15 @@ import six
 
 class SutterMP285(Device, OptomechDevice):
 
-    sigPositionChanged = QtCore.Signal(object)
-    sigLimitsChanged = QtCore.Signal(object)
+    sigPositionChanged = Qt.Signal(object)
+    sigLimitsChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
         self.config = config
         self.configFile = os.path.join('devices', name + '_config.cfg')
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.port = config['port']  ## windows com ports start at COM1, pyserial ports start at 0
 
         # whether this device has an arduino interface protecting it from roe/serial collisions
@@ -50,7 +50,7 @@ class SutterMP285(Device, OptomechDevice):
         self.loadConfig()
         
         self.mp285 = SutterMP285Driver(self.port, self.baud)
-        self.driverLock = Mutex(QtCore.QMutex.Recursive)
+        self.driverLock = Mutex(Qt.QMutex.Recursive)
         
         self.mThread = SutterMP285Thread(self, self.mp285, self.driverLock, self.scale, self.limits, self.maxSpeed)
         self.mThread.sigPositionChanged.connect(self.posChanged)
@@ -154,15 +154,15 @@ class SutterMP285(Device, OptomechDevice):
         self.getPosition(refresh=True)
 
 
-class SMP285Interface(QtGui.QWidget):
+class SMP285Interface(Qt.QWidget):
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.ui = devTemplate.Ui_Form()
         self.ui.setupUi(self)
         
         self.win = win
         self.dev = dev
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        #Qt.QObject.connect(self.dev, Qt.SIGNAL('positionChanged'), self.update)
         self.dev.sigPositionChanged.connect(self.update)
         self.update()
         
@@ -252,12 +252,12 @@ class TimeoutError(Exception):
         
 class SutterMP285Thread(Thread):
 
-    sigPositionChanged = QtCore.Signal(object)
-    sigError = QtCore.Signal(object)
+    sigPositionChanged = Qt.Signal(object)
+    sigError = Qt.Signal(object)
 
     def __init__(self, dev, driver, driverLock, scale, limits, maxSpd):
         Thread.__init__(self)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.scale = scale
         self.mp285 = driver
         self.driverLock = driverLock
@@ -308,7 +308,7 @@ class SutterMP285Thread(Thread):
             #print "Discarding %d bytes" % self.sp.inWaiting()
             #self.sp.read(self.sp.inWaiting())
         #import wingdbstub
-        print("  Starting MP285 thread: 0x%x" % int(QtCore.QThread.currentThreadId()))
+        print("  Starting MP285 thread: 0x%x" % int(Qt.QThread.currentThreadId()))
         #import sip
         #print "    also known as 0x%x" % sip.unwrapinstance(self)
         velocity = np.array([0,0,0])
@@ -385,7 +385,7 @@ class SutterMP285Thread(Thread):
                         pos = newPos
         
                         if any(change):
-                            #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
+                            #self.emit(Qt.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
                             self.sigPositionChanged.emit({'rel': change, 'abs': pos})
                 else:
                     ## moving; make a guess about the current position

@@ -17,7 +17,7 @@ import os
 import os.path
 import itertools
 import functools
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import numpy as np
 import numpy.ma as ma
 import scipy
@@ -70,7 +70,7 @@ def trace_calls_and_returns(frame, event, arg, indent=[0]):
     return
 
 
-class MultiLine(pg.QtGui.QGraphicsPathItem):
+class MultiLine(Qt.QGraphicsPathItem):
     def __init__(self, x, y, downsample=1):
         """x and y are 2D arrays of shape (Nplots, Nsamples)"""
         if x.ndim == 1:
@@ -82,11 +82,11 @@ class MultiLine(pg.QtGui.QGraphicsPathItem):
         connect = np.ones(x.shape, dtype=bool)
         connect[:, -1] = 0  # don't draw the segment between each trace
         self.path = pg.arrayToQPath(x.flatten(), y.flatten(), connect.flatten())
-        pg.QtGui.QGraphicsPathItem.__init__(self, self.path)
+        Qt.QGraphicsPathItem.__init__(self, self.path)
         self.setPen(pg.mkPen('w'))
 
     def shape(self): # override because QGraphicsPathItem.shape is too expensive.
-        return pg.QtGui.QGraphicsItem.shape(self)
+        return Qt.QGraphicsItem.shape(self)
 
     def boundingRect(self):
         return self.path.boundingRect()
@@ -181,19 +181,19 @@ class PSPReversal(AnalysisModule):
 
         # --------------graphical elements-----------------
         self._sizeHint = (1280, 900)  # try to establish size of window
-        self.ctrl_widget = QtGui.QWidget()
+        self.ctrl_widget = Qt.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrl_widget)
-        self.results_widget = QtGui.QWidget()
+        self.results_widget = Qt.QWidget()
         self.results = resultsTemplate.Ui_ResultsDialogBox()
         self.results.setupUi(self.results_widget)
-        self.scripts_widget = QtGui.QWidget()
+        self.scripts_widget = Qt.QWidget()
         self.scripts_form = scriptTemplate.Ui_Form()
         self.scripts_form.setupUi(self.scripts_widget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output
-        self.widget = QtGui.QWidget()
-        self.grid_layout = QtGui.QGridLayout()
+        self.widget = Qt.QWidget()
+        self.grid_layout = Qt.QGridLayout()
         self.widget.setLayout(self.grid_layout)
         self.grid_layout.setContentsMargins(4, 4, 4, 4)
         self.grid_layout.setSpacing(1)
@@ -449,20 +449,20 @@ class PSPReversal(AnalysisModule):
         if forcestate is not None:
             if forcestate:
                 region['region'].show()
-                region['state'].setChecked(QtCore.Qt.Checked)
+                region['state'].setChecked(Qt.Qt.Checked)
                 region['shstate'] = True
             else:
                 region['region'].hide()
-                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['state'].setChecked(Qt.Qt.Unchecked)
                 region['shstate'] = False
         else:
             if not region['shstate']:
                 region['region'].show()
-                region['state'].setChecked(QtCore.Qt.Checked)
+                region['state'].setChecked(Qt.Qt.Checked)
                 region['shstate'] = True
             else:
                 region['region'].hide()
-                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['state'].setChecked(Qt.Qt.Unchecked)
                 region['shstate'] = False
 
     def uniq(self, inlist):
@@ -1244,7 +1244,7 @@ class PSPReversal(AnalysisModule):
                 file_ok = os.path.exists(fullpath)
                 if not file_ok:  # get the directory handle and take it from there
                     continue
-                self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
+                self.ctrl.PSPReversal_KeepT.setChecked(Qt.Qt.Unchecked)  # make sure this is unchecked
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFileRequested([dh]):  # note: must pass a list
                     print('failed to load requested file: ', fullpath)
@@ -1253,7 +1253,7 @@ class PSPReversal(AnalysisModule):
                 self.analysis_summary['Drugs'] = thiscell['manip'][p]
                 # alt_flag = bool(thiscell['alternation'])
                 # self.analysis_parameters['alternation'] = alt_flag
-                # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
+                # self.ctrl.PSPReversal_Alternation.setChecked((Qt.Qt.Unchecked, Qt.Qt.Checked)[alt_flag])
                 # if 'junctionpotential' in thiscell:
                 #     self.analysis_parameters['junction'] = thiscell['junctionpotential']
                 #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
@@ -1398,7 +1398,7 @@ class PSPReversal(AnalysisModule):
                 ltxt += '<   >\t'
         print(ltxt)
         if copytoclipboard:
-            clipb = QtGui.QApplication.clipboard()
+            clipb = Qt.QApplication.clipboard()
             clipb.clear(mode=clipb.Clipboard )
             clipb.setText(ltxt, mode=clipb.Clipboard)
 
@@ -1763,8 +1763,8 @@ class PSPReversal(AnalysisModule):
         """
         if self.ctrl.PSPReversal_KeepAnalysis.isChecked() is False:
             self.iv_plot.clear()
-            self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
-            self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
+            self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=Qt.Qt.DashLine))
+            self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=Qt.Qt.DashLine))
         jp = self.analysis_parameters['junction']  # get offsets for voltage
         ho = float(self.holding) * 1e3
         offset = jp + ho  # combine
@@ -2092,7 +2092,7 @@ class PSPReversal(AnalysisModule):
     #     if not fpar:
     #         print 'PSPReversal::update_tauh: tau_h fitting failed - see log'
     #         return
-    #     redpen = pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine)
+    #     redpen = pg.mkPen('r', width=1.5, style=Qt.Qt.DashLine)
     #     if self.fit_curve is None:
     #         self.fit_curve = self.data_plot.plot(xf[0], yf[0],
     #                                              pen=redpen)

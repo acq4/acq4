@@ -6,7 +6,7 @@ from acq4.Manager import logMsg
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph import multiprocess
-from PyQt4 import QtCore
+from acq4.util import Qt
 from numpy import *
 import sys, traceback
 from .DeviceGui import *
@@ -16,8 +16,8 @@ from acq4.util.debug import *
 
 class MultiClamp(Device):
     
-    sigStateChanged = QtCore.Signal(object)
-    sigHoldingChanged = QtCore.Signal(object, object)  # self, mode
+    sigStateChanged = Qt.Signal(object)
+    sigHoldingChanged = Qt.Signal(object, object)  # self, mode
 
     # remote process used to connect to commander from 32-bit python
     proc = None

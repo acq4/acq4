@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from collections import OrderedDict
 from acq4.analysis.AnalysisModule import AnalysisModule
 from . import STDPControlTemplate, STDPPlotsTemplate
@@ -21,7 +21,7 @@ class STDPAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
 
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = STDPControlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
 
@@ -32,7 +32,7 @@ class STDPAnalyzer(AnalysisModule):
         self.dbGui = DatabaseGui(dm=self.dataManager(), tables=tables)
 
        
-        self.plotsWidget = QtGui.QWidget()
+        self.plotsWidget = Qt.QWidget()
         self.plots = STDPPlotsTemplate.Ui_Form()
         self.plots.setupUi(self.plotsWidget)
 

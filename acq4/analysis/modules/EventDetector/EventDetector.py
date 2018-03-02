@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.flowchart import *
 import os
@@ -50,7 +50,7 @@ class EventDetector(AnalysisModule):
         else:
             self.dbCtrl = dbCtrl(self, identity=self.dbIdentity)
 
-        #self.ctrl = QtGui.QLabel('LABEL')
+        #self.ctrl = Qt.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
@@ -258,12 +258,12 @@ class EventDetector(AnalysisModule):
             #dbui.storeBtnFeedback(False, "Error!", "See console for error message..")
             #raise
         
-class DBCtrl(QtGui.QWidget):
+class DBCtrl(Qt.QWidget):
     def __init__(self, host, identity):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.host = host
         
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = Qt.QVBoxLayout()
         self.setLayout(self.layout)
         self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables={identity: 'EventDetector_events'})
         self.storeBtn = pg.FeedbackButton("Store to DB")

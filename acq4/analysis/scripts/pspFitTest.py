@@ -10,7 +10,7 @@ sys.path.append(path)
 
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 
 ## TODO:
 #  fit using rise and decay/rise as parameters so that the ratio can be constrained 
@@ -516,7 +516,7 @@ def errorSurface(axes=[3, 0], v1=None, v2=None, bounds=None, noise=0.0, n=5000):
         p.addItem(img)
         b1 = bounds[axes[0]]
         b2 = bounds[axes[1]]
-        img.setRect(QtCore.QRectF(b1[0], b2[0], b1[1]-b1[0], b2[1]-b2[0]))
+        img.setRect(Qt.QRectF(b1[0], b2[0], b1[1]-b1[0], b2[1]-b2[0]))
     elif len(axes) == 3:
         pg.image(err)
         
@@ -532,8 +532,8 @@ def watchFit(data, guess, bounds):
 
 if __name__ == '__main__':
     #np.seterr(all='raise')
-    #from PyQt4 import QtGui
-    #app = QtGui.QApplication([])
+    #from acq4.util import Qt
+    #app = Qt.QApplication([])
     main()
     #showAll()
     #app.exec_()

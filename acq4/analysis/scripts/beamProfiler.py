@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtCore
+from acq4.util import Qt
 import acq4.Manager
 import acq4.util.imageAnalysis as imageAnalysis
 
@@ -17,7 +17,7 @@ cam.sigNewFrame.connect(collect)
     
 def measure():
     if len(frames) == 0:
-        QtCore.QTimer.singleShot(100, measure)
+        Qt.QTimer.singleShot(100, measure)
         return
     global run
     if run:
@@ -37,6 +37,6 @@ def measure():
     else:
         global frames
         frames = []
-    QtCore.QTimer.singleShot(2000, measure)
+    Qt.QTimer.singleShot(2000, measure)
 
 measure()

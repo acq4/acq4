@@ -10,9 +10,9 @@ sys.path.extend([d1, d2])
 from acq4.util.DirTreeWidget import *
 from .DirTreeLoader import *
 from acq4.util.DataManager import *
-from PyQt4 import QtCore,QtGui
+from acq4.util import Qt
 
-app = QtGui.QApplication([])
+app = Qt.QApplication([])
 
 dm = DataManager()
 dh = dm.getDirHandle(d)['testDir']
@@ -33,7 +33,7 @@ class Loader(DirTreeLoader):
         return True
         
 
-#w = DirTreeWidget(defaultFlags=QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled, defaultCheckState=False)
+#w = DirTreeWidget(defaultFlags=Qt.Qt.ItemIsUserCheckable | Qt.Qt.ItemIsEnabled, defaultCheckState=False)
 w = Loader(dh)
 w.show()
 

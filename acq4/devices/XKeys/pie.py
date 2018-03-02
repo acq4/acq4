@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import platform
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.devices.Device import Device
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph.multiprocess as mp
@@ -66,7 +66,7 @@ def getDevices():
 class XKeys(Device):
     """P.I. Engineering X-Keys input device.
     """
-    sigStateChanged = QtCore.Signal(object, object)  # self, changes
+    sigStateChanged = Qt.Signal(object, object)  # self, changes
 
     def __init__(self, man, config, name):
         Device.__init__(self, man, config, name)

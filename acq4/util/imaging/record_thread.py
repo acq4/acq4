@@ -2,7 +2,7 @@ from __future__ import print_function
 import time
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.util.debug as debug
 from acq4.util.metaarray import MetaArray
 import numpy as np
@@ -19,10 +19,10 @@ except ImportError:
 class RecordThread(Thread):
     """Class for offloading image recording to a worker thread.
     """
-    # sigShowMessage = QtCore.Signal(object)
-    sigRecordingFailed = QtCore.Signal()
-    sigRecordingFinished = QtCore.Signal(object, object)  # file handle, num frames
-    sigSavedFrame = QtCore.Signal(object)
+    # sigShowMessage = Qt.Signal(object)
+    sigRecordingFailed = Qt.Signal()
+    sigRecordingFinished = Qt.Signal(object, object)  # file handle, num frames
+    sigSavedFrame = Qt.Signal(object)
     
     def __init__(self, ui):
         Thread.__init__(self)
@@ -34,7 +34,7 @@ class RecordThread(Thread):
         self.frameLimit = None
         
         # Interaction with worker thread:
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.newFrames = []  # list of frames and the files they should be sored / appended to.
 
         # Attributes private to worker thread:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import weakref
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from .CanvasItem import CanvasItem
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.graphicsItems.TargetItem
@@ -139,12 +139,12 @@ class PointParameter(pg.parametertree.Parameter):
 registerItemType(MarkersCanvasItem)
 
 
-class MarkerItemCtrlWidget(QtGui.QWidget):
+class MarkerItemCtrlWidget(Qt.QWidget):
     def __init__(self, canvasitem):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.canvasitem = weakref.ref(canvasitem)
 
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
@@ -152,16 +152,16 @@ class MarkerItemCtrlWidget(QtGui.QWidget):
         self.ptree.setParameters(canvasitem.params)
         self.layout.addWidget(self.ptree, 0, 0, 1, 2)
 
-        self.saveJsonBtn = QtGui.QPushButton('Save Json')
+        self.saveJsonBtn = Qt.QPushButton('Save Json')
         self.layout.addWidget(self.saveJsonBtn, 1, 0)
         self.saveJsonBtn.clicked.connect(self.saveJson)
         
-        self.copyJsonBtn = QtGui.QPushButton('Copy Json')
+        self.copyJsonBtn = Qt.QPushButton('Copy Json')
         self.layout.addWidget(self.copyJsonBtn, 1, 0)
         self.copyJsonBtn.clicked.connect(self.copyJson)
 
     def saveJson(self):
-        filename = QtGui.QFileDialog.getSaveFileName(None, "Save markers", path, "JSON files (*.json)")
+        filename = Qt.QFileDialog.getSaveFileName(None, "Save markers", path, "JSON files (*.json)")
         if filename == '':
             return
         if not filename.endswith('.json'):

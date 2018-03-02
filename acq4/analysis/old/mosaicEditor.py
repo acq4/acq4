@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from .MosaicTemplate import *
 from acq4.Manager import getManager
 
-class MosaicEditor(QtGui.QMainWindow):
+class MosaicEditor(Qt.QMainWindow):
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.show()
         self.items = {}
-        self.connect(self.ui.setRootBtn, QtCore.SIGNAL('clicked()'), self.setRootClicked)
-        self.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
-        self.connect(self.ui.canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
+        self.connect(self.ui.setRootBtn, Qt.SIGNAL('clicked()'), self.setRootClicked)
+        self.connect(self.ui.loadBtn, Qt.SIGNAL('clicked()'), self.loadClicked)
+        self.connect(self.ui.canvas, Qt.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
         
     def loadClicked(self):
         f = self.ui.fileTree.selectedFile()

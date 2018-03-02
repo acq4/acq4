@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
 #from DevTemplate import Ui_Form
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.pyqtgraph.parametertree import * 
 import collections
 
-class CameraDeviceGui(QtGui.QWidget):
+class CameraDeviceGui(Qt.QWidget):
     def __init__(self, dev, win):
         #pdb.set_trace()
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         self.win = win
         #self.cam = self.dev.cam
         #self.ui = Ui_Form()
         #self.ui.setupUi(self)
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
         self.setLayout(self.layout)
         
@@ -33,7 +33,7 @@ class CameraDeviceGui(QtGui.QWidget):
             
             if not p[1]:  ## read-only param
                 params.append({'name': k, 'readonly': True, 'value': val, 'type': 'str'})
-                #w = QtGui.QLabel()
+                #w = Qt.QLabel()
                 #w.setText(str(val))
                 #self.labels[k] = w
 
@@ -58,7 +58,7 @@ class CameraDeviceGui(QtGui.QWidget):
                     #print k, val, p
                     params.append({'name': k, 'type': 'list', 'value': val, 'values': p[0]})
                 #elif 'BOOL' in typ:
-                #    w = QtGui.QCheckBox()
+                #    w = Qt.QCheckBox()
                 #    w.setChecked(val)
                 else:
                     print("    Ignoring parameter '%s': %s" % (k, str(p)))
@@ -91,7 +91,7 @@ class CameraDeviceGui(QtGui.QWidget):
             
             ##typ = self.cam.getParamTypeName(p)
             #if not p[1]:  ## read-only param
-                #w = QtGui.QLabel()
+                #w = Qt.QLabel()
                 #w.setText(str(val))
                 #self.labels[k] = w
 
@@ -103,7 +103,7 @@ class CameraDeviceGui(QtGui.QWidget):
                         #(mn, mx) = p[0]
                         #step = 1
                     #if type(mx) in [int, long] and type(mn) in [int, long]:
-                        #w = QtGui.QSpinBox()
+                        #w = Qt.QSpinBox()
                         #intmax = (2**16)-1
                         #if mx is None or mx > intmax:
                             #mx = intmax
@@ -119,14 +119,14 @@ class CameraDeviceGui(QtGui.QWidget):
                         #w.setOpts(value=val, range=(mn, mx), dec=True, step=1)
                     
                 #elif type(p[0]) is list:
-                    #w = QtGui.QComboBox()
+                    #w = Qt.QComboBox()
                     ##(opts, vals) = self.cam.getEnumList(p)
                     #for i in range(len(p[0])):
                         #w.addItem(str(p[0][i]))
                         #if p[0][i] == val:
                             #w.setCurrentIndex(i)
                 ##elif 'BOOL' in typ:
-                ##    w = QtGui.QCheckBox()
+                ##    w = Qt.QCheckBox()
                 ##    w.setChecked(val)
                 #else:
                     #print "    Ignoring parameter '%s': %s" % (k, str(p))
@@ -134,11 +134,11 @@ class CameraDeviceGui(QtGui.QWidget):
             
                 #self.stateGroup.addWidget(w, k)
             #self.ui.formLayout_2.addRow(k, w)
-        ##QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        ##Qt.QObject.connect(self.stateGroup, Qt.SIGNAL('changed'), self.stateChanged)
         #self.stateGroup.sigChanged.connect(self.stateChanged)
-        ##QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
+        ##Qt.QObject.connect(self.ui.reconnectBtn, Qt.SIGNAL('clicked()'), self.reconnect)
         #self.ui.reconnectBtn.clicked.connect(self.reconnect)
-        ##QtCore.QObject.connect(self.dev, QtCore.SIGNAL('paramsChanged'), self.paramsChanged)
+        ##Qt.QObject.connect(self.dev, Qt.SIGNAL('paramsChanged'), self.paramsChanged)
         #self.dev.sigParamsChanged.connect(self.paramsChanged)
         ##print "Done with UI"
             
@@ -188,7 +188,7 @@ class CameraDeviceGui(QtGui.QWidget):
                         
                         #(mn, mx, step) = newBounds
                         
-                        #if isinstance(w, QtGui.QSpinBox):
+                        #if isinstance(w, Qt.QSpinBox):
                             #intmax = (2**16)-1
                             #if mx is None or mx > intmax:
                                 #mx = intmax

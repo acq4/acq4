@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import time, re
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from CanvasItem import CanvasItem
 import acq4.Manager
 import acq4.pyqtgraph as pg
@@ -119,23 +119,23 @@ registerItemType(MultiPatchLogCanvasItem)
 
 
 
-class MultiPatchLogCtrlWidget(QtGui.QWidget):
+class MultiPatchLogCtrlWidget(Qt.QWidget):
     def __init__(self):
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
+        Qt.QWidget.__init__(self)
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.timeSlider = QtGui.QSlider()
+        self.timeSlider = Qt.QSlider()
         self.layout.addWidget(self.timeSlider, 0, 0)
-        self.timeSlider.setOrientation(QtCore.Qt.Horizontal)
+        self.timeSlider.setOrientation(Qt.Qt.Horizontal)
         self.timeSlider.setMinimum(0)
 
-        self.timeLabel = QtGui.QLabel()
+        self.timeLabel = Qt.QLabel()
         self.layout.addWidget(self.timeLabel, 0, 1)
 
-        self.createMarkersBtn = QtGui.QPushButton('Create markers')
+        self.createMarkersBtn = Qt.QPushButton('Create markers')
         self.layout.addWidget(self.createMarkersBtn, 1, 0)
         
-        self.createMarkersFormat = QtGui.QLineEdit("Cell_%02d")
+        self.createMarkersFormat = Qt.QLineEdit("Cell_%02d")
         self.layout.addWidget(self.createMarkersFormat, 1, 1)

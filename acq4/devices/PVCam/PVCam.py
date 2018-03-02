@@ -3,7 +3,7 @@ from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Camera import Camera, CameraTask
 from acq4.drivers.pvcam import PVCam as PVCDriver
-from PyQt4 import QtCore
+from acq4.util import Qt
 import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
@@ -190,7 +190,7 @@ class PVCam(Camera):
         if autoRestart and restart:
             self.restart()
         
-        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        #self.emit(Qt.SIGNAL('paramsChanged'), newVals)
         self.sigParamsChanged.emit(newVals)
         return (newVals, restart)
 
@@ -209,7 +209,7 @@ class PVCam(Camera):
         
         #if autoRestart and restart:
             #self.restart()
-        #self.emit(QtCore.SIGNAL('paramsChanged'), {param: newVal})
+        #self.emit(Qt.SIGNAL('paramsChanged'), {param: newVal})
         #return (newVal, restart)
 
     def getParam(self, param):

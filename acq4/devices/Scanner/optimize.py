@@ -91,9 +91,9 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(path, '..', '..', 'util'))
     
     import user, time, collections
-    from PyQt4 import QtGui, QtCore
+    from acq4.util import Qt
     import acq4.pyqtgraph as pg
-    app = QtGui.QApplication([])
+    app = Qt.QApplication([])
     
     minTime = 10.
     minDist = 0.5e-3
@@ -158,7 +158,7 @@ if __name__ == '__main__':
                 
                 ## number spots
                 #for i in range(len(data)):
-                    #t = QtGui.QGraphicsTextItem()
+                    #t = Qt.QGraphicsTextItem()
                     #t.setHtml('<span style="color: #f00">%d</span>'%i)
                     #t.setFlag(t.ItemIgnoresTransformations, True)
                     #t.setPos(*l2[i][0])

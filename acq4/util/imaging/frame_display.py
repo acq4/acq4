@@ -1,12 +1,12 @@
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from acq4 import pyqtgraph as pg
 from .contrast_ctrl import ContrastCtrl
 from .bg_subtract_ctrl import BgSubtractCtrl
 from acq4.util.debug import printExc
 
 
-class FrameDisplay(QtCore.QObject):
+class FrameDisplay(Qt.QObject):
     """Used with live imaging to hold the most recently acquired frame and allow
     user control of contrast, gain, and background subtraction.
 
@@ -19,10 +19,10 @@ class FrameDisplay(QtCore.QObject):
     contrastClass = ContrastCtrl
     bgSubtractClass = BgSubtractCtrl
 
-    imageUpdated = QtCore.Signal(object)  # emits frame when the image is redrawn
+    imageUpdated = Qt.Signal(object)  # emits frame when the image is redrawn
 
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
 
         self._imageItem = pg.ImageItem()
         self.contrastCtrl = self.contrastClass()
@@ -40,10 +40,10 @@ class FrameDisplay(QtCore.QObject):
         ## Check for new frame updates every 16ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than
         ## 60fps.
-        self.frameTimer = QtCore.QTimer()
+        self.frameTimer = Qt.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
         self.frameTimer.start(30) ## draw frames no faster than 60Hz
-        #QtCore.QTimer.singleShot(1, self.drawFrame)
+        #Qt.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
 
     def newFrame(self, frame):

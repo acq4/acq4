@@ -13,7 +13,7 @@ import zmq
 
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from acq4.pyqtgraph import QtCore, QtGui
+from acq4.util import Qt
 from acq4.pyqtgraph.util.mutex import Mutex
 
 """
@@ -70,12 +70,12 @@ class IgorCallError(Exception):
         super(IgorCallError, self).__init__(message)
 
 
-class IgorThread(QtCore.QThread):
+class IgorThread(Qt.QThread):
 
-    _newRequest = QtCore.Signal(object)
+    _newRequest = Qt.Signal(object)
 
     def __init__(self, useZMQ=False):
-        QtCore.QThread.__init__(self)
+        Qt.QThread.__init__(self)
         self.moveToThread(self)
         if useZMQ:
             self.igor = ZMQIgorBridge()
@@ -112,7 +112,7 @@ class IgorThread(QtCore.QThread):
 
     def run(self):
       pythoncom.CoInitialize()
-      QtCore.QThread.run(self)
+      Qt.QThread.run(self)
 
 
 class IgorBridge(object):
@@ -222,7 +222,7 @@ class ZMQIgorBridge(object):
         self._socket.setsockopt(zmq.SNDTIMEO, 1000)
         self._socket.setsockopt(zmq.RCVTIMEO, 0)
         self._socket.connect(self.address)
-        self._pollTimer = QtCore.QTimer()
+        self._pollTimer = Qt.QTimer()
         self._pollTimer.timeout.connect(self._checkRecv)
         self._pollTimer.start(100)
 
@@ -328,7 +328,7 @@ if __name__ == '__main__':
                 plt.plot(x, data)
 
 
-    timer = pg.QtCore.QTimer()
+    timer = Qt.QTimer()
     timer.timeout.connect(update)
     timer.start(10)
 

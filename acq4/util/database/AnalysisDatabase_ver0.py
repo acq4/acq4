@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtSql, QtCore
+from acq4.util import Qt
 import numpy as np
 import pickle, re, os
 import acq4.Manager
@@ -30,7 +30,7 @@ class SqliteDatabase:
     regardless of the type specified by its column.
     """
     def __init__(self, fileName=':memory:'):
-        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE")
+        self.db = Qt.QSqlDatabase.addDatabase("QSQLITE")
         self.db.setDatabaseName(fileName)
         self.db.open()
         self._readTableList()
@@ -41,7 +41,7 @@ class SqliteDatabase:
     def exe(self, cmd, data=None, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
         be bound to the query and executed sequentially. Returns the query object."""
-        q = QtSql.QSqlQuery(self.db)
+        q = Qt.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
         else:
@@ -208,7 +208,7 @@ class SqliteDatabase:
                 #raise Exception("Table %s has no field named '%s'. Schema is: %s" % (table, k, str(schema)))
             typ = schema[k].lower()
             if typ == 'blob':
-                funcs[k] = lambda obj: QtCore.QByteArray(pickle.dumps(obj))
+                funcs[k] = lambda obj: Qt.QByteArray(pickle.dumps(obj))
             elif typ == 'int':
                 funcs[k] = int
             elif typ == 'real':
@@ -269,17 +269,17 @@ class SqliteDatabase:
                 val = None
             else:
                 val = rec.value(i)
-                if isinstance(val, QtCore.QByteArray):
+                if isinstance(val, Qt.QByteArray):
                     val = pickle.loads(str(val))
                 #v = rec.value(i)   ## required when not using V2 API for QVariant
                 #t = v.type()
-                #if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
+                #if t in [Qt.QVariant.Int, Qt.QVariant.LongLong]:
                     #val = v.toInt()[0]
-                #if t in [QtCore.QVariant.Double]:
+                #if t in [Qt.QVariant.Double]:
                     #val = v.toDouble()[0]
-                #elif t == QtCore.QVariant.String:
+                #elif t == Qt.QVariant.String:
                     #val = str(v.toString())
-                #elif t == QtCore.QVariant.ByteArray:
+                #elif t == Qt.QVariant.ByteArray:
                     #val = pickle.loads(str(v.toByteArray()))
             data[n] = val
         return data
@@ -547,7 +547,7 @@ class AnalysisDatabase(SqliteDatabase):
         return True
 
 if __name__ == '__main__':
-    print("Avaliable DB drivers:", list(QtSql.QSqlDatabase.drivers()))
+    print("Avaliable DB drivers:", list(Qt.QSqlDatabase.drivers()))
 
     db = SqliteDatabase()
     db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob)")

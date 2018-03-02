@@ -1,8 +1,8 @@
 from __future__ import print_function
-from PyQt4 import QtCore
+from acq4.util import Qt
 from .debug import enableFaulthandler
 
-class Thread(QtCore.QThread):
+class Thread(Qt.QThread):
     """ Simple wrapper around QThread that allows customization of behavior for all threads
     across ACQ4.
 
@@ -10,7 +10,7 @@ class Thread(QtCore.QThread):
     the new thread.
     """
     def __init__(self, *args, **kwds):
-        QtCore.QThread.__init__(self, *args, **kwds)
+        Qt.QThread.__init__(self, *args, **kwds)
 
         # sneaky trick: force all subclasses to use our run wrapper
         self.__subclass_run = self.run

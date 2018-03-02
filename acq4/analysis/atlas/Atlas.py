@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from . import atlasCtrlTemplate
 import acq4.pyqtgraph as pg
 from acq4.util.debug import Profiler
 
-class Atlas(QtCore.QObject):
+class Atlas(Qt.QObject):
     
     DBIdentity = None
     
     """An Atlas is responsible for determining the position of images, cells, scan data, etc relative
     to a common coordinate system."""
     def __init__(self, state=None):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         if state is not None:
             self.restoreState(state)
     
@@ -38,10 +38,10 @@ class Atlas(QtCore.QObject):
     #def close(self):
         #pass
         
-class AtlasCtrlWidget(QtGui.QWidget):
+class AtlasCtrlWidget(Qt.QWidget):
     
     def __init__(self, atlas, host):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         
         self.sliceDir = None
         #self.blockUpdate = 0  ## used in CNAtlas to block re-rendering
@@ -54,7 +54,7 @@ class AtlasCtrlWidget(QtGui.QWidget):
         self.loader = host.getElement('File Loader')
         self.loader.sigBaseChanged.connect(self.baseDirChanged)        
         
-        self.ctrl = QtGui.QWidget()
+        self.ctrl = Qt.QWidget()
         self.ui = atlasCtrlTemplate.Ui_Form()
         self.ui.setupUi(self)        
         self.ui.setSliceBtn.clicked.connect(self.setSliceClicked)

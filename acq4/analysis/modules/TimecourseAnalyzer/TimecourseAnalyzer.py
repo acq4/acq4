@@ -35,10 +35,10 @@ class TimecourseAnalyzer(AnalysisModule):
         tables = OrderedDict([(self.dbIdentity+'.traces', 'TimecourseAnalyzer_traces')])
         self.dbGui = DatabaseGui(dm=host.dataManager(), tables=tables)
 
-        self.ctrl = QtGui.QWidget()
-        self.ctrl.setLayout(QtGui.QVBoxLayout())
-        self.analyzeBtn = QtGui.QPushButton('Analyze')
-        self.storeToDBBtn = QtGui.QPushButton('Store to DB')
+        self.ctrl = Qt.QWidget()
+        self.ctrl.setLayout(Qt.QVBoxLayout())
+        self.analyzeBtn = Qt.QPushButton('Analyze')
+        self.storeToDBBtn = Qt.QPushButton('Store to DB')
         self.ctrl.layout().addWidget(self.analyzeBtn)
         self.ctrl.layout().addWidget(self.storeToDBBtn)
 

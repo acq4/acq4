@@ -18,14 +18,14 @@ from six.moves import range
 
 class Scanner(Device, OptomechDevice):
     
-    sigShutterChanged = QtCore.Signal()
+    sigShutterChanged = Qt.Signal()
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
         
         self.config = config
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None
         self.calibrationIndex = None
@@ -148,7 +148,7 @@ class Scanner(Device, OptomechDevice):
             
         ## map from global coordinates to parent
         parentPos = self.mapGlobalToParent((x,y))
-        if isinstance(parentPos, QtCore.QPointF):
+        if isinstance(parentPos, Qt.QPointF):
             x = parentPos.x()
             y = parentPos.y()
         else:

@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from .Device import Device
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
@@ -48,25 +48,25 @@ class OptomechDevice(object):
     
     ## these signals are proxied from the OptomechDevice object
     ## we do this to avoid QObject double-inheritance issues.
-    class SignalProxyObject(QtCore.QObject):
-        sigTransformChanged = QtCore.Signal(object)        # self
+    class SignalProxyObject(Qt.QObject):
+        sigTransformChanged = Qt.Signal(object)        # self
             ## emitted when this device's transform changes
-        sigGlobalTransformChanged = QtCore.Signal(object, object)  # self, changed device
+        sigGlobalTransformChanged = Qt.Signal(object, object)  # self, changed device
             ## emitted when the transform for this device or any of its parents changes
             
-        sigSubdeviceTransformChanged = QtCore.Signal(object, object)  ## self, subdev
+        sigSubdeviceTransformChanged = Qt.Signal(object, object)  ## self, subdev
             ## Emitted when the transform of a subdevice has changed
-        sigGlobalSubdeviceTransformChanged = QtCore.Signal(object, object, object)  # self, dev, subdev
+        sigGlobalSubdeviceTransformChanged = Qt.Signal(object, object, object)  # self, dev, subdev
             ## Emitted when the transform of a subdevice or any (grand)parent's subdevice has changed
             
-        sigSubdeviceChanged = QtCore.Signal(object, object, object) ## self, new subdev, old subdev
+        sigSubdeviceChanged = Qt.Signal(object, object, object) ## self, new subdev, old subdev
             ## Emitted when this device changes its current subdevice
-        sigGlobalSubdeviceChanged = QtCore.Signal(object, object, object, object) ## self, dev, new subdev, old subdev
+        sigGlobalSubdeviceChanged = Qt.Signal(object, object, object, object) ## self, dev, new subdev, old subdev
             ## Emitted when this device or any (grand)parent changes its current subdevice
     
-        sigSubdeviceListChanged = QtCore.Signal(object) ## self
+        sigSubdeviceListChanged = Qt.Signal(object) ## self
             ## Emitted when this device changes its list of available subdevices
-        sigGlobalSubdeviceListChanged = QtCore.Signal(object, object) ## self, dev
+        sigGlobalSubdeviceListChanged = Qt.Signal(object, object) ## self, dev
             ## Emitted when this device or any (grand)parent changes its list of available subdevices
     
     def __init__(self, dm, config, name):
@@ -228,9 +228,9 @@ class OptomechDevice(object):
             retType = type(obj)
             if np.isscalar(obj[0]):
                 if len(obj) == 2:
-                    obj = QtCore.QPointF(*obj)
+                    obj = Qt.QPointF(*obj)
                 elif len(obj) == 3:
-                    obj = QtGui.QVector3D(*obj)
+                    obj = Qt.QVector3D(*obj)
                 else:
                     raise TypeError("Cannot map %s of length %d." % (type(obj).__name__, len(obj)))
             elif isinstance(obj[0], np.ndarray):
@@ -238,12 +238,12 @@ class OptomechDevice(object):
             else:
                 raise Exception ('Cannot map--object of type %s ' % str(type(obj[0])))
 
-        if isinstance(obj, QtCore.QPointF):
+        if isinstance(obj, Qt.QPointF):
             ret = tr.map(obj)
             if retType is not None:
                 return retType([ret.x(), ret.y()])
             return ret
-        elif isinstance(obj, QtGui.QVector3D):
+        elif isinstance(obj, Qt.QVector3D):
             ret = tr.map(obj)
             if retType is not None:
                 return retType([ret.x(), ret.y(), ret.z()])
@@ -274,7 +274,7 @@ class OptomechDevice(object):
         *subdev* may be the name of the device or the device itself.
         """
         with self.__lock:
-            tr = QtGui.QMatrix4x4(self.__transform)
+            tr = Qt.QMatrix4x4(self.__transform)
             
             ## if a subdevice is specified, multiply by the subdevice's transform before returning
             dev = self.getSubdevice(subdev)
@@ -289,7 +289,7 @@ class OptomechDevice(object):
         """
         with self.__lock:
             if self.__inverseTransform == 0:
-                tr = QtGui.QMatrix4x4(self.__transform)
+                tr = Qt.QMatrix4x4(self.__transform)
                 if tr is None:
                     self.__inverseTransform = None
                 else:
@@ -297,7 +297,7 @@ class OptomechDevice(object):
                     if not invertible:
                         raise Exception("Transform is not invertible.")
                     self.__inverseTransform = inv
-            tr = QtGui.QMatrix4x4(self.__inverseTransform)
+            tr = Qt.QMatrix4x4(self.__inverseTransform)
             if subdev == 0:  ## indicates we should skip any subdevices
                 return tr
             ## if a subdevice is specified, multiply by the subdevice's transform before returning
@@ -331,7 +331,7 @@ class OptomechDevice(object):
             if subdev is None: ## return cached transform
                 if self.__globalTransform == 0:
                     self.__globalTransform = self.__computeGlobalTransform()
-                return QtGui.QMatrix4x4(self.__globalTransform)
+                return Qt.QMatrix4x4(self.__globalTransform)
             else:
                 return self.__computeGlobalTransform(subdev)
                 
@@ -371,7 +371,7 @@ class OptomechDevice(object):
                         if not invertible:
                             raise Exception("Transform is not invertible.")
                         self.__inverseGlobalTransform = inv
-                return QtGui.QMatrix4x4(self.__inverseGlobalTransform)
+                return Qt.QMatrix4x4(self.__inverseGlobalTransform)
             else:
                 return self.__computeGlobalTransform(subdev, inverse=True)
     
@@ -596,7 +596,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
     def makeGroup(self, dev, subdev):
         """Construct a QGraphicsItemGroup for the specified device/subdevice.
         This is a good method to extend in subclasses."""
-        newGroup = QtGui.QGraphicsItemGroup()
+        newGroup = Qt.QGraphicsItemGroup()
         newGroup.setTransform(pg.SRTTransform(dev.deviceTransform(subdev)))
         return newGroup
         

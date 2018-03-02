@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.multiprocess as mp
@@ -59,16 +59,16 @@ def loadScanSequence(fh, host):
 
             
 
-class Scan(QtCore.QObject):
+class Scan(Qt.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
     ### It handles processing and caching data 
-    sigEventsChanged = QtCore.Signal(object)
-    sigLockStateChanged = QtCore.Signal(object)  # self
-    sigItemVisibilityChanged = QtCore.Signal(object)
-    sigStorageStateChanged = QtCore.Signal(object) #self
+    sigEventsChanged = Qt.Signal(object)
+    sigLockStateChanged = Qt.Signal(object)  # self
+    sigItemVisibilityChanged = Qt.Signal(object)
+    sigStorageStateChanged = Qt.Signal(object) #self
     
     def __init__(self, host, source, dirHandles, name=None, itemName=None):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self._source = source           ## DirHandle to data for this scan
         self.dirHandles = []            ## List of DirHandles, one per spot
         

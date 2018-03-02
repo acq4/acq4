@@ -3,7 +3,7 @@ from __future__ import print_function
 from acq4.modules.Module import *
 from .CameraWindow import CameraWindow
 import os
-from PyQt4 import QtGui
+from acq4.util import Qt
 
 class Camera(Module):
     moduleDisplayName = "Camera"
@@ -13,7 +13,7 @@ class Camera(Module):
         Module.__init__(self, manager, name, config)
         self.ui = CameraWindow(self)
         mp = os.path.dirname(__file__)
-        self.ui.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
+        self.ui.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         manager.declareInterface(name, ['cameraModule'], self)
         
     def window(self):

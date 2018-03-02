@@ -7,13 +7,13 @@ import weakref
 from acq4.util.Mutex import *
 
 
-class InterfaceDirectory(QtCore.QObject):
+class InterfaceDirectory(Qt.QObject):
     """Class for managing a phonebook of interfaces.
     Any object in the program may advertise its services via this directory"""
-    sigInterfaceListChanged = QtCore.Signal(object)
+    sigInterfaceListChanged = Qt.Signal(object)
     
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.lock = Mutex(Mutex.Recursive)
         #self.objList = weakref.WeakValueDictionary() # maps objName:object
         self.nameList = {}                           # maps objName:typeName:None

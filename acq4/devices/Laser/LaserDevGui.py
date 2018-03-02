@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.Manager import getManager, logExc, logMsg
 from .devTemplate import Ui_Form
 import numpy as np
@@ -9,10 +9,10 @@ import six
 import time
 
 
-class LaserDevGui(QtGui.QWidget):
+class LaserDevGui(Qt.QWidget):
     
     def __init__(self, dev):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
@@ -249,7 +249,7 @@ class LaserDevGui(QtGui.QWidget):
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
-            item = QtGui.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
+            item = Qt.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
             item.key = opticState
             self.ui.calibrationList.addTopLevelItem(item)
             

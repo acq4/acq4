@@ -24,7 +24,7 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.metaarray import MetaArray
 from acq4.util import DataManager
 from acq4.pyqtgraph import configfile
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 class ScriptProcessor(AnalysisModule):
@@ -58,7 +58,7 @@ class ScriptProcessor(AnalysisModule):
             be read, or the dialog was cancelled, the return result will be None
         """
         
-        self.script_name = QtGui.QFileDialog.getOpenFileName(
+        self.script_name = Qt.QFileDialog.getOpenFileName(
                    None, 'Open Script File', '', 'Script (*.cfg)')
         if self.script_name == '':  # cancel returns empty string
             return None

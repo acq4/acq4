@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from collections import OrderedDict
 from .Map import Map
 import acq4.util.DatabaseGui as DatabaseGui
@@ -9,10 +9,10 @@ from acq4.Manager import logMsg, logExc
 import acq4.pyqtgraph as pg
 import os
 
-class DBCtrl(QtGui.QWidget):
+class DBCtrl(Qt.QWidget):
     """GUI for reading and writing to the database."""
     def __init__(self, host, identity):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.host = host   ## host is the parent Photostim object
         self.dbIdentity = identity
         
@@ -23,7 +23,7 @@ class DBCtrl(QtGui.QWidget):
             (self.dbIdentity+'.events', 'Photostim_events')
         ])
         self.maps = []
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = Qt.QVBoxLayout()
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
@@ -35,7 +35,7 @@ class DBCtrl(QtGui.QWidget):
         #self.scanTree = TreeWidget.TreeWidget()
         #self.layout.addWidget(self.scanTree)
         self.ui = MapCtrlTemplate.Ui_Form()
-        self.mapWidget = QtGui.QWidget()
+        self.mapWidget = Qt.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
         self.ui.scanTree.setAcceptDrops(False)
@@ -355,7 +355,7 @@ class ScanTreeItem(pg.TreeWidgetItem):
         
     def changed(self, col):
         ## when scan items are checked/unchecked, show/hide the canvasItem
-        checked = self.checkState(col) == QtCore.Qt.Checked
+        checked = self.checkState(col) == Qt.Qt.Checked
         if col == 1:
             self.scan.canvasItem().setVisible(checked)
             
@@ -382,23 +382,23 @@ class ScanTreeItem(pg.TreeWidgetItem):
         
     def scanItemVisibilityChanged(self, scan):
         cItem = scan.canvasItem()
-        checked = self.checkState(1) == QtCore.Qt.Checked
+        checked = self.checkState(1) == Qt.Qt.Checked
         vis = cItem.isVisible()
         if vis == checked:
             return
-        self.setCheckState(1, QtCore.Qt.Checked if vis else QtCore.Qt.Unchecked)
+        self.setCheckState(1, Qt.Qt.Checked if vis else Qt.Qt.Unchecked)
             
 
-class SaveLockWidget(QtGui.QWidget):
-    sigLockClicked = QtCore.Signal(object)  # self, lock
+class SaveLockWidget(Qt.QWidget):
+    sigLockClicked = Qt.Signal(object)  # self, lock
     
     def __init__(self):
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QHBoxLayout()
+        Qt.QWidget.__init__(self)
+        self.layout = Qt.QHBoxLayout()
         self.setLayout(self.layout)
-        self.saveLabel = QtGui.QLabel()
+        self.saveLabel = Qt.QLabel()
         self.saveLabel.setScaledContents(True)
-        self.lockBtn = QtGui.QPushButton()
+        self.lockBtn = Qt.QPushButton()
         self.lockBtn.setFixedWidth(20)
         self.lockBtn.setFixedHeight(20)
         self.saveLabel.setFixedWidth(20)
@@ -411,8 +411,8 @@ class SaveLockWidget(QtGui.QWidget):
         
         path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'icons'))
         images = [os.path.join(path, x) for x in ['locked.png', 'unlocked.png', 'saved.png', 'unsaved.png']]
-        self.images = [QtGui.QPixmap(img) for img in images]
-        self.icons = [QtGui.QIcon(img) for img in self.images[:2]]
+        self.images = [Qt.QPixmap(img) for img in images]
+        self.icons = [Qt.QIcon(img) for img in self.images[:2]]
         if any([img.width() == 0 for img in self.images]):
             raise Exception("Could not load icons:", images)
         self.setSaved(False)

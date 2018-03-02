@@ -3,14 +3,14 @@ from __future__ import print_function
 
 if __name__ == '__main__':
     from . import items
-    app = QtGui.QApplication([])
-    w1 = QtGui.QMainWindow()
+    app = Qt.QApplication([])
+    w1 = Qt.QMainWindow()
     c1 = Canvas(name="Canvas1")
     w1.setCentralWidget(c1)
     w1.show()
     w1.resize(600, 600)
     
-    w2 = QtGui.QMainWindow()
+    w2 = Qt.QMainWindow()
     c2 = Canvas(name="Canvas2")
     w2.setCentralWidget(c2)
     w2.show()

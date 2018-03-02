@@ -6,7 +6,7 @@ sys.path = [os.path.join(md, '..', '..', 'util')] + sys.path
 dataFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus.ma"
 labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 #import acq4.pyqtgraph.ColorButton as ColorButton
 #import acq4.pyqtgraph.ProgressDialog as ProgressDialog
@@ -16,18 +16,18 @@ import acq4.util.metaarray as metaarray
 import acq4.util.debug as debug
 import user
 
-QtGui.QApplication.setGraphicsSystem('raster')
-app = QtGui.QApplication([])
+Qt.QApplication.setGraphicsSystem('raster')
+app = Qt.QApplication([])
 
-win = QtGui.QMainWindow()
-cw = QtGui.QWidget()
+win = Qt.QMainWindow()
+cw = Qt.QWidget()
 win.setCentralWidget(cw)
 ui = builderTemplate.Ui_Form()
 ui.setupUi(cw)
 win.show()
 win.resize(800,600)
 
-ui.labelTree.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+ui.labelTree.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
 
 data = metaarray.MetaArray(file=dataFile, mmap=True)
 ## data must have axes (anterior, dorsal, right)
@@ -50,8 +50,8 @@ vb.invertY(False)
 
 
 dataImg = pg.ImageItem()
-labelImg = pg.ImageItem() # mode=QtGui.QPainter.CompositionMode_Plus)
-#labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Overlay)
+labelImg = pg.ImageItem() # mode=Qt.QPainter.CompositionMode_Plus)
+#labelImg.setCompositionMode(Qt.QPainter.CompositionMode_Overlay)
 labelImg.setZValue(10)
 labelImg.setOpacity(1)
 vb.addItem(dataImg)
@@ -84,25 +84,25 @@ def init():
 def keyPressEvent(ev):
     k = ev.key()
     mod = ev.modifiers()
-    if k == QtCore.Qt.Key_Right:
-        if mod & QtCore.Qt.ControlModifier:
+    if k == Qt.Qt.Key_Right:
+        if mod & Qt.Qt.ControlModifier:
             copyLabel(1)
         ui.zSlider.setValue(ui.zSlider.value()+1)
-    elif k == QtCore.Qt.Key_Left:
-        if mod & QtCore.Qt.ControlModifier:
+    elif k == Qt.Qt.Key_Left:
+        if mod & Qt.Qt.ControlModifier:
             copyLabel(-1)
         ui.zSlider.setValue(ui.zSlider.value()-1)
-    elif k == QtCore.Qt.Key_Equal:
+    elif k == Qt.Qt.Key_Equal:
         ui.radiusSpin.setValue(ui.radiusSpin.value()+1)
-    elif k == QtCore.Qt.Key_Minus:
+    elif k == Qt.Qt.Key_Minus:
         ui.radiusSpin.setValue(ui.radiusSpin.value()-1)
-    elif k == QtCore.Qt.Key_Space:
+    elif k == Qt.Qt.Key_Space:
         if labelImg.isVisible():
             labelImg.setVisible(False)
         else:
             updateLabelImage()
             labelImg.setVisible(True)
-    elif k == QtCore.Qt.Key_G:
+    elif k == Qt.Qt.Key_G:
         ui.greyCheck.toggle()
     else:
         ev.ignore()
@@ -121,7 +121,7 @@ def draw(src, dst, mask, srcSlice, dstSlice, ev):
     mod = ev.modifiers()
     mask = mask[srcSlice]
     src = src[srcSlice].astype(l.dtype)
-    if mod & QtCore.Qt.ShiftModifier:
+    if mod & Qt.Qt.ShiftModifier:
         #src = 1-src
         l[dstSlice] &= ~(src * 2**ui.labelSpin.value())
     #l[dstSlice] = l[dstSlice] * (1-mask) + src * mask
@@ -152,12 +152,12 @@ def addLabel(info=None):
         info['color'] = pg.mkColor(info['color'])
     
     l = info['id']
-    item = QtGui.QTreeWidgetItem([str(l), info['name'], ''])
-    item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsUserCheckable)
+    item = Qt.QTreeWidgetItem([str(l), info['name'], ''])
+    item.setFlags(item.flags() | Qt.Qt.ItemIsEditable | Qt.Qt.ItemIsUserCheckable)
     if info['visible']:
-        item.setCheckState(0, QtCore.Qt.Checked)
+        item.setCheckState(0, Qt.Qt.Checked)
     else:
-        item.setCheckState(0, QtCore.Qt.Unchecked)
+        item.setCheckState(0, Qt.Qt.Unchecked)
     btn = pg.ColorButton(color=info['color'])
     ui.labelTree.addTopLevelItem(item)
     ui.labelTree.setItemWidget(item, 2, btn)
@@ -171,9 +171,9 @@ def addLabel(info=None):
 
 def overlayToggled(b):
     if b:
-        labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Overlay)
+        labelImg.setCompositionMode(Qt.QPainter.CompositionMode_Overlay)
     else:
-        labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_SourceOver)
+        labelImg.setCompositionMode(Qt.QPainter.CompositionMode_SourceOver)
     updateImage()
 
 def itemChanged(*args):
@@ -187,7 +187,7 @@ def writeMeta():
             'id': k,
             'name': str(v['item'].text(1)),
             'color': pg.colorStr(v['btn'].color()),
-            'visible': v['item'].checkState(0) == QtCore.Qt.Checked
+            'visible': v['item'].checkState(0) == Qt.Qt.Checked
         } )
     label._info[-1]['labels'] = meta
     label.writeMeta(labelFile)
@@ -232,7 +232,7 @@ def renderLabels(z, sl=None, overlay=False):
     val = ui.labelSlider.value()/128.
     
     for k, v in labelInfo.items():
-        if not v['item'].checkState(0) == QtCore.Qt.Checked:
+        if not v['item'].checkState(0) == Qt.Qt.Checked:
             continue
         c = pg.colorTuple(v['btn'].color())
         mask = (lsl&(2**k) > 0)

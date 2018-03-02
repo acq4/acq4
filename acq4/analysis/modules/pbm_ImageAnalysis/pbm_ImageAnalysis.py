@@ -24,7 +24,7 @@ This module provides:
     Has potential dependency on openCV for some functions.
 """
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import os
@@ -127,19 +127,19 @@ class pbm_ImageAnalysis(AnalysisModule):
         # ------ Graphical Elements ------
         self._sizeHint = (1280, 900)   # try to establish size of window
 
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         
-        self.ctrlROIFuncWidget = QtGui.QWidget()
+        self.ctrlROIFuncWidget = Qt.QWidget()
         self.ctrlROIFunc = ctrlROIsTemplate.Ui_Form()
         self.ctrlROIFunc.setupUi(self.ctrlROIFuncWidget)
 
-        self.ctrlImageFuncWidget = QtGui.QWidget()
+        self.ctrlImageFuncWidget = Qt.QWidget()
         self.ctrlImageFunc = ctrlAnalysisTemplate.Ui_Form()
         self.ctrlImageFunc.setupUi(self.ctrlImageFuncWidget)
         
-        self.ctrlPhysFuncWidget = QtGui.QWidget()
+        self.ctrlPhysFuncWidget = Qt.QWidget()
         self.ctrlPhysFunc = ctrlPhysiologyTemplate.Ui_Form()
         self.ctrlPhysFunc.setupUi(self.ctrlPhysFuncWidget)
         
@@ -670,7 +670,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.imageData = self.imageData.transpose(0, 2, 1)
        # compute global transform
         tr = self.rs.imageTransform()
-        st = pg.QtGui.QTransform()
+        st = Qt.QTransform()
         st.scale(self.downSample, 1)
         tr = st * tr
         self.pmtTransform = pg.SRTTransform3D(tr)
@@ -710,7 +710,7 @@ class pbm_ImageAnalysis(AnalysisModule):
 
     def getCSVFile(self):
         """ read the CSV file for the ROI timing data """
-        fd = QtGui.QFileDialog(self)
+        fd = Qt.QFileDialog(self)
         self.fileName = fd.getOpenFileName()
         from os.path import isfile
         allcsvdata = []
@@ -1481,7 +1481,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                     #     self.MPL_plots.plot([x1, x2], [y1, y2],
                     #         linestyle = '--', color='grey', marker='o', linewidth=minline)
                     # else:
-                    #     pn = pg.mkPen(width=minline, color=[128, 128, 128, 192], style=QtCore.Qt.DashLine)
+                    #     pn = pg.mkPen(width=minline, color=[128, 128, 128, 192], style=Qt.Qt.DashLine)
                     #     plt.plot([x1, x2], [y1, y2], pen = pn)
                 else:
                     lw = maxline*(abs(self.IXC_Strength[i, j])-threshold)/(maxStr-threshold)+minline
@@ -1573,7 +1573,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         roi.ID = self.nROI  # give each ROI a unique identification number
         rgb = self.RGB[self.nROI]
         self.nROI = self.nROI + 1
-        roi.setPen(QtGui.QPen(QtGui.QColor(rgb[0], rgb[1], rgb[2])))
+        roi.setPen(Qt.QPen(Qt.QColor(rgb[0], rgb[1], rgb[2])))
         roi.color = rgb
         self.AllRois.append(roi)
         self.imageView.addItem(roi)
@@ -1846,7 +1846,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         newWin.show()
         img = pg.ImageItem(border=border)
         view.scene().addItem(img)
-        view.setRange(QtCore.QRectF(0, 0, 500, 500))
+        view.setRange(Qt.QRectF(0, 0, 500, 500))
         return(newWin, view, img)
 
     def saveROI(self, fileName=None):
@@ -1867,7 +1867,7 @@ class pbm_ImageAnalysis(AnalysisModule):
                             self.AllRois[i].boundingRect().height(), self.AllRois[i].boundingRect().width()])
         data = data.T ## transpose
         if fileName is None or fileName is False:
-            fileName= QtGui.QFileDialog.getSaveFileName(None, "Save ROI as csv file", "",
+            fileName= Qt.QFileDialog.getSaveFileName(None, "Save ROI as csv file", "",
                 self.tr("CSV Files (*.csv)"))
             if not fileName:
                 return
@@ -1899,7 +1899,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         """Retrieve the ROI locations from a file, plot them on the image, and compute the traces."""
         self.clearAllROI()  # always start with a clean slate.
         if fileName is False or fileName is None:
-            fileName = QtGui.QFileDialog.getOpenFileName(None, u'Retrieve ROI data', u'', u'ROIs (*.roi)')
+            fileName = Qt.QFileDialog.getOpenFileName(None, u'Retrieve ROI data', u'', u'ROIs (*.roi)')
         if fileName:
             fd = open(fileName, 'r')
             for line in fd:
@@ -3127,12 +3127,12 @@ class pbm_ImageAnalysis(AnalysisModule):
         return events
 
 
-class DBCtrl(QtGui.QWidget):
+class DBCtrl(Qt.QWidget):
     def __init__(self, host, identity):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.host = host
 
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = Qt.QVBoxLayout()
         self.setLayout(self.layout)
         self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables={identity: 'EventDetector_events'})
         self.storeBtn = pg.FeedbackButton("Store to DB")
@@ -3144,7 +3144,7 @@ class DBCtrl(QtGui.QWidget):
 
 
 
-class pyqtgrwindow(QtGui.QMainWindow):
+class pyqtgrwindow(Qt.QMainWindow):
     def __init__(self, parent=None, title = '', size=(500,500)):
         super(pyqtgrwindow, self).__init__(parent)
         self.view = pg.GraphicsView()

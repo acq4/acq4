@@ -37,10 +37,10 @@ except:
 
 
 def dirDialog(startDir='', title="Select Directory"):
-  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+  return str(Qt.QFileDialog.getExistingDirectory(None, title, startDir))
 
 def fileDialog():
-  return str(QtGui.QFileDialog.getOpenFileName())
+  return str(Qt.QFileDialog.getOpenFileName())
 
 
 

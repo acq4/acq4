@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
@@ -14,15 +14,15 @@ class ImageAnalysis(AnalysisModule):
         self.background = None
         
         #self.view = pg.GraphicsView()
-        self.ctrl = QtGui.QWidget()
-        l = QtGui.QGridLayout()
+        self.ctrl = Qt.QWidget()
+        l = Qt.QGridLayout()
         self.ctrl.setLayout(l)
         self.ctrl.layout = l
-        #self.loadBgBtn = QtGui.QPushButton('load reference')
+        #self.loadBgBtn = Qt.QPushButton('load reference')
         #l.addWidget(self.loadBgBtn, 0, 0)
-        self.addRoiBtn = QtGui.QPushButton('add ROI')
+        self.addRoiBtn = Qt.QPushButton('add ROI')
         l.addWidget(self.addRoiBtn, 0, 0)
-        s = QtGui.QSpinBox()
+        s = Qt.QSpinBox()
         s.setMaximum(10)
         s.setMinimum(1)
         self.nsegSpin = s

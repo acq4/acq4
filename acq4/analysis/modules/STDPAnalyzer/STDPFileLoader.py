@@ -1,6 +1,6 @@
 from __future__ import print_function
 from acq4.util.FileLoader import FileLoader
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 
 class STDPFileLoader(FileLoader):
 
@@ -10,7 +10,7 @@ class STDPFileLoader(FileLoader):
         self.ui.loadBtn.setText('Load EPSP File')
         self.ui.loadBtn.clicked.disconnect()
 
-        self.ui.loadPairingBtn = QtGui.QPushButton('Load Pairing File')
+        self.ui.loadPairingBtn = Qt.QPushButton('Load Pairing File')
         self.ui.verticalLayout_2.insertWidget(1, self.ui.loadPairingBtn)
 
         self.ui.loadBtn.clicked.connect(self.loadEPSPClicked)
@@ -20,37 +20,37 @@ class STDPFileLoader(FileLoader):
         files = self.ui.dirTree.selectedFiles()
         #self.loadFile(fh)
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             for fh in files:
                 if self.host is None:
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
                 elif self.host.loadEPSPFileRequested([fh]):
                     name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-                    item = QtGui.QTreeWidgetItem([name])
+                    item = Qt.QTreeWidgetItem([name])
                     item.file = fh
                     self.ui.fileTree.addTopLevelItem(item)
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
 
     def loadPairingClicked(self):
         files = self.ui.dirTree.selectedFiles()
         #self.loadFile(fh)
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             for fh in files:
                 if self.host is None:
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
                 elif self.host.loadPairingFileRequested([fh]):
                     name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-                    item = QtGui.QTreeWidgetItem([name])
+                    item = Qt.QTreeWidgetItem([name])
                     item.file = fh
                     self.ui.fileTree.addTopLevelItem(item)
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
      

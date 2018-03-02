@@ -5,7 +5,7 @@ For combining photostimulation maps across cells and displaying against 3D atlas
 
 
 """
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
@@ -28,16 +28,16 @@ class MapCombiner(AnalysisModule):
         
         self.ctrlLayout = pg.LayoutWidget()
         
-        self.reloadBtn = QtGui.QPushButton('Reload Data')
+        self.reloadBtn = Qt.QPushButton('Reload Data')
         self.ctrlLayout.addWidget(self.reloadBtn)
         self.ctrl = ptree.ParameterTree(showHeader=False)
         self.ctrlLayout.addWidget(self.ctrl, row='next', col=0)
-        self.filterBtn = QtGui.QPushButton('Filter')
+        self.filterBtn = Qt.QPushButton('Filter')
         self.ctrlLayout.addWidget(self.filterBtn, row='next', col=0)
         
-        self.cellList = QtGui.QListWidget()
+        self.cellList = Qt.QListWidget()
         self.cellList.setSelectionMode(self.cellList.ExtendedSelection)
-        self.filterText = QtGui.QTextEdit("selected = data")
+        self.filterText = Qt.QTextEdit("selected = data")
         self.ctrlLayout.addWidget(self.filterText, row='next', col=0)
         self.ctrlLayout.addWidget(self.cellList, row='next', col=0)
 
@@ -179,7 +179,7 @@ class MapCombiner(AnalysisModule):
         cells = set(self.filtered['cell'])
         self.cellList.clear()
         for c in cells:
-            item = QtGui.QListWidgetItem(c.name())
+            item = Qt.QListWidgetItem(c.name())
             item.dh = c
             self.cellList.addItem(item)
         self.cellList.selectAll()

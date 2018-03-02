@@ -5,7 +5,7 @@ from six.moves import reduce
 
 from acq4.modules.Module import *
 from .TaskRunnerTemplate import *
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.util.DirTreeWidget as DirTreeWidget
 import acq4.util.configfile as configfile
 from collections import OrderedDict
@@ -24,17 +24,17 @@ from acq4.util.StatusBar import StatusBar
 from functools import reduce
 
 
-class Window(QtGui.QMainWindow):
+class Window(Qt.QMainWindow):
     def __init__(self, pr):
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         mp = os.path.dirname(__file__)
-        self.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
+        self.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.pr = pr
 
         self.stateFile = os.path.join('modules', self.pr.name + '_ui.cfg')
         uiState = getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
-            geom = QtCore.QRect(*uiState['geometry'])
+            geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         
     def closeEvent(self, ev):
@@ -65,12 +65,12 @@ class TaskRunner(Module):
     moduleDisplayName = "Task Runner"
     moduleCategory = "Acquisition"
     
-    sigTaskPaused = QtCore.Signal()
-    sigTaskFinished = QtCore.Signal()       ## emitted when the task thread exits (end of task, end of sequence, or exit due to error)
-    sigNewFrame = QtCore.Signal(object)         ## emitted at the end of each individual task
-    sigTaskSequenceStarted = QtCore.Signal(object)  ## called whenever single task OR task sequence has started
-    sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY task, including within sequences
-    sigTaskChanged = QtCore.Signal(object, object)
+    sigTaskPaused = Qt.Signal()
+    sigTaskFinished = Qt.Signal()       ## emitted when the task thread exits (end of task, end of sequence, or exit due to error)
+    sigNewFrame = Qt.Signal(object)         ## emitted at the end of each individual task
+    sigTaskSequenceStarted = Qt.Signal(object)  ## called whenever single task OR task sequence has started
+    sigTaskStarted = Qt.Signal(object)      ## called at start of EVERY task, including within sequences
+    sigTaskChanged = Qt.Signal(object, object)
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
@@ -118,9 +118,9 @@ class TaskRunner(Module):
         self.currentTask = None   ## pointer to current task object
         
         for m in analysisModules.MODULES:
-            item = QtGui.QListWidgetItem(m, self.ui.analysisList)
-            item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable )
-            item.setCheckState(QtCore.Qt.Unchecked)
+            item = Qt.QListWidgetItem(m, self.ui.analysisList)
+            item.setFlags(Qt.Qt.ItemIsSelectable | Qt.Qt.ItemIsEnabled | Qt.Qt.ItemIsUserCheckable )
+            item.setCheckState(Qt.Qt.Unchecked)
         
         self.taskThread = TaskThread(self)
         
@@ -156,10 +156,10 @@ class TaskRunner(Module):
         """Return the taskGui for dev. Used by some devices to detect changes in others."""
         ## Create or re-enable the device if needed
         try:
-            item = self.ui.deviceList.findItems(dev, QtCore.Qt.MatchExactly)[0]
+            item = self.ui.deviceList.findItems(dev, Qt.Qt.MatchExactly)[0]
         except:
             raise Exception('Requested device %s does not exist!' % dev)
-        item.setCheckState(QtCore.Qt.Checked)
+        item.setCheckState(Qt.Qt.Checked)
         self.deviceItemClicked(item)
         
         return self.docks[dev].widget()
@@ -192,29 +192,29 @@ class TaskRunner(Module):
         ## Add all devices that exist in the current system
         for d in devList:
             if d not in self.devListItems:
-                self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
-                #self.devListItems[d].setData(32, QtCore.QVariant(d))
+                self.devListItems[d] = Qt.QListWidgetItem(d, self.ui.deviceList)
+                #self.devListItems[d].setData(32, Qt.QVariant(d))
                 self.devListItems[d].setData(32, d)
-            self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(0,0,0)))
+            self.devListItems[d].setForeground(Qt.QBrush(Qt.QColor(0,0,0)))
             
         ## Add all devices that are referenced by the task but do not exist
         for d in protList:
             if d not in self.devListItems:
-                self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
-                self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(150,0,0)))
+                self.devListItems[d] = Qt.QListWidgetItem(d, self.ui.deviceList)
+                self.devListItems[d].setForeground(Qt.QBrush(Qt.QColor(150,0,0)))
             
         ## Make sure flags and checkState are correct for all items
         for d in self.devListItems:
-            self.devListItems[d].setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable )
+            self.devListItems[d].setFlags(Qt.Qt.ItemIsSelectable | Qt.Qt.ItemIsEnabled | Qt.Qt.ItemIsUserCheckable )
             if d in protList:
-                self.devListItems[d].setCheckState(QtCore.Qt.Checked)
+                self.devListItems[d].setCheckState(Qt.Qt.Checked)
             else:
-                self.devListItems[d].setCheckState(QtCore.Qt.Unchecked)
+                self.devListItems[d].setCheckState(Qt.Qt.Unchecked)
         
     def deviceItemClicked(self, item):
         """Respond to clicks in the device list. Add/remove devices from the current task and update docks."""
         name = str(item.text())
-        if item.checkState() == QtCore.Qt.Unchecked:
+        if item.checkState() == Qt.Qt.Unchecked:
             self.currentTask.removeDevice(name)
         else:
             self.currentTask.addDevice(name)
@@ -222,34 +222,34 @@ class TaskRunner(Module):
 
     def analysisItemClicked(self, item):
         name = str(item.text())
-        if item.checkState() == QtCore.Qt.Checked:
+        if item.checkState() == Qt.Qt.Checked:
             if self.createAnalysisDock(name) is False:
-                item.setCheckState(QtCore.Qt.Unchecked)
+                item.setCheckState(Qt.Qt.Unchecked)
         else:
             self.removeAnalysisDock(name)
         
     def createAnalysisDock(self, mod):
         try:
             m = analysisModules.createAnalysisModule(mod, self)
-            dock = QtGui.QDockWidget(mod)
+            dock = Qt.QDockWidget(mod)
             dock.setFeatures(dock.AllDockWidgetFeatures)
-            dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
+            dock.setAllowedAreas(Qt.Qt.BottomDockWidgetArea|Qt.Qt.TopDockWidgetArea)
             dock.setObjectName(mod)
             dock.setWidget(m)
             dock.setAutoFillBackground(True)
             
             self.analysisDocks[mod] = dock
-            self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
+            self.win.addDockWidget(Qt.Qt.BottomDockWidgetArea, dock)
             if self.firstDock is None:
                 self.firstDock = dock
             else:
                 # by default, docks are tabbed. 
                 # if dock state is stored, this will be corrected later.
-                QtGui.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
+                Qt.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                 self.win.tabifyDockWidget(self.firstDock, dock)
             
-            items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
-            items[0].setCheckState(QtCore.Qt.Checked)
+            items = self.ui.analysisList.findItems(mod, Qt.Qt.MatchExactly)
+            items[0].setCheckState(Qt.Qt.Checked)
             
             return True
         except:
@@ -268,8 +268,8 @@ class TaskRunner(Module):
             self.firstDock = None
         self.win.removeDockWidget(dock)
         del self.analysisDocks[mod]
-        items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
-        items[0].setCheckState(QtCore.Qt.Unchecked)
+        items = self.ui.analysisList.findItems(mod, Qt.Qt.MatchExactly)
+        items[0].setCheckState(Qt.Qt.Unchecked)
         
     def fileChanged(self, handle, change, args):
         if change == 'renamed' or change == 'moved':
@@ -365,19 +365,19 @@ class TaskRunner(Module):
                     del self.docks[d]
                     
                 if d in self.docks:
-                    dock = QtGui.QDockWidget(d)
+                    dock = Qt.QDockWidget(d)
                     dock.setFeatures(dock.AllDockWidgetFeatures)
-                    dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
+                    dock.setAllowedAreas(Qt.Qt.BottomDockWidgetArea|Qt.Qt.TopDockWidgetArea)
                     dock.setObjectName(d)
                     dock.setWidget(dw)
                     dock.setAutoFillBackground(True)
-                    dw.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+                    dw.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
                     self.docks[d] = dock
-                    self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
+                    self.win.addDockWidget(Qt.Qt.BottomDockWidgetArea, dock)
                     if self.firstDock is None:
                         self.firstDock = dock
                     else:
-                        QtGui.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
+                        Qt.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                         self.win.tabifyDockWidget(self.firstDock, dock)
                     dock.widget().sigSequenceChanged.connect(self.updateSeqParams)
                     self.updateSeqParams(d)
@@ -404,7 +404,7 @@ class TaskRunner(Module):
         self.ui.sequenceParamList.clear()
         
         ## now's a good time to free up some memory.
-        QtGui.QApplication.instance().processEvents()
+        Qt.QApplication.instance().processEvents()
         gc.collect()
     
     def quit(self):
@@ -442,7 +442,7 @@ class TaskRunner(Module):
     def loadTask(self, handle):
         prof = Profiler('TaskRunner.loadTask', disabled=True)
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             self.stopSequence()
             self.stopSingle()
             
@@ -509,7 +509,7 @@ class TaskRunner(Module):
             prof.mark('position docks')
             
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
             prof.finish()
             
     def saveTask(self, fileHandle=None):
@@ -690,7 +690,7 @@ class TaskRunner(Module):
             now = ptime.time()
             if now - self.lastQtProcessTime > 1.0:
                 self.lastQtProcessTime = now
-                QtGui.QApplication.processEvents()
+                Qt.QApplication.processEvents()
             if progressDlg.wasCanceled():
                 raise Exception("Target sequence computation canceled by user.")
         #prof.mark('done')
@@ -790,7 +790,7 @@ class TaskRunner(Module):
         if self.loopEnabled:
             ct = self.protoStateGroup.state()['loopCycleTime']
             t = max(0, ct - (ptime.time() - self.lastProtoTime))
-            QtCore.QTimer.singleShot(int(t*1000.), self.loop)
+            Qt.QTimer.singleShot(int(t*1000.), self.loop)
         prof.finish()
         
         # good time to collect garbage
@@ -803,7 +803,7 @@ class TaskRunner(Module):
             return
 
         if self.taskThread.isRunning():  ## If a task is still running, delay 10ms and try again
-            QtCore.QTimer.singleShot(10, self.loop)
+            Qt.QTimer.singleShot(10, self.loop)
         else:
             self.testSingle()
 
@@ -841,7 +841,7 @@ class Task:
                 
             if 'winState' in conf:
                 self.conf['windowState'] = conf['winState']
-            self.conf['windowState'] = QtCore.QByteArray.fromPercentEncoding(self.conf['windowState'])
+            self.conf['windowState'] = Qt.QByteArray.fromPercentEncoding(self.conf['windowState'])
             
             self.devices = conf['devices']
             self.enabled = list(self.devices.keys())
@@ -920,16 +920,16 @@ class Task:
         
 class TaskThread(Thread):
     
-    sigPaused = QtCore.Signal()
-    sigNewFrame = QtCore.Signal(object)
-    sigExitFromError = QtCore.Signal()
-    sigTaskStarted = QtCore.Signal(object)
+    sigPaused = Qt.Signal()
+    sigNewFrame = Qt.Signal(object)
+    sigExitFromError = Qt.Signal()
+    sigTaskStarted = Qt.Signal(object)
     
     def __init__(self, ui):
         Thread.__init__(self)
         self.ui = ui
         self.dm = self.ui.manager
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.stopThread = True
         self.abortThread = False
         self.paused = False
@@ -1087,7 +1087,7 @@ class TaskThread(Thread):
             raise Exception('stop', result)
         
         ## Give everyone else a chance to catch up
-        QtCore.QThread.yieldCurrentThread()
+        Qt.QThread.yieldCurrentThread()
         prof.mark('yield')
         prof.finish()
         

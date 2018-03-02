@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from collections import OrderedDict
 
 import six
 
 
-class DictView(QtGui.QTreeWidget):
+class DictView(Qt.QTreeWidget):
     def __init__(self, data, parent=None):
-        QtGui.QTreeWidget.__init__(self, parent)
+        Qt.QTreeWidget.__init__(self, parent)
         self.setData(data)
         self.setColumnCount(2)
         self.setHeaderLabels(['key', 'value'])
@@ -31,13 +31,13 @@ class DictView(QtGui.QTreeWidget):
             v = OrderedDict(zip(inds, v))
         if isinstance(v, dict):
             #print "\nadd tree", k, v
-            node = QtGui.QTreeWidgetItem([name])
+            node = Qt.QTreeWidgetItem([name])
             for k in v:
                 newNode = self.mkNode(k, v[k])
                 node.addChild(newNode)
         else:
             #print "\nadd value", k, str(v)
-            node = QtGui.QTreeWidgetItem([six.text_type(name), six.text_type(v)])
+            node = Qt.QTreeWidgetItem([six.text_type(name), six.text_type(v)])
         return node
         
     def close(self):

@@ -11,8 +11,8 @@ import os, sys
 if __package__ is None:
     import acq4
     __package__ = 'acq4'
-from . import pyqtgraph as pg
-from .pyqtgraph.Qt import QtGui, QtCore
+
+from .util import Qt
 from .Manager import Manager
 from .util.debug import installExceptionHandler
 
@@ -46,7 +46,7 @@ installExceptionHandler()
 
 
 ## Initialize Qt
-app = pg.mkQApp()
+app = Qt.pg.mkQApp()
 
 
 ## Disable garbage collector to improve stability. 
@@ -66,18 +66,14 @@ See the <a href="http://acq4.org/documentation/userGuide/configuration.html">ACQ
 for more information.</center>
 """ % man.configFile
 if man.configFile.endswith(os.path.join('example', 'default.cfg')):
-    mbox = QtGui.QMessageBox()
+    mbox = Qt.QMessageBox()
     mbox.setText(message)
     mbox.setStandardButtons(mbox.Ok)
     mbox.exec_()
 
 
-## Start Qt event loop unless running in interactive mode.
-from . import pyqtgraph as pg
-interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
-
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
-timer = QtCore.QTimer()
+timer = Qt.QTimer()
 def donothing(*args):
     #print "-- beat --"
     x = 0
@@ -87,6 +83,9 @@ timer.timeout.connect(donothing)
 timer.start(1000)
 
 
+## Start Qt event loop unless running in interactive mode.
+from . import pyqtgraph as pg
+interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 if interactive:
     print("Interactive mode; not starting event loop.")
     

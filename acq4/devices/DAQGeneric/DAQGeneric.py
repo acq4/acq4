@@ -76,11 +76,11 @@ class DAQGeneric(Device):
                 invert: True
         
     """
-    sigHoldingChanged = QtCore.Signal(object, object)
+    sigHoldingChanged = Qt.Signal(object, object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self._DGLock = Mutex(QtCore.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
+        self._DGLock = Mutex(Qt.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
         ## Do some sanity checks here on the configuration
         
         # 'channels' key is expected; for backward compatibility we just use the top-level config.
@@ -485,11 +485,11 @@ class DAQGenericTask(DeviceTask):
                 dirHandle.setInfo({(self.dev.name(), ch): self.initialState[ch]})
            
                 
-class DAQDevGui(QtGui.QWidget):
+class DAQDevGui(Qt.QWidget):
     def __init__(self, dev):
         self.dev = dev
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QVBoxLayout()
+        Qt.QWidget.__init__(self)
+        self.layout = Qt.QVBoxLayout()
         self.setLayout(self.layout)
         chans = self.dev.listChannels()
         self.widgets = {}
@@ -497,7 +497,7 @@ class DAQDevGui(QtGui.QWidget):
         self.defaults = {}
         row = 0
         for ch in chans:
-            wid = QtGui.QWidget()
+            wid = Qt.QWidget()
             ui = DeviceTemplate.Ui_Form()
             ui.setupUi(wid)
             self.layout.addWidget(wid)
@@ -505,7 +505,7 @@ class DAQDevGui(QtGui.QWidget):
             #ui.channel = ch
             for s in dir(ui):
                 i = getattr(ui, s)
-                if isinstance(i, QtGui.QWidget):
+                if isinstance(i, Qt.QWidget):
                     i.channel = ch
                 
             self.widgets[ch] = ui
@@ -563,7 +563,7 @@ class DAQDevGui(QtGui.QWidget):
                     ui.holdingLabel.hide()
                     ui.holdingSpin.hide()
                 ui.invertCheck.toggled.connect(self.invertToggled)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
+        #Qt.QObject.connect(self.dev, Qt.SIGNAL('holdingChanged'), self.holdingChanged)
         self.dev.sigHoldingChanged.connect(self.holdingChanged)
     
     def holdingChanged(self, ch, val):

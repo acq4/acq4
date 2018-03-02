@@ -1,15 +1,15 @@
 from __future__ import print_function
 
 
-from PyQt4 import QtGui
+from acq4.util import Qt
 from acq4.LogWindow import LogButton
 
 
 
-class StatusBar(QtGui.QStatusBar):
+class StatusBar(Qt.QStatusBar):
     
     def __init__(self, parent=None):
-        QtGui.QStatusBar.__init__(self, parent)
+        Qt.QStatusBar.__init__(self, parent)
         
         btn = LogButton("Log")
         btn.setFixedHeight(21)

@@ -9,7 +9,7 @@ from ctypes import *
 from acq4.util.clibrary import *
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from acq4.pyqtgraph import graphicsWindows as gw
-from PyQt4 import QtGui
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from collections import OrderedDict
 import atexit
@@ -945,7 +945,7 @@ if __name__ == '__main__':
 
 #time.sleep(1.0)
 #print "starting app.."
-#app = QtGui.QApplication([])
+#app = Qt.QApplication([])
 #print "app started."
 #print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
 #a.shape = (camerainfo['qinfCcdHeight'], camerainfo['qinfCcdWidth'])

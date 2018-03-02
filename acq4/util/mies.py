@@ -1,6 +1,6 @@
 from __future__ import print_function
 from igorpro import IgorThread, IgorCallError
-from PyQt4 import QtCore
+from acq4.util import Qt
 
 
 # MIES constants, see MIES_Constants.ipf
@@ -12,11 +12,11 @@ def __reload__(old):
     MIES._bridge = old['MIES']._bridge
 
 
-class MIES(QtCore.QObject):
+class MIES(Qt.QObject):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
-    sigDataReady = QtCore.Signal(object)
-    _sigFutureComplete = QtCore.Signal(object)
+    sigDataReady = Qt.Signal(object)
+    _sigFutureComplete = Qt.Signal(object)
     _bridge = None
     ALLDATA = None
     PEAKRES = 1
@@ -41,7 +41,7 @@ class MIES(QtCore.QObject):
         self._sigFutureComplete.connect(self.processUpdate)
         self._initTPTime = None
         self._lastTPTime = None
-        self._TPTimer = QtCore.QTimer()
+        self._TPTimer = Qt.QTimer()
         self._TPTimer.setSingleShot(True)
         self._TPTimer.timeout.connect(self.getMIESUpdate)
         self.start()
@@ -122,18 +122,18 @@ class MIES(QtCore.QObject):
 
 
 if __name__ == "__main__":
-    from PyQt4 import QtGui
+    from acq4.util import Qt
     import pyqtgraph as pg
     import sys
 
-    class W(QtGui.QWidget):
+    class W(Qt.QWidget):
         def __init__(self, parent=None):
             super(W, self).__init__(parent=parent)
             self.mies = MIES.getBridge(True)
             self.mies.sigDataReady.connect(self.printit)
-            self.b = QtGui.QPushButton("stop", parent=self)
+            self.b = Qt.QPushButton("stop", parent=self)
             self.b.clicked.connect(self.mies.quit)
-            l = QtGui.QVBoxLayout()
+            l = Qt.QVBoxLayout()
             l.addWidget(self.b)
             self.setLayout(l)
 

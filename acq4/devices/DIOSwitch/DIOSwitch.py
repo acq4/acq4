@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.devices.Device import *
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.util.Mutex as Mutex
 
 
 class DIOSwitch(Device):
     """Simple device which polls DIO ports on a DAQ and reports when their state changes."""
     
-    sigSwitchChanged = QtCore.Signal(object, object)
+    sigSwitchChanged = Qt.Signal(object, object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -24,7 +24,7 @@ class DIOSwitch(Device):
         
         self.poll()
         
-        self.timer = QtCore.QTimer()
+        self.timer = Qt.QTimer()
         self.timer.timeout.connect(self.poll)
         self.timer.start(config['interval']*1000)
         
@@ -55,17 +55,17 @@ class DIOSwitch(Device):
     def quit(self):
         self.timer.stop()
  
-class DevGui(QtGui.QWidget):
+class DevGui(Qt.QWidget):
     def __init__(self, dev, state):
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
+        Qt.QWidget.__init__(self)
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.labels = {}
         self.dev = dev
         row = 0
         for name in self.dev.state:
-            l1 = QtGui.QLabel(name)
-            l2 = QtGui.QLabel()
+            l1 = Qt.QLabel(name)
+            l2 = Qt.QLabel()
             self.labels[name] = l2
             self.labels[name+'_name'] = l1
             self.layout.addWidget(l1, row, 0)

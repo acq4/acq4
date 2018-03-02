@@ -7,7 +7,7 @@ import collections
 import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
 import acq4.util.debug as debug
-from PyQt4 import QtCore
+from acq4.util import Qt
 import six
 from six.moves import range
 import sqlite3
@@ -45,7 +45,7 @@ class SqliteDatabase:
         ## no need to remove the connection entirely.
         #import gc
         #gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
-        #QtSql.QSqlDatabase.removeDatabase(self._connectionName)
+        #Qt.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 

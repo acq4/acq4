@@ -8,7 +8,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 import six
 
-from PyQt4 import QtCore
+from acq4.util import Qt
 import traceback
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.util.mutex import Mutex, RecursiveMutex
@@ -30,7 +30,7 @@ class ThreadsafeWrapper(object):
         self.__TSOwrapped_object__ = obj
             
         if reentrant:
-            self.__TSOwrap_lock__ = Mutex(QtCore.QMutex.Recursive)
+            self.__TSOwrap_lock__ = Mutex(Qt.QMutex.Recursive)
         else:
             self.__TSOwrap_lock__ = Mutex()
         self.__TSOrecursive__ = recursive

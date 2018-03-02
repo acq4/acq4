@@ -25,16 +25,16 @@ class SqliteDatabase:
             c = 0
             while True:
                 self._connectionName = ':memory:%d' % c
-                if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+                if self._connectionName not in Qt.QSqlDatabase.connectionNames():
                     break
                 c += 1
         else:
             self._connectionName = os.path.abspath(fileName)
             
-        if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
-            self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
+        if self._connectionName not in Qt.QSqlDatabase.connectionNames():
+            self.db = Qt.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
         else:
-            self.db = QtSql.QSqlDatabase.database(self._connectionName)
+            self.db = Qt.QSqlDatabase.database(self._connectionName)
             
             
         self.db.setDatabaseName(fileName)
@@ -52,7 +52,7 @@ class SqliteDatabase:
         ## no need to remove the connection entirely.
         #import gc
         #gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
-        #QtSql.QSqlDatabase.removeDatabase(self._connectionName)
+        #Qt.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
@@ -73,7 +73,7 @@ class SqliteDatabase:
         #import traceback
         #traceback.print_stack()
         
-        q = QtSql.QSqlQuery(self.db)
+        q = Qt.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
             p.mark("Executed with no data")
@@ -426,7 +426,7 @@ class SqliteDatabase:
             
             typ = schema[k].lower()
             if typ == 'blob':
-                converters[k] = lambda obj: QtCore.QByteArray(pickle.dumps(obj))
+                converters[k] = lambda obj: Qt.QByteArray(pickle.dumps(obj))
             elif typ == 'int':
                 converters[k] = int
             elif typ == 'real':
@@ -503,20 +503,20 @@ class SqliteDatabase:
                 val = rec.value(i)
                 ## If we are using API 1 for QVariant (ie not PySide)
                 ## then val is a QVariant and must be coerced back to a python type
-                if HAVE_QVARIANT and isinstance(val, QtCore.QVariant):
+                if HAVE_QVARIANT and isinstance(val, Qt.QVariant):
                     t = val.type()
-                    if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
+                    if t in [Qt.QVariant.Int, Qt.QVariant.LongLong]:
                         val = val.toInt()[0]
-                    if t in [QtCore.QVariant.Double]:
+                    if t in [Qt.QVariant.Double]:
                         val = val.toDouble()[0]
-                    elif t == QtCore.QVariant.String:
+                    elif t == Qt.QVariant.String:
                         val = six.text_type(val.toString())
-                    elif t == QtCore.QVariant.ByteArray:
+                    elif t == Qt.QVariant.ByteArray:
                         val = val.toByteArray()
                         
                 ## Unpickle byte arrays into their original objects.
                 ## (Hopefully they were stored as pickled data in the first place!)
-                if isinstance(val, QtCore.QByteArray):
+                if isinstance(val, Qt.QByteArray):
                     val = pickle.loads(str(val))
             data[n] = val
         prof.finish()

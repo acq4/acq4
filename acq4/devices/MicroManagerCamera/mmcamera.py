@@ -4,7 +4,7 @@ from __future__ import division, with_statement
 import re
 from collections import OrderedDict
 from acq4.devices.Camera import Camera, CameraTask
-from PyQt4 import QtCore
+from acq4.util import Qt
 import six
 import time, sys, traceback
 from numpy import *

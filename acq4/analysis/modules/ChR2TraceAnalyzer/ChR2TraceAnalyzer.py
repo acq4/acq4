@@ -13,7 +13,7 @@ The specifics of the analysis depends on the choice of the flowchart.
 12/5/2013-4/19/2014 pbmanis
 """
 
-from PyQt4 import QtGui
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 #import acq4.analysis.modules.EventDetector as EventDetector
 from collections import OrderedDict
@@ -39,23 +39,23 @@ class ChR2TraceAnalyzer(AnalysisModule):
         self.dbIdentity = "ChR2TraceAnalysis"  ## how we identify to the database; this determines which tables we own
 
         self._sizeHint = (1024, 800)  # try to establish size of window
-        self.confWidget = QtGui.QWidget()
+        self.confWidget = Qt.QWidget()
         self.confLoader = ConfLoader(self, confpath)
         self.fileLoader = DataLoader(self, host.dataManager())
-        self.addPlotBtn = QtGui.QPushButton('Add Plot')
-        self.processWidget = QtGui.QWidget()
-        self.processLayout = QtGui.QGridLayout()
+        self.addPlotBtn = Qt.QPushButton('Add Plot')
+        self.processWidget = Qt.QWidget()
+        self.processLayout = Qt.QGridLayout()
         self.processWidget.setLayout(self.processLayout)
-        self.processProtocolBtn = QtGui.QPushButton('Process Protocol')
-        self.processSliceBtn = QtGui.QPushButton('Process Slice')
-        self.processCellBtn = QtGui.QPushButton('Process Cell')
-        self.processCheck = QtGui.QCheckBox('Auto')
+        self.processProtocolBtn = Qt.QPushButton('Process Protocol')
+        self.processSliceBtn = Qt.QPushButton('Process Slice')
+        self.processCellBtn = Qt.QPushButton('Process Cell')
+        self.processCheck = Qt.QCheckBox('Auto')
         self.processLayout.addWidget(self.processSliceBtn, 0, 0)
         self.processLayout.addWidget(self.processCellBtn, 1, 0)
         self.processLayout.addWidget(self.processProtocolBtn, 2, 0)
         self.processLayout.addWidget(self.processCheck, 3, 0)
-        self.confWidget = QtGui.QWidget()
-        self.confLayout = QtGui.QGridLayout()
+        self.confWidget = Qt.QWidget()
+        self.confLayout = Qt.QGridLayout()
         self.confWidget.setLayout(self.confLayout)
         self.confLayout.addWidget(self.confLoader, 0, 0)
         self.confLayout.addWidget(self.addPlotBtn, 1, 0)
@@ -237,7 +237,7 @@ class DataLoader(FileLoader):
             handle = dh[fileName]
             self.loaded.append(handle)
             #name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-            item = QtGui.QTreeWidgetItem([fileName])
+            item = Qt.QTreeWidgetItem([fileName])
             item.file = handle
             self.ui.fileTree.addTopLevelItem(item)
         self.sigFileLoaded.emit(dh)

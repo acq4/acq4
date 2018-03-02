@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import os
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
@@ -144,7 +144,7 @@ class MapImager(AnalysisModule):
         if fileName is None:
             dh = self.getElement("File Loader").baseDir().name()
             self.fileDialog = FileDialog(None, "Save image data", dh, '*.ma')
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.saveMA)
             return  

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from .TaskTemplate import *
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import TaskGui
@@ -8,7 +8,7 @@ from acq4.devices.Device import TaskGui
 import numpy as np
 import acq4.pyqtgraph as pg
 #from acq4.pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
-#from PyQt4 import Qwt5 as Qwt
+#from acq4.util import Qt
 
 class CameraTaskGui(DAQGenericTaskGui):
     def __init__(self, dev, taskRunner):

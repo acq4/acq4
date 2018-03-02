@@ -21,10 +21,10 @@ from acq4.util.configfile import *
 import time
 from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph import SignalProxy, BusyCursor
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-    QtCore.Slot = QtCore.pyqtSlot
+    Qt.Signal = Qt.pyqtSignal
+    Qt.Slot = Qt.pyqtSlot
 import acq4.filetypes as filetypes
 from acq4.util.debug import *
 import copy
@@ -64,7 +64,7 @@ def cleanup():
     getDataManager().cleanup()
 
 
-class DataManager(QtCore.QObject):
+class DataManager(Qt.QObject):
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per file/directory. 
     This class is (supposedly) thread-safe.
     """
@@ -72,12 +72,12 @@ class DataManager(QtCore.QObject):
     INSTANCE = None
     
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         if DataManager.INSTANCE is not None:
             raise Exception("Attempted to create more than one DataManager!")
         DataManager.INSTANCE = self
         self.cache = {}
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         
     def getDirHandle(self, dirName, create=False):
         with self.lock:
@@ -116,11 +116,11 @@ class DataManager(QtCore.QObject):
         """Cache a handle and watch it for changes"""
         self._setCache(fileName, handle)
         ## make sure all file handles belong to the main GUI thread
-        app = QtGui.QApplication.instance()
+        app = Qt.QApplication.instance()
         if app is not None:
             handle.moveToThread(app.thread())
         ## No signals; handles should explicitly inform the manager of changes
-        #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
+        #Qt.QObject.connect(handle, Qt.SIGNAL('changed'), self._handleChanged)
         
     def _handleChanged(self, handle, change, *args):
         with self.lock:
@@ -175,18 +175,18 @@ class DataManager(QtCore.QObject):
         
 
 
-class FileHandle(QtCore.QObject):
+class FileHandle(Qt.QObject):
     
-    sigChanged = QtCore.Signal(object, object, object)  # (self, change, (args))
-    sigDelayedChange = QtCore.Signal(object, object)  # (self, changes)
+    sigChanged = Qt.Signal(object, object, object)  # (self, change, (args))
+    sigDelayedChange = Qt.Signal(object, object)  # (self, changes)
     
     def __init__(self, path, manager):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.manager = manager
         self.delayedChanges = []
         self.path = os.path.abspath(path)
         self.parentDir = None
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
         
     def getFile(self, fn):

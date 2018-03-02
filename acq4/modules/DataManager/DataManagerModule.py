@@ -12,20 +12,20 @@ from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar
 
-class Window(QtGui.QMainWindow):
+class Window(Qt.QMainWindow):
     
-    sigClosed = QtCore.Signal()
+    sigClosed = Qt.Signal()
     
     def closeEvent(self, ev):
         ev.accept()
-        #self.emit(QtCore.SIGNAL('closed'))
+        #self.emit(Qt.SIGNAL('closed'))
         self.sigClosed.emit()
 
 class DataManager(Module):
     moduleDisplayName = "Data Manager"
     moduleCategory = "Acquisition"
     
-    sigAnalysisDbChanged = QtCore.Signal()
+    sigAnalysisDbChanged = Qt.Signal()
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
@@ -33,7 +33,7 @@ class DataManager(Module):
         self.dm = getDataManager()
         self.win = Window()
         mp = os.path.dirname(__file__)
-        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
+        self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.win.dm = self  ## so embedded widgets can find the module easily
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
@@ -47,7 +47,7 @@ class DataManager(Module):
         self.ui.splitter.setSizes([int(w*0.4), int(w*0.6)])
         self.ui.logDock.hide()
         self.dialog = None
-        self.ui.fileTreeWidget.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        self.ui.fileTreeWidget.setSelectionMode(Qt.QAbstractItemView.ExtendedSelection)
         ## Load values into GUI
         #self.model = DMModel(self.manager.getBaseDir())
         #self.ui.fileTreeView.setModel(self.model)
@@ -152,7 +152,7 @@ class DataManager(Module):
         bd = self.manager.getBaseDir()
         if self.dialog is None:
             self.dialog = FileDialog()
-            self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+            self.dialog.setFileMode(Qt.QFileDialog.DirectoryOnly)
             self.dialog.filesSelected.connect(self.setBaseDir)
         if bd is not None:
             self.dialog.setDirectory(bd.name())
@@ -165,13 +165,13 @@ class DataManager(Module):
             else:
                 raise Exception("Caught. Please to be examined: %s" % str(dirName))
         #if dirName is None:
-            #dirName = QtGui.QFileDialog.getExistingDirectory()
-        #if type(dirName) is QtCore.QStringList:
+            #dirName = Qt.QFileDialog.getExistingDirectory()
+        #if type(dirName) is Qt.QStringList:
         #    dirName = str(dirName[0])
             #raise Exception("Caught. Please to be examined.")
-        #if type(dirName) is QtCore.QStringList:
+        #if type(dirName) is Qt.QStringList:
             #dirName = str(dirName[0])
-        #elif type(dirName) is QtCore.QString:
+        #elif type(dirName) is Qt.QString:
             #dirName = str(dirName)
         if dirName is None:
             return
@@ -248,8 +248,8 @@ class DataManager(Module):
             #self.showFileInfo(nd)
             
             #index = self.model.handleIndex(nd)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
+            #self.ui.fileTreeView.selectionModel().select(index, Qt.QItemSelectionModel.Clear)
+            #self.ui.fileTreeView.selectionModel().select(index, Qt.QItemSelectionModel.Select)
             self.ui.fileTreeWidget.refresh(parent)  ## fileTreeWidget waits a while before updating; force it to refresh immediately.
             self.ui.fileTreeWidget.select(nd)
             ##self.ui.fileInfo.setCurrentFile(nd)
@@ -261,7 +261,7 @@ class DataManager(Module):
     def fileSelectionChanged(self):
         #print "file selection changed"
         if self.selFile is not None:
-            #QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            #Qt.QObject.disconnect(self.selFile, Qt.SIGNAL('changed'), self.selectedFileAltered)
             try:
                 self.selFile.sigChanged.disconnect(self.selectedFileAltered)
             except TypeError:
@@ -272,7 +272,7 @@ class DataManager(Module):
         self.loadFile(fh)
         self.selFile = fh
         if fh is not None:
-            #QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            #Qt.QObject.connect(self.selFile, Qt.SIGNAL('changed'), self.selectedFileAltered)
             self.selFile.sigChanged.connect(self.selectedFileAltered)
         
     def loadFile(self, fh):
@@ -307,8 +307,8 @@ class DataManager(Module):
     def selectedFileAltered(self, name, change, args):
         if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
             #index = self.model.handleIndex(self.selFile)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
+            #self.ui.fileTreeView.selectionModel().select(index, Qt.QItemSelectionModel.Clear)
+            #self.ui.fileTreeView.selectionModel().select(index, Qt.QItemSelectionModel.Select)
             self.ui.fileTreeWidget.select(self.selFile)  ## re-select file if it has moved.
             self.ui.fileNameLabel.setText(self.selFile.name(relativeTo=self.baseDir))
         

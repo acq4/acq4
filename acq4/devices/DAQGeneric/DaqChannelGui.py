@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from . import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from acq4.util.SequenceRunner import *
 import numpy
@@ -10,9 +10,9 @@ from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
 
 ###### For task GUIs
 
-class DaqChannelGui(QtGui.QWidget):
+class DaqChannelGui(Qt.QWidget):
     def __init__(self, parent, name, config, plot, dev, taskRunner, daqName=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         
         ## Name of this channel
         self.name = name
@@ -73,7 +73,7 @@ class DaqChannelGui(QtGui.QWidget):
 
     def setChildrenVisible(self, obj, vis):
         for c in obj.children():
-            if isinstance(c, QtGui.QWidget):
+            if isinstance(c, Qt.QWidget):
                 c.setVisible(vis)
             else:
                 self.setChildrenVisible(c, vis)
@@ -109,8 +109,8 @@ class DaqChannelGui(QtGui.QWidget):
         
 class OutputChannelGui(DaqChannelGui):
     
-    sigSequenceChanged = QtCore.Signal(object)
-    sigDataChanged = QtCore.Signal(object)
+    sigSequenceChanged = Qt.Signal(object)
+    sigDataChanged = Qt.Signal(object)
     
     def __init__(self, *args):
         self._block_update = False  # blocks plotting during state changes
@@ -229,13 +229,13 @@ class OutputChannelGui(DaqChannelGui):
             for w in waves:
                 if w is not None:
                     # self.ui.functionCheck.setChecked(True)
-                    self.plotCurve(w, color=QtGui.QColor(100, 100, 100))
+                    self.plotCurve(w, color=Qt.QColor(100, 100, 100))
             
             ## display single-mode wave in red
             single = self.getSingleWave()
             if single is not None:
                 # self.ui.functionCheck.setChecked(True)
-                self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
+                self.plotCurve(single, color=Qt.QColor(200, 100, 100))
         finally:
             self.plot.enableAutoRange(x=autoRange[0], y=autoRange[1])
 
@@ -250,11 +250,11 @@ class OutputChannelGui(DaqChannelGui):
         
         cur = self.getSingleWave(params)
         if cur is not None:
-            self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
+            self.currentPlot = self.plotCurve(cur, color=Qt.QColor(100, 200, 100))
             self.currentPlot.setZValue(100)
         
-    def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
-        plot = self.plot.plot(y=data, x=self.timeVals, pen=QtGui.QPen(color))
+    def plotCurve(self, data, color=Qt.QColor(100, 100, 100), replot=True):
+        plot = self.plot.plot(y=data, x=self.timeVals, pen=Qt.QPen(color))
         return plot
 
     def getSingleWave(self, params=None):
@@ -335,9 +335,9 @@ class InputChannelGui(DaqChannelGui):
                 self.clearPlots()
                 self.clearBeforeNextPlot = False
 
-            plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), params=params)
+            plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=Qt.QPen(Qt.QColor(200, 200, 200)), params=params)
             #plot = PlotCurve('cell')
-            #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+            #plot.setPen(Qt.QPen(Qt.QColor(200, 200, 200)))
             #plot.setData(result.xvals('Time'), result)
             #plot.attach(self.plot)
             #self.plots.append(plot)

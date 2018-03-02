@@ -9,7 +9,7 @@ import acq4.pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
-from acq4.pyqtgraph import QtGui, QtCore
+from acq4.util import Qt
 
 
 # Keep track of all available scan program components
@@ -258,7 +258,7 @@ class ScanProgramPreview(object):
         self.masks = []
 
         self.rate = 0.1
-        self.timer = QtCore.QTimer()
+        self.timer = Qt.QTimer()
         self.timer.timeout.connect(self.step)
 
         self.lastTime = None
@@ -288,7 +288,7 @@ class ScanProgramPreview(object):
         self.clear()
 
         self.path = pg.PlotCurveItem()
-        self.spot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(-1, -1, 2, 2))
+        self.spot = Qt.QGraphicsEllipseItem(Qt.QRectF(-1, -1, 2, 2))
         self.spot.scale(1e-6, 1e-6)
         self.spot.setPen(pg.mkPen('y'))
 
@@ -382,7 +382,7 @@ class ScanProgramCtrlGroup(pTypes.GroupParameter):
     Parameter tree used for generating ScanProgram
     
     """
-    sigAddNewRequested = QtCore.Signal(object, object)
+    sigAddNewRequested = Qt.Signal(object, object)
     
     def __init__(self):
         opts = {

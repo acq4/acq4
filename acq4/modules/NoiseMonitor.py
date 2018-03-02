@@ -1,7 +1,7 @@
 from __future__ import print_function
 import time, weakref, collections
 import numpy as np
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 
 from acq4.modules.Module import Module
 import acq4.util.InterfaceCombo  # just to register 'interface' parameter type
@@ -22,15 +22,15 @@ class NoiseMonitor(Module):
         self.recordWritable = False
         self.running = False
         
-        self.win = QtGui.QSplitter()
+        self.win = Qt.QSplitter()
         
         self.ctrlWidget = pg.LayoutWidget()
         self.win.addWidget(self.ctrlWidget)
-        self.newBtn = QtGui.QPushButton('New Record')
-        self.loadBtn = QtGui.QPushButton('Load Record')
-        self.startBtn = QtGui.QPushButton('Start')
+        self.newBtn = Qt.QPushButton('New Record')
+        self.loadBtn = Qt.QPushButton('Load Record')
+        self.startBtn = Qt.QPushButton('Start')
         self.startBtn.setCheckable(True)
-        self.fileLabel = QtGui.QLabel()
+        self.fileLabel = Qt.QLabel()
         self.ctrlWidget.addWidget(self.newBtn, 0, 0)
         self.ctrlWidget.addWidget(self.loadBtn, 1, 0)
         self.ctrlWidget.addWidget(self.startBtn, 2, 0)
@@ -48,14 +48,14 @@ class NoiseMonitor(Module):
         self.ptree.setParameters(self.params)
         self.ctrlWidget.addWidget(self.ptree, 4, 0)
 
-        self.channelLayout =QtGui.QSplitter()
+        self.channelLayout =Qt.QSplitter()
         self.win.addWidget(self.channelLayout)
         
         self.channels = collections.OrderedDict()
 
         self.win.show()
         
-        self.timer = QtCore.QTimer()
+        self.timer = Qt.QTimer()
         self.timer.timeout.connect(self.runOnce)
 
     def runOnce(self):
@@ -101,7 +101,7 @@ class NoiseMonitor(Module):
             startDir = self.manager.getCurrentDir()
         except Exception:
             startDir = self.manager.getBaseDir()
-        dirname = QtGui.QFileDialog.getExistingDirectory(self.win, "Open Record", startDir.name())
+        dirname = Qt.QFileDialog.getExistingDirectory(self.win, "Open Record", startDir.name())
         if dirname == '':
             return
         self.recordDir = getDirHandle(dirname)
@@ -127,7 +127,7 @@ class NoiseMonitor(Module):
         self.channels = collections.OrderedDict()
 
 
-class ChannelRecorder(QtGui.QSplitter):
+class ChannelRecorder(Qt.QSplitter):
     def __init__(self, mod, dev, mode, recordDir):
         self.mod = weakref.ref(mod)
         self.dev = dev
@@ -150,7 +150,7 @@ class ChannelRecorder(QtGui.QSplitter):
         self.resetDisplay = True
         self.showNewRecords = True
 
-        QtGui.QSplitter.__init__(self, QtCore.Qt.Vertical)
+        Qt.QSplitter.__init__(self, Qt.Qt.Vertical)
 
         self.plot = pg.PlotWidget(labels={'left': ('Primary', self.units), 'bottom': ('Time', 's')}, title="%s (%s)" % (dev, mode))
         self.plot.setDownsampling(auto=True)

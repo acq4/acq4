@@ -1,5 +1,5 @@
 from __future__ import print_function
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.opengl as gl
@@ -27,26 +27,26 @@ if 'events' not in locals():
     events = {}
     firstRun = True
 
-    win = QtGui.QMainWindow()
-    #cw = QtGui.QWidget()
+    win = Qt.QMainWindow()
+    #cw = Qt.QWidget()
     layout = pg.LayoutWidget()
-    #layout = QtGui.QGridLayout()
+    #layout = Qt.QGridLayout()
     #layout.setContentsMargins(0,0,0,0)
     #layout.setSpacing(0)
     #cw.setLayout(layout)
     win.setCentralWidget(layout)
 
-    cellCombo = QtGui.QComboBox()
+    cellCombo = Qt.QComboBox()
     cellCombo.setSizeAdjustPolicy(cellCombo.AdjustToContents)
     layout.addWidget(cellCombo)
     
-    reloadBtn = QtGui.QPushButton('reload')
+    reloadBtn = Qt.QPushButton('reload')
     layout.addWidget(reloadBtn)
     
-    separateCheck = QtGui.QCheckBox("color pre/post")
+    separateCheck = Qt.QCheckBox("color pre/post")
     layout.addWidget(separateCheck)
     
-    colorCheck = QtGui.QCheckBox("color y position")
+    colorCheck = Qt.QCheckBox("color y position")
     layout.addWidget(colorCheck)
     
     errLimitSpin = pg.SpinBox(value=0.7, step=0.1)
@@ -61,8 +61,8 @@ if 'events' not in locals():
     postRgnStopSpin = pg.SpinBox(value=0.700, step=0.01, siPrefix=True, suffix='s')
     layout.addWidget(postRgnStopSpin)
 
-    spl1 = QtGui.QSplitter()
-    spl1.setOrientation(QtCore.Qt.Vertical)
+    spl1 = Qt.QSplitter()
+    spl1.setOrientation(Qt.Qt.Vertical)
     layout.addWidget(spl1, row=1, col=0, rowspan=1, colspan=8)
 
     pw1 = pg.PlotWidget()
@@ -70,14 +70,14 @@ if 'events' not in locals():
     pw1.setLabel('left', 'Amplitude', 'A')
     pw1.setLabel('bottom', 'Decay Tau', 's')
 
-    spl2 = QtGui.QSplitter()
-    spl2.setOrientation(QtCore.Qt.Horizontal)
+    spl2 = Qt.QSplitter()
+    spl2.setOrientation(Qt.Qt.Horizontal)
     spl1.addWidget(spl2)
 
     pw2 = pg.PlotWidget(labels={'bottom': ('time', 's')})
     spl2.addWidget(pw2)
     
-    tab = QtGui.QTabWidget()
+    tab = Qt.QTabWidget()
     spl2.addWidget(tab)
     
     
@@ -298,7 +298,7 @@ def showCell(**kwds):
     #if lock:
         #return
     #lock = True
-    QtGui.QApplication.processEvents() ## prevents double-spin
+    Qt.QApplication.processEvents() ## prevents double-spin
     #lock = False
     cell = cells[cellCombo.currentIndex()-1]
     

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.pyqtgraph.Qt import QtCore, QtGui, QtSvg
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from CanvasItem import CanvasItem
 from .itemtypes import registerItemType
@@ -41,7 +41,7 @@ class SvgCanvasItem(CanvasItem):
     
     def __init__(self, handle, **opts):
         opts['handle'] = handle
-        item = QtSvg.QGraphicsSvgItem(handle.name())
+        item = Qt.QGraphicsSvgItem(handle.name())
         CanvasItem.__init__(self, item, **opts)
     
     @classmethod

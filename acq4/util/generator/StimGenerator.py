@@ -13,7 +13,7 @@ for evaluation are provided in waveforms.py.
 
 import sys, types, re
 import numpy as np
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from collections import OrderedDict
 import acq4.util.functions as fn
 from .GeneratorTemplate import *
@@ -27,15 +27,15 @@ import six
 
 import acq4.util.units as units
 
-class StimGenerator(QtGui.QWidget):
+class StimGenerator(Qt.QWidget):
     
-    sigDataChanged = QtCore.Signal()        ## Emitted when the output of getSingle() is expected to have changed
-    sigStateChanged = QtCore.Signal()       ## Emitted when the output of saveState() is expected to have changed
-    sigParametersChanged = QtCore.Signal()  ## Emitted when the sequence parameter space has changed
-    sigFunctionChanged = QtCore.Signal()    ## Emitted when the waveform-generating function has changed
+    sigDataChanged = Qt.Signal()        ## Emitted when the output of getSingle() is expected to have changed
+    sigStateChanged = Qt.Signal()       ## Emitted when the output of saveState() is expected to have changed
+    sigParametersChanged = Qt.Signal()  ## Emitted when the sequence parameter space has changed
+    sigFunctionChanged = Qt.Signal()    ## Emitted when the waveform-generating function has changed
     
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         #self.timeScale = 1.0
         #self.scale = 1.0
         self.offset = 0.0

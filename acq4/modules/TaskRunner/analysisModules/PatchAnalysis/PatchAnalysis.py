@@ -2,7 +2,7 @@
 from __future__ import print_function
 from .. import AnalysisModule
 from acq4.Manager import getManager
-from PyQt4 import QtGui
+from acq4.util import Qt
 
 class PatchAnalysisModule(AnalysisModule):
     """
@@ -17,10 +17,10 @@ class PatchAnalysisModule(AnalysisModule):
     
     def __init__(self, *args):
         AnalysisModule.__init__(self, *args)
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
-        self.rmLabel = QtGui.QLabel("Membrane Resistance:")
-        self.raLabel = QtGui.QLabel("Access Resistance:")
+        self.rmLabel = Qt.QLabel("Membrane Resistance:")
+        self.raLabel = Qt.QLabel("Access Resistance:")
         self.layout.addWidget(self.rmLabel)
         self.layout.addWidget(self.raLabel)
         

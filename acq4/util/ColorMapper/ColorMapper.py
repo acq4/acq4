@@ -4,7 +4,7 @@ if __name__ == '__main__':
     import sys
     sys.path.append('..')
     
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import SpinBox
 from acq4.pyqtgraph import GradientWidget
@@ -13,12 +13,12 @@ from . import CMTemplate
 import os
 import acq4.util.configfile as configfile
 
-class ColorMapper(QtGui.QWidget):
+class ColorMapper(Qt.QWidget):
     
-    sigChanged = QtCore.Signal()
+    sigChanged = Qt.Signal()
     
     def __init__(self, parent=None, filePath=None):
-        QtGui.QWidget.__init__(self, parent)      
+        Qt.QWidget.__init__(self, parent)      
         self._signalBlock = 0
         self.ui = CMTemplate.Ui_Form()
         self.ui.setupUi(self)
@@ -28,8 +28,8 @@ class ColorMapper(QtGui.QWidget):
         self.ui.tree.setColumnWidth(2, 60)
         self.ui.tree.setColumnWidth(3, 60)
         
-        self.addBtn = QtGui.QPushButton('Add New')
-        item = QtGui.QTreeWidgetItem()
+        self.addBtn = Qt.QPushButton('Add New')
+        item = Qt.QTreeWidgetItem()
         self.ui.tree.addTopLevelItem(item)
         self.ui.tree.setItemWidget(item, 0, self.addBtn)
         
@@ -51,10 +51,10 @@ class ColorMapper(QtGui.QWidget):
 
     def blockSignals(self, b):
         self._signalBlock += 1 if b else -1
-        QtGui.QWidget.blockSignals(self, self._signalBlock > 0)
+        Qt.QWidget.blockSignals(self, self._signalBlock > 0)
         
     def event(self, event): ## This is because QComboBox does not emit the editingFinished signal when enter is pressed.
-        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Return:
+        if event.type() == Qt.QEvent.KeyPress and event.key() == Qt.Qt.Key_Return:
             self.editDone()
             return True
         return False
@@ -129,7 +129,7 @@ class ColorMapper(QtGui.QWidget):
             raise
         #self.origStyle = self.ui.fileCombo.styleSheet()
         #self.ui.fileCombo.setStyleSheet("QComboBox {background-color: #0F0}")
-        #QtCore.QTimer.singleShot(200, self.unblink)
+        #Qt.QTimer.singleShot(200, self.unblink)
         
     def saveAs(self):
         self.ui.fileCombo.blockSignals(True)
@@ -180,7 +180,7 @@ class ColorMapper(QtGui.QWidget):
         return (None, ColorMapper.saveState, ColorMapper.restoreState)
         
     def emitChanged(self):
-        #self.emit(QtCore.SIGNAL('changed'))
+        #self.emit(Qt.SIGNAL('changed'))
         self.sigChanged.emit()
     
     def setArgList(self, args):
@@ -215,7 +215,7 @@ class ColorMapper(QtGui.QWidget):
             color = np.clip(color, 0, 1.)
             #print color, c
         color = np.clip(color*255, 0, 255).astype(int)
-        return QtGui.QColor(*color)
+        return Qt.QColor(*color)
     
     def getColorArray(self, data, opengl=False):
         """
@@ -279,12 +279,12 @@ class ColorMapper(QtGui.QWidget):
         self.sigChanged.emit()
 
 
-class ColorMapperItem(QtGui.QTreeWidgetItem):
+class ColorMapperItem(Qt.QTreeWidgetItem):
     
     
     def __init__(self, cm):
         self.cm = cm
-        QtGui.QTreeWidgetItem.__init__(self)
+        Qt.QTreeWidgetItem.__init__(self)
         self.argCombo = pg.ComboBox()
         self.opCombo = pg.ComboBox()
         self.minSpin = SpinBox(value=0.0, dec=True, step=1)
@@ -293,7 +293,7 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.updateArgList()
         self.opCombo.addItem('+')
         self.opCombo.addItem('*')
-        self.remBtn = QtGui.QPushButton('Remove')
+        self.remBtn = Qt.QPushButton('Remove')
         self.remBtn.clicked.connect(self.delete)
         
         self.minSpin.sigValueChanged.connect(self.emitChanged)
@@ -336,7 +336,7 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
             raise Exception('Cannot generate color; value "%s" is not present in this data.' % arg)
         val = args[arg]
         if val is None:
-            return pg.QtGui.QColor(100,100,100,255)
+            return Qt.QColor(100,100,100,255)
             #raise Exception('Cannot generate color; value "%s" is empty (None).' % arg)
         mn = self.minSpin.value()
         mx = self.maxSpin.value()
@@ -380,8 +380,8 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.gradient.restoreState(state['gradient'])
 
 if __name__ == '__main__':
-    app = QtGui.QApplication([])
-    win = QtGui.QMainWindow()
+    app = Qt.QApplication([])
+    win = Qt.QMainWindow()
     w = ColorMapper(filePath='./test')
     win.setCentralWidget(w)
     win.show()

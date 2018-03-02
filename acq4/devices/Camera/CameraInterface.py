@@ -1,6 +1,6 @@
 from __future__ import print_function
 import time, types, os.path, re, sys
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import SignalProxy, Point
 import acq4.pyqtgraph.dockarea as dockarea
@@ -27,7 +27,7 @@ class CameraInterface(CameraModuleInterface):
     directly manages its own GraphicsItems within the camera module's view box.
     """
     
-    sigNewFrame = QtCore.Signal(object, object)  # self, frame
+    sigNewFrame = Qt.Signal(object, object)  # self, frame
     
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
@@ -40,7 +40,7 @@ class CameraInterface(CameraModuleInterface):
         ## setup UI
         self.ui = CameraInterfaceTemplate()
         self.widget = dockarea.DockArea()
-        w = QtGui.QWidget()
+        w = Qt.QWidget()
         self.ui.setupUi(w)
 
         # takes care of displaying image data, 
@@ -183,7 +183,7 @@ class CameraInterface(CameraModuleInterface):
         if scale != self.lastCameraScale:
             anchor = self.view.mapViewToDevice(self.lastCameraPosition)
             self.view.scaleBy(scale / self.lastCameraScale)
-            pg.QtGui.QApplication.processEvents()
+            Qt.QApplication.processEvents()
             anchor2 = self.view.mapDeviceToView(anchor)
             diff = pos - anchor2
             self.lastCameraScale = scale
@@ -312,7 +312,7 @@ class CameraItemGroup(DeviceTreeItemGroup):
     def makeGroup(self, dev, subdev):
         grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
         if dev is self.device:
-            bound = QtGui.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound = Qt.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
             bound.setParentItem(grp)
             bound.setPen(pg.mkPen(40, 150, 150))
         return grp
@@ -321,7 +321,7 @@ class CameraItemGroup(DeviceTreeItemGroup):
 class CamROI(pg.ROI):
     """Used for specifying the ROI for a camera to acquire from"""
     def __init__(self, size, parent=None):
-        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
+        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=Qt.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 0], [0, 1])
         self.addScaleHandle([0, 1], [1, 0])

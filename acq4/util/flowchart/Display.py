@@ -5,7 +5,7 @@ from acq4.pyqtgraph.flowchart.library.common import *
 import acq4.pyqtgraph as pg
 import weakref
 #from acq4.pyqtgraph import graphicsItems
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import numpy as np
 
 class EventListPlotter(CtrlNode):

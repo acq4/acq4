@@ -3,7 +3,7 @@ from six.moves import range
 import weakref
 import numpy as np
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
@@ -121,12 +121,12 @@ class MultiLineScanROI(pg.PolyLineROI):
                 s.setPen(pg.mkPen([75, 200, 75]))
 
 
-class LineScanControl(QtCore.QObject):
+class LineScanControl(Qt.QObject):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, component):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.name = component.name
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         

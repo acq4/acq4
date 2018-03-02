@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.Manager
 from acq4.util.LogWindow import LogWidget
 import acq4.util.configfile as cf
