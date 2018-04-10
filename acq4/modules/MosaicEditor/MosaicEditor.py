@@ -11,6 +11,7 @@ import scipy.stats
 
 import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
+from acq4.modules.Module import Module
 from acq4.analysis.AnalysisModule import AnalysisModule
 from PyQt4 import QtGui, QtCore
 from MosaicEditorTemplate import *
@@ -21,7 +22,7 @@ from acq4.util.Canvas import items
 import acq4
 
 
-class MosaicEditor(AnalysisModule):
+class MosaicEditorModule(Module):
     """
     The Mosiac Editor allows the user to bring in multiple images onto
     a canvas, and manipulate the images, including adjusting contrast,
@@ -39,7 +40,54 @@ class MosaicEditor(AnalysisModule):
     The resulting images may be saved as SVG or PNG files.
     Mosaic Editor makes extensive use of pyqtgraph Canvas methods.
     """
-    
+    moduleDisplayName = "Mosaic Editor"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.dataModel = None  # left over from old analysis system..
+        self.editor = MosaicEditor(self)
+        self.win = MosaicEditorWindow(self.editor, name)
+        self.win.show()
+
+    def dataManager(self):
+        """Return DataManager module used to set base directory
+        """
+        return self.manager.getModule("Data Manager")
+        
+
+
+class MosaicEditorWindow(QtGui.QWidget):
+    def __init__(self, mod, name):
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.dockarea = pg.dockarea.DockArea()
+        self.layout.addWidget(self.dockarea)
+
+        self.mod = mod
+
+        elems = self.mod.listElements()
+        for name, el in elems.iteritems():
+            w = self.mod.getElement(name, create=True)
+            d = pg.dockarea.Dock(name=name, size=el.size())
+            if w is not None:
+                d.addWidget(w)
+            pos = el.pos()
+            if pos is None:
+                pos = ()
+            #print d, pos
+            if isinstance(pos, basestring):
+                pos = (pos,)
+            self.dockarea.addDock(d, *pos)
+        self.elements = elems
+        
+        self.setWindowTitle(name)
+        
+
+class MosaicEditor(AnalysisModule):
     # Version number for save format.
     #   increment minor version number for backward-compatible changes
     #   increment major version number for backward-incompatible changes
@@ -48,13 +96,11 @@ class MosaicEditor(AnalysisModule):
     # Types that appear in the dropdown menu as addable items
     # Use MosaicEditor.registerItemType to add to this list.
     _addTypes = OrderedDict()
-    
+
     def __init__(self, host):
-        AnalysisModule.__init__(self, host)
-        
+        AnalysisModule.__init__(self, host=host)
         self.items = weakref.WeakKeyDictionary()
         self.files = weakref.WeakValueDictionary()
-        
 
         self.ctrl = QtGui.QWidget()
         self.ui = Ui_Form()

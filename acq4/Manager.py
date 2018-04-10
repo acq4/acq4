@@ -166,7 +166,10 @@ class Manager(QtCore.QObject):
                     self.createWindowShortcut('F1', self.gui.win)
                 for m in loadModules:
                     try:
-                        self.loadDefinedModule(m)
+                        if m in self.definedModules:
+                            self.loadDefinedModule(m)
+                        else:
+                            self.loadModule(m)
                     except:
                         if not loadManager:
                             self.showGUI()
