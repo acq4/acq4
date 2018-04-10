@@ -44,6 +44,10 @@ class MosaicEditor(AnalysisModule):
     #   increment minor version number for backward-compatible changes
     #   increment major version number for backward-incompatible changes
     _saveVersion = (2, 0)
+
+    # Types that appear in the dropdown menu as addable items
+    # Use MosaicEditor.registerItemType to add to this list.
+    _addTypes = OrderedDict()
     
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
@@ -51,7 +55,6 @@ class MosaicEditor(AnalysisModule):
         self.items = weakref.WeakKeyDictionary()
         self.files = weakref.WeakValueDictionary()
         
-        self._addTypes = OrderedDict()
 
         self.ctrl = QtGui.QWidget()
         self.ui = Ui_Form()
@@ -113,21 +116,18 @@ class MosaicEditor(AnalysisModule):
 
         self.imageMax = 0.0
         
-        self.registerItemType(items.getItemType('GridCanvasItem'))
-        self.registerItemType(items.getItemType('RulerCanvasItem'))
-        self.registerItemType(items.getItemType('MarkersCanvasItem'))
-        self.registerItemType(items.getItemType('CellCanvasItem'))
-        self.registerItemType(items.getItemType('AtlasCanvasItem'))
+        for menuString in self._addTypes:
+            self.addCombo.addItem(menuString)
 
-    def registerItemType(self, itemclass, menuString=None):
+    @classmethod
+    def registerItemType(cls, itemclass, menuString=None):
         """Add an item type to the list of addable items. 
         """
         if menuString is None:
             menuString = itemclass.typeName()
         if itemclass.__name__ not in items.itemTypes():
             items.registerItemType(itemclass)
-        self._addTypes[menuString] = itemclass.__name__
-        self.addCombo.addItem(menuString)
+        cls._addTypes[menuString] = itemclass.__name__
             
     def _addItemChanged(self, index):
         # User requested to create and add a new item
@@ -469,6 +469,15 @@ class MosaicEditor(AnalysisModule):
         self.files = None
         self.items = None
         self.canvas.clear()
+
+
+# Set up the default list of addable items
+MosaicEditor.registerItemType(items.getItemType('GridCanvasItem'))
+MosaicEditor.registerItemType(items.getItemType('RulerCanvasItem'))
+MosaicEditor.registerItemType(items.getItemType('MarkersCanvasItem'))
+MosaicEditor.registerItemType(items.getItemType('CellCanvasItem'))
+MosaicEditor.registerItemType(items.getItemType('AtlasCanvasItem'))
+
 
 
 class Encoder(json.JSONEncoder):
