@@ -97,6 +97,26 @@ class MosaicEditor(AnalysisModule):
     # Use MosaicEditor.registerItemType to add to this list.
     _addTypes = OrderedDict()
 
+    # used to allow external modules to add their own ui elements to the mosaic editor
+    _extensions = OrderedDict()
+
+    @classmethod
+    def addExtension(cls, name, spec):
+        """Add a specification for a UI element to add to newly created MosaicEditor instances.
+        Format is:
+        
+            {
+                'type': 'ctrl', 
+                'builder': callable, 
+                'pos': ('right', 'Canvas'),
+                'size': (200, 400),
+            }
+
+        Where *callable* will be called with the MosaicEditor as its argument and must return a QWidget
+        to be inserted into the UI.
+        """
+        cls._extensions[name] = spec
+
     def __init__(self, host):
         AnalysisModule.__init__(self, host=host)
         self.items = weakref.WeakKeyDictionary()
@@ -115,6 +135,11 @@ class MosaicEditor(AnalysisModule):
             ('ItemList', {'type': 'ctrl', 'object': self.canvas.ui.canvasCtrlWidget, 'pos': ('right', 'Canvas'), 'size': (200, 400)}),
             ('ItemCtrl', {'type': 'ctrl', 'object': self.canvas.ui.canvasItemCtrl, 'pos': ('bottom', 'ItemList'), 'size': (200, 400)}),
         ])
+        for name, spec in self._extensions.items():
+            builder = spec.pop('builder', None)
+            if builder is not None:
+                spec['object'] = builder(self)
+            self._elements_[name] = spec
 
         self.initializeElements()
 
