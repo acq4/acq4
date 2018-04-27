@@ -297,6 +297,11 @@ class DirTreeWidget(QtGui.QTreeWidget):
             root = self.invisibleRootItem()
 
         handle = self.handle(root)
+        if handle.isFile():
+            handle = handle.parent()
+            root = self.itemParent(root)
+        if root is None:
+            return
 
         self.clearTree(root)
         if handle is None:
