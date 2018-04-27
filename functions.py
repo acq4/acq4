@@ -15,7 +15,8 @@ from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, USE_PYSIDE
 from .metaarray import MetaArray
 from . import getConfigOption, setConfigOptions
-from . import debug
+from . import debug, reload
+from .reload import getPreviousVersion 
 from .metaarray import MetaArray
 
 
@@ -111,7 +112,7 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
         return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision=precision, suffix=suffix, space=space, minVal=minVal))
 
 
-def siParse(s, regex=FLOAT_REGEX):
+def siParse(s, regex=FLOAT_REGEX, suffix=None):
     """Convert a value written in SI notation to a tuple (number, si_prefix, suffix).
     
     Example::
@@ -119,6 +120,12 @@ def siParse(s, regex=FLOAT_REGEX):
         siParse('100 μV")  # returns ('100', 'μ', 'V')
     """
     s = asUnicode(s)
+    s = s.strip()
+    if suffix is not None and len(suffix) > 0:
+        if s[-len(suffix):] != suffix:
+            raise ValueError("String '%s' does not have the expected suffix '%s'" % (s, suffix))
+        s = s[:-len(suffix)] + 'X'  # add a fake suffix so the regex still picks up the si prefix
+        
     m = regex.match(s)
     if m is None:
         raise ValueError('Cannot parse number "%s"' % s)
@@ -127,15 +134,18 @@ def siParse(s, regex=FLOAT_REGEX):
     except IndexError:
         sip = ''
     
-    try:
-        suf = m.group('suffix')
-    except IndexError:
-        suf = ''
+    if suffix is None:
+        try:
+            suf = m.group('suffix')
+        except IndexError:
+            suf = ''
+    else:
+        suf = suffix
     
     return m.group('number'), '' if sip is None else sip, '' if suf is None else suf 
 
 
-def siEval(s, typ=float, regex=FLOAT_REGEX):
+def siEval(s, typ=float, regex=FLOAT_REGEX, suffix=None):
     """
     Convert a value written in SI notation to its equivalent prefixless value.
 
@@ -143,9 +153,9 @@ def siEval(s, typ=float, regex=FLOAT_REGEX):
     
         siEval("100 μV")  # returns 0.0001
     """
-    val, siprefix, suffix = siParse(s, regex)
+    val, siprefix, suffix = siParse(s, regex, suffix=suffix)
     v = typ(val)
-    return siApply(val, siprefix)
+    return siApply(v, siprefix)
 
     
 def siApply(val, siprefix):
@@ -2164,7 +2174,7 @@ def isosurface(data, level):
             ## compute lookup table of index: vertexes mapping
             faceTableI = np.zeros((len(triTable), i*3), dtype=np.ubyte)
             faceTableInds = np.argwhere(nTableFaces == i)
-            faceTableI[faceTableInds[:,0]] = np.array([triTable[j] for j in faceTableInds])
+            faceTableI[faceTableInds[:,0]] = np.array([triTable[j[0]] for j in faceTableInds])
             faceTableI = faceTableI.reshape((len(triTable), i, 3))
             faceShiftTables.append(edgeShifts[faceTableI])
             
@@ -2435,7 +2445,7 @@ def disconnect(signal, slot):
         try:
             signal.disconnect(slot)
             return True
-        except TypeError, RuntimeError:
+        except (TypeError, RuntimeError):
             slot = reload.getPreviousVersion(slot)
             if slot is None:
                 return False

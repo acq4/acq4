@@ -239,7 +239,7 @@ class ImageView(QtGui.QWidget):
                            levels. Options are 'mono', which provides a single level control for
                            all image channels, and 'rgb' or 'rgba', which provide individual
                            controls for each channel.
-        ================== =======================================================================
+        ================== ===========================================================================
 
         **Notes:**        
         
@@ -488,7 +488,7 @@ class ImageView(QtGui.QWidget):
         n = int(self.playRate * dt)
         if n != 0:
             self.lastPlayTime += (float(n)/self.playRate)
-            if self.currentIndex+n > self.image.shape[0]:
+            if self.currentIndex+n > self.image.shape[self.axes['t']]:
                 self.play(0)
             self.jumpFrames(n)
         
@@ -633,8 +633,12 @@ class ImageView(QtGui.QWidget):
             
         cax = self.axes['c']
         if cax is None:
+            if data.size == 0:
+                return [(0, 0)]
             return [(float(nanmin(data)), float(nanmax(data)))]
         else:
+            if data.size == 0:
+                return [(0, 0)] * data.shape[-1]
             return [(float(nanmin(data.take(i, axis=cax))), 
                      float(nanmax(data.take(i, axis=cax)))) for i in range(data.shape[-1])]
 

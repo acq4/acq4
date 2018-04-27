@@ -105,6 +105,7 @@ class WidgetParameterItem(ParameterItem):
             if t == 'int':
                 defs['int'] = True
                 defs['minStep'] = 1.0
+                defs['format'] = '{value:d}'
             for k in defs:
                 if k in opts:
                     defs[k] = opts[k]
@@ -405,6 +406,7 @@ class GroupParameterItem(ParameterItem):
         else:
             for c in [0,1]:
                 self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
+                self.setForeground(c, QtGui.QBrush(QtGui.QColor(50,50,50)))
                 font = self.font(c)
                 font.setBold(True)
                 #font.setPointSize(font.pointSize()+1)
