@@ -334,7 +334,7 @@ class ImageItem(GraphicsObject):
             sl = [slice(None)] * data.ndim
             sl[ax] = slice(None, None, 2)
             data = data[sl]
-        return nanmin(data), nanmax(data)
+        return np.nanmin(data), np.nanmax(data)
 
     def updateImage(self, *args, **kargs):
         ## used for re-rendering qimage from self.image.
@@ -379,6 +379,10 @@ class ImageItem(GraphicsObject):
             image = fn.downsample(self.image, xds, axis=axes[0])
             image = fn.downsample(image, yds, axis=axes[1])
             self._lastDownsample = (xds, yds)
+            
+            # Check if downsampling reduced the image size to zero due to inf values.
+            if image.size == 0:
+                return
         else:
             image = self.image
 
@@ -465,11 +469,11 @@ class ImageItem(GraphicsObject):
         
         This method is also used when automatically computing levels.
         """
-        if self.image is None:
+        if self.image is None or self.image.size == 0:
             return None,None
         if step == 'auto':
-            step = (int(np.ceil(self.image.shape[0] / targetImageSize)),
-                    int(np.ceil(self.image.shape[1] / targetImageSize)))
+            step = (max(1, int(np.ceil(self.image.shape[0] / targetImageSize))),
+                    max(1, int(np.ceil(self.image.shape[1] / targetImageSize))))
         if np.isscalar(step):
             step = (step, step)
         stepData = self.image[::step[0], ::step[1]]
@@ -489,14 +493,17 @@ class ImageItem(GraphicsObject):
                 bins = [mn, mx]
 
         kwds['bins'] = bins
-        stepData = stepData[np.isfinite(stepData)]
+
         if perChannel:
             hist = []
             for i in range(stepData.shape[-1]):
-                h = np.histogram(stepData[..., i], **kwds)
+                stepChan = stepData[..., i]
+                stepChan = stepChan[np.isfinite(stepChan)]
+                h = np.histogram(stepChan, **kwds)
                 hist.append((h[1][:-1], h[0]))
             return hist
         else:
+            stepData = stepData[np.isfinite(stepData)]
             hist = np.histogram(stepData, **kwds)
             return hist[1][:-1], hist[0]
 
