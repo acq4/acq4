@@ -125,7 +125,6 @@ class DirTreeWidget(QtGui.QTreeWidget):
         else:
             raise Exception("Can't find tree item for file '%s'" % handle.name())
 
-
     def itemChangedEvent(self, item, col):
         """Item text has changed; try renaming the file"""
         handle = self.handle(item)
@@ -323,7 +322,6 @@ class DirTreeWidget(QtGui.QTreeWidget):
                 del self.items[handle]
             root.removeChild(child)
 
-
     def itemExpandedEvent(self, item):
         """Called whenever an item in the tree is expanded; responsible for loading children if they have not been loaded yet."""
         if not item.childrenLoaded:
@@ -347,15 +345,13 @@ class DirTreeWidget(QtGui.QTreeWidget):
         self.scrollToItem(item.child(item.childCount()-1))
         self.scrollToItem(item)
 
-
     def select(self, handle):
-        item = self.item(handle)
+        item = self.item(handle, create=True)
+        self.expandTo(handle)
         self.setCurrentItem(item)
-
 
     def dropMimeData(self, parent, index, data, action):
         #print "dropMimeData:", parent, index, self.selectedFiles()
-        #source = [self.handle(s) for s in self.selectedItems()]
         source = self.selectedFiles()
         if parent is None:
             target = self.baseDir
@@ -368,13 +364,6 @@ class DirTreeWidget(QtGui.QTreeWidget):
         except:
             printExc('Move failed:')
             return False
-
-    #def handleScheduledMove(self, item, parent):
-        #handle = self.handle(item)
-        #try:
-            #handle.move(self.handle(parent))
-        #except:
-            #printExc("Move failed:")
 
     def contextMenuEvent(self, ev):
         item = self.itemAt(ev.pos())
@@ -397,7 +386,6 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
 
         if self.handle.isDir():
             self.setExpanded(False)
-            #if self.handle.hasChildren():  ## too expensive.
             self.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
             self.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsDropEnabled|QtCore.Qt.ItemIsEnabled)
             self.setForeground(0, QtGui.QBrush(QtGui.QColor(0, 0, 150)))
@@ -416,7 +404,6 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
             else:
                 self.setCheckState(0, QtCore.Qt.Unchecked)
         self.expandState = False
-        #QtCore.QObject.connect(self.handle, QtCore.SIGNAL('changed'), self.handleChanged)
         self.handle.sigChanged.connect(self.handleChanged)
         self.updateBoldState()
 
