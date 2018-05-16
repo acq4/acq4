@@ -76,6 +76,7 @@ class FileLoader(QtGui.QWidget):
                     self.loaded.append(fh)
                 elif self.host.loadFileRequested([fh]):
                     name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
+                    print name
                     item = QtGui.QTreeWidgetItem([name])
                     item.file = fh
                     self.ui.fileTree.addTopLevelItem(item)

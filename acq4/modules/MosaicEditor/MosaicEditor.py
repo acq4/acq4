@@ -366,7 +366,7 @@ class MosaicEditor(AnalysisModule):
         # rescaling is done against the global histogram, to keep the gain constant.
         for i in range(nsel):
             d = np.array(self.canvas.selectedItems()[i].data)
-#            hmd = np.histogram(d, 512) # return (count, bins)
+            # hmd = np.histogram(d, 512) # return (count, bins)
             xh = d.shape # capture shape just in case it is not right (have data that is NOT !!)
             # flatten the illumination using the blimg average illumination pattern
             newImage = d # / blimg[0:xh[0], 0:xh[1]] # (d - imin)/(blimg - imin) # rescale image.
@@ -374,7 +374,7 @@ class MosaicEditor(AnalysisModule):
             n = np.argmax(hn[0])
             newImage = (hm[1][m]/hn[1][n])*newImage # rescale to the global max.
             self.canvas.selectedItems()[i].updateImage(newImage)
-         #   self.canvas.selectedItems()[i].levelRgn.setRegion([0, 2.0])
+            # self.canvas.selectedItems()[i].levelRgn.setRegion([0, 2.0])
             self.canvas.selectedItems()[i].levelRgn.setRegion([0., self.imageMax])
         print "MosaicEditor::self imageMax: ", self.imageMax
 
