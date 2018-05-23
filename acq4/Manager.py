@@ -166,7 +166,10 @@ class Manager(QtCore.QObject):
                     self.createWindowShortcut('F1', self.gui.win)
                 for m in loadModules:
                     try:
-                        self.loadDefinedModule(m)
+                        if m in self.definedModules:
+                            self.loadDefinedModule(m)
+                        else:
+                            self.loadModule(m)
                     except:
                         if not loadManager:
                             self.showGUI()
@@ -588,7 +591,7 @@ class Manager(QtCore.QObject):
         #path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
         print "\n---- Reloading all libraries under %s ----" % path
-        reload.reloadAll(prefix=path, debug=True)
+        reload.reloadAll(debug=True)
         print "Done reloading.\n"
         logMsg("Reloaded all libraries under %s." %path, msgType='status')
         
