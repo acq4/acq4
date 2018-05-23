@@ -7,6 +7,7 @@ acq4-0.10 (unreleased)
             require tolerance to long, unpredictable wait times (such as while waiting for an external 
             trigger), it is necessary to set {'protocol': {'timeout': None}}. Note that the TaskRunner
             disables the default timeout for exactly this reason.
+        MosaicEditor is now a normal acq4 module. (The original analysis module can still be accessed through datamanager, though)
     New Features:
         New MultiPatch module for synchronous control / calibration / monitoring of multiple manipulators
         Added Solution Editor module for designing ACSF/internal recipes
