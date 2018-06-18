@@ -6,7 +6,7 @@ except ImportError:
     import pickle
 
 from .remoteproxy import RemoteEventHandler, ClosedError, NoResultError, LocalObjectProxy, ObjectProxy
-from ..Qt import USE_PYSIDE
+from ..Qt import QT_LIB
 from ..util import cprint  # color printing for debugging
 
 
@@ -131,7 +131,7 @@ class Process(RemoteEventHandler):
             ppid=pid, 
             targetStr=targetStr, 
             path=sysPath, 
-            pyside=USE_PYSIDE,
+            qt_lib=QT_LIB,
             debug=procDebug,
             pyqtapis=pyqtapis,
             )
@@ -165,6 +165,7 @@ class Process(RemoteEventHandler):
                 if timeout is not None and time.time() - start > timeout:
                     raise Exception('Timed out waiting for remote process to end.')
                 time.sleep(0.05)
+        self.conn.close()
         self.debugMsg('Child process exited. (%d)' % self.proc.returncode)
 
     def debugMsg(self, msg, *args):
@@ -250,7 +251,7 @@ class ForkedProcess(RemoteEventHandler):
         
         proxyIDs = {}
         if preProxy is not None:
-            for k, v in preProxy.iteritems():
+            for k, v in preProxy.items():
                 proxyId = LocalObjectProxy.registerObject(v)
                 proxyIDs[k] = proxyId
         
@@ -299,7 +300,7 @@ class ForkedProcess(RemoteEventHandler):
             RemoteEventHandler.__init__(self, remoteConn, name+'_child', pid=ppid)
             
             self.forkedProxies = {}
-            for name, proxyId in proxyIDs.iteritems():
+            for name, proxyId in proxyIDs.items():
                 self.forkedProxies[name] = ObjectProxy(ppid, proxyId=proxyId, typeStr=repr(preProxy[name]))
             
             if target is not None:
@@ -341,6 +342,7 @@ class ForkedProcess(RemoteEventHandler):
         except OSError:  ## probably remote process has already quit
             pass
         
+        self.conn.close()  # don't leak file handles!
         self.hasJoined = True
 
     def kill(self):

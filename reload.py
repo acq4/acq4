@@ -21,13 +21,17 @@ Does NOT:
        print module.someObject
 """
 
-
+from __future__ import print_function
 import inspect, os, sys, gc, traceback, types
-try:
-    import __builtin__ as builtins
-except ImportError:
-    import builtins
 from .debug import printExc
+try:
+    from importlib import reload as orig_reload
+except ImportError:
+    orig_reload = reload
+
+
+py3 = sys.version_info >= (3,)
+
 
 
 def reloadAll(prefix=None, debug=False):
@@ -80,7 +84,7 @@ def reload(module, debug=False, lists=False, dicts=False):
         
     ## make a copy of the old module dictionary, reload, then grab the new module dictionary for comparison
     oldDict = module.__dict__.copy()
-    builtins.reload(module)
+    orig_reload(module)
     newDict = module.__dict__
     
     ## Allow modules access to the old dictionary after they reload
@@ -130,6 +134,9 @@ def updateFunction(old, new, debug, depth=0, visited=None):
         
     old.__code__ = new.__code__
     old.__defaults__ = new.__defaults__
+    if hasattr(old, '__kwdefaults'):
+        old.__kwdefaults__ = new.__kwdefaults__
+    old.__doc__ = new.__doc__
     
     if visited is None:
         visited = []
@@ -154,7 +161,16 @@ def updateFunction(old, new, debug, depth=0, visited=None):
 ## For classes:
 ##  1) find all instances of the old class and set instance.__class__ to the new class
 ##  2) update all old class methods to use code from the new class methods
+<<<<<<< HEAD
 def updateClass(old, new, debug):
+||||||| merged common ancestors
+def updateClass(old, new, debug):
+
+=======
+
+
+def updateClass(old, new, debug):
+>>>>>>> pyqtgraph-upstream/develop
     ## Track town all instances and subclasses of old
     refs = gc.get_referrers(old)
     for ref in refs:
@@ -198,7 +214,8 @@ def updateClass(old, new, debug):
     ## but it fixes a few specific cases (pyqt signals, for one)
     for attr in dir(old):
         oa = getattr(old, attr)
-        if inspect.ismethod(oa):
+        if (py3 and inspect.isfunction(oa)) or inspect.ismethod(oa):
+            # note python2 has unbound methods, whereas python3 just uses plain functions
             try:
                 na = getattr(new, attr)
             except AttributeError:
@@ -206,11 +223,26 @@ def updateClass(old, new, debug):
                     print("    Skipping method update for %s; new class does not have this attribute" % attr)
                 continue
                 
+<<<<<<< HEAD
             if hasattr(oa, 'im_func') and hasattr(na, 'im_func') and oa.__func__ is not na.__func__:
                 depth = updateFunction(oa.__func__, na.__func__, debug)
                 if not hasattr(na.__func__, '__previous_reload_method__'):
                     na.__func__.__previous_reload_method__ = oa  # important for managing signal connection
                 #oa.im_class = new  ## bind old method to new class  ## not allowed
+||||||| merged common ancestors
+            if hasattr(oa, 'im_func') and hasattr(na, 'im_func') and oa.__func__ is not na.__func__:
+                depth = updateFunction(oa.__func__, na.__func__, debug)
+                #oa.im_class = new  ## bind old method to new class  ## not allowed
+=======
+            ofunc = getattr(oa, '__func__', oa)  # in py2 we have to get the __func__ from unbound method,
+            nfunc = getattr(na, '__func__', na)  # in py3 the attribute IS the function
+
+            if ofunc is not nfunc:
+                depth = updateFunction(ofunc, nfunc, debug)
+                if not hasattr(nfunc, '__previous_reload_method__'):
+                    nfunc.__previous_reload_method__ = oa  # important for managing signal connection
+                    #oa.__class__ = new  ## bind old method to new class  ## not allowed
+>>>>>>> pyqtgraph-upstream/develop
                 if debug:
                     extra = ""
                     if depth > 0:
@@ -244,6 +276,7 @@ def safeStr(obj):
     return s
 
 
+<<<<<<< HEAD
 def getPreviousVersion(obj):
     """Return the previous version of *obj*, or None if this object has not
     been reloaded.
@@ -261,6 +294,32 @@ def getPreviousVersion(obj):
             self = obj.im_self
             cls = oldmethod.im_class
             return types.MethodType(oldmethod.__func__, self, cls)
+||||||| merged common ancestors
+=======
+def getPreviousVersion(obj):
+    """Return the previous version of *obj*, or None if this object has not
+    been reloaded.
+    """
+    if isinstance(obj, type) or inspect.isfunction(obj):
+        return getattr(obj, '__previous_reload_version__', None)
+    elif inspect.ismethod(obj):
+        if obj.__self__ is None:
+            # unbound method
+            return getattr(obj.__func__, '__previous_reload_method__', None)
+        else:
+            oldmethod = getattr(obj.__func__, '__previous_reload_method__', None)
+            if oldmethod is None:
+                return None
+            self = obj.__self__
+            oldfunc = getattr(oldmethod, '__func__', oldmethod)
+            if hasattr(oldmethod, 'im_class'):
+                # python 2
+                cls = oldmethod.im_class
+                return types.MethodType(oldfunc, self, cls)
+            else:
+                # python 3
+                return types.MethodType(oldfunc, self)
+>>>>>>> pyqtgraph-upstream/develop
 
 
 
