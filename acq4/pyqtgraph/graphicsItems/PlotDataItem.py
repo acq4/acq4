@@ -490,6 +490,9 @@ class PlotDataItem(GraphicsObject):
             self.curve.hide()
         
         if scatterArgs['symbol'] is not None:
+            
+            if self.opts.get('stepMode', False) is True:
+                x = 0.5 * (x[:-1] + x[1:])                
             self.scatter.setData(x=x, y=y, **scatterArgs)
             self.scatter.show()
         else:
@@ -771,7 +774,7 @@ def isSequence(obj):
         #if isinstance(arg, basestring):
             #return self.data[arg]
         #elif isinstance(arg, int):
-            #return dict([(k, v[arg]) for k, v in self.data.iteritems()])
+            #return dict([(k, v[arg]) for k, v in self.data.items()])
         #elif isinstance(arg, tuple):
             #arg = self._orderArgs(arg)
             #return self.data[arg[1]][arg[0]]
