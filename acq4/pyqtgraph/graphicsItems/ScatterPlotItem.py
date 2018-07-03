@@ -765,17 +765,7 @@ class ScatterPlotItem(GraphicsObject):
                     self.data['targetRect'][updateMask] = list(map(QtCore.QRectF, updatePts[0,:], updatePts[1,:], width, width))
 
                 data = self.data[viewMask]
-<<<<<<< HEAD
-                if USE_PYSIDE or USE_PYQT5:
-                    list(map(p.drawPixmap, data['targetRect'], repeat(atlas), data['sourceRect']))
-                else:
-||||||| merged common ancestors
-                if USE_PYSIDE or USE_PYQT5:
-                    list(imap(p.drawPixmap, data['targetRect'], repeat(atlas), data['sourceRect']))
-                else:
-=======
                 if QT_LIB == 'PyQt4':
->>>>>>> develop
                     p.drawPixmapFragments(data['targetRect'].tolist(), data['sourceRect'].tolist(), atlas)
                 else:
                     list(imap(p.drawPixmap, data['targetRect'], repeat(atlas), data['sourceRect']))
