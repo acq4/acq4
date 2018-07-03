@@ -25,11 +25,29 @@ __all__ = ['HistogramLUTItem']
 class HistogramLUTItem(GraphicsWidget):
     """
     This is a graphicsWidget which provides controls for adjusting the display of an image.
+    
     Includes:
 
     - Image histogram 
     - Movable region over histogram to select black/white levels
     - Gradient editor to define color lookup table for single-channel images
+    
+    Parameters
+    ----------
+    image : ImageItem or None
+        If *image* is provided, then the control will be automatically linked to
+        the image and changes to the control will be immediately reflected in
+        the image's appearance.
+    fillHistogram : bool
+        By default, the histogram is rendered with a fill.
+        For performance, set *fillHistogram* = False.    
+    rgbHistogram : bool
+        Sets whether the histogram is computed once over all channels of the
+        image, or once per channel.
+    levelMode : 'mono' or 'rgba'
+        If 'mono', then only a single set of black/whilte level lines is drawn,
+        and the levels apply to all channels in the image. If 'rgba', then one
+        set of levels is drawn for each channel.
     """
     
     sigLookupTableChanged = QtCore.Signal(object)
@@ -37,10 +55,6 @@ class HistogramLUTItem(GraphicsWidget):
     sigLevelChangeFinished = QtCore.Signal(object)
     
     def __init__(self, image=None, fillHistogram=True, rgbHistogram=False, levelMode='mono'):
-        """
-        If *image* (ImageItem) is provided, then the control will be automatically linked to the image and changes to the control will be immediately reflected in the image's appearance.
-        By default, the histogram is rendered with a fill. For performance, set *fillHistogram* = False.
-        """
         GraphicsWidget.__init__(self)
         self.lut = None
         self.imageItem = lambda: None  # fake a dead weakref
@@ -76,7 +90,6 @@ class HistogramLUTItem(GraphicsWidget):
             region.sigRegionChanged.connect(self.regionChanging)
             region.sigRegionChangeFinished.connect(self.regionChanged)
             
-            
         self.region = self.regions[0]  # for backward compatibility.
         
         self.axis = AxisItem('left', linkView=self.vb, maxTickLength=-10, parent=self)
@@ -86,9 +99,6 @@ class HistogramLUTItem(GraphicsWidget):
         self.range = None
         self.gradient.setFlag(self.gradient.ItemStacksBehindParent)
         self.vb.setFlag(self.gradient.ItemStacksBehindParent)
-        
-        #self.grid = GridItem()
-        #self.vb.addItem(self.grid)
         
         self.gradient.sigGradientChanged.connect(self.gradientChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
@@ -114,7 +124,6 @@ class HistogramLUTItem(GraphicsWidget):
         
         if image is not None:
             self.setImageItem(image)
-        #self.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
         
     def fillHistogram(self, fill=True, level=0.0, color=(100, 100, 200)):
         colors = [color, (255, 0, 0, 50), (0, 255, 0, 50), (0, 0, 255, 50), (255, 255, 255, 50)]
@@ -124,9 +133,6 @@ class HistogramLUTItem(GraphicsWidget):
                 plot.setBrush(colors[i])
             else:
                 plot.setFillLevel(None)
-        
-    #def sizeHint(self, *args):
-        #return QtCore.QSizeF(115, 200)
         
     def paint(self, p, *args):
         if self.levelMode != 'mono':
@@ -143,8 +149,6 @@ class HistogramLUTItem(GraphicsWidget):
             p.drawLine(p2 - Point(0, 5), gradRect.topLeft())
             p.drawLine(gradRect.topLeft(), gradRect.topRight())
             p.drawLine(gradRect.bottomLeft(), gradRect.bottomRight())
-        #p.drawRect(self.boundingRect())
-        
         
     def setHistogramRange(self, mn, mx, padding=0.1):
         """Set the Y range on the histogram plot. This disables auto-scaling."""
@@ -195,7 +199,7 @@ class HistogramLUTItem(GraphicsWidget):
 
     def regionChanged(self):
         if self.imageItem() is not None:
-            self.imageItem().setLevels(self.region.getRegion())
+            self.imageItem().setLevels(self.getLevels())
         self.sigLevelChangeFinished.emit(self)
 
     def regionChanging(self):
@@ -251,6 +255,8 @@ class HistogramLUTItem(GraphicsWidget):
             
     def getLevels(self):
         """Return the min and max levels.
+        
+        For rgba mode, this returns a list of the levels for each channel.
         """
         if self.levelMode == 'mono':
             return self.region.getRegion()
@@ -282,8 +288,26 @@ class HistogramLUTItem(GraphicsWidget):
         Options are 'mono' or 'rgba'.
         """
         assert mode in ('mono', 'rgba')
+        
+        if mode == self.levelMode:
+            return
+        
+        oldLevels = self.getLevels()
         self.levelMode = mode
         self._showRegions()
+        
+        # do our best to preserve old levels
+        if mode == 'mono':
+            levels = np.array(oldLevels).mean(axis=0)
+            self.setLevels(*levels)
+        else:
+            levels = [oldLevels] * 4
+            self.setLevels(rgba=levels)
+            
+        # force this because calling self.setLevels might not set the imageItem
+        # levels if there was no change to the region item
+        self.imageItem().setLevels(self.getLevels())
+        
         self.imageChanged()
         self.update()
 
@@ -313,8 +337,11 @@ class HistogramLUTItem(GraphicsWidget):
         return {
             'gradient': self.gradient.saveState(),
             'levels': self.getLevels(),
+            'mode': self.levelMode,
         }
     
     def restoreState(self, state):
+        if 'mode' in state:
+            self.setLevelMode(state['mode'])
         self.gradient.restoreState(state['gradient'])
         self.setLevels(*state['levels'])

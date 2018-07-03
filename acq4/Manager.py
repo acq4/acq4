@@ -116,9 +116,8 @@ class Manager(Qt.QObject):
             atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
-            # Load all built-in device and module classes
-            devices.registerBuiltinClasses()
-            modules.registerBuiltinClasses()
+            # Import all built-in module classes
+            modules.importBuiltinClasses()
 
             ## Handle command line options
             loadModules = []
@@ -169,7 +168,10 @@ class Manager(Qt.QObject):
                     self.createWindowShortcut('F1', self.gui.win)
                 for m in loadModules:
                     try:
-                        self.loadDefinedModule(m)
+                        if m in self.definedModules:
+                            self.loadDefinedModule(m)
+                        else:
+                            self.loadModule(m)
                     except:
                         if not loadManager:
                             self.showGUI()
@@ -591,7 +593,7 @@ class Manager(Qt.QObject):
         #path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
         print("\n---- Reloading all libraries under %s ----" % path)
-        reload.reloadAll(prefix=path, debug=True)
+        reload.reloadAll(debug=True)
         print("Done reloading.\n")
         logMsg("Reloaded all libraries under %s." %path, msgType='status')
         

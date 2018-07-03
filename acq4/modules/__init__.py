@@ -3,42 +3,43 @@ from collections import OrderedDict
 from importlib import import_module
 import os
 from ..util.debug import printExc
-
-
-MODULE_CLASSES = OrderedDict()
+from . import Module
 
 
 def getModuleClass(name):
     """Return a registered module class given its name.
     """
+    modClasses = getModuleClasses()
+    
     try:
-        return MODULE_CLASSES[name]
+        return modClasses[name]
     except KeyError:
-        raise KeyError('No registered module class named "%s"' % name)
+        raise KeyError('No known module class named "%s"' % name)
 
 
-def registerModuleClass(modclass):
-    """Register a module class.
-
-    This makes it possible for the ACQ4 Manager to instantiate modules by name,
-    and also causes the module to be displayed in the manager window's list of
-    loadable modules.
+def getModuleClasses():
+    """Return a dict containing name:class pairs for all defined Module subclasses.
     """
-    global MODULE_CLASSES
-    name = modclass.__name__
-    if name in MODULE_CLASSES:
-        raise KeyError('Module class named "%s" is already registered' % name)
-    MODULE_CLASSES[name] = modclass
+    modClasses = OrderedDict()
+
+    # recursively find all Module subclasses
+    subclasses = [Module.Module]
+    for cls in subclasses:
+        subclasses.extend(cls.__subclasses__())
+        if cls is Module.Module:
+            continue
+        modClasses[cls.__name__] = cls
+    return modClasses
 
 
-_builtin_registered = False
-def registerBuiltinClasses():
-    """Load and register all builtin module classes.
+_builtin_imported = False
+def importBuiltinClasses():
+    """Import all builtin module classes under acq4/modules.
     """
-    global _builtin_registered
-    if _builtin_registered:
+    global _builtin_imported
+    if _builtin_imported:
         return
-    _builtin_registered = True
+    _builtin_imported = True
 
     path = os.path.dirname(__file__)
     for f in os.listdir(path):
@@ -52,7 +53,5 @@ def registerBuiltinClasses():
             f = f[:-3]
         try:
             mod = import_module('acq4.modules.' + f)
-            cls = getattr(mod, f)
-            registerModuleClass(cls)
         except Exception:
-            printExc('Error while registering builtin module class from %s' % ff)
+            printExc('Error importing builtin module from %s' % ff)

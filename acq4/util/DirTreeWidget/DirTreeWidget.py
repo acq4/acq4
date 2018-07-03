@@ -126,7 +126,6 @@ class DirTreeWidget(Qt.QTreeWidget):
         else:
             raise Exception("Can't find tree item for file '%s'" % handle.name())
 
-
     def itemChangedEvent(self, item, col):
         """Item text has changed; try renaming the file"""
         handle = self.handle(item)
@@ -298,6 +297,13 @@ class DirTreeWidget(Qt.QTreeWidget):
             root = self.invisibleRootItem()
 
         handle = self.handle(root)
+        if handle is None:
+            return
+        if handle.isFile():
+            handle = handle.parent()
+            root = self.itemParent(root)
+        if root is None:
+            return
 
         self.clearTree(root)
         if handle is None:
@@ -324,7 +330,6 @@ class DirTreeWidget(Qt.QTreeWidget):
                 del self.items[handle]
             root.removeChild(child)
 
-
     def itemExpandedEvent(self, item):
         """Called whenever an item in the tree is expanded; responsible for loading children if they have not been loaded yet."""
         if not item.childrenLoaded:
@@ -348,15 +353,13 @@ class DirTreeWidget(Qt.QTreeWidget):
         self.scrollToItem(item.child(item.childCount()-1))
         self.scrollToItem(item)
 
-
     def select(self, handle):
-        item = self.item(handle)
+        item = self.item(handle, create=True)
+        self.expandTo(handle)
         self.setCurrentItem(item)
-
 
     def dropMimeData(self, parent, index, data, action):
         #print "dropMimeData:", parent, index, self.selectedFiles()
-        #source = [self.handle(s) for s in self.selectedItems()]
         source = self.selectedFiles()
         if parent is None:
             target = self.baseDir
@@ -369,13 +372,6 @@ class DirTreeWidget(Qt.QTreeWidget):
         except:
             printExc('Move failed:')
             return False
-
-    #def handleScheduledMove(self, item, parent):
-        #handle = self.handle(item)
-        #try:
-            #handle.move(self.handle(parent))
-        #except:
-            #printExc("Move failed:")
 
     def contextMenuEvent(self, ev):
         item = self.itemAt(ev.pos())
@@ -398,7 +394,6 @@ class FileTreeItem(Qt.QTreeWidgetItem):
 
         if self.handle.isDir():
             self.setExpanded(False)
-            #if self.handle.hasChildren():  ## too expensive.
             self.setChildIndicatorPolicy(Qt.QTreeWidgetItem.ShowIndicator)
             self.setFlags(Qt.Qt.ItemIsSelectable|Qt.Qt.ItemIsDropEnabled|Qt.Qt.ItemIsEnabled)
             self.setForeground(0, Qt.QBrush(Qt.QColor(0, 0, 150)))
@@ -417,7 +412,6 @@ class FileTreeItem(Qt.QTreeWidgetItem):
             else:
                 self.setCheckState(0, Qt.Qt.Unchecked)
         self.expandState = False
-        #Qt.QObject.connect(self.handle, Qt.SIGNAL('changed'), self.handleChanged)
         self.handle.sigChanged.connect(self.handleChanged)
         self.updateBoldState()
 
