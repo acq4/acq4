@@ -21,7 +21,7 @@ class PrairieStage(Stage):
 
         interval = config.get('pollInterval', 0.1)
 
-        scale = config.get('scale', (1e-6, -1e-6, -1e-6)) #Flip y and z from what Prairie reports 
+        self.scale = config.get('scale', (1e-6, -1e-6, -1e-6)) #Flip y and z from what Prairie reports 
         # include a pollInterval in the configuration; how often should the stage position be queried
         # if not included, set to 100 ms
 
@@ -29,9 +29,15 @@ class PrairieStage(Stage):
 
         self.pv = PrairieView()
 
-        self.stageThread = PrairieStageThread(interval, scale, self.pv)
+        self.stageThread = PrairieStageThread(interval, self.scale, self.pv)
         self.stageThread.start()
         self.stageThread.positionChanged.connect(self.posChanged)
+
+        # clear cached position for this device and re-read to generate an initial position update
+        self._lastPos = None
+        #self.getPosition(refresh=True)
+
+        self._lastMove = None
  
         #man.sigAbortAll.connect(self.stop)
 
@@ -43,13 +49,61 @@ class PrairieStage(Stage):
         else:
             return {
                 'getPos': (True, True, True),
-                'setPos': (False, False, False), #Cannot move the stage -- can only get the position
+                'setPos': (False, False, True), #Cannot move the stage, but can move focus (Moving the stage is not yet implemented)
                 'limits': (False, False, False)
             }
 
+    def _move(self, abs, rel, speed, linear):
+        """Must be reimplemented by subclasses and return a MoveFuture instance.
+        """
+        ## position arguments are in meters
+        with self.lock:
+            pos = self._toAbsolutePosition(abs, rel)
+            #if pos[0] is not None or pos[1] is not None:
+            #    raise Exception("X and Y movement are not implemented. Position requested was %s" % str(pos))
 
-    #def _getPosition(self):
-        #return self.stageThread.getPosition()
+            if linear and (pos.count(None) < 2):
+                raise Exception("PrairieView does not support diagonal movement.")
+
+            if self._lastMove is not None and not self._lastMove.isDone():
+                raise Exception("Previous PrairieView move is not finished.")
+
+            self._lastMove = PrairieMoveFuture(self, pos, None)
+            return self._lastMove
+
+
+    def stop(self):
+        """Stop moving the device immediately.
+        """
+        raise NotImplementedError()
+
+    def targetPosition(self):
+        """If the stage is moving, return the target position. Otherwise return 
+        the current position.
+        """
+        with self.lock:
+            if self._lastMove is None or self._lastMove.isDone():
+                return self.getPosition()
+            else:
+                return self._lastMove.targetPos
+
+
+    def _getPosition(self):
+        # Called by superclass when user requests position refresh
+        with self.lock:
+            pos = self.pv.getPos()
+            pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
+            if pos != self._lastPos:
+                self._lastPos = pos
+                emit = True
+            else:
+                emit = False
+
+        if emit:
+            # don't emit signal while locked
+            self.posChanged(pos)
+
+        return pos
 
 
     def quit(self):
@@ -142,5 +196,47 @@ class PrairieStageThread(Thread):
             # if a clean disconnect occured, this line will be printed in the acq4 console
 
 
+class PrairieMoveFuture(MoveFuture):
 
+    def __init__(self, dev, pos, speed=None):
+        MoveFuture.__init__(self, dev, pos, None)
+         
+        target = pos[2]/self.dev.scale[2]
+        self.dev.pv.move('Z', target)
 
+    def wasInterrupted(self, debug=False):
+        """Return True if the move was interrupted before completing.
+        """
+        self.update()
+        with self.lock:
+            reachedTarget = self._reachedTarget
+
+        if debug:
+            print "     in wasInterrupted...     reachedTarget:",reachedTarget,  " moving:", self.isMoving()
+        if reachedTarget:
+            return False
+        elif self.isMoving():
+            return False
+        else:
+            return True
+
+        #return not reachedTarget and not self.isMoving()
+        
+
+    def isMoving(self, interval=0.25):
+        pos1 = self.dev.getPosition(refresh=True)
+        time.sleep(interval)
+        pos2 = self.dev.getPosition(refresh=True)
+
+        if pos1 != pos2:
+            return True
+        else:
+            return False
+
+        #### TODO:
+        #   -get rid of sleep
+        #   -instead, get a position and a time
+        #   -if it is a new position save them
+        #   -if it is the same position, ask if it's been more than
+        #    interval and return False if it has
+        #    

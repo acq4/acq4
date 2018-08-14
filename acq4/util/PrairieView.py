@@ -20,13 +20,18 @@ class PrairieView(QtCore.QObject):
         self.prairieRigIP = "10.128.26.11" #Wayne Rig
         self.pl_socket = None
         self.connected = False
+        self.lock = Mutex()
 
 
     def connect_to_prairie(self):
  
         if not self.connected:
 
-            self.pl_socket = socket.create_connection((self.prairieRigIP, 1236))
+            try:
+                self.pl_socket = socket.create_connection((self.prairieRigIP, 1236))
+            except:
+                raise Exception("Could not connect to PrairieView software.")
+
             self.connected = True
 
 
@@ -45,13 +50,15 @@ class PrairieView(QtCore.QObject):
 
         orig_cmd = cmd
         cmd = cmd.replace(' ', '\1') + '\r\n'
-        self.pl_socket.send(cmd)
-        response = ''
-        while True:
-            response += self.pl_socket.recv(1000)
-            if response.endswith('DONE\r\n'):
-                break
-            time.sleep(0.005)
+
+        with self.lock:
+            self.pl_socket.send(cmd)
+            response = ''
+            while True:
+                response += self.pl_socket.recv(1000)
+                if response.endswith('DONE\r\n'):
+                    break
+                time.sleep(0.005)
         parts = response.split('\r\n')
 
 
@@ -65,3 +72,26 @@ class PrairieView(QtCore.QObject):
             #self.sigTSeriesRun.emit(orig_cmd)
 
         return parts[1:-1]
+
+    def getPos(self):
+        #if not self.connected:
+        #    self.connect_to_prairie()
+
+        x = float(self.call_pl('-GetMotorPosition X')[0])
+        y = float(self.call_pl('-GetMotorPosition Y')[0])
+        z = float(self.call_pl('-GetMotorPosition Z')[0])
+
+        pos = np.array([x, y, z]) 
+
+        return pos
+
+    def getZPos(self):
+         z = float(self.call_pl('-GetMotorPosition Z')[0])
+         return z
+
+    def move(self, axis, pos):
+        ## position in microns
+        ## axis one of X, Y, Z 
+        #cmd = "-MoveMotor %s %i" % (axis, distance)
+        cmd = "-SetMotorPosition %s %f" % (axis, pos) 
+        self.call_pl(cmd)
