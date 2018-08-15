@@ -200,14 +200,13 @@ class PrairieMoveFuture(MoveFuture):
 
     def __init__(self, dev, pos, speed=None):
         MoveFuture.__init__(self, dev, pos, None)
-         
-        current = self.dev.getPosition()
+
+
         ## Raise an error if we're asked to move in X or Y directions
-        if abs(current[0]-pos[0]) > 1e-6 or abs(current[1]-pos[1]) > 1e-6:
+        if abs(self.startPos[0]-self.targetPos[0]) > 1e-6 or abs(self.startPos[1]-self.targetPos[1]) > 1e-6:
             raise Exception("PrairieStage only supports movement in the Z axis. Move requested was from %s to %s." %(str(current),str(pos)))
-            
-        target = pos[2]/self.dev.scale[2]
-        self.dev.pv.move('Z', target)
+
+        self.dev.pv.move('Z', self.targetPos[2]/self.dev.scale[2])
 
     def wasInterrupted(self, debug=False):
         """Return True if the move was interrupted before completing.
