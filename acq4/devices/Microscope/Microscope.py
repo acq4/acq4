@@ -212,7 +212,7 @@ class Microscope(Device, OptomechDevice):
         pd = self.positionDevice()
         fd = self.focusDevice()
 
-        if len(pos) == 3 and fd is not pd:
+        if len(pos) == 3 and fd is not pd and pd is not None:
             z = pos[2]
             self.setFocusDepth(z)
             pos = pos[:2]
@@ -220,11 +220,14 @@ class Microscope(Device, OptomechDevice):
             pos = list(pos) + [self.getFocusDepth()]
 
         # Determine how to move the xy(z) stage to react the new center position
-        gpos = self.globalPosition()
-        sgpos = pd.globalPosition()
-        sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
-        sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        return pd.moveToGlobal(sgpos2, speed)
+        if pd is not None:
+            gpos = self.globalPosition()
+            sgpos = pd.globalPosition()
+            sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
+            sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
+            return pd.moveToGlobal(sgpos2, speed)
+        else: 
+            return self.setFocusDepth(pos[2])
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
