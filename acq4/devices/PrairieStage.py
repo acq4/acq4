@@ -206,6 +206,8 @@ class PrairieMoveFuture(MoveFuture):
         if abs(self.startPos[0]-self.targetPos[0]) > 1e-6 or abs(self.startPos[1]-self.targetPos[1]) > 1e-6:
             raise Exception("PrairieStage only supports movement in the Z axis. Move requested was from %s to %s." %(str(current),str(pos)))
 
+        self._lastPos = (self.startPos, time.time())
+
         self.dev.pv.move('Z', self.targetPos[2]/self.dev.scale[2])
 
     def wasInterrupted(self, debug=False):
@@ -228,19 +230,12 @@ class PrairieMoveFuture(MoveFuture):
         
 
     def isMoving(self, interval=0.25):
-        pos1 = self.dev.getPosition(refresh=True)
-        time.sleep(interval)
-        pos2 = self.dev.getPosition(refresh=True)
-
-        if pos1 != pos2:
+        pos = self.dev.getPosition(refresh=True)
+        if pos != self._lastPos[0]:
+            self._lastPos = (pos, time.time())
             return True
+        elif time.time() - self._lastPos[1] < interval:
+            return True
+
         else:
             return False
-
-        #### TODO:
-        #   -get rid of sleep
-        #   -instead, get a position and a time
-        #   -if it is a new position save them
-        #   -if it is the same position, ask if it's been more than
-        #    interval and return False if it has
-        #    
