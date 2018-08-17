@@ -111,6 +111,9 @@ class PrairieView(QtCore.QObject):
         self.setImageName(name, iterationNum)
         self.call_pl('-SingleScan')
 
+    def setSaveDirectory(self, dirPath):
+        self.call_pl('-SetSavePath %s' % dirPath)
+
     
 
 

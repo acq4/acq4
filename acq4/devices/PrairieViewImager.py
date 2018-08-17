@@ -1,23 +1,30 @@
 from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.Device import Device
 from acq4.util.PrairieView import PrairieView
-from acq4.util.imaging.Frame import Frame
+from acq4.util.imaging.frame import Frame
 from PIL import Image
 import os
 from optoanalysis import xml_parse
 from collections import OrderedDict
+import os, time
+import numpy as np
 
-class PrairieViewImager(OptomechDevice):
+class PrairieViewImager(OptomechDevice, Device):
 
 
     def __init__(self, deviceManager, config, name):
+        Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
 
         self.pv = PrairieView()
-        self.pv.setSaveDirectory('C:/Megan/acq4')
-        self._imageDirectory = 'Z:/Megan/acq4'
+        #self.pv.setSaveDirectory('C:/Megan/acq4_data')
+        self._saveDirectory = os.path.abspath('C:/Megan/acq4_data') ## where we tell Prairie to save data
+        self._imageDirectory = os.path.abspath('Z:/Megan/acq4_data') ## where we retrieve prairie's data from
         self._frameIDcounter = 0
         self.scale = 1e-6
 
+    def setup(self):
+        self.pv.setSaveDirectory(self._saveDirectory)
         
 
     def acquireFrames(self, n=1, stack=True):
@@ -43,9 +50,14 @@ class PrairieViewImager(OptomechDevice):
 
         self.pv.saveImage(imageBaseName, imageID)
 
+
         imageName = imageBaseName+'-%03d'%imageID
-        imagePath = os.join(self._imageDirectory, imageName)
-        xmlPath = os.join(imagePath, imageName+'.xml')
+        imagePath = os.path.join(self._imageDirectory, imageName)
+        xmlPath = os.path.join(imagePath, imageName+'.xml')
+
+        #while not self.isDone(imagePath):
+        #    time.sleep(0.1)
+        time.sleep(8)
 
         xml_attrs = xml_parse.ParseTSeriesXML(xmlPath, imagePath)
 
@@ -81,9 +93,16 @@ class PrairieViewImager(OptomechDevice):
             #rChn = np.transpose(rChn)
 
         if images[1] is not None:
-            filepath = os.path.join(imagePath, images[1])
+            filepath = os.path.join(dirPath, images[1])
             gChn = np.array(Image.open(filepath))
             #gChn = np.transpose(gChn)
 
         return np.stack([rChn, gChn], axis=-1)
 
+
+    # def isDone(self, imagePath):
+    #     # If 'RAWDATA' file appears in the tseries folder, then we assume the tseries is not done yet
+    #     if not any('RAWDATA' in substring for substring in [f for f in os.listdir(imagePath)]):
+    #         return True
+    #     else:
+    #         return False
