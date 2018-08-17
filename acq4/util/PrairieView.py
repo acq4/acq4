@@ -95,3 +95,22 @@ class PrairieView(QtCore.QObject):
         #cmd = "-MoveMotor %s %i" % (axis, distance)
         cmd = "-SetMotorPosition %s %f" % (axis, pos) 
         self.call_pl(cmd)
+
+    def setImageName(self, name, iterationNum, addDateTime=False):
+
+        if addDateTime:
+            adt = 'addDateTime'
+        else:
+            adt = ''
+        
+        self.call_pl('-SetFileName Singlescan %s %s' % (name, adt))
+        self.call_pl('-SetFileIteration Singlescan %i' % iterationNum)
+
+    def saveImage(self, name, iterationNum):
+
+        self.setImageName(name, iterationNum)
+        self.call_pl('-SingleScan')
+
+    
+
+
