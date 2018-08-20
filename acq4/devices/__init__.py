@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from importlib import import_module
 from . import Device
+from ..util.debug import printExc
 
 
 def getDeviceClass(name):
@@ -18,7 +19,7 @@ def getDeviceClass(name):
             import_module('acq4.devices.' + name)
             devClasses = getDeviceClasses()
         except ImportError:
-            pass
+            printExc('Error importing device module "%s"' % name)
 
     try:
         return devClasses[name]
