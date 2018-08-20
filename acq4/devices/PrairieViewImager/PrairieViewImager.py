@@ -8,9 +8,11 @@ from optoanalysis import xml_parse
 from collections import OrderedDict
 import os, time
 import numpy as np
+from PyQt4 import QtCore
 
 class PrairieViewImager(OptomechDevice, Device):
 
+    sigNewFrame = QtCore.Signal(object)
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -48,10 +50,11 @@ class PrairieViewImager(OptomechDevice, Device):
         imageID = self._frameIDcounter
         self._frameIDcounter += 1
 
-        self.pv.saveImage(imageBaseName, imageID)
+        #self.pv.saveImage(imageBaseName, imageID)
 
 
         imageName = imageBaseName+'-%03d'%imageID
+        imageName = "ACQ4_image-002"
         imagePath = os.path.join(self._imageDirectory, imageName)
         xmlPath = os.path.join(imagePath, imageName+'.xml')
 
@@ -76,7 +79,9 @@ class PrairieViewImager(OptomechDevice, Device):
         info['deviceTransform'] = {}
         info['PrairieMetaInfo'] = xml_attrs
 
-        return Frame(images, info)
+        frame = Frame(images, info)
+        self.sigNewFrame.emit(frame)
+        return Frame
 
 
         ## connect to Manager.sigCurrentDirChanged to have Prairie change the save path to match acq4's directory structure?
@@ -98,6 +103,9 @@ class PrairieViewImager(OptomechDevice, Device):
             #gChn = np.transpose(gChn)
 
         return np.stack([rChn, gChn], axis=-1)
+
+    def moduleInterface(self, mod):
+        return ModuleInterface(self, mod)
 
 
     # def isDone(self, imagePath):
