@@ -18,6 +18,7 @@ def getDeviceClass(name):
             import_module('acq4.devices.' + name)
             devClasses = getDeviceClasses()
         except ImportError:
+            print('There was an error importing device class named "%s"' % name)
             pass
 
     try:
