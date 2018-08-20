@@ -18,7 +18,8 @@ class PrairieViewImager(OptomechDevice, Device):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
 
-        self.pv = PrairieView()
+        ip = config.get('ipaddress', None)
+        self.pv = PrairieView(ip)
         #self.pv.setSaveDirectory('C:/Megan/acq4_data')
         self._saveDirectory = os.path.abspath('C:/Megan/acq4_data') ## where we tell Prairie to save data
         self._imageDirectory = os.path.abspath('Z:/Megan/acq4_data') ## where we retrieve prairie's data from

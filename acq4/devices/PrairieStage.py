@@ -20,6 +20,7 @@ class PrairieStage(Stage):
         Stage.__init__(self, man, config, name)
 
         interval = config.get('pollInterval', 0.1)
+        ip = config.get('ipaddress', None)
 
         self.scale = config.get('scale', (1e-6, -1e-6, -1e-6)) #Flip y and z from what Prairie reports 
         # include a pollInterval in the configuration; how often should the stage position be queried
@@ -27,7 +28,7 @@ class PrairieStage(Stage):
 
         #self.prairieDevice = man.getDevice('PrairieDevice')
 
-        self.pv = PrairieView()
+        self.pv = PrairieView(ip)
 
         self.stageThread = PrairieStageThread(interval, self.scale, self.pv)
         self.stageThread.start()

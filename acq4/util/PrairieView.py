@@ -14,10 +14,10 @@ class PrairieView(QtCore.QObject):
     sigDataReady = QtCore.Signal(object)
     sigMarkPointsRun = QtCore.Signal(object)
 
-    def __init__(self):
+    def __init__(self, ipaddress):
 
         QtCore.QObject.__init__(self)
-        self.prairieRigIP = "10.128.26.11" #Wayne Rig
+        self.prairieRigIP = ipaddress #Wayne Rig
         self.pl_socket = None
         self.connected = False
         self.lock = Mutex()
