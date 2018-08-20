@@ -61,7 +61,11 @@ class Stage(Device, OptomechDevice):
         if 'joystick' in config:
             for axis, axcfg in config['joystick'].items():
                 jsname, jsaxis = axcfg['axis']
-                js = dm.getDevice(jsname)
+                try:
+                    js = dm.getDevice(jsname)
+                except Exception:
+                    print('Joystick device "%s" not found; disabling control from this device.' % jsname)
+                    continue
                 jsdevs.add(js)
                 self._jsAxes.add((js, jsaxis))
                 for jsname, button, scale in axcfg.get('modifiers', []):
