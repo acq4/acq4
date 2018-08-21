@@ -1,6 +1,8 @@
 from moduleTemplate import Ui_Form
 from PyQt4 import QtGui, QtCore
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.util.imaging.imaging_ctrl import ImagingCtrl
+import acq4.pyqtgraph as pg
 
 class PVImagerModuleGui(QtGui.QWidget):
     """For controlling the module gui for PrairieViewImager"""
@@ -15,28 +17,35 @@ class PVImagerModuleGui(QtGui.QWidget):
 class PVImagerCamModInterface(CameraModuleInterface):
     """For plugging PrairieView images into the camera module"""
 
-    def __init__(self, dev, mod):
-        CameraModuleInterface.__init__(self, dev, mod)
-        self.widget = PVImagerModuleGui()
+    def __init__(self, dev, cameraModule):
+        CameraModuleInterface.__init__(self, dev, cameraModule)
+        # self.widget = PVImagerModuleGui()
 
-        self.view = mod.getView()
+        self.view = cameraModule.window().view
 
         self.imagingCtrl = ImagingCtrl()
-        self.frameDisplay = self.imagingCtrl.frameDisplay
+        #self.frameDisplay = self.imagingCtrl.frameDisplay
+        #self.imageItem = self.frameDisplay.imageItem()
+        self.imageItem = pg.ImageItem()
 
-        ## set up item groups
-        self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
-        self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
-        self.view.addItem(self.imageItemGroup)
-        self.view.addItem(self.cameraItemGroup)
-        self.cameraItemGroup.setZValue(0)
-        self.imageItemGroup.setZValue(-2)
-
-        ## video image item
-        self.imageItem = self.frameDisplay.imageItem()
         self.view.addItem(self.imageItem)
-        self.imageItem.setParentItem(self.imageItemGroup)
-        self.imageItem.setZValue(-10)
+
+        # ## set up item groups
+        # self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
+        # self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
+        # self.view.addItem(self.imageItemGroup)
+        # self.view.addItem(self.cameraItemGroup)
+        # self.cameraItemGroup.setZValue(0)
+        # self.imageItemGroup.setZValue(-2)
+
+        # ## video image item
+        # self.imageItem = self.frameDisplay.imageItem()
+        # self.view.addItem(self.imageItem)
+        # self.imageItem.setParentItem(self.imageItemGroup)
+        # self.imageItem.setZValue(-10)
+
+        self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
+        #self.frameDisplay.imageUpdated.connect(self.imageUpdated)
 
 
 
@@ -50,7 +59,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         May return None.
         """
-        return self.widget
+        return None
 
     def boundingRect(self):
         """Return the bounding rectangle of all graphics items.
@@ -63,7 +72,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
         May return None.
         """
         #return None
-        return self.imageItem
+        return self.frameDisplay.imageItem()
 
     def takeImage(self, closeShutter=None):
         """Request the imaging device to acquire a single frame.
@@ -75,6 +84,17 @@ class PVImagerCamModInterface(CameraModuleInterface):
         # Would be nice to have a more natural way of handling this..
         #raise NotImplementedError(str(self))
         return self.getDevice().acquireFrames(1, stack=False)
+
+    def acquireFrameClicked(self):
+        frame = self.getDevice().acquireFrames(1, stack=False)
+        #self.imagingCtrl.newFrame(frame)
+        self.imageItem.setImage(frame.data())
+        self.imageUpdated(frame)
+
+    def imageUpdated(self, frame):
+        ## according to ImagingCtrl docs we should set the image transform here
+        #raise NotImplementedError()
+        pass
 
 
 

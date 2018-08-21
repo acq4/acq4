@@ -9,6 +9,7 @@ from collections import OrderedDict
 import os, time
 import numpy as np
 from PyQt4 import QtCore
+from ModuleInterfaces import PVImagerCamModInterface
 
 class PrairieViewImager(OptomechDevice, Device):
 
@@ -51,11 +52,11 @@ class PrairieViewImager(OptomechDevice, Device):
         imageID = self._frameIDcounter
         self._frameIDcounter += 1
 
-        #self.pv.saveImage(imageBaseName, imageID)
+        self.pv.saveImage(imageBaseName, imageID)
 
 
         imageName = imageBaseName+'-%03d'%imageID
-        imageName = "ACQ4_image-002"
+        #imageName = "ACQ4_image-000"
         imagePath = os.path.join(self._imageDirectory, imageName)
         xmlPath = os.path.join(imagePath, imageName+'.xml')
 
@@ -79,10 +80,11 @@ class PrairieViewImager(OptomechDevice, Device):
         info['frameTransform'] = {'pos':(x, y, z)}
         info['deviceTransform'] = {}
         info['PrairieMetaInfo'] = xml_attrs
+        info['time'] = time.time()
 
         frame = Frame(images, info)
         self.sigNewFrame.emit(frame)
-        return Frame
+        return frame
 
 
         ## connect to Manager.sigCurrentDirChanged to have Prairie change the save path to match acq4's directory structure?
@@ -102,11 +104,12 @@ class PrairieViewImager(OptomechDevice, Device):
             filepath = os.path.join(dirPath, images[1])
             gChn = np.array(Image.open(filepath))
             #gChn = np.transpose(gChn)
+        bChn = np.zeros(rChn.shape)
 
-        return np.stack([rChn, gChn], axis=-1)
+        return np.stack([rChn, gChn, bChn], axis=-1)
 
     def moduleInterface(self, mod):
-        return ModuleInterface(self, mod)
+        return PVImagerCamModInterface(self, mod)
 
 
     # def isDone(self, imagePath):
