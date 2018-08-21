@@ -24,8 +24,8 @@ class ImagingCtrl(QtGui.QWidget):
     * Place self.frameDisplay.imageItem() in a ViewBox.
     * Display this widget along with self.frameDisplay.contrastCtrl and .bgCtrl
       to provide the user interface.
-    * Connect to sigAcquireVideoClicked and sigAcquireFrameClicked to handle
-      user requests for acquisition.
+    * Connect to sigStartVideoClicked, sigStopVideoClicked and 
+      sigAcquireFrameClicked to handle user requests for acquisition.
     * Call acquisitionStarted() and acquisitionStopped() to provide feedback
     * Call newFrame(Frame) whenever a new frame is available from the imaging
       device.
