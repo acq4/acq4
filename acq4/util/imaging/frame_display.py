@@ -1,6 +1,6 @@
 from PyQt4 import QtCore, QtGui
 from acq4 import pyqtgraph as pg
-from .contrast_ctrl import ContrastCtrl
+from .contrast_ctrl import ContrastCtrl, RGBContrastCtrl
 from .bg_subtract_ctrl import BgSubtractCtrl
 from acq4.util.debug import printExc
 
@@ -127,7 +127,6 @@ class FrameDisplay(QtCore.QObject):
             info = self.currentFrame.info()
             prof()
             
-            
             ## divide the background out of the current frame if needed
             data = self.bgCtrl.processImage(data)
             prof()
@@ -153,3 +152,9 @@ class FrameDisplay(QtCore.QObject):
     def quit(self):
         self.imageItem = None
         self.hasQuit = True
+
+class RGBFrameDisplay(FrameDisplay):
+
+    contrastClass = RGBContrastCtrl
+    bgSubtractClass = BgSubtractCtrl
+

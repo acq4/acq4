@@ -122,3 +122,25 @@ class ContrastCtrl(QtGui.QWidget):
                 self.ignoreLevelChange = False
 
         self.imageItem.setOpacity(self.alpha)
+
+class RGBContrastCtrl(QtGui.QWidget):
+
+    def __init__(self, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+
+        self.imageItem = None
+
+    def setImageItem(self, item):
+        self.imageItem = item
+
+    def processImage(self, data):
+        """Data is an RGB image."""
+
+        nonZero = data != 0
+
+        mn = data[nonZero].min()
+        mx = data[nonZero].max()
+
+        self.imageItem.setLevels([[mn, mx], [mn, mx], [mn, mx]])
+
+

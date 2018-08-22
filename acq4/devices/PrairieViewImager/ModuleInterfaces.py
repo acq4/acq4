@@ -1,7 +1,7 @@
 from moduleTemplate import Ui_Form
 from PyQt4 import QtGui, QtCore
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.util.imaging.imaging_ctrl import ImagingCtrl
+from acq4.util.imaging.imaging_ctrl import RGBImagingCtrl
 import acq4.pyqtgraph as pg
 
 class PVImagerModuleGui(QtGui.QWidget):
@@ -23,10 +23,9 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.view = cameraModule.window().view
 
-        self.imagingCtrl = ImagingCtrl()
-        #self.frameDisplay = self.imagingCtrl.frameDisplay
-        #self.imageItem = self.frameDisplay.imageItem()
-        self.imageItem = pg.ImageItem()
+        self.imagingCtrl = RGBImagingCtrl()
+        self.frameDisplay = self.imagingCtrl.frameDisplay
+        self.imageItem = self.frameDisplay.imageItem()
 
         self.view.addItem(self.imageItem)
 
@@ -87,9 +86,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
     def acquireFrameClicked(self):
         frame = self.getDevice().acquireFrames(1, stack=False)
-        #self.imagingCtrl.newFrame(frame)
-        self.imageItem.setImage(frame.data())
-        self.imageUpdated(frame)
+        self.imagingCtrl.newFrame(frame)
 
     def imageUpdated(self, frame):
         ## according to ImagingCtrl docs we should set the image transform here
