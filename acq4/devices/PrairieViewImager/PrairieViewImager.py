@@ -8,8 +8,11 @@ from optoanalysis import xml_parse
 from collections import OrderedDict
 import os, time
 import numpy as np
-from PyQt4 import QtCore
+from PyQt4 import QtCore, QtGui
 from ModuleInterfaces import PVImagerCamModInterface
+from acq4.pyqtgraph import SRTTransform3D, Point
+import deviceTemplate
+
 
 class PrairieViewImager(OptomechDevice, Device):
 
@@ -29,6 +32,9 @@ class PrairieViewImager(OptomechDevice, Device):
 
     def setup(self):
         self.pv.setSaveDirectory(self._saveDirectory)
+
+    def deviceTransform(self, subdev=None):
+        return SRTTransform3D(OptomechDevice.deviceTransform(self, subdev))
         
 
     def acquireFrames(self, n=1, stack=True):
@@ -71,14 +77,14 @@ class PrairieViewImager(OptomechDevice, Device):
         info = OrderedDict()
 
         if xml_attrs['Environment']['XAxis_umPerPixel'] == xml_attrs['Environment']['YAxis_umPerPixel']:
-            info['pixelSize'] = xml_attrs['Environment']['XAxis_umPerPixel']/self.scale
+            info['pixelSize'] = xml_attrs['Environment']['XAxis_umPerPixel']*self.scale
 
         x = xml_attrs['Environment']['XAxis']
         y = xml_attrs['Environment']['YAxis']
         z = xml_attrs['Environment']['ZAxis']
 
-        info['frameTransform'] = {'pos':(x, y, z)}
-        info['deviceTransform'] = {}
+        info['frameTransform'] = self.makeFrameTransform(xml_attrs)
+        info['deviceTransform'] = self.deviceTransform()
         info['PrairieMetaInfo'] = xml_attrs
         info['time'] = time.time()
 
@@ -90,6 +96,60 @@ class PrairieViewImager(OptomechDevice, Device):
         ## connect to Manager.sigCurrentDirChanged to have Prairie change the save path to match acq4's directory structure?
 
         ## save file using DirHandle.writeFile
+
+    def makeFrameTransform(self, info):
+        ### Need to make a transform that maps from image coordinates (0,0 in top left) to device coordinates.
+        ### Need to divide pixelSize here by objective scale so that it can be re-devided by Microscope in the deviceTransform
+        xPixelSize = info['Environment']['XAxis_umPerPixel']*self.scale
+        yPixelSize = info['Environment']['YAxis_umPerPixel']*self.scale
+        
+        tr = SRTTransform3D()
+        
+
+        ### Scaling
+        # calculate scale of device transform 
+        dtrans = self.deviceTransform()
+        dxscale = Point(dtrans.map(Point(0, 0)) - dtrans.map(Point(1, 0))).length()
+        dyscale = Point(dtrans.map(Point(0, 0)) - dtrans.map(Point(0, 1))).length()
+
+        # frame scale takes us the rest of the way
+        fxscale = xPixelSize / dxscale
+        fyscale = yPixelSize / dyscale
+
+        
+        tr.setScale(fxscale, fyscale)
+        tr.setRotate(-90.) ## to match what's on PrairieView screen
+        #print("FrameTransform scale:", fxscale, fyscale)
+        #print("               pixelSize:", xPixelSize, yPixelSize)
+
+        ## Translation
+        ## move center of image to center of device
+        imageWidth = info['Environment']['PixelsPerLine']*xPixelSize
+        imageHeight = info['Environment']['LinesPerFrame']*yPixelSize
+
+        voltageWidth = info['Environment']['ScannerVoltages']['XAxis_maxVoltage'] - info['Environment']['ScannerVoltages']['XAxis_minVoltage']
+        voltageHeight = info['Environment']['ScannerVoltages']['YAxis_maxVoltage'] - info['Environment']['ScannerVoltages']['YAxis_minVoltage']
+
+        centerVoltageX = info['Environment']['ScannerVoltages']['XAxis_currentScanCenter']
+        centerVoltageY = info['Environment']['ScannerVoltages']['YAxis_currentScanCenter']
+
+        centerX = (imageWidth/voltageWidth)*centerVoltageX
+        centerY = (imageHeight/voltageHeight)*centerVoltageY
+
+        ## find corner, from center
+        x = centerX - imageWidth/2.
+        y = centerY - imageHeight/2.
+
+        tr.setTranslate(x, y)
+        #print("FrameTransform translate:", x, y)
+
+
+        return tr
+
+        
+
+
+
 
     def loadImages(self, images, dirPath):
         ## images is a tuple of image file names (as strings) as saved in Prairie's .xml meta info
@@ -111,6 +171,14 @@ class PrairieViewImager(OptomechDevice, Device):
     def moduleInterface(self, mod):
         return PVImagerCamModInterface(self, mod)
 
+    def deviceInterface(self, win):
+        return PrairieImagerDeviceGui(self, win)
+
+    def setOffset(self, pos):
+        tr = self.deviceTransform()
+        tr.setTranslate(pos)
+        self.setDeviceTransform(tr)
+
 
     # def isDone(self, imagePath):
     #     # If 'RAWDATA' file appears in the tseries folder, then we assume the tseries is not done yet
@@ -118,3 +186,45 @@ class PrairieViewImager(OptomechDevice, Device):
     #         return True
     #     else:
     #         return False
+
+
+class PrairieImagerDeviceGui(QtGui.QWidget):
+
+    def __init__(self, dev, win):
+        QtGui.QWidget.__init__(self)
+
+        self.dev = dev
+        self.win = win
+
+        self.ui = deviceTemplate.Ui_Form()
+        self.ui.setupUi(self)
+
+        opts = {'suffix': 'm',
+                'siPrefix': True,
+                'step': 1e-6,
+                'decimals':3}
+        self.ui.xOffsetSpin.setOpts(**opts)
+        self.ui.yOffsetSpin.setOpts(**opts)
+        self.blockSpinChange = False
+
+        self.ui.xOffsetSpin.sigValueChanged.connect(self.offsetSpinChanged)
+        self.ui.yOffsetSpin.sigValueChanged.connect(self.offsetSpinChanged)
+        self.dev.sigTransformChanged.connect(self.updateSpins)
+
+        self.updateSpins()
+
+    def offsetSpinChanged(self, spin):
+        if self.blockSpinChange:
+            return
+
+        self.dev.sigTransformChanged.disconnect(self.updateSpins)
+        try:
+            self.dev.setOffset((self.ui.xOffsetSpin.value(), self.ui.yOffsetSpin.value()))
+        finally:
+            self.dev.sigTransformChanged.connect(self.updateSpins)
+
+        
+    def updateSpins(self):
+        offset = self.dev.deviceTransform().getTranslation()
+        self.ui.xOffsetSpin.setValue(offset.x())
+        self.ui.yOffsetSpin.setValue(offset.y())

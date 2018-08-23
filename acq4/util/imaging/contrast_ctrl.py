@@ -123,10 +123,16 @@ class ContrastCtrl(QtGui.QWidget):
 
         self.imageItem.setOpacity(self.alpha)
 
-class RGBContrastCtrl(QtGui.QWidget):
+class RGBContrastCtrl(ContrastCtrl):
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        ContrastCtrl.__init__(self, parent)
+
+        self.ui.histogram.hide()
+        #self.ui.histogram.item.rgbHistogram = True
+        #self.ui.histogram.item.setLevelMode('rgba')
+        self.ui.btnAutoGain.setChecked(False)
+        self.ui.btnAutoGain.setEnabled(False)
 
         self.imageItem = None
 
