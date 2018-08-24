@@ -91,11 +91,6 @@ class PrairieViewImager(OptomechDevice, Device):
         self.sigNewFrame.emit(frame)
         return frame
 
-
-        ## connect to Manager.sigCurrentDirChanged to have Prairie change the save path to match acq4's directory structure?
-
-        ## save file using DirHandle.writeFile
-
     def makeFrameTransform(self, info):
         ### Need to make a transform that maps from image coordinates (0,0 in top left) to device coordinates.
         ### Need to divide pixelSize here by objective scale so that it can be re-devided by Microscope in the deviceTransform
@@ -135,12 +130,15 @@ class PrairieViewImager(OptomechDevice, Device):
         centerX = (imageWidth/voltageWidth)*centerVoltageX
         centerY = (imageHeight/voltageHeight)*centerVoltageY
 
-        ## find corner, from center
-        x = centerX - imageWidth/2.
-        y = centerY - imageHeight/2.
+        ## find bottom-left corner, from center
+        x = (centerX - imageWidth/2.)
+        y = (centerY - imageHeight/2.)
 
-        tr.setTranslate(x, y)
-        #print("FrameTransform translate:", x, y)
+        globalTopLeft = Point(x, -y)
+        idtrans = self.inverseGlobalTransform()
+        localTopLeft = idtrans.map(globalTopLeft) - idtrans.map(Point([0, 0]))
+
+        tr.setTranslate(localTopLeft.x(), localTopLeft.y())
 
 
         return tr
