@@ -31,6 +31,10 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.dev().setup() ##set save directory
 
+        self.imagingCtrl.ui.stackWidget.hide()
+        self.imagingCtrl.ui.frameRateWidget.hide()
+        self.imagingCtrl.ui.acquireVideoBtn.setEnabled(False)
+
         # ## set up item groups
         # self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
         # self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
@@ -47,6 +51,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
+
 
 
 
@@ -86,14 +91,24 @@ class PVImagerCamModInterface(CameraModuleInterface):
         #raise NotImplementedError(str(self))
         return self.getDevice().acquireFrames(1, stack=False)
 
+    def setAcquireBtn(self, b):
+        btn = self.imagingCtrl.ui.acquireFrameBtn
+        if b:
+            btn.setText('Acquire Frame')
+            btn.setEnabled(True)
+        else:
+            btn.setText('Acquiring...')
+            btn.setEnabled(False)
+
     def acquireFrameClicked(self):
+        self.setAcquireBtn(False)
         frame = self.getDevice().acquireFrames(1, stack=False)
+        self.setAcquireBtn(True)
         self.imagingCtrl.newFrame(frame)
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
-        #self.imageItem.setTransform(frame.frameTransform().as2D())
-        self.imageItem.setTransform(frame.globalTransform().as2D())    
+        self.imageItem.setTransform(frame.globalTransform().as2D())   
 
 
 
