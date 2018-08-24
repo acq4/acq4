@@ -29,7 +29,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.view.addItem(self.imageItem)
 
-        self.lastFrame = None
+        self.dev().setup() ##set save directory
 
         # ## set up item groups
         # self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
@@ -47,7 +47,6 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
-        self.dev().sigTransformChanged.connect(self.deviceTransformUpdated)
 
 
 
@@ -94,13 +93,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
         #self.imageItem.setTransform(frame.frameTransform().as2D())
-        self.lastFrame = frame
-        self.imageItem.setTransform(frame.globalTransform().as2D())
-        
-    def deviceTransformUpdated(self, dev):
-        ##Need to update the image transform when the user updates the deviceTransform (by adjusting offsets in the gui)
-        if self.lastFrame is not None:
-            self.imageItem.setTransform(self.lastFrame.globalTransform().as2D())
+        self.imageItem.setTransform(frame.globalTransform().as2D())    
 
 
 

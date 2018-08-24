@@ -62,7 +62,6 @@ class PrairieViewImager(OptomechDevice, Device):
 
 
         imageName = imageBaseName+'-%03d'%imageID
-        #imageName = "ACQ4_image-000"
         imagePath = os.path.join(self._imageDirectory, imageName)
         xmlPath = os.path.join(imagePath, imageName+'.xml')
 
@@ -84,7 +83,7 @@ class PrairieViewImager(OptomechDevice, Device):
         z = xml_attrs['Environment']['ZAxis']
 
         info['frameTransform'] = self.makeFrameTransform(xml_attrs)
-        info['deviceTransform'] = self.deviceTransform()
+        info['deviceTransform'] = self.globalTransform()
         info['PrairieMetaInfo'] = xml_attrs
         info['time'] = time.time()
 
@@ -108,7 +107,7 @@ class PrairieViewImager(OptomechDevice, Device):
 
         ### Scaling
         # calculate scale of device transform 
-        dtrans = self.deviceTransform()
+        dtrans = self.globalTransform()
         dxscale = Point(dtrans.map(Point(0, 0)) - dtrans.map(Point(1, 0))).length()
         dyscale = Point(dtrans.map(Point(0, 0)) - dtrans.map(Point(0, 1))).length()
 
@@ -172,7 +171,8 @@ class PrairieViewImager(OptomechDevice, Device):
         return PVImagerCamModInterface(self, mod)
 
     def deviceInterface(self, win):
-        return PrairieImagerDeviceGui(self, win)
+        #return PrairieImagerDeviceGui(self, win) ## use for debugging transform, doesn't display info that makes sense for a user
+        return None
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
@@ -202,9 +202,10 @@ class PrairieImagerDeviceGui(QtGui.QWidget):
         opts = {'suffix': 'm',
                 'siPrefix': True,
                 'step': 1e-6,
-                'decimals':3}
+                'decimals':4}
         self.ui.xOffsetSpin.setOpts(**opts)
         self.ui.yOffsetSpin.setOpts(**opts)
+        self.ui.zOffsetSpin.setOpts(**opts)
         self.blockSpinChange = False
 
         self.ui.xOffsetSpin.sigValueChanged.connect(self.offsetSpinChanged)
@@ -228,3 +229,4 @@ class PrairieImagerDeviceGui(QtGui.QWidget):
         offset = self.dev.deviceTransform().getTranslation()
         self.ui.xOffsetSpin.setValue(offset.x())
         self.ui.yOffsetSpin.setValue(offset.y())
+        self.ui.zOffsetSpin.setValue(offset.z())
