@@ -65,12 +65,18 @@ class PrairieViewImager(OptomechDevice, Device):
         imagePath = os.path.join(self._imageDirectory, imageName)
         xmlPath = os.path.join(imagePath, imageName+'.xml')
 
-        #while not self.isDone(imagePath):
-        #    time.sleep(0.1)
-        time.sleep(8)
+        while not self.isXmlDone(xmlPath):
+            QtGui.QApplication.processEvents()
 
         xml_attrs = xml_parse.ParseTSeriesXML(xmlPath, imagePath)
 
+        for im in xml_attrs['SingleImage']['Frames'][0]['Images']:
+            p = os.path.join(imagePath, im)
+            while not self.isTifDone(p):
+                QtGui.QApplication.processEvents()
+
+
+        #time.sleep(1)## wait for images to be written
         images = self.loadImages(xml_attrs['SingleImage']['Frames'][0]['Images'], imagePath)
 
         info = OrderedDict()
@@ -142,6 +148,26 @@ class PrairieViewImager(OptomechDevice, Device):
 
 
         return tr
+
+    def isXmlDone(self, filePath):
+        if not os.path.exists(filePath):
+            return False
+        size = os.path.getsize(filePath)
+        end = ''
+        if size > 9:
+            f = open(filePath, 'r')
+            f.seek(-9, os.SEEK_END)
+            end = f.read()
+            f.close()
+        if end == '</PVScan>':
+            return True
+       
+        return False
+
+    def isTifDone(self, filePath):
+        if not os.path.exists(filePath):
+            return False
+        return True
 
         
 
