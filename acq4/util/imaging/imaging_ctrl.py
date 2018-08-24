@@ -292,9 +292,7 @@ class ImagingCtrl(QtGui.QWidget):
         else:            
             self.ui.saveFrameBtn.success("Saved.")
 
-class RGBImagingCtrl(ImagingCtrl):
 
-    frameDisplayClass = RGBFrameDisplay
 
 
 

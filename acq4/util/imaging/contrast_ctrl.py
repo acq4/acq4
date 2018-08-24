@@ -86,7 +86,7 @@ class ContrastCtrl(QtGui.QWidget):
 
         if self.ui.btnAutoGain.isChecked():
             cw = self.ui.spinAutoGainCenterWeight.value()
-            (w, h) = data.shape
+            (w, h) = data.shape[:2]
             center = data[w//2-w//6:w//2+w//6, h//2-h//6:h//2+h//6]
             minVal = data.min() * (1.0-cw) + center.min() * cw
             maxVal = data.max() * (1.0-cw) + center.max() * cw
@@ -123,30 +123,6 @@ class ContrastCtrl(QtGui.QWidget):
 
         self.imageItem.setOpacity(self.alpha)
 
-class RGBContrastCtrl(ContrastCtrl):
 
-    def __init__(self, parent=None):
-        ContrastCtrl.__init__(self, parent)
-
-        self.ui.histogram.hide()
-        #self.ui.histogram.item.rgbHistogram = True
-        #self.ui.histogram.item.setLevelMode('rgba')
-        self.ui.btnAutoGain.setChecked(False)
-        self.ui.btnAutoGain.setEnabled(False)
-
-        self.imageItem = None
-
-    def setImageItem(self, item):
-        self.imageItem = item
-
-    def processImage(self, data):
-        """Data is an RGB image."""
-
-        nonZero = data != 0
-
-        mn = data[nonZero].min()
-        mx = data[nonZero].max()
-
-        self.imageItem.setLevels([[mn, mx], [mn, mx], [mn, mx]])
 
 

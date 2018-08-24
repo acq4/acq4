@@ -1,7 +1,7 @@
 from moduleTemplate import Ui_Form
 from PyQt4 import QtGui, QtCore
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.util.imaging.imaging_ctrl import RGBImagingCtrl
+from acq4.util.imaging.imaging_ctrl import ImagingCtrl
 import acq4.pyqtgraph as pg
 
 class PVImagerModuleGui(QtGui.QWidget):
@@ -23,8 +23,9 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.view = cameraModule.window().view
 
-        self.imagingCtrl = RGBImagingCtrl()
+        self.imagingCtrl = ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
+        self.frameDisplay.contrastCtrl.ui.spinAutoGainSpeed.setValue(0)
         self.imageItem = self.frameDisplay.imageItem()
 
         self.view.addItem(self.imageItem)
