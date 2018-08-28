@@ -1,7 +1,7 @@
 
 from PyQt4 import QtGui, QtCore
 from acq4 import pyqtgraph as pg
-from .frame_display import FrameDisplay, RGBFrameDisplay
+from .frame_display import FrameDisplay
 from .imaging_template import Ui_Form
 from .record_thread import RecordThread
 from acq4.util.debug import printExc
