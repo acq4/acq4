@@ -89,11 +89,9 @@ class ImageFile(FileType):
             img = Image.fromarray(data.transpose())
             img.save(os.path.join(dirHandle.name(), fileName))
         except TypeError:
-            raise Exception("Saving 3channel, 16bit tiff files is not yet implemented.")
-            ### This works for saving, but there are problems with reading the files back in.
-            #import tifffile
-            #name = os.path.join(dirHandle.name(), fileName)
-            #tifffile.imsave(name, data, photometric='rgb')
+            import tifffile
+            name = os.path.join(dirHandle.name(), fileName)
+            tifffile.imsave(name, data.transpose(), photometric='rgb')
 
         #if ext in ['tif', 'tiff']:
             #d = data.transpose()
@@ -112,10 +110,8 @@ class ImageFile(FileType):
         try:
             img = Image.open(fileHandle.name())
         except IOError:
-            raise Exception('Reading 3channel 16bit tiff files is not yet implemented.')
-            ## the following two lines work, but we run into problems below
-            #import tifffile
-            #img = tifffile.imread(fileHandle.name()).transpose()
+            import tifffile
+            img = tifffile.imread(fileHandle.name())
 
         arr = array(img)
         if arr.ndim == 0:
@@ -145,7 +141,11 @@ class ImageFile(FileType):
             transp[1] = 0
             axisHint = ['x', 'y']
         elif arr.ndim == 3:
-            if len(img.getbands()) > 1:
+            if not hasattr(img, 'getbands'): ## then we're dealing with a tifffile image instead of a PIL image
+                #transp[0] = 1
+                #transp[1] = 0
+                axisHint = ['x', 'y', 'R', 'G', 'B']
+            elif len(img.getbands()) > 1:
                 transp[0] = 1
                 transp[1] = 0
                 axisHint = ['x', 'y']
@@ -161,7 +161,8 @@ class ImageFile(FileType):
             raise Exception("Bad image size: %s" % str(arr.ndim))
         #print arr.shape
         arr = arr.transpose(tuple(transp))
-        axisHint.append(img.getbands())
+        if hasattr(img, 'getbands'):
+            axisHint.append(img.getbands())
         
         arr = Array(arr) ## allow addition of new attributes
         arr.axisHint = arr
