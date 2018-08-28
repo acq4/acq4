@@ -49,6 +49,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
         # self.view.addItem(self.imageItem)
         # self.imageItem.setParentItem(self.imageItemGroup)
         # self.imageItem.setZValue(-10)
+        self.lastFrame = None
 
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
@@ -109,6 +110,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
+        self.lastFrame = frame
         self.imageItem.setTransform(frame.globalTransform().as2D())   
 
 

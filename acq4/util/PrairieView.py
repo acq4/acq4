@@ -8,6 +8,7 @@ from acq4.pyqtgraph.Qt import QtGui, QtCore
 from acq4.util.Mutex import Mutex
 import win32com.client
 import pythoncom
+import os
 
 class PrairieView(QtCore.QObject):
 
@@ -21,6 +22,7 @@ class PrairieView(QtCore.QObject):
         self.pl_socket = None
         self.connected = False
         self.lock = Mutex()
+        self.publicFilePath = 'M:'
 
 
     def connect_to_prairie(self):
@@ -114,6 +116,16 @@ class PrairieView(QtCore.QObject):
     def setSaveDirectory(self, dirPath):
         self.call_pl('-SetSavePath %s' % dirPath)
 
+    def markPoints(self, pos, laserPower, duration, spiralSize, revolutions):
+        self.call_pl("-MarkPoints %f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration, laserPower, spiralSize, revolutions))
+
     
+    def loadMarkPoints(self, filename=None):
+        if filename is None:
+            filename = os.path.join(self.publicFilePath, 'acq4_MarkPoints.xml')
+        self.call_pl("-LoadMarkPoints %s" %filename)
+
+
+
 
 
