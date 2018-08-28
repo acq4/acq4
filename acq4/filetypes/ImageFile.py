@@ -85,10 +85,16 @@ class ImageFile(FileType):
         """
         fileName = cls.addExtension(fileName)
         ext = os.path.splitext(fileName)[1].lower()[1:]
-        
-        img = Image.fromarray(data.transpose())
-        img.save(os.path.join(dirHandle.name(), fileName))
-        
+        try:
+            img = Image.fromarray(data.transpose())
+            img.save(os.path.join(dirHandle.name(), fileName))
+        except TypeError:
+            raise Exception("Saving 3channel, 16bit tiff files is not yet implemented.")
+            ### This works for saving, but there are problems with reading the files back in.
+            #import tifffile
+            #name = os.path.join(dirHandle.name(), fileName)
+            #tifffile.imsave(name, data, photometric='rgb')
+
         #if ext in ['tif', 'tiff']:
             #d = data.transpose()
             #tiff = libtiff.TIFFimage(d, description='')
@@ -103,7 +109,14 @@ class ImageFile(FileType):
     @classmethod
     def read(cls, fileHandle):
         """Read a file, return a data object"""
-        img = Image.open(fileHandle.name())
+        try:
+            img = Image.open(fileHandle.name())
+        except IOError:
+            raise Exception('Reading 3channel 16bit tiff files is not yet implemented.')
+            ## the following two lines work, but we run into problems below
+            #import tifffile
+            #img = tifffile.imread(fileHandle.name()).transpose()
+
         arr = array(img)
         if arr.ndim == 0:
             raise Exception("Image has no data. Either 1) this is not a valid image or 2) PIL does not support this image type.")

@@ -88,8 +88,8 @@ class PrairieViewImager(OptomechDevice, Device):
         y = xml_attrs['Environment']['YAxis']
         z = xml_attrs['Environment']['ZAxis']
 
-        info['frameTransform'] = self.makeFrameTransform(xml_attrs)
-        info['deviceTransform'] = self.globalTransform()
+        info['frameTransform'] = SRTTransform3D(self.makeFrameTransform(xml_attrs))
+        info['deviceTransform'] = SRTTransform3D(self.globalTransform())
         info['PrairieMetaInfo'] = xml_attrs
         info['time'] = time.time()
 
@@ -180,14 +180,14 @@ class PrairieViewImager(OptomechDevice, Device):
         
         if images[0] is not None:
             filepath = os.path.join(dirPath, images[0])
-            rChn = np.array(Image.open(filepath))
+            rChn = np.array(Image.open(filepath)).astype(int)
             #rChn = np.transpose(rChn)
 
         if images[1] is not None:
             filepath = os.path.join(dirPath, images[1])
-            gChn = np.array(Image.open(filepath))
+            gChn = np.array(Image.open(filepath)).astype(int)
             #gChn = np.transpose(gChn)
-        bChn = np.zeros(rChn.shape)
+        bChn = np.zeros(rChn.shape).astype(int)
 
         return np.stack([rChn, gChn, bChn], axis=-1)
 
