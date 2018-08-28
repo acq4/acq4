@@ -6,6 +6,7 @@ from .imaging_template import Ui_Form
 from .record_thread import RecordThread
 from acq4.util.debug import printExc
 
+PINNED_FRAME_ZVALUE = -10000 #start here
 
 class ImagingCtrl(QtGui.QWidget):
     """Control widget used to interact with imaging devices. 
@@ -259,11 +260,13 @@ class ImagingCtrl(QtGui.QWidget):
         hist = self.frameDisplay.contrastCtrl.ui.histogram
         im = pg.ImageItem(data, levels=hist.getLevels(), lut=hist.getLookupTable(img=data), removable=True)
         im.sigRemoveRequested.connect(self.removePinnedFrame)
-        if len(self.pinnedFrames) == 0:
-            z = -10000
-        else:
-            z = self.pinnedFrames[-1].zValue() + 1
-        im.setZValue(z)
+        #if len(self.pinnedFrames) == 0:
+        #    z = -10000
+        #else:
+        #    z = self.pinnedFrames[-1].zValue() + 1
+        global PINNED_FRAME_ZVALUE
+        PINNED_FRAME_ZVALUE += 1
+        im.setZValue(PINNED_FRAME_ZVALUE)
 
         self.pinnedFrames.append(im)
         view = self.frameDisplay.imageItem().getViewBox()
