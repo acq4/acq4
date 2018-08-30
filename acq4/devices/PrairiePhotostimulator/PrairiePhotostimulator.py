@@ -23,7 +23,7 @@ baseDicts = {
             ('TriggerSelection', 'TrigIn'),
             ('TriggerCount', '1'),
             ('AsyncSyncFrequency', 'EveryPoint'),
-            ('VoltageOutputCatagoryName', 'None'),
+            ('VoltageOutputCategoryName', 'None'),
             ('VoltageRecCategoryName','None'),
             ('parameterSet', 'CurrentSettings')]),
     'PVGalvoPointElement':OrderedDict([
@@ -50,12 +50,24 @@ class PrairiePhotostimulator(Device, OptomechDevice):
     def moduleGui(self, mod):
         return PrairiePhotostimModGui(self, mod)
 
-    # def stimulate(self, pos, laserPower, duration, spiralSize, revolutions):
-    #     self.pv.markPoints(pos, laserPower, duration, spiralSize, revolutions)
-    def runStimulation(self, xml):
-        filePath = os.path.join(self.pv.publicFilePath, 'acq4_MarkPoints.xml')
-        xml.write(filePath)
-        self.pv.loadMarkPoints()
+
+
+    def mapToPrairie(self, pos, frame):
+        #frame = man.getModule('PrairieViewStimulator').window().interface.lastFrame ## get the last frame from PrairieImagerDevice
+        ## map pos to frame coordinates, p will be in pixels
+        p = pg.Point(frame.globalTransform().inverted()[0].map(pos))
+        
+        ## map from pixels to percent of image
+        xPixels = frame.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
+        yPixels = frame.info()['PrairieMetaInfo']['Environment']['LinesPerFrame']
+
+        x = p.x()/float(xPixels)
+        y = p.y()/float(yPixels)
+
+        return (x, y)
+
+    def runStimulation(self, params):
+        self.pv.markPoints(params['pos'], params['duration'], params['laserPower'], params['spiralSize'], params['spiralRevolutions'])
 
 
 
@@ -147,6 +159,22 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
         return et.ElementTree(seriesElement)
 
+    def getStimulationCmds(self, pts):
+        ## return a list of dicts with per point info that Prairie needs
+        frame = self.parent().window().interface.lastFrame
+        cmds = []
+        for p in pts:
+            d = {}
+            d['pos'] = self.dev.mapToPrairie(p.getPos(), frame)
+            d['duration'] = self.spiralParams['duration'] * 1000 ## convert to ms for prairie
+            d['laserPower'] = self.spiralParams['laser power'] ## can leave this as percent
+            d['spiralSize'] = abs(self.dev.mapToPrairie((self.spiralParams['size'], 0), frame)[0])
+            d['spiralRevolutions'] = self.spiralParams['spiral revolutions']
+            cmds.append(d)
+        return cmds
+
+    #frame = man.getModule('PrairieViewStimulator').window().interface.lastFrame
+
     # def stimulate(self, pt):
     #     pos = mapToPrairie(pt.getPos())
     #     laserPower = self.spiralParams['laser power']
@@ -157,19 +185,18 @@ class PrairiePhotostimModGui(QtGui.QWidget):
     #     self.dev.stimulate(pos, laserPower, duration, spiralSize, revolutions)
 
 
-    def mapToPrairie(self, pos):
-        frame = self.parent().window().interface.lastFrame ## get the last frame from PrairieImagerDevice
-        ## map pos to frame coordinates, p will be in pixels
-        p = pg.Point(frame.globalTransform().inverted()[0].map(pos))
-        
-        ## map from pixels to percent of image
-        xPixels = frame.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
-        yPixels = frame.info()['PrairieMetaInfo']['Environment']['LinesPerFrame']
 
-        x = p.x()/float(xPixels)
-        y = p.y()/float(yPixels)
 
-        return (x, y)
+
+class Photostimulation():
+
+    def __init__(self, stimPoint, laserPower, laserDuration, shape):
+        self.stimPoint = stimPoint
+        self.pos = self.stimPoint.getPos()
+        self.laserPower = laserPower
+        self.laserDuration = laserDuration
+        self.shape = shape
+
 
 
 
@@ -201,7 +228,7 @@ class PhotostimTarget(TargetItem):
         TargetItem.__init__(self, pen=self.enabledPen)
 
         self.setLabel(str(label))
-        self.setPos(pg.Point(pos))
+        self.setPos(pg.Point(pos)) 
 
     def setEnabledPen(self, b):
         if b:
