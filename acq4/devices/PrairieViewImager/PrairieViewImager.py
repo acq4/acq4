@@ -149,6 +149,7 @@ class PrairieViewImager(OptomechDevice, Device):
         return tr
 
     def isXmlDone(self, filePath):
+        """Return True if the xml in filePath ends with </PVScan> (the expected ending for PrairieView xmls)."""
         if not os.path.exists(filePath):
             return False
         size = os.path.getsize(filePath)
@@ -164,6 +165,7 @@ class PrairieViewImager(OptomechDevice, Device):
         return False
 
     def isTifDone(self, filePath):
+        """Return True if filePath exists. There is probably a better way to do this."""
         if not os.path.exists(filePath):
             return False
         return True
@@ -193,13 +195,14 @@ class PrairieViewImager(OptomechDevice, Device):
         return None
 
     def setOffset(self, pos):
+        """Translate the device transform by pos. For use with PrarieImagerDeviceGui."""
         tr = self.deviceTransform()
         tr.setTranslate(pos)
         self.setDeviceTransform(tr)
 
 
 class PrairieImagerDeviceGui(QtGui.QWidget):
-
+    """A device gui that implements spinBoxes for the user to adjust the offset of the PrairieImagerDevice"""
     def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
 
