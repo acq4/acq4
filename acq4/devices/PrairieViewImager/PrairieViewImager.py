@@ -15,6 +15,7 @@ import deviceTemplate
 
 
 class PrairieViewImager(OptomechDevice, Device):
+    """A device for acquiring 2-photon images through PrairieView software."""
 
     sigNewFrame = QtCore.Signal(object)
 
@@ -31,6 +32,8 @@ class PrairieViewImager(OptomechDevice, Device):
         self.scale = 1e-6
 
     def setup(self):
+        """Tell Prairie where to save images so acq4 can find them. This should be called
+        when initializing modules that need acq4 to retrieve images from Prairie. """
         self.pv.setSaveDirectory(self._saveDirectory)
 
     def deviceTransform(self, subdev=None):
@@ -38,29 +41,23 @@ class PrairieViewImager(OptomechDevice, Device):
         
 
     def acquireFrames(self, n=1, stack=True):
-        """Immediately acquire and return a specific number of frames.
-
-        This method blocks until all frames are acquired and may not be supported by all camera
-        types.
-
-        All frames are returned stacked within a single Frame instance, as a 3D or 4D array.
-
-        If *stack* is False, then the first axis is dropped and the resulting data will instead be
-        2D or 3D.
+        """Immediately acquire and return a Frame instance. Currently we only 
+        support acquiring one image at a time (n=1).
         """
 
-        ### Have pv acquire a frame, grab it, display it.
+        
 
         if n > 1:
             raise Exception("%s can only acquire one frame at a time." % self.name())
 
+        ### Have pv acquire a frame
         imageBaseName = "ACQ4_image"
         imageID = self._frameIDcounter
         self._frameIDcounter += 1
 
         self.pv.saveImage(imageBaseName, imageID)
 
-
+        ### Load the metadata (xml) and image
         imageName = imageBaseName+'-%03d'%imageID
         imagePath = os.path.join(self._imageDirectory, imageName)
         xmlPath = os.path.join(imagePath, imageName+'.xml')
@@ -75,10 +72,9 @@ class PrairieViewImager(OptomechDevice, Device):
             while not self.isTifDone(p):
                 QtGui.QApplication.processEvents()
 
-
-        #time.sleep(1)## wait for images to be written
         images = self.loadImages(xml_attrs['SingleImage']['Frames'][0]['Images'], imagePath)
 
+        ## Organize/create metainfo to go along with Frame
         info = OrderedDict()
 
         if xml_attrs['Environment']['XAxis_umPerPixel'] == xml_attrs['Environment']['YAxis_umPerPixel']:
@@ -99,7 +95,6 @@ class PrairieViewImager(OptomechDevice, Device):
 
     def makeFrameTransform(self, info):
         ### Need to make a transform that maps from image coordinates (0,0 in top left) to device coordinates.
-        ### Need to divide pixelSize here by objective scale so that it can be re-devided by Microscope in the deviceTransform
         xPixelSize = info['Environment']['XAxis_umPerPixel']*self.scale
         yPixelSize = info['Environment']['YAxis_umPerPixel']*self.scale
         
@@ -169,11 +164,6 @@ class PrairieViewImager(OptomechDevice, Device):
             return False
         return True
 
-        
-
-
-
-
     def loadImages(self, images, dirPath):
         ## images is a tuple of image file names (as strings) as saved in Prairie's .xml meta info
         ## dirPath is the directory path that contains those images
@@ -202,14 +192,6 @@ class PrairieViewImager(OptomechDevice, Device):
         tr = self.deviceTransform()
         tr.setTranslate(pos)
         self.setDeviceTransform(tr)
-
-
-    # def isDone(self, imagePath):
-    #     # If 'RAWDATA' file appears in the tseries folder, then we assume the tseries is not done yet
-    #     if not any('RAWDATA' in substring for substring in [f for f in os.listdir(imagePath)]):
-    #         return True
-    #     else:
-    #         return False
 
 
 class PrairieImagerDeviceGui(QtGui.QWidget):
