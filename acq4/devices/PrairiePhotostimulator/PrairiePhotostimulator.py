@@ -95,7 +95,7 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         self.ui.stimulusParamTree.addParameters(self.spiralParams)
         self.stimPoints = []
         self.counter = 0
-        self.ui.iterationsSpin.setValue(1)
+        #self.ui.iterationsSpin.setValue(1)
 
         self.parent().prairieImagerDevice.sigNewFrame.connect(self.newFrame)
 
