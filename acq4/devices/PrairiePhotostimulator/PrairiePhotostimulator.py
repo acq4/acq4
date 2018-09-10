@@ -6,7 +6,7 @@ import pyqtgraph as pg
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
 import xml.etree.ElementTree as et
-from acq4.util.PrairieView import PrairieView
+#from acq4.util.PrairieView import PrairieView
 import os
 from collections import OrderedDict
 
@@ -44,8 +44,13 @@ class PrairiePhotostimulator(Device, OptomechDevice):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
 
-        ip = config.get('ipaddress', None)
-        self.pv = PrairieView(ip)
+        if config.get('mock', False):
+            from acq4.util.MockPrairieView import MockPrairieView
+            self.pv = MockPrairieView()
+        else:
+            ip = config.get('ipaddress', None)
+            from acq4.util.PrairieView import PrairieView
+            self.pv = PrairieView(ip)
 
     def moduleGui(self, mod):
         return PrairiePhotostimModGui(self, mod)

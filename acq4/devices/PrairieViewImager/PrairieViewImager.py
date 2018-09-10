@@ -1,6 +1,6 @@
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Device import Device
-from acq4.util.PrairieView import PrairieView
+#from acq4.util.PrairieView import PrairieView, MockPrairieView
 from acq4.util.imaging.frame import Frame
 from PIL import Image
 import os
@@ -23,8 +23,13 @@ class PrairieViewImager(OptomechDevice, Device):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
 
-        ip = config.get('ipaddress', None)
-        self.pv = PrairieView(ip)
+        if config.get('mock', False):
+            from acq4.util.MockPrairieView import MockPrairieView
+            self.pv = MockPrairieView()
+        else:
+            from acq4.util.PrairieView import PrairieView
+            ip = config.get('ipaddress', None)
+            self.pv = PrairieView(ip)
         #self.pv.setSaveDirectory('C:/Megan/acq4_data')
         self._saveDirectory = os.path.abspath('C:/Megan/acq4_data') ## where we tell Prairie to save data
         self._imageDirectory = os.path.abspath('Z:/Megan/acq4_data') ## where we retrieve prairie's data from
