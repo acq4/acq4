@@ -58,8 +58,10 @@ class PrairiePhotostimulator(Device, OptomechDevice):
 
 
     def mapToPrairie(self, pos, frame):
+        """Map *pos* from global coordinates to frame coordinates, then map frame coordinates to between 0 and 1. """
         #frame = man.getModule('PrairieViewStimulator').window().interface.lastFrame ## get the last frame from PrairieImagerDevice
         ## map pos to frame coordinates, p will be in pixels
+
         p = pg.Point(frame.globalTransform().inverted()[0].map(pos))
         
         ## map from pixels to percent of image
@@ -118,7 +120,7 @@ class PrairiePhotostimModGui(QtGui.QWidget):
     def newFrame(self, frame):
         ### check if stimulationPoints are within new frame, deactivate them if not
         for sp in self.stimPoints:
-            if 0 < self.mapToPrairie(sp.getPos()) < 1:
+            if 0 < self.dev.mapToPrairie(sp.getPos()) < 1:
                 sp.params.setValue(True)
             else: 
                 sp.params.setValue(False)

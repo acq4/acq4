@@ -115,12 +115,11 @@ class PrairieViewImager(OptomechDevice, Device):
         # frame scale takes us the rest of the way
         fxscale = xPixelSize / dxscale
         fyscale = yPixelSize / dyscale
+        fyscale = -fyscale ## flip y direction
 
-        
         tr.setScale(fxscale, fyscale)
-        tr.setRotate(-90.) ## to match what's on PrairieView screen
-        #print("FrameTransform scale:", fxscale, fyscale)
-        #print("               pixelSize:", xPixelSize, yPixelSize)
+
+
 
         ## Translation
         ## move center of image to center of device
@@ -176,12 +175,12 @@ class PrairieViewImager(OptomechDevice, Device):
         if images[0] is not None:
             filepath = os.path.join(dirPath, images[0])
             rChn = np.array(Image.open(filepath)).astype(int)
-            #rChn = np.transpose(rChn)
+            rChn = np.transpose(rChn)
 
         if images[1] is not None:
             filepath = os.path.join(dirPath, images[1])
             gChn = np.array(Image.open(filepath)).astype(int)
-            #gChn = np.transpose(gChn)
+            gChn = np.transpose(gChn)
         bChn = np.zeros(rChn.shape).astype(int)
 
         return np.stack([rChn, gChn, bChn], axis=-1)
