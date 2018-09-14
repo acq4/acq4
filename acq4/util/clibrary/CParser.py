@@ -244,7 +244,10 @@ class CParser():
         try:
             ## read cache file
             import pickle
-            cache = pickle.load(open(cacheFile, 'rb'))
+            try:
+                cache = pickle.load(open(cacheFile, 'r'))
+            except ValueError:
+                cache = pickle.load(open(cacheFile, 'rb'))
             
             ## make sure __init__ options match (unless we can't parse the headers anyway)
             if checkValidity:
