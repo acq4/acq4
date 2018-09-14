@@ -7,7 +7,7 @@ class Trigger(Device):
         self.config = config
 
     def getTriggerChannel(self, daq):
-        if daq in self.config:
-            return self.config[daq]
+        if daq in self.config['channels']:
+            return self.config['channels'][daq]
         return None
         

@@ -21,8 +21,6 @@ class DirTreeLoader(Qt.QWidget):
         self.baseDir = baseDir
         self.currentFile = None
         
-        #self.fileTree = DirTreeModel(baseDir)
-        #self.ui.fileTree.setModel(self.fileTree)
         self.ui.fileTree.setSortMode(sortMode)
         self.ui.fileTree.setBaseDirHandle(baseDir)
         
@@ -45,9 +43,6 @@ class DirTreeLoader(Qt.QWidget):
     def newClicked(self):
         if self.new():
             self.setCurrentFile(None)
-            #self.ui.currentLabel.setText('[ new ]')
-            #self.ui.saveBtn.setEnabled(False)
-            #self.currentFile = None
     
     def new(self):
         raise Exception("Function must be reimplemented in subclass.")
@@ -67,9 +62,6 @@ class DirTreeLoader(Qt.QWidget):
         if self.load(fh):
             fn = fh.name(relativeTo=self.baseDir)
             self.setCurrentFile(fh)
-            #self.ui.currentLabel.setText(fn)
-            #self.ui.saveBtn.setEnabled(True)
-            #self.currentFile = fh
 
     def load(self, handle):
         raise Exception("Function must be reimplemented in subclass.")

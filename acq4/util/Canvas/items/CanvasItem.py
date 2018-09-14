@@ -14,19 +14,19 @@ class CanvasItem(OrigCanvasItem):
             self.opts['handle'] = None
         
         ## reload user transform from disk if possible
+        trans = None
         if self.opts['handle'] is not None:
             trans = self.opts['handle'].info().get('userTransform', None)
-            if trans is not None:
-                self.restoreTransform(trans)
-            elif 'defaultUserTransform' in self.opts:
-                self.restoreTransform(self.opts['defaultUserTransform'])
             if self.opts['name'] is None:
                 self.opts['name'] = self.opts['handle'].shortName()
         else:
             if self.opts['name'] is None:
                 self.opts['name'] = self.typeName()
             
-        
+        if trans is None and 'defaultUserTransform' in self.opts:
+            trans = self.opts['defaultUserTransform']
+        if trans is not None:
+            self.restoreTransform(trans)
 
     @classmethod
     def typeName(cls):

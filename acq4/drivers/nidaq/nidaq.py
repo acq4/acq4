@@ -363,19 +363,19 @@ class Task:
 
     def absChannelName(self, n):
         parts = n.lstrip('/').split('/')
-        if parts[0][:3] != 'Dev':
-            devs = self.GetTaskDevices().split(', ')
+        devs = self.GetTaskDevices().split(', ')
+        if parts[0] not in devs:
             if len(devs) != 1:
                 raise Exception("Cannot determine device to prepend on channel '%s'" % n)
             parts = [devs[0]] + parts
         return '/' + '/'.join(parts)
         
     def taskType(self):
-        #print "taskType:"
+        # print "taskType:"
         ch = self.GetTaskChannels().split(', ')
-        #print ch
+        # print ch
         ch = self.absChannelName(ch[0])
-        #print "First task channel:", ch
+        # print "First task channel:", ch
         return self.GetChanType(ch)
 
     def isInputTask(self):

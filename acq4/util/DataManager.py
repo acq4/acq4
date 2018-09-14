@@ -645,7 +645,10 @@ class DirHandle(FileHandle):
             return time.mktime(time.strptime(m.groups()[0], "%Y.%m.%d"))
         
         ## if all else fails, just ask the file system
-        return os.path.getctime(os.path.join(self.name(), fileName))
+        try:
+            return os.path.getctime(os.path.join(self.name(), fileName))
+        except:
+            return 0
     
     def isGrandparentOf(self, child):
         """Return true if child is anywhere in the tree below this directory."""

@@ -7,7 +7,6 @@ from .FileInfoViewTemplate import *
 from acq4.util import Qt
 from acq4.util.DataManager import DirHandle
 import acq4.Manager as Manager
-#import sip
 import time
 import acq4.util.configfile as configfile
 from acq4.util.DictView import *
@@ -21,7 +20,6 @@ class FocusEventCatcher(Qt.QObject):
         
     def eventFilter(self, obj, event):
         if event.type() == Qt.QEvent.FocusOut:
-            #self.emit(Qt.SIGNAL("lostFocus"), obj)
             self.sigLostFocus.emit(obj)
         return False
 
@@ -36,7 +34,6 @@ class FileInfoView(Qt.QWidget):
         self.widgets = {}
         self.ui.fileInfoLayout = self.ui.formLayout_2
         self.focusEventCatcher = FocusEventCatcher()
-        #Qt.QObject.connect(self.focusEventCatcher, Qt.SIGNAL('lostFocus'), self.focusLost)
         self.focusEventCatcher.sigLostFocus.connect(self.focusLost)
         
     def setCurrentFile(self, file):
@@ -49,61 +46,72 @@ class FileInfoView(Qt.QWidget):
             self.current = None
             return
         
-        #if self.current is not None:
-            #Qt.QObject.disconnect(self.current, Qt.SIGNAL('changed'), self.currentDirChanged)
-        
         self.current = file
         self.clear()
-        #Qt.QObject.connect(self.current, Qt.SIGNAL('changed'), self.currentDirChanged)
         
         ## Decide on the list of fields to display
         info = file.info()
         infoKeys = list(info.keys())
-        #fields = OrderedDict()
         fields = self.manager.suggestedDirFields(file)
-            
         
         ## Generate fields, populate if data exists
         #print "Add %d rows.." % len(fields)
-        for f in fields:
-            if f in infoKeys:
-                infoKeys.remove(f)
-                
-            if type(fields[f]) is tuple:
-                ft = fields[f][0]
-            else:
-                ft = fields[f]
-                
-            if ft == 'text':
+
+        # each field has a number of options that can be set by providing
+        # either a dict or a tuple (where the order of arguments determine their meaning).
+        fieldTypeArgs = {
+            'text': ['numLines', 'default'],
+            'string': ['default'],
+            'list': ['values', 'default'],
+            'bool': ['default'],
+        }
+
+        for fieldName, fieldOpts in fields.items():
+            if fieldName in infoKeys:
+                infoKeys.remove(fieldName)
+            
+            # a single value is interpreted as the first element of a tuple
+            if not isinstance(fieldOpts, (dict, tuple)):
+                fieldOpts = (fieldOpts,)
+            
+            if isinstance(fieldOpts, tuple):
+                fieldTyp = fieldOpts[0]
+                # convert to dict based on order of args
+                fieldOpts = {fieldTypeArgs[fieldTyp][i-1]:fieldOpts[i] for i in range(1, len(fieldOpts))}
+                fieldOpts['type'] = fieldTyp
+
+            fieldTyp = fieldOpts['type']
+
+            # now use args to create a widget for this field                
+            value = info.get(fieldName, fieldOpts.get('default', None))
+            if fieldTyp == 'text':
                 w = Qt.QTextEdit()
                 w.setTabChangesFocus(True)
-                if f in info:
-                    w.setText(info[f])
-            elif ft == 'string':
+                if value is not None:
+                    w.setText(value)
+            elif fieldTyp == 'string':
                 w = Qt.QLineEdit()
-                if f in info:
-                    w.setText(info[f])
-            elif ft == 'list':
+                if value is not None:
+                    w.setText(value)
+            elif fieldTyp == 'list':
                 w = Qt.QComboBox()
-                w.addItems([''] + fields[f][1])
+                w.addItems([''] + fieldOpts['values'])
                 w.setEditable(True)
-                if f in info:
-                    w.lineEdit().setText(info[f])
-            elif ft == 'bool':
+                if value is not None:
+                    w.lineEdit().setText(value)
+            elif fieldTyp == 'bool':
                 w = Qt.QCheckBox()
-                if f in info:
-                    w.setChecked(info[f])
+                if value is not None:
+                    w.setChecked(value)
             else:
-                raise Exception("Don't understand info type '%s' (parameter %s)" % (fields[f][0], f))
-            self.addRow(f, w)
-        #self.ui.fileInfoLayout.setMinAndMaxSize()
+                raise Exception("Don't understand info type '%s' (parameter %s)" % (fieldTyp, fieldName))
+            self.addRow(fieldName, w)
         
         ## Add fields for any other keys that happen to be present
         #print "Add %d rows.." % len(infoKeys)
         for f in infoKeys:
             if isinstance(info[f], dict):
                 w = DictView(info[f])
-                #s = configfile.genString(info[f])
             else:
                 s = str(info[f])
                 if isinstance(f, six.string_types) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
@@ -112,7 +120,6 @@ class FileInfoView(Qt.QWidget):
                         dt = " [elapsed = %0.3f s]" % (info[f] - t0)
                     except:
                         dt = ""
-                        #raise
                     s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(float(s))) + dt
                     
                     
@@ -121,10 +128,6 @@ class FileInfoView(Qt.QWidget):
                 f = '.'.join(f)
             f = str(f).replace('__', '')
             self.addRow(f, w)
-            
-    #def currentDirChanged(self, name, change, *args):
-        #if change in ['renamed', 'moved', 'parent']:
-            #self.setCurrentFile
             
     def addRow(self, name, widget):
         
@@ -155,16 +158,6 @@ class FileInfoView(Qt.QWidget):
     def clear(self):
         #print "clear"
         ## remove all rows from layout
-        #count = 0
         while self.ui.fileInfoLayout.count() > 0:
             w = self.ui.fileInfoLayout.takeAt(0).widget()
-            #sip.delete(w)
             w.setParent(None)
-            
-            
-            #w.setParent(None)
-            #count += 1
-        #print "removed %d widgets" % count
-            
-    
-    

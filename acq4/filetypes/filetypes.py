@@ -56,13 +56,32 @@ def suggestWriteType(data, fileName=None):
     #print "Suggesting", maxType
     return maxType
 
+
 def listReadTypes(fileHandle):
     """List all fileType classes that can read the file indicated."""
     return [typ for typ in listFileTypes() if typ.acceptsFile(fileHandle) is not False]
 
+
 def listWriteTypes(data, fileName=None):
     """List all fileType classes that can write the data to file."""
     return [typ for typ in listFileTypes() if typ.acceptsData(data, fileName) is not False]
+
+
+def registerFileType(name, cls):
+    """Register a new file type.
+
+    This adds support for automatic reading / writing of a file type.
+
+    Parameters
+    ----------
+    name : str
+        Name of the type to be registered
+    cls : FileType subclass
+        FileType subclass to register
+    """
+    global KNOWN_FILE_TYPES
+    KNOWN_FILE_TYPES[name] = cls
+
 
 def getFileType(typName):
     """Return the fileType class for the given name.
@@ -71,7 +90,7 @@ def getFileType(typName):
     if typName not in KNOWN_FILE_TYPES:
         mod = __import__('acq4.filetypes.' + typName, fromlist=['*'])
         cls = getattr(mod, typName)
-        KNOWN_FILE_TYPES[typName] = cls
+        registerFileType(typName, cls)
         
     return KNOWN_FILE_TYPES[typName]
     
