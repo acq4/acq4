@@ -178,7 +178,7 @@ class DAQGeneric(Device):
             else:
                 daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a task is running, this will not be set until it completes.
         prof('set channel value')
-        self.sigHoldingChanged.emit(channel, val)
+        self.sigHoldingChanged.emit(channel, level)
         prof('emit')
         
     def getChanHolding(self, chan):
@@ -511,8 +511,6 @@ class DAQDevGui(QtGui.QWidget):
             ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel']))
             
             holding = chans[ch].get('holding', 0)
-            
-            
             
             if chans[ch]['type'] in ['ao', 'ai']:
                 ui.inputRadio.setEnabled(False)
