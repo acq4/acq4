@@ -73,6 +73,14 @@ class PrairiePhotostimulator(Device, OptomechDevice):
 
         return (x, y)
 
+    def spiralSizeToPrairie(self, size, frame):
+        xPixels = frame.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
+        pixelLength = frame.info()['PrairieMetaInfo']['Environment']['XAxis_umPerPixel']
+
+        x=float(size*1000000)/float(xPixels)/pixelLength
+        return x
+    
+
     def runStimulation(self, params):
         self.pv.markPoints(params['pos'], params['laserPower'], params['duration'], params['spiralSize'], params['spiralRevolutions'])
 
@@ -175,7 +183,7 @@ class PrairiePhotostimModGui(QtGui.QWidget):
             d['pos'] = self.dev.mapToPrairie(p.getPos(), frame)
             d['duration'] = self.spiralParams['duration'] * 1000 ## convert to ms for prairie
             d['laserPower'] = self.spiralParams['laser power'] ## can leave this as percent
-            d['spiralSize'] = abs(self.dev.mapToPrairie((self.spiralParams['size'], 0), frame)[0])
+            d['spiralSize'] = self.dev.spiralSizeToPrairie(self.spiralParams['size'], frame)
             d['spiralRevolutions'] = self.spiralParams['spiral revolutions']
             cmds.append(d)
         return cmds
