@@ -21,5 +21,10 @@ class MockPrairieView():
     def setSaveDirectory(self, dirPath):
         pass
 
-    def markPoints(self, pos, *args):
-        print("Marking point %s" % str(pos))
+    def markPoints(self, pos, laserPower, duration, spiralSize, revolutions):
+        print("CMD: -MarkPoints %f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration, laserPower, spiralSize, revolutions))
+        print("   pos:", pos,
+              "   laserPower:", laserPower,
+              "   duration:", duration,
+              "   spiralSize:", spiralSize,
+              "   revolutions:", revolutions)

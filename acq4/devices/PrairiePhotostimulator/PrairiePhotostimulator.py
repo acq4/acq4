@@ -74,7 +74,7 @@ class PrairiePhotostimulator(Device, OptomechDevice):
         return (x, y)
 
     def runStimulation(self, params):
-        self.pv.markPoints(params['pos'], params['duration'], params['laserPower'], params['spiralSize'], params['spiralRevolutions'])
+        self.pv.markPoints(params['pos'], params['laserPower'], params['duration'], params['spiralSize'], params['spiralRevolutions'])
 
 
 
