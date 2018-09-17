@@ -909,6 +909,5 @@ class AcquireThread(Thread):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-            #self.start(QtCore.QThread.HighPriority)
             self.start()
 

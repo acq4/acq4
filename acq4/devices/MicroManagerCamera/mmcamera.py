@@ -69,12 +69,24 @@ class MicroManagerCamera(Camera):
         
     def startCamera(self):
         with self.camLock:
+            if self._config['mmAdapterName'] == 'HamamatsuHam':
+                # seems to be a bug in HamamatsuHam that fails to set trigger source correctly.
+                if self.getParam('triggerMode') == 'Normal':
+                    self.setParam('TRIGGER SOURCE', 'INTERNAL')
+                else:
+                    self.setParam('TRIGGER SOURCE', 'EXTERNAL')
+
             self.mmc.startContinuousSequenceAcquisition(0)
             
     def stopCamera(self):
         with self.camLock:
             self.mmc.stopSequenceAcquisition()
             self.acqBuffer = None
+
+    def isRunning(self):
+        # This is needed to allow calling setParam inside startCamera before the acquisition has actually begun
+        # (but after the acquisition thread has started)
+        return self.mmc.isSequenceRunning()
 
     def _acquireFrames(self, n=1):
         if self.isRunning():
