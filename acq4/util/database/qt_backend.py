@@ -1,3 +1,8 @@
+from __future__ import print_function
+import six
+from six.moves import range
+
+
 """
 Deprecated class based on QtSql; new implementation uses builtin sqlite3 package.
 """
@@ -20,16 +25,16 @@ class SqliteDatabase:
             c = 0
             while True:
                 self._connectionName = ':memory:%d' % c
-                if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
+                if self._connectionName not in Qt.QSqlDatabase.connectionNames():
                     break
                 c += 1
         else:
             self._connectionName = os.path.abspath(fileName)
             
-        if self._connectionName not in QtSql.QSqlDatabase.connectionNames():
-            self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
+        if self._connectionName not in Qt.QSqlDatabase.connectionNames():
+            self.db = Qt.QSqlDatabase.addDatabase("QSQLITE", self._connectionName)
         else:
-            self.db = QtSql.QSqlDatabase.database(self._connectionName)
+            self.db = Qt.QSqlDatabase.database(self._connectionName)
             
             
         self.db.setDatabaseName(fileName)
@@ -47,7 +52,7 @@ class SqliteDatabase:
         ## no need to remove the connection entirely.
         #import gc
         #gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
-        #QtSql.QSqlDatabase.removeDatabase(self._connectionName)
+        #Qt.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
@@ -68,7 +73,7 @@ class SqliteDatabase:
         #import traceback
         #traceback.print_stack()
         
-        q = QtSql.QSqlQuery(self.db)
+        q = Qt.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
             p.mark("Executed with no data")
@@ -76,7 +81,7 @@ class SqliteDatabase:
             data = TableData(data)
             res = []
             if not q.prepare(cmd):
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
             p.mark("Prepared query")
             if batch:
@@ -87,7 +92,7 @@ class SqliteDatabase:
             else:
                 for d in data:
                     #print len(d)
-                    for k, v in d.iteritems():
+                    for k, v in d.items():
                         q.bindValue(':'+k, v)
                         #print k, v, type(v)
                     p.mark("bound values for record")
@@ -132,9 +137,9 @@ class SqliteDatabase:
         """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
-            #if isinstance(columns, basestring):
+            #if isinstance(columns, six.string_types):
                 #columns = columns.split(',')
-            if not isinstance(columns, basestring):
+            if not isinstance(columns, six.string_types):
                 qf = []
                 for f in columns:
                     if f == '*':
@@ -203,7 +208,7 @@ class SqliteDatabase:
         indicating progress. This *must* be used inside a for loop::
         
             for n,nmax in db.iterInsert(table, data):
-                print "Insert %d%% complete" % (100. * n / nmax)
+                print("Insert %d%% complete" % (100. * n / nmax))
         
         Use the chunkSize argument to determine how many records are inserted per iteration.
         See insert() for a description of all other options.
@@ -223,7 +228,7 @@ class SqliteDatabase:
             records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
             p.mark("prepared data")
 
-            columns = records.keys()
+            columns = list(records.keys())
             insert = "INSERT"
             if replaceOnConflict:
                 insert += " OR REPLACE"
@@ -290,7 +295,7 @@ class SqliteDatabase:
         
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
-        return q[0].values()[0]
+        return list(q[0].values())[0]
 
     def replace(self, *args, **kargs):
         return self.insert(*args, replaceOnConflict=True, **kargs)
@@ -308,7 +313,7 @@ class SqliteDatabase:
         columns = parseColumnDefs(columns)
         
         columnStr = []
-        for name, conf in columns.iteritems():
+        for name, conf in columns.items():
             columnStr.append('"%s" %s %s' % (name, conf['Type'], conf.get('Constraints', '')))
         columnStr = ','.join(columnStr)
 
@@ -322,7 +327,7 @@ class SqliteDatabase:
         (see sqlite 'CREATE INDEX')
         """
         ine = "IF NOT EXISTS" if ifNotExist else ""
-        if isinstance(columns, basestring):
+        if isinstance(columns, six.string_types):
             columns = [columns]
         name = table + '__' + '_'.join(columns)
         colStr = quoteList(columns)
@@ -344,7 +349,7 @@ class SqliteDatabase:
         """
         if self.tables is None:
             self._readTableList()
-        return self.tables.keys()
+        return list(self.tables.keys())
  
     def removeTable(self, table):
         self('DROP TABLE "%s"' % table)
@@ -377,7 +382,7 @@ class SqliteDatabase:
             ret = fn(cmd)
         if not ret:
             if cmd is not None:
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
             else:
                 raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
@@ -391,8 +396,8 @@ class SqliteDatabase:
             
         where = self._prepareData(table, where)[0]
         conds = []
-        for k,v in where.iteritems():
-            if isinstance(v, basestring):
+        for k,v in where.items():
+            if isinstance(v, six.string_types):
                 conds.append('"%s"=\'%s\'' % (k, v))
             else:
                 conds.append('"%s"=%s' % (k,v))
@@ -421,7 +426,7 @@ class SqliteDatabase:
             
             typ = schema[k].lower()
             if typ == 'blob':
-                converters[k] = lambda obj: QtCore.QByteArray(pickle.dumps(obj))
+                converters[k] = lambda obj: Qt.QByteArray(pickle.dumps(obj))
             elif typ == 'int':
                 converters[k] = int
             elif typ == 'real':
@@ -452,7 +457,7 @@ class SqliteDatabase:
                         if k.lower() != 'rowid':
                             if k not in schema:
                                 raise Exception("Column '%s' not present in table '%s'" % (k, table))
-                            print "Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                            print("Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k]))))
             if batch:
                 for k in newData:
                     newData[k].append(newRec.get(k, None))
@@ -464,7 +469,7 @@ class SqliteDatabase:
     def _queryToDict(self, q):
         prof = debug.Profiler("_queryToDict", disabled=True)
         res = []
-        while q.next():
+        while next(q):
             res.append(self._readRecord(q.record()))
         return res
 
@@ -480,7 +485,7 @@ class SqliteDatabase:
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(recs)):
+        for i in range(1, len(recs)):
             arr[i] = tuple(recs[i].values())
         prof.mark('converted to array')
         prof.finish()
@@ -498,20 +503,20 @@ class SqliteDatabase:
                 val = rec.value(i)
                 ## If we are using API 1 for QVariant (ie not PySide)
                 ## then val is a QVariant and must be coerced back to a python type
-                if HAVE_QVARIANT and isinstance(val, QtCore.QVariant):
+                if HAVE_QVARIANT and isinstance(val, Qt.QVariant):
                     t = val.type()
-                    if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
+                    if t in [Qt.QVariant.Int, Qt.QVariant.LongLong]:
                         val = val.toInt()[0]
-                    if t in [QtCore.QVariant.Double]:
+                    if t in [Qt.QVariant.Double]:
                         val = val.toDouble()[0]
-                    elif t == QtCore.QVariant.String:
-                        val = unicode(val.toString())
-                    elif t == QtCore.QVariant.ByteArray:
+                    elif t == Qt.QVariant.String:
+                        val = six.text_type(val.toString())
+                    elif t == Qt.QVariant.ByteArray:
                         val = val.toByteArray()
                         
                 ## Unpickle byte arrays into their original objects.
                 ## (Hopefully they were stored as pickled data in the first place!)
-                if isinstance(val, QtCore.QByteArray):
+                if isinstance(val, Qt.QByteArray):
                     val = pickle.loads(str(val))
             data[n] = val
         prof.finish()

@@ -1,6 +1,7 @@
 # import os, sys
 # sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 # import acq4.util.clibrary as clib
+from __future__ import print_function
 
 import os, sys, struct, ctypes, time, threading
 import numpy as np
@@ -441,7 +442,7 @@ def hexdump(data, size):
                 break
             line += '%02x ' % ord(data[i])
             i += 1
-        print line
+        print(line)
 
 
 if __name__ == '__main__':
@@ -451,13 +452,13 @@ if __name__ == '__main__':
     else:
         index = 0
     h = getDeviceHandles()
-    print "Available device handles:", h
+    print("Available device handles:", h)
     dev = XKeysDevice(h[index])
-    print "Device %d  handle %d:" % (index, h[index]), dev.pid, dev.model
+    print("Device %d  handle %d:" % (index, h[index]), dev.pid, dev.model)
     dev.setBacklightRows(bl1=0, bl2=0)
 
     def cb(changes):
-        print changes
+        print(changes)
         if 'keys' in changes:
             for key, state in changes['keys']:
                 if key[1] in (0, 1):

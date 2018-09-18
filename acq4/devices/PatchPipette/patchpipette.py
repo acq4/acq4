@@ -1,5 +1,6 @@
+from __future__ import print_function
 from ..Pipette import Pipette
-from PyQt4 import QtCore
+from acq4.util import Qt
 from ...Manager import getManager
 
 
@@ -14,7 +15,7 @@ class PatchPipette(Pipette):
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
 
     def __init__(self, deviceManager, config, name):
         self.pressures = {

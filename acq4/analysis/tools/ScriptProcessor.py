@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 
 ScriptProcessor processes a script file (generally), loading data using the requested
@@ -23,7 +24,7 @@ from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.metaarray import MetaArray
 from acq4.util import DataManager
 from acq4.pyqtgraph import configfile
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 class ScriptProcessor(AnalysisModule):
@@ -57,7 +58,7 @@ class ScriptProcessor(AnalysisModule):
             be read, or the dialog was cancelled, the return result will be None
         """
         
-        self.script_name = QtGui.QFileDialog.getOpenFileName(
+        self.script_name = Qt.QFileDialog.getOpenFileName(
                    None, 'Open Script File', '', 'Script (*.cfg)')
         if self.script_name == '':  # cancel returns empty string
             return None
@@ -67,7 +68,7 @@ class ScriptProcessor(AnalysisModule):
 #            self.ctrl.IVCurve_ScriptName.setText('None')
             return None
         # set the data manager to the script if we can
-        print self.script['directory']
+        print(self.script['directory'])
         if 'directory' in self.script.keys():
             try:
                 self.dataManager.setBaseDir(self.script['directory'])
@@ -106,7 +107,7 @@ class ScriptProcessor(AnalysisModule):
                 return False
                 
         all_found = True
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        trailingchars = [c for c in map(chr, range(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for c in self.script['Cells']:
             if self.script['Cells'][c]['include'] is False:
                 continue
@@ -131,8 +132,8 @@ class ScriptProcessor(AnalysisModule):
                 if file_ok:
                     print('File found: {:s}'.format(fullpath))
                 else:
-                    print '  current dataManager self.dm points to file: ', dm_selected_file
-                    print '  and file not found was: ', fullpath
+                    print('  current dataManager self.dm points to file: ', dm_selected_file)
+                    print('  and file not found was: ', fullpath)
                     all_found = False
                 #else:
                 #    print 'file found ok: %s' % fullpath
@@ -150,7 +151,7 @@ class ScriptProcessor(AnalysisModule):
         self.textout = ('\nScript File: {:<32s}\n'.format(self.script_name))
         # settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        trailingchars = [c for c in map(chr, range(97, 123))]  # trailing chars used to identify different parts of a cell's data
         self.dataManager().setBaseDir(self.script['directory'])
         ordered = sorted(self.script['Cells'].keys())  # order the analysis by date/slice/cell
         prog1 = ProgressDialog("Script Processing..", 0, len(ordered))
@@ -163,7 +164,7 @@ class ScriptProcessor(AnalysisModule):
             #print 'processing cell: %s' % thiscell
             if thiscell['include'] is False:  # skip this cell
                 try:
-                    print 'Skipped: %s, reason:%s' % (cell, thiscell['reason'])
+                    print('Skipped: %s, reason:%s' % (cell, thiscell['reason']))
                 except:
                     raise ValueError('cell %s has no tag "reason" but "include" is False' % cell)
                     
@@ -173,7 +174,7 @@ class ScriptProcessor(AnalysisModule):
 #            prog2 = ProgressDialog("Cell Processing..%s" , 0, len(sortedkeys)):
             for p in sortedkeys:
                 if thiscell['choice'][p] not in self.script['datafilter']:  # pick out steady-state conditions
-                    print 'p: %s not in data: ' % (thiscell['choice'][p]), self.script['datafilter']
+                    print('p: %s not in data: ' % (thiscell['choice'][p]), self.script['datafilter'])
                     continue
                 # print 'working on %s' % thiscell['choice'][p]
                 pr = self.script['protocol'] + '_' + p  # add the underscore here
@@ -187,7 +188,7 @@ class ScriptProcessor(AnalysisModule):
                 fullpath = os.path.join(dm_selected_file, fn)
                 file_ok = os.path.exists(fullpath)
                 if not file_ok:  # get the directory handle and take it from there
-                    print 'File is not ok: %s' % fullpath
+                    print('File is not ok: %s' % fullpath)
                     continue
 
                 m = thiscell['choice'][p]  # get the tag for the manipulation
@@ -210,7 +211,7 @@ class ScriptProcessor(AnalysisModule):
 
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFile([dh], analyze=False, bridge=presetDict['bridgeCorrection']):  # note: must pass a list of dh; don't let analyisis run at end
-                    print 'Failed to load requested file: ', fullpath
+                    print('Failed to load requested file: ', fullpath)
                     continue  # skip bad sets of records...
                 if 'datamode' in thiscell.keys():
                     self.clamps.data_mode = thiscell['datamode']
@@ -230,7 +231,7 @@ class ScriptProcessor(AnalysisModule):
                 del dh
                 gc.collect()
 
-        print self.textout
+        print(self.textout)
         self.auto_updater = True # restore function
 #        print '\nDone'
 
@@ -270,10 +271,10 @@ class ScriptProcessor(AnalysisModule):
 
     def print_script_output(self):
         """
-        print a clean version of the results to the terminal
+        print(a clean version of the results to the terminal)
         :return:
         """
-        print self.remove_html_markup(self.textout)
+        print(self.remove_html_markup(self.textout))
 
     def copy_script_output(self):
         """

@@ -1,4 +1,5 @@
 #  -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 PSPReversal: Analysis module that analyzes the current-voltage relationships
 relationships of PSPs from voltage clamp data.
@@ -16,7 +17,7 @@ import os
 import os.path
 import itertools
 import functools
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import numpy as np
 import numpy.ma as ma
 import scipy
@@ -30,9 +31,9 @@ standard_font = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 #from acq4.analysis.modules.PSPReversal.ctrlTemplate import ctrlTemplate
-import ctrlTemplate
-import resultsTemplate
-import scriptTemplate
+from . import ctrlTemplate
+from . import resultsTemplate
+from . import scriptTemplate
 #import acq4.analysis.modules.PSPReversal.ctrlTemplate as ctrlTemplate
 #import acq4.analysis.modules.PSPReversal.resultsTemplate as resultsTemplate
 #import acq4.analysis.modules.PSPReversal.scriptTemplate as scriptTemplate
@@ -60,16 +61,16 @@ def trace_calls_and_returns(frame, event, arg, indent=[0]):
         return
     if event == 'call':
         indent[0] += 1
-        print '%sCall to %s on line %s of %s' % ("   " * indent[0], func_name, line_no, filename)
+        print('%sCall to %s on line %s of %s' % ("   " * indent[0], func_name, line_no, filename))
        # print '%s   args: %s ' % ("   " * indent[0], arg)  # only gets return args...
         return trace_calls_and_returns
     elif event == 'return':
-        print '%s%s => %s' % ("   " * indent[0], func_name, arg)
+        print('%s%s => %s' % ("   " * indent[0], func_name, arg))
         indent[0] -= 1
     return
 
 
-class MultiLine(pg.QtGui.QGraphicsPathItem):
+class MultiLine(Qt.QGraphicsPathItem):
     def __init__(self, x, y, downsample=1):
         """x and y are 2D arrays of shape (Nplots, Nsamples)"""
         if x.ndim == 1:
@@ -81,11 +82,11 @@ class MultiLine(pg.QtGui.QGraphicsPathItem):
         connect = np.ones(x.shape, dtype=bool)
         connect[:, -1] = 0  # don't draw the segment between each trace
         self.path = pg.arrayToQPath(x.flatten(), y.flatten(), connect.flatten())
-        pg.QtGui.QGraphicsPathItem.__init__(self, self.path)
+        Qt.QGraphicsPathItem.__init__(self, self.path)
         self.setPen(pg.mkPen('w'))
 
     def shape(self): # override because QGraphicsPathItem.shape is too expensive.
-        return pg.QtGui.QGraphicsItem.shape(self)
+        return Qt.QGraphicsItem.shape(self)
 
     def boundingRect(self):
         return self.path.boundingRect()
@@ -180,19 +181,19 @@ class PSPReversal(AnalysisModule):
 
         # --------------graphical elements-----------------
         self._sizeHint = (1280, 900)  # try to establish size of window
-        self.ctrl_widget = QtGui.QWidget()
+        self.ctrl_widget = Qt.QWidget()
         self.ctrl = ctrlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrl_widget)
-        self.results_widget = QtGui.QWidget()
+        self.results_widget = Qt.QWidget()
         self.results = resultsTemplate.Ui_ResultsDialogBox()
         self.results.setupUi(self.results_widget)
-        self.scripts_widget = QtGui.QWidget()
+        self.scripts_widget = Qt.QWidget()
         self.scripts_form = scriptTemplate.Ui_Form()
         self.scripts_form.setupUi(self.scripts_widget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output
-        self.widget = QtGui.QWidget()
-        self.grid_layout = QtGui.QGridLayout()
+        self.widget = Qt.QWidget()
+        self.grid_layout = Qt.QGridLayout()
         self.widget.setLayout(self.grid_layout)
         self.grid_layout.setContentsMargins(4, 4, 4, 4)
         self.grid_layout.setSpacing(1)
@@ -448,20 +449,20 @@ class PSPReversal(AnalysisModule):
         if forcestate is not None:
             if forcestate:
                 region['region'].show()
-                region['state'].setChecked(QtCore.Qt.Checked)
+                region['state'].setChecked(Qt.Qt.Checked)
                 region['shstate'] = True
             else:
                 region['region'].hide()
-                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['state'].setChecked(Qt.Qt.Unchecked)
                 region['shstate'] = False
         else:
             if not region['shstate']:
                 region['region'].show()
-                region['state'].setChecked(QtCore.Qt.Checked)
+                region['state'].setChecked(Qt.Qt.Checked)
                 region['shstate'] = True
             else:
                 region['region'].hide()
-                region['state'].setChecked(QtCore.Qt.Unchecked)
+                region['state'].setChecked(Qt.Qt.Unchecked)
                 region['shstate'] = False
 
     def uniq(self, inlist):
@@ -492,7 +493,7 @@ class PSPReversal(AnalysisModule):
                 return
         dh = dh[0]  # only the first file
         self.sequence = self.dataModel.listSequenceParams(dh)
-        keys = self.sequence.keys()
+        keys = list(self.sequence.keys())
         leftseq = [str(x) for x in self.sequence[keys[0]]]
         if len(keys) > 1:
             rightseq = [str(x) for x in self.sequence[keys[1]]]
@@ -616,8 +617,8 @@ class PSPReversal(AnalysisModule):
                 # Check if no clamp file for this iteration of the protocol
                 # (probably the protocol was stopped early)
                 if data_file_handle is None:
-                    print ('PSPReversal::loadFileRequested: ',
-                           'Missing data in %s, element: %d' % (directory_name, i))
+                    print('PSPReversal::loadFileRequested: ',
+                          'Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
                 print("Error loading data for protocol %s:"
@@ -685,7 +686,7 @@ class PSPReversal(AnalysisModule):
         #    i += 1
         #sys.settrace(trace_calls_and_returns)
         if traces is None or len(traces) == 0:
-            print "PSPReversal::loadFileRequested: No data found in this run..."
+            print("PSPReversal::loadFileRequested: No data found in this run...")
             return False
         if self.amp_settings['WCCompValid']:
             if self.amp_settings['WCEnabled'] and self.amp_settings['CompEnabled']:
@@ -1151,7 +1152,7 @@ class PSPReversal(AnalysisModule):
 
         self.script = configfile.readConfigFile(self.script_name)
         if self.script is None:
-            print 'failed to read script'
+            print('failed to read script')
             return
 #        print 'script ok:', self.script
         fh = open(self.script_name)  # read the raw text file too
@@ -1181,10 +1182,10 @@ class PSPReversal(AnalysisModule):
         :return: False if cannot find files; True if all are found
         """
         if self.script['module'] != 'PSPReversal':
-            print 'script is not for PSPReversal (found %s)', self.script['module']
+            print('script is not for PSPReversal (found %s)', self.script['module'])
             return False
         all_found = True
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        trailingchars = [c for c in map(chr, range(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for c in self.script['Cells']:
             if self.script['Cells'][c]['include'] is False:
                 continue
@@ -1202,8 +1203,8 @@ class PSPReversal(AnalysisModule):
                 #if file_ok:
                 #    print('File found: {:s}'.format(fullpath))
                 if not file_ok:
-                    print '  current dataManager self.dm points to file: ', dm_selected_file
-                    print '  and file not found was: ', fullpath
+                    print('  current dataManager self.dm points to file: ', dm_selected_file)
+                    print('  and file not found was: ', fullpath)
                     all_found = False
                 #else:
                 #    print 'file found ok: %s' % fullpath
@@ -1221,7 +1222,7 @@ class PSPReversal(AnalysisModule):
         self.textout = ('Script File: {:<32s}'.format(self.script_name))
         settext(self.textout)
         script_header = True  # reset the table to a print new header for each cell
-        trailingchars = [c for c in map(chr, xrange(97, 123))]  # trailing chars used to identify different parts of a cell's data
+        trailingchars = [c for c in map(chr, range(97, 123))]  # trailing chars used to identify different parts of a cell's data
         for cell in self.script['Cells']:
             thiscell = self.script['Cells'][cell]
             if thiscell['include'] is False:  # skip this cell
@@ -1243,16 +1244,16 @@ class PSPReversal(AnalysisModule):
                 file_ok = os.path.exists(fullpath)
                 if not file_ok:  # get the directory handle and take it from there
                     continue
-                self.ctrl.PSPReversal_KeepT.setChecked(QtCore.Qt.Unchecked)  # make sure this is unchecked
+                self.ctrl.PSPReversal_KeepT.setChecked(Qt.Qt.Unchecked)  # make sure this is unchecked
                 dh = self.dataManager().manager.dirHandle(fullpath)
                 if not self.loadFileRequested([dh]):  # note: must pass a list
-                    print 'failed to load requested file: ', fullpath
+                    print('failed to load requested file: ', fullpath)
                     continue  # skip bad sets of records...
                 apptext(('Protocol: {:<s} <br>Manipulation: {:<s}'.format(pr, thiscell['manip'][p])))
                 self.analysis_summary['Drugs'] = thiscell['manip'][p]
                 # alt_flag = bool(thiscell['alternation'])
                 # self.analysis_parameters['alternation'] = alt_flag
-                # self.ctrl.PSPReversal_Alternation.setChecked((QtCore.Qt.Unchecked, QtCore.Qt.Checked)[alt_flag])
+                # self.ctrl.PSPReversal_Alternation.setChecked((Qt.Qt.Unchecked, Qt.Qt.Checked)[alt_flag])
                 # if 'junctionpotential' in thiscell:
                 #     self.analysis_parameters['junction'] = thiscell['junctionpotential']
                 #     self.ctrl.PSPReversal_Junction.setValue(float(thiscell['junctionpotential']))
@@ -1274,7 +1275,7 @@ class PSPReversal(AnalysisModule):
                 self.print_formatted_script_output(script_header)
                 script_header = False
         self.auto_updater = True # restore function
-        print '\nDone'
+        print('\nDone')
 
     def get_window_analysisPars(self):
         """
@@ -1339,11 +1340,11 @@ class PSPReversal(AnalysisModule):
                 thiswin = thiscell[winmode]
                 r = self.regions[lrwinx]['mode'].findText(thiswin)
                 if r >= 0:
-                    print 'setting %s mode to %s ' % (win, thiswin)
+                    print('setting %s mode to %s ' % (win, thiswin))
                     self.regions[lrwinx]['mode'].setCurrentIndex(r)
                     self.analysis_parameters[lrwinx]['mode'] = thiswin
                 else:
-                    print '%s analysis mode not recognized: %s' % (win, thiswin)
+                    print('%s analysis mode not recognized: %s' % (win, thiswin))
             else:
                 r = self.regions[lrwinx]['mode'].findText(self.analysis_parameters[lrwinx]['mode'])
                 if r >= 0:
@@ -1352,10 +1353,10 @@ class PSPReversal(AnalysisModule):
 
     def print_script_output(self):
         """
-        print a clean version of the results to the terminal
+        print(a clean version of the results to the terminal)
         :return:
         """
-        print self.remove_html_markup(self.textout)
+        print(self.remove_html_markup(self.textout))
 
     def copy_script_output(self):
         """
@@ -1386,7 +1387,7 @@ class PSPReversal(AnalysisModule):
             print('{:34s}\t{:24s}\t'.format("Cell", "Protocol")),
             for k in data_template.keys():
                 print('{:<s}\t'.format(k)),
-            print ''
+            print('')
         ltxt = ''
         ltxt += ('{:34s}\t{:24s}\t'.format(self.analysis_summary['CellID'], self.analysis_summary['Protocol']))
 
@@ -1395,9 +1396,9 @@ class PSPReversal(AnalysisModule):
                 ltxt += ((data_template[a] + '\t').format(self.analysis_summary[a]))
             else:
                 ltxt += '<   >\t'
-        print ltxt
+        print(ltxt)
         if copytoclipboard:
-            clipb = QtGui.QApplication.clipboard()
+            clipb = Qt.QApplication.clipboard()
             clipb.clear(mode=clipb.Clipboard )
             clipb.setText(ltxt, mode=clipb.Clipboard)
 
@@ -1495,16 +1496,16 @@ class PSPReversal(AnalysisModule):
             r0 = self.analysis_parameters['lrwin0']['times'] #regions['lrwin0']['region'].getRegion()
             tx = ma.masked_inside(tx1, r0[0], r0[1])  #
             if tx.mask.all():  # handle case where win1 is entirely inside win2
-                print 'update_win_analysis: Window 1 is entirely inside Window 0: No analysis possible'
-                print 'rgninfo: ', rgninfo
-                print 'r0: ', r0
+                print('update_win_analysis: Window 1 is entirely inside Window 0: No analysis possible')
+                print('rgninfo: ', rgninfo)
+                print('r0: ', r0)
                 return 'bad window1/0 relationship'
             data1 = ma.array(data1, mask=ma.resize(ma.getmask(tx), data1.shape))
             self.txm = ma.compressed(tx)  # now compress tx as well
             self.win1fits = None  # reset the fits
 
         if data1.shape[1] == 0 or data1.shape[0] == 1:
-            print 'no data to analyze?'
+            print('no data to analyze?')
             return 'no data'  # skip it
         commands = np.array(self.values)  # get clamp specified command levels
         if self.data_mode in self.ic_modes:
@@ -1558,7 +1559,7 @@ class PSPReversal(AnalysisModule):
         if mode in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
             self.measure[winraw_i] = self.measure[window]  # save raw measured current before corrections
         elif mode not in ['Mean-Win1', 'Mean-Linear', 'Mean-Poly2', 'Sum-Win1']:
-            print 'update_win_analysis: Mode %s is not recognized (1)' % mode
+            print('update_win_analysis: Mode %s is not recognized (1)' % mode)
             return 'bad mode'
         else:
             pass
@@ -1580,7 +1581,7 @@ class PSPReversal(AnalysisModule):
             self.measure[winraw_i] = np.sum(data1, axis=1)
             self.measure[window] = np.sum(data1 - u[:, np.newaxis], axis=1)
         elif mode not in ['Min', 'Max', 'Mean', 'Sum', 'Abs', 'Linear', 'Poly2']:
-            print 'update_win_analysis: Mode %s is not recognized (2)' % mode
+            print('update_win_analysis: Mode %s is not recognized (2)' % mode)
             return 'bad mode'
         else:
             pass
@@ -1589,7 +1590,7 @@ class PSPReversal(AnalysisModule):
             self.measure[window] = self.measure[window] - self.measure['rmp']
         if len(self.nospk) >= 1 and self.data_mode in self.ic_modes:
             # Steady-state IV where there are no spikes
-            print 'update_win_analysis: Removing traces with spikes from analysis'
+            print('update_win_analysis: Removing traces with spikes from analysis')
             self.measure[window] = self.measure[window][self.nospk]
             if len(self.measure[windowsd]) > 0:
                 self.measure[windowsd] = self.measure[windowsd][self.nsopk]
@@ -1728,10 +1729,10 @@ class PSPReversal(AnalysisModule):
         our lists, and a clear_flag. Used to overplot different data.
         """
         n = self.keep_analysis_count
-        pen = self.color_list.next()
+        pen = next(self.color_list)
         filledbrush = pen
         emptybrush = None
-        symbol = self.symbol_list.next()
+        symbol = next(self.symbol_list)
         if n == 0:
             clear_flag = True
         else:
@@ -1762,8 +1763,8 @@ class PSPReversal(AnalysisModule):
         """
         if self.ctrl.PSPReversal_KeepAnalysis.isChecked() is False:
             self.iv_plot.clear()
-            self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
-            self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=QtCore.Qt.DashLine))
+            self.iv_plot.addLine(x=0, pen=pg.mkPen('888', width=0.5, style=Qt.Qt.DashLine))
+            self.iv_plot.addLine(y=0, pen=pg.mkPen('888', width=0.5, style=Qt.Qt.DashLine))
         jp = self.analysis_parameters['junction']  # get offsets for voltage
         ho = float(self.holding) * 1e3
         offset = jp + ho  # combine
@@ -1849,7 +1850,7 @@ class PSPReversal(AnalysisModule):
                                    symbolPen=pen, symbolBrush=emptybrush)
                 self.rmp_plot.setLabel('bottom', 'Spikes')
             else:
-                print 'Selected RMP x axis mode not known: %s' % mode
+                print('Selected RMP x axis mode not known: %s' % mode)
 
     def update_spike_plots(self):
         """
@@ -2091,7 +2092,7 @@ class PSPReversal(AnalysisModule):
     #     if not fpar:
     #         print 'PSPReversal::update_tauh: tau_h fitting failed - see log'
     #         return
-    #     redpen = pg.mkPen('r', width=1.5, style=QtCore.Qt.DashLine)
+    #     redpen = pg.mkPen('r', width=1.5, style=Qt.Qt.DashLine)
     #     if self.fit_curve is None:
     #         self.fit_curve = self.data_plot.plot(xf[0], yf[0],
     #                                              pen=redpen)

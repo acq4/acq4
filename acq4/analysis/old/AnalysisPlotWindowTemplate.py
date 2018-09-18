@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 # Form implementation generated from reading ui file 'AnalysisPlotWindow.ui'
 #
@@ -76,4 +77,4 @@ class Ui_AnalysisPlotWindowTemplate(object):
         self.addPlotBtn.setText(QtGui.QApplication.translate("AnalysisPlotWindowTemplate", "Add Plot", None, QtGui.QApplication.UnicodeUTF8))
 
 from acq4.pyqtgraph.PlotWidget import PlotWidget
-from AnalysisPlotWidget import AnalysisPlotWidget
+from .AnalysisPlotWidget import AnalysisPlotWidget

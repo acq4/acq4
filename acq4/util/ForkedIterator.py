@@ -1,3 +1,4 @@
+from __future__ import print_function
 import multiprocessing as m
 import time
 import numpy
@@ -31,7 +32,7 @@ class ForkedIterator(m.Process):
     def __iter__(self):
         return self
         
-    def next(self):
+    def __next__(self):
         try:
             x = self.p1.recv()
             #print "recv:", x
@@ -42,7 +43,7 @@ class ForkedIterator(m.Process):
                 raise Exception("Remote process has ended (and pipe is empty). (exit code %d)" % self.exitcode)
         except IOError as (errno, strerror):
             if errno == 4:   ## blocking read was interrupted; try again.
-                return self.next()
+                return next(self)
             else:
                 raise
         if isinstance(x, StopRemoteIteration):
@@ -71,5 +72,5 @@ if __name__ == '__main__':
     
     fg = ForkedIterator(gen, 10)
     for x in fg:
-        print x
+        print(x)
     

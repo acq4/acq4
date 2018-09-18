@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 from ..Stage import Stage, StageInterface, MoveFuture
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
 from acq4.util.Mutex import Mutex
@@ -7,8 +8,8 @@ from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug
 import time
 
-class ChangeNotifier(QtCore.QObject):
-    sigPosChanged = QtCore.Signal(object, object, object)
+class ChangeNotifier(Qt.QObject):
+    sigPosChanged = Qt.Signal(object, object, object)
 
 
 class ThorlabsMFC1(Stage):
@@ -162,13 +163,13 @@ class MFC1StageInterface(StageInterface):
     def __init__(self, dev, win):
         StageInterface.__init__(self, dev, win)
         if dev._roeDev is not None:
-            self.connectRoeBtn = QtGui.QPushButton('Enable ROE')
+            self.connectRoeBtn = Qt.QPushButton('Enable ROE')
             self.connectRoeBtn.setCheckable(True)
             self.connectRoeBtn.setChecked(True)
             self.layout.addWidget(self.connectRoeBtn, self.nextRow, 0, 1, 2)
             self.connectRoeBtn.toggled.connect(self.connectRoeToggled)
 
-            self.setZeroBtn = QtGui.QPushButton('Set Zero')
+            self.setZeroBtn = Qt.QPushButton('Set Zero')
             self.layout.addWidget(self.setZeroBtn, self.nextRow, 2, 1, 1)
             self.setZeroBtn.clicked.connect(self.setZeroClicked)
 

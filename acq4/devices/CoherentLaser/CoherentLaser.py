@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Laser import *
 #import serial, struct
 from acq4.drivers.Coherent import *
@@ -13,9 +14,9 @@ class CoherentLaser(Laser):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0
         self.baud = config.get('baud', 19200)
         self.driver = Coherent(self.port, self.baud)
-        self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
+        self.driverLock = Mutex(Qt.QMutex.Recursive)  ## access to low level driver calls
         
-        self.coherentLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
+        self.coherentLock = Mutex(Qt.QMutex.Recursive)  ## access to self.attributes
         self.coherentPower = 0
         self.coherentWavelength = 0
         
@@ -116,13 +117,13 @@ class CoherentTask(LaserTask):
         
 class CoherentThread(Thread):
 
-    sigPowerChanged = QtCore.Signal(object)
-    sigWavelengthChanged = QtCore.Signal(object)
-    sigError = QtCore.Signal(object)
+    sigPowerChanged = Qt.Signal(object)
+    sigWavelengthChanged = Qt.Signal(object)
+    sigError = Qt.Signal(object)
 
     def __init__(self, dev, driver, lock):
         Thread.__init__(self)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.dev = dev
         self.driver = driver
         self.driverLock = lock
@@ -132,7 +133,7 @@ class CoherentThread(Thread):
         pass
         
     def setShutter(self, opened):
-        wait = QtCore.QWaitCondition()
+        wait = Qt.QWaitCondition()
         cmd = ['setShutter', opened]
         with self.lock:
             self.cmds.append(cmd)

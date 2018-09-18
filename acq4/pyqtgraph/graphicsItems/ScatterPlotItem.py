@@ -1,8 +1,4 @@
 from itertools import starmap, repeat
-try:
-    from itertools import imap
-except ImportError:
-    imap = map
 import numpy as np
 import weakref
 from ..Qt import QtGui, QtCore, QT_LIB
@@ -172,7 +168,7 @@ class SymbolAtlas(object):
             width = 0
 
         # sort symbols by height
-        symbols = sorted(rendered.keys(), key=lambda x: rendered[x].shape[1], reverse=True)
+        symbols = sorted(list(rendered.keys()), key=lambda x: rendered[x].shape[1], reverse=True)
 
         self.atlasRows = []
 
@@ -565,7 +561,7 @@ class ScatterPlotItem(GraphicsObject):
 
             self.fragmentAtlas.getAtlas() # generate atlas so source widths are available.
 
-            dataSet['width'] = np.array(list(imap(QtCore.QRectF.width, dataSet['sourceRect'])))/2
+            dataSet['width'] = np.array(list(map(QtCore.QRectF.width, dataSet['sourceRect'])))/2
             dataSet['targetRect'] = None
             self._maxSpotPxWidth = self.fragmentAtlas.max_width
         else:
@@ -766,7 +762,7 @@ class ScatterPlotItem(GraphicsObject):
                 if np.any(updateMask):
                     updatePts = pts[:,updateMask]
                     width = self.data[updateMask]['width']*2
-                    self.data['targetRect'][updateMask] = list(imap(QtCore.QRectF, updatePts[0,:], updatePts[1,:], width, width))
+                    self.data['targetRect'][updateMask] = list(map(QtCore.QRectF, updatePts[0,:], updatePts[1,:], width, width))
 
                 data = self.data[viewMask]
                 if QT_LIB == 'PyQt4':

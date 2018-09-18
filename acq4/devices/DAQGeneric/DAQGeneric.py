@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Device import *
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex
 import numpy as np
-from taskGUI import *
+from .taskGUI import *
 from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
-import DeviceTemplate
+from . import DeviceTemplate
 from collections import OrderedDict
+import six
 
 
 class DataMapping:
@@ -27,7 +29,7 @@ class DataMapping:
         self.offset = {}
         if chans is None:
             chans = device.listChannels()
-        if type(chans) in [str, unicode]:
+        if isinstance(chans, six.string_types):
             chans = [chans]
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
@@ -74,11 +76,11 @@ class DAQGeneric(Device):
                 invert: True
         
     """
-    sigHoldingChanged = QtCore.Signal(object, object)
+    sigHoldingChanged = Qt.Signal(object, object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self._DGLock = Mutex(QtCore.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
+        self._DGLock = Mutex(Qt.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
         ## Do some sanity checks here on the configuration
         
         # 'channels' key is expected; for backward compatibility we just use the top-level config.
@@ -284,7 +286,7 @@ class DAQGenericTask(DeviceTask):
         
         prof = Profiler('DAQGenericTask.configure', disabled=True)
         #self.daqTasks = {}
-        self.mapping = self.dev.getMapping(chans=self._DAQCmd.keys())  ## remember the mapping so we can properly translate data after it has been returned
+        self.mapping = self.dev.getMapping(chans=list(self._DAQCmd.keys()))  ## remember the mapping so we can properly translate data after it has been returned
         
         
         self.initialState = {}
@@ -431,7 +433,7 @@ class DAQGenericTask(DeviceTask):
             result[ch]['units'] = self.getChanUnits(ch)
         
         if len(result) > 0:
-            meta = result[result.keys()[0]]['info']
+            meta = result[list(result.keys())[0]]['info']
             rate = meta['rate']
             nPts = meta['numPts']
             ## Create an array of time values
@@ -444,8 +446,8 @@ class DAQGenericTask(DeviceTask):
             try:
                 arr = np.concatenate(chanList)
             except:
-                print chanList
-                print [a.shape for a in chanList]
+                print(chanList)
+                print([a.shape for a in chanList])
                 raise
             
             daqState = OrderedDict()
@@ -483,11 +485,11 @@ class DAQGenericTask(DeviceTask):
                 dirHandle.setInfo({(self.dev.name(), ch): self.initialState[ch]})
            
                 
-class DAQDevGui(QtGui.QWidget):
+class DAQDevGui(Qt.QWidget):
     def __init__(self, dev):
         self.dev = dev
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QVBoxLayout()
+        Qt.QWidget.__init__(self)
+        self.layout = Qt.QVBoxLayout()
         self.setLayout(self.layout)
         chans = self.dev.listChannels()
         self.widgets = {}
@@ -495,7 +497,7 @@ class DAQDevGui(QtGui.QWidget):
         self.defaults = {}
         row = 0
         for ch in chans:
-            wid = QtGui.QWidget()
+            wid = Qt.QWidget()
             ui = DeviceTemplate.Ui_Form()
             ui.setupUi(wid)
             self.layout.addWidget(wid)
@@ -503,7 +505,7 @@ class DAQDevGui(QtGui.QWidget):
             #ui.channel = ch
             for s in dir(ui):
                 i = getattr(ui, s)
-                if isinstance(i, QtGui.QWidget):
+                if isinstance(i, Qt.QWidget):
                     i.channel = ch
                 
             self.widgets[ch] = ui
@@ -559,7 +561,7 @@ class DAQDevGui(QtGui.QWidget):
                     ui.holdingLabel.hide()
                     ui.holdingSpin.hide()
                 ui.invertCheck.toggled.connect(self.invertToggled)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
+        #Qt.QObject.connect(self.dev, Qt.SIGNAL('holdingChanged'), self.holdingChanged)
         self.dev.sigHoldingChanged.connect(self.holdingChanged)
     
     def holdingChanged(self, ch, val):

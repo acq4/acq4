@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import division, with_statement
 import re
 from collections import OrderedDict
 from acq4.devices.Camera import Camera, CameraTask
-from PyQt4 import QtCore
+from acq4.util import Qt
+import six
 import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
@@ -217,7 +219,7 @@ class MicroManagerCamera(Camera):
         """List properties of specified parameters, or of all parameters if None"""
         if params is None:
             return self._allParams.copy()
-        if isinstance(params, basestring):
+        if isinstance(params, six.string_types):
             return self._allParams[params]
         return dict([(p, self._allParams[p]) for p in params])
 
@@ -317,7 +319,7 @@ class MicroManagerCamera(Camera):
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         return dict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):

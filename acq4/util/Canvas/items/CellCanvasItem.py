@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from CanvasItem import CanvasItem
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from .CanvasItem import CanvasItem
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 import acq4.Manager
 from .itemtypes import registerItemType
@@ -16,7 +17,7 @@ class CellCanvasItem(CanvasItem):
     def __init__(self, **opts):
         if 'scale' not in opts:
             opts['scale'] = [20e-6, 20e-6]
-        item = QtGui.QGraphicsEllipseItem(-0.5, -0.5, 1., 1.)
+        item = Qt.QGraphicsEllipseItem(-0.5, -0.5, 1., 1.)
         item.setPen(pg.mkPen((255,255,255)))
         item.setBrush(pg.mkBrush((0,100,255)))
         opts.setdefault('scalable', False)

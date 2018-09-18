@@ -1,13 +1,14 @@
+from __future__ import print_function
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from collections import OrderedDict
 from acq4.analysis.AnalysisModule import AnalysisModule
-import STDPControlTemplate, STDPPlotsTemplate
+from . import STDPControlTemplate, STDPPlotsTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
-import STDPFileLoader
+from . import STDPFileLoader
 
 class STDPAnalyzer(AnalysisModule):
 
@@ -20,7 +21,7 @@ class STDPAnalyzer(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
 
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = STDPControlTemplate.Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
 
@@ -31,7 +32,7 @@ class STDPAnalyzer(AnalysisModule):
         self.dbGui = DatabaseGui(dm=self.dataManager(), tables=tables)
 
        
-        self.plotsWidget = QtGui.QWidget()
+        self.plotsWidget = Qt.QWidget()
         self.plots = STDPPlotsTemplate.Ui_Form()
         self.plots.setupUi(self.plotsWidget)
 
@@ -180,7 +181,7 @@ class STDPAnalyzer(AnalysisModule):
                 for i, protoDir in enumerate(f.ls()):
                     df = self.dataModel.getClampFile(f[protoDir])
                     if df is None:
-                        print 'Error in reading data file %s' % f.name()
+                        print('Error in reading data file %s' % f.name())
                         break
                     data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
@@ -216,7 +217,7 @@ class STDPAnalyzer(AnalysisModule):
                 for i, protoDir in enumerate(f.ls()):
                     df = self.dataModel.getClampFile(f[protoDir])
                     if df is None:
-                        print 'Error in reading data file %s' % f.name()
+                        print('Error in reading data file %s' % f.name())
                         break
                     data = df.read()
                     timestamp = data.infoCopy()[-1]['startTime']
@@ -657,8 +658,8 @@ class STDPAnalyzer(AnalysisModule):
                 try:
                     x = pr1[0] # no points inside 
                 except:
-                    print self.analysisResults['time']
-                    print 'starttime: ', postStart
+                    print(self.analysisResults['time'])
+                    print('starttime: ', postStart)
                     msg = 'Recording is shorter than needed for analysis window\n'
                     msg += 'Max rec time: %8.3f sec, window starts at %8.3f sec' % (np.max
                         (self.analysisResults['time']), 60.*postwin[0])

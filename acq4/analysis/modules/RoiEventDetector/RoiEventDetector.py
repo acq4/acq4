@@ -1,10 +1,11 @@
+from __future__ import print_function
 import os, re, zipfile
 from acq4.analysis.modules.EventDetector.EventDetector import EventDetector
 from acq4.pyqtgraph.metaarray import MetaArray
 import acq4.pyqtgraph as pg
 import numpy as np
-import CtrlTemplate
-from acq4.pyqtgraph.Qt import QtGui, QtCore
+from . import CtrlTemplate
+from acq4.util import Qt
 
 
 class RoiEventDetector(EventDetector):
@@ -54,7 +55,7 @@ class RoiEventDetector(EventDetector):
     
     def addVirtualFiles(self, fh):
         name = fh.name(relativeTo=self.fileLoader.baseDir())
-        self.fileLoader.addVirtualFiles(self.data[name].keys(), parentName=name)
+        self.fileLoader.addVirtualFiles(list(self.data[name].keys()), parentName=name)
     
     def selectedFileChanged(self, item):
         data = self.data[str(item.parent().text(0))][str(item.text(0))]
@@ -136,7 +137,7 @@ class RoiEventDetector(EventDetector):
         ## read all old lines
         with open(self.storageFile, 'r') as f:
             lines = f.readlines()
-            print "# of old lines:", len(lines)
+            print("# of old lines:", len(lines))
             
         ## overwrite file, then write lines back in if they aren't ones we want to delete
         with open(self.storageFile, 'w') as f:
@@ -165,12 +166,12 @@ class RoiEventDetector(EventDetector):
             node = nodes[name]
             d = {}
             if hasattr(node, 'ctrls'):
-                for k, v in node.ctrls.iteritems():
-                    if type(v) == type(QtGui.QCheckBox()):
+                for k, v in node.ctrls.items():
+                    if type(v) == type(Qt.QCheckBox()):
                         d[k] = v.isChecked()
-                    elif type(v) == type(QtGui.QComboBox()):
+                    elif type(v) == type(Qt.QComboBox()):
                         d[k] = str(v.currentText())
-                    elif type(v) in [type(QtGui.QSpinBox()), type(QtGui.QDoubleSpinBox()), type(pg.SpinBox())]:
+                    elif type(v) in [type(Qt.QSpinBox()), type(Qt.QDoubleSpinBox()), type(pg.SpinBox())]:
                         d[k] = v.value()
                     else:
                         print("Not saving param %s for node %s because we don't know how to record value of type %s" %(k, name, str(type(v))))
@@ -187,7 +188,7 @@ class RoiEventDetector(EventDetector):
     
     def newStorageFileClicked(self):
         self.fileDialog = pg.FileDialog(self.dbCtrl, "New Storage File", self.fileLoader.baseDir().name(), "CSV File (*.csv);;All Files (*.*)")
-        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+        self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave) 
         self.fileDialog.show()
         self.fileDialog.fileSelected.connect(self.createNewStorageFile)
         
@@ -220,7 +221,7 @@ class RoiEventDetector(EventDetector):
         
     def openStorageFileClicked(self):
             self.fileDialog = pg.FileDialog(self.dbCtrl, "Load Storage File", self.fileLoader.baseDir().name(), "CSV file (*.csv);;All Files (*.*)")
-            #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            #self.fileDialog.setFileMode(Qt.QFileDialog.AnyFile)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.openStorageFile)
                 
@@ -256,9 +257,9 @@ class RoiEventDetector(EventDetector):
     
         
         
-class Ctrl(QtGui.QWidget):
+class Ctrl(Qt.QWidget):
     def __init__(self, host, identity):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.host = host
         
         self.ui = CtrlTemplate.Ui_Form()
@@ -275,7 +276,7 @@ class Ctrl(QtGui.QWidget):
         elif self.ui.everythingRadio.isChecked():
             return 'all'
         
-        #self.layout = QtGui.QVBoxLayout()
+        #self.layout = Qt.QVBoxLayout()
         #self.setLayout(self.layout)
         #self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables={identity: 'EventDetector_events'})
         #self.storeBtn = pg.FeedbackButton("Store to DB")

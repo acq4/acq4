@@ -1,5 +1,9 @@
+from __future__ import print_function
 import serial, time, sys
 import logging
+
+import six
+
 
 class TimeoutError(Exception):
     """Raised when a serial communication times out.
@@ -59,7 +63,7 @@ class SerialDevice(object):
         if sys.platform.startswith('win'):
             if isinstance(port, int):
                 port = 'com%d' % (port+1)
-            elif isinstance(port, basestring) and port.lower()[:3] == 'com':
+            elif isinstance(port, six.string_types) and port.lower()[:3] == 'com':
                 port = port.lower()
         return port
 
@@ -100,6 +104,8 @@ class SerialDevice(object):
     
     def write(self, data):
         """Write *data* to the serial port"""
+        if sys.version > '3' and isinstance(data, str):
+            data = data.encode()
         logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
 
@@ -130,7 +136,7 @@ class SerialDevice(object):
         # Note: pyserial's timeout mechanism is broken (specifically, calling setTimeout can cause 
         # serial data to be lost) so we implement our own in readWithTimeout().
         start = time.time()
-        packet = ''
+        packet = b''
         # Interval between serial port checks is adaptive:
         #   * start with very short interval for low-latency reads
         #   * iteratively increase interval duration to reduce CPU usage on long reads
@@ -153,6 +159,9 @@ class SerialDevice(object):
         If *minBytes* is given, then this number of bytes will be read without checking for *term*.
         Returns the entire packet including *term*.
         """
+        if isinstance(term, str):
+            term = term.encode()
+
         start = time.time()
 
         if minBytes > 0:
@@ -169,8 +178,8 @@ class SerialDevice(object):
                 packet += self.read(1, timeout=timeout-elapsed)
             except TimeoutError:
                 raise TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
-            if len(packet) > minBytes and packet[-len(term):] == term:
 
+            if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet
 
     def clearBuffer(self):
@@ -179,7 +188,7 @@ class SerialDevice(object):
         time.sleep(0.1)
         d += self.readAll()
         if len(d) > 0:
-            print self, "Warning: discarded serial data ", repr(d)
+            print(self, "Warning: discarded serial data ", repr(d))
         return d
 
     def getPort(self):
@@ -198,10 +207,10 @@ if __name__ == '__main__':
     try:
         port, baud = sys.argv[1:3]
     except:
-        print "Usage: python -i SerialDevice port baudrate"
+        print("Usage: python -i SerialDevice port baudrate")
         os._exit(1)
 
     sd = SerialDevice(port=port, baudrate=baud)
-    print ""
-    print "Serial port opened and available as 'sd'."
-    print "Try using sd.write(...), sd.readAll(), and sd.read(length, term, timeout)"
+    print("")
+    print("Serial port opened and available as 'sd'.")
+    print("Try using sd.write(...), sd.readAll(), and sd.read(length, term, timeout)")

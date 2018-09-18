@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 """
 Python class wrapper for data fitting.
@@ -48,7 +49,7 @@ try:
     HAVE_OPENOPT = True
 except ImportError:
     HAVE_OPENOPT = False
-    print "There was an error importing openopt. Continuing...."
+    print("There was an error importing openopt. Continuing....")
 
 import ctypes
 import numpy.random
@@ -117,7 +118,7 @@ class Fitting():
         self.fitSum2Err = 0
 
     def getFunctions(self):
-        return(self.fitfuncmap.keys())
+        return(list(self.fitfuncmap.keys()))
 
     def exp0eval(self, p, x, y=None, C = None, sumsq = False):
         """
@@ -426,7 +427,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
             t0 = numpy.min(tdat)
         func = self.fitfuncmap[fitFunc]
         if func is None:
-            print "FitRegion: unknown function %s" % (fitFunc)
+            print("FitRegion: unknown function %s" % (fitFunc))
             return
         xp = []
         xf = []
@@ -475,8 +476,8 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                                                 args=(tx, dy, fixedPars),
                                                 full_output = 1, maxfev = func[2])
                         if ier > 4:
-                            print "optimize.leastsq error flag is: %d" % (ier)
-                            print mesg
+                            print("optimize.leastsq error flag is: %d" % (ier))
+                            print(mesg)
                 elif method == 'curve_fit':
                     plsq, cov = scipy.optimize.curve_fit(func[0], tx, dy, p0=fpars)
                     ier = 0
@@ -516,14 +517,14 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                         ier = 0
                     else:
                         fopt = openopt.DFP(func[0], fpars, tx, dy, df = fitFuncDer)
-                        print func[8]
+                        print(func[8])
                       #  fopt.df = func[7]
                         fopt.checkdf()
                         r = fopt.solve('nlp:ralg', plot=0, iprint = 10)
                         plsq = r.xf
                         ier = 0                        
                 else:
-                    print 'method %s not recognized, please check Fitting.py' % (method)
+                    print('method %s not recognized, please check Fitting.py' % (method))
                     return    
                 xfit = numpy.arange(min(tx), max(tx), (max(tx)-min(tx))/100.0)
                 yfit = func[0](plsq, xfit, C=fixedPars)
@@ -562,7 +563,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
         if fitPlot is None:
             return(yFit)
         for k in range(0, len(fitPars)):
-            print dir(plotInstance)
+            print(dir(plotInstance))
             if plotInstance is None:
                 fitPlot.plot(xFit[k], yFit[k], pen=fcolor)
             else:
@@ -656,8 +657,8 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
             try:
                 f[k]= d[pos+1]
             except:
-                print "error in chebftd: k = %d (len f = %d)  pos = %d, len(d) = %d\n" % (k, len(f), pos, len(d))
-                print "you should probably make sure this doesn't happen"
+                print("error in chebftd: k = %d (len f = %d)  pos = %d, len(d) = %d\n" % (k, len(f), pos, len(d)))
+                print("you should probably make sure this doesn't happen")
         fac = 2.0/n
         c=numpy.zeros(n)
         for j in range(0, n):
@@ -711,7 +712,7 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
 if __name__ == "__main__":
 #    import matplotlib.pyplot as pyplot
     import timeit
-    import Fitting
+    from . import Fitting
     import matplotlib as MP
     MP.use('Qt4Agg')
     ################## Do not modify the following code 
@@ -798,13 +799,13 @@ if __name__ == "__main__":
     for func in Fits.fitfuncmap:
         if func != 'exp1':
             continue
-        print "\nFunction: %s\nTarget: " % (func),
+        print("\nFunction: %s\nTarget: " % (func), end=" ")
         f = Fits.fitfuncmap[func]
         for k in range(0,len(f[1])):
-            print "%f " % (f[1][k]),
-        print "\nStarting:     ",
+            print("%f " % (f[1][k]), end=" ")
+        print("\nStarting:     ", end=" ")
         for k in range(0,len(f[5])):
-            print "%f " % (f[5][k]),
+            print("%f " % (f[5][k]), end=" ")
 
 #        nstep = 500.0
 #        if func == 'sin':

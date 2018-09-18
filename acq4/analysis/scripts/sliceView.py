@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+import acq4.util.Qt as Qt
 import acq4.pyqtgraph as pg
 import numpy as np
 import acq4.pyqtgraph.opengl as gl 
@@ -18,7 +20,7 @@ def __reload__(old):  ## re-use existing objects if module is reloaded
 if not initialized:
     atlas = cn.CochlearNucleus()
     w = pg.GraphicsWindow()
-    w.setRenderHints(pg.QtGui.QPainter.Antialiasing | pg.QtGui.QPainter.TextAntialiasing | pg.QtGui.QPainter.SmoothPixmapTransform)
+    w.setRenderHints(Qt.QPainter.Antialiasing | Qt.QPainter.TextAntialiasing | Qt.QPainter.SmoothPixmapTransform)
     w.setBackground(pg.mkColor('w'))
     v = w.addViewBox()
     v.setAspectLocked()
@@ -80,7 +82,7 @@ def show(dh=None):
         
         ## add scale bar
         sbLength = 25e-6
-        g.cellScale = pg.QtGui.QGraphicsLineItem(0.0, 0.0, sbLength, 0.0)
+        g.cellScale = Qt.QGraphicsLineItem(0.0, 0.0, sbLength, 0.0)
         g.cellScale.setPen(pg.mkPen(color=0.0, width=100e-6/cellScale, cosmetic=False))
         g.cellScale.setParentItem(cellGroup)
         g.cellScale.setZValue(10)
@@ -164,7 +166,7 @@ def showMap(dh=None):
     
         ## add scale bar
         sbLength = 50e-6
-        g.cellScale = pg.QtGui.QGraphicsLineItem(0.0, 0.0, sbLength, 0.0)
+        g.cellScale = Qt.QGraphicsLineItem(0.0, 0.0, sbLength, 0.0)
         g.cellScale.setPen(pg.mkPen(color=0.0, width=5))
         g.cellScale.setZValue(10)
         g.cellScale.text = pg.TextItem(u"%d µm" % int(sbLength*1e6), anchor=(0.5, 1), color=(0,0,0))
@@ -176,7 +178,7 @@ def showMap(dh=None):
         g.cellScale.setPos(corner + pg.Point(-sbLength/2., -sbLength/3.))
     pos = pg.SRTTransform(cd.info()['userTransform']).map(pg.Point(0,0))
     size = pg.Point(30e-6, 30e-6)
-    g.cellMarker = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(pos-size, pos+size))
+    g.cellMarker = Qt.QGraphicsEllipseItem(Qt.QRectF(pos-size, pos+size))
     g.cellMarker.setBrush(pg.mkBrush(100,100,255,150))
     g.cellMarker.setPen(pg.mkPen('k', width=0.5))
     g.cellMarker.setParentItem(g.sliceGroup)
@@ -219,7 +221,7 @@ def showMap(dh=None):
     name += "   Direct n spikes: " + str(rec['DirectNSpikes'])
     name += "\nSpont Ex Decay: %s   Spont In Decay: %s" % (str(rec['SpontExDecay1']), str(rec['SpontInDecay']))
     name += "\nExcitatory input" if (rec['EvokedExDecay'] is not None or rec['EvokedExAmp'] is not None) else ""
-    print rec
+    print(rec)
     #name += '\nDirect Slow Decay: %s %s' % (str(rec['DirectAreaGT0']), str(rec['DirectAreaGT0']))
     
     
@@ -251,13 +253,13 @@ def exportAll():
                         continue
                     
                     show(cell)
-                    pg.QtGui.QApplication.processEvents()
-                    pg.QtGui.QApplication.processEvents()
+                    Qt.QApplication.processEvents()
+                    Qt.QApplication.processEvents()
                     
                     name = day.shortName() + "_" + sl.shortName() + "_" + cell.shortName() + ".svg"
                     ex = pg.exporters.SVGExporter.SVGExporter(v.scene())
                     ex.export(name)
-                    print name
+                    print(name)
                     
                     if dlg.wasCanceled():
                         raise Exception("export cancelled")
@@ -275,13 +277,13 @@ def exportAllMaps():
             day = sl.parent()
             
             showMap(cell)
-            pg.QtGui.QApplication.processEvents()
-            pg.QtGui.QApplication.processEvents()
+            Qt.QApplication.processEvents()
+            Qt.QApplication.processEvents()
             
             name = 'map_' + day.shortName() + "_" + sl.shortName() + "_" + cell.shortName() + ".svg"
             ex = pg.exporters.SVGExporter.SVGExporter(v.scene())
             ex.export(name)
-            print name
+            print(name)
             
             if dlg.wasCanceled():
                 raise Exception("export cancelled")

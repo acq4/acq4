@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+
+import six
+
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 import acq4.util.FileLoader as FileLoader
 import acq4.util.DatabaseGui as DatabaseGui
@@ -7,7 +11,7 @@ import acq4.util.Canvas as Canvas
 #import acq4.pyqtgraph.widgets.DataTreeWidget as DataTreeWidget
 from collections import OrderedDict
 
-class AnalysisModule(QtCore.QObject):
+class AnalysisModule(Qt.QObject):
     """
     Generic class for analysis modules. 
     The general purpose of a module is to perform a specific analysis task in any context
@@ -51,7 +55,7 @@ class AnalysisModule(QtCore.QObject):
         """Subclasses should define self._elements_ to take advantage of default methods. 
         self._elements_ is a dict of (name: element) pairs, but can be initially defined
         as (name: (args..)) pairs, and the element objects will be created automatically."""
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self._host_ = host
         self.dataModel = host.dataModel
         self._sizeHint = (800, 600)
@@ -62,12 +66,12 @@ class AnalysisModule(QtCore.QObject):
               It does NOT create the actual element widgets; this happens 
               when getElement(..., create=True) is called.
         """
-        for name, el in self._elements_.iteritems():
+        for name, el in self._elements_.items():
             if isinstance(el, tuple):
                 self._elements_[name] = Element(name, args=el)
             elif isinstance(el, dict):
                 self._elements_[name] = Element(name, args=el)
-            elif isinstance(el, basestring):
+            elif isinstance(el, six.string_types):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
@@ -77,7 +81,7 @@ class AnalysisModule(QtCore.QObject):
         Default quit function calls close() on all elements.
         Module may return False to indicate that it is not ready to quit.
         """
-        for el in self._elements_.itervalues():
+        for el in self._elements_.values():
             if hasattr(el, 'close'):
                 el.close()
         #self.logBtn.close()
@@ -137,12 +141,12 @@ class AnalysisModule(QtCore.QObject):
     def sizeHint(self):
         return self._sizeHint
 
-class Element(QtCore.QObject):
+class Element(Qt.QObject):
     """Simple class for holding options and attributes for elements"""
-    sigObjectChanged = QtCore.Signal(object, object, object)  ## Element, old obj, new obj
+    sigObjectChanged = Qt.Signal(object, object, object)  ## Element, old obj, new obj
     
     def __init__(self, name, type=None, args=None):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.params = {
             'type': type,         ## string such as 'plot', 'canvas', 'ctrl'
             'name': name,

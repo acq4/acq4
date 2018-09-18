@@ -1,39 +1,62 @@
 #!/usr/bin/python
 """
-Rebuild the Ui files
-Note: If the system complains about not finding PyQt4 from pyuic, and you are using
-anaconda, change the script in ~/anaconda/bin/pyuic4 to start with python2.7, not pythonw2.7
+Script for compiling Qt Designer .ui files to .py
+
+
+
 """
-import os, sys
-uic = 'pyuic4'
-sys.argv.pop(0)
-if len(sys.argv) > 1 and sys.argv[1] == '--pyside':
-    sys.argv.pop(0)
-    uic = 'pyside-uic'
+import os, sys, subprocess, tempfile
 
-paths = sys.argv
-if len(paths) == 0:
-    paths = ['.']
+pyqtuic = 'pyuic4'
+pysideuic = 'pyside-uic'
+pyqt5uic = 'pyuic5'
 
-uifiles = []
-for root in paths:
-    if os.path.isdir(root):
-        for path, sd, files in os.walk(root):
-            if os.path.join('acq4', 'pyqtgraph') in path:
-                continue
-            for f in files:
-                if f.endswith('.ui'):
-                    uifiles.append(os.path.join(path, f))
-    elif os.path.isfile(root):
-        if root.endswith('.ui'):
-            uifiles.append(root)
-        else:
-            raise Exception('Not a .ui file: %s' % root)
-    else:
-        raise Exception('Not a file or directory: %s' % root)
+usage = """Compile .ui files to .py for all supported pyqt/pyside versions.
+
+  Usage: python rebuildUi.py [--force] [.ui files|search paths]
+
+  May specify a list of .ui files and/or directories to search recursively for .ui files.
+"""
+
+args = sys.argv[1:]
+
+if '--force' in args:
+    force = True
+    args.remove('--force')
+else:
+    force = False
+
+if len(args) == 0:
+    print(usage)
+    sys.exit(-1)
+
     
+uifiles = []
+for arg in args:
+    if os.path.isfile(arg) and arg.endswith('.ui'):
+        uifiles.append(arg)
+    elif os.path.isdir(arg):
+        # recursively search for ui files in this directory
+        for path, sd, files in os.walk(arg):
+            for f in files:
+                if not f.endswith('.ui'):
+                    continue
+                uifiles.append(os.path.join(path, f))
+    else:
+        print('Argument "%s" is not a directory or .ui file.' % arg)
+        sys.exit(-1)
+
+# rebuild all requested ui files
 for ui in uifiles:
-    py = os.path.splitext(ui)[0] + '.py'
-    if not os.path.exists(py) or os.stat(py).st_mtime < os.stat(ui).st_mtime:
-        os.system('%s %s > %s' % (uic, ui, py))
-        print py
+    base, _ = os.path.splitext(ui)
+    for compiler, ext in [(pyqtuic, '_pyqt.py'), (pysideuic, '_pyside.py'), (pyqt5uic, '_pyqt5.py')]:
+        py = base + ext
+        if not force and os.path.exists(py) and os.stat(ui).st_mtime <= os.stat(py).st_mtime:
+            print("Skipping %s; already compiled." % py)
+        else:
+            cmd = '%s %s > %s' % (compiler, ui, py)
+            print(cmd)
+            try:
+                subprocess.check_call(cmd, shell=True)
+            except subprocess.CalledProcessError:
+                os.remove(py)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Device import *
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.util.Mutex as Mutex
 from collections import OrderedDict
 
@@ -9,7 +10,7 @@ class LightSource(Device):
     """Device tracking the state and properties of multiple illumination sources.
     """
     # emitted when the on/off status of a light changes
-    sigLightChanged = QtCore.Signal(object, object)  # self, light_name
+    sigLightChanged = Qt.Signal(object, object)  # self, light_name
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)

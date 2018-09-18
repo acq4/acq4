@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys, os
 if __name__ == '__main__':
     d = os.path.dirname(__file__)
@@ -8,12 +9,13 @@ from ctypes import *
 from acq4.util.clibrary import *
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from acq4.pyqtgraph import graphicsWindows as gw
-from PyQt4 import QtGui
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from collections import OrderedDict
 import atexit
 import traceback
 import time
+import six
 modDir = os.path.dirname(__file__)
 sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
 
@@ -22,7 +24,7 @@ if os.path.isdir(sdkDir):
     headerDir = sdkDir
 else:
     headerDir = modDir
-print headerDir
+print(headerDir)
 p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
 
 if sys.platform == 'darwin':
@@ -129,7 +131,7 @@ class QCamDriverClass:
     
     def getCamera(self, cam):
         #print "QIdriver: getting camera...."
-        if not self.cams.has_key(cam):
+        if cam not in self.cams:
             #print "    creating camera class..."
             self.cams[cam] = QCameraClass(cam, self)
             #print "    camera class created for cam: %s" %cam
@@ -292,7 +294,7 @@ class QCameraClass:
     def convertUnitsToAcq4(self, param, value):
         if param in self.unitConversionDict:
             #print "        0 convertUnits: param:", param, "value:", value
-            if type(value) in [type(1),type(1.0),type(1L)]:
+            if type(value) in list(six.integer_types) + [float]:
                 #print "        1 convertUnits: param:", param, "value:", value*self.unitConversionDict[param]
                 return value*self.unitConversionDict[param]
             elif type(value) == list:
@@ -304,7 +306,7 @@ class QCameraClass:
                 #print "        3 convertUnits: param:", param, "value:", (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])
                 return (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])  
             else:
-                print "qcam.convertUnitsToAcq4 does not know how to convert value of type ", type(value)
+                print("qcam.convertUnitsToAcq4 does not know how to convert value of type ", type(value))
         else: 
             #print "%s not in unitConversionDict." %param, "Value = ", value
             return value
@@ -364,13 +366,13 @@ class QCameraClass:
                             table = (c_ulong *32)()
                             r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                        except QCamFunctionError, err: ###if sparse table doesn't work try getting a RangeTable
+                        except QCamFunctionError as err: ###if sparse table doesn't work try getting a RangeTable
                             if err.value == 1:  
                                 min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise 
-                except QCamFunctionError, err:
+                except QCamFunctionError as err:
                     if err.value == 1: pass    
                     else: raise
         #for x in lib('enums', 'QCam_ParamS32'):
@@ -381,13 +383,13 @@ class QCameraClass:
                             table = (c_long *32)()
                             r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                        except QCamFunctionError, err:
+                        except QCamFunctionError as err:
                             if err.value == 1:
                                 min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise
-                except QCamFunctionError, err:
+                except QCamFunctionError as err:
                     if err.value == 1: pass
                     else: raise
         #for x in lib('enums', 'QCam_Param64'):
@@ -398,13 +400,13 @@ class QCameraClass:
                             table = (c_ulonglong *32)()
                             r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                        except QCamFunctionError, err:
+                        except QCamFunctionError as err:
                             if err.value == 1:  ## qerrNotSupported
                                 min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise
-                except QCamFunctionError, err:
+                except QCamFunctionError as err:
                     if err.value == 1:  pass
                     else: raise
         #print "      parameters are retrieved."
@@ -496,7 +498,7 @@ class QCameraClass:
             try:
                 a = self.call(lib.GetInfo, self.handle, getattr(lib, x))
                 self.cameraInfo[x] = a[2]
-            except QCamFunctionError, err:
+            except QCamFunctionError as err:
                 if err.value == 1:
                     #print "No info for: ", x
                     pass
@@ -516,7 +518,7 @@ class QCameraClass:
         """Get a list of parameter values. Return a dictionary of name: value pairs"""
         vals = OrderedDict()
         if params is None:
-            params = self.paramAttrs.keys()
+            params = list(self.paramAttrs.keys())
         
         s = self.readSettings()
         for param in params:
@@ -555,7 +557,7 @@ class QCameraClass:
         
         
         if asList:
-            return vals.values()
+            return list(vals.values())
         else:
             return vals
 
@@ -586,7 +588,7 @@ class QCameraClass:
         ### Unpack grouped params
         for x in params.keys():
             if x in self.groupParams:
-                tuples = zip(self.groupParams[x], params[x])
+                tuples = list(zip(self.groupParams[x], params[x]))
                 #newDict = {}
                 for y in tuples:
                     params[y[0]]= y[1]
@@ -606,7 +608,7 @@ class QCameraClass:
         state = self.getParams(['binning', 'region'])
         
         ## will also see whether there are actually any changes to make
-        current = self.getParams(params.keys())
+        current = self.getParams(list(params.keys()))
         changed = False
         #changedKeys = []  ## keys for parameters that have changed 
                           ### (this is not necessarily the same as params)
@@ -618,8 +620,8 @@ class QCameraClass:
                 if params[x] == current[x]:
                     continue
             except:
-                print "PARAMS:", params
-                print "CURRENT:", current
+                print("PARAMS:", params)
+                print("CURRENT:", current)
                 raise
             
             if x == 'ringSize':
@@ -628,7 +630,7 @@ class QCameraClass:
                 continue
             if x == 'qprmImageFormat':
                 if params[x] != 'qfmtMono16':
-                    print "QCam driver currently only supports the 'qfmtMono16' image format."
+                    print("QCam driver currently only supports the 'qfmtMono16' image format.")
                     continue
             #print "changed param", x, current[x], params[x]
             changed = True
@@ -656,7 +658,7 @@ class QCameraClass:
                             value = max(allowableValues)
                     elif type(allowableValues) == list:
                         if value not in allowableValues:
-                            print "%s not an allowable value for QImaging camera. Allowable values are %s" %(value, allowableValues)
+                            print("%s not an allowable value for QImaging camera. Allowable values are %s" %(value, allowableValues))
             #print "     4 value:", value
             
             
@@ -736,7 +738,7 @@ class QCameraClass:
         #ret = {}
         #for x in params:
             #ret[x] = self.getParam(x)
-        ret = self.getParams(self.getParams(params.keys()))
+        ret = self.getParams(self.getParams(list(params.keys())))
         self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
         #if not autoRestart:
@@ -869,7 +871,7 @@ class QCameraClass:
         #for x in args[0]:
             #dict[x] = self.getParam(x)
         #print "Set params to:", dict
-        print "Queued settings have been changed. (Message from queueSettings callback). Settings:", args
+        print("Queued settings have been changed. (Message from queueSettings callback). Settings:", args)
 
     def stop(self):
 
@@ -897,14 +899,14 @@ class QCameraClass:
         return a 
         
 if __name__ == '__main__':
-    print "Testing QCam driver..."
+    print("Testing QCam driver...")
     qcd = QCamDriverClass()
     cams = qcd.listCameras()
-    print "Found cameras:", cams
+    print("Found cameras:", cams)
     cam = qcd.getCamera(cams[0])
-    print "Opened camera 0."
+    print("Opened camera 0.")
     params = cam.listParams()
-    print "Parameters available:", params.keys()
+    print("Parameters available:", list(params.keys()))
     qcd.quit()
     
 #loadDriver()
@@ -943,7 +945,7 @@ if __name__ == '__main__':
 
 #time.sleep(1.0)
 #print "starting app.."
-#app = QtGui.QApplication([])
+#app = Qt.QApplication([])
 #print "app started."
 #print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
 #a.shape = (camerainfo['qinfCcdHeight'], camerainfo['qinfCcdWidth'])

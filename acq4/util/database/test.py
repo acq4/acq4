@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(path, '..', '..', '..'))
@@ -11,8 +12,8 @@ def testDataRetrieval():
     """
     db = SqliteDatabase()
     db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob, 'other' other)")
-    columns = db.tableSchema('t').keys()
-    print columns
+    columns = list(db.tableSchema('t').keys())
+    print(columns)
 
 
     ## Test insertion and retrieval of different data types into each column type

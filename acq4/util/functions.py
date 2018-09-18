@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 functions.py - Miscellaneous homeless functions 
 Copyright 2010  Luke Campagnola
@@ -12,6 +13,10 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 
 
 """
+
+import six
+
+from six.moves import range
 import sys
 import os, re, math, time, threading, decimal
 from acq4.util.metaarray import *
@@ -32,10 +37,10 @@ except:
 
 
 def dirDialog(startDir='', title="Select Directory"):
-  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+  return str(Qt.QFileDialog.getExistingDirectory(None, title, startDir))
 
 def fileDialog():
-  return str(QtGui.QFileDialog.getOpenFileName())
+  return str(Qt.QFileDialog.getOpenFileName())
 
 
 
@@ -179,7 +184,7 @@ def pspFunc(v, x, risePower=2.0):
     try:
         out = v[0] / maxVal * pspInnerFunc(x-v[1], v[2], v[3], risePower)
     except:
-        print v[2], v[3], maxVal, x.shape, x.dtype
+        print(v[2], v[3], maxVal, x.shape, x.dtype)
         raise
     return out
 
@@ -292,7 +297,7 @@ def doublePspFunc(v, x, risePower=2.0):
         decayExp2 = amp2 * np.exp(-x / decay2)
         out[mask] =  riseExp * (decayExp1 + decayExp2)
     except:
-        print v, x.shape, x.dtype
+        print(v, x.shape, x.dtype)
         raise
     return out
 
@@ -482,16 +487,16 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
         nit = int(np.floor(np.log(objSize)/np.log(2)) + 1)
     else:
         nit = 5
-    print "Doing %d iterations" % nit
+    print("Doing %d iterations" % nit)
     
     spow = 2.0
-    scales = map(lambda x: 1.0 / spow**x, range(nit-1,-1,-1))
+    scales = [1.0 / spow**x for x in range(nit-1,-1,-1)]
     imScale = [[None, None]] * nit
     imScale[-1] = [im1, im2]
     time2 = time.clock()
     for i in range(nit-2,-1,-1):
         imScale[i] = [scipy.ndimage.zoom(imScale[i+1][0], 1.0/spow, order=1), scipy.ndimage.zoom(imScale[i+1][1], 1.0/spow, order=1)]
-    print scales
+    print(scales)
 
     time3 = time.clock()
     lastSf = None
@@ -502,7 +507,7 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
         start = np.array([0,0])
         end = None
         
-    print "Checking range %s - %s" % (str(start), str(end))
+    print("Checking range %s - %s" % (str(start), str(end)))
     for i in range(0, nit):
         sf = scales[i]
         im1s = imScale[i][0]
@@ -514,14 +519,14 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
         ## get prediction
         #print "Scale %f: start: %s  end: %s" % (sf, str(start), str(end))
         if end is None or any(start != end):
-            print "register:", start, end
+            print("register:", start, end)
             center = registerImages(im1s, im2s, (start, end))
         #print "   center = %s" % str(center/sf)
         
         
         lastSf = sf
     time4 = time.clock()
-    print "Scale time: %f   Corr time: %f    Total: %f" % (time3-time2, time4-time3, time4-time1)
+    print("Scale time: %f   Corr time: %f    Total: %f" % (time3-time2, time4-time3, time4-time1))
     return center
 
 def xcMax(xc):
@@ -538,7 +543,7 @@ def registerImages(im1, im2, searchRange):
     #start=[sx[0], sy[0]]
     #end = [sx[1], sy[1]]
     start, end = searchRange
-    print "start:",start,"end:",end
+    print("start:",start,"end:",end)
     
     if end is None:
         mode = 'full'
@@ -549,17 +554,17 @@ def registerImages(im1, im2, searchRange):
         mode = 'valid'
         s1x = max(0, start[0])
         s1y = max(0, start[1])
-        print im1.shape
-        print im2.shape
+        print(im1.shape)
+        print(im2.shape)
         e1x = min(im1.shape[0], im2.shape[0]+end[0])
         e1y = min(im1.shape[1], im2.shape[1]+end[1])
-        print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
+        print("%d,%d - %d,%d" % (s1x, s1y, e1x, e1y))
         
         s2x = max(0, -start[0])
         s2y = max(0, -start[1])
         e2x = min(im2.shape[0], im1.shape[0]-end[0])
         e2y = min(im2.shape[1], im1.shape[1]-end[1])
-        print "%d,%d - %d,%d" % (s2x, s2y, e2x, e2y)
+        print("%d,%d - %d,%d" % (s2x, s2y, e2x, e2y))
         
         ## Crop images
         im1c = im1[s1x:e1x, s1y:e1y]
@@ -578,11 +583,11 @@ def registerImages(im1, im2, searchRange):
         try:
             img.shape = im2c.shape
         except:
-            print img.shape, im2c.shape
+            print(img.shape, im2c.shape)
             raise
         return abs(im2c - img).sum()
     
-    print im1c.shape, im2c.shape
+    print(im1c.shape, im2c.shape)
     xc = scipy.ndimage.generic_filter(im1c, err, footprint=im2c) 
    # print xc.min(), xc.max()
     #xcb = ndimage.filters.gaussian_filter(xc, 20)
@@ -599,12 +604,12 @@ def registerImages(im1, im2, searchRange):
     #showImage(xcc)
     #showImage(xcb)
     
-    print "Best match at " + str(xcm)
+    print("Best match at " + str(xcm))
     if mode == 'full':
         xcm -= np.array(im1c.shape)-1
     else:
         xcm += start
-    print "  ..corrected to " + str(xcm)
+    print("  ..corrected to " + str(xcm))
     
     #showImage(regPair(im1, im2, xcm))
     raise Exception()
@@ -657,7 +662,7 @@ def vibratome(data, start, stop, axes=(0,1)):
     (The data set returned is not guaranteed to hit the stopping point exactly)"""
 
     ## transpose data so x and y are the first 2 axes
-    trAx = range(data.ndim)
+    trAx = list(range(data.ndim))
     trAx.remove(axes[0])
     trAx.remove(axes[1])
     tr1 = tuple(axes) + tuple(trAx)
@@ -779,7 +784,7 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
     
 
     ## transpose data so slice axes come first
-    trAx = range(data.ndim)
+    trAx = list(range(data.ndim))
     for x in axes:
         trAx.remove(x)
     tr1 = tuple(axes) + tuple(trAx)
@@ -819,7 +824,7 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
         output[ind] = scipy.ndimage.map_coordinates(data[ind], x, **kargs)
     
     
-    tr = range(output.ndim)
+    tr = list(range(output.ndim))
     trb = []
     for i in range(min(axes)):
         ind = tr1.index(i) + (len(shape)-len(axes))
@@ -830,147 +835,6 @@ def affineSlice(data, shape, origin, vectors, axes, **kargs):
 
     ## Untranspose array before returning
     return output.transpose(tr2)
-    
-    
-    ## old manual method. Might resurrect if performance is an issue..
-    
-    ### x[:, 1,2,3] is the vector indicating the position in data coords for the point [1,2,3] in slice coords
-    ### Note this is the floating-point position, and should not be used for indexing (that's what xi is for)
-    ### so axes are [pos, (slice axes)]
-    
-    
-    
-    ### Location of original values that will contribute to each point
-    ### If there is no interpolation, then we use nearest neighbor.
-    ### If there is interpolation, then each output voxel will be a combination of the nearest 2**ndim voxels
-    ##xi0 = np.floor(x).astype(uint)
-    ##yi0 = np.floor(y).astype(uint)
-    ##xi1 = xi0 + 1
-    ##yi1 = yi0 + 1
-    #if interpolate:
-        #xi = np.empty((2,) + x.shape, dtype=np.intp)
-        #xi[0] = np.floor(x)
-        #xi[1] = xi[0] + 1
-    #else:
-        #xi = np.round(x).astype(np.intp)[np.newaxis,...]
-    ###Now we have added a new axis to the beginning of the array for separating the values on either side of the sample location
-    ### so axes are [+/-, pos, (slice axes)]
-    
-    ### Find out-of-bound values
-    ##ox0 = (xi0 < 0) + (xi0 >= data.shape[0])
-    ##oy0 = (yi0 < 0) + (yi0 >= data.shape[1])
-    ##ox1 = (xi1 < 0) + (xi1 >= data.shape[0])
-    ##oy1 = (yi1 < 0) + (yi1 >= data.shape[1])
-    #sh = list(xi.shape)
-    
-    #sh[1] = 1  ## instead of a vector for each point, we just want a boolean marking bad spots 
-               ### (but leave the axis in anyway for broadcasting compatibility)
-    #ox = np.zeros(tuple(sh), dtype=bool)
-    #for i in range(len(xi.shape[1])):
-        #ox += xi[:,i] < 0
-        #ox += xi[:,i] > data.shape[i]
-    ### axes are [+/-, 1, (slice axes)]
-    
-    ### Make sure these locations are in-bounds so the indexing slice will not barf later
-    ### (just read from 0,0 and then overwrite the values later)
-    ##xi0[ox0] = 0
-    ##xi1[ox1] = 0
-    ##yi0[oy0] = 0
-    ##yi1[oy1] = 0
-    #xi[ox] = 0
-    
-    ### slices needed to pull values from data set
-    ##s00 = [xi0, yi0] + [slice(None)] * (data.ndim-2)
-    ##s10 = [xi1, yi0] + [slice(None)] * (data.ndim-2)
-    ##s01 = [xi0, yi1] + [slice(None)] * (data.ndim-2)
-    ##s11 = [xi1, yi1] + [slice(None)] * (data.ndim-2)
-    
-    ### Actual values from data set
-    ##v00 = data[s00]
-    ##v10 = data[s10]
-    ##v01 = data[s01]
-    ##v11 = data[s11]
-    #if interpolate:
-        ###Should look like this:
-        ##slices[0,1,1] = (xi[0,0], xi[1,1], xi[1,2])
-        ##slices = fromfunction(lambda *inds: tuple([xi[inds[i], i] for i in range(len(inds))]), (2,)*len(shape), dtype=object)
-        
-        ### for each point in the slice, we grab 2**ndim neighboring values from which to interpolate
-        ### v[0,1,1] = data[slices[0,1,1]]
-        
-        #intShape = (2,)*len(axes)  ## shape of interpolation space around each voxel
-        
-        #v = np.empty(intShape + data.shape, dtype=data.dtype)
-        ### axes are [(interp. space), (slice axes), (other axes)]
-        
-        ##c = empty(v.shape, dtype=float)
-        
-        #for inds in np.ndindex(*intShape):  ## iterate over interpolation space
-            #sl = tuple([xi[inds[i], i] for i in range(len(inds))])  ## generate the correct combination of slice values from xi
-            #v[inds] = data[sl]
-            #v[inds][ox] = 0  ## set out-of-bounds values to 0
-            
-            ### create interpolation coefficients 
-            ##dx = x - xi
-            #c = np.ones()
-            #for i in range(len(shape)):
-                #c *= x - xi
-                
-            ### apply interpolation coeff.
-            #v[inds] *= c
-            
-        ### interpolate!
-        #for i in range(len(shape)):
-            #v = v.sum(axis=0)
-    #else:
-        #sl = tuple([xi[0][i] for i in range(len(shape))])
-        #v = data[sl]
-        #v[ox] = 0
-        
-
-    ### Set 0 for all out-of-bound values
-    ##v00[ox0+oy0] = 0
-    ##v10[ox1+oy0] = 0
-    ##v01[ox0+oy1] = 0
-    ##v11[ox1+oy1] = 0
-
-    ### Interpolation coefficients
-    #dx0 = x - xi0
-    #dy0 = y - yi0
-    #dx1 = 1 - dx0
-    #dy1 = 1 - dy0
-    #c00 = dx1 * dy1
-    #c10 = dx0 * dy1
-    #c01 = dx1 * dy0
-    #c11 = dx0 * dy0
-    
-    ### Add un-indexed dimensions into coefficient arrays
-    #c00.shape = c00.shape + (1,)*(data.ndim-2)
-    #c10.shape = c10.shape + (1,)*(data.ndim-2)
-    #c01.shape = c01.shape + (1,)*(data.ndim-2)
-    #c11.shape = c11.shape + (1,)*(data.ndim-2)
-    
-    ### Interpolate!
-    #interpolated = v00*c00 + v10*c10 + v01*c01 + v11*c11
-    
-    ### figure out the reverse transpose order
-    ##tr1 = list(tr1)
-    ##tr1.pop(1)
-    ##tr2 = [None] * len(tr1)
-    ##for i in range(len(tr1)):
-        ##if tr1[i] > 1:
-            ##tr1[i] -= 1
-        ##tr2[tr1[i]] = i
-    ##tr2 = tuple(tr2)
-
-    #tr2 = np.array(tr1)
-    #for i in range(0, len(tr2)):
-        #tr2[tr1[i]] = i
-    #tr2 = tuple(tr2)
-
-
-    ### Untranspose array before returning
-    #return interpolated.transpose(tr2)
 
 
 def volumeSum(data, alpha, axis=0, dtype=None):
@@ -1316,7 +1180,7 @@ def imgDeconvolve(data, div):
 
 def xColumn(data, col):
     """Take a column out of a 2-D MetaArray and turn it into the axis values for axis 1. (Used for correcting older rtxi files)"""
-    yCols = range(0, data.shape[0])
+    yCols = list(range(0, data.shape[0]))
     yCols.remove(col)
     b = data[yCols].copy()
     b._info[1] = data.infoCopy()[0]['cols'][col]
@@ -1410,7 +1274,7 @@ def makeDispMap(im1, im2, maxDist=10, searchRange=None, normBlur=5.0, matchSize=
                 #matchOffset[tuple(ind)] = v
             
             if printProgress:
-                print "Displacement %d, %d: %d matches" % (i,j, len(stdCmpInds))
+                print("Displacement %d, %d: %d matches" % (i,j, len(stdCmpInds)))
             
             if showProgress:
                 imw1.updateImage(errMap, autoRange=True)
@@ -1444,7 +1308,7 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
     
     
     ## Scale down image to quickly find a rough displacement map
-    print "Scaling images down for fast displacement search"
+    print("Scaling images down for fast displacement search")
     #im1s = downsamplend(im1, (scale,scale))
     #im2s = downsamplend(im2, (scale,scale))
     im1s = downsample(downsample(im1, scale), scale)
@@ -1470,7 +1334,7 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
         [scale*(dmCrop[...,0].min()-1), scale*(dmCrop[...,0].max()+1)], 
         [scale*(dmCrop[...,1].min()-1), scale*(dmCrop[...,1].max()+1)]
     ]
-    print "Finished initial search; displacement range is", search
+    print("Finished initial search; displacement range is", search)
     
     
     ## Generate full-size displacement map
@@ -1486,7 +1350,7 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
     
     
     ## Generate matched images
-    print "Distorting image to match.."
+    print("Distorting image to match..")
     im2d = geometric_transform(im2, lambda x: (x[0]+(dm2Blur[x[0], x[1], 0]), x[1]+(dm2Blur[x[0], x[1], 1])))
     
     if showProgress:
@@ -1699,7 +1563,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
                 continue
         if offTimes[-1] < onTimes[-1]:
             onTimes = onTimes[:-1]
-        for i in xrange(len(onTimes)):
+        for i in range(len(onTimes)):
             hits.append((onTimes[i], offTimes[i]))
     
     ## sort hits  ## NOTE: this can be sped up since we already know how to interleave the events..
@@ -1828,7 +1692,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
     if xvals is not None:
         events['time'] = xvals[events['index']]
         
-    #for i in xrange(len(events)):
+    #for i in range(len(events)):
         #print events[i]['time'], events[i]['peak']
 
     return events
@@ -2078,7 +1942,7 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
 
 
 def tauiness(data, win, step=10):
-    ivals = range(0, len(data)-win-1, int(win/step))
+    ivals = list(range(0, len(data)-win-1, int(win/step)))
     xvals = data.xvals(0)
     result = np.empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
@@ -2181,9 +2045,9 @@ def concatenateColumns(data):
                 try:
                     out[name] = element[name]
                 except:
-                    print "Column:", name
-                    print "Input shape:", element.shape, element.dtype
-                    print "Output shape:", out.shape, out.dtype
+                    print("Column:", name)
+                    print("Input shape:", element.shape, element.dtype)
+                    print("Output shape:", out.shape, out.dtype)
                     raise
         else:
             name, type, d = element
@@ -2207,7 +2071,7 @@ def suggestDType(x, singleValue=False):
         return float
     elif isinstance(x, int) or isinstance(x, long):
         return int
-    #elif isinstance(x, basestring):  ## don't try to guess correct string length; use object instead.
+    #elif isinstance(x, six.string_types):  ## don't try to guess correct string length; use object instead.
         #return '<U%d' % len(x)
     else:
         return object
@@ -2219,7 +2083,7 @@ def suggestRecordDType(x, singleRecord=False):
     when a single cell contains a sequence as its value.
     """
     dt = []
-    for k, v in x.iteritems():
+    for k, v in x.items():
         dt.append((k, suggestDType(v, singleValue=singleRecord)))
     return dt
     
@@ -2239,10 +2103,10 @@ def isInt(x):
 def find(data, val, op='==', arrayOp='all', axis=0, useWeave=True):
     operands = {'==': 'eq', '!=': 'ne', '<': 'lt', '>': 'gt', '<=': 'le', '>=': 'ge'}
     if op not in operands:
-        raise Exception("Operand '%s' is not supported. Options are: %s" % (str(op), str(operands.keys())))
+        raise Exception("Operand '%s' is not supported. Options are: %s" % (str(op), str(list(operands.keys()))))
     ## fallback for when weave is not available
     if not useWeave:
-        axes = range(data.ndim)
+        axes = list(range(data.ndim))
         axes.remove(axis)
         axes = [axis] + axes
         d2 = data.transpose(axes)
@@ -2484,8 +2348,8 @@ def cmd(func, n, time):
 
 
 def inpRes(data, v1Range, v2Range):
-    r1 = filter(lambda r: r['Time'] > v1Range[0] and r['Time'] < v1Range[1], data)
-    r2 = filter(lambda r: r['Time'] > v2Range[0] and r['Time'] < v2Range[1], data)
+    r1 = [r for r in data if r['Time'] > v1Range[0] and r['Time'] < v1Range[1]]
+    r2 = [r for r in data if r['Time'] > v2Range[0] and r['Time'] < v2Range[1]]
     v1 = mean([r['voltage'] for r in r1])
     v2 = min(smooth([r['voltage'] for r in r2], 10))
     c1 = mean([r['current'] for r in r1])

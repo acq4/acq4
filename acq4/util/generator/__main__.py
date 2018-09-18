@@ -1,14 +1,15 @@
+from __future__ import print_function
 import os, sys, user
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(md, '..'))
 
 import acq4.pyqtgraph as pg
 import acq4.util.SequenceRunner as SequenceRunner
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-from StimGenerator import *
-app = QtGui.QApplication([])
+    Qt.Signal = Qt.pyqtSignal
+from .StimGenerator import *
+app = Qt.QApplication([])
 sg = StimGenerator()
 sg.show()
 
@@ -31,7 +32,7 @@ def plotData():
 
     global seqPlots
     seqPlots = []
-    SequenceRunner.runSequence(lambda p: seqPlots.append(sg.getSingle(rate, nPts, p)), params, params.keys())
+    SequenceRunner.runSequence(lambda p: seqPlots.append(sg.getSingle(rate, nPts, p)), params, list(params.keys()))
     
     for i, w in enumerate(seqPlots):
         if w is not None:

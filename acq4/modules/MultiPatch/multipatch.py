@@ -1,7 +1,8 @@
+from __future__ import print_function
 import os, re
 import numpy as np
 import json
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 
 from acq4.modules.Module import Module
 from acq4 import getManager
@@ -23,20 +24,20 @@ class MultiPatch(Module):
         self.win.show()
 
 
-class PipetteControl(QtGui.QWidget):
+class PipetteControl(Qt.QWidget):
 
-    sigMoveStarted = QtCore.Signal(object)
-    sigMoveFinished = QtCore.Signal(object)
+    sigMoveStarted = Qt.Signal(object)
+    sigMoveFinished = Qt.Signal(object)
 
     def __init__(self, pipette, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.pip = pipette
         self.moving = False
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
         self.pip.sigDataChanged.connect(self.updatePlots)
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.stateChanged)
-        self.moveTimer = QtCore.QTimer()
+        self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
         self.ui = Ui_PipetteControl()
@@ -98,7 +99,7 @@ class PipetteControl(QtGui.QWidget):
         self.sigMoveFinished.emit(self)
 
 
-class MultiPatchWindow(QtGui.QWidget):
+class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
         self.storageFile = None
 
@@ -106,14 +107,14 @@ class MultiPatchWindow(QtGui.QWidget):
         self._calibrateStagePositions = []
         self._setTargetPips = []
 
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.module = module
 
         self.ui = Ui_MultiPatch()
         self.ui.setupUi(self)
 
         self.setWindowTitle('Multipatch')
-        self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
+        self.setWindowIcon(Qt.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
 
         man = getManager()
         pipNames = man.listInterfaces('pipette')
@@ -344,7 +345,7 @@ class MultiPatchWindow(QtGui.QWidget):
             self._setTargetPips = []
 
     def cameraModuleClicked_calibrate(self, ev):
-        if ev.button() != QtCore.Qt.LeftButton:
+        if ev.button() != Qt.Qt.LeftButton:
             return
 
         # Set next pipette position from mouse click
@@ -364,7 +365,7 @@ class MultiPatchWindow(QtGui.QWidget):
             self.updateXKeysBacklight()
 
     def cameraModuleClicked_setTarget(self, ev):
-        if ev.button() != QtCore.Qt.LeftButton:
+        if ev.button() != Qt.Qt.LeftButton:
             return
 
         # Set next pipette position from mouse click

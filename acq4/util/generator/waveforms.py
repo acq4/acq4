@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 waveforms.py -  Waveform functions used by StimGenerator
 Copyright 2010  Luke Campagnola

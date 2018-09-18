@@ -1,25 +1,26 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.widgets.SpinBox import SpinBox
 from acq4.pyqtgraph.widgets.ColorButton import ColorButton
-import ContourPlotterTemplate
+from . import ContourPlotterTemplate
 
 
 
 
-class ContourPlotter(QtGui.QWidget):
+class ContourPlotter(Qt.QWidget):
     
-    sigChanged = QtCore.Signal()
+    sigChanged = Qt.Signal()
 
     def __init__(self, canvas=None, host=None):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         
         self.canvas = canvas
         self.ui = ContourPlotterTemplate.Ui_Form()
         self.ui.setupUi(self)
         
-        self.addBtn = QtGui.QPushButton('Add New')
-        item = QtGui.QTreeWidgetItem()
+        self.addBtn = Qt.QPushButton('Add New')
+        item = Qt.QTreeWidgetItem()
         self.ui.tree.addTopLevelItem(item)
         self.ui.tree.setItemWidget(item, 0, self.addBtn) 
         self.ui.drawBtn.hide()
@@ -82,15 +83,15 @@ class ContourPlotter(QtGui.QWidget):
             
 
     
-class ContourItem(QtGui.QTreeWidgetItem):
+class ContourItem(Qt.QTreeWidgetItem):
     def __init__(self, cp, parentImage=None):
         self.cp = cp
-        QtGui.QTreeWidgetItem.__init__(self)
+        Qt.QTreeWidgetItem.__init__(self)
         self.paramCombo = pg.ComboBox()
         self.thresholdSpin = pg.SpinBox(value=0.98, dec=True, step=0.1)
-        self.maxCheck = QtGui.QCheckBox()
+        self.maxCheck = Qt.QCheckBox()
         self.colorBtn = ColorButton(color=(255,255,255))
-        self.remBtn = QtGui.QPushButton('Remove')
+        self.remBtn = Qt.QPushButton('Remove')
         self.curveItem = pg.IsocurveItem()
         self.curveItem.setParentItem(parentImage)
         

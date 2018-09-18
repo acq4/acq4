@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from acq4.pyqtgraph.flowchart.library.common import *
 from acq4.pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine
 import numpy as np
 import acq4.util.functions as functions
+from six.moves import range
 
 class Threshold(CtrlNode):
     """Absolute threshold detection filter. Returns indexes where data crosses threshold."""
@@ -173,7 +175,7 @@ class ThresholdEvents(PlottingCtrlNode):
         last = 0
         dt = s['deadTime']
         rt = s['reverseTime']
-        for i in xrange(1, len(events)):
+        for i in range(1, len(events)):
             tdiff = events[i]['time'] - events[last]['time']
             if tdiff < dt:  ## check dead time
                 mask[i] = False

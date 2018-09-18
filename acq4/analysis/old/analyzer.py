@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from acq4.Manager import getManager
-from AnalyzerTemplate import *
+from .AnalyzerTemplate import *
 from acq4.util.flowchart import *
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.pyqtgraph.PlotWidget import *
 from acq4.util.Canvas import *
@@ -11,10 +12,10 @@ import acq4.util.configfile as configfile
 import pickle
 from acq4.util.DataManager import getHandle
 
-class Analyzer(QtGui.QMainWindow):
+class Analyzer(Qt.QMainWindow):
     def __init__(self, protoDir, parent=None):
         self.protoDir = protoDir
-        QtGui.QMainWindow.__init__(self, parent)
+        Qt.QMainWindow.__init__(self, parent)
         self.ui  =  Ui_MainWindow()
         self.ui.setupUi(self)
         
@@ -41,21 +42,21 @@ class Analyzer(QtGui.QMainWindow):
         
         self.dataSource = None
         
-        QtCore.QObject.connect(self.ui.dataSourceCombo, QtCore.SIGNAL("currentIndexChanged(int)"), self.setDataSource)
-        QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL("clicked()"), self.loadData)
-        QtCore.QObject.connect(self.ui.loadSequenceBtn, QtCore.SIGNAL("clicked()"), self.loadSequence)
-        QtCore.QObject.connect(self.ui.loadSessionBtn, QtCore.SIGNAL("clicked()"), self.loadSession)
-        QtCore.QObject.connect(self.ui.recompSelectedBtn, QtCore.SIGNAL("clicked()"), self.recomputeSelected)
-        QtCore.QObject.connect(self.ui.recompAllBtn, QtCore.SIGNAL("clicked()"), self.recomputeAll)
-        QtCore.QObject.connect(self.ui.saveAllBtn, QtCore.SIGNAL("clicked()"), self.saveAll)
-        QtCore.QObject.connect(self.ui.addOutputBtn, QtCore.SIGNAL("clicked()"), self.addOutput)
-        QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL("clicked()"), self.addPlot)
-        QtCore.QObject.connect(self.ui.addCanvasBtn, QtCore.SIGNAL("clicked()"), self.addCanvas)
-        QtCore.QObject.connect(self.ui.addTableBtn, QtCore.SIGNAL("clicked()"), self.addTable)
-        QtCore.QObject.connect(self.ui.removeDockBtn, QtCore.SIGNAL("clicked()"), self.removeSelected)
-        QtCore.QObject.connect(self.ui.dataTree, QtCore.SIGNAL("currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)"), self.dataSelected)
+        Qt.QObject.connect(self.ui.dataSourceCombo, Qt.SIGNAL("currentIndexChanged(int)"), self.setDataSource)
+        Qt.QObject.connect(self.ui.loadDataBtn, Qt.SIGNAL("clicked()"), self.loadData)
+        Qt.QObject.connect(self.ui.loadSequenceBtn, Qt.SIGNAL("clicked()"), self.loadSequence)
+        Qt.QObject.connect(self.ui.loadSessionBtn, Qt.SIGNAL("clicked()"), self.loadSession)
+        Qt.QObject.connect(self.ui.recompSelectedBtn, Qt.SIGNAL("clicked()"), self.recomputeSelected)
+        Qt.QObject.connect(self.ui.recompAllBtn, Qt.SIGNAL("clicked()"), self.recomputeAll)
+        Qt.QObject.connect(self.ui.saveAllBtn, Qt.SIGNAL("clicked()"), self.saveAll)
+        Qt.QObject.connect(self.ui.addOutputBtn, Qt.SIGNAL("clicked()"), self.addOutput)
+        Qt.QObject.connect(self.ui.addPlotBtn, Qt.SIGNAL("clicked()"), self.addPlot)
+        Qt.QObject.connect(self.ui.addCanvasBtn, Qt.SIGNAL("clicked()"), self.addCanvas)
+        Qt.QObject.connect(self.ui.addTableBtn, Qt.SIGNAL("clicked()"), self.addTable)
+        Qt.QObject.connect(self.ui.removeDockBtn, Qt.SIGNAL("clicked()"), self.removeSelected)
+        Qt.QObject.connect(self.ui.dataTree, Qt.SIGNAL("currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)"), self.dataSelected)
 
-        QtCore.QObject.connect(self.flowchart.outputNode, QtCore.SIGNAL("terminalRenamed"), self.outputRenamed)
+        Qt.QObject.connect(self.flowchart.outputNode, Qt.SIGNAL("terminalRenamed"), self.outputRenamed)
         i = 0
         while True:
             name = "Analyzer-%d"%i
@@ -70,18 +71,18 @@ class Analyzer(QtGui.QMainWindow):
         
     def setDataSource(self):
         if self.dataSource is not None:
-            QtCore.QObject.disconnect(self.dataSource, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
+            Qt.QObject.disconnect(self.dataSource, Qt.SIGNAL("resultsChanged"), self.dataSourceChanged)
         source = self.ui.dataSourceCombo.getSelectedObj()
         self.dataSource = source
         if source is None:
             return
-        QtCore.QObject.connect(source, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
+        Qt.QObject.connect(source, Qt.SIGNAL("resultsChanged"), self.dataSourceChanged)
         #print "connected to", source
         self.dataSourceChanged()
     
     def dumpProtocol(self):
         state = {'docks': {}}
-        for name, d in self.dockItems.iteritems():
+        for name, d in self.dockItems.items():
             s = {'type': d['type']}
             if 'widget' in d and hasattr(d['widget'], 'saveState'):
                 s['state'] = d['widget'].saveState()
@@ -98,7 +99,7 @@ class Analyzer(QtGui.QMainWindow):
         return True
         
     def newProtocol(self):
-        for name, d in self.dockItems.iteritems():
+        for name, d in self.dockItems.items():
             self.removeDockWidget(d['dock'])
             d['dock'].setObjectName('')
         self.ui.dockList.clear()
@@ -118,12 +119,12 @@ class Analyzer(QtGui.QMainWindow):
         self.flowchart.restoreState(state['flowchart'])
         
         ## recreate docks
-        for name, d in state['docks'].iteritems():
+        for name, d in state['docks'].items():
             fn = getattr(self, 'add'+d['type'])
             fn(name, d.get('state', None))
         
         ## restore dock positions
-        self.restoreState(QtCore.QByteArray.fromPercentEncoding(state['window']))
+        self.restoreState(Qt.QByteArray.fromPercentEncoding(state['window']))
         
         return True
         
@@ -174,7 +175,7 @@ class Analyzer(QtGui.QMainWindow):
     def loadSequence(self, data=None):
         if data is None:
             data = getManager().currentFile
-        item = QtGui.QTreeWidgetItem([data.shortName()])
+        item = Qt.QTreeWidgetItem([data.shortName()])
         item.data = data
         self.ui.dataTree.addTopLevelItem(item)
         self.data.append(data)
@@ -184,12 +185,12 @@ class Analyzer(QtGui.QMainWindow):
             except:
                 continue
             subd = data[sub]
-            i2 = QtGui.QTreeWidgetItem([sub])
+            i2 = Qt.QTreeWidgetItem([sub])
             i2.data = subd
             item.addChild(i2)
 
     def dataSourceChanged(self):
-        print "data source changed!"
+        print("data source changed!")
         result = self.dataSource.results
         self.flowchart.setInput(dataIn=result)
 
@@ -217,13 +218,13 @@ class Analyzer(QtGui.QMainWindow):
         self.recompute([i.data for i in items])
         
     def recompute(self, inputs):
-        progressDlg = QtGui.QProgressDialog("Processing:", 0, len(inputs))
-        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        progressDlg = Qt.QProgressDialog("Processing:", 0, len(inputs))
+        progressDlg.setWindowModality(Qt.Qt.WindowModal)
         for i in range(len(inputs)):
             inp = inputs[i]
             progressDlg.setLabelText("Processing: " + inp.name())
             progressDlg.setValue(i)
-            QtGui.QApplication.instance().processEvents()
+            Qt.QApplication.instance().processEvents()
             if progressDlg.wasCanceled():
                 progressDlg.setValue(len(inputs))
                 break
@@ -231,7 +232,7 @@ class Analyzer(QtGui.QMainWindow):
             self.results[inp] = out
             
         progressDlg.setValue(len(inputs))
-        self.emit(QtCore.SIGNAL('resultsChanged'))
+        self.emit(Qt.SIGNAL('resultsChanged'))
         #self.flowchart2.dataIn.setValue(self.results)
                     
     def saveAll(self, saveFile=None):
@@ -243,12 +244,12 @@ class Analyzer(QtGui.QMainWindow):
             protoName = proto.shortName() + '.pk'
         if saveFile is None:
             self.fileDialog = FileDialog(None, "Save session", os.path.join(saveDir, protoName))
-            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.setFileMode(Qt.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave) 
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.saveAll)
             return
-        #saveFile = QtGui.QFileDialog.getSaveFileName(None, "Save session", os.path.join(saveDir, protoName))
+        #saveFile = Qt.QFileDialog.getSaveFileName(None, "Save session", os.path.join(saveDir, protoName))
         state = {}
         state['program'] = self.dumpProtocol()
         state['data'] = self.data
@@ -280,7 +281,7 @@ class Analyzer(QtGui.QMainWindow):
             name = name2
         
         p = PlotWidget(name=name)
-        d = QtGui.QDockWidget(name)
+        d = Qt.QDockWidget(name)
         d.setObjectName(name)
         d.setWidget(p)
         
@@ -295,7 +296,7 @@ class Analyzer(QtGui.QMainWindow):
             node = self.flowchart.createNode('PlotWidget', name=name)
         node.setPlot(p)
 
-        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
+        self.addDockWidget(Qt.Qt.RightDockWidgetArea, d)
         item = ListItem(name, d)
         self.dockItems[name] = {'type': 'Plot', 'listItem': item, 'dock': d, 'widget': p, 'node': node}
         self.ui.dockList.addItem(item)
@@ -314,7 +315,7 @@ class Analyzer(QtGui.QMainWindow):
         
         p = CanvasWidget()
         
-        d = QtGui.QDockWidget(name)
+        d = Qt.QDockWidget(name)
         d.setObjectName(name)
         d.setWidget(p)
         
@@ -329,7 +330,7 @@ class Analyzer(QtGui.QMainWindow):
             node = self.flowchart.createNode('CanvasWidget', name=name)
         node.setCanvas(p.canvas)
 
-        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
+        self.addDockWidget(Qt.Qt.RightDockWidgetArea, d)
         item = ListItem(name, d)
         self.dockItems[name] = {'type': 'Canvas', 'listItem': item, 'dock': d, 'widget': p, 'node': node}
         self.ui.dockList.addItem(item)
@@ -338,15 +339,15 @@ class Analyzer(QtGui.QMainWindow):
         pass
     
     
-class CanvasWidget(QtGui.QWidget):
+class CanvasWidget(Qt.QWidget):
     def __init__(self):
-        QtGui.QWidget.__init__(self)
-        self.lay = QtGui.QGridLayout()
+        Qt.QWidget.__init__(self)
+        self.lay = Qt.QGridLayout()
         self.lay.setSpacing(0)
         self.setLayout(self.lay)
-        self.addBtn = QtGui.QPushButton('Add Image')
-        self.clearBtn = QtGui.QPushButton('Clear Images')
-        self.autoBtn = QtGui.QPushButton('Auto Range')
+        self.addBtn = Qt.QPushButton('Add Image')
+        self.clearBtn = Qt.QPushButton('Clear Images')
+        self.autoBtn = Qt.QPushButton('Auto Range')
         self.canvas = Canvas()
         self.lay.addWidget(self.addBtn, 0, 0)
         self.lay.addWidget(self.clearBtn, 0, 1)
@@ -354,11 +355,11 @@ class CanvasWidget(QtGui.QWidget):
         self.lay.addWidget(self.canvas, 1, 0, 1, 3)
         self.imageItems = []
         self.z = -1000
-        self.canvas.view.setRange(QtCore.QRectF(-0.01, -0.01, 0.02, 0.02))
+        self.canvas.view.setRange(Qt.QRectF(-0.01, -0.01, 0.02, 0.02))
 
-        self.connect(self.addBtn, QtCore.SIGNAL('clicked()'), self.addImage)
-        self.connect(self.clearBtn, QtCore.SIGNAL('clicked()'), self.clearImages)
-        self.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.autoRange)
+        self.connect(self.addBtn, Qt.SIGNAL('clicked()'), self.addImage)
+        self.connect(self.clearBtn, Qt.SIGNAL('clicked()'), self.clearImages)
+        self.connect(self.autoBtn, Qt.SIGNAL('clicked()'), self.autoRange)
         
     def autoRange(self):
         bounds = self.imageItems[0].sceneBoundingRect()
@@ -394,7 +395,7 @@ class CanvasWidget(QtGui.QWidget):
         self.imageItems = []
     
     
-class ListItem(QtGui.QListWidgetItem):
+class ListItem(Qt.QListWidgetItem):
     def __init__(self, name, obj):
-        QtGui.QListWidgetItem.__init__(self, name)
+        Qt.QListWidgetItem.__init__(self, name)
         #self.obj = weakref.ref(obj)

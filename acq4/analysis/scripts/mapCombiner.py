@@ -1,3 +1,4 @@
+from __future__ import print_function
 import acq4.Manager
 import numpy as np
 import acq4.analysis.tools.functions as afn
@@ -187,7 +188,7 @@ def interpolateCells(sites, spacing=5e-6, method='nearest', probThreshold=0.05):
     
     arr = np.zeros((n, xdim, ydim), dtype=float)
     results = []
-    print 'xdim:', xdim, 'ydim:', ydim
+    print('xdim:', xdim, 'ydim:', ydim)
     for i, c in enumerate(cells):
         data = sites[sites['CellDir'] == c]
         trans1 = (data['CellXPos'][0] - avgCellX, data['CellYPos'][0]-avgCellY)
@@ -197,7 +198,7 @@ def interpolateCells(sites, spacing=5e-6, method='nearest', probThreshold=0.05):
         #pts[1] = pts[1]+(avgCellY-ymin)
         xlimits = (int((data['xPos'].min()-trans1[0]-trans2[0])/spacing), int((data['xPos'].max()-trans1[0]-trans2[0])/spacing))
         ylimits = (int((data['yPos'].min()-trans1[1]-trans2[1])/spacing), int((data['yPos'].max()-trans1[1]-trans2[1])/spacing)) 
-        print 'xlimits:', xlimits, '   ylimits:', ylimits
+        print('xlimits:', xlimits, '   ylimits:', ylimits)
         pts = pts.transpose()/spacing 
         
         xi = np.indices((xdim, ydim))
@@ -400,7 +401,7 @@ def convolveCells_newAtlas(sites, keys=None, factor=1.11849, spacing=5e-6, probT
     counts = []
     
     for i, c in enumerate(cells):
-        print "index:", i," = cell:", c
+        print("index:", i," = cell:", c)
         
         data = sites[sites['CellDir']==c]
         if timeWindow == None:
@@ -486,7 +487,7 @@ def convolveCells_newAtlas_ZScore(sites, keys=None, factor=1.11849, spacing=5e-6
     counts = []
     
     for i, c in enumerate(cells):
-        print "index:", i," = cell:", c
+        print("index:", i," = cell:", c)
         
         data = sites[sites['CellDir']==c]
         #if timeWindow == None:
@@ -647,9 +648,9 @@ def getContourStats(arr, spacing=5e-6):
             xmax = c[:,:,1].max()+3
             ymin = c[:,:,0].min()-3
             ymax = c[:,:,0].max()+3
-            print i, j
-            print '   x:', xmin, xmax
-            print '   y:', ymin, ymax
+            print(i, j)
+            print('   x:', xmin, xmax)
+            print('   y:', ymin, ymax)
             m = cv2.moments(data[xmin:xmax, ymin:ymax])
             y = (m['m10']/m['m00'])+0.5 ## the contour/moments functions seem to leave off the right and bottom edge of contours, so we add it back
             x = (m['m01']/m['m00'])+0.5
@@ -672,7 +673,7 @@ def test(n=10):
     tasks = range(n)
     with Parallelize(tasks, workers=2, results=results)as tasker:
         for task in tasker: 
-            print 'hi' 
+            print('hi')
             #print 'Task:', task, '    pid:', os.getpid() 
             #sys.stdout.flush()
             #raise Exception("This is the exception for testing Parallelize")
