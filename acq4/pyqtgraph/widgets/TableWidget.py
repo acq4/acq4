@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
-from ..Qt import QtGui, QtCore
-from ..python2_3 import asUnicode
-
 import numpy as np
-try:
-    import metaarray
-    HAVE_METAARRAY = True
-except ImportError:
-    HAVE_METAARRAY = False
+from ..Qt import QtGui, QtCore
+from ..python2_3 import asUnicode, basestring
+from .. import metaarray
 
 
 __all__ = ['TableWidget']
@@ -151,7 +146,8 @@ class TableWidget(QtGui.QTableWidget):
             i += 1
             self.setRow(i, [x for x in fn1(row)])
             
-        if self._sorting and self.horizontalHeader().sortIndicatorSection() >= self.columnCount():
+        if (self._sorting and self.horizontalHeadersSet and 
+            self.horizontalHeader().sortIndicatorSection() >= self.columnCount()):
             self.sortByColumn(0, QtCore.Qt.AscendingOrder)
     
     def setEditable(self, editable=True):
@@ -207,7 +203,7 @@ class TableWidget(QtGui.QTableWidget):
             return lambda d: d.__iter__(), None
         elif isinstance(data, dict):
             return lambda d: iter(d.values()), list(map(asUnicode, data.keys()))
-        elif HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
+        elif (hasattr(data, 'implements') and data.implements('MetaArray')):
             if data.axisHasColumns(0):
                 header = [asUnicode(data.columnName(0, i)) for i in range(data.shape[0])]
             elif data.axisHasValues(0):
@@ -221,6 +217,8 @@ class TableWidget(QtGui.QTableWidget):
             return self.iterate, list(map(asUnicode, data.dtype.names))
         elif data is None:
             return (None,None)
+        elif np.isscalar(data):
+            return self.iterateScalar, None
         else:
             msg = "Don't know how to iterate over data type: {!s}".format(type(data))
             raise TypeError(msg)
@@ -234,6 +232,9 @@ class TableWidget(QtGui.QTableWidget):
         # has no __iter__ (??)
         for x in data:
             yield x
+        
+    def iterateScalar(self, data):
+        yield data
         
     def appendRow(self, data):
         self.appendData([data])
@@ -358,11 +359,11 @@ class TableWidget(QtGui.QTableWidget):
         self.contextMenu.popup(ev.globalPos())
         
     def keyPressEvent(self, ev):
-        if ev.text() == 'c' and ev.modifiers() == QtCore.Qt.ControlModifier:
+        if ev.key() == QtCore.Qt.Key_C and ev.modifiers() == QtCore.Qt.ControlModifier:
             ev.accept()
-            self.copy()
+            self.copySel()
         else:
-            ev.ignore()
+            QtGui.QTableWidget.keyPressEvent(self, ev)
 
     def handleItemChanged(self, item):
         item.itemChanged()
@@ -494,14 +495,13 @@ if __name__ == '__main__':
     
     t.setData(ll)
     
-    if HAVE_METAARRAY:
-        ma = metaarray.MetaArray(np.ones((20, 3)), info=[
-            {'values': np.linspace(1, 5, 20)}, 
-            {'cols': [
-                {'name': 'x'},
-                {'name': 'y'},
-                {'name': 'z'},
-            ]}
-        ])
-        t.setData(ma)
+    ma = metaarray.MetaArray(np.ones((20, 3)), info=[
+        {'values': np.linspace(1, 5, 20)}, 
+        {'cols': [
+            {'name': 'x'},
+            {'name': 'y'},
+            {'name': 'z'},
+        ]}
+    ])
+    t.setData(ma)
     

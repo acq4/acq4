@@ -11,6 +11,9 @@ import acq4.pyqtgraph as pg
 class NoiseMonitor(Module):
     """ Used to monitor electrical noise over long time periods.
     """
+    moduleDisplayName = "Noise Monitor"
+    moduleCategory = "Utilities"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config) 
         
@@ -36,9 +39,9 @@ class NoiseMonitor(Module):
         self.startBtn.toggled.connect(self.startToggled)
 
         self.params = pg.parametertree.Parameter.create(name='params', type='group', children=[
-        	dict(name='interval', type='float', value=10, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
-        	dict(name='trace duration', type='float', value=1.0, suffix='s', siPrefix=True, limits=[0.001, None], step=0.1),
-        	dict(name='sample rate', type='int', value=1e6, suffix='Hz', siPrefix=True, limits=[100, None], step=1e5),
+            dict(name='interval', type='float', value=10, suffix='s', siPrefix=True, limits=[0.001, None], step=1.0),
+            dict(name='trace duration', type='float', value=1.0, suffix='s', siPrefix=True, limits=[0.001, None], step=0.1),
+            dict(name='sample rate', type='int', value=1e6, suffix='Hz', siPrefix=True, limits=[100, None], step=1e5),
         ])
         self.ptree = pg.parametertree.ParameterTree()
         self.ptree.setParameters(self.params)
@@ -199,8 +202,8 @@ class ChannelRecorder(QtGui.QSplitter):
     def runOnce(self):
         dev = self.dev
         mode = self.mode
-    	dur = self.mod().params['trace duration']
-    	rate = self.mod().params['sample rate']
+        dur = self.mod().params['trace duration']
+        rate = self.mod().params['sample rate']
         npts = int(dur * rate)
         cmd = {
             'protocol': {'duration': dur},

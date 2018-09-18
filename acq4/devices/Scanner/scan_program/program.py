@@ -320,7 +320,7 @@ class ScanProgramPreview(object):
         index = self.index + dt * self.sampleRate
         npts = data.shape[0]
         end = min(index, npts-1)
-        va = data[:end]
+        va = data[:int(end)]
 
         self.index = index
         self.lastTime = now
@@ -329,7 +329,7 @@ class ScanProgramPreview(object):
         self.path.setData(va[:,0], va[:,1])
         self.timeline.setValue(end / self.sampleRate)
         self.spot.setPos(va[-1,0], va[-1,1])
-        if self.laserMask[end]:
+        if self.laserMask[int(end)]:
             self.spot.setBrush(pg.mkBrush('y'))
         else:
             self.spot.setBrush(pg.mkBrush('k'))

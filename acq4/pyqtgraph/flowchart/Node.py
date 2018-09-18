@@ -6,7 +6,6 @@ from .Terminal import *
 from ..pgcollections import OrderedDict
 from ..debug import *
 import numpy as np
-from .eq import *
 
 
 def strDict(d):
@@ -223,7 +222,7 @@ class Node(QtCore.QObject):
         for t in self.inputs().values():
             nodes |= set([i.node() for i in t.inputTerminals()])
         return nodes
-        #return set([t.inputTerminals().node() for t in self.listInputs().itervalues()])
+        #return set([t.inputTerminals().node() for t in self.listInputs().values()])
         
     def __repr__(self):
         return "<Node %s @%x>" % (self.name(), id(self))
@@ -261,7 +260,7 @@ class Node(QtCore.QObject):
         for k, v in args.items():
             term = self._inputs[k]
             oldVal = term.value()
-            if not eq(oldVal, v):
+            if not fn.eq(oldVal, v):
                 changed = True
             term.setValue(v, process=False)
         if changed and '_updatesHandled_' not in args:
@@ -478,7 +477,7 @@ class NodeGraphicsItem(GraphicsObject):
         #self.node.sigTerminalRenamed.connect(self.updateActionMenu)
         
     #def setZValue(self, z):
-        #for t, item in self.terminals.itervalues():
+        #for t, item in self.terminals.values():
             #item.setZValue(z+1)
         #GraphicsObject.setZValue(self, z)
         

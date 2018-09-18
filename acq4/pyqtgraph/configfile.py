@@ -9,15 +9,16 @@ file format. Data structures may be nested and contain any data type as long
 as it can be converted to/from a string using repr and eval.
 """
 
-import re, os, sys
+import re, os, sys, datetime
+import numpy
 from .pgcollections import OrderedDict
-GLOBAL_PATH = None # so not thread safe.
 from . import units
-from .python2_3 import asUnicode
+from .python2_3 import asUnicode, basestring
 from .Qt import QtCore
 from .Point import Point
 from .colormap import ColorMap
-import numpy
+GLOBAL_PATH = None # so not thread safe.
+
 
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):
@@ -142,6 +143,7 @@ def parseString(lines, start=0):
             local['Point'] = Point
             local['QtCore'] = QtCore
             local['ColorMap'] = ColorMap
+            local['datetime'] = datetime
             # Needed for reconstructing numpy arrays
             local['array'] = numpy.array
             for dtype in ['int8', 'uint8', 

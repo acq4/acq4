@@ -95,7 +95,7 @@ class Scan(QtCore.QObject):
         
     def canvasItem(self):
         if self._canvasItem is None:
-            self._canvasItem = Canvas.ScanCanvasItem(handle=self.source(), subDirs=self.dirHandles, name=self.itemName)
+            self._canvasItem = Canvas.items.ScanCanvasItem.ScanCanvasItem(handle=self.source(), subDirs=self.dirHandles, name=self.itemName)
             self._canvasItem.graphicsItem().scan = self  ## mark the graphicsItem so that we can trace back to here when it is clicked
             self._canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
             self.item = self._canvasItem.graphicsItem()     ## graphics item

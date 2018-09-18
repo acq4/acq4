@@ -145,10 +145,20 @@ class PlotCurveItem(GraphicsObject):
 
         ## Get min/max (or percentiles) of the requested data range
         if frac >= 1.0:
+            # include complete data range
+            # first try faster nanmin/max function, then cut out infs if needed.
             b = (np.nanmin(d), np.nanmax(d))
+            if any(np.isinf(b)):
+                mask = np.isfinite(d)
+                d = d[mask]
+                if len(d) == 0:
+                    return (None, None)
+                b = (d.min(), d.max())
+                
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:
+            # include a percentile of data range
             mask = np.isfinite(d)
             d = d[mask]
             b = np.percentile(d, [50 * (1 - frac), 50 * (1 + frac)])
@@ -184,7 +194,7 @@ class PlotCurveItem(GraphicsObject):
         if self._boundingRect is None:
             (xmn, xmx) = self.dataBounds(ax=0)
             (ymn, ymx) = self.dataBounds(ax=1)
-            if xmn is None:
+            if xmn is None or ymn is None:
                 return QtCore.QRectF()
             
             px = py = 0.0

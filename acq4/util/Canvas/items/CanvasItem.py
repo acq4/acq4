@@ -1,7 +1,10 @@
 from acq4.pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
 
+
 class CanvasItem(OrigCanvasItem):
     ## extent canvasitem to have support for filehandles
+    
+    _typeName = "Item"
     
     def __init__(self, *args, **kargs):
         OrigCanvasItem.__init__(self, *args, **kargs)
@@ -10,18 +13,28 @@ class CanvasItem(OrigCanvasItem):
             self.opts['handle'] = None
         
         ## reload user transform from disk if possible
+        trans = None
         if self.opts['handle'] is not None:
             trans = self.opts['handle'].info().get('userTransform', None)
-            if trans is not None:
-                self.restoreTransform(trans)
-            elif 'defaultUserTransform' in self.opts:
-                self.restoreTransform(self.opts['defaultUserTransform'])
             if self.opts['name'] is None:
                 self.opts['name'] = self.opts['handle'].shortName()
-        
+        else:
+            if self.opts['name'] is None:
+                self.opts['name'] = self.typeName()
+            
+        if trans is None and 'defaultUserTransform' in self.opts:
+            trans = self.opts['defaultUserTransform']
+        if trans is not None:
+            self.restoreTransform(trans)
+
+    @classmethod
+    def typeName(cls):
+        """Return a string used to represent this item type to the user."""
+        return cls._typeName
+     
     def getHandle(self):
         """Return the file handle for this item, if any exists."""
-        return self.opts['handle']
+        return self.opts.get('handle')
     
     @classmethod
     def checkFile(cls, handle):
@@ -45,4 +58,8 @@ class CanvasItem(OrigCanvasItem):
             raise Exception("Transform has invalid scale; not saving: %s" % str(trans))
         fh.setInfo(userTransform=trans)
     
-
+    def saveState(self, relativeTo=None):
+        state = OrigCanvasItem.saveState(self)
+        handle = self.getHandle()
+        state['filename'] = None if handle is None else handle.name(relativeTo=relativeTo)
+        return state

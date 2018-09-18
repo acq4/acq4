@@ -333,10 +333,15 @@ class CameraModuleInterface(QtCore.QObject):
         """
         return None
 
-    def takeImage(self):
+    def takeImage(self, closeShutter=None):
         """Request the imaging device to acquire a single frame.
+
+        The optional closeShutter argument is used to tell laser scanning devices whether
+        to close their shutter after imaging. Cameras can simply ignore this option.
         """
-        raise NotImplementedError()
+        # Note: this is a bit kludgy. 
+        # Would be nice to have a more natural way of handling this..
+        raise NotImplementedError(str(self))
 
     def quit(self):
         """Called when the interface is removed from the camera module or when
@@ -377,12 +382,18 @@ class ROIPlotter(QtGui.QWidget):
         self.roiLayout.setSpacing(0)
         self.roiLayout.setContentsMargins(0,0,0,0)
         self.setLayout(self.roiLayout)
+
+        # rect
         rectPath = QtGui.QPainterPath()
         rectPath.addRect(0, 0, 1, 1)
         self.rectBtn = pg.PathButton(path=rectPath)
+
+        # ellipse
         ellPath = QtGui.QPainterPath()
         ellPath.addEllipse(0, 0, 1, 1)
         self.ellipseBtn = pg.PathButton(path=ellPath)
+
+        # polygon
         polyPath = QtGui.QPainterPath()
         polyPath.moveTo(0,0)
         polyPath.lineTo(2,3)
@@ -391,16 +402,26 @@ class ROIPlotter(QtGui.QWidget):
         polyPath.lineTo(2, -2)
         polyPath.lineTo(0,0)
         self.polygonBtn = pg.PathButton(path=polyPath)
+
+        # ruler
         polyPath = QtGui.QPainterPath()
-        polyPath.moveTo(0,0)
-        polyPath.lineTo(2,3)
-        polyPath.lineTo(3,1)
-        polyPath.lineTo(5,0)
-        self.polylineBtn = pg.PathButton(path=polyPath)
+        polyPath.moveTo(0, 0)
+        polyPath.lineTo(3, -2)
+        polyPath.moveTo(0, 0)
+        polyPath.lineTo(3, 0)
+        polyPath.moveTo(1, 0)
+        polyPath.arcTo(-1, -1, 2, 2, 0, 33.69)
+        for i in range(5):
+            x = i * 3./4.
+            y = x * -2./3.
+            polyPath.moveTo(x, y)
+            polyPath.lineTo(x-0.2, y-0.3)
+        self.rulerBtn = pg.PathButton(path=polyPath)
+
         self.roiLayout.addWidget(self.rectBtn, 0, 0)
         self.roiLayout.addWidget(self.ellipseBtn, 0, 1)
         self.roiLayout.addWidget(self.polygonBtn, 1, 0)
-        self.roiLayout.addWidget(self.polylineBtn, 1, 1)
+        self.roiLayout.addWidget(self.rulerBtn, 1, 1)
         self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
         self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
         self.roiPlotCheck = QtGui.QCheckBox('Plot')
@@ -409,14 +430,29 @@ class ROIPlotter(QtGui.QWidget):
         self.roiPlot = pg.PlotWidget()
         self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
 
-        self.rectBtn.clicked.connect(self.addROI)
+        self.rectBtn.clicked.connect(lambda: self.addROI('rect'))
+        self.ellipseBtn.clicked.connect(lambda: self.addROI('ellipse'))
+        self.polygonBtn.clicked.connect(lambda: self.addROI('polygon'))
+        self.rulerBtn.clicked.connect(lambda: self.addROI('ruler'))
 
-    def addROI(self):
+    def addROI(self, roiType):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
         center = self.view.viewRect().center()
         #print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
         size = [x*50 for x in self.view.viewPixelSize()]
-        roi = PlotROI(center, size)
+        if roiType == 'rect':
+            roi = PlotROI(center, size)
+        elif roiType == 'ellipse':
+            roi = pg.EllipseROI(center, size, removable=True)
+        elif roiType == 'polygon':
+            pts = [center, center+pg.Point(0, size[1]), center+pg.Point(size[0], 0)]
+            roi = pg.PolyLineROI(pts, closed=True, removable=True)
+        elif roiType == 'ruler':
+            pts = [center, center+pg.Point(size[0], size[1])]
+            roi = pg.graphicsItems.ROI.RulerROI(pts, removable=True)
+        else:
+            raise ValueError("Invalid ROI type %s" % roiType)
+
         roi.setZValue(40000)
         roi.setPen(pen)
         self.view.addItem(roi)
@@ -471,6 +507,8 @@ class ROIPlotter(QtGui.QWidget):
             self.lastPlotTime = now
             
         for r in self.ROIs:
+            if isinstance(r['roi'], pg.graphicsItems.ROI.RulerROI):
+                continue
             d = r['roi'].getArrayRegion(frame.data(), imageItem, axes=(0,1))
             prof.mark('get array rgn')
             if d is None:
@@ -500,10 +538,10 @@ class ImageSequencer(QtGui.QWidget):
         self.ui = SequencerTemplate()
         self.ui.setupUi(self)
 
-        self.ui.zStartSpin.setOpts(value=100e-6, suffix='m', siPrefix=True, step=10e-6, precision=6)
-        self.ui.zEndSpin.setOpts(value=50e-6, suffix='m', siPrefix=True, step=10e-6, precision=6)
-        self.ui.zSpacingSpin.setOpts(minimum=1e-9, value=1e-6, suffix='m', siPrefix=True, dec=True, minStep=1e-9, step=0.5)
-        self.ui.intervalSpin.setOpts(minimum=0, value=1, suffix='s', siPrefix=True, dec=True, minStep=1e-3, step=1)
+        self.ui.zStartSpin.setOpts(value=100e-6, suffix='m', siPrefix=True, step=10e-6, decimals=6)
+        self.ui.zEndSpin.setOpts(value=50e-6, suffix='m', siPrefix=True, step=10e-6, decimals=6)
+        self.ui.zSpacingSpin.setOpts(min=1e-9, value=1e-6, suffix='m', siPrefix=True, dec=True, minStep=1e-9, step=0.5)
+        self.ui.intervalSpin.setOpts(min=0, value=1, suffix='s', siPrefix=True, dec=True, minStep=1e-3, step=1)
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
@@ -694,12 +732,15 @@ class SequencerThread(Thread):
         prot = self.prot
         maxIter = prot['timelapseCount']
         interval = prot['timelapseInterval']
+        dev = self.prot['imager'].getDevice()
 
         depths = prot['zStackValues']
         iter = 0
         while True:
             start = time.time()
 
+            running = dev.isRunning()
+            dev.stop()
             self.holdImagerFocus(True)
             self.openShutter(True)   # don't toggle shutter between stack frames
             try:
@@ -724,6 +765,8 @@ class SequencerThread(Thread):
             finally:
                 self.openShutter(False)
                 self.holdImagerFocus(False)
+                if running:
+                    dev.start()
 
             iter += 1
             if maxIter == 0 or iter >= maxIter:
@@ -766,10 +809,17 @@ class SequencerThread(Thread):
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.
         """
-        imager = self.prot['imager'].getDevice().setFocusHolding(hold)
+        idev = self.prot['imager'].getDevice()
+        fdev = idev.getFocusDevice()
+        if fdev is None:
+            raise Exception("Device %s is not connected to a focus controller." % idev)
+        if hasattr(fdev, 'setHolding'):
+            fdev.setHolding(hold)
 
     def openShutter(self, open):
-        imager = self.prot['imager'].getDevice().openShutter(open)
+        idev = self.prot['imager'].getDevice()
+        if hasattr(idev, 'openShutter'):
+            idev.openShutter(open)
 
     def getFrame(self):
         # request next frame
@@ -777,13 +827,16 @@ class SequencerThread(Thread):
         with self.lock:
             # clear out any previously received frames
             self._frame = None
-        imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
 
-        # wait for frame to arrive
-        self.sleep(until='frame')
-        with self.lock:
-            frame = self._frame
-            self._frame = None
+        frame = imager.takeImage(closeShutter=False)   # we'll handle the shutter elsewhere
+
+        if frame is None:
+            # wait for frame to arrive by signal
+            # (camera and LSM imagers behave differently here; this behavior needs to be made consistent)
+            self.sleep(until='frame')
+            with self.lock:
+                frame = self._frame
+                self._frame = None
         return frame
 
     def recordFrame(self, frame, iter, depthIndex):

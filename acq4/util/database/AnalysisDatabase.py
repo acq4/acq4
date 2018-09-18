@@ -401,6 +401,7 @@ class AnalysisDatabase(SqliteDatabase):
             parent = dirHandle.parent()
             if parent.isManaged() and parent is not self.baseDir():
                 pType = self.dataModel().dirType(parent)
+                pType = "" if pType is None else pType
                 colName = pType + "Dir"
                 columns = [(colName, 'directory:'+pType)] + columns
                 #self.linkTables(tableName, colName, pName)

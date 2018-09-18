@@ -100,7 +100,13 @@ class OptomechDevice(object):
         self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged)
         if config is not None:
             if 'parentDevice' in config:
-                self.setParentDevice(config['parentDevice'])
+                try:
+                    self.setParentDevice(config['parentDevice'])
+                except Exception as ex:
+                    if "No device named" in ex.message:
+                        print "Cannot set parent device %s; no device by that name." % config['parentDevice']
+                    else:
+                        raise
             if 'transform' in config:
                 self.setDeviceTransform(config['transform'])
             
@@ -303,10 +309,6 @@ class OptomechDevice(object):
         with self.__lock:
             self.__transform = pg.SRTTransform3D(tr)
             self.invalidateCachedTransforms()
-        #print "setDeviceTransform", self
-        #print "   -> emit sigTransformChanged"
-        #import traceback
-        #traceback.print_stack()
         
         self.sigTransformChanged.emit(self)
 
@@ -535,7 +537,29 @@ class OptomechDevice(object):
         devs.sort()
         return tuple([dev + "__" + state[dev] for dev in devs])
         
-        
+    def getFocusDepth(self):
+        return self.mapToGlobal([0, 0, 0])[2]
+
+    def setFocusDepth(self, depth, speed='slow'):
+        dev = self.getFocusDevice()
+        if dev is None:
+            raise Exception("Device %s is not connected to a focus controller." % dev)
+        dz = depth - self.getFocusDepth()
+        dpos = dev.globalPosition()
+        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2]+dz], speed)
+
+    def getFocusDevice(self):
+        """Return the device that provides focus capabilities for this device.
+        """
+        dev = self.parentDevice()
+        from .Stage import Stage
+        while dev is not None:
+            if isinstance(dev, Stage) and dev.capabilities()['setPos'][2]:
+                return dev
+            dev = dev.parentDevice()
+        return None
+
+
 class DeviceTreeItemGroup(pg.ItemGroup):
     """
     Extension of QGraphicsItemGroup that maintains a hierarchy of item groups

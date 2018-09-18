@@ -10,6 +10,7 @@ import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 
+
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
@@ -20,7 +21,6 @@ class PVCam(Camera):
         self.lastIndex = None
         self.lastFrameTime = None
         self.stopOk = False
-        
     
     def setupCamera(self):
         self.pvc = PVCDriver
@@ -38,7 +38,6 @@ class PVCam(Camera):
                 raise Exception('Can not find pvcam camera "%s". Options are: %s' % (str(self.camConfig['serial']), str(cams)))
         print "Selected camera:", cams[ind]
         self.cam = self.pvc.getCamera(cams[ind])
-        
     
     def start(self, block=True):
         #print "PVCam: start"
@@ -90,7 +89,19 @@ class PVCam(Camera):
                 time.sleep(1.0)
             self.cam.stop()
             self.acqBuffer = None
-        
+
+    def _acquireFrames(self, n=1):
+        assert not self.isRunning(), "Camera must be stopped before calling acquireFrames."
+        return self.cam.acquire(n)
+
+    def noFrameWarning(self, time):
+        # 2015.11: discovered that simply opening connections to multiple USB-serial devices on the same hub as the 
+        # camera can cause it to fail to return frames, even if there is no data being sent to/from the serial devices.
+        # 
+        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+        print "This can be caused by insufficient USB bandwidth; try moving the camera to its own exclusive USB hub."
+        print "Alternatively, reduce the bandwidth requirements of the camera by increasing the binning or decreasing the ROI size."
+
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
         
@@ -157,7 +168,9 @@ class PVCam(Camera):
         
     def quit(self):
         Camera.quit(self)
-        self.pvc.quit()
+        time.sleep(2)
+        self.cam.close()
+        #self.pvc.quit()
         
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""

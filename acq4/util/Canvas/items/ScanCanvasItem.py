@@ -6,17 +6,20 @@ import ScanCanvasItemTemplate
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np
-#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
+from .itemtypes import registerItemType
+
 
 class ScanCanvasItem(CanvasItem):
+    """
+    CanvasItem representing a photostimulation scan.
+    Options:
+        handle: DirHandle where scan data is stored (required)
+        subDirs: list of DirHandles to the individual Protocols for each spot 
+                    (optional; this allows the inclusion of only part of a scan sequence)
+    """
+    _typeName = "Scan"
+    
     def __init__(self, **opts):
-        """
-        Create a new CanvasItem representing a scan.
-        Options:
-            handle: DirHandle where scan data is stored (required)
-            subDirs: list of DirHandles to the individual Protocols for each spot 
-                     (optional; this allows the inclusion of only part of a scan sequence)
-        """
         self.defaultSize = 1e-4 # set a default spot size as 100 um.
         if 'handle' not in opts:
             raise Exception("ScanCanvasItem must be initialized with 'handle' or 'handles' specified in opts")
@@ -304,6 +307,8 @@ class ScanCanvasItem(CanvasItem):
     def removeGradient(self):
         self.canvas.removeItem(self.gradientLegend)
         
+registerItemType(ScanCanvasItem)
+
         
 class ScanImageCanvasItem(ImageCanvasItem):
     def __init__(self, img, handles, **kargs):

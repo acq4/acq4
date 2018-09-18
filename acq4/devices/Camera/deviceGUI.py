@@ -43,6 +43,8 @@ class CameraDeviceGui(QtGui.QWidget):
                     elif len(p[0]) == 2:
                         (mn, mx) = p[0]
                         step = 1
+                    else:
+                        raise TypeError("Invalid parameter specification for '%s': %s" % (k, repr(p)))
                     if type(mx) in [int, long] and type(mn) in [int, long]:
                         params.append({'name': k, 'type': 'int', 'value': val, 'limits': (mn, mx), 'step': step})
                     else:

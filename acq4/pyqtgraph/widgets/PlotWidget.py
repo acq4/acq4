@@ -69,14 +69,14 @@ class PlotWidget(GraphicsView):
         #self.scene().clear()
         #self.mPlotItem.close()
         self.setParent(None)
-        GraphicsView.close(self)
+        super(PlotWidget, self).close()
 
     def __getattr__(self, attr):  ## implicitly wrap methods from plotItem
         if hasattr(self.plotItem, attr):
             m = getattr(self.plotItem, attr)
             if hasattr(m, '__call__'):
                 return m
-        raise NameError(attr)
+        raise AttributeError(attr)
     
     def viewRangeChanged(self, view, range):
         #self.emit(QtCore.SIGNAL('viewChanged'), *args)

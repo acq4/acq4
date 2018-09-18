@@ -229,23 +229,6 @@ class Scanner(Device, OptomechDevice):
                 self.devGui = ScannerDeviceGui(self, win)
             return self.devGui
 
-    def getFocusDepth(self):
-        return self.mapToGlobal([0, 0, 0])[2]
-
-    def setFocusDepth(self, depth, speed='slow'):
-        dev = self.getFocusDevice()
-        dz = depth - self.getFocusDepth()
-        dpos = dev.globalPosition()
-        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2]+dz], speed)
-
-    def getFocusDevice(self):
-        dev = self.parentDevice()
-        while dev is not None:
-            if isinstance(dev, Stage) and dev.capabilities()['setPos'][2]:
-                return dev
-            dev = dev.parentDevice()
-        raise Exception("Device is not connected to a focus controller.")
-
 
 class ScannerTask(DeviceTask):
     """

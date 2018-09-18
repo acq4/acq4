@@ -54,7 +54,7 @@ class Frame(object):
         """
         return SRTTransform3D(self._info['transform'])
         
-    def mapFromFrameToGlobal(obj):
+    def mapFromFrameToGlobal(self, obj):
         """Map *obj* from the frame's data coordinates to global coordinates.
         """
         return self.globalTransform().map(obj)

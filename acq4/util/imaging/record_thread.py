@@ -199,8 +199,9 @@ class RecordThread(Thread):
             self.startFrameTime = frames[0][1]['time']
 
         times = [f[1]['time'] for f in frames]
+        translations = np.array([f[1]['transform'].getTranslation() for f in frames])
         arrayInfo = [
-            {'name': 'Time', 'values': array(times) - self.startFrameTime, 'units': 's'},
+            {'name': 'Time', 'values': array(times) - self.startFrameTime, 'units': 's', 'translation': translations},
             {'name': 'X'},
             {'name': 'Y'}
         ]
@@ -208,6 +209,6 @@ class RecordThread(Thread):
         
         data = MetaArray(np.concatenate(imgs, axis=0), info=arrayInfo)
         if newRec:
-            self.currentStack = dh.writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time')
+            self.currentStack = dh.writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time', appendKeys=['translation'])
         else:
-            data.write(self.currentStack.name(), appendAxis='Time')
+            data.write(self.currentStack.name(), appendAxis='Time', appendKeys=['translation'])

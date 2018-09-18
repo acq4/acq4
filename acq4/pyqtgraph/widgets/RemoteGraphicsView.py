@@ -1,5 +1,5 @@
-from ..Qt import QtGui, QtCore, USE_PYSIDE
-if not USE_PYSIDE:
+from ..Qt import QtGui, QtCore, QT_LIB
+if QT_LIB in ['PyQt4', 'PyQt5']:
     import sip
 from .. import multiprocess as mp
 from .GraphicsView import GraphicsView
@@ -77,6 +77,10 @@ class RemoteGraphicsView(QtGui.QWidget):
             if sys.platform.startswith('win'):
                 self.shmtag = newfile   ## on windows, we create a new tag for every resize
                 self.shm = mmap.mmap(-1, size, self.shmtag) ## can't use tmpfile on windows because the file can only be opened once.
+            elif sys.platform == 'darwin':
+                self.shmFile.close()
+                self.shmFile = open(self._view.shmFileName(), 'r')
+                self.shm = mmap.mmap(self.shmFile.fileno(), size, mmap.MAP_SHARED, mmap.PROT_READ)
             else:
                 self.shm = mmap.mmap(self.shmFile.fileno(), size, mmap.MAP_SHARED, mmap.PROT_READ)
         self.shm.seek(0)
@@ -193,11 +197,18 @@ class Renderer(GraphicsView):
                     ## it also says (sometimes) 'access is denied' if we try to reuse the tag.
                     self.shmtag = "pyqtgraph_shmem_" + ''.join([chr((random.getrandbits(20)%25) + 97) for i in range(20)])
                     self.shm = mmap.mmap(-1, size, self.shmtag)
+                elif sys.platform == 'darwin':
+                    self.shm.close()
+                    self.shmFile.close()
+                    self.shmFile = tempfile.NamedTemporaryFile(prefix='pyqtgraph_shmem_')
+                    self.shmFile.write(b'\x00' * (size + 1))
+                    self.shmFile.flush()
+                    self.shm = mmap.mmap(self.shmFile.fileno(), size, mmap.MAP_SHARED, mmap.PROT_WRITE)
                 else:
                     self.shm.resize(size)
             
             ## render the scene directly to shared memory
-            if USE_PYSIDE:
+            if QT_LIB in ['PySide', 'PySide2']:
                 ch = ctypes.c_char.from_buffer(self.shm, 0)
                 #ch = ctypes.c_char_p(address)
                 self.img = QtGui.QImage(ch, self.width(), self.height(), QtGui.QImage.Format_ARGB32)

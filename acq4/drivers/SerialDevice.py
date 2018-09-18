@@ -50,15 +50,17 @@ class SerialDevice(object):
             self.open()
 
     @classmethod
-    def normalizePortName(self, port):
+    def normalizePortName(cls, port):
         """
         Return a 'normalized' port name that is always the same for a particular serial port.
         On windows, this means 'com1', 'COM1', and 0 will all normalize to 0. On unix,
         the port name is unchanged.
         """
         if sys.platform.startswith('win'):
-            if isinstance(port, basestring) and port.lower()[:3] == 'com':
-                port = int(port[3:]) - 1
+            if isinstance(port, int):
+                port = 'com%d' % (port+1)
+            elif isinstance(port, basestring) and port.lower()[:3] == 'com':
+                port = port.lower()
         return port
 
     def open(self, port=None, baudrate=None, **kwds):
@@ -180,6 +182,15 @@ class SerialDevice(object):
             print self, "Warning: discarded serial data ", repr(d)
         return d
 
+    def getPort(self):
+        """Return the serial port that was last connected.
+        """
+        return self.__serialOpts['port']
+
+    def getBaudrate(self):
+        """Return the configured baud rate.
+        """
+        return self.__serialOpts['baudrate']
 
 
 if __name__ == '__main__':

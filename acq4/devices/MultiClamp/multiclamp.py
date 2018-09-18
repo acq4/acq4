@@ -58,7 +58,7 @@ class MultiClamp(Device):
                     MultiClamp.proc.close()
                     MultiClamp.proc = None
                     raise
-            mc = self.proc.mc_mod.MultiClamp.instance()
+            mcmod = self.proc.mc_mod
         else:
             if MultiClamp.proc not in (None, False):
                 raise Exception("Already connected to multiclamp via remote process; cannot connect locally at the same time.")
@@ -67,55 +67,54 @@ class MultiClamp(Device):
                 MultiClamp.proc = False
 
             try:
-                from acq4.drivers.MultiClamp import MultiClamp as MultiClampDriver
+                import acq4.drivers.MultiClamp as MultiClampDriver
             except RuntimeError as exc:
                 if "32-bit" in exc.message:
                     raise Exception("MultiClamp commander does not support access by 64-bit processes. To circumvent this problem, "
                                     "Use the 'pythonExecutable' device configuration option to connect via a 32-bit python instead.")
                 else:
                     raise
-            mc = MultiClampDriver.instance()
+            mcmod = MultiClampDriver
 
+        # Ask driver to use a specific DLL if specified in config
+        dllPath = self.config.get('dllPath', None)
+        if dllPath is not None:
+            mcmod.getAxlib(dllPath)
+
+        # Create driver instance
+        mc = mcmod.MultiClamp.instance()
 
         # get a handle to our specific multiclamp channel
-        try:
-            if executable is not None:
-                self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
-            else:
-                self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
-            
-            ## wait for first update..
-            c = 0
-            while self.mc.getState() is None:
-                time.sleep(0.1)
-                c += 1
-                if c > 50:
-                    raise Exception("Timed out waiting for first update from multi clamp commander.")
-            
-            print "Created MultiClamp device", self.config['channelID']
+        if executable is not None:
+            self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
+        else:
+            self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
+        
+        ## wait for first update..
+        start = time.time()
+        while self.mc.getState() is None:
+            time.sleep(0.1)
+            if time.time() - start > 10:
+                raise Exception("Timed out waiting for first update from multi clamp commander.")
+        
+        print "Created MultiClamp device", self.config['channelID']
 
-            ## set configured holding values
-            if 'vcHolding' in self.config:
-                self.holding['VC'] = self.config['vcHolding']
-            if 'icHolding' in self.config:
-                self.holding['IC'] = self.config['icHolding']
+        ## set configured holding values
+        if 'vcHolding' in self.config:
+            self.holding['VC'] = self.config['vcHolding']
+        if 'icHolding' in self.config:
+            self.holding['IC'] = self.config['icHolding']
 
-            ## Set up default MC settings for each mode, then leave MC in I=0 mode
-            # look for 'defaults', followed by 'settings' (for backward compatibility)
-            defaults = self.config.get('defaults', self.config.get('settings', None))
-            for mode in ['IC', 'VC']:
-                self.setMode(mode) # Set mode even if we have no parameters to set;
-                                   # this ensures that self.lastState is filled.
-                if defaults is not None and mode in defaults:
-                    self.mc.setParams(defaults[mode])
-            self.setMode('I=0')  ## safest mode to leave clamp in
+        ## Set up default MC settings for each mode, then leave MC in I=0 mode
+        # look for 'defaults', followed by 'settings' (for backward compatibility)
+        defaults = self.config.get('defaults', self.config.get('settings', None))
+        for mode in ['IC', 'VC']:
+            self.setMode(mode) # Set mode even if we have no parameters to set;
+                               # this ensures that self.lastState is filled.
+            if defaults is not None and mode in defaults:
+                self.mc.setParams(defaults[mode])
+        self.setMode('I=0')  ## safest mode to leave clamp in
 
-        except Exception as ex1:
-            try:
-                mc.quit()
-            except:
-                pass
-            raise ex1
         
         dm.declareInterface(name, ['clamp'], self)
 
@@ -150,9 +149,9 @@ class MultiClamp(Device):
         
     def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
+        if mode is None:
+            mode = self.mc.getMode()
         with self.stateLock:
-            if mode is None:
-                mode = self.mc.getMode()
             if mode in self.lastState:
                 return self.lastState[mode]
         
@@ -244,6 +243,9 @@ class MultiClamp(Device):
             scale = 1.0 / s
             #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
+
+    def autoPipetteOffset(self):
+        self.mc.autoPipetteOffset()
         
     def listSignals(self, mode):
         return self.mc.listSignals(mode)

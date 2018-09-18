@@ -376,7 +376,7 @@
         <rect>
          <x>5</x>
          <y>65</y>
-         <width>131</width>
+         <width>157</width>
          <height>26</height>
         </rect>
        </property>
@@ -459,7 +459,7 @@
         <rect>
          <x>5</x>
          <y>90</y>
-         <width>131</width>
+         <width>159</width>
          <height>28</height>
         </rect>
        </property>
@@ -570,12 +570,12 @@
       <property name="title">
        <string>Image types</string>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>10</x>
          <y>25</y>
-         <width>96</width>
+         <width>100</width>
          <height>62</height>
         </rect>
        </property>
@@ -715,7 +715,7 @@
         <string>Auto</string>
        </property>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -750,7 +750,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>5</x>
@@ -790,7 +790,7 @@
       <property name="geometry">
        <rect>
         <x>195</x>
-        <y>310</y>
+        <y>300</y>
         <width>116</width>
         <height>96</height>
        </rect>

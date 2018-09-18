@@ -1,6 +1,19 @@
+import os, sys
+
 __version__ = '0.9.2'
 
-import os, sys
+
+# If we are running from a git repo, generate a more descriptive version number 
+from .util.gitversion import getGitVersion
+
+try:
+    gitv = getGitVersion('acq4', os.path.join(os.path.dirname(__file__), '..'))
+    if gitv is not None:
+        __version__ = gitv
+except Exception:
+    pass
+
+
 
 # Set up a list of paths to search for configuration files 
 # (used if no config is explicitly specified)
@@ -32,9 +45,10 @@ if 'PyQt4' in sys.modules:
         try:
             v = sip.getapi(api)
             if v != 2:
-                raise Exception("ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\" _before_ importing PyQt4." % (api, v))
-            else:
-                set_api = False
+                print("WARNING: ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. "
+                      "Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\""
+                      " _before_ importing PyQt4." % (api, v))
+            set_api = False
         except ValueError:
             set_api = True
 elif 'PySide' in sys.modules:
@@ -63,6 +77,9 @@ pg.renamePyc(modDir)
 
 ## Install a simple message handler for Qt errors:
 def messageHandler(msgType, msg):
+    # ignore harmless ibus messages on linux
+    if 'ibus-daemon' in msg:
+        return
     import traceback
     print("Qt Error: (traceback follows)")
     print(msg)
@@ -89,3 +106,6 @@ def messageHandler(msgType, msg):
             pass
     
 pg.QtCore.qInstallMsgHandler(messageHandler)
+
+from Manager import getManager
+

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from acq4.devices.OptomechDevice import *
+from acq4.devices.LightSource import LightSource
 from acq4.devices.Stage import Stage
 from deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
@@ -22,18 +23,21 @@ class Microscope(Device, OptomechDevice):
     """
     
     sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
+    sigLightChanged = QtCore.Signal(object, object)  # self, lightName
     sigObjectiveListChanged = QtCore.Signal()
     sigSurfaceDepthChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
+
         self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.switchDevice = None
         self.currentSwitchPosition = None
         self.currentObjective = None
         self._focusDevice = None
+        self._positionDevice = None
         self._surfaceDepth = None
         
         self.objectives = collections.OrderedDict()
@@ -60,6 +64,13 @@ class Microscope(Device, OptomechDevice):
             self.addSubdevice(obj)
         
         
+        ## if there is a light source, configure it here
+        if 'lightSource' in config:
+            self.lightSource = dm.getDevice(config['lightSource'])
+            self.lightSource.sigLightChanged.connect(self._lightChanged)
+        else:
+            self.lightSource = None
+
         ## If there is a switch device, configure it here
         if 'objectiveSwitch' in config:
             self.switchDevice = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
@@ -105,36 +116,25 @@ class Microscope(Device, OptomechDevice):
             return
         
         self.setCurrentSubdevice(self.currentObjective)
-        #self.updateDeviceTransform()
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
-    #def updateDeviceTransform(self):
-        #obj = self.getObjective()
-        #self.setDeviceTransform(obj.transform())
-    
     def getObjective(self):
         """Return the currently active Objective."""
         with self.lock:
             if self.currentSwitchPosition not in self.selectedObjectives:
                 return None
             return self.selectedObjectives[self.currentSwitchPosition]
-            #return self.objectives[self.currentSwitchPosition][selected]
-    
+
     def listObjectives(self):
         """
         Return a list of available objectives. (one objective returned per switch position)
         """
         with self.lock:
             return self.selectedObjectives.values()
-            #l = collections.OrderedDict()
-            #for i in self.selectedObjectives:
-                #l[i] = self.objectives[i][self.selectedObjectives[i]]
-            #return l
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
         iface.objectiveChanged((self.currentObjective, None))
-        #iface.positionChanged({'abs': self.getPosition()})
         return iface
 
     def selectObjective(self, obj):
@@ -152,9 +152,8 @@ class Microscope(Device, OptomechDevice):
         ## used by (preferrably only) GUI interface
         return self.objectives
     
-    #def objectiveTransformChanged(self, obj):
-        #if obj is self.currentObjective:
-            #self.updateDeviceTransform()
+    def _lightChanged(self, light, name):
+        self.sigLightChanged.emit(self, name)
 
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module.
@@ -168,7 +167,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(QtGui.QVector3D(0, 0, 0)).z()
 
-    def setFocusDepth(self, z):
+    def setFocusDepth(self, z, speed='fast'):
         """Set the z-position of the focal plane.
 
         This method requires motorized focus control.
@@ -182,7 +181,7 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        return fd.moveToGlobal(fdpos, 'fast')
+        return fd.moveToGlobal(fdpos, speed)
 
     def getSurfaceDepth(self):
         """Return the z-position of the sample surface as marked by the user.
@@ -193,6 +192,39 @@ class Microscope(Device, OptomechDevice):
         self._surfaceDepth = depth
         self.sigSurfaceDepthChanged.emit(depth)
         self.writeCalibration()
+
+    def globalPosition(self):
+        """Return the global position of the scope's center axis at the focal plane.
+        """
+        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0))        
+
+    def setGlobalPosition(self, pos, speed='fast'):
+        """Move the microscope such that its center axis is at a specified global position.
+
+        If *pos* is a 3-element vector, then this method will also attempt to set the focus depth
+        accordingly.
+
+        Return a MoveFuture instance.
+
+        Note: If the xy positioning device is different from the z positioning
+        device, then the MoveFuture returned only corresponds to the xy motion.
+        """
+        pd = self.positionDevice()
+        fd = self.focusDevice()
+
+        if len(pos) == 3 and fd is not pd:
+            z = pos[2]
+            self.setFocusDepth(z)
+            pos = pos[:2]
+        if len(pos) == 2:
+            pos = list(pos) + [self.getFocusDepth()]
+
+        # Determine how to move the xy(z) stage to react the new center position
+        gpos = self.globalPosition()
+        sgpos = pd.globalPosition()
+        sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
+        sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
+        return pd.moveToGlobal(sgpos2, speed)
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
@@ -207,6 +239,16 @@ class Microscope(Device, OptomechDevice):
                     break
                 p = p.parentDevice()
         return self._focusDevice
+
+    def positionDevice(self):
+        if self._positionDevice is None:
+            p = self
+            while True:
+                if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][0] and p.capabilities()['setPos'][1]:
+                    self._positionDevice = p
+                    break
+                p = p.parentDevice()
+        return self._positionDevice
 
 
 class Objective(OptomechDevice):
@@ -413,13 +455,22 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.surfaceLine = self.plot.addLine(y=sd, pen='g')
         self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
+        # Note: this is placed here because there is currently no better place.
+        # Ideally, the sample orientation, height, and anatomical identity would be contained 
+        # in a Sample or Slice object elsewhere..
         self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
+        self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
+        self.layout.addWidget(self.depthLabel, 1, 0)
+
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
-        self.movableFocusLine.sigDragged.connect(self.focusDragged)
+
+        # only works with devices that can change their waypoint while in motion
+        # self.movableFocusLine.sigDragged.connect(self.focusDragged)
+        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusDragged)
 
         self.transformChanged()
 
@@ -431,11 +482,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.surfaceLine.setValue(depth)
 
     def transformChanged(self):
-        prof = pg.debug.Profiler()
         focus = self.getDevice().getFocusDepth()
-        prof('1')
         self.focusLine.setValue(focus)
-        prof('2')
 
         # Compute the target focal plane.
         # This is a little tricky because the objective might have an offset+scale relative
@@ -443,15 +491,16 @@ class ScopeCameraModInterface(CameraModuleInterface):
         fd = self.getDevice().focusDevice()
         if fd is None:
             return
-        prof('3')
         tpos = fd.globalTargetPosition()
-        prof('4')
         fpos = fd.globalPosition()
-        prof('5')
         dif = tpos[2] - fpos[2]
-        prof('6')
-        self.movableFocusLine.setValue(focus + dif)
-        prof('7')
+        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
+            self.movableFocusLine.setValue(focus + dif)
+
+        sdepth = self.getDevice().getSurfaceDepth()
+        if sdepth is not None:
+            depth = fpos[2] - sdepth
+            self.depthLabel.setValue(depth)
 
     def focusDragged(self):
         self.getDevice().setFocusDepth(self.movableFocusLine.value())

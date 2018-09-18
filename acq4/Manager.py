@@ -14,10 +14,6 @@ The class is responsible for:
 
 import os, sys, gc
 
-## install global exception handler for others to hook into.
-import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
-exceptionHandling.setTracebackClearing(True)
-
 import time, atexit, weakref
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.util.reload as reload
@@ -26,15 +22,13 @@ from .util import DataManager, ptime, configfile
 from .Interfaces import *
 from .util.Mutex import Mutex
 from .util.debug import *
+from .util import debug
 import getopt, glob
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from .LogWindow import LogWindow
 from .util.HelpfulException import HelpfulException
-
-
-LOG = None
-
+from . import __version__
+from . import devices, modules
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -42,74 +36,10 @@ def getManager():
         raise Exception("No manager created yet")
     return Manager.single
 
+
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
-    # preserve old log window
-    global LOG
-    LOG = old['LOG']
-    
-def logMsg(msg, **kwargs):
-    """msg: the text of the log message
-       msgTypes: user, status, error, warning (status is default)
-       importance: 0-9 (0 is low importance, 9 is high, 5 is default)
-       other supported keywords:
-          exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
-          docs: a list of strings where documentation related to the message can be found
-          reasons: a list of reasons (as strings) for the message
-          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
-       Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
-        """
-    global LOG
-    if LOG is not None:
-        try:
-            LOG.logMsg(msg, **kwargs)
-        except:
-            print "Error logging message:"
-            print "    " + "\n    ".join(msg.split("\n"))
-            print "    " + str(kwargs)
-            sys.excepthook(*sys.exc_info())
-    else:
-        print "Can't log message; no log created yet."
-        #print args
-        print kwargs
-        
-    
-def logExc(msg, *args, **kwargs):
-    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
-    global LOG
-    if LOG is not None:
-        try:
-            LOG.logExc(msg, *args, **kwargs)
-        except:
-            print "Error logging exception:"
-            print "    " + "\n    ".join(msg.split("\n"))
-            print "    " + str(kwargs)
-            sys.excepthook(*sys.exc_info())
-    else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
-
-blockLogging = False
-def exceptionCallback(*args):
-    ## Called whenever there is an unhandled exception.
-    
-    ## unhandled exceptions generate an error message by default, but this
-    ## can be overridden by raising HelpfulException(msgType='...')
-    global blockLogging
-    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
-        try:
-            blockLogging = True
-            logMsg("Unexpected error: ", exception=args, msgType='error')
-        except:
-            print "Error: Exception could no be logged."
-            original_excepthook(*sys.exc_info())
-        finally:
-            blockLogging = False
-exceptionHandling.register(exceptionCallback)        
-
-
 
 
 class Manager(QtCore.QObject):
@@ -136,10 +66,10 @@ class Manager(QtCore.QObject):
     
     def __init__(self, configFile=None, argv=None):
         self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
-        self.devices = OrderedDict()
-        self.modules = OrderedDict()
+        self.devices = OrderedDict()  # all currently loaded devices
+        self.modules = OrderedDict()  # all currently running modules
+        self.definedModules = OrderedDict()  # all custom-defined module configurations
         self.config = OrderedDict()
-        self.definedModules = OrderedDict()
         self.currentDir = None
         self.baseDir = None
         self.gui = None
@@ -152,10 +82,11 @@ class Manager(QtCore.QObject):
         try:
             if Manager.CREATED:
                 raise Exception("Manager object already created!")
+
+            Manager.CREATED = True
+            Manager.single = self
             
-            global LOG
-            LOG = LogWindow(self)
-            self.logWindow = LOG
+            self.logWindow = debug.createLogWindow(self)
             
             self.documentation = Documentation()
             
@@ -183,7 +114,9 @@ class Manager(QtCore.QObject):
             atexit.register(self.quit)
             self.interfaceDir = InterfaceDirectory()
     
-            
+            # Import all built-in module classes
+            modules.importBuiltinClasses()
+
             ## Handle command line options
             loadModules = []
             setBaseDir = None
@@ -217,10 +150,7 @@ class Manager(QtCore.QObject):
             self.configDir = os.path.dirname(configFile)
             self.readConfig(configFile)
             
-            logMsg('ACQ4 started.', importance=9)
-            
-            Manager.CREATED = True
-            Manager.single = self
+            logMsg('ACQ4 version %s started.' % __version__, importance=9)
             
             ## Act on options if they were specified..
             try:
@@ -232,34 +162,33 @@ class Manager(QtCore.QObject):
                 if setStorageDir is not None:
                     self.setCurrentDir(setStorageDir)
                 if loadManager:
-                    #mm = self.loadModule(module='Manager', name='Manager', config={})
                     self.showGUI()
                     self.createWindowShortcut('F1', self.gui.win)
                 for m in loadModules:
                     try:
-                        self.loadDefinedModule(m)
+                        if m in self.definedModules:
+                            self.loadDefinedModule(m)
+                        else:
+                            self.loadModule(m)
                     except:
                         if not loadManager:
                             self.showGUI()
-                            #self.loadModule(module='Manager', name='Manager', config={})
                         raise
                         
             except:
                 printExc("\nError while acting on command line options: (but continuing on anyway..)")
                 
-                
         except:
             printExc("Error while configuring Manager:")
+            Manager.CREATED = False
+            Manager.single = None
+            
         finally:
             if len(self.modules) == 0:
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")
             
-        #win = QtGui.QApplication.instance().activeWindow()
         win = self.modules[self.modules.keys()[0]].window()
-        #if win is None:   ## Breaks on some systems..
-            #raise Exception("No GUI windows created during startup, exiting now.")
-        #print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.abortShortcut = QtGui.QShortcut(QtGui.QKeySequence('Esc'), win)
@@ -269,10 +198,7 @@ class Manager(QtCore.QObject):
         self.quitShortcut.activated.connect(self.quit)
         self.abortShortcut.activated.connect(self.sigAbortAll)
         self.reloadShortcut.activated.connect(self.reloadAll)
-    
-        
-        #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
-            
+
     def _getConfigFile(self):
         ## search all the default locations to find a configuration file.
         from acq4 import CONFIGPATH
@@ -293,7 +219,6 @@ class Manager(QtCore.QObject):
         else:
             return os.path.expanduser('~/.local/acq4')
 
-            
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
@@ -306,14 +231,55 @@ class Manager(QtCore.QObject):
         self.configFile = configFile
         print "\n============= Manager configuration complete =================\n"
         logMsg('Manager configuration complete.')
-        
+
+    def exec_(self, pyfile):
+        """Execute a Python file.
+
+        This is used to enable easy loading of customizations from an externally defined file.
+        Note that sys.path is temporarily modified to allow the external file to import from
+        scripts in its own path.
+
+        For more complex customizations, it is recommended to build an importable
+        module instead.
+
+        Parameters
+        ----------
+        pyfile : str
+            The full path to the python file to be exec'd
+
+        Returns
+        -------
+        globs : dict
+            global namespace defined by the exec
+        """
+        modDir = os.path.dirname(pyfile)
+        sys.path.insert(0, modDir)
+        try:
+            globs = {}
+            exec(open(pyfile, 'rb').read(), globs)
+        finally:
+            sys.path.pop(0)
+        return globs
+
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
         
-        for key in cfg:
+        for key, val in cfg.items():
             try:
+                # Handle custom import / exec
+                if key == 'imports':
+                    if isinstance(val, str):
+                        val = [val]
+                    for mod in val:
+                        __import__(mod)
+                elif key == 'execFiles':
+                    if isinstance(val, str):
+                        val = [val]
+                    for pyfile in val:
+                        self.exec_(pyfile)
+                
                 ## configure new devices
-                if key == 'devices':
+                elif key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
                             print "    --> Ignoring device '%s' -- disabled by request" % k
@@ -343,7 +309,7 @@ class Manager(QtCore.QObject):
                     logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
                     self.setBaseDir(cfg['storageDir'])
                 
-		elif key == 'defaultCompression':
+                elif key == 'defaultCompression':
                     comp = cfg['defaultCompression']
                     try:
                         if isinstance(comp, tuple):
@@ -416,9 +382,6 @@ class Manager(QtCore.QObject):
                 raise Exception("Could not find configuration named '%s'" % name)
             cfg = self.config['configurations'].get(name, )
         self.configure(cfg)
-
-    #def __del__(self):
-        #self.quit()
     
     def readConfigFile(self, fileName, missingOk=True):
         with self.lock:
@@ -448,16 +411,30 @@ class Manager(QtCore.QObject):
             else:
                 raise Exception("Could not find file %s" % fileName)
         
-        
     def configFileName(self, name):
         with self.lock:
             return os.path.join(self.configDir, name)
     
-    def loadDevice(self, driverName, conf, name):
-        """Load the code for a device. For this to work properly, there must be 
-        a python module called acq4.devices.driverName which contains a class called driverName."""
-        mod = __import__('acq4.devices.%s' % driverName, fromlist=['*'])
-        devclass = getattr(mod, driverName)
+    def loadDevice(self, devClassName, conf, name):
+        """Create a new instance of a device.
+        
+        Parameters
+        ----------
+        devClassName : str
+            The name of a device class that was registered using acq4.devices.registerDeviceClass().
+            See acq4.devices.DEVICE_CLASSES for access to all available device classes.
+        conf : dict
+            A structure passed to the device providing configuration options
+        name : str
+            The name of this device. The instantiated device object will be retrievable using
+            ``Manager.getDevice(name)``
+
+        Returns
+        -------
+        device : Device instance
+            The instantiated device object
+        """
+        devclass = devices.getDeviceClass(devClassName)
         dev = devclass(self, conf, name)
         with self.lock:
             self.devices[name] = dev
@@ -475,49 +452,51 @@ class Manager(QtCore.QObject):
         with self.lock:
             return self.devices.keys()
 
-    def loadModule(self, module, name, config=None, forceReload=False):
-        """Create a new instance of an acq4 module. For this to work properly, there must be 
-        a python module called acq4.modules.moduleName which contains a class called moduleName.
-        Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
-        should have anticipated."""
+    def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
+        """Create a new instance of an user interface module. 
+
+        Parameters
+        ----------
+        moduleClassName : str
+            The name of the module *class* to instantiate. The class must have been
+            registered by calling acq4.modules.registerModuleClass(). See
+            acq4.modules.MODULE_CLASSES for access to all available module classes.
+        name : str or None
+            The name to assign to the newly instantiated module. If None, then the class
+            name is used instead. Module names are automatically modified to avoid name
+            collision with previously loaded modules.
+        config : dict | None
+            Configuration options to pass to the module constructor
+        """
+        if name is None:
+            name = moduleClassName
+
+        ## Find an unused name for this module
+        baseName = name
+        n = 0
+        while name in self.modules:
+            name = "%s_%d" % (baseName, n)
+            n += 1
+
+        if config is None:
+            config = {}
         
-        print 'Loading module "%s" as "%s"...' % (module, name)
-        with self.lock:
-            if name in self.modules:
-                raise Exception('Module already exists with name "%s"' % name)
-            if config is None:
-                config = {}
+        print 'Loading module "%s" as "%s"...' % (moduleClassName, name)
         
-        #print "  import"
-        mod = __import__('acq4.modules.%s' % module, fromlist=['*'])
-        #if forceReload:
-            ### Reload all .py files in module's directory
-            #modDir = os.path.join('lib', 'modules', module)
-            #files = glob.glob(os.path.join(modDir, '*.py'))
-            #files = [os.path.basename(f[:-3]) for f in files]
-            #for f in [module, '__init__']:
-                #if f in files:  ## try to rearrange so we load in correct order
-                    #files.remove('__init__')
-                    #files.append('__init__')
-            #modName = 'acq4.modules.' + module
-            #modNames = [modName + '.' + m for m in files] + [modName]
-            #print "RELOAD", modNames
-            #for m in modNames:
-                #if m in sys.modules:
-                    #reload(sys.modules[m])
-            #mod = __import__('acq4.modules.%s' % module, fromlist=['*'])
-            
-        modclass = getattr(mod, module)
-        #print "  create"
+        # deprecated args
+        if importMod is not None:
+            __import__(importMod)
+        elif execPath is not None:
+            self.exec_(execPath)
+
+        modclass = modules.getModuleClass(moduleClassName)
+        
         mod = modclass(self, name, config)
-        #print "  emit"
         with self.lock:
             self.modules[name] = mod
             
         self.sigModulesChanged.emit()
-        #print "  return"
         return mod
-        
         
     def listModules(self):
         """List names of currently loaded modules. """
@@ -547,13 +526,11 @@ class Manager(QtCore.QObject):
     def getCurrentDatabase(self):
         """Return the database currently selected in the Data Manager"""
         return self.getModule("Data Manager").currentDatabase()
-
         
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
         with self.lock:
-            return self.definedModules.keys()
-
+            return self.definedModules.copy()
 
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
@@ -569,22 +546,17 @@ class Manager(QtCore.QObject):
         else:
             config = {}
             
-        ## Find an unused name for this module
-        mName = name
-        n = 0
-        while mName in self.modules:
-            mName = "%s_%d" % (name, n)
-            n += 1
+        # Allow mechanisms for importing custom modules
+        execPath = conf.get('exec', None)
+        importMod = conf.get('import', None)
             
-        mod = self.loadModule(mod, mName, config, forceReload=forceReload)
+        mod = self.loadModule(mod, name, config, forceReload=forceReload, execPath=execPath, importMod=importMod)
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
-        print "Loaded module '%s'" % mName
-
+        print "Loaded module '%s'" % mod.name
     
     def moduleHasQuit(self, mod):
-        
         with self.lock:
             if mod.name in self.modules:
                 del self.modules[mod.name]
@@ -595,8 +567,6 @@ class Manager(QtCore.QObject):
         self.sigModulesChanged.emit()
         self.sigModuleHasQuit.emit(mod.name)
         #print "Module", mod.name, "has quit"
-
-
 
     def unloadModule(self, name):
         try:
@@ -621,7 +591,7 @@ class Manager(QtCore.QObject):
         #path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
         print "\n---- Reloading all libraries under %s ----" % path
-        reload.reloadAll(prefix=path, debug=True)
+        reload.reloadAll(debug=True)
         print "Done reloading.\n"
         logMsg("Reloaded all libraries under %s." %path, msgType='status')
         
@@ -670,7 +640,6 @@ class Manager(QtCore.QObject):
         if self.gui is None:
             self.gui = self.loadModule('Manager', 'Manager', {})
         self.gui.show()
-    
     
     def getCurrentDir(self):
         """
@@ -723,7 +692,6 @@ class Manager(QtCore.QObject):
         """Handle situation where currentDir is moved or renamed"""
         self.sigCurrentDirChanged.emit(fh, change, args)
             
-            
     def getBaseDir(self):
         """
         Return a directory handle to the base directory for data storage. 
@@ -769,7 +737,7 @@ class Manager(QtCore.QObject):
         if self.taskLock.tryLock(10e3):
             return True
         else:
-            raise Exception("Times out waiting for task reservation system")
+            raise Exception("Timed out waiting for task reservation system")
         
     def unlockReserv(self):
         """Unlock reservation system"""
@@ -806,7 +774,6 @@ class Manager(QtCore.QObject):
     def getInterface(self, *args, **kargs):
         with self.lock:
             return self.interfaceDir.getInterface(*args, **kargs)
-        
     
     def suggestedDirFields(self, file):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
@@ -829,7 +796,6 @@ class Manager(QtCore.QObject):
         
     def showDocumentation(self, label=None):
         self.documentation.show(label)
-        
         
     def quit(self):
         """Nicely request that all devices and modules shut down"""
@@ -879,6 +845,7 @@ class Manager(QtCore.QObject):
         QtGui.QApplication.quit()
         #pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
                     # this avoids otherwise irritating exit crashes.
+
 
 class Task:
     id = 0
@@ -966,6 +933,10 @@ class Task:
             before, after = task.getStartOrder()
             deps[devName] |= set(map(Task.getDevName, before))
             for t in map(self.getDevName, after):
+                if t not in deps:
+                    # device is not in task; don't worry about its start order
+                    # (this happens, for example, with Trigger devices that do not need to be started by acq4)
+                    continue
                 deps[t].add(devName)
                 
         deps = dict([(k, list(deps[k])) for k in deps.keys()])

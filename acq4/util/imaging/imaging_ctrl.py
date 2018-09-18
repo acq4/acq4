@@ -85,6 +85,7 @@ class ImagingCtrl(QtGui.QWidget):
         self.ui.recordStackBtn.toggled.connect(self.recordStackToggled)
         self.ui.saveFrameBtn.clicked.connect(self.saveFrameClicked)
         self.ui.pinFrameBtn.clicked.connect(self.pinFrameClicked)
+        self.ui.clearPinnedFramesBtn.clicked.connect(self.clearPinnedFramesClicked)
 
     def addFrameButton(self, name):
         """Add a new button below the original "Acquire Frame" button.
@@ -276,6 +277,14 @@ class ImagingCtrl(QtGui.QWidget):
             fr.scene().removeItem(fr)
         fr.sigRemoveRequested.disconnect(self.removePinnedFrame)
         
+    def clearPinnedFramesClicked(self):
+        if QtGui.QMessageBox.question(self, "Really?", "Clear all pinned frames?", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel) == QtGui.QMessageBox.Ok:
+            self.clearPinnedFrames()
+
+    def clearPinnedFrames(self):
+        for frame in self.pinnedFrames[:]:
+            self.removePinnedFrame(frame)
+
     def threadSavedFrame(self, file):
         # Called when the recording thread saves a single frame
         if file is False:

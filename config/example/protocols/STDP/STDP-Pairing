@@ -1,0 +1,248 @@
+protocol:
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%05%DC%00%00%011%FC%01%00%00%00%06%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01X%00%00%01X%00%FF%FF%FF%FB%00%00%00%10%00T%00a%00s%00k%00D%00o%00c%00k%01%00%00%01%5C%00%00%01%19%00%00%01%19%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%00%D8%00%00%01%84%00%00%00%00%00%00%00%00%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02y%00%00%01m%00%00%015%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%03%EA%00%00%01%1F%00%00%00%A4%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%05%0D%00%00%00%CF%00%00%00_%00%FF%FF%FF%00%00%00%03%00%00%05%DC%00%00%02f%FC%01%00%00%00%01%FC%00%00%00%00%00%00%05%DC%00%00%018%00%FF%FF%FF%FC%02%00%00%00%03%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%019%00%00%01%60%00%00%00%C6%00%FF%FF%FF%FB%00%00%00%0E%00S%00t%00i%00m%00M%00o%00n%00%00%00%02e%00%00%00%5E%00%00%00%00%00%00%00%00%FB%00%00%00%0A%00S%00t%00i%00m%000%01%00%00%02%9D%00%00%01%02%00%00%00%C2%00%FF%FF%FF%00%00%05%DC%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    params: [('protocol', 'repetitions', True, [])]
+    conf:
+        continuous: False
+        cycleTime: 1.0
+        loop: False
+        duration: 0.35
+        repetitions: 100
+        leadTime: 0.01
+        loopCycleTime: 1.0
+    analysis:
+devices:
+    Clamp1:
+        bottomPlotWidget:
+            yGridCheck: False
+            logXCheck: False
+            clipToViewCheck: True
+            maxTracesCheck: False
+            autoDownsampleCheck: True
+            peakRadio: True
+            downsampleSpin: 1
+            pointsGroup: True
+            gridAlphaSlider: 128
+            maxTracesSpin: 0
+            averageGroup: False
+            alphaGroup: True
+            logYCheck: False
+            xGridCheck: False
+            autoAlphaCheck: False
+            alphaSlider: 1000
+            meanRadio: False
+            paramList:
+            subsampleRadio: False
+            fftCheck: False
+            autoPointsCheck: True
+            downsampleCheck: True
+            forgetTracesCheck: False
+            view:
+                wheelScaleFactor: -0.125
+                viewRange: [[0.024429225373172502, 0.16405688672299204], [-1.5e-10, 1.6499999999999999e-09]]
+                autoPan: [False, False]
+                limits:
+                    xRange: [None, None]
+                    yLimits: [None, None]
+                    yRange: [None, None]
+                    xLimits: [None, None]
+                enableMenu: True
+                mouseEnabled: [True, True]
+                linkedViews: [None, None]
+                mouseMode: 3
+                background: None
+                yInverted: False
+                autoVisibleOnly: [False, False]
+                targetRange: [[0.024429225373172502, 0.16405688672299204], [-1.5e-10, 1.6499999999999999e-09]]
+                xInverted: False
+                autoRange: [False, True]
+                aspectLocked: False
+        primarySignalCheck: False
+        topPlotWidget:
+            yGridCheck: False
+            logXCheck: False
+            clipToViewCheck: True
+            maxTracesCheck: False
+            autoDownsampleCheck: True
+            peakRadio: True
+            downsampleSpin: 1
+            pointsGroup: True
+            gridAlphaSlider: 128
+            maxTracesSpin: 0
+            averageGroup: False
+            alphaGroup: True
+            logYCheck: False
+            xGridCheck: False
+            autoAlphaCheck: True
+            alphaSlider: 438
+            meanRadio: False
+            paramList:
+                protocol.repetitions: True
+            subsampleRadio: False
+            fftCheck: False
+            autoPointsCheck: True
+            downsampleCheck: True
+            forgetTracesCheck: False
+            view:
+                wheelScaleFactor: -0.125
+                viewRange: [[-0.010641464717498118, 0.36059146471749809], [-0.073759856345689767, 0.094235623973455973]]
+                autoPan: [False, False]
+                limits:
+                    xRange: [None, None]
+                    yLimits: [None, None]
+                    yRange: [None, None]
+                    xLimits: [None, None]
+                enableMenu: True
+                mouseEnabled: [True, True]
+                linkedViews: [None, None]
+                mouseMode: 3
+                background: None
+                yInverted: False
+                autoVisibleOnly: [False, False]
+                targetRange: [[-0.010641464717498118, 0.36059146471749809], [-0.073759856345689767, 0.094235623973455973]]
+                xInverted: False
+                autoRange: [1.0, 1.0]
+                aspectLocked: False
+        vcModeRadio: False
+        splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%EC%00%00%00E%01%00%00%00%05%01%00%00%00%02'
+        holdingCheck: False
+        holdingSpin: 0.0
+        primarySignal: 'Membrane Potential'
+        primaryGainSpin: 5
+        secondaryGainSpin: 1
+        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%017%00%00%05%D1%01%00%00%00%05%01%00%00%00%01'
+        i0ModeRadio: False
+        waveGeneratorWidget:
+            function: 'pulse(\n  times=60*ms + np.linspace(0, 8*ms * (5-1), 5),\n  widths=2*ms,\n  values=1.5e-09\n)'
+            autoUpdate: False
+            stimuli:
+                PulseTrain:
+                    start:
+                        sequence: 'off'
+                        value: 0.06
+                    length:
+                        sequence: 'off'
+                        value: 0.002
+                    amplitude:
+                        sequence: 'off'
+                        value: 1.5e-09
+                    sum:
+                        affect: 'length'
+                        sequence: 'off'
+                        value: 3e-12
+                    period:
+                        sequence: 'off'
+                        value: 0.008
+                    pulse_number:
+                        sequence: 'off'
+                        value: 5
+                    type: 'pulseTrain'
+            params:
+            advancedMode: False
+        icModeRadio: True
+        primarySignalCombo: u'Membrane Potential'
+        secondaryGainCheck: False
+        primaryGainCheck: False
+        secondarySignalCheck: True
+        mode: 'IC'
+        secondarySignalCombo: u'Membrane Current'
+        secondarySignal: 'Membrane Current'
+    Stim0:
+        splitter2: '%00%00%00%FF%00%00%00%00%00%00%00%01%00%00%01%E1%01%00%00%00%05%01%00%00%00%02'
+        splitter3: '%00%00%00%FF%00%00%00%00%00%00%00%01%00%00%00E%01%00%00%00%05%01%00%00%00%02'
+        splitter1: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%017%00%00%00d%01%00%00%00%05%01%00%00%00%01'
+        channels:
+            Command:
+                plot:
+                    yGridCheck: False
+                    logXCheck: False
+                    clipToViewCheck: True
+                    maxTracesCheck: False
+                    autoDownsampleCheck: True
+                    peakRadio: True
+                    downsampleSpin: 1
+                    pointsGroup: True
+                    gridAlphaSlider: 128
+                    maxTracesSpin: 0
+                    averageGroup: False
+                    alphaGroup: True
+                    logYCheck: False
+                    xGridCheck: False
+                    autoAlphaCheck: False
+                    alphaSlider: 1000
+                    meanRadio: False
+                    paramList:
+                    subsampleRadio: False
+                    fftCheck: False
+                    autoPointsCheck: True
+                    downsampleCheck: True
+                    forgetTracesCheck: False
+                    view:
+                        wheelScaleFactor: -0.125
+                        viewRange: [[0.024429225373172502, 0.16405688672299204], [-3.097323560743381e-05, 0.00013137796985357192]]
+                        autoPan: [False, False]
+                        limits:
+                            xRange: [None, None]
+                            yLimits: [None, None]
+                            yRange: [None, None]
+                            xLimits: [None, None]
+                        enableMenu: True
+                        mouseEnabled: [True, True]
+                        linkedViews: [u'Clamp1.Command', None]
+                        mouseMode: 3
+                        background: None
+                        yInverted: False
+                        autoVisibleOnly: [False, False]
+                        targetRange: [[0.024429225373172502, 0.16405688672299204], [-3.097323560743381e-05, 0.00013137796985357192]]
+                        xInverted: False
+                        autoRange: [False, False]
+                        aspectLocked: False
+                holdingCheck: False
+                holdingSpin: 0.0
+                functionCheck: True
+                preSetCheck: False
+                groupBox: True
+                displayCheck: True
+                preSetSpin: 0.0
+                waveGeneratorWidget:
+                    function: 'pulse(\n  times=0.05 + np.linspace(0, 0.008 * (1-1), 1),\n  widths=0.0001,\n  values=80*uA\n)'
+                    autoUpdate: False
+                    stimuli:
+                        PulseTrain:
+                            start:
+                                sequence: 'off'
+                                value: 0.05
+                            length:
+                                sequence: 'off'
+                                value: 0.0001
+                            amplitude:
+                                sequence: 'off'
+                                value: 8e-05
+                            sum:
+                                affect: 'length'
+                                sequence: 'off'
+                                value: 8e-09
+                            period:
+                                sequence: 'off'
+                                value: 0.008
+                            pulse_number:
+                                sequence: 'off'
+                                value: 1
+                            type: 'pulseTrain'
+                    params:
+                    advancedMode: False
+    DAQ:
+        butterworthStopband: 40000.0
+        denoiseThreshold: 4.0
+        denoiseMethod: u'None'
+        downsample: 10
+        filterMethod: u'None'
+        butterworthPassband: 20000.0
+        butterworthPassDB: 3.0
+        denoiseWidth: 1
+        butterworthStopDB: 40.0
+        rate: 400000.0
+        butterworthBidirectional: False
+        besselOrder: 4
+        triggerDevice: u'No Trigger'
+        besselBidirectional: False
+        besselCutoff: 20000.0

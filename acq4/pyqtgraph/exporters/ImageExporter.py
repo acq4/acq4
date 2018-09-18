@@ -1,6 +1,6 @@
 from .Exporter import Exporter
 from ..parametertree import Parameter
-from ..Qt import QtGui, QtCore, QtSvg, USE_PYSIDE
+from ..Qt import QtGui, QtCore, QtSvg, QT_LIB
 from .. import functions as fn
 import numpy as np
 
@@ -23,8 +23,8 @@ class ImageExporter(Exporter):
             bg.setAlpha(0)
             
         self.params = Parameter(name='params', type='group', children=[
-            {'name': 'width', 'type': 'int', 'value': tr.width(), 'limits': (0, None)},
-            {'name': 'height', 'type': 'int', 'value': tr.height(), 'limits': (0, None)},
+            {'name': 'width', 'type': 'int', 'value': int(tr.width()), 'limits': (0, None)},
+            {'name': 'height', 'type': 'int', 'value': int(tr.height()), 'limits': (0, None)},
             {'name': 'antialias', 'type': 'bool', 'value': True},
             {'name': 'background', 'type': 'color', 'value': bg},
             {'name': 'invertValue', 'type': 'bool', 'value': False}
@@ -35,19 +35,19 @@ class ImageExporter(Exporter):
     def widthChanged(self):
         sr = self.getSourceRect()
         ar = float(sr.height()) / sr.width()
-        self.params.param('height').setValue(self.params['width'] * ar, blockSignal=self.heightChanged)
+        self.params.param('height').setValue(int(self.params['width'] * ar), blockSignal=self.heightChanged)
         
     def heightChanged(self):
         sr = self.getSourceRect()
         ar = float(sr.width()) / sr.height()
-        self.params.param('width').setValue(self.params['height'] * ar, blockSignal=self.widthChanged)
+        self.params.param('width').setValue(int(self.params['height'] * ar), blockSignal=self.widthChanged)
         
     def parameters(self):
         return self.params
     
     def export(self, fileName=None, toBytes=False, copy=False):
         if fileName is None and not toBytes and not copy:
-            if USE_PYSIDE:
+            if QT_LIB in ['PySide', 'PySide2']:
                 filter = ["*."+str(f) for f in QtGui.QImageWriter.supportedImageFormats()]
             else:
                 filter = ["*."+bytes(f).decode('utf-8') for f in QtGui.QImageWriter.supportedImageFormats()]

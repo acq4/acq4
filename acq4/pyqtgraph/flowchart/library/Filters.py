@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
+import numpy as np
 from ...Qt import QtCore, QtGui
 from ..Node import Node
 from . import functions
 from ... import functions as pgfn
 from .common import *
-import numpy as np
-
+from ...python2_3 import xrange
 from ... import PolyLineROI
 from ... import Point
 from ... import metaarray as metaarray
@@ -38,7 +38,7 @@ class Bessel(CtrlNode):
     nodeName = 'BesselFilter'
     uiTemplate = [
         ('band', 'combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
-        ('cutoff', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('cutoff', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
         ('order', 'intSpin', {'value': 4, 'min': 1, 'max': 16}),
         ('bidir', 'check', {'checked': True})
     ]
@@ -57,10 +57,10 @@ class Butterworth(CtrlNode):
     nodeName = 'ButterworthFilter'
     uiTemplate = [
         ('band', 'combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
-        ('wPass', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
-        ('wStop', 'spin', {'value': 2000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
-        ('gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
-        ('gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('wPass', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('wStop', 'spin', {'value': 2000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
         ('bidir', 'check', {'checked': True})
     ]
     
@@ -78,14 +78,14 @@ class ButterworthNotch(CtrlNode):
     """Butterworth notch filter"""
     nodeName = 'ButterworthNotchFilter'
     uiTemplate = [
-        ('low_wPass', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
-        ('low_wStop', 'spin', {'value': 2000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
-        ('low_gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
-        ('low_gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
-        ('high_wPass', 'spin', {'value': 3000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
-        ('high_wStop', 'spin', {'value': 4000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
-        ('high_gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
-        ('high_gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('low_wPass', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('low_wStop', 'spin', {'value': 2000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('low_gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('low_gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('high_wPass', 'spin', {'value': 3000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('high_wStop', 'spin', {'value': 4000., 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+        ('high_gPass', 'spin', {'value': 2.0, 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+        ('high_gStop', 'spin', {'value': 20.0, 'step': 1, 'dec': True, 'bounds': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
         ('bidir', 'check', {'checked': True})
     ]
     
@@ -160,11 +160,12 @@ class Gaussian(CtrlNode):
     
     @metaArrayWrapper
     def processData(self, data):
+        sigma = self.ctrls['sigma'].value()
         try:
             import scipy.ndimage
+            return scipy.ndimage.gaussian_filter(data, sigma)
         except ImportError:
-            raise Exception("GaussianFilter node requires the package scipy.ndimage.")
-        return pgfn.gaussianFilter(data, self.ctrls['sigma'].value())
+            return pgfn.gaussianFilter(data, sigma)
 
 
 class Derivative(CtrlNode):
@@ -343,4 +344,20 @@ class RemovePeriodic(CtrlNode):
         return ma
         
         
-        
+class TVDenoise(CtrlNode):
+    nodeName = 'TVDenoise'
+    uiTemplate = [
+        ('weight', 'spin', {'value': 50, 'min': None, 'max': None, 'step': 1.0}),
+        ('epsilon', 'spin', {'value': 2.4e-4, 'min': 1e-16, 'max': None, 'step': 1e-4}),
+        ('keepType', 'check', {'checked': False}),
+        ('maxIter', 'intSpin', {'value': 200, 'min': 1, 'max': 100000}),
+    ]
+
+    def processData(self, data):
+        s = self.stateGroup.state()
+        w = s['weight']
+        e = s['epsilon']
+        k = s['keepType']
+        i = s['maxIter']
+        return functions.tv_denoise(data, weight=w, eps=e, keep_type=k, n_iter_max=i)
+

@@ -1,1 +1,0 @@
-from manipulator import Manipulator

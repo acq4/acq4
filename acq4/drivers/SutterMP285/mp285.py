@@ -392,7 +392,8 @@ class SutterMP285(SerialDevice):
 
         
 if __name__ == '__main__':
-    s = SutterMP285(port=5, baud=19200) # Arduino baud rate, NOT MP285 baud rate.
+    import sys
+    s = SutterMP285(port=sys.argv[1], baud=int(sys.argv[2])) # Arduino baud rate, NOT MP285 baud rate.
     #s = SutterMP285(port=2, baud=9600)
     def pos():
         p = s.getPos()

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>361</width>
-    <height>557</height>
+    <width>238</width>
+    <height>433</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -52,13 +52,6 @@
          </column>
         </widget>
        </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QVBoxLayout" name="verticalLayout_2">
-       <property name="spacing">
-        <number>0</number>
-       </property>
        <item>
         <widget class="QPushButton" name="loadBtn">
          <property name="text">
@@ -66,6 +59,20 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QPushButton" name="clearBtn">
+         <property name="text">
+          <string>Clear</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="layoutWidget">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>0</number>
+       </property>
        <item>
         <widget class="QTreeWidget" name="fileTree">
          <property name="headerHidden">
