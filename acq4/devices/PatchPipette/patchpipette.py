@@ -122,8 +122,9 @@ class PatchPipette(Pipette):
             clamp.autoPipetteOffset()
 
 
-class PressureControl(QtCore.QObject):
+class PressureControl(Qt.QObject):
     def __init__(self, deviceName):
+        Qt.QObject.__init__(self)
         man = getManager()
         self.device = man.getDevice(deviceName)
 

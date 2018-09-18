@@ -93,7 +93,7 @@ class XKeys(Device):
 
         self._callbacks = {}
         # use queued signal here to ensure events are processed in GUI thread
-        self.sigStateChanged.connect(self._handleCallbacks, QtCore.Qt.QueuedConnection)
+        self.sigStateChanged.connect(self._handleCallbacks, Qt.Qt.QueuedConnection)
 
     def setBacklights(self, state, **kwds):
         if PIE32_BRIDGE:
