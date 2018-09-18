@@ -90,6 +90,10 @@ class XKeys(Device):
 
         self.dev.setIntensity(255,255)
 
+        self._callbacks = {}
+        # use queued signal here to ensure events are processed in GUI thread
+        self.sigStateChanged.connect(self._handleCallbacks, QtCore.Qt.QueuedConnection)
+
     def setBacklights(self, state, **kwds):
         if PIE32_BRIDGE:
             self.dev.__getattr__('setBacklights', _deferGetattr=True)(state, _callSync='off', **kwds)
@@ -108,7 +112,18 @@ class XKeys(Device):
     def _stateChanged(self, changes):
         self.sigStateChanged.emit(self, changes)
 
+    def _handleCallbacks(self, dev, changes):
+        # check for key press callbacks
+        keych = changes.get('keys', [])
+        for pos, state in keych:
+            if state is False:
+                continue
+            for cb, arg in self._callbacks.get(pos, []):
+                cb(dev, changes, arg)
+    
     def quit(self):
         self.dev.setBacklightRows(0, 0)
         self.dev.close()
 
+    def addKeyCallback(self, key, callback, arg=None):
+        self._callbacks.setdefault(key, []).append((callback, arg))

@@ -121,6 +121,15 @@ class Camera(DAQGeneric, OptomechDevice):
                 self.setParams(defaults)
             except:
                 printExc("Error default setting camera parameters:")
+
+        # set up preset hotkeys
+        for name, preset in self.camConfig.get('presets', {}).items():
+            if 'hotkey' not in preset:
+                continue
+            dev = dm.getDevice(preset['hotkey']['device'])
+            key = preset['hotkey']['key']
+            dev.addKeyCallback(key, self.presetHotkeyPressed, name)
+
         #print "Camera: no config params to set."
         dm.declareInterface(name, ['camera'], self)
     
@@ -166,7 +175,22 @@ class Camera(DAQGeneric, OptomechDevice):
         
     def getParam(self, param):
         return self.getParams([param])[param]
-        
+
+    def listPresets(self):
+        """Return a list of all preset names.
+        """
+        return list(self.camConfig.get('presets', {}).keys())
+
+    def loadPreset(self, preset):
+        presets = self.camConfig.get('presets', None)
+        if presets is None or preset not in presets:
+            raise ValueError("No camera preset named %r" % preset)
+        params = presets[preset]['params']
+        self.setParams(params)
+
+    def presetHotkeyPressed(self, dev, changes, presetName):
+        self.loadPreset(presetName)
+
     def newFrames(self):
         """Returns a list of all new frames that have arrived since the last call. The list looks like:
             [{'id': 0, 'data': array, 'time': 1234678.3213}, ...]
