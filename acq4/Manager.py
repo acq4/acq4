@@ -933,6 +933,10 @@ class Task:
             before, after = task.getStartOrder()
             deps[devName] |= set(map(Task.getDevName, before))
             for t in map(self.getDevName, after):
+                if t not in deps:
+                    # device is not in task; don't worry about its start order
+                    # (this happens, for example, with Trigger devices that do not need to be started by acq4)
+                    continue
                 deps[t].add(devName)
                 
         deps = dict([(k, list(deps[k])) for k in deps.keys()])
