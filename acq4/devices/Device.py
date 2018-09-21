@@ -3,8 +3,10 @@ import time, traceback, sys, weakref
 from PyQt4 import QtCore, QtGui
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
+from acq4.Interfaces import InterfaceMixin
 
-class Device(QtCore.QObject):
+
+class Device(QtCore.QObject, InterfaceMixin):
     """Abstract class defining the standard interface for Device subclasses."""
     def __init__(self, deviceManager, config, name):
         QtCore.QObject.__init__(self)
@@ -19,8 +21,10 @@ class Device(QtCore.QObject):
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
         self._name = name
-    
+            
     def name(self):
+        """Return the string name of this device.
+        """
         return self._name
     
     def createTask(self, cmd, task):
