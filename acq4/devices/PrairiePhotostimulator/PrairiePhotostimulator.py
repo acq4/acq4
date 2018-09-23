@@ -114,7 +114,10 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         name, itr = self.getNextName()
         sp = StimulationPoint(name, itr, pos)
         self.ui.pointsParamTree.addParameters(sp.params)
+        sp.paramItem = sp.params.items.keys()[0] ## get ahold of the treeWidgetItem, possibly should be a weakref instead
         self.stimPoints.append(sp)
+        sp.sigStimPointChanged.connect(self.updatePoints)
+        self.updatePoints()
         return sp.graphicsItem
 
     def getNextName(self):
@@ -123,56 +126,81 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
     def activePoints(self):
         ##return a list of active points (ones that are in view and checked)
-        return [sp for sp in self.stimPoints if sp.params.value() == True]
+        return self._activePoints
 
     def newFrame(self, frame):
-        ### check if stimulationPoints are within new frame, deactivate them if not
-        for sp in self.stimPoints:
-            if 0 < self.dev.mapToPrairie(sp.getPos()) < 1:
-                sp.params.setValue(True)
-            else: 
-                sp.params.setValue(False)
+        self.lastFrame = frame
+        self.updatePoints()
 
-    def createMarkPointsXML(self):
-        global baseDicts
 
-        baseDicts['PVMarkPointSeriesElements']['Iterations'] = str(self.ui.iterationsSpin.value())
-        baseDicts['PVMarkPointSeriesElements']['IterationDelay'] = str(self.ui.iterDelaySpin.value())
+    def updatePoints(self):
 
-        baseDicts['PVMarkPointElement']['UncagingLaserPower'] = self.spiralParams['laser power']/53. ## convert from %max to voltage
+        self._activePoints = []
 
-        pts = self.activePoints()
-        baseDicts['PVGalvoPointElement']['Indices'] = "1-%i" % (len(pts))
+        for pt in self.stimPoints:
 
-        pointDicts = []
-        for i, pt in enumerate(pts):
-            pos = self.mapToPrairie(pt.getPos())
-            d = {}
-            d['Index'] = i+1
-            d['X'] = pos[0]
-            d['Y'] = pos[1]
-            d['IsSpiral'] = True
-            size = self.spiralParams['size']
-            pSize = self.mapToPrairie((size, size))
-            d['SpiralWidth'] = pSize[0]
-            d['SpiralHeight'] = pSize[1]
-            pointDicts.append(d)
+            ## if point is not in bounds set gray
+            pos = self.dev.mapToPrairie(pt.getPos(), self.lastFrame)
+            if (not 0 < pos[0] < 1) or (not 0 < pos[1] < 1):
+                pt.graphicsItem.setEnabledPen(False)
+                pt.paramItem.setBackground(0, pg.mkBrush('w'))
+                pt.paramItem.setForeground(0, pg.mkBrush((150,150,150)))
 
-        seriesElement = et.Element('PVMarkPointSeriesElements')
-        for k,v in baseDicts['PVMarkPointSeriesElements'].iteritems():
-            seriesElement.set(k,str(v))
-        mpElement = et.SubElement(seriesElement, 'PVMarkPointElement')
-        for k, v in baseDicts['PVMarkPointElement'].iteritems():
-            mpElement.set(k,str(v))
-        galvoElement = et.SubElement(mpElement, 'PVGalvoPointElement')
-        for k, v in baseDicts['PVGalvoPointElement'].iteritems():
-            galvoElement.set(k, str(v))
-        for pt in pointDicts:
-            ptElement = et.SubElement(galvoElement, 'Point')
-            for k, v in pt.iteritems():
-                ptElement.set(k,str(v))
+            ## if point is not checked set gray
+            elif not pt.params.value():
+                pt.graphicsItem.setEnabledPen(False)
+                pt.paramItem.setBackground(0, pg.mkBrush('w'))
 
-        return et.ElementTree(seriesElement)
+            elif 0 < pos[0] < 1 and 0 < pos[1] < 1 and pt.params.value():
+                pt.graphicsItem.setEnabledPen(True)
+                pt.paramItem.setBackground(0, pg.mkBrush('g'))
+                pt.paramItem.setForeground(0, pg.mkBrush('k'))
+                self._activePoints.append(pt)
+
+            else:
+                print('Not sure how to update %s at %s, value %s' %(pt.name, str(pos), pt.params.value()))
+
+
+    # # def createMarkPointsXML(self):
+    #     global baseDicts
+
+    #     baseDicts['PVMarkPointSeriesElements']['Iterations'] = str(self.ui.iterationsSpin.value())
+    #     baseDicts['PVMarkPointSeriesElements']['IterationDelay'] = str(self.ui.iterDelaySpin.value())
+
+    #     baseDicts['PVMarkPointElement']['UncagingLaserPower'] = self.spiralParams['laser power']/53. ## convert from %max to voltage
+
+    #     pts = self.activePoints()
+    #     baseDicts['PVGalvoPointElement']['Indices'] = "1-%i" % (len(pts))
+
+    #     pointDicts = []
+    #     for i, pt in enumerate(pts):
+    #         pos = self.mapToPrairie(pt.getPos())
+    #         d = {}
+    #         d['Index'] = i+1
+    #         d['X'] = pos[0]
+    #         d['Y'] = pos[1]
+    #         d['IsSpiral'] = True
+    #         size = self.spiralParams['size']
+    #         pSize = self.mapToPrairie((size, size))
+    #         d['SpiralWidth'] = pSize[0]
+    #         d['SpiralHeight'] = pSize[1]
+    #         pointDicts.append(d)
+
+    #     seriesElement = et.Element('PVMarkPointSeriesElements')
+    #     for k,v in baseDicts['PVMarkPointSeriesElements'].iteritems():
+    #         seriesElement.set(k,str(v))
+    #     mpElement = et.SubElement(seriesElement, 'PVMarkPointElement')
+    #     for k, v in baseDicts['PVMarkPointElement'].iteritems():
+    #         mpElement.set(k,str(v))
+    #     galvoElement = et.SubElement(mpElement, 'PVGalvoPointElement')
+    #     for k, v in baseDicts['PVGalvoPointElement'].iteritems():
+    #         galvoElement.set(k, str(v))
+    #     for pt in pointDicts:
+    #         ptElement = et.SubElement(galvoElement, 'Point')
+    #         for k, v in pt.iteritems():
+    #             ptElement.set(k,str(v))
+
+    #     return et.ElementTree(seriesElement)
 
     def getStimulationCmds(self, pts):
         ## return a list of dicts with per point info that Prairie needs
@@ -217,30 +245,38 @@ class Photostimulation():
 
 
 
-class StimulationPoint():
+class StimulationPoint(QtCore.QObject):
+
+    sigStimPointChanged = QtCore.Signal(object)
 
     def __init__(self, name, itr, pos):
-
+        QtCore.QObject.__init__(self)
         self.name = "%s %i" % (name, itr)
         self.graphicsItem = PhotostimTarget(pos, label=itr)
-        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=True, renamable=True)
+        self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=False, renamable=True)
 
-        self.params.sigValueChanged.connect(self.valueChanged)
+        self.params.sigValueChanged.connect(self.changed)
+        self.graphicsItem.sigDragged.connect(self.changed)
 
-    def valueChanged(self, b):
-        self.graphicsItem.setEnabledPen(b)
+    def changed(self, param):
+        self.sigStimPointChanged.emit(self)
 
     def getPos(self):
         ## return position in global coordinates
         return self.graphicsItem.pos()
 
 
+
+
 class PhotostimTarget(TargetItem):
+    ## inherits from TargetItem, GraphicsObject, GraphicsItem, QGraphicsObject
 
     def __init__(self, pos, label):
         self.enabledPen = pg.mkPen((0, 255, 255))
         self.disabledPen = pg.mkPen((150,150,150))
-        TargetItem.__init__(self, pen=self.enabledPen)
+        self.enabledBrush = pg.mkBrush((0,0,255,100))
+        self.disabledBrush = pg.mkBrush((0,0,255,0))
+        TargetItem.__init__(self, pen=self.enabledPen, brush=self.enabledBrush)
 
         self.setLabel(str(label))
         self.setPos(pg.Point(pos)) 
@@ -248,5 +284,10 @@ class PhotostimTarget(TargetItem):
     def setEnabledPen(self, b):
         if b:
             self.pen = self.enabledPen
+            self.brush = self.enabledBrush
         else:
             self.pen = self.disabledPen
+            self.brush = self.disabledBrush
+
+        self._picture = None
+        self.update()
