@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from PyQt4 import QtTest
 from acq4.devices.OptomechDevice import OptomechDevice
 from .FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
@@ -59,7 +60,7 @@ class FilterWheel(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
         
-        self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         
         self.filters = OrderedDict()
         ## Format of self.filters is:
@@ -70,10 +71,12 @@ class FilterWheel(Device, OptomechDevice):
         nPos = self.getPositionCount()
         emptyFilter = {'name': 'empty', 'description': 'empty'}
         for k in range(nPos):  ## Set value for each filter
-            filt = Filter(config['filters'].get(k, emptyFilter), self, k)
+            filt = FilterSet(config['filters'].get(k, emptyFilter), self, k)
             self.filters[k] = filt
         
         self.currentFilter = self.getFilter()
+
+        self.lastFuture = None
             
         self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
         self.fwThread.fwPosChanged.connect(self.positionChanged)
@@ -98,8 +101,28 @@ class FilterWheel(Device, OptomechDevice):
         raise NotImplementedError("Method must be implemented in subclass")
     
     def setPosition(self, pos):
+        """Set the filter wheel position and return a FilterWheelFuture instance
+        that can be used to wait for the move to complete.
+        """
+        with self.lock:
+            fut = self.lastFuture
+            if fut is not None and not fut.isDone():
+                fut.cancel()
+            self.lastFuture = self._setPosition(pos)
+            return self.lastFuture
+
+    def _setPosition(self, pos):
+        """Must be implemented in subclass to request device movement and
+        return a FilterWheelFuture.
+
+        Example::
+
+            def _setPosition(self, pos):
+                self.device.setPosition(pos)  # actually ask device to move
+                return FilterWheelFuture(self, pos)
+        """
         raise NotImplementedError("Method must be implemented in subclass")
-    
+
     def getPosition(self):
         """Return the current position of the filter wheel.
         """
@@ -111,6 +134,23 @@ class FilterWheel(Device, OptomechDevice):
         self.currentFilter = self.filters.get(newPos)
         self.sigFilterChanged.emit(self, newPos)
         
+    def isMoving(self):
+        """Return the current position of the filter wheel.
+        """
+        raise NotImplementedError("Method must be implemented in subclass")
+        
+    def stop(self):
+        """Immediately stop the filter wheel.
+        """
+        self._stop()
+        with self.lock:
+            fut = self.lastFuture
+            if fut is not None:
+                fut.cancel()
+
+    def _stop(self):
+        raise NotImplementedError("Method must be implemented in subclass")
+
     def setSpeed(self, speed):
         raise NotImplementedError("Method must be implemented in subclass")
     
@@ -169,7 +209,7 @@ class FilterSet(OptomechDevice):
 
     """
     def __init__(self, fwDevice, key, name, description, **kwds):
-        self._fw = fw
+        self._fw = fwDevice
         self._key = key
         self._name = name
         self._description = description
@@ -189,7 +229,76 @@ class FilterSet(OptomechDevice):
     def __repr__(self):
         return "<Filter %s.%s %s>" % (self._fw.name(), self.key(), self.name())
 
+
+class FilterWheelFuture(self):
+    def __init__(self, dev, position):
+        self.dev = dev
+        self.position = position
+        self._wasInterrupted = False
+        self._done = False
+        self._error = None
+
+    def wasInterrupted(self):
+        """Return True if the move was interrupted before completing.
+        """
+        return self._wasInterrupted
+
+    def cancel(self):
+        if self.isDone():
+            return
+        self._wasInterrupted = True
+        self._error = "Filter change was cancelled"
+
+    def _atTarget(self):
+        return self.dev.getPosition() == self.position
     
+    def isDone(self):
+        """Return True if the move has completed or was interrupted.
+        """
+        if self._wasInterrupted or self._done:
+            return True
+        if self.dev.isMoving():
+            return False
+
+        if self._atTarget():
+            self._done = True
+            return True
+        else:
+            self._wasInterrupted = True
+            self._error = "Filter wheel did not reach target"
+            return True
+
+    def errorMessage(self):
+        """Return a string description of the reason for a move failure,
+        or None if there was no failure (or if the reason is unknown).
+        """
+        return self._error
+        
+    def wait(self, timeout=None, updates=False):
+        """Block until the move has completed, has been interrupted, or the
+        specified timeout has elapsed.
+
+        If *updates* is True, process Qt events while waiting.
+
+        If the move did not complete, raise an exception.
+        """
+        start = ptime.time()
+        while (timeout is None) or (ptime.time() < start + timeout):
+            if self.isDone():
+                break
+            if updates is True:
+                QtTest.QTest.qWait(100)
+            else:
+                time.sleep(0.1)
+        
+        if not self.isDone():
+            err = self.errorMessage()
+            if err is None:
+                raise RuntimeError("Timeout waiting for filter wheel change")
+            else:
+                raise RuntimeError("Move did not complete: %s" % err)
+
+
 class FilterWheelTask(DeviceTask):
 
     def __init__(self, dev, cmd, parentTask):
