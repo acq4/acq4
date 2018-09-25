@@ -113,7 +113,7 @@ class CameraInterface(CameraModuleInterface):
 
         #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
-        self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
+        self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from acq4.util.SpinBox) is delayed.
 
         ## Signals from Camera device
@@ -121,6 +121,7 @@ class CameraInterface(CameraModuleInterface):
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
+        self.cam.sigParamsChanged.connect(self.cameraParamsChanged)
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigStartVideoClicked.connect(self.startAcquireClicked)
@@ -150,7 +151,6 @@ class CameraInterface(CameraModuleInterface):
             bins.reverse()
             for b in bins:
                 self.ui.binningCombo.addItem(str(b))
-
 
         except:
             self.showMessage("Error opening camera")
@@ -243,11 +243,16 @@ class CameraInterface(CameraModuleInterface):
         #self.clearFrameBuffer()
         ###self.updateRgnLabel()
 
-    def setUiBinning(self, b):
+    def setUiBinning(self, b, updateCamera=True):
         ind = self.ui.binningCombo.findText(str(b))
         if ind == -1:
             raise Exception("Binning mode %s not in list." % str(b))
-        self.ui.binningCombo.setCurrentIndex(ind)
+
+        if updateCamera:
+            self.ui.binningCombo.setCurrentIndex(ind)
+        else:
+            with self.binningComboProxy.block():
+                self.ui.binningCombo.setCurrentIndex(ind)
 
     def setExposure(self, e=None, autoRestart=True):
         if e is not None:
@@ -269,6 +274,33 @@ class CameraInterface(CameraModuleInterface):
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
+
+    def cameraParamsChanged(self, changes):
+        # camera parameters changed; update ui to match
+        if 'exposure' in changes:
+            with pg.SignalBlock(self.ui.spinExposure.valueChanged, self.setExposure):
+                self.ui.spinExposure.setValue(changes['exposure'])
+
+        if 'binningX' in changes:
+            self.setUiBinning(changes['binningX'], updateCamera=False)
+        elif 'binning' in changes:
+            self.setUiBinning(changes['binning'][0], updateCamera=False)
+        
+        if 'region' in changes:
+            with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+                rgn = changes['region']
+                self.roi.setPos([rgn[0], rgn[1]])
+                self.roi.setSize([rgn[2], rgn[3]])
+        if 'regionX' in changes or 'regionY' in changes:
+            with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+                x = changes.get('regionX', self.roi.pos().x())
+                y = changes.get('regionY', self.roi.pos().y())
+                self.roi.setPos([x, y])
+        if 'regionW' in changes or 'regionH' in changes:
+            with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+                w = changes.get('regionW', self.roi.state['size'][0])
+                h = changes.get('regionH', self.roi.state['size'][1])
+                self.roi.setSize([w, h])
 
     def startAcquireClicked(self, mode):
         """User clicked the acquire video button.
