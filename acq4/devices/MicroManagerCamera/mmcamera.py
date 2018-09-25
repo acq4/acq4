@@ -66,18 +66,9 @@ class MicroManagerCamera(Camera):
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
-        # import pprint
-        # pprint.pprint(dict(self.listParams()))
         
     def startCamera(self):
         with self.camLock:
-            if self._config['mmAdapterName'] == 'HamamatsuHam':
-                # seems to be a bug in HamamatsuHam that fails to set trigger source correctly.
-                if self.getParam('triggerMode') == 'Normal':
-                    self.setParam('TRIGGER SOURCE', 'INTERNAL')
-                else:
-                    self.setParam('TRIGGER SOURCE', 'EXTERNAL')
-
             self.mmc.startContinuousSequenceAcquisition(0)
             
     def stopCamera(self):
@@ -273,6 +264,9 @@ class MicroManagerCamera(Camera):
             self.mmc.setROI(*rgn)
             return
 
+        # translate requested parameter into a list of sub-parameters to set
+        setParams = []
+
         if param.startswith('binning'):
             if self._binningMode is None:
                 # camera does not support binning; only allow values of 1
@@ -284,22 +278,20 @@ class MicroManagerCamera(Camera):
             if param == 'binningX':
                 y = self.getParam('binningY')
                 value = (value, y)
-                param = 'binning'
             elif param == 'binningY':
                 x = self.getParam('binningX')
                 value = (x, value)
-                param = 'binning'
 
             if self._binningMode == 'x':
                 value = '%d' % value[0]
             else:
                 value = '%dx%d' % value
-            param = 'Binning'
+
+            setParams.append(('Binning', value))
 
         elif param == 'exposure':
             # s to ms
-            value = value * 1e3
-            param = 'Exposure'
+            setParams.append(('Exposure', value * 1e3))
 
         elif param == 'triggerMode':
             if self._triggerProp is None:
@@ -307,15 +299,33 @@ class MicroManagerCamera(Camera):
                 if value != 'Normal':
                     raise ValueError("Invalid trigger mode '%s'" % value)
                 return
-            value = self._triggerModes[1][value]
-            param = self._triggerProp
+
+            # translate trigger mode name
+            setParams.append((self._triggerProp, self._triggerModes[1][value]))
+
+            # Hamamatsu cameras require setting a trigger source as well
+            if self._config['mmAdapterName'] == 'HamamatsuHam':
+                if value == 'Normal':
+                    source = 'INTERNAL'
+                elif value == 'TriggerStart':
+                    source = 'EXTERNAL'
+                else:
+                    raise ValueError("Invalid trigger mode '%s'" % value)
+                # On Orca 4 we actually have to toggle the source property
+                # back and forth, otherwise it is sometimes ignored.
+                setParams.append(('TRIGGER SOURCE', 'INTERNAL'))
+                setParams.append(('TRIGGER SOURCE', source))
+
+        else:
+            setParams.append((param, value))
 
         # elif param == 'bitDepth':
         #     param = 'PixelType'
         #     value = '%dbit' % value
 
         with self.camLock:
-            self.mmc.setProperty(self.camName, str(param), str(value))
+            for param, value in setParams:
+                self.mmc.setProperty(self.camName, str(param), str(value))
 
     def getParams(self, params=None):
         if params is None:
