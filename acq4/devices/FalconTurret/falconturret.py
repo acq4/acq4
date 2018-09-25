@@ -12,7 +12,7 @@ class FalconTurret(FilterWheel):
     def getPositionCount(self):
         return self.dev._total_slides
 
-    def getPosition(self):
+    def _getPosition(self):
         return int(self.dev.current_slide)
 
     def _setPosition(self, pos):

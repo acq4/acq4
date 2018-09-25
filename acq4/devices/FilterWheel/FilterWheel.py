@@ -74,23 +74,29 @@ class FilterWheel(Device, OptomechDevice):
             filt = FilterSet(config['filters'].get(k, emptyFilter), self, k)
             self.filters[k] = filt
         
-        self.currentFilter = self.getFilter()
+        self._lastFuture = None
+        self._lastPosition = None
 
-        self.lastFuture = None
-            
-        self.fwThread = FilterWheelThread(self, self.driver, self.driverLock)
-        self.fwThread.fwPosChanged.connect(self.positionChanged)
+        # polling thread just checks position regularly; this causes sigFilterChanged to be emitted
+        # whenever a change is detected
+        self.fwThread = FilterWheelPollThread(self)
         self.fwThread.start()
-        
+
+        dm.sigAbortAll.connect(self.stop)
+
     def listFilters(self):
         """Return a dict of available filters.
         """
         with self.filterWheelLock:
             return self.filters.copy()
     
-    def getFilter(self):
-        """Return the currently active Filter."""
-        return self.currentFilter
+    def getFilter(self, position=None):
+        """Return the Filter at *position*. 
+        
+        If *position* is None, then return the currently active Filter."""
+        if position is None:
+            position = self.getPosition()
+        return self.filters[position]
     
     def getPositionCount(self):
         """Return the number of filter positions.
@@ -105,11 +111,11 @@ class FilterWheel(Device, OptomechDevice):
         that can be used to wait for the move to complete.
         """
         with self.lock:
-            fut = self.lastFuture
+            fut = self._lastFuture
             if fut is not None and not fut.isDone():
                 fut.cancel()
-            self.lastFuture = self._setPosition(pos)
-            return self.lastFuture
+            self._lastFuture = self._setPosition(pos)
+            return self._lastFuture
 
     def _setPosition(self, pos):
         """Must be implemented in subclass to request device movement and
@@ -126,13 +132,13 @@ class FilterWheel(Device, OptomechDevice):
     def getPosition(self):
         """Return the current position of the filter wheel.
         """
+        pos = self._getPosition()
+        if pos != self._lastPosition:
+            self.sigFilterChanged.emit(self, self.getFilter(pos))
+            self._lastPosition = pos
+
+    def _getPosition(self):
         raise NotImplementedError("Method must be implemented in subclass")
-        
-    def positionChanged(self, newPos):
-        """Sublclasses should call this method when the filterwheel position has changed.
-        """
-        self.currentFilter = self.filters.get(newPos)
-        self.sigFilterChanged.emit(self, newPos)
         
     def isMoving(self):
         """Return the current position of the filter wheel.
@@ -144,7 +150,7 @@ class FilterWheel(Device, OptomechDevice):
         """
         self._stop()
         with self.lock:
-            fut = self.lastFuture
+            fut = self._lastFuture
             if fut is not None:
                 fut.cancel()
 
@@ -161,7 +167,7 @@ class FilterWheel(Device, OptomechDevice):
         """Sublclasses should call this method when the filterwheel speed has changed.
         """
         self.sigSpeedChanged.emit(self, speed)
-        
+
     def createTask(self, cmd, parentTask):
         return FilterWheelTask(self, cmd, parentTask)
     
@@ -324,7 +330,8 @@ class FilterWheelTask(DeviceTask):
 
     def isDone(self):
         return True
-    
+
+
 class FilterWheelTaskGui(TaskGui):
     
     def __init__(self, dev, taskRunner):
@@ -418,45 +425,60 @@ class FilterWheelTaskGui(TaskGui):
         #print 'filterList : ', self.filterList
         return self.filterList
             
-    
-class FilterWheelThread(Thread):
 
-    fwPosChanged = QtCore.Signal(object)
-
-    def __init__(self, dev, driver, lock):
-        Thread.__init__(self)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+class FilterWheelDevGui(QtGui.QWidget):
+    def __init__(self, dev):
+        QtGui.QWidget.__init__(self)
         self.dev = dev
-        self.driver = driver
-        self.driverLock = lock
-        self.cmds = {}
 
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+
+        self.positionBtnLayout = QtGui.QGridLayout()
+        self.layout.addLayout(self.positionBtnLayout, 0, 0)
+        self.positionBtnLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.positionGroup = QtGui.QButtonGroup()
+        self.positionButtons = []
+        cols = 3
+        for i in range(self.dev.getPositionCount()):
+            btn = QtGui.QPushButton(str(self.dev.filters[i].name()))
+            btn.setCheckable(True)
+            btn.filterPosition = i
+            self.positionButtons.append(btn)
+            self.positionGroup.addButton(btn, i)
+            self.positionBtnLayout.addWidget(btn, i // cols, i % cols)
+            btn.clicked.connect(self.positionButtonClicked)
+        self.positionGroup.setExclusive(True)
+        
+        self.updatePosition()
+
+        self.dev.sigFilterChanged.connect(self.positionChanged)
+
+    def updatePosition(self):
+        pos = self.dev.getPosition()
+        self.positionButtons[pos].setChecked(True)
+
+    def positionButtonClicked(self):
+        btn = self.sender()
+        self.dev.setPosition(btn.filterPosition)
+
+
+class FilterWheelPollThread(Thread):
+    def __init__(self, dev, interval=0.1):
+        Thread.__init__(self)
+        self.dev = dev
+        self.interval = interval
         
     def run(self):
         self.stopThread = False
-        with self.driverLock:
-            self.fwPosChanged.emit(self.driver.getPos())
-        while True:
+        while self.stopThread is False:
             try:
-                with self.driverLock:
-                    pos = self.driver.getPos()
-                self.fwPosChanged.emit(pos)
-                time.sleep(0.5)
+                pos = self.dev.getPosition()
+                time.sleep(self.interval)
             except:
-                debug.printExc("Error in Filter Wheel communication thread:")
-                
-            self.lock.lock()
-            if self.stopThread:
-                self.lock.unlock()
-                break
-            self.lock.unlock()
-            time.sleep(0.02)
-
-        self.driver.close()
+                debug.printExc("Error in Filter Wheel poll thread:")
+                time.sleep(1.0)
     
-    def stop(self, block=False):
-        with self.lock:
-            self.stopThread = True
-        if block:
-            if not self.wait(10000):
-                raise Exception("Timed out while waiting for Filter Wheel thread exit!")
+    def stop(self):
+        self.stopThread = True
