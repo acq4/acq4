@@ -87,7 +87,7 @@ class PatchPipette(Pipette):
             p = self.pressures[state]
             if isinstance(p, str):
                 self.pressureDevice.setSource(p)
-                self.device.setChanHolding('pressure_out', 0)
+                self.pressureDevice.setPressure(0)
             else:
                 self.pressureDevice.setPressure(p)
                 self.pressureDevice.setSource('regulator')
