@@ -90,7 +90,10 @@ class CameraTaskGui(DAQGenericTaskGui):
     def taskSequenceStarted(self):
         DAQGenericTaskGui.taskSequenceStarted(self)
         if self.ui.releaseAfterRadio.isChecked():
-            self.dev.pushState('cam_proto_state')
+            # For now, the task gui only changes triggerMode. If we allow
+            # other parameters to be changed from here, then they will have to be added
+            # to the list of parameters to push/pop
+            self.dev.pushState('cam_proto_state', params=['triggerMode'])
         
     def taskFinished(self):
         DAQGenericTaskGui.taskFinished(self)

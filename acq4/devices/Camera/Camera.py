@@ -217,15 +217,14 @@ class Camera(DAQGeneric, OptomechDevice):
         # This method is only here to allow PVCam to display some useful information.
         print("Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % time)
     
-    def pushState(self, name=None):
-        #print "Camera: pushState", name
-        params = self.listParams()
-        for k in params.keys():    ## remove non-writable parameters
-            if not params[k][1]:
-                del params[k]
-        params = self.getParams(list(params.keys()))
+    def pushState(self, name=None, params=None):
+        if params is None:
+            # push all writeable parameters
+            params = [param for param, spec in self.listParams().items() if spec[1] is True]
+        
+        # print("Camera: pushState", name, params)
+        params = self.getParams(params)
         params['isRunning'] = self.isRunning()
-        #print "Camera: pushState", name, params
         self.stateStack.append((name, params))
         
     def popState(self, name=None):
@@ -491,11 +490,6 @@ class CameraTask(DAQGenericTask):
         }
         params.update(self.camCmd['params'])
         
-        if 'pushState' in self.camCmd:
-            stateName = self.camCmd['pushState']
-            self.dev.pushState(stateName)
-        prof.mark('collect params')
-
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger
         ## (bulb and strobe modes only require a restart if the trigger mode is not already set; this is handled later)
         if params['triggerMode'] == 'TriggerStart':
@@ -509,10 +503,16 @@ class CameraTask(DAQGenericTask):
             ## Make sure we haven't requested something stupid..
             if self.camCmd.get('triggerProtocol', False) and self.dev.camConfig['triggerOutChannel']['device'] == daqName:
                 raise Exception("Task requested camera to trigger and be triggered by the same device.")
-        
-        (newParams, restart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
-        
+
+        if 'pushState' in self.camCmd:
+            stateName = self.camCmd['pushState']
+            self.dev.pushState(stateName, params=list(params.keys()))
+        prof.mark('push params onto stack')
+
+        (newParams, paramsNeedRestart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
+        restart = restart or paramsNeedRestart
         prof.mark('set params')
+
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.name()
