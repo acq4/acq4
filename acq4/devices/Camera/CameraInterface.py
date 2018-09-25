@@ -127,7 +127,15 @@ class CameraInterface(CameraModuleInterface):
         self.imagingCtrl.sigStartVideoClicked.connect(self.startAcquireClicked)
         self.imagingCtrl.sigStopVideoClicked.connect(self.stopAcquireClicked)
         self.imagingCtrl.ui.acquireFrameBtn.setEnabled(False)
-        
+
+        # Hotkey signals
+        for action, key in self.cam.camConfig.get('hotkeys', {}).items():
+            if action not in ['snap', 'start']:
+                raise ValueError("Unknown hotkey action %r" % action)
+            
+            dev = Manager.getManager().getDevice(key['device'])
+            dev.addKeyCallback(key['key'], self.hotkeyPressed, (action,))
+    
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
         self.sigNewFrame.emit(self, frame)
@@ -224,6 +232,14 @@ class CameraInterface(CameraModuleInterface):
             self.cam.stop()
             if not self.cam.wait(10000):
                 printExc("Timed out while waiting for acq thread exit!")
+
+    def hotkeyPressed(self, device, keys, action):
+        callback = {
+            'snap': self.imagingCtrl.saveFrameClicked,
+            'start': self.imagingCtrl.acquireVideoClicked,
+        }.get(action)
+        
+        callback()
 
     def cameraStopped(self):
         self.imagingCtrl.acquisitionStopped()

@@ -129,7 +129,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 continue
             dev = dm.getDevice(preset['hotkey']['device'])
             key = preset['hotkey']['key']
-            dev.addKeyCallback(key, self.presetHotkeyPressed, name)
+            dev.addKeyCallback(key, self.presetHotkeyPressed, (name,))
 
         #print "Camera: no config params to set."
         dm.declareInterface(name, ['camera'], self)

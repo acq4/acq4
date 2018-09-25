@@ -119,12 +119,12 @@ class XKeys(Device):
         for pos, state in keych:
             if state is False:
                 continue
-            for cb, arg in self._callbacks.get(pos, []):
-                cb(dev, changes, arg)
+            for cb, args in self._callbacks.get(pos, []):
+                cb(dev, changes, *args)
     
     def quit(self):
         self.dev.setBacklightRows(0, 0)
         self.dev.close()
 
-    def addKeyCallback(self, key, callback, arg=None):
-        self._callbacks.setdefault(key, []).append((callback, arg))
+    def addKeyCallback(self, key, callback, args=()):
+        self._callbacks.setdefault(key, []).append((callback, args))
