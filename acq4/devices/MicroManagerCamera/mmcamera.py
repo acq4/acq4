@@ -215,28 +215,48 @@ class MicroManagerCamera(Camera):
         return dict([(p, self._allParams[p]) for p in params])
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        p = Profiler(disabled=True, delayed=False)
+
         # umanager will refuse to set params while camera is running,
         # so autoRestart doesn't make sense in this context
         if self.isRunning():
-            restart = True
+            restart = autoRestart
             self.stop()
+            p('stop')
         else:
-            restart = False
+            restart = False        
+
+        # Join region params into one request (_setParam can be very slow)
+        regionKeys = ['regionX', 'regionY', 'regionW', 'regionH']
+        nRegionKeys = len([k for k in regionKeys if k in params])
+        if nRegionKeys > 1:
+            rgn = list(self.mmc.getROI(self.camName))
+            for k in regionKeys:
+                if k not in params:
+                    continue
+                i = {'X':0, 'Y':1, 'W':2, 'H':3}[k[-1]]
+                rgn[i] = params[k]
+                del params[k]
+            params['region'] = rgn
 
         newVals = {}
         for k,v in params.items():
             self._setParam(k, v, autoCorrect=autoCorrect)
+            p('setParam %r' % k)
             if k == 'binning':
                 newVals['binningX'], newVals['binningY'] = self.getParam(k)
             elif k == 'region':
                 newVals['regionX'], newVals['regionY'], newVals['regionW'], newVals['regionH'] = self.getParam(k)
             else:
                 newVals[k] = self.getParam(k)
+            p('reget param')
         self.sigParamsChanged.emit(newVals)
+        p('emit')
 
         if restart:
             self.start()
-
+            p('start')
+        
         needRestart = False
         return (newVals, needRestart)
 
