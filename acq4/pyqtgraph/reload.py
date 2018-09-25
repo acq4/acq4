@@ -15,20 +15,22 @@ Does NOT:
  - update references to any module-level objects
    ie, this does not reload correctly:
        from module import someObject
-       print(someObject)
+       print someObject
    ..but you can use this instead: (this works even for the builtin reload)
        import module
-       print(module.someObject)
+       print module.someObject
 """
 
 from __future__ import print_function
 import inspect, os, sys, gc, traceback, types
 from .debug import printExc
 try:
-    from __builtin__ import reload as builtin_reload
+    from importlib import reload as orig_reload
 except ImportError:
-    from importlib import reload as builtin_reload
-from .debug import printExc
+    orig_reload = reload
+
+
+py3 = sys.version_info >= (3,)
 
 
 def reloadAll(prefix=None, debug=False):
@@ -81,7 +83,7 @@ def reload(module, debug=False, lists=False, dicts=False):
         
     ## make a copy of the old module dictionary, reload, then grab the new module dictionary for comparison
     oldDict = module.__dict__.copy()
-    builtin_reload(module)
+    orig_reload(module)
     newDict = module.__dict__
     
     ## Allow modules access to the old dictionary after they reload
@@ -464,3 +466,99 @@ def fn():
     os.remove(modFile2+'c')
     os.system('rm -r test1')
 
+
+
+
+
+
+
+
+#
+#        Failure graveyard ahead:
+#
+
+
+"""Reload Importer:
+Hooks into import system to 
+1) keep a record of module dependencies as they are imported
+2) make sure modules are always reloaded in correct order
+3) update old classes and functions to use reloaded code"""
+
+#import imp, sys
+
+## python's import hook mechanism doesn't work since we need to be 
+## informed every time there is an import statement, not just for new imports
+#class ReloadImporter:
+    #def __init__(self):
+        #self.depth = 0
+        
+    #def find_module(self, name, path):
+        #print "  "*self.depth + "find: ", name, path
+        ##if name == 'PyQt4' and path is None:
+            ##print "PyQt4 -> PySide"
+            ##self.modData = imp.find_module('PySide')
+            ##return self
+        ##return None ## return none to allow the import to proceed normally; return self to intercept with load_module
+        #self.modData = imp.find_module(name, path)
+        #self.depth += 1
+        ##sys.path_importer_cache = {}
+        #return self
+        
+    #def load_module(self, name):
+        #mod =  imp.load_module(name, *self.modData)
+        #self.depth -= 1
+        #print "  "*self.depth + "load: ", name
+        #return mod
+
+#def pathHook(path):
+    #print "path hook:", path
+    #raise ImportError
+#sys.path_hooks.append(pathHook)
+
+#sys.meta_path.append(ReloadImporter())
+
+
+### replace __import__ with a wrapper that tracks module dependencies
+#modDeps = {}
+#reloadModule = None
+#origImport = __builtins__.__import__
+#def _import(name, globals=None, locals=None, fromlist=None, level=-1, stack=[]):
+    ### Note that stack behaves as a static variable.
+    ##print "  "*len(importStack) + "import %s" % args[0]
+    #stack.append(set())
+    #mod = origImport(name, globals, locals, fromlist, level)
+    #deps = stack.pop()
+    #if len(stack) > 0:
+        #stack[-1].add(mod)
+    #elif reloadModule is not None:     ## If this is the top level import AND we're inside a module reload
+        #modDeps[reloadModule].add(mod)
+            
+    #if mod in modDeps:
+        #modDeps[mod] |= deps
+    #else:
+        #modDeps[mod] = deps
+        
+    
+    #return mod
+    
+#__builtins__.__import__ = _import
+
+### replace 
+#origReload = __builtins__.reload
+#def _reload(mod):
+    #reloadModule = mod
+    #ret = origReload(mod)
+    #reloadModule = None
+    #return ret
+#__builtins__.reload = _reload
+
+
+#def reload(mod, visited=None):
+    #if visited is None:
+        #visited = set()
+    #if mod in visited:
+        #return
+    #visited.add(mod)
+    #for dep in modDeps.get(mod, []):
+        #reload(dep, visited)
+    #__builtins__.reload(mod)
