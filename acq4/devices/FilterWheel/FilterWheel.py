@@ -79,8 +79,9 @@ class FilterWheel(Device, OptomechDevice):
 
         # polling thread just checks position regularly; this causes sigFilterChanged to be emitted
         # whenever a change is detected
-        self.fwThread = FilterWheelPollThread(self)
-        self.fwThread.start()
+        if config.get('pollInterval', 0.1) is not None:
+            self.fwThread = FilterWheelPollThread(self, interval=pollInterval)
+            self.fwThread.start()
 
         dm.sigAbortAll.connect(self.stop)
 
@@ -176,64 +177,6 @@ class FilterWheel(Device, OptomechDevice):
         
     def deviceInterface(self, win):
         return FilterWheelDevGui(self)
-
-
-class FilterSet(OptomechDevice):
-    """Represents an optical filter or filter set.
-
-    Parameters
-    ----------
-    fwDevice : 
-        Parent device to which this filter belongs
-    key :
-        Position where this filter can be accessed from its parent
-    name : str
-        Short name of this filter (eg, for display in a dropdown menu)
-    optics : dict
-        Description of the optical properties of this filter. Keys
-        are the names of ports on the device; typically 'default' for
-        single-axis filters, or 'excitation' / 'emission' for dichroic
-        or beam split filters.
-
-    Examples:
-
-        # A pair of stacked filters; second filter is closer to the 
-        optics = {'default': [
-                    {'model': '...', 'passBands': [(530,580)]},  # bandpass
-                    {'model': '...', 'passBands': [(None, 560)]},  # shortpass
-                 ]}
-
-        # A dichroic filter cube with excitation / emission filters
-        optics = {'excitation': [
-                    {'model': '...', 'passBands': [(420,480)]},  # bandpass
-                    {'model': '... (reflection)', 'passBands': [(None, 500)]},  # dichroic shortpass
-                 ],
-                 'emission': [
-                    {'model': '... (transmission)', 'passBands': [(505, None)]},  # dichroic longpass 
-                    {'model': '...', 'passBands': [(530,580)]},  # bandpass
-                 ]}
-
-    """
-    def __init__(self, fwDevice, key, name, description, **kwds):
-        self._fw = fwDevice
-        self._key = key
-        self._name = name
-        self._description = description
-
-    def name(self):
-        return self._config.get('name')
-
-    def key(self):
-        return self._key
-
-    def description(self):
-        return self._config.get('description')
-    
-    def filterwheel(self):
-        return self._fw
-    
-    def __repr__(self):
-        return "<Filter %s.%s %s>" % (self._fw.name(), self.key(), self.name())
 
 
 class FilterWheelFuture(self):
