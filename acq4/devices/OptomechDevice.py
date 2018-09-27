@@ -173,7 +173,9 @@ class OptomechDevice(InterfaceMixin):
                 self.setDeviceTransform(config['transform'])
 
             self.__ports = config.get('ports', ['default'])
+            assert isinstance(self.__ports, list)
             self.__optics = config.get('optics', {'default': []})
+            assert isinstance(self.__optics, dict)
 
         # declare that this device supports the OptomechDevice API
         self.addInterface('OptomechDevice')
@@ -493,13 +495,14 @@ class OptomechDevice(InterfaceMixin):
         """Return a list of all optics in the path from this device to the sample.
         """
         optics = []
-        parent = self
+        dev = self
         while True:
-            parent = self.parentDevice()
+            parent = dev.parentDevice()
             if parent is None:
                 break
-            parentPort = self.parentPort()
+            parentPort = dev.parentPort()
             optics += parent.listOptics(parentPort)
+            dev = parent
 
         return optics
 
