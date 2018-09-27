@@ -9,6 +9,7 @@ import xml.etree.ElementTree as et
 #from acq4.util.PrairieView import PrairieView
 import os
 from collections import OrderedDict
+import numpy as np
 
 
 baseDicts = {
@@ -51,6 +52,11 @@ class PrairiePhotostimulator(Device, OptomechDevice):
             ip = config.get('ipaddress', None)
             from acq4.util.PrairieView import PrairieView
             self.pv = PrairieView(ip)
+
+        self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
+
+    def scopeDevice(self):
+        return self._scopeDev
 
     def moduleGui(self, mod):
         return PrairiePhotostimModGui(self, mod)
@@ -108,15 +114,18 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         #self.ui.iterationsSpin.setValue(1)
 
         self.parent().prairieImagerDevice.sigNewFrame.connect(self.newFrame)
+        self.dev.scopeDevice().sigGlobalTransformChanged.connect(self.updatePoints)
 
 
     def addStimPoint(self, pos):
         name, itr = self.getNextName()
-        sp = StimulationPoint(name, itr, pos)
+        z = self.dev.scopeDevice().getFocusDepth()
+        sp = StimulationPoint(name, itr, pos, z)
         self.ui.pointsParamTree.addParameters(sp.params)
         sp.paramItem = sp.params.items.keys()[0] ## get ahold of the treeWidgetItem, possibly should be a weakref instead
         self.stimPoints.append(sp)
         sp.sigStimPointChanged.connect(self.updatePoints)
+        sp.sigTargetDragged.connect(self.targetDragged)
         self.updatePoints()
         return sp.graphicsItem
 
@@ -132,15 +141,23 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         self.lastFrame = frame
         self.updatePoints()
 
+    def targetDragged(self, pt):
+        z = self.dev.scopeDevice().getFocusDepth()
+        pt.setDepth(z)
 
     def updatePoints(self):
 
         self._activePoints = []
+        focusDepth = self.dev.scopeDevice().getFocusDepth()
 
         for pt in self.stimPoints:
 
-            ## if point is not in bounds set gray
-            pos = self.dev.mapToPrairie(pt.getPos(), self.lastFrame)
+            
+            pos = self.dev.mapToPrairie(pt.getPos()[:2], self.lastFrame)
+            depth = pt.getPos()[2]
+            relativeDepth = focusDepth-depth
+
+            ## if point is not in x/y bounds set gray
             if (not 0 < pos[0] < 1) or (not 0 < pos[1] < 1):
                 pt.graphicsItem.setEnabledPen(False)
                 pt.paramItem.setBackground(0, pg.mkBrush('w'))
@@ -151,7 +168,14 @@ class PrairiePhotostimModGui(QtGui.QWidget):
                 pt.graphicsItem.setEnabledPen(False)
                 pt.paramItem.setBackground(0, pg.mkBrush('w'))
 
-            elif 0 < pos[0] < 1 and 0 < pos[1] < 1 and pt.params.value():
+            ## if out-of-focus set point green or red and grey out parameter line
+            elif (-10e-6 > relativeDepth) or (relativeDepth > 10e-6):
+                pt.graphicsItem.setRelativeDepth(relativeDepth)
+                pt.paramItem.setBackground(0, pg.mkBrush('w'))
+                pt.paramItem.setForeground(0, pg.mkBrush((150,150,150)))
+
+
+            elif 0 < pos[0] < 1 and 0 < pos[1] < 1 and pt.params.value() and -10e-6 < relativeDepth < 10e-6:
                 pt.graphicsItem.setEnabledPen(True)
                 pt.paramItem.setBackground(0, pg.mkBrush('g'))
                 pt.paramItem.setForeground(0, pg.mkBrush('k'))
@@ -248,22 +272,32 @@ class Photostimulation():
 class StimulationPoint(QtCore.QObject):
 
     sigStimPointChanged = QtCore.Signal(object)
+    sigTargetDragged = QtCore.Signal(object)
 
-    def __init__(self, name, itr, pos):
+    def __init__(self, name, itr, pos, z):
         QtCore.QObject.__init__(self)
         self.name = "%s %i" % (name, itr)
+        self.z = z
         self.graphicsItem = PhotostimTarget(pos, label=itr)
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=False, renamable=True)
 
         self.params.sigValueChanged.connect(self.changed)
-        self.graphicsItem.sigDragged.connect(self.changed)
+        self.graphicsItem.sigDragged.connect(self.targetDragged)
+
 
     def changed(self, param):
         self.sigStimPointChanged.emit(self)
 
+    def targetDragged(self):
+        self.sigTargetDragged.emit(self)
+
+    def setDepth(self, z):
+        self.z = z
+        self.changed(z)
+
     def getPos(self):
         ## return position in global coordinates
-        return self.graphicsItem.pos()
+        return (self.graphicsItem.pos().x(), self.graphicsItem.pos().y(), self.z)
 
 
 
@@ -289,5 +323,13 @@ class PhotostimTarget(TargetItem):
             self.pen = self.disabledPen
             self.brush = self.disabledBrush
 
+        self._picture = None
+        self.update()
+
+    def setRelativeDepth(self, depth):
+        # adjust the apparent depth of the target
+        dist = depth * 255 / 50e-6
+        color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0, 150)
+        self.pen = pg.mkPen(color)
         self._picture = None
         self.update()
