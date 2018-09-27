@@ -17,8 +17,8 @@ def getDeviceClass(name):
         try:
             import_module('acq4.devices.' + name)
             devClasses = getDeviceClasses()
-        except ImportError:
-            pass
+        except ImportError as exc:
+            print("Warning: error importing device class %s: %s" % (name, str(exc)))
 
     try:
         return devClasses[name]
