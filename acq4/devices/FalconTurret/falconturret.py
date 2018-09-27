@@ -1,12 +1,17 @@
+import logging
 from acq4.pyqtgraph.Qt import QtGui
 import falconoptics
-from ..FilterWheel import FilterWheel, FilterWheelFuture
+from ..FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
+
+logger = logging.getLogger('falconoptics')
+logger.setLevel(logging.WARN)
 
 
 class FalconTurret(FilterWheel):
     def __init__(self, dm, config, name):
         self.dev = falconoptics.Falcon(config_file=None, update_nonvolitile=True)
-        self.dev.home(block=False)
+        if not self.dev.is_homed:
+            self.dev.home(block=False)
 
         FilterWheel.__init__(self, dm, config, name)
 
@@ -14,7 +19,7 @@ class FalconTurret(FilterWheel):
         return self.dev._total_slides
 
     def _getPosition(self):
-        return int(self.dev.current_slide)
+        return int(self.dev.current_slide) % self.dev._total_slides
 
     def _setPosition(self, pos):
         if pos == 'home':
@@ -34,13 +39,19 @@ class FalconTurret(FilterWheel):
     def isMoving(self):
         return self.dev.is_moving
 
+    def deviceInterface(self, win):
+        return FalconDevGui(self)
+
+    def quit(self):
+        self.stop()
+
     
 class FalconTurretFuture(FilterWheelFuture):
     def _atTarget(self):
         if self.position == 'home':
             return self.dev.dev.is_homed
         else:
-            return FilterWheelFuture._atTarget()
+            return FilterWheelFuture._atTarget(self)
 
 
 class FalconDevGui(FilterWheelDevGui):
@@ -49,3 +60,5 @@ class FalconDevGui(FilterWheelDevGui):
 
         self.homeBtn = QtGui.QPushButton("Find Home")
         self.homeBtn.clicked.connect(self.dev.home)
+
+        self.layout.addWidget(self.homeBtn, self.layout.rowCount(), 0)
