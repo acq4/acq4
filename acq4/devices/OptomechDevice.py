@@ -138,7 +138,7 @@ class OptomechDevice(InterfaceMixin):
         self.__inverseTransform = 0
 
         # Contains {port: [list of optics]} describing the optics (usually filters) for each port
-        self._optics = {}
+        self.__optics = {}
 
         # Swappable sub-devices. (eg: objective changers, filter wheels)
         self.__subdevices = collections.OrderedDict()
@@ -161,11 +161,11 @@ class OptomechDevice(InterfaceMixin):
                     elif isinstance(parent, dict) and 'name' in parent:
                         self.setParentDevice(parent['name'], port=parent.get('port', 'default'))
                     else:
-                        raise TypeError("Invalid parent device specification: %r" % parent)
+                        raise TypeError("Invalid parent device specification: %s" % repr(parent))
 
                 except Exception as ex:
                     if "No device named" in ex.message:
-                        print "Cannot set parent device %s; no device by that name." % config['parentDevice']
+                        print "Cannot set parent device %s; no device by that name." % repr(config['parentDevice'])
                     else:
                         raise
             
@@ -173,6 +173,7 @@ class OptomechDevice(InterfaceMixin):
                 self.setDeviceTransform(config['transform'])
 
             self.__ports = config.get('ports', ['default'])
+            self.__optics = config.get('optics', {'default': []})
 
         # declare that this device supports the OptomechDevice API
         self.addInterface('OptomechDevice')
@@ -474,7 +475,7 @@ class OptomechDevice(InterfaceMixin):
         If *port* is given, then optics are listed for the specified
         attachment port (eg: 'excitation' or 'emission' for dichroic devices).
         """
-        optics = self._optics.get(port, [])[:]
+        optics = self.__optics.get(port, [])[:]
 
         # Add in optics from current subdevice. This allows swappable filter configurations.
         dev = self.getSubdevice()
@@ -485,7 +486,7 @@ class OptomechDevice(InterfaceMixin):
     def setOptics(self, optics, port='default'):
         """Set this device's list of optics for the specified port.
         """
-        self._optics[port] = optics
+        self.__optics[port] = optics
         self.sigOpticsChanged.emit(self, port)
 
     def listGlobalOptics(self):
