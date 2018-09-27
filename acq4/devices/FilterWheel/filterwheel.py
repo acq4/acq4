@@ -19,37 +19,26 @@ from collections import OrderedDict
 # Filter is just object, not OptoMech
 
 class FilterWheel(Device, OptomechDevice):
-    """Optical filter wheel device
+    """Optical filter wheel device for swapping FilterSet devices.
 
     The Filter wheel device class adds control and display for a filter wheel that selects between
-    many filters or filter sets.
+    many filters or filter sets. Filters must be defined in the configuration prior to the 
+    FilterWheel; see FilterSet for more information.
     
     * Maintains list of the filters in the wheel positions with their description
     * Support for selecting a filter wheel position
     * Support for filter wheel implementation during task : specific filter wheel position during one task, different positions as task sequence
-    * Support to changing filter wheel speed and input/ouput modus 
     
     Configuration examples:
     
-    FilterWheel:
-        driver: 'FilterWheel'
-        parentDevice: 'Microscope'
-        ports: ['excitation', 'emission']
-        filters: # filters in slots
-            0:  # first slot
-                name: 'green_and_shortpass'
-                description: 'ET535/70m Chroma, FESH0700 ThorL'
-                # Wavelength passed by this filter from parent to child
-                emissionWavelength: 535*nm
-            1:  # second slot 
-                name: 'red'
-                description: 'ET630/75m-2p Chroma'
-                # Wavelength passed by this filter from parent to child
-                emissionWavelength: 630*nm
-            2: # third slot
-                name: 'shortpass'
-                description: 'shortpass'
-
+        FilterWheel:
+            driver: 'FilterWheel'
+            parentDevice: 'Microscope'
+            slots:
+                # These are the names of FilterSet devices that have been defined elsewhere
+                0: "DIC_FilterCube"
+                1: "EGFP_FilterCube"
+                2: "EYFP_FilterCube"
     """
     
     sigFilterChanged = QtCore.Signal(object, object)  # self, Filter
@@ -58,28 +47,54 @@ class FilterWheel(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         
         Device.__init__(self, dm, config, name)
-        OptomechDevice.__init__(self, dm, config, name)
         
         self.lock = Mutex(QtCore.QMutex.Recursive)
         
-        self.filters = OrderedDict()
-        ## Format of self.filters is:
-        ## { 
-        ##    filterWheelPosition1: {filterName: filter},
-        ##    filterWheelPosition2: {filterName: filter},
-        ## }
+        self._filters = OrderedDict()
+        self._slotNames = OrderedDict()
+
         nPos = self.getPositionCount()
-        emptyFilter = {'name': 'empty', 'description': 'empty'}
+        ports = config.get('ports', None)
         for k in range(nPos):  ## Set value for each filter
-            filt = FilterSet(config['filters'].get(k, emptyFilter), self, k)
-            self.filters[k] = filt
-        
+            slot = config['slots'].get(str(k))
+            if slot is None:
+                self._filters[k] = None
+                self._slotNames[k] = "empty"
+                continue
+
+            if isinstance(slot, str):
+                # We are only naming this slot; no actual filter device is defined here
+                self._filters[k] = None
+                self._slotNames[k] = slot
+            elif isinstance(slot, dict):
+                filtname = slot['device']
+                filt = dm.getDevice(filtname)
+                self._filters[k] = filt
+                self._slotNames[k] = slot.get('name', filt.name())
+                devports = filt.ports()
+                if ports is None:
+                    ports = devports
+                elif set(ports) != set(devports):
+                    raise Exception("FilterSet %r does not have the expected ports (%r vs %r)" % (filt, devports, ports))
+            else:
+                raise TypeError("Slot definition must be str or dict; got: %r" % slot)
+
+            if 'hotkey' in slot:
+                dev = dm.getDevice(slot['hotkey']['device'])
+                key = slot['hotkey']['key']
+                # todo: connect to key
+
+        config['ports'] = ports
+
+        OptomechDevice.__init__(self, dm, config, name)
+
         self._lastFuture = None
         self._lastPosition = None
 
         # polling thread just checks position regularly; this causes sigFilterChanged to be emitted
         # whenever a change is detected
-        if config.get('pollInterval', 0.1) is not None:
+        pollInterval = config.get('pollInterval', 0.1)
+        if pollInterval is not None:
             self.fwThread = FilterWheelPollThread(self, interval=pollInterval)
             self.fwThread.start()
 
@@ -89,16 +104,21 @@ class FilterWheel(Device, OptomechDevice):
         """Return a dict of available filters.
         """
         with self.filterWheelLock:
-            return self.filters.copy()
+            return self._filters.copy()
     
+    def slotNames(self):
+        """Return a dict of names for each slot in the wheel.
+        """
+        return self._slotNames.copy()
+
     def getFilter(self, position=None):
         """Return the Filter at *position*. 
         
         If *position* is None, then return the currently active Filter."""
         if position is None:
             position = self.getPosition()
-        return self.filters[position]
-    
+        return self._filters[position]
+
     def getPositionCount(self):
         """Return the number of filter positions.
 
@@ -135,12 +155,18 @@ class FilterWheel(Device, OptomechDevice):
         """
         pos = self._getPosition()
         if pos != self._lastPosition:
-            self.sigFilterChanged.emit(self, self.getFilter(pos))
+            self._positionChanged(pos)
             self._lastPosition = pos
+        return pos
 
     def _getPosition(self):
         raise NotImplementedError("Method must be implemented in subclass")
-        
+
+    def _positionChanged(self, pos):
+        filt = self.getFilter(pos)
+        self.setCurrentSubdevice(filt)
+        self.sigFilterChanged.emit(self, filt)
+
     def isMoving(self):
         """Return the current position of the filter wheel.
         """
@@ -179,7 +205,7 @@ class FilterWheel(Device, OptomechDevice):
         return FilterWheelDevGui(self)
 
 
-class FilterWheelFuture(self):
+class FilterWheelFuture(object):
     def __init__(self, dev, position):
         self.dev = dev
         self.position = position
@@ -384,8 +410,10 @@ class FilterWheelDevGui(QtGui.QWidget):
         self.positionGroup = QtGui.QButtonGroup()
         self.positionButtons = []
         cols = 3
+        slotNames = self.dev.slotNames()
         for i in range(self.dev.getPositionCount()):
-            btn = QtGui.QPushButton(str(self.dev.filters[i].name()))
+            name = slotNames[i]
+            btn = QtGui.QPushButton("%d: %s" % (i, name))
             btn.setCheckable(True)
             btn.filterPosition = i
             self.positionButtons.append(btn)
@@ -394,13 +422,17 @@ class FilterWheelDevGui(QtGui.QWidget):
             btn.clicked.connect(self.positionButtonClicked)
         self.positionGroup.setExclusive(True)
         
-        self.updatePosition()
+        self.positionChanged()
 
         self.dev.sigFilterChanged.connect(self.positionChanged)
 
-    def updatePosition(self):
+    def positionChanged(self):
         pos = self.dev.getPosition()
-        self.positionButtons[pos].setChecked(True)
+        if pos is None:
+            for btn in self.positionButtons:
+                btn.setChecked(False)
+        else:
+            self.positionButtons[pos].setChecked(True)
 
     def positionButtonClicked(self):
         btn = self.sender()
