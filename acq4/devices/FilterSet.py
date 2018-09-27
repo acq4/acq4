@@ -68,9 +68,26 @@ class FilterSet(Device, OptomechDevice):
             ports['default'] = optics
 
         omconfig['ports'] = list(ports.keys())
+
+        # Ports can either be specified like:
+        #    {'first_port': [{optic1}, {optic2}, ...], 'second_port': [...]}
+        # or like:
+        #    {'first_port': {0: {optic1}, 1: {optic2}, ...}, 'second_port': {...}}
+        # (the second form is easier to write out in config files)
+        for p, optics in ports.items():
+            if isinstance(optics, list):
+                continue
+            elif isinstance(optics, dict):
+                # convert {0:x, 1:y} dict to list
+                keys = sorted(list(optics.keys()))
+                assert len(set(keys)) == int(keys[-1]) + 1, "Optics dict must have contiguous integer keys; got: %r" % keys
+                ports[p] = [optics[k] for k in keys]
+            else:
+                raise TypeError("Optics must be described by a list or a dict; got: %r" % optics)
+
         omconfig['optics'] = ports
 
-        OptomechDevice.__init__(self, dm, config, name)
+        OptomechDevice.__init__(self, dm, omconfig, name)
 
     def description(self):
         return self._config.get('description')
