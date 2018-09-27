@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Camera import Camera
 from acq4.drivers.QImaging.QImagingDriver import *
-from PyQt4 import QtCore
+from acq4.util import Qt
 import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
@@ -23,7 +24,7 @@ class QCam(Camera):
             raise Exception('No cameras found by QCam driver')
         
         # If no camera is specified, choose the first
-        serial = self.camConfig.get('serial', cams.keys()[0])
+        serial = self.camConfig.get('serial', list(cams.keys())[0])
         
         if serial not in cams:
             raise Exception('QCam camera "%s" not found. Options are: %s' % (serial, list(cams.keys())))
@@ -53,13 +54,13 @@ class QCam(Camera):
         
         if autoRestart and restart:
             self.restart()
-        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        #self.emit(Qt.SIGNAL('paramsChanged'), newVals)
         self.sigParamsChanged.emit(newVals)
         return (newVals, restart)
         
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         with self.camLock:
             return self.cam.getParams(params)
 

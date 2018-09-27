@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 CLibrary.py -  Provides CLibrary class
 Copyright 2010  Luke Campagnola
@@ -11,6 +12,9 @@ function calling based on C header definitions.
 
 from ctypes import *
 import sys, os, platform
+
+import six
+
 
 def find_lib(name, paths=[], dirHints=[]):
     """Search through likely directories to find non-system dlls. Return the first filepath that is found. Currently only supported on Windows.
@@ -256,7 +260,7 @@ class CLibrary:
             ## apply pointers and arrays
             while len(mods) > 0:
                 m = mods.pop(0)
-                if isinstance(m, basestring):  ## pointer or reference
+                if isinstance(m, six.string_types):  ## pointer or reference
                     if m[0] == '*' or m[0] == '&':
                         for i in m:
                             cls = POINTER(cls)
@@ -298,7 +302,7 @@ class CLibrary:
                     raise Exception("Not sure what to do with this type modifier: '%s'" % str(p))
             return cls
         except:
-            print "Error while processing type", typ
+            print("Error while processing type", typ)
             raise
         
     def _cstruct(self, strType, strName):
@@ -379,7 +383,7 @@ class CFunction:
         """Return the ctype required for the specified argument.
         arg can be either an integer  or the name of the argument.
         """
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             arg = self.argInds[arg]
         return self.lib._ctype(self.sig[1][arg][1])
     
@@ -405,7 +409,7 @@ class CFunction:
         for k in kwargs:
             #print "    kw:", k
             if k not in self.argInds:
-                print "Function signature:", self.prettySignature()
+                print("Function signature:", self.prettySignature())
                 raise Exception("Function signature has no argument named '%s'" % k)
             ind = self.argInds[k]
             if ind >= len(argList):  ## stretch argument list if needed
@@ -442,15 +446,15 @@ class CFunction:
                     if sys.exc_info()[0] is not AssertionError:
                         raise
                         #sys.excepthook(*sys.exc_info())
-                    print "Function signature:", self.prettySignature()
+                    print("Function signature:", self.prettySignature())
                     raise Exception("Function call '%s' missing required argument %d '%s'. (See above for signature)" % (self.name, i, self.sig[1][i][0]))
         #print "  args:", argList
         try:
             res = self.func(*argList)
         except:
-            print "Function call failed. Signature is:", self.prettySignature()
-            print "Arguments:", argList
-            print "Argtypes:", self.func.argtypes
+            print("Function call failed. Signature is:", self.prettySignature())
+            print("Arguments:", argList)
+            print("Argtypes:", self.func.argtypes)
             raise
         #print "  result:", res
         

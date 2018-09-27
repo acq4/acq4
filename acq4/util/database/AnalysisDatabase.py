@@ -1,3 +1,7 @@
+from __future__ import print_function
+import six
+from six.moves import range
+
 from .database import *
 from acq4.util import DataManager
 from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
@@ -80,12 +84,12 @@ class AnalysisDatabase(SqliteDatabase):
             raise Exception("A .version_upgrade for %s already exists. Please delete or rename it" %dbFile)
         if version is None:
             prog = ProgressDialog("Converting database...")
-            from AnalysisDatabase_ver0 import AnalysisDatabase as AnalysisDatabaseOld
+            from .AnalysisDatabase_ver0 import AnalysisDatabase as AnalysisDatabaseOld
             oldDb = AnalysisDatabaseOld(dbFile)
             newDb = AnalysisDatabase(newFileName, self.dataModel(), oldDb.baseDir())
             
             dirTypes = ['Day', 'Experiment', 'Slice', 'Cell', 'Site', 'Protocol', 'ProtocolSequence']
-            print oldDb.listTables()
+            print(oldDb.listTables())
             for table in dirTypes:
                 if not oldDb.hasTable(table):
                     continue
@@ -94,7 +98,7 @@ class AnalysisDatabase(SqliteDatabase):
                     try:
                         newDb.addDir(dh)
                     except:
-                        print "Can't add directory %s from old DB:" % dh.name()
+                        print("Can't add directory %s from old DB:" % dh.name())
                         debug.printExc()
                     
             total = len(oldDb.select('Photostim_events')) + len(oldDb.select('Photostim_sites'))
@@ -271,7 +275,7 @@ class AnalysisDatabase(SqliteDatabase):
             
         records = []
         colTuples = []
-        for name, col in columns.iteritems():
+        for name, col in columns.items():
             rec = {'Column': name, 'Table': table, 'Link': None, 'Constraints': None}
             rec.update(col)
             
@@ -354,7 +358,7 @@ class AnalysisDatabase(SqliteDatabase):
                 ts = self.tableSchema(table)
                 config = self.getColumnConfig(table)
                 
-                for colName, col in columns.iteritems():
+                for colName, col in columns.items():
                     colType = col['Type']
                     if colName not in ts:  ## <-- this is a case-insensitive operation
                         if ignoreUnknownColumns:
@@ -384,7 +388,7 @@ class AnalysisDatabase(SqliteDatabase):
         
         with self.transaction():
             ## Ask manager what columns we think should go with this directory
-            columns = acq4.Manager.getManager().suggestedDirFields(dirHandle).keys()
+            columns = list(acq4.Manager.getManager().suggestedDirFields(dirHandle).keys())
             
             ## Add in any other columns present
             #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want
@@ -433,7 +437,7 @@ class AnalysisDatabase(SqliteDatabase):
             
             ## find all directory columns, make sure linked directories are present in DB
             conf = self.getColumnConfig(table)
-            for colName, col in conf.iteritems():
+            for colName, col in conf.items():
                 if col['Type'].startswith('directory'):
                     #pTable = col['Link']
                     pType = col['Type'].lstrip('directory:')
@@ -475,12 +479,12 @@ class AnalysisDatabase(SqliteDatabase):
             self(cmd)
             
             ## Create column config records for this view
-            colNames = self.tableSchema(viewName).keys()
+            colNames = list(self.tableSchema(viewName).keys())
             colDesc = []
             colIndex = 0
             for table in tables:
                 cols = self.getColumnConfig(table)
-                for col, config in cols.iteritems():
+                for col, config in cols.items():
                     config = config.copy()
                     config['Column'] = colNames[colIndex]
                     config['Table'] = viewName
@@ -511,7 +515,7 @@ class AnalysisDatabase(SqliteDatabase):
         If no relationships are found, return None.
         """
         def strlower(x):  # convert strings to lower, everything else stays the same
-            if isinstance(x, basestring):
+            if isinstance(x, six.string_types):
                 return x.lower()
             return x
             
@@ -608,7 +612,7 @@ class AnalysisDatabase(SqliteDatabase):
         """
         if isinstance(dh, DataManager.DirHandle):
             typeName = self.dataModel().dirType(dh)
-        elif isinstance(dh, basestring):
+        elif isinstance(dh, six.string_types):
             typeName = dh
         else:
             raise TypeError(type(dh))
@@ -656,7 +660,7 @@ class AnalysisDatabase(SqliteDatabase):
             data = data[0]
             
         if isinstance(data, np.ndarray):
-            for i in xrange(len(data.dtype)):
+            for i in range(len(data.dtype)):
                 name = data.dtype.names[i]
                 typ = data.dtype[i].kind
                 if typ == 'i':
@@ -669,9 +673,9 @@ class AnalysisDatabase(SqliteDatabase):
                     if typ == 'O': ## check to see if this is a pointer to a string
                         allStr = 0
                         allHandle = 0
-                        for i in xrange(len(data)):
+                        for i in range(len(data)):
                             val = data[i][name]
-                            if val is None or isinstance(val, basestring):
+                            if val is None or isinstance(val, six.string_types):
                                 allStr += 1
                             elif val is None or isinstance(val, DataManager.FileHandle):
                                 allHandle += 1
@@ -683,12 +687,12 @@ class AnalysisDatabase(SqliteDatabase):
                         typ = 'blob'
                 columns[name] = typ
         elif isinstance(data, dict):
-            for name, v in data.iteritems():
+            for name, v in data.items():
                 if functions.isFloat(v):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, basestring):
+                elif isinstance(v, six.string_types):
                     typ = 'text'
                 elif isinstance(v, DataManager.FileHandle):
                     typ = 'file'
@@ -710,7 +714,7 @@ class AnalysisDatabase(SqliteDatabase):
         config = self.getColumnConfig(table)
         
         ## convert file/dir handles
-        for column, conf in config.iteritems():
+        for column, conf in config.items():
             if column not in data.columnNames():
                 continue
             
@@ -719,7 +723,7 @@ class AnalysisDatabase(SqliteDatabase):
                 linkTable = conf['Link']
                 handles = dict([(rid, self.getDir(linkTable, rid)) for rid in rids if rid is not None])
                 handles[None] = None
-                data[column] = map(handles.get, data[column])
+                data[column] = list(map(handles.get, data[column]))
                     
             elif conf.get('Type', None) == 'file':
                 def getHandle(name):
@@ -732,7 +736,7 @@ class AnalysisDatabase(SqliteDatabase):
                             sep = '/'
                         name = name.replace(sep, os.sep) ## make sure file handles have an operating-system-appropriate separator (/ for Unix, \ for Windows)
                         return self.baseDir()[name]
-                data[column] = map(getHandle, data[column])
+                data[column] = list(map(getHandle, data[column]))
                 
         prof.mark("converted file/dir handles")
                 
@@ -758,7 +762,7 @@ class AnalysisDatabase(SqliteDatabase):
         
         data = TableData(data).copy()  ## have to copy here since we might be changing some values
         dataCols = set(data.columnNames())
-        for colName, colConf in config.iteritems():
+        for colName, colConf in config.items():
             if colName not in dataCols:
                 continue
             
@@ -780,7 +784,7 @@ class AnalysisDatabase(SqliteDatabase):
                     rowids[dh] = rid
                     
                 ## convert dirhandles to rowids
-                data[colName] = map(rowids.get, handles)
+                data[colName] = list(map(rowids.get, handles))
             elif colConf.get('Type', None) == 'file':
                 ## convert filehandles to strings
                 files = []
@@ -791,7 +795,7 @@ class AnalysisDatabase(SqliteDatabase):
                         try:
                             files.append(f.name(relativeTo=self.baseDir()))
                         except:
-                            print "f:", f
+                            print("f:", f)
                             raise
                 data[colName] = files
 

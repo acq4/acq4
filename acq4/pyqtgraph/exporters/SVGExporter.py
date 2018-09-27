@@ -78,7 +78,7 @@ def generateSvg(item, options={}):
     finally:
         ## reset export mode for all items in the tree
         if isinstance(item, QtGui.QGraphicsScene):
-            items = item.items()
+            items = list(item.items())
         else:
             items = [item]
             for i in items:

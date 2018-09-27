@@ -21,10 +21,11 @@
 # UNC Chapel Hill
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
+from __future__ import print_function
 import time
 import copy
 import pprint
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import numpy as np
 from collections import OrderedDict
 
@@ -87,7 +88,7 @@ FrameModes = OrderedDict([
 
 
 
-class ImagerWindow(QtGui.QMainWindow):
+class ImagerWindow(Qt.QMainWindow):
     """
     Create the window we will use for the Imager Module.
     This is only done this way so that we can catch the window
@@ -98,7 +99,7 @@ class ImagerWindow(QtGui.QMainWindow):
         self.module = module ## handle to the rest of the module class
    
         ## Create the main window
-        win = QtGui.QMainWindow.__init__(self)
+        win = Qt.QMainWindow.__init__(self)
         return win
     
     def closeEvent(self, ev):
@@ -106,26 +107,26 @@ class ImagerWindow(QtGui.QMainWindow):
 
 
 
-class Black(QtGui.QWidget):
+class Black(Qt.QWidget):
     """ make a black rectangle to fill screen when "blanking" 
 
     Also draws a Cancel button that emits sigCancelClicked when clicked."""
 
-    sigCancelClicked = QtCore.Signal()
+    sigCancelClicked = Qt.Signal()
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.cancelRect = None
         self.cancelPressed = False
 
     def paintEvent(self, event):
-        p = QtGui.QPainter(self)
+        p = Qt.QPainter(self)
         brush = pg.mkBrush(0.0)
         p.fillRect(self.rect(), brush)
 
         center = self.rect().center()
-        r = QtCore.QPoint(70, 30)
-        self.cancelRect = QtCore.QRect(center-r, center+r)
+        r = Qt.QPoint(70, 30)
+        self.cancelRect = Qt.QRect(center-r, center+r)
         p.setPen(pg.mkPen(150, 0, 0))
         f = p.font()
         f.setPointSize(18)
@@ -133,17 +134,17 @@ class Black(QtGui.QWidget):
         if self.cancelPressed:
             p.fillRect(self.cancelRect, pg.mkBrush(80, 0, 0))
         p.drawRect(self.cancelRect)
-        p.drawText(self.cancelRect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, "Cancel")
+        p.drawText(self.cancelRect, Qt.Qt.AlignHCenter | Qt.Qt.AlignVCenter, "Cancel")
         p.end()
 
     def mousePressEvent(self, ev):
-        if ev.button() == QtCore.Qt.LeftButton and self.cancelRect.contains(ev.pos()):
+        if ev.button() == Qt.Qt.LeftButton and self.cancelRect.contains(ev.pos()):
             ev.accept()
             self.cancelPressed = True
             self.update()
 
     def mouseReleaseEvent(self, ev):
-        if ev.button() == QtCore.Qt.LeftButton:
+        if ev.button() == Qt.Qt.LeftButton:
             if self.cancelRect.contains(ev.pos()) and self.cancelPressed:
                 self.sigCancelClicked.emit()
             self.cancelPressed = False
@@ -151,19 +152,19 @@ class Black(QtGui.QWidget):
 
      
 
-class ScreenBlanker(QtCore.QObject):
+class ScreenBlanker(Qt.QObject):
     """
     Cover all screens with black.
     This is so that extraneous light does not leak into the 
     detector during acquisition.
     """
-    sigCancelClicked = QtCore.Signal()
+    sigCancelClicked = Qt.Signal()
 
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.cancelled = False
         self.widgets = []
-        d = QtGui.QApplication.desktop()
+        d = Qt.QApplication.desktop()
         for i in range(d.screenCount()): # look for all screens
             w = Black()
             w.hide()
@@ -177,7 +178,7 @@ class ScreenBlanker(QtCore.QObject):
         for w in self.widgets:
             w.showFullScreen()
             w.show()
-        QtGui.QApplication.processEvents() # make it so
+        Qt.QApplication.processEvents() # make it so
 
     def unblank(self):
         for w in self.widgets:
@@ -238,19 +239,19 @@ class Imager(Module):
         self.win.setWindowTitle('Multiphoton Imager')
         self.win.resize(500, 900) # make the window big enough to use on a large monitor...
 
-        self.w1 = QtGui.QSplitter() # divide l, r
-        self.w1.setOrientation(QtCore.Qt.Horizontal)
+        self.w1 = Qt.QSplitter() # divide l, r
+        self.w1.setOrientation(Qt.Qt.Horizontal)
         self.win.setCentralWidget(self.w1) # w1 is the "main window" splitter
 
         self.dockarea = pg.dockarea.DockArea()
         self.w1.addWidget(self.dockarea)
 
-        self.w2s = QtGui.QWidget()
-        self.w2sl = QtGui.QVBoxLayout()
+        self.w2s = Qt.QWidget()
+        self.w2sl = Qt.QVBoxLayout()
         self.w2s.setLayout(self.w2sl)
         self.w2sl.setContentsMargins(0, 0, 0, 0)
         self.w2sl.setSpacing(0)
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ui = Ui_Form()
         self.ui.setupUi(self.ctrlWidget)  # put the ui on the top 
         self.w2sl.addWidget(self.ctrlWidget)
@@ -305,7 +306,7 @@ class Imager(Module):
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         except:
             self.manager.loadDefinedModule(config['cameraModule'])
-            pg.QtGui.QApplication.processEvents()
+            Qt.QApplication.processEvents()
             self.cameraModule = self.manager.getModule(config['cameraModule'])
         self.laserDev = self.manager.getDevice(config['laser'])
         self.scannerDev = self.manager.getDevice(config['scanner'])
@@ -343,7 +344,7 @@ class Imager(Module):
         if self.filterDevice is not None:
             self.filterDevice.sigFilterChanged.connect(self.filterUpdate)
         
-        self.laserMonitor = QtCore.QTimer()
+        self.laserMonitor = Qt.QTimer()
         self.laserMonitor.timeout.connect(self.updateLaserInfo)
         ival = self.config.get('powerCheckInterval', 3.0)
         if ival is not False:
@@ -529,20 +530,20 @@ class Imager(Module):
         """
         for the current objective, parse a color or use a default. This is a kludge. 
         """
-        color = QtGui.QColor("red")
+        color = Qt.QColor("red")
         id = objective.key()[1]
         if id == u'63x0.9':
-            color = QtGui.QColor("darkBlue")
+            color = Qt.QColor("darkBlue")
         elif id == u'40x0.8':
-            color = QtGui.QColor("blue")
+            color = Qt.QColor("blue")
         elif id == u'40x0.75':
-            color = QtGui.QColor("blue")
+            color = Qt.QColor("blue")
         elif id == u'5x0.25':
-            color = QtGui.QColor("red")
+            color = Qt.QColor("red")
         elif id == u'4x0.1':
-            color = QtGui.QColor("darkRed")
+            color = Qt.QColor("darkRed")
         else:
-            color = QtGui.QColor("lightGray")
+            color = Qt.QColor("lightGray")
         return(color)
             
     def createROI(self, roiColor='r'):
@@ -1129,9 +1130,9 @@ class ImagingFrame(imaging.Frame):
 
 class ImagingThread(Thread):
 
-    sigNewFrame = QtCore.Signal(object)
-    sigVideoStopped = QtCore.Signal()
-    sigAborted = QtCore.Signal()
+    sigNewFrame = Qt.Signal(object)
+    sigVideoStopped = Qt.Signal()
+    sigAborted = Qt.Signal()
 
     def __init__(self, laserDev, scannerDev):
         Thread.__init__(self)

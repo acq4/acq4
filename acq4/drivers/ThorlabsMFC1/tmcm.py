@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 Low-level serial communication for Trinamic TMCM-140-42-SE controller
 (used internally for the Thorlabs MFC1)
@@ -187,7 +188,7 @@ class TMCMError(Exception):
         self.status = status
         msg = STATUS[status]
         
-        Exception.__init__(msg)
+        Exception.__init__(self, msg)
         
 
 class TMCM140(SerialDevice):
@@ -391,6 +392,7 @@ class TMCM140(SerialDevice):
         if self._waiting_for_reply:
             raise Exception("Cannot send command; previous reply has not been "
                             "received yet.")
+
         cmd_num = COMMANDS[cmd]
         assert isinstance(type, int)
         assert isinstance(motor, int)
@@ -405,6 +407,7 @@ class TMCM140(SerialDevice):
             
         chksum = sum(bytearray(cmd)) % 256
         out = cmd + struct.pack('B', chksum)
+
         self.write(out)
         self._waiting_for_reply = True
         

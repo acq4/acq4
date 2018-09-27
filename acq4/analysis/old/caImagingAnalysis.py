@@ -1,5 +1,6 @@
 #!/usr/bin/python -i
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import sys, os, re
 from glob import glob
 #sys.path = ['/home/lcampagn/work/manis_lab/code/libs'] + sys.path
@@ -9,7 +10,7 @@ sys.path.append(os.path.join(localDir, '../util'))
 
 
 #from helpers import *
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.pyqtgraph.widgets import *
 from acq4.pyqtgraph.graphicsWindows import *
 import Image
@@ -17,10 +18,10 @@ from acq4.util.functions import *
 from scipy.ndimage import *
 from scipy.ndimage import correlate
 
-app = QtGui.QApplication([])
+app = Qt.QApplication([])
 
 def dirDialog(startDir='', title="Select Directory"):
-  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+  return str(Qt.QFileDialog.getExistingDirectory(None, title, startDir))
   
 images = []
 def showImg(data=None, parent=None, title='', copy=True):
@@ -28,7 +29,7 @@ def showImg(data=None, parent=None, title='', copy=True):
         fileName = fileDialog()
         title = fileName
         data = loadImg(fileName)
-    elif type(data) is types.StringType:
+    elif isinstance(data, str):
         title = data
         data = loadImg(data)
     title = "Image %d: %s" % (len(images), title)
@@ -44,7 +45,7 @@ def loadImageDir(dirName=None):
     # Generate list of files, sort
     files = os.listdir(dirName)
     files.sort()
-    files = filter(lambda f: os.path.splitext(f)[1][1:] in IMAGE_EXTENSIONS, files)
+    files = [f for f in files if os.path.splitext(f)[1][1:] in IMAGE_EXTENSIONS]
     files = [os.path.join(dirName, f) for f in files]
     return loadImageList(files)
 
@@ -132,7 +133,7 @@ try:
     fd.close()
     exec(inf)
 except:
-    print "Warning: could not open info file"
+    print("Warning: could not open info file")
 
 
 ## Find file names
@@ -166,15 +167,15 @@ dTimes -= startTime
 image = showImg(img)
 
 ## Build plot window
-plotWindow = QtGui.QMainWindow()
-plotCW = QtGui.QScrollArea()
+plotWindow = Qt.QMainWindow()
+plotCW = Qt.QScrollArea()
 plotWindow.setCentralWidget(plotCW)
-plotSW = QtGui.QWidget()
+plotSW = Qt.QWidget()
 plotSW.setMinimumSize(300, 300)
-plotSW.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding))
+plotSW.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding))
 plotCW.setWidget(plotSW)
 plotCW.setWidgetResizable(True)
-plotVBox = QtGui.QVBoxLayout()
+plotVBox = Qt.QVBoxLayout()
 plotSW.setLayout(plotVBox)
 plotWindow.show()
 plotWindow.resize(600, 400)
@@ -182,16 +183,16 @@ plots = []
 
 
 ## Build analysis control window
-ctrlWindow = QtGui.QMainWindow()
-ctrlCW = QtGui.QWidget()
+ctrlWindow = Qt.QMainWindow()
+ctrlCW = Qt.QWidget()
 ctrlWindow.setCentralWidget(ctrlCW)
-ctrlVBox = QtGui.QVBoxLayout()
+ctrlVBox = Qt.QVBoxLayout()
 ctrlCW.setLayout(ctrlVBox)
-ctrlRadius = QtGui.QDoubleSpinBox()
+ctrlRadius = Qt.QDoubleSpinBox()
 ctrlRadius.setDecimals(1)
 ctrlRadius.setSingleStep(0.5)
 ctrlRadius.setRange(0.5, 1000.)
-ctrlGenROI = QtGui.QPushButton("Generate ROIs")
+ctrlGenROI = Qt.QPushButton("Generate ROIs")
 ctrlVBox.addWidget(ctrlRadius)
 ctrlVBox.addWidget(ctrlGenROI)
 ctrlWindow.show()
@@ -229,26 +230,26 @@ def addROI():
     global rois, img, images, plots, cTimes, plotVBox
     c = intColor(len(rois))
     roi = RectROI([0, 0], [5, 5], translateSnap=True, scaleSnap=True)
-    roi.setPen(QtGui.QPen(c))
+    roi.setPen(Qt.QPen(c))
     rois.append(roi)
     images[0].addItem(roi)
     p = PlotWidget(None, name='ROI-%03d' % len(rois))
     #p.ui.btnHorizScale.setChecked(True)
     p.addCurve(ROIPlotItem(roi, img, images[0].imageItem, axes=(1,2), xVals=cTimes, color=c))
-    p.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding))
+    p.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding))
     p.setMinimumSize(100, 100)
     plotVBox.addWidget(p)
     
     
-    p.line = QtGui.QGraphicsLineItem(0, 1e100, 0, -1e100)
+    p.line = Qt.QGraphicsLineItem(0, 1e100, 0, -1e100)
     p.addItem(p.line)
-    p.line.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
-    QtCore.QObject.connect(images[0].cw, QtCore.SIGNAL('timeChanged'), lambda i,t: p.line.setLine(cTimes[i], 1e100, cTimes[i], -1e100))
-    #QtCore.QObject.connect(images[0].cw, QtCore.SIGNAL('timeChanged'), p.scene.invalidate)
+    p.line.setPen(Qt.QPen(Qt.QColor(200, 200, 0)))
+    Qt.QObject.connect(images[0].cw, Qt.SIGNAL('timeChanged'), lambda i,t: p.line.setLine(cTimes[i], 1e100, cTimes[i], -1e100))
+    #Qt.QObject.connect(images[0].cw, Qt.SIGNAL('timeChanged'), p.scene.invalidate)
     ## improves performance
     #images[0].ui.timeSlider.setTracking(False)
     
-    QtCore.QObject.connect(p, QtCore.SIGNAL('closed'), lambda: images[0].removeItem(roi))
+    Qt.QObject.connect(p, Qt.SIGNAL('closed'), lambda: images[0].removeItem(roi))
     
     #for pp in plots:
         #p.view.lockXRange(pp.view)
@@ -271,7 +272,7 @@ def enhanceCells(img, radius=2.0):
     ## Create a 'center-surround' mask to enhance cell bodies
     im2 = img - (img.max()+img.min())*0.5
     c2 = c - c.max()*0.5
-    print im2.shape, c2.shape
+    print(im2.shape, c2.shape)
     mask = correlate(im2, c2)
     #showImg(mask, title='correlation mask')
     
@@ -334,10 +335,10 @@ def updateEnhancedImage(r):
 
 
 
-QtCore.QObject.connect(ctrlRadius, QtCore.SIGNAL('valueChanged(double)'), updateEnhancedImage)
+Qt.QObject.connect(ctrlRadius, Qt.SIGNAL('valueChanged(double)'), updateEnhancedImage)
 ctrlRadius.setValue(3.0)
 
-QtCore.QObject.connect(ctrlGenROI, QtCore.SIGNAL('clicked()'), buildROIs)
+Qt.QObject.connect(ctrlGenROI, Qt.SIGNAL('clicked()'), buildROIs)
 
 #l = labelPeaks(enh, threshold=0.4)
 #lcImg = showImg(l, title='labeled cells')

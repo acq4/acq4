@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
-from PatchTemplate import *
-from PyQt4 import QtGui, QtCore
+from .PatchTemplate import *
+from acq4.util import Qt
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
 from acq4.util.metaarray import *
@@ -17,13 +18,13 @@ import acq4.util.ptime as ptime
 from acq4.util.StatusBar import StatusBar
 
 
-class PatchWindow(QtGui.QMainWindow):
+class PatchWindow(Qt.QMainWindow):
     
-    sigWindowClosed = QtCore.Signal(object)
+    sigWindowClosed = Qt.Signal(object)
     
     def __init__(self, dm, config):
         clampName = config['clampDev']
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
         self.startTime = None
         self.redrawCommand = 1
@@ -58,12 +59,12 @@ class PatchWindow(QtGui.QMainWindow):
         }
         
         
-        self.paramLock = Mutex(QtCore.QMutex.Recursive)
+        self.paramLock = Mutex(Qt.QMutex.Recursive)
 
         self.manager = dm
         self.clampName = clampName
         self.thread = PatchThread(self)
-        self.cw = QtGui.QWidget()
+        self.cw = Qt.QWidget()
         self.setCentralWidget(self.cw)
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
@@ -74,10 +75,10 @@ class PatchWindow(QtGui.QMainWindow):
         self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
         uiState = Manager.getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
-            geom = QtCore.QRect(*uiState['geometry'])
+            geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         if 'window' in uiState:
-            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(uiState['window'])
             self.restoreState(ws)
             
         self.ui.splitter_2.setSizes([self.width()/4, self.width()*3./4.])
@@ -122,10 +123,10 @@ class PatchWindow(QtGui.QMainWindow):
         self.stateGroup.setState(self.params)
         
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
-        self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        self.patchFitCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(0, 100, 200)))
+        self.patchCurve = self.ui.patchPlot.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
+        self.patchFitCurve = self.ui.patchPlot.plot(pen=Qt.QPen(Qt.QColor(0, 100, 200)))
         self.ui.commandPlot.setLabel('left', text='Command', units='V')
-        self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        self.commandCurve = self.ui.commandPlot.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
         
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.recordBtn.clicked.connect(self.recordClicked)
@@ -146,7 +147,7 @@ class PatchWindow(QtGui.QMainWindow):
             w = getattr(self.ui, n+'Check')
             w.clicked.connect(self.showPlots)
             p = self.plots[n]
-            self.analysisCurves[n] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
+            self.analysisCurves[n] = p.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
             for suf in ['', 'Std']:
                 self.analysisData[n+suf] = []
         self.showPlots()
@@ -359,7 +360,7 @@ class PatchWindow(QtGui.QMainWindow):
                 try:
                     data[:, k+s] = self.analysisData[k+s][sl]
                 except:
-                    print data.shape, data[:, k+s].shape, len(self.analysisData[k+s][sl])
+                    print(data.shape, data[:, k+s].shape, len(self.analysisData[k+s][sl]))
                     raise
                 
         return data
@@ -394,14 +395,14 @@ class PatchWindow(QtGui.QMainWindow):
         
 class PatchThread(Thread):
     
-    sigNewFrame = QtCore.Signal(object)
+    sigNewFrame = Qt.Signal(object)
     
     def __init__(self, ui):
         self.ui = ui
         self.manager = ui.manager
         self.clampName = ui.clampName
         Thread.__init__(self)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.stopThread = True
         self.paramsUpdated = True
     
@@ -415,7 +416,7 @@ class PatchThread(Thread):
             with self.lock:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
-                daqName = clamp.listChannels().values()[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
+                daqName = list(clamp.listChannels().values())[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
                 clampName = self.clampName
                 self.paramsUpdated = True
             
@@ -458,7 +459,7 @@ class PatchThread(Thread):
                     break
         except:
             printExc("Error in patch acquisition thread, exiting.")
-        #self.emit(QtCore.SIGNAL('threadStopped'))
+        #self.emit(Qt.SIGNAL('threadStopped'))
         
     def runOnce(self, params, clamp, daqName, clampName):
         prof = Profiler('PatchThread.run', disabled=True)
@@ -543,7 +544,7 @@ class PatchThread(Thread):
             frame = {'data': result, 'analysis': analysis}
             prof.mark('analyze')
             
-            #self.emit(QtCore.SIGNAL('newFrame'), frame)
+            #self.emit(Qt.SIGNAL('newFrame'), frame)
             self.sigNewFrame.emit(frame)
         except:
             printExc('Error in patch analysis:')

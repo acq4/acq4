@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from FileType import *
+from __future__ import print_function
+from .FileType import *
     
 class FlatDict(FileType):
     

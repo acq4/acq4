@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time, traceback, sys, weakref
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 from acq4.Interfaces import InterfaceMixin
 
 
-class Device(QtCore.QObject, InterfaceMixin):
+class Device(Qt.QObject, InterfaceMixin):
     """Abstract class defining the standard interface for Device subclasses."""
     def __init__(self, deviceManager, config, name):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
 
         # task reservation lock -- this is a recursive lock to allow a task to run its own subtasks
         # (for example, setting a holding value before exiting a task).
         # However, under some circumstances we might try to run two concurrent tasks from the same 
         # thread (eg, due to calling processEvents() while waiting for the task to complete). We
         # don't have a good solution for this problem at present..
-        self._lock_ = Mutex(QtCore.QMutex.Recursive)
+        self._lock_ = Mutex(Qt.QMutex.Recursive)
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
@@ -79,9 +80,9 @@ class Device(QtCore.QObject, InterfaceMixin):
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                print "Timeout waiting for device lock for %s" % self.name()
-                print "  Device is currently locked from:"
-                print self._lock_tb_
+                print("Timeout waiting for device lock for %s" % self.name())
+                print("  Device is currently locked from:")
+                print(self._lock_tb_)
                 raise Exception("Timed out waiting for device lock for %s" % self.name())
         else:
             l = self._lock_.tryLock()
@@ -275,12 +276,12 @@ class DeviceTask(object):
         self.stop(abort=True)
 
     
-class TaskGui(QtGui.QWidget):
+class TaskGui(Qt.QWidget):
     
-    sigSequenceChanged = QtCore.Signal(object)
+    sigSequenceChanged = Qt.Signal(object)
     
     def __init__(self, dev, taskRunner):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         self.taskRunner = taskRunner
         self._PGConnected = False

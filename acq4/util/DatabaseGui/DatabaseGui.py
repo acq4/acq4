@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
-import DatabaseTemplate, QueryTemplate
+from __future__ import print_function
+from acq4.util import Qt
+from . import DatabaseTemplate, QueryTemplate
 import os
 
-class DatabaseGui(QtGui.QWidget):
+class DatabaseGui(Qt.QWidget):
     """Presents a very simple interface for selecting tables from an AnalysisDatabase."""
     
-    sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
-    #sigStoreToDB = QtCore.Signal()
+    sigTableChanged = Qt.Signal(str, str)  ## table purpose, table name
+    #sigStoreToDB = Qt.Signal()
     
     def __init__(self, parent=None, dm=None, tables=None):  ## datamanager tells us which DB is currently loaded.
         """tables should be a dict like {'owner': 'default', ...}"""
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dm = dm
         #self.ident = identity
         self.tables = {}
@@ -54,7 +55,7 @@ class DatabaseGui(QtGui.QWidget):
         self.generateTableLists()
         
     def generateTableLists(self):
-        for l, c in self.tableWidgets.itervalues():
+        for l, c in self.tableWidgets.values():
             self.ui.tableArea.layout().removeWidget(l)
             self.ui.tableArea.layout().removeWidget(c)
         self.tableWidgets = {}
@@ -62,9 +63,9 @@ class DatabaseGui(QtGui.QWidget):
         if self.db is None or self.tables is None:
             return
             
-        for ident, default in self.tables.iteritems():
-            label = QtGui.QLabel(ident)
-            combo = QtGui.QComboBox()
+        for ident, default in self.tables.items():
+            label = Qt.QLabel(ident)
+            combo = Qt.QComboBox()
             combo.setEditable(True)
             tables = self.db.listTablesOwned(ident)
             if (default is not None) and (default not in tables):
@@ -86,9 +87,9 @@ class DatabaseGui(QtGui.QWidget):
             
         
         
-#class QueryGui(QtGui.QWidget):
+#class QueryGui(Qt.QWidget):
     #def __init__(self, dm):  ## datamanager tells us which DB is currently loaded.
-        #QtGui.QWidget.__init__(self)
+        #Qt.QWidget.__init__(self)
         #self.ui = QueryTemplate.Ui_Form()
         #self.ui.setupUi(self)
         #self.dbChanged()

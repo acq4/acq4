@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys, time
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(path)
@@ -7,7 +8,7 @@ import acq4.pyqtgraph as pg
 
 
 if len(sys.argv) < 2:
-    print "Usage:  python test.py device\n  (device may be com3, /dev/ttyACM0, etc.)"
+    print("Usage:  python test.py device\n  (device may be com3, /dev/ttyACM0, etc.)")
     sys.exit(1)
 
 s = TMCM140(port=sys.argv[1], baudrate=9600)
@@ -36,7 +37,7 @@ def step_curve(decay_threshold=-1):
             x.append(s['encoder_position'])
             x.append(s['encoder_position'])
             x.append(s['encoder_position'])
-            print i, x[-1]
+            print(i, x[-1])
         plt.plot(x, symbol='o')
         pg.QtGui.QApplication.processEvents()
 
@@ -70,7 +71,7 @@ def test_seek():
     while True:
         now = time.time()
         if now - start > 3:
-            print "QUIT"
+            print("QUIT")
             break
         t.append(now-start)
         x.append(s['encoder_position'])

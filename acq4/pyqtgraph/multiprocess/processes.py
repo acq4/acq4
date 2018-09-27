@@ -492,4 +492,7 @@ class FileForwarder(threading.Thread):
             while True:
                 line = self.input.readline()
                 with self.lock:
-                    self.output.write(line)
+                    try:
+                        self.output.write(line)
+                    except TypeError:
+                        self.output.write(line.decode())

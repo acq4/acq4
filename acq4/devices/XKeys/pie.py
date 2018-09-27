@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import platform
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.devices.Device import Device
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph.multiprocess as mp
@@ -65,7 +66,7 @@ def getDevices():
 class XKeys(Device):
     """P.I. Engineering X-Keys input device.
     """
-    sigStateChanged = QtCore.Signal(object, object)  # self, changes
+    sigStateChanged = Qt.Signal(object, object)  # self, changes
 
     def __init__(self, man, config, name):
         Device.__init__(self, man, config, name)
@@ -90,6 +91,10 @@ class XKeys(Device):
 
         self.dev.setIntensity(255,255)
 
+        self._callbacks = {}
+        # use queued signal here to ensure events are processed in GUI thread
+        self.sigStateChanged.connect(self._handleCallbacks, Qt.Qt.QueuedConnection)
+
     def setBacklights(self, state, **kwds):
         if PIE32_BRIDGE:
             self.dev.__getattr__('setBacklights', _deferGetattr=True)(state, _callSync='off', **kwds)
@@ -108,7 +113,18 @@ class XKeys(Device):
     def _stateChanged(self, changes):
         self.sigStateChanged.emit(self, changes)
 
+    def _handleCallbacks(self, dev, changes):
+        # check for key press callbacks
+        keych = changes.get('keys', [])
+        for pos, state in keych:
+            if state is False:
+                continue
+            for cb, args in self._callbacks.get(pos, []):
+                cb(dev, changes, *args)
+    
     def quit(self):
         self.dev.setBacklightRows(0, 0)
         self.dev.close()
 
+    def addKeyCallback(self, key, callback, args=()):
+        self._callbacks.setdefault(key, []).append((callback, args))

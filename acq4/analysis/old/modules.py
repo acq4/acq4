@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.Manager import getManager
 from acq4.util.metaarray import *
 from acq4.pyqtgraph.ImageView import *
@@ -9,9 +10,9 @@ from acq4.pyqtgraph.PlotWidget import *
 from acq4.pyqtgraph.functions import *
 from acq4.pyqtgraph.widgets import *
 from acq4.util.Canvas import Canvas
-from UncagingControlTemplate import *
-from StdpCtrlTemplate import *
-from PyQt4 import QtCore, QtGui
+from .UncagingControlTemplate import *
+from .StdpCtrlTemplate import *
+from acq4.util import Qt
 from acq4.util.functions import *
 from SpinBox import *
 from acq4.util.debug import *
@@ -28,9 +29,9 @@ from acq4.pyqtgraph.Point import *
 #import matplotlib.image as mpimg
 
 
-class UncagingSpot(QtGui.QGraphicsEllipseItem):
+class UncagingSpot(Qt.QGraphicsEllipseItem):
     def __init__(self, source=None): #source is directory handle for single-stimulus spots
-        QtGui.QGraphicsEllipseItem.__init__(self, 0, 0, 1, 1)
+        Qt.QGraphicsEllipseItem.__init__(self, 0, 0, 1, 1)
         self.source = source
         self.index = None
         self.position = None
@@ -56,13 +57,13 @@ class tShapeROI(ROI):
         
     def paint(self, p, opt, widget):
         r = self.boundingRect()
-        #p.setRenderHint(QtGui.QPainter.Antialiasing)
+        #p.setRenderHint(Qt.QPainter.Antialiasing)
         p.setPen(self.pen)
         #p.drawRect(r)
-        p.drawLine(QtCore.QPointF(-r.width()/2.0, 0.0), QtCore.QPointF(r.width()/2.0, 0.0))
-        p.drawLine(QtCore.QPointF(0.0, 0.0), QtCore.QPointF(0.0, r.height()))
+        p.drawLine(Qt.QPointF(-r.width()/2.0, 0.0), Qt.QPointF(r.width()/2.0, 0.0))
+        p.drawLine(Qt.QPointF(0.0, 0.0), Qt.QPointF(0.0, r.height()))
         #p.scale(r.width(), r.height())## workaround for GL bug
-        #r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
+        #r = Qt.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
         #
         #p.drawEllipse(r)
         
@@ -72,10 +73,10 @@ class cellROI(ROI):
         
     def paint(self, p, opt, widget):
         r = self.boundingRect()
-        p.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
+        p.setPen(Qt.QPen(Qt.QColor(255,255,255)))
         p.drawEllipse(r)
-        p.drawLine(QtCore.QPointF(r.width()/2.0, r.height()*0.25), QtCore.QPointF(r.width()/2.0, r.height()*0.75))
-        p.drawLine(QtCore.QPointF(r.width()*0.25, r.height()*0.5), QtCore.QPointF(r.width()*0.75, r.height()*0.5))
+        p.drawLine(Qt.QPointF(r.width()/2.0, r.height()*0.25), Qt.QPointF(r.width()/2.0, r.height()*0.75))
+        p.drawLine(Qt.QPointF(r.width()*0.25, r.height()*0.5), Qt.QPointF(r.width()*0.75, r.height()*0.5))
     
     def getPosition(self, coord='scene'):
         """Return the position of the center of the ROI in specified coordinates."""
@@ -86,24 +87,24 @@ class cellROI(ROI):
         if coord == 'scene':
             return self.mapToScene(x, y)
         elif coord == 'item':
-            return QtCore.QPointF(x, y)
+            return Qt.QPointF(x, y)
 
 
         
 
-from EventDetectionCtrlTemplate import *
+from .EventDetectionCtrlTemplate import *
 
-class EventMatchWidget(QtGui.QSplitter):
+class EventMatchWidget(Qt.QSplitter):
     def __init__(self):
-        QtGui.QSplitter.__init__(self)
+        Qt.QSplitter.__init__(self)
         
         ## set up GUI
-        self.setOrientation(QtCore.Qt.Horizontal)
+        self.setOrientation(Qt.Qt.Horizontal)
         
-        self.vsplitter = QtGui.QSplitter()
-        self.vsplitter.setOrientation(QtCore.Qt.Vertical)
+        self.vsplitter = Qt.QSplitter()
+        self.vsplitter.setOrientation(Qt.Qt.Vertical)
         
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = Ui_EventDetectionCtrlForm()
         self.ctrl.setupUi(self.ctrlWidget)
         self.addWidget(self.ctrlWidget)        
@@ -128,21 +129,21 @@ class EventMatchWidget(QtGui.QSplitter):
         self.ctrl.zcSumAbsThresholdSpin.setOpts(value=0, step=1, minStep=1e-12, bounds=[0,None], dec=True)
         self.ctrl.zcAmpAbsThresholdSpin.setOpts(value=0, step=1, minStep=1e-12, bounds=[0,None], dec=True)
         
-        QtCore.QObject.connect(self.ctrl.detectMethodCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ctrl.detectMethodStack.setCurrentIndex)
+        Qt.QObject.connect(self.ctrl.detectMethodCombo, Qt.SIGNAL('currentIndexChanged(int)'), self.ctrl.detectMethodStack.setCurrentIndex)
         self.analysisEnabled = True
         self.events = []
         self.data = []
         
         self.stateGroup = WidgetGroup(self)
         
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)        
+        Qt.QObject.connect(self.stateGroup, Qt.SIGNAL('changed'), self.stateChanged)        
 
 
     def widgetGroupInterface(self):
         return (None, None, None, True) ## Just tells self.stateGroup to automatically add all children
         
     #def stateChanged(self):
-        #self.emit(QtCore.SIGNAL('stateChanged'))
+        #self.emit(Qt.SIGNAL('stateChanged'))
         #self.recompute()
         
     def enableAnalysis(self, b):
@@ -172,7 +173,7 @@ class EventMatchWidget(QtGui.QSplitter):
         
     def recalculate(self, pens=None, analyze=True):
         self.events = self.processData(self.data, pens=pens, display=True, analyze=analyze)
-        self.emit(QtCore.SIGNAL('outputChanged'), self)
+        self.emit(Qt.SIGNAL('outputChanged'), self)
         #print "Events:", self.events
         ##display events
         
@@ -314,7 +315,7 @@ class EventMatchWidget(QtGui.QSplitter):
             ## Find events
             eventList = self.findEvents(ppd)
             if len(eventList) > 200:
-                print "Warning--detected %d events; only showing first 200." % len(eventList)
+                print("Warning--detected %d events; only showing first 200." % len(eventList))
             eventList = eventList[:200]   ## Only take first 200 events to avoid overload
             events.append(eventList)
             
@@ -389,22 +390,22 @@ class EventMatchWidget(QtGui.QSplitter):
         self.data = []
         
 
-class UncagingWindow(QtGui.QMainWindow):
+class UncagingWindow(Qt.QMainWindow):
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
-        self.cw = QtGui.QSplitter()
-        self.cw.setOrientation(QtCore.Qt.Vertical)
+        Qt.QMainWindow.__init__(self)
+        self.cw = Qt.QSplitter()
+        self.cw.setOrientation(Qt.Qt.Vertical)
         self.setCentralWidget(self.cw)
-        bw = QtGui.QWidget()
-        bwl = QtGui.QHBoxLayout()
+        bw = Qt.QWidget()
+        bwl = Qt.QHBoxLayout()
         bw.setLayout(bwl)
         self.cw.addWidget(bw)
-        self.addImgBtn = QtGui.QPushButton('Add Image')
-        self.addScanBtn = QtGui.QPushButton('Add Scan')
-        self.addDrugScanBtn = QtGui.QPushButton('Add Drug Scan')
-        self.clearImgBtn = QtGui.QPushButton('Clear Images')
-        self.clearScanBtn = QtGui.QPushButton('Clear Scans')
-        self.generateTableBtn = QtGui.QPushButton('GenerateTable')
+        self.addImgBtn = Qt.QPushButton('Add Image')
+        self.addScanBtn = Qt.QPushButton('Add Scan')
+        self.addDrugScanBtn = Qt.QPushButton('Add Drug Scan')
+        self.clearImgBtn = Qt.QPushButton('Clear Images')
+        self.clearScanBtn = Qt.QPushButton('Clear Scans')
+        self.generateTableBtn = Qt.QPushButton('GenerateTable')
         self.defaultSize = 150e-6
         bwl.addWidget(self.addImgBtn)
         bwl.addWidget(self.clearImgBtn)
@@ -412,21 +413,21 @@ class UncagingWindow(QtGui.QMainWindow):
         bwl.addWidget(self.addDrugScanBtn)
         bwl.addWidget(self.clearScanBtn)
         bwl.addWidget(self.generateTableBtn)
-        QtCore.QObject.connect(self.addImgBtn, QtCore.SIGNAL('clicked()'), self.addImage)
-        QtCore.QObject.connect(self.addScanBtn, QtCore.SIGNAL('clicked()'), self.addScan)
-        QtCore.QObject.connect(self.clearImgBtn, QtCore.SIGNAL('clicked()'), self.clearImage)
-        QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
-        QtCore.QObject.connect(self.addDrugScanBtn, QtCore.SIGNAL('clicked()'), self.addDrugScan)
-        QtCore.QObject.connect(self.generateTableBtn, QtCore.SIGNAL('clicked()'), self.generatePspDataTable)
-        #self.layout = QtGui.QVBoxLayout()
+        Qt.QObject.connect(self.addImgBtn, Qt.SIGNAL('clicked()'), self.addImage)
+        Qt.QObject.connect(self.addScanBtn, Qt.SIGNAL('clicked()'), self.addScan)
+        Qt.QObject.connect(self.clearImgBtn, Qt.SIGNAL('clicked()'), self.clearImage)
+        Qt.QObject.connect(self.clearScanBtn, Qt.SIGNAL('clicked()'), self.clearScan)
+        Qt.QObject.connect(self.addDrugScanBtn, Qt.SIGNAL('clicked()'), self.addDrugScan)
+        Qt.QObject.connect(self.generateTableBtn, Qt.SIGNAL('clicked()'), self.generatePspDataTable)
+        #self.layout = Qt.QVBoxLayout()
         #self.cw.setLayout(self.layout)
-        bwtop = QtGui.QSplitter()
-        bwtop.setOrientation(QtCore.Qt.Horizontal)
+        bwtop = Qt.QSplitter()
+        bwtop.setOrientation(Qt.Qt.Horizontal)
         self.cw.insertWidget(1, bwtop)
         self.canvas = Canvas()
-        QtCore.QObject.connect(self.canvas.view, QtCore.SIGNAL('mouseReleased'), self.canvasClicked)
+        Qt.QObject.connect(self.canvas.view, Qt.SIGNAL('mouseReleased'), self.canvasClicked)
         self.ctrl = Ui_UncagingControlWidget()
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         bwtop.addWidget(self.ctrlWidget)
         self.ctrl.setupUi(self.ctrlWidget)
         bwtop.addWidget(self.canvas)
@@ -439,7 +440,7 @@ class UncagingWindow(QtGui.QMainWindow):
         #self.traceColorScale = ColorScaleBar(self.plot.dataPlot, [10,150], [-10,-10])
         #self.traceColorScale.setZValue(1000000)
         #self.plot.dataPlot.layout.addItem(self.traceColorScale, 2,2)
-        QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
+        Qt.QObject.connect(self.ctrl.recolorBtn, Qt.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
         self.ctrl.colorSpin1.setValue(8.0)
@@ -470,7 +471,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.cw.setStretchFactor(1, 5)
         self.cw.setStretchFactor(2, 20)
         
-        QtCore.QObject.connect(self.plot.stateGroup, QtCore.SIGNAL('changed'), self.resetAnalysisCache)
+        Qt.QObject.connect(self.plot.stateGroup, Qt.SIGNAL('changed'), self.resetAnalysisCache)
         
         self.z = 0
         self.resize(1000, 600)
@@ -538,7 +539,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 appendIndex += 1
                 item.position = pos
                 item.size = size
-                item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200,0)))                 
+                item.setBrush(Qt.QBrush(Qt.QColor(100,100,200,0)))                 
                 self.canvas.addItem(item, pos=[pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=dh.shortName()+'.'+ d.shortName())
                 if drug:
                     item.drug = True
@@ -558,14 +559,14 @@ class UncagingWindow(QtGui.QMainWindow):
                     avgSpot = UncagingSpot()
                     avgSpot.position = pos
                     avgSpot.size = size
-                    avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200, 100)))                 
+                    avgSpot.setBrush(Qt.QBrush(Qt.QColor(100,100,200, 100)))                 
                     self.canvas.addItem(avgSpot, pos=[pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name="Averages"+"spot%03d"%len(self.scanAvgItems))
                     self.scanAvgItems.append(avgSpot)
                 
                 avgSpot.sourceItems.append(item)
                 
             else:
-                print "Skipping directory %s" %d.name()
+                print("Skipping directory %s" %d.name())
         self.analysisCache = self.analysisCache[:appendIndex]    
         self.z += 1
         
@@ -594,9 +595,9 @@ class UncagingWindow(QtGui.QMainWindow):
     def recolor(self):
         #for i in self.scanItems:
             #color = self.spotColor(i)
-            #i.setBrush(QtGui.QBrush(color))
-        progressDlg = QtGui.QProgressDialog("Detecting events in all traces...", 0, 100)
-        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+            #i.setBrush(Qt.QBrush(color))
+        progressDlg = Qt.QProgressDialog("Detecting events in all traces...", 0, 100)
+        progressDlg.setWindowModality(Qt.Qt.WindowModal)
         #self.progressDlg.setMinimumDuration(0)
         for n in range(len(self.scanItems)):
             i = self.scanItems[n]
@@ -610,7 +611,7 @@ class UncagingWindow(QtGui.QMainWindow):
             i.laserTime = q
             self.analyzeEvents(i)
             progressDlg.setValue(100.*float(n)/len(self.scanItems))
-            QtGui.QApplication.instance().processEvents()
+            Qt.QApplication.instance().processEvents()
             if progressDlg.wasCanceled():
                 progressDlg.setValue(100)
                 return
@@ -659,7 +660,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def getEventLists(self, i):
         #if not self.plot.analysisEnabled:
-        #    return QtGui.QColor(100,100,200)
+        #    return Qt.QColor(100,100,200)
         data = self.getClampData(i.source)['Channel':'primary']
         if self.analysisCache[i.index]['eventsValid'] == False:
             #print "Recomputing events...."
@@ -726,7 +727,7 @@ class UncagingWindow(QtGui.QMainWindow):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             spont = self.analysisCache['preChargeNeg'].mean()
-            print "spont activity:", spont
+            print("spont activity:", spont)
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -758,23 +759,23 @@ class UncagingWindow(QtGui.QMainWindow):
 
                 ## Traces with no events are transparent
                 if abs(negCharge) < 1e-16:
-                    color = QtGui.QColor(0,0,0,0)
+                    color = Qt.QColor(0,0,0,0)
                 
                 
 
                 ## Traces with events below threshold are transparent
                 if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
-                    color = QtGui.QColor(0,0,0,0)
+                    color = Qt.QColor(0,0,0,0)
                 
                 ## Direct events have white outlines
                 if directeventsflag == True:
-                    pen = mkPen(color = QtGui.QColor(0,0,0,200), width = 2)
+                    pen = mkPen(color = Qt.QColor(0,0,0,200), width = 2)
                     if abs(negCharge) < 1e-16: 
-                        color = QtGui.QColor(0,0,0,200)
+                        color = Qt.QColor(0,0,0,200)
                 else:
-                    pen = QtGui.QPen()
+                    pen = Qt.QPen()
 
-                item.setBrush(QtGui.QBrush(color))
+                item.setBrush(Qt.QBrush(color))
                 item.setPen(pen)
 
                 #print "Color set."
@@ -802,9 +803,9 @@ class UncagingWindow(QtGui.QMainWindow):
                 red = clip(log(max(1.0, median(postZPos)+1))*255, 0, 255) 
                 blue = clip(log(max(1.0, median(postZNeg)+1))*255, 0, 255)
                 green = clip(log(max(1.0, min(dirZ)+1))*255, 0, 255)
-                color = QtGui.QColor(red, green, blue, max(red, green, blue))
+                color = Qt.QColor(red, green, blue, max(red, green, blue))
             
-                item.setBrush(QtGui.QBrush(color))
+                item.setBrush(Qt.QBrush(color))
                 #item.setPen(pen)
             
             
@@ -814,7 +815,7 @@ class UncagingWindow(QtGui.QMainWindow):
         ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
         """Makes self.currentTraces a list of data corresponding to items on a canvas under a mouse click. Each list item is a tuple where the first element
            is an array of clamp data, and the second is the directory handle for the Clamp.ma file."""
-        if ev.button() != QtCore.Qt.LeftButton:
+        if ev.button() != Qt.Qt.LeftButton:
             return []
            
         spots = self.canvas.view.items(ev.pos())
@@ -838,7 +839,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 data = [data[i][self.ctrl.lowClipSpin.value():self.ctrl.highClipSpin.value()] for i in range(len(data))]
                 data = [downsample(data[i], self.ctrl.downsampleSpin.value()) for i in range(len(data))]
             self.plot.setData(data, pens=pens, analyze=False)
-            #gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(1,0))
+            #gradient = Qt.QLinearGradient(Qt.QPointF(0,0), Qt.QPointF(1,0))
             #self.traceColorScale.show()
             #self.traceColorScale.setGradient
             #self.colorScaleBar.setLabels({str(max):1, str(min):0}
@@ -966,7 +967,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def generateEventTable(self, rostral=None):
         if rostral not in ['right', 'left']:
-            print "Rostral orientation must be specified. Options: 'right', 'left'. Enter orientation as if the pia were horizontal at the top of the image."
+            print("Rostral orientation must be specified. Options: 'right', 'left'. Enter orientation as if the pia were horizontal at the top of the image.")
             return
         
         table = zeros((len(self.scanItems)*10), dtype=[ ## create a buffer space of 20 events per trace (maybe need more?)
@@ -998,7 +999,7 @@ class UncagingWindow(QtGui.QMainWindow):
             traceID = item.source.name()
             
             ### return the coordinates of stim. site relative to sliceMarker
-            xs, ys = Point(item.mapToItem(self.sliceMarker, QtCore.QPointF(item.position[0], item.position[1])))
+            xs, ys = Point(item.mapToItem(self.sliceMarker, Qt.QPointF(item.position[0], item.position[1])))
             cell = Point(self.sliceMarker.mapFromScene(self.cellMarker.getPosition()))
             xc = xs - cell[0]
             yc = ys - cell[1]
@@ -1109,7 +1110,7 @@ class UncagingWindow(QtGui.QMainWindow):
         for i in range(self.plot.ctrl.preFilterList.filterList.topLevelItemCount()):
             j = 0
             item = self.plot.ctrl.preFilterList.filterList.topLevelItem(i)
-            if item.checkState(0) == QtCore.Qt.Checked:
+            if item.checkState(0) == Qt.Qt.Checked:
                 filter = item.filter
                 x={}
                 x['index'] = j
@@ -1144,9 +1145,9 @@ class UncagingWindow(QtGui.QMainWindow):
     
 
 
-#class CellMixer(QtCore.QObject):
+#class CellMixer(Qt.QObject):
 #    def __init__(self):
-#        QtCore.QObject.__init__(self)
+#        Qt.QObject.__init__(self)
 #        self.arrayList = []
 #        self.metaInfo = []
 #        self.dataTable = None
@@ -1511,10 +1512,10 @@ class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
     def __init__(self):
         UncagingWindow.__init__(self)
-        bwtop = QtGui.QSplitter()
-        bwtop.setOrientation(QtCore.Qt.Horizontal)
+        bwtop = Qt.QSplitter()
+        bwtop.setOrientation(Qt.Qt.Horizontal)
         self.cw.insertWidget(1, bwtop)
-        self.plotBox = QtGui.QTabWidget()
+        self.plotBox = Qt.QTabWidget()
         self.LTPplot = PlotWidget()
         self.line = InfiniteLine(self.LTPplot, 1.0, movable = True)
         self.finalTimeRgn = LinearRegionItem(self.LTPplot, orientation='vertical', vals=[30, 50])
@@ -1525,16 +1526,16 @@ class STDPWindow(UncagingWindow):
         self.plotBox.addTab(self.avgPlot, 'Averages')
         self.results = {}
         #self.dictView = DictView(self.results)
-        self.resultsTable = QtGui.QTableWidget()
+        self.resultsTable = Qt.QTableWidget()
         bwtop.addWidget(self.canvas)
         bwtop.addWidget(self.plotBox)
         #bwtop.addWidget(self.dictView)
         bwtop.addWidget(self.resultsTable)
-        bwbottom = QtGui.QSplitter()
-        bwbottom.setOrientation(QtCore.Qt.Horizontal)
+        bwbottom = Qt.QSplitter()
+        bwbottom.setOrientation(Qt.Qt.Horizontal)
         self.cw.insertWidget(2, bwbottom)
         self.stdpCtrl = Ui_StdpCtrlWidget()
-        self.stdpCtrlWidget = QtGui.QWidget()
+        self.stdpCtrlWidget = Qt.QWidget()
         bwbottom.addWidget(self.stdpCtrlWidget)
         self.stdpCtrl.setupUi(self.stdpCtrlWidget)
         self.stdpCtrl.thresholdSpin.setValue(4.0)
@@ -1550,23 +1551,23 @@ class STDPWindow(UncagingWindow):
         self.colorScaleBar.hide()
         self.epspStats = None
 
-        self.slopeMark1 = QtGui.QGraphicsLineItem()
-        self.slopeMark1.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
-        self.slopeMark2 = QtGui.QGraphicsLineItem()
-        self.slopeMark2.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
-        self.slopeMark3a = QtGui.QGraphicsLineItem()
-        self.slopeMark3a.setPen(QtGui.QPen(QtGui.QColor(0,255,0)))
-        self.slopeMark4a = QtGui.QGraphicsLineItem()
-        self.slopeMark4a.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
-        self.slopeMark3b = QtGui.QGraphicsLineItem()
-        self.slopeMark3b.setPen(QtGui.QPen(QtGui.QColor(0,255,0)))
-        self.slopeMark4b = QtGui.QGraphicsLineItem()
-        self.slopeMark4b.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        self.slopeMark1 = Qt.QGraphicsLineItem()
+        self.slopeMark1.setPen(Qt.QPen(Qt.QColor(255,255,255)))
+        self.slopeMark2 = Qt.QGraphicsLineItem()
+        self.slopeMark2.setPen(Qt.QPen(Qt.QColor(255,255,255)))
+        self.slopeMark3a = Qt.QGraphicsLineItem()
+        self.slopeMark3a.setPen(Qt.QPen(Qt.QColor(0,255,0)))
+        self.slopeMark4a = Qt.QGraphicsLineItem()
+        self.slopeMark4a.setPen(Qt.QPen(Qt.QColor(0,0,255)))
+        self.slopeMark3b = Qt.QGraphicsLineItem()
+        self.slopeMark3b.setPen(Qt.QPen(Qt.QColor(0,255,0)))
+        self.slopeMark4b = Qt.QGraphicsLineItem()
+        self.slopeMark4b.setPen(Qt.QPen(Qt.QColor(0,0,255)))
         self.stdpCtrl.slopeWidthSpin.setOpts(value=2e-3, dec=True, step=1, minStep=1e-4, bounds=[1e-4, None], suffix='s', siPrefix=True)
         
         self.plot.analysisPlot.show()
 
-        self.line.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
+        self.line.connect(Qt.SIGNAL('positionChanged'), self.lineMoved)
         bwtop.setStretchFactor(0, 2)
         bwtop.setStretchFactor(1, 5)
         bwtop.setStretchFactor(0, 5)
@@ -1575,7 +1576,7 @@ class STDPWindow(UncagingWindow):
         
         
     def canvasClicked(self, ev):
-        if ev.button() != QtCore.Qt.LeftButton:
+        if ev.button() != Qt.Qt.LeftButton:
             return
         spots = UncagingWindow.canvasClicked(self, ev)
         if len(spots) == 0:
@@ -1663,7 +1664,7 @@ class STDPWindow(UncagingWindow):
         
         ## Analyze pre and post traces for events
         if preSearchStart is None or postSearchStart is None:
-            print "Could not determine start time for PSP search; will not calculate stats.", preSearchStart, postSearchStart
+            print("Could not determine start time for PSP search; will not calculate stats.", preSearchStart, postSearchStart)
         else:
             for j in range(len(self.epspStats)):
                 i = self.epspStats[j]['currentTracesIndex']
@@ -1802,16 +1803,16 @@ class STDPWindow(UncagingWindow):
         t.setColumnCount(3)
         t.setRowCount(len(data))
         for i in range(len(data)):
-            k = data.keys()[i]
+            k = list(data.keys())[i]
             v = data[k]
-            i1 = QtGui.QTableWidgetItem(k)
+            i1 = Qt.QTableWidgetItem(k)
             t.setItem(i, 0, i1)
             if type(v) is tuple:
-                i2 = [QtGui.QTableWidgetItem("%0.04g" % x) for x in v]
+                i2 = [Qt.QTableWidgetItem("%0.04g" % x) for x in v]
                 for j in range(len(i2)):
                     t.setItem(i, j+1, i2[j])
             else:
-                i2 = QtGui.QTableWidgetItem("%0.04g" % v)
+                i2 = Qt.QTableWidgetItem("%0.04g" % v)
                 t.setItem(i, 1, i2)
         self.copyResultsTable()
                 
@@ -1828,7 +1829,7 @@ class STDPWindow(UncagingWindow):
                 else:
                     row.append('')
             s += ('\t'.join(row) + '\n')
-        QtGui.QApplication.clipboard().setText(s)
+        Qt.QApplication.clipboard().setText(s)
 
     def showAveragePlots(self):
         stats = self.epspStats
@@ -2004,9 +2005,9 @@ class STDPWindow(UncagingWindow):
             g = ndimage.gaussian_filter(h[0].astype(float32), 2)
             i = argwhere(g > g.max()/3)
             if len(i) < 1:
-                print "Coundn't find %s search start." % period
-                print "Event times:", events
-                print "histogram:", g
+                print("Coundn't find %s search start." % period)
+                print("Event times:", events)
+                print("histogram:", g)
                 return None
             i = i[0,0]
             start = h[1][i]
@@ -2069,12 +2070,12 @@ class STDPWindow(UncagingWindow):
     #    pspRgn = data[0]['Time': q:(q+self.stdpCtrl.durationSpin.value()/1000.0)]
     #    amp = pspRgn.max() - base.mean()
     #    return time, amp
-from AnalysisPlotWindowTemplate import *
+from .AnalysisPlotWindowTemplate import *
     
-class AnalysisPlotWindow(QtGui.QMainWindow):
+class AnalysisPlotWindow(Qt.QMainWindow):
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
-        self.cw = QtGui.QWidget()
+        Qt.QMainWindow.__init__(self)
+        self.cw = Qt.QWidget()
         self.setCentralWidget(self.cw)
         self.ui = Ui_AnalysisPlotWindowTemplate()
         self.ui.setupUi(self.cw)
@@ -2087,13 +2088,13 @@ class AnalysisPlotWindow(QtGui.QMainWindow):
         self.ui.analysisPlot2.setHost(self)
         self.ui.dataSourceCombo.insertItems(0, ['data manager', 'uncaging window', 'stdp window'])
         
-        QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL('clicked()'), self.loadData)
-        QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL('clicked()'), self.addPlot)
+        Qt.QObject.connect(self.ui.loadDataBtn, Qt.SIGNAL('clicked()'), self.loadData)
+        Qt.QObject.connect(self.ui.addPlotBtn, Qt.SIGNAL('clicked()'), self.addPlot)
         
         self.show()
         
     def loadData(self):
-        print "loadData() called."
+        print("loadData() called.")
         self.ui.tracePlot.clearPlots()
         
         if self.ui.dataSourceCombo.currentText() == 'data manager':
@@ -2163,20 +2164,20 @@ class AnalysisPlotWindow(QtGui.QMainWindow):
         self.ui.autoName.setDataSource(self.data)
         self.ui.autoName.setHost(self)
         
-class IVWindow(QtGui.QMainWindow):
+class IVWindow(Qt.QMainWindow):
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         self.traces = None
-        self.cw = QtGui.QSplitter()
-        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.cw = Qt.QSplitter()
+        self.cw.setOrientation(Qt.Qt.Vertical)
         self.setCentralWidget(self.cw)
-        bw = QtGui.QWidget()
-        bwl = QtGui.QHBoxLayout()
+        bw = Qt.QWidget()
+        bwl = Qt.QHBoxLayout()
         bw.setLayout(bwl)
         self.cw.addWidget(bw)
-        self.loadIVBtn = QtGui.QPushButton('Load I/V')
+        self.loadIVBtn = Qt.QPushButton('Load I/V')
         bwl.addWidget(self.loadIVBtn)
-        QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
+        Qt.QObject.connect(self.loadIVBtn, Qt.SIGNAL('clicked()'), self.loadIV)
         self.plot1 = PlotWidget()
         self.cw.addWidget(self.plot1)
         self.plot2 = PlotWidget()
@@ -2185,7 +2186,7 @@ class IVWindow(QtGui.QMainWindow):
         self.show()
         self.lr = LinearRegionItem(self.plot1, 'vertical', [0, 1])
         self.plot1.addItem(self.lr)
-        self.lr.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
+        self.lr.connect(self.lr, Qt.SIGNAL('regionChanged'), self.updateAnalysis)
         
 
     def loadIV(self):
@@ -2232,19 +2233,19 @@ class IVWindow(QtGui.QMainWindow):
         
         
 
-class PSPWindow(QtGui.QMainWindow):
+class PSPWindow(Qt.QMainWindow):
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
-        self.cw = QtGui.QSplitter()
-        self.cw.setOrientation(QtCore.Qt.Vertical)
+        Qt.QMainWindow.__init__(self)
+        self.cw = Qt.QSplitter()
+        self.cw.setOrientation(Qt.Qt.Vertical)
         self.setCentralWidget(self.cw)
-        bw = QtGui.QWidget()
-        bwl = QtGui.QHBoxLayout()
+        bw = Qt.QWidget()
+        bwl = Qt.QHBoxLayout()
         bw.setLayout(bwl)
         self.cw.addWidget(bw)
-        self.loadTraceBtn = QtGui.QPushButton('Load Trace')
+        self.loadTraceBtn = Qt.QPushButton('Load Trace')
         bwl.addWidget(self.loadTraceBtn)
-        QtCore.QObject.connect(self.loadTraceBtn, QtCore.SIGNAL('clicked()'), self.loadTrace)
+        Qt.QObject.connect(self.loadTraceBtn, Qt.SIGNAL('clicked()'), self.loadTrace)
         self.plot = PlotWidget()
         self.cw.addWidget(self.plot)
         self.resize(800, 800)
@@ -2259,19 +2260,19 @@ class PSPWindow(QtGui.QMainWindow):
             data = d['Clamp2.ma'].read()['Channel': 'primary']
         self.plot.plot(data)
         
-class CellHealthWindow(QtGui.QMainWindow):
+class CellHealthWindow(Qt.QMainWindow):
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
-        self.cw = QtGui.QSplitter()
-        self.cw.setOrientation(QtCore.Qt.Vertical)
+        Qt.QMainWindow.__init__(self)
+        self.cw = Qt.QSplitter()
+        self.cw.setOrientation(Qt.Qt.Vertical)
         self.setCentralWidget(self.cw)
-        bw = QtGui.QWidget()
-        bwl = QtGui.QHBoxLayout()
+        bw = Qt.QWidget()
+        bwl = Qt.QHBoxLayout()
         bw.setLayout(bwl)
         self.cw.addWidget(bw)
-        self.loadDataBtn = QtGui.QPushButton('Load Data')
+        self.loadDataBtn = Qt.QPushButton('Load Data')
         bwl.addWidget(self.loadDataBtn)
-        QtCore.QObject.connect(self.loadDataBtn, QtCore.SIGNAL('clicked()'), self.loadData)
+        Qt.QObject.connect(self.loadDataBtn, Qt.SIGNAL('clicked()'), self.loadData)
         self.riPlot = PlotWidget()
         self.raPlot = PlotWidget()
         self.vmPlot = PlotWidget()

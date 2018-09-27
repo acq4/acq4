@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+import six
 import time
 from numpy import *
 import acq4.util.ptime as ptime  ## platform-independent precision timing
@@ -46,7 +48,7 @@ class SuperTask:
     def getTask(self, chan, typ=None):
         """Return the task which should be used for this channel and i/o type. Creates the task if needed."""
         key = self.getTaskKey(chan, typ)
-        if not self.tasks.has_key(key):
+        if key not in self.tasks:
             self.tasks[key] = self.daq.createTask()
             self.taskInfo[key] = {'cache': None, 'chans': [], 'dataWritten': False}
         return self.tasks[key]
@@ -62,7 +64,7 @@ class SuperTask:
                 mode = self.daq.Val_RSE
             elif typ in ['di', 'do']:
                 mode = self.daq.Val_ChanPerLine
-        elif isinstance(mode, basestring):
+        elif isinstance(mode, six.string_types):
             # decide which modes are allowed for this channel
             if typ == 'ai':
                 allowed = ['RSE', 'NRSE', 'Diff', 'PseudoDiff']
@@ -140,9 +142,9 @@ class SuperTask:
             try:
                 self.taskInfo[key]['cache'] = concatenate(waves)
             except:
-                print "Input shapes for %s:" % ','.join(self.channelInfo.keys())
+                print("Input shapes for %s:" % ','.join(list(self.channelInfo.keys())))
                 for w in waves:
-                    print w.shape
+                    print(w.shape)
                 raise
         return self.taskInfo[key]['cache']
         
@@ -154,7 +156,7 @@ class SuperTask:
                 try:
                     self.tasks[k].write(d)
                 except:
-                    print "Error while writing data to task '%s':" % str(k)
+                    print("Error while writing data to task '%s':" % str(k))
                     raise
                 self.taskInfo[k]['dataWritten'] = True
         
@@ -166,7 +168,7 @@ class SuperTask:
         clkSource = None
         if len(self.tasks) == 0:
             raise Exception("No tasks to configure.")
-        keys = self.tasks.keys()
+        keys = list(self.tasks.keys())
         self.numPts = nPts
         self.rate = rate
         
@@ -240,7 +242,7 @@ class SuperTask:
         self.result = None
         ## TODO: Reserve all hardware needed before starting tasks
         
-        keys = self.tasks.keys()
+        keys = list(self.tasks.keys())
         ## move clock task key to the end
         if self.clockSource in keys:
             #print "  Starting %s last" % str(tt) 

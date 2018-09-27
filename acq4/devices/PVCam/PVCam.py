@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Camera import Camera, CameraTask
 from acq4.drivers.pvcam import PVCam as PVCDriver
-from PyQt4 import QtCore
+from acq4.util import Qt
 import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
@@ -25,7 +26,7 @@ class PVCam(Camera):
     def setupCamera(self):
         self.pvc = PVCDriver
         cams = self.pvc.listCameras()
-        print "Cameras:", cams
+        print("Cameras:", cams)
         if len(cams) < 1:
             raise Exception('No cameras found by pvcam driver')
         
@@ -36,7 +37,7 @@ class PVCam(Camera):
                 ind = cams.index(self.camConfig['serial'])
             else:
                 raise Exception('Can not find pvcam camera "%s". Options are: %s' % (str(self.camConfig['serial']), str(cams)))
-        print "Selected camera:", cams[ind]
+        print("Selected camera:", cams[ind])
         self.cam = self.pvc.getCamera(cams[ind])
     
     def start(self, block=True):
@@ -71,12 +72,12 @@ class PVCam(Camera):
                     self.cam.setParam('ringSize', self.ringSize)
                     self.acqBuffer = self.cam.start()
                 break
-            except Exception, e:
+            except Exception as e:
                 if len(e.args) == 2 and (e.args[1] in (15, 41)):
                     printRingSize = True
                     self.ringSize = int(self.ringSize * 0.9)
-                    print "PVCam error: %r" % e
-                    print "Trying again with smaller ring size %d" % self.ringSize
+                    print("PVCam error: %r" % e)
+                    print("Trying again with smaller ring size %d" % self.ringSize)
                     if self.ringSize < 2:
                         raise
                 else:
@@ -98,9 +99,9 @@ class PVCam(Camera):
         # 2015.11: discovered that simply opening connections to multiple USB-serial devices on the same hub as the 
         # camera can cause it to fail to return frames, even if there is no data being sent to/from the serial devices.
         # 
-        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
-        print "This can be caused by insufficient USB bandwidth; try moving the camera to its own exclusive USB hub."
-        print "Alternatively, reduce the bandwidth requirements of the camera by increasing the binning or decreasing the ROI size."
+        print("Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff)
+        print("This can be caused by insufficient USB bandwidth; try moving the camera to its own exclusive USB hub.")
+        print("Alternatively, reduce the bandwidth requirements of the camera by increasing the binning or decreasing the ROI size.")
 
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
@@ -123,7 +124,7 @@ class PVCam(Camera):
         if self.lastIndex is not None:
             diff = (index - self.lastIndex) % self.ringSize
             if diff > (self.ringSize / 2):
-                print "Image acquisition buffer is at least half full (possible dropped frames)"
+                print("Image acquisition buffer is at least half full (possible dropped frames)")
         else:
             self.lastIndex = index-1
             diff = 1
@@ -189,13 +190,13 @@ class PVCam(Camera):
         if autoRestart and restart:
             self.restart()
         
-        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        #self.emit(Qt.SIGNAL('paramsChanged'), newVals)
         self.sigParamsChanged.emit(newVals)
         return (newVals, restart)
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         with self.camLock:
             return self.cam.getParams(params)
 
@@ -208,7 +209,7 @@ class PVCam(Camera):
         
         #if autoRestart and restart:
             #self.restart()
-        #self.emit(QtCore.SIGNAL('paramsChanged'), {param: newVal})
+        #self.emit(Qt.SIGNAL('paramsChanged'), {param: newVal})
         #return (newVal, restart)
 
     def getParam(self, param):

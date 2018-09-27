@@ -1,7 +1,9 @@
+from __future__ import print_function
+from six.moves import range
 import weakref
 import numpy as np
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
@@ -43,7 +45,7 @@ class LineScanComponent(ScanProgramComponent):
         between successive points. 
         Interscan intervals are green on the line, scan intervals are white
         """
-        pts = map(pg.Point, cmd['points'])
+        pts = list(map(pg.Point, cmd['points']))
         startPos = pts[0]                
         stopPos = pts[-1]
         
@@ -62,7 +64,7 @@ class LineScanComponent(ScanProgramComponent):
         nIntersegmentScans = 0
         scanPointList = []
         interScanFlag = False
-        for k in xrange(len(pts)): # loop through the list of points
+        for k in range(len(pts)): # loop through the list of points
             k2 = k + 1
             if k2 > len(pts)-1:
                 k2 = 0
@@ -119,12 +121,12 @@ class MultiLineScanROI(pg.PolyLineROI):
                 s.setPen(pg.mkPen([75, 200, 75]))
 
 
-class LineScanControl(QtCore.QObject):
+class LineScanControl(Qt.QObject):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, component):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.name = component.name
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         
@@ -164,7 +166,7 @@ class LineScanControl(QtCore.QObject):
         pts = self.roi.listPoints()
         scanTime = 0.
         interScanFlag = False
-        for k in xrange(len(pts)): # loop through the list of points
+        for k in range(len(pts)): # loop through the list of points
             k2 = k + 1
             if k2 > len(pts)-1:
                 k2 = 0

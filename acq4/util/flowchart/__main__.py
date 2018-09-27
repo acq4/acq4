@@ -1,11 +1,12 @@
+from __future__ import print_function
 import os, sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(path, '..'))
 sys.path.insert(0, os.path.join(path, '..', '..', '..'))
 
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.util.flowchart as flowchart
-app = QtGui.QApplication([])
+app = Qt.QApplication([])
 
 fc = flowchart.Flowchart(terminals={
     'dataIn': {'io': 'in'},
@@ -34,7 +35,7 @@ def process(**kargs):
     return fc.process(**kargs)
 
     
-print process(dataIn=7)
+print(process(dataIn=7))
 
 fc.setInput(dataIn=3)
 

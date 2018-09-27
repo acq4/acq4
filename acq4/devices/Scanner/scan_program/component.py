@@ -1,4 +1,5 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 import weakref
 
 

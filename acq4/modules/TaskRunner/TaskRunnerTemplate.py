@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 # Form implementation generated from reading ui file 'acq4/modules/TaskRunner/TaskRunnerTemplate.ui'
 #
@@ -272,4 +273,4 @@ class Ui_MainWindow(object):
         self.dockWidget.setWindowTitle(_translate("MainWindow", "Analysis", None))
 
 from acq4.pyqtgraph import SpinBox
-from ParamList import ParamList
+from .ParamList import ParamList

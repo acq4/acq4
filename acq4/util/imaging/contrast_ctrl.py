@@ -1,10 +1,11 @@
+from __future__ import print_function
 from __future__ import division
 
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import numpy as np
 from .contrast_ctrl_template import Ui_Form
 
-class ContrastCtrl(QtGui.QWidget):
+class ContrastCtrl(Qt.QWidget):
     """Widget for controlling contrast with rapidly updating image content.
 
     Provides:
@@ -16,7 +17,7 @@ class ContrastCtrl(QtGui.QWidget):
     * zoom-to-image button
     """
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

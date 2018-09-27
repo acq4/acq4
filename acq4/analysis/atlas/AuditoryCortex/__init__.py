@@ -1,1 +1,2 @@
-from AuditoryCortex import *
+from __future__ import print_function
+from .AuditoryCortex import *

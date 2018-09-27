@@ -1,3 +1,4 @@
 # -*- coding: utf-8 -*-
-from CParser import *
-from CLibrary import *
+from __future__ import print_function
+from .CParser import *
+from .CLibrary import *

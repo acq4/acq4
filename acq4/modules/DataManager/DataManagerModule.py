@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
-from DataManagerTemplate import *
+from __future__ import print_function
+from .DataManagerTemplate import *
 from acq4.modules.Module import *
 from acq4.util.DataManager import *
 import os, re, sys, time
 from acq4.util.debug import *
-import FileAnalysisView
+from . import FileAnalysisView
 from acq4.LogWindow import LogButton, LogWindow
-import FileLogView
+from . import FileLogView
 from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar
 
-class Window(QtGui.QMainWindow):
+class Window(Qt.QMainWindow):
     
-    sigClosed = QtCore.Signal()
+    sigClosed = Qt.Signal()
     
     def closeEvent(self, ev):
         ev.accept()
@@ -23,14 +24,14 @@ class DataManager(Module):
     moduleDisplayName = "Data Manager"
     moduleCategory = "Acquisition"
     
-    sigAnalysisDbChanged = QtCore.Signal()
+    sigAnalysisDbChanged = Qt.Signal()
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.dm = getDataManager()
         self.win = Window()
         mp = os.path.dirname(__file__)
-        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
+        self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.win.dm = self  ## so embedded widgets can find the module easily
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
@@ -44,7 +45,7 @@ class DataManager(Module):
         self.ui.splitter.setSizes([int(w*0.4), int(w*0.6)])
         self.ui.logDock.hide()
         self.dialog = None
-        self.ui.fileTreeWidget.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        self.ui.fileTreeWidget.setSelectionMode(Qt.QAbstractItemView.ExtendedSelection)
         self.baseDirChanged()
         self.currentDirChanged()
         self.selFile = None
@@ -71,7 +72,7 @@ class DataManager(Module):
         conf = self.manager.config['folderTypes']
         #print "folderTypes:", self.manager.config['folderTypes'].keys()
         self.ui.newFolderList.clear()
-        self.ui.newFolderList.addItems(['New...', 'Folder'] + conf.keys())
+        self.ui.newFolderList.addItems(['New...', 'Folder'] + list(conf.keys()))
         
     def baseDirChanged(self):
         dh = self.manager.getBaseDir()
@@ -134,7 +135,7 @@ class DataManager(Module):
         bd = self.manager.getBaseDir()
         if self.dialog is None:
             self.dialog = FileDialog()
-            self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+            self.dialog.setFileMode(Qt.QFileDialog.DirectoryOnly)
             self.dialog.filesSelected.connect(self.setBaseDir)
         if bd is not None:
             self.dialog.setDirectory(bd.name())

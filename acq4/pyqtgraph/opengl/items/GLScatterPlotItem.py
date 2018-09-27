@@ -4,6 +4,7 @@ from .. GLGraphicsItem import GLGraphicsItem
 from .. import shaders
 from ... import QtGui
 import numpy as np
+from functools import reduce
 
 __all__ = ['GLScatterPlotItem']
 

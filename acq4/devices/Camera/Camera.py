@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -8,19 +9,19 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 #from acq4.devices.Device import *
 from acq4.devices.Microscope import Microscope
-from PyQt4 import QtCore
+from acq4.util import Qt
 import time
 from numpy import *
 from acq4.util.metaarray import *
-from taskGUI import *
-from deviceGUI import *
+from .taskGUI import *
+from .deviceGUI import *
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import *
 from acq4.util import imaging
 from acq4.pyqtgraph import Vector, SRTTransform3D
 
-from CameraInterface import CameraInterface
+from .CameraInterface import CameraInterface
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -50,11 +51,11 @@ class Camera(DAQGeneric, OptomechDevice):
             CLEAR_MODE: 'CLEAR_PRE_SEQUENCE'  ## Overlap mode for QuantEM
     """
 
-    sigCameraStopped = QtCore.Signal()
-    sigCameraStarted = QtCore.Signal()
-    sigShowMessage = QtCore.Signal(object)  # (string message)
-    sigNewFrame = QtCore.Signal(object)  # (frame data)
-    sigParamsChanged = QtCore.Signal(object)
+    sigCameraStopped = Qt.Signal()
+    sigCameraStarted = Qt.Signal()
+    sigShowMessage = Qt.Signal(object)  # (string message)
+    sigNewFrame = Qt.Signal(object)  # (frame data)
+    sigParamsChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
         OptomechDevice.__init__(self, dm, config, name)
@@ -121,6 +122,15 @@ class Camera(DAQGeneric, OptomechDevice):
                 self.setParams(defaults)
             except:
                 printExc("Error default setting camera parameters:")
+
+        # set up preset hotkeys
+        for name, preset in self.camConfig.get('presets', {}).items():
+            if 'hotkey' not in preset:
+                continue
+            dev = dm.getDevice(preset['hotkey']['device'])
+            key = preset['hotkey']['key']
+            dev.addKeyCallback(key, self.presetHotkeyPressed, (name,))
+
         #print "Camera: no config params to set."
         dm.declareInterface(name, ['camera'], self)
     
@@ -166,7 +176,22 @@ class Camera(DAQGeneric, OptomechDevice):
         
     def getParam(self, param):
         return self.getParams([param])[param]
-        
+
+    def listPresets(self):
+        """Return a list of all preset names.
+        """
+        return list(self.camConfig.get('presets', {}).keys())
+
+    def loadPreset(self, preset):
+        presets = self.camConfig.get('presets', None)
+        if presets is None or preset not in presets:
+            raise ValueError("No camera preset named %r" % preset)
+        params = presets[preset]['params']
+        self.setParams(params)
+
+    def presetHotkeyPressed(self, dev, changes, presetName):
+        self.loadPreset(presetName)
+
     def newFrames(self):
         """Returns a list of all new frames that have arrived since the last call. The list looks like:
             [{'id': 0, 'data': array, 'time': 1234678.3213}, ...]
@@ -190,17 +215,16 @@ class Camera(DAQGeneric, OptomechDevice):
     def noFrameWarning(self, time):
         # display a warning message that no camera frames have arrived.
         # This method is only here to allow PVCam to display some useful information.
-        print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % time
+        print("Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % time)
     
-    def pushState(self, name=None):
-        #print "Camera: pushState", name
-        params = self.listParams()
-        for k in params.keys():    ## remove non-writable parameters
-            if not params[k][1]:
-                del params[k]
-        params = self.getParams(params.keys())
+    def pushState(self, name=None, params=None):
+        if params is None:
+            # push all writeable parameters
+            params = [param for param, spec in self.listParams().items() if spec[1] is True]
+        
+        # print("Camera: pushState", name, params)
+        params = self.getParams(params)
         params['isRunning'] = self.isRunning()
-        #print "Camera: pushState", name, params
         self.stateStack.append((name, params))
         
     def popState(self, name=None):
@@ -337,8 +361,8 @@ class Camera(DAQGeneric, OptomechDevice):
         If globalCoords==False, return in local coordinates.
         """
         size = self.getParam('sensorSize')
-        bounds = QtGui.QPainterPath()
-        bounds.addRect(QtCore.QRectF(0, 0, *size))
+        bounds = Qt.QPainterPath()
+        bounds.addRect(Qt.QRectF(0, 0, *size))
         if globalCoords:
             return pg.SRTTransform(self.globalTransform()).map(bounds)
         else:
@@ -466,11 +490,6 @@ class CameraTask(DAQGenericTask):
         }
         params.update(self.camCmd['params'])
         
-        if 'pushState' in self.camCmd:
-            stateName = self.camCmd['pushState']
-            self.dev.pushState(stateName)
-        prof.mark('collect params')
-
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger
         ## (bulb and strobe modes only require a restart if the trigger mode is not already set; this is handled later)
         if params['triggerMode'] == 'TriggerStart':
@@ -484,10 +503,16 @@ class CameraTask(DAQGenericTask):
             ## Make sure we haven't requested something stupid..
             if self.camCmd.get('triggerProtocol', False) and self.dev.camConfig['triggerOutChannel']['device'] == daqName:
                 raise Exception("Task requested camera to trigger and be triggered by the same device.")
-        
-        (newParams, restart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
-        
+
+        if 'pushState' in self.camCmd:
+            stateName = self.camCmd['pushState']
+            self.dev.pushState(stateName, params=list(params.keys()))
+        prof.mark('push params onto stack')
+
+        (newParams, paramsNeedRestart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
+        restart = restart or paramsNeedRestart
         prof.mark('set params')
+
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.name()
@@ -636,7 +661,7 @@ class CameraTaskResult:
                     try:
                         times = array([f.info()['time'] for f in self._frames])
                     except:
-                        print f
+                        print(f)
                         raise
                     times -= times[0]
                 else:
@@ -708,8 +733,8 @@ class CameraTaskResult:
         
 class AcquireThread(Thread):
     
-    sigNewFrame = QtCore.Signal(object)
-    sigShowMessage = QtCore.Signal(object)
+    sigNewFrame = Qt.Signal(object)
+    sigShowMessage = Qt.Signal(object)
     
     def __init__(self, dev):
         Thread.__init__(self)
@@ -763,7 +788,7 @@ class AcquireThread(Thread):
     #    with self.lock:
     #        self.state[param] = value
     #    if start:
-    #        #self.start(QtCore.QThread.HighPriority)
+    #        #self.start(Qt.QThread.HighPriority)
     #        self.start()
     #    
     
@@ -807,7 +832,7 @@ class AcquireThread(Thread):
                     if lastFrameId is not None:
                         drop = frames[0]['id'] - lastFrameId - 1
                         if drop > 0:
-                            print "WARNING: Camera dropped %d frames" % drop
+                            print("WARNING: Camera dropped %d frames" % drop)
                         
                     ## Build meta-info for this frame(s)
                     info = camState.copy()
@@ -909,6 +934,4 @@ class AcquireThread(Thread):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-            #self.start(QtCore.QThread.HighPriority)
             self.start()
-

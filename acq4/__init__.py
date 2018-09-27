@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys
 
 __version__ = '0.9.2'
@@ -36,31 +37,8 @@ CONFIGPATH.extend([
     ])
 
 
-# If we are using PyQt, ACQ4 requires API version 2 for QString and QVariant. 
-# Check for those here..
-set_api = True
-if 'PyQt4' in sys.modules:
-    import sip
-    for api in ['QString', 'QVariant']:
-        try:
-            v = sip.getapi(api)
-            if v != 2:
-                print("WARNING: ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. "
-                      "Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\""
-                      " _before_ importing PyQt4." % (api, v))
-            set_api = False
-        except ValueError:
-            set_api = True
-elif 'PySide' in sys.modules:
-    set_api = False
-
-if set_api:
-    try:
-        import sip
-        sip.setapi('QString', 2)
-        sip.setapi('QVariant', 2)
-    except ImportError:
-        pass  # no sip; probably pyside will be imported later..
+# Initialize Qt
+from .util import Qt
 
 
 # Import pyqtgraph, get QApplication instance
@@ -76,7 +54,11 @@ pg.renamePyc(modDir)
 
 
 ## Install a simple message handler for Qt errors:
-def messageHandler(msgType, msg):
+def messageHandler(*args):
+    if len(args) == 2:  # Qt4
+        msgType, msg = args
+    else:               # Qt5
+        msgType, context, msg = args
     # ignore harmless ibus messages on linux
     if 'ibus-daemon' in msg:
         return
@@ -96,7 +78,7 @@ def messageHandler(msgType, msg):
         traceback.print_exc()
         
     
-    if msgType == pg.Qt.QtCore.QtFatalMsg:
+    if msgType == pg.QtCore.QtFatalMsg:
         try:
             print("Fatal error occurred; asking manager to quit.")
             global man, app
@@ -104,8 +86,11 @@ def messageHandler(msgType, msg):
             app.processEvents()
         except:
             pass
-    
-pg.QtCore.qInstallMsgHandler(messageHandler)
 
-from Manager import getManager
+try:
+    pg.QtCore.qInstallMsgHandler(messageHandler)
+except AttributeError:
+    pg.QtCore.qInstallMessageHandler(messageHandler)
+
+from .Manager import getManager
 
