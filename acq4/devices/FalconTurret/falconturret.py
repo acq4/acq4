@@ -1,3 +1,4 @@
+from acq4.pyqtgraph.Qt import QtGui
 import falconoptics
 from ..FilterWheel import FilterWheel, FilterWheelFuture
 
@@ -23,6 +24,8 @@ class FalconTurret(FilterWheel):
         return FalconTurretFuture(self, pos)
 
     def home(self):
+        """Search for home position on turret; used to recalibrate wheel location.
+        """
         self.setPosition('home')
     
     def _stop(self):
@@ -38,3 +41,11 @@ class FalconTurretFuture(FilterWheelFuture):
             return self.dev.dev.is_homed
         else:
             return FilterWheelFuture._atTarget()
+
+
+class FalconDevGui(FilterWheelDevGui):
+    def __init__(self, dev):
+        FilterWheelDevGui.__init__(self, dev)
+
+        self.homeBtn = QtGui.QPushButton("Find Home")
+        self.homeBtn.clicked.connect(self.dev.home)
