@@ -3,13 +3,13 @@ from acq4.pyqtgraph.Qt import QtGui
 import falconoptics
 from ..FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
 
-logger = logging.getLogger('falconoptics')
-logger.setLevel(logging.WARN)
-
 
 class FalconTurret(FilterWheel):
     def __init__(self, dm, config, name):
-        self.dev = falconoptics.Falcon(config_file=None, update_nonvolitile=True)
+        self.dev = falconoptics.Falcon(config_file=None, update_nonvolatile=True)
+        logger = logging.getLogger('falconoptics')
+        logger.setLevel(logging.CRITICAL)
+        
         if not self.dev.is_homed:
             self.dev.home(block=False)
 
