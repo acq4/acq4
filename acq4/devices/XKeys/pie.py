@@ -104,6 +104,13 @@ class XKeys(Device):
     def getBacklights(self):
         return self.dev.backlightState.copy()
 
+    def setBacklight(self, key, blue=None, red=None):
+        """Set backlight status of a specific key.
+
+        *blue* and *red* may be 0=off, 1=on, 2=flash.
+        """
+        self.dev.setBacklight(key[0], key[1], blue, red)
+
     def getState(self):
         return self.dev.state.copy()
 
