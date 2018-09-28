@@ -52,6 +52,7 @@ class FilterWheel(Device, OptomechDevice):
         
         self._filters = OrderedDict()
         self._slotNames = OrderedDict()
+        self._slotIndicators = OrderedDict()
 
         nPos = self.getPositionCount()
         ports = config.get('ports', None)
@@ -82,6 +83,8 @@ class FilterWheel(Device, OptomechDevice):
             if 'hotkey' in slot:
                 dev = dm.getDevice(slot['hotkey']['device'])
                 key = slot['hotkey']['key']
+                dev.addKeyCallback(key, self._hotkeyPressed, (k,))
+                self._slotIndicators[k] = (dev, key)
                 # todo: connect to key
 
         config['ports'] = ports
@@ -150,13 +153,16 @@ class FilterWheel(Device, OptomechDevice):
         """
         raise NotImplementedError("Method must be implemented in subclass")
 
+    def _hotkeyPressed(self, dev, changes, pos):
+        self.setPosition(pos)
+
     def getPosition(self):
         """Return the current position of the filter wheel.
         """
         pos = self._getPosition()
         if pos != self._lastPosition:
-            self._positionChanged(pos)
             self._lastPosition = pos
+            self._positionChanged(pos)
         return pos
 
     def _getPosition(self):
@@ -166,6 +172,12 @@ class FilterWheel(Device, OptomechDevice):
         filt = self.getFilter(pos)
         self.setCurrentSubdevice(filt)
         self.sigFilterChanged.emit(self, filt)
+        for k,indicator in self._slotIndicators.items():
+            dev, key = indicator
+            if k == pos:
+                dev.setBacklight(key, blue=1, red=1)
+            else:
+                dev.setBacklight(key, blue=0, red=0)
 
     def isMoving(self):
         """Return the current position of the filter wheel.
@@ -435,6 +447,7 @@ class FilterWheelDevGui(QtGui.QWidget):
             self.positionButtons[pos].setChecked(True)
 
     def positionButtonClicked(self):
+        self.positionChanged()  # reset button until the filter wheel catches up
         btn = self.sender()
         self.dev.setPosition(btn.filterPosition)
 
