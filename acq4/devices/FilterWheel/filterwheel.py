@@ -103,6 +103,9 @@ class FilterWheel(Device, OptomechDevice):
 
         dm.sigAbortAll.connect(self.stop)
 
+        if 'initialSlot' in config:
+            self.setPosition(config['initialSlot'])
+
     def listFilters(self):
         """Return a dict of available filters.
         """
