@@ -259,6 +259,7 @@ class Photostimulation():
 
     def __init__(self, stimPoint, laserPower, laserDuration, shape):
         self.stimPoint = stimPoint
+        self.stimPointID = stimPoint.id
         self.pos = self.stimPoint.getPos()
         self.laserPower = laserPower
         self.laserDuration = laserDuration
@@ -277,6 +278,7 @@ class StimulationPoint(QtCore.QObject):
     def __init__(self, name, itr, pos, z):
         QtCore.QObject.__init__(self)
         self.name = "%s %i" % (name, itr)
+        self.id = itr
         self.z = z
         self.graphicsItem = PhotostimTarget(pos, label=itr)
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=True, removable=False, renamable=True)
