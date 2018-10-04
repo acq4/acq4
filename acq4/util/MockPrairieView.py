@@ -28,3 +28,9 @@ class MockPrairieView():
               "   duration:", duration,
               "   spiralSize:", spiralSize,
               "   revolutions:", revolutions)
+
+    def openShutter(self):
+        pass
+
+    def resetShutter(self):
+        pass

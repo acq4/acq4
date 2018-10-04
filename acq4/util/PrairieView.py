@@ -125,6 +125,12 @@ class PrairieView(QtCore.QObject):
             filename = os.path.join(self.publicFilePath, 'acq4_MarkPoints.xml')
         self.call_pl("-LoadMarkPoints %s" %filename)
 
+    def openShutter(self):
+        self.call_pl("-OverrideHardShutter Fidelity open")
+
+    def resetShutter(self):
+        self.call_pl("-OverrideHardShutter Fidelity auto")
+
 
 
 
