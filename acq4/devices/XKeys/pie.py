@@ -104,6 +104,13 @@ class XKeys(Device):
     def getBacklights(self):
         return self.dev.backlightState.copy()
 
+    def setBacklight(self, key, blue=None, red=None):
+        """Set backlight status of a specific key.
+
+        *blue* and *red* may be 0=off, 1=on, 2=flash.
+        """
+        self.dev.setBacklight(key[0], key[1], blue, red)
+
     def getState(self):
         return self.dev.state.copy()
 
@@ -119,12 +126,12 @@ class XKeys(Device):
         for pos, state in keych:
             if state is False:
                 continue
-            for cb, arg in self._callbacks.get(pos, []):
-                cb(dev, changes, arg)
+            for cb, args in self._callbacks.get(pos, []):
+                cb(dev, changes, *args)
     
     def quit(self):
         self.dev.setBacklightRows(0, 0)
         self.dev.close()
 
-    def addKeyCallback(self, key, callback, arg=None):
-        self._callbacks.setdefault(key, []).append((callback, arg))
+    def addKeyCallback(self, key, callback, args=()):
+        self._callbacks.setdefault(key, []).append((callback, args))

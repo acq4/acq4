@@ -22,7 +22,7 @@ class LightSource(Device):
         if 'xkey' in conf:
             devname, row, col = self._sources[name]['xkey']
             dev = self.dm.getDevice(devname)
-            dev.addKeyCallback((row, col), self._hotkeyPressed, name)
+            dev.addKeyCallback((row, col), self._hotkeyPressed, (name,))
 
     def describe(self, onlyActive=True):
         """Return a description of the current state of all active light sources.

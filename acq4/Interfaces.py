@@ -7,6 +7,40 @@ import weakref
 from acq4.util.Mutex import *
 
 
+class InterfaceMixin(object):
+    """Mixin class used to allow objects to declare which APIs they implement.
+
+    Use addInterface() to declare a supported API::
+
+        class MyObject(InterfaceMixin):
+            def __init__(self):
+                self.addInterface("my_api")
+
+    Use implements() to determine whether an object supports an API:
+
+        if hasattr(obj, 'implements') and obj.implements('my_api'):
+            # safe to call methods defined by my_api
+    
+    """
+    def implements(self, interface=None):
+        """Return True if this device implements the specified API.
+
+        If no API name is given, then return the list of APIs implemented by this device.
+        """
+        ints = getattr(self, '_InterfaceMixin__interfaces', [])
+        if interface is None:
+            return ints
+        return interface in ints
+
+    def addInterface(self, name):
+        """Declare that this device implements a particular API.
+        """
+        if not hasattr(self, '_InterfaceMixin__interfaces'):
+            self.__interfaces = []
+        if name not in self.__interfaces:
+            self.__interfaces.append(name)
+    
+
 class InterfaceDirectory(Qt.QObject):
     """Class for managing a phonebook of interfaces.
     Any object in the program may advertise its services via this directory"""
@@ -89,18 +123,19 @@ class InterfaceDirectory(Qt.QObject):
         """
         with self.lock:
             if types is None:
-                types = list(self.typeList.keys())
-                #return dict([(k, dict(v)) for k,v in self.typeList.iteritems()])
-            elif isinstance(types, six.string_types):
+                types = self.typeList.keys()
+            
+            elif isinstance(types, basestring):
                 return list(self.typeList.get(types, {}).keys())
                 
             ints = {}
             for t in types:
                 ints[t] = list(self.typeList.get(t, {}).keys())
-                #for n in self.typeList.get(t, []):
-                    #ints.append(n)
             return ints
             
     def getInterface(self, type, name):
         with self.lock:
             return self.typeList[type][name]
+
+
+

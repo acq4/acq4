@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FilterWheelWidget</class>
+ <widget class="QWidget" name="FilterWheelWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>207</width>
+    <height>226</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="2">
+    <widget class="QRadioButton" name="FastButton">
+     <property name="text">
+      <string>fast</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">SpeedButtonGroup</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QRadioButton" name="inputTrigButton">
+     <property name="text">
+      <string>input</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">TriggerButtonGroup</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="label_3">
+     <property name="font">
+      <font>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Trigger Mode</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QLabel" name="label">
+     <property name="font">
+      <font>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Speed</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QRadioButton" name="SlowButton">
+     <property name="text">
+      <string>slow</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">SpeedButtonGroup</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QRadioButton" name="outputTrigButton">
+     <property name="text">
+      <string>output</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">TriggerButtonGroup</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="3" column="0" colspan="3">
+    <widget class="QGroupBox" name="PositionGroup">
+     <property name="title">
+      <string>Current Position</string>
+     </property>
+     <layout class="QGridLayout" name="PositionGridLayout"/>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="font">
+      <font>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Sensor Mode</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QRadioButton" name="sensorOffButton">
+     <property name="text">
+      <string>off</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="2">
+    <widget class="QRadioButton" name="sensorOnButton">
+     <property name="text">
+      <string>on</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+ <buttongroups>
+  <buttongroup name="SpeedButtonGroup"/>
+  <buttongroup name="TriggerButtonGroup"/>
+ </buttongroups>
+</ui>
