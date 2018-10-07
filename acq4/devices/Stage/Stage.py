@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import division, print_function
 from acq4.util import Qt
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
@@ -338,7 +338,15 @@ class Stage(Device, OptomechDevice):
         information.
         """
         return self.move(abs=pos, speed=speed, progress=progress, linear=linear)
-    
+
+    def movePath(self, path):
+        """Move the stage along a path with multiple waypoints.
+
+        The format of *path* is a list of dicts, where each dict specifies keyword arguments
+        to self.move().
+        """
+        return MovePathFuture(self, path)
+
     def stop(self):
         """Stop moving the device immediately.
         """
@@ -392,6 +400,7 @@ class MoveFuture(object):
         self.speed = speed
         self.targetPos = pos
         self.startPos = dev.getPosition()
+        self._wasStopped = False
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -410,6 +419,13 @@ class MoveFuture(object):
         if d2 == 0:
             return 100
         return 100 * d1 / d2
+
+    def stop(self):
+        """Stop the move in progress.
+        """
+        if not self.isDone():
+            self.dev.stop()
+            self._wasStopped = True
 
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
@@ -449,6 +465,102 @@ class MoveFuture(object):
                 raise RuntimeError("Move did not complete.")
             else:
                 raise RuntimeError("Move did not complete: %s" % err)
+
+
+class MovePathFuture(object):
+    def __init__(self, dev, path):
+        self.dev = dev
+        self.path = path
+        self._currentFuture = None
+        self._done = False
+        self._wasInterrupted = False
+        self._errorMessage = None
+        self._stopped = False
+        self._finishEvent = threading.Event()
+
+        self._moveThread = threading.Thread(target=self._movePath)
+        self._moveThread.start()
+
+    def percentDone(self):
+        fut = self._currentFuture
+        if fut is None:
+            return 0.0
+        pd = (100 * fut._pathStep + fut.percentDone()) / len(self.path)
+        return pd
+
+    def isDone(self):
+        return self._done
+
+    def wasInterrupted(self):
+        return self._wasInterrupted
+
+    def errorMessage(self):
+        return self._errorMessage
+
+    def stop(self):
+        fut = self._currentFuture
+        if fut is not None:
+            fut.stop()
+        self._stopped = True
+
+    def wait(self, timeout=None, updates=False):
+        """Block until the move has completed, has been interrupted, or the
+        specified timeout has elapsed.
+
+        If *updates* is True, process Qt events while waiting.
+
+        If the move did not complete, raise an exception.
+        """
+        start = ptime.time()
+        while (timeout is None) or (ptime.time() < start + timeout):
+            if self.isDone():
+                break
+            if updates is True:
+                Qt.QTest.qWait(100)
+            else:
+                time.sleep(0.1)
+        if not self.isDone() or self.wasInterrupted():
+            err = self.errorMessage()
+            if err is None:
+                raise RuntimeError("Move did not complete.")
+            else:
+                raise RuntimeError("Move did not complete: %s" % err)
+
+    def _movePath(self):
+        try:
+            print("Move path")
+            for i, step in enumerate(self.path):
+                print(step)
+                fut = self.dev.move(**step)
+                fut._pathStep = i
+                self._currentFuture = fut
+                while not fut.isDone():
+                    try:
+                        fut.wait(timeout=0.1)
+                    except RuntimeError:
+                        pass
+                    if self._stopped:
+                        fut.stop()
+                        break
+                print("step done")
+                
+                if self._stopped:
+                    self._errorMessage = "Move was cancelled"
+                    self._wasInterrupted = True
+                    print("stopped")
+                    break
+
+                if fut.wasInterrupted():
+                    self._errorMessage = fut.errorMessage()
+                    self._wasInterrupted = True
+                    print("interrupted")
+                    break
+        except Exception as exc:
+            self._errorMessage = "Error in path move thread: %s" % exc
+            self._wasInterrupted = True
+        finally:
+            print("done.")
+            self._done = True
 
 
 class StageInterface(Qt.QWidget):
