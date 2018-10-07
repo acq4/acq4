@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+
+import six
+
+from acq4.util import Qt
 from acq4.Manager import getManager
 import acq4.pyqtgraph.parametertree as parametertree
 import acq4.pyqtgraph.parametertree.parameterTypes as ptypes
 
 ### TODO: inherit from util/ComboBox instead.
 
-class InterfaceCombo(QtGui.QComboBox):
+class InterfaceCombo(Qt.QComboBox):
     """
     ComboBox that displays a list of objects registered with the ACQ4 interface directory. 
 
@@ -16,15 +20,15 @@ class InterfaceCombo(QtGui.QComboBox):
         self.dir = getManager().interfaceDir
         self.interfaceMap = []
         self.preferred = None
-        QtGui.QComboBox.__init__(self, parent)
-        #QtCore.QObject.connect(self.dir, QtCore.SIGNAL('interfaceListChanged'), self.updateList)
+        Qt.QComboBox.__init__(self, parent)
+        #Qt.QObject.connect(self.dir, Qt.SIGNAL('interfaceListChanged'), self.updateList)
         self.dir.sigInterfaceListChanged.connect(self.updateList)
         
         if types is not None:
             self.setTypes(types)
         
     def setTypes(self, types):
-        if isinstance(types, basestring):
+        if isinstance(types, six.string_types):
             types = [types]
         self.types = types
         self.updateList()
@@ -44,7 +48,7 @@ class InterfaceCombo(QtGui.QComboBox):
             self.blockSignals(True)
             self.clear()
             man = getManager()
-            for typ,intList in ints.iteritems():
+            for typ,intList in ints.items():
                 for name in intList:
                     obj = man.getInterface(typ, name)
                     if obj in objects:
@@ -78,7 +82,7 @@ class InterfaceCombo(QtGui.QComboBox):
         return self.dir.getInterface(*self.interfaceMap[self.currentIndex()])
 
     def currentText(self):
-        return str(QtGui.QComboBox.currentText(self))
+        return str(Qt.QComboBox.currentText(self))
         
     def setCurrentText(self, text):
         """Set the current item by name"""
@@ -126,7 +130,7 @@ class InterfaceParameter(ptypes.ListParameter):
         ints = self.dir.listInterfaces(self.opts['interfaceTypes'])
         if isinstance(ints, dict):
             interfaces = []
-            for i in ints.itervalues():
+            for i in ints.values():
                 interfaces.extend(i)
         else:
             interfaces = ints

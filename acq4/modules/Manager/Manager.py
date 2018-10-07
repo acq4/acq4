@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.modules.Module import *
-from ManagerTemplate import Ui_MainWindow
-from PyQt4 import QtCore, QtGui
+from .ManagerTemplate import Ui_MainWindow
+from acq4.util import Qt
 import sys, os
 import acq4.util.configfile as configfile
 from acq4.util.debug import *
@@ -14,9 +15,9 @@ class Manager(Module):
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
-        self.win = QtGui.QMainWindow()
+        self.win = Qt.QMainWindow()
         mp = os.path.dirname(__file__)
-        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
+        self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
@@ -30,13 +31,13 @@ class Manager(Module):
                 dw = self.manager.getDevice(d).deviceInterface(self)
                 if dw is None:
                     continue
-                dock = QtGui.QDockWidget(d)
+                dock = Qt.QDockWidget(d)
                 dock.setFeatures(dock.DockWidgetMovable | dock.DockWidgetFloatable)
                 dock.setObjectName(d)
                 dock.setWidget(dw)
                 
                 self.devRackDocks[d] = dock
-                self.win.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+                self.win.addDockWidget(Qt.Qt.RightDockWidgetArea, dock)
                 
                 # By default, we stack all docks
                 if firstDock is None:
@@ -60,11 +61,11 @@ class Manager(Module):
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
         if 'geometry' in state:
-            geom = QtCore.QRect(*state['geometry'])
+            geom = Qt.QRect(*state['geometry'])
             self.win.setGeometry(geom)
         # restore dock configuration
         if 'window' in state:
-            ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)
 
         self.win.show()
@@ -87,7 +88,7 @@ class Manager(Module):
             cls = modules.getModuleClass(conf['module'])
             confMods.append(cls)
             root = self._mkModGrpItem(cls.moduleCategory)
-            item = QtGui.QTreeWidgetItem([name])
+            item = Qt.QTreeWidgetItem([name])
             font = item.font(0)
             font.setBold(True)
             item.setFont(0, font)
@@ -100,7 +101,7 @@ class Manager(Module):
                 continue
             root = self._mkModGrpItem(cls.moduleCategory)
             dispName = cls.moduleDisplayName or cls.__name__
-            item = QtGui.QTreeWidgetItem([dispName])
+            item = Qt.QTreeWidgetItem([dispName])
             item.modName = name
             root.addChild(item)
     
@@ -114,7 +115,7 @@ class Manager(Module):
             root = self._mkModGrpItem('.'.join(parts[:-1]))
         else:
             root = self.ui.moduleList.invisibleRootItem()
-        item = QtGui.QTreeWidgetItem([parts[-1]])
+        item = Qt.QTreeWidgetItem([parts[-1]])
         root.addChild(item)
         item.setExpanded(True)
         self._modGrpItems[name] = item
@@ -140,19 +141,19 @@ class Manager(Module):
 
     def loadConfiguredModule(self, mod):
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             self.manager.loadDefinedModule(mod)
             self.showMessage("Loaded module configuration '%s'." % mod, 10000)
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
         
     def loadModule(self, mod):
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             self.manager.loadModule(mod)
             self.showMessage("Loaded module '%s'." % mod, 10000)
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
         
     def reloadAll(self):
         self.manager.reloadAll()

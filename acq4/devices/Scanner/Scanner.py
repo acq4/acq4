@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import os, pickle 
 import numpy as np
 import acq4.pyqtgraph as pg
@@ -13,17 +14,18 @@ from ..Stage import Stage
 from .DeviceGui import ScannerDeviceGui
 from .TaskGui import ScannerTaskGui
 from .scan_program import ScanProgram 
+from six.moves import range
 
 class Scanner(Device, OptomechDevice):
     
-    sigShutterChanged = QtCore.Signal()
+    sigShutterChanged = Qt.Signal()
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
         
         self.config = config
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None
         self.calibrationIndex = None
@@ -146,7 +148,7 @@ class Scanner(Device, OptomechDevice):
             
         ## map from global coordinates to parent
         parentPos = self.mapGlobalToParent((x,y))
-        if isinstance(parentPos, QtCore.QPointF):
+        if isinstance(parentPos, Qt.QPointF):
             x = parentPos.x()
             y = parentPos.y()
         else:
@@ -335,7 +337,7 @@ class ScannerTask(DeviceTask):
         npts = int(10e-3 / dt)
         ons -= npts
         mask = np.zeros(len(laser), dtype=bool)
-        for i in xrange(len(ons)):
+        for i in range(len(ons)):
             on = max(0, ons[i])
             mask[on:offs[i]] = True
         
@@ -375,7 +377,7 @@ class ScannerTask(DeviceTask):
     def stop(self, abort=False):
         if abort:
             with self.abortLock:
-                print "Abort!"
+                print("Abort!")
                 self.aborted = True
         with self.dev.lock:
             for t in self.daqTasks:

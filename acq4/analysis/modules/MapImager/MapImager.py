@@ -1,4 +1,5 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 import os
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
@@ -12,8 +13,8 @@ from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
 from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
-from SpatialCorrelator import SpatialCorrelator
-from MapConvolver import MapConvolver
+from .SpatialCorrelator import SpatialCorrelator
+from .MapConvolver import MapConvolver
 from acq4.util.ColorMapper import ColorMapper
 from acq4.util.Canvas.items.ImageCanvasItem import ImageCanvasItem
 from acq4.util.ContourPlotter.ContourPlotter import ContourPlotter
@@ -143,7 +144,7 @@ class MapImager(AnalysisModule):
         if fileName is None:
             dh = self.getElement("File Loader").baseDir().name()
             self.fileDialog = FileDialog(None, "Save image data", dh, '*.ma')
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.saveMA)
             return  

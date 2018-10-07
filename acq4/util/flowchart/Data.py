@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.pyqtgraph.flowchart.Node import Node
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.util.DirTreeWidget import *
 import numpy as np
 import acq4.util.metaarray as metaarray
@@ -18,7 +19,7 @@ class SubtreeNode(Node):
         self.files = set()
         self.lastInput = None
         self.fileList = DirTreeWidget(checkState=False, allowMove=False, allowRename=False)
-        #QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        #Qt.QObject.connect(self.fileList, Qt.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
         self.fileList.itemChanged.connect(self.itemChanged)
         
     def process(self, In, display=True):
@@ -58,7 +59,7 @@ class SubtreeNode(Node):
 
     def itemChanged(self, item):
         fname = item.handle.name(relativeTo=self.root)
-        if item.checkState(0) == QtCore.Qt.Checked:
+        if item.checkState(0) == Qt.Qt.Checked:
             if fname not in self.files:
                 self.files.add(fname)
                 self.addOutput(fname)

@@ -1,5 +1,5 @@
 from acq4.modules.Module import Module
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 
 
 class CCFViewer(Module):

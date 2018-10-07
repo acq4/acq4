@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 # Form implementation generated from reading ui file 'acq4/util/imaging/bg_subtract_template.ui'
 #

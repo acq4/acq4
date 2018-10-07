@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import division
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
-from PyQt4 import QtCore, QtGui
-from imagingTemplate import Ui_Form
+from acq4.util import Qt
+from .imagingTemplate import Ui_Form
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
@@ -18,9 +19,9 @@ class ImagingModule(AnalysisModule):
         AnalysisModule.__init__(self, *args)
         # self.ui = Ui_Form()
         # self.ui.setupUi(self)
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
-        self.splitter = QtGui.QSplitter()
+        self.splitter = Qt.QSplitter()
         self.layout.addWidget(self.splitter)
         self.ptree = ParameterTree()
         self.splitter.addWidget(self.ptree)
@@ -156,7 +157,7 @@ class ImagingModule(AnalysisModule):
         # Update list so user can select program component
         supportedTypes = ['rect']
         progs = dict([(prog['name'], prog) for prog in progs if prog['type'] in supportedTypes])
-        self.params.child('scanProgram').setLimits(progs.keys())
+        self.params.child('scanProgram').setLimits(list(progs.keys()))
         selectedProg = self.params['scanProgram']
         if selectedProg not in progs:
             return
@@ -206,7 +207,7 @@ class ImagingModule(AnalysisModule):
 
             # compute global transform
             tr = rs.imageTransform()
-            st = pg.QtGui.QTransform()
+            st = Qt.QTransform()
             st.scale(self.params['downsample'], 1)
             tr = st * tr
             result['transform'] = pg.SRTTransform3D(tr)
@@ -216,7 +217,7 @@ class ImagingModule(AnalysisModule):
             # Display image locally
             self.imageView.setImage(imageData, xvals=frameTimes, levelMode=levelMode)
             self.imageView.getView().setAspectLocked(True)
-#            self.imageView.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
+#            self.imageView.imageItem.setRect(Qt.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
             self.imageView.imageItem.resetTransform()
             self.imageView.imageItem.scale((rs.width/rs.height)/(imageData.shape[1]/imageData.shape[2]), 1.0)
             self.imageView.autoRange()

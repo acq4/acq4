@@ -1,11 +1,12 @@
+from __future__ import print_function
 
 from acq4.pyqtgraph.PlotWidget import *
-from AnalysisPlotWidgetTemplate import *
+from .AnalysisPlotWidgetTemplate import *
 import exceptions
 
-class AnalysisPlotWidget(QtGui.QWidget):
+class AnalysisPlotWidget(Qt.QWidget):
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.ui = Ui_AnalysisPlotWidgetTemplate()
         self.ui.setupUi(self)
         self.ui.xAxisCombo.insertItems(0, ['stim intensity', 'latency', 'slope', 'amplitude', 'firing rate'])
@@ -13,12 +14,12 @@ class AnalysisPlotWidget(QtGui.QWidget):
         self.dataSource = None
         self.host = None
         
-        QtCore.QObject.connect(self.ui.removeBtn, QtCore.SIGNAL('clicked()'), self.remove)
-        QtCore.QObject.connect(self.ui.xAxisCombo, QtCore.SIGNAL('comboIndexChanged()'), self.updatePlot)
-        QtCore.QObject.connect(self.ui.yAxisCombo, QtCore.SIGNAL('comboIndexChanged()'), self.updatePlot)
+        Qt.QObject.connect(self.ui.removeBtn, Qt.SIGNAL('clicked()'), self.remove)
+        Qt.QObject.connect(self.ui.xAxisCombo, Qt.SIGNAL('comboIndexChanged()'), self.updatePlot)
+        Qt.QObject.connect(self.ui.yAxisCombo, Qt.SIGNAL('comboIndexChanged()'), self.updatePlot)
         
     def remove(self):
-        #QtCore.QObject.disconnect(self.ui.removeBtn, 0,0,0)
+        #Qt.QObject.disconnect(self.ui.removeBtn, 0,0,0)
         self.setParent(None)
         
     def updatePlot(self):

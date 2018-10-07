@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time
 import numpy as np
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from ..Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util.Mutex import Mutex
@@ -312,17 +313,17 @@ class ScientificaGUI(StageInterface):
         StageInterface.__init__(self, dev, win)
 
         # Insert Scientifica-specific controls into GUI
-        self.zeroBtn = QtGui.QPushButton('Zero position')
+        self.zeroBtn = Qt.QPushButton('Zero position')
         self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
         self.nextRow += 1
 
-        self.psGroup = QtGui.QGroupBox('Rotary Controller')
+        self.psGroup = Qt.QGroupBox('Rotary Controller')
         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
         self.nextRow += 1
 
-        self.psLayout = QtGui.QGridLayout()
+        self.psLayout = Qt.QGridLayout()
         self.psGroup.setLayout(self.psLayout)
-        self.speedLabel = QtGui.QLabel('Speed')
+        self.speedLabel = Qt.QLabel('Speed')
         self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, bounds=[1e-6, 10e-3])
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)

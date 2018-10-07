@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtTest
+from __future__ import print_function
+from acq4.util import Qt
 from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
@@ -19,9 +20,9 @@ class Stage(Device, OptomechDevice):
     defined by the hardware.
     """
 
-    sigPositionChanged = QtCore.Signal(object)
-    sigLimitsChanged = QtCore.Signal(object)
-    sigSwitchChanged = QtCore.Signal(object, object)  # self, {switch_name: value, ...}
+    sigPositionChanged = Qt.Signal(object)
+    sigLimitsChanged = Qt.Signal(object)
+    sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -29,12 +30,12 @@ class Stage(Device, OptomechDevice):
 
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = QtGui.QMatrix4x4(self.deviceTransform())
-        self._stageTransform = QtGui.QMatrix4x4()
-        self._invStageTransform = QtGui.QMatrix4x4()
+        self._baseTransform = Qt.QMatrix4x4(self.deviceTransform())
+        self._stageTransform = Qt.QMatrix4x4()
+        self._invStageTransform = Qt.QMatrix4x4()
 
         self.config = config
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.pos = [0]*3
         self._defaultSpeed = 'fast'
         self.pitch = config.get('pitch', 27)
@@ -51,7 +52,7 @@ class Stage(Device, OptomechDevice):
         self._limits = [(None, None), (None, None), (None, None)]
 
         self._progressDialog = None
-        self._progressTimer = QtCore.QTimer()
+        self._progressTimer = Qt.QTimer()
         self._progressTimer.timeout.connect(self.updateProgressDialog)
 
         dm.declareInterface(name, ['stage'], self)
@@ -96,7 +97,7 @@ class Stage(Device, OptomechDevice):
         """Return the transform that maps from the local coordinate system to
         the scaled position reported by the stage hardware.
         """
-        return QtGui.QMatrix4x4(self._stageTransform)
+        return Qt.QMatrix4x4(self._stageTransform)
 
     def mapToStage(self, obj):
         return self._mapTransform(obj, self._stageTransform)
@@ -171,7 +172,7 @@ class Stage(Device, OptomechDevice):
     def baseTransform(self):
         """Return the base transform for this Stage.
         """
-        return QtGui.QMatrix4x4(self._baseTransform)
+        return Qt.QMatrix4x4(self._baseTransform)
 
     def setBaseTransform(self, tr):
         """Set the base transform of the stage. 
@@ -179,7 +180,7 @@ class Stage(Device, OptomechDevice):
         This sets the starting position and orientation of the stage before the 
         hardware-reported stage position is taken into account.
         """
-        self._baseTransform = QtGui.QMatrix4x4(tr)
+        self._baseTransform = Qt.QMatrix4x4(tr)
         self._updateTransform()
 
     def _updateTransform(self):
@@ -289,7 +290,7 @@ class Stage(Device, OptomechDevice):
         mfut = self._move(abs, rel, speed, linear=linear)
 
         if progress:
-            self._progressDialog = QtGui.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
+            self._progressDialog = Qt.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
             self._progressDialog.mf = mfut
             self._progressTimer.start(100)
 
@@ -439,7 +440,7 @@ class MoveFuture(object):
             if self.isDone():
                 break
             if updates is True:
-                QtTest.QTest.qWait(100)
+                Qt.QTest.qWait(100)
             else:
                 time.sleep(0.1)
         if not self.isDone() or self.wasInterrupted():
@@ -450,13 +451,13 @@ class MoveFuture(object):
                 raise RuntimeError("Move did not complete: %s" % err)
 
 
-class StageInterface(QtGui.QWidget):
+class StageInterface(Qt.QWidget):
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
 
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.axCtrls = {}
         self.posLabels = {}
@@ -467,20 +468,20 @@ class StageInterface(QtGui.QWidget):
 
         for axis in (0, 1, 2):
             if cap['getPos'][axis]:
-                axLabel = QtGui.QLabel('XYZ'[axis])
+                axLabel = Qt.QLabel('XYZ'[axis])
                 axLabel.setMaximumWidth(15)
-                posLabel = QtGui.QLabel('0')
+                posLabel = Qt.QLabel('0')
                 self.posLabels[axis] = posLabel
                 widgets = [axLabel, posLabel]
                 if cap['limits'][axis]:
-                    minCheck = QtGui.QCheckBox('Min:')
+                    minCheck = Qt.QCheckBox('Min:')
                     minCheck.tag = (axis, 0)
-                    # minBtn = QtGui.QPushButton('set')
+                    # minBtn = Qt.QPushButton('set')
                     # minBtn.tag = (axis, 0)
                     # minBtn.setMaximumWidth(30)
-                    maxCheck = QtGui.QCheckBox('Max:')
+                    maxCheck = Qt.QCheckBox('Max:')
                     maxCheck.tag = (axis, 1)
-                    # maxBtn = QtGui.QPushButton('set')
+                    # maxBtn = Qt.QPushButton('set')
                     # maxBtn.tag = (axis, 1)
                     # maxBtn.setMaximumWidth(30)
                     self.limitChecks[axis] = (minCheck, maxCheck)

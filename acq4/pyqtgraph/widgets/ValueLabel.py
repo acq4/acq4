@@ -3,6 +3,9 @@ from ..ptime import time
 from .. import functions as fn
 from functools import reduce
 
+from functools import reduce
+
+
 __all__ = ['ValueLabel']
 
 class ValueLabel(QtGui.QLabel):

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 debug.py - Functions to aid in debugging 
 Copyright 2010  Luke Campagnola
@@ -60,14 +61,14 @@ def logMsg(msg, **kwargs):
         try:
             LOG_UI.logMsg(msg, **kwargs)
         except:
-            print "Error logging message:"
-            print "    " + "\n    ".join(msg.split("\n"))
-            print "    " + str(kwargs)
+            print("Error logging message:")
+            print("    " + "\n    ".join(msg.split("\n")))
+            print("    " + str(kwargs))
             sys.excepthook(*sys.exc_info())
     else:
-        print "Can't log message; no log created yet."
+        print("Can't log message; no log created yet.")
         #print args
-        print kwargs
+        print(kwargs)
         
     
 def logExc(msg, *args, **kwargs):
@@ -77,14 +78,14 @@ def logExc(msg, *args, **kwargs):
         try:
             LOG_UI.logExc(msg, *args, **kwargs)
         except:
-            print "Error logging exception:"
-            print "    " + "\n    ".join(msg.split("\n"))
-            print "    " + str(kwargs)
+            print("Error logging exception:")
+            print("    " + "\n    ".join(msg.split("\n")))
+            print("    " + str(kwargs))
             sys.excepthook(*sys.exc_info())
     else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
+        print("Can't log error message; no log created yet.")
+        print(args)
+        print(kwargs)
 
 
 blockLogging = False
@@ -99,7 +100,7 @@ def exceptionCallback(*args):
             blockLogging = True
             logMsg("Unexpected error: ", exception=args, msgType='error')
         except:
-            print "Error: Exception could no be logged."
+            print("Error: Exception could no be logged.")
             original_excepthook(*sys.exc_info())
         finally:
             blockLogging = False

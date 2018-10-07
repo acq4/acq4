@@ -1,3 +1,4 @@
+from __future__ import print_function
 import serial, struct, time, collections
 import numpy as np
 
@@ -47,7 +48,7 @@ class SutterMPC200(SerialDevice):
         n, drives = dev.getDriveStatus()
 
         # read position of drive 0
-        print dev.getPos(0)
+        print(dev.getPos(0))
 
         # move drive 1 to x=10mm
         dev.moveTo(1, [10e-3, 0, 0], 'fast')
@@ -260,7 +261,7 @@ class SutterMPC200(SerialDevice):
             self.readAll()
         except TimeoutError:
             # just for debugging
-            print "start pos:", currentPos, "move pos:", ustepPos
+            print("start pos:", currentPos, "move pos:", ustepPos)
             raise
         finally:
             self._moving = False
@@ -348,7 +349,7 @@ def measureSpeedTable(dev, drive, dist=3e-3):
         stop = ptime.time()
         dt = stop - start
         v.append(dist / dt)
-        print '%d: %0.4g,  # %0.2g m / %0.2g s' % (i, v[-1], dist, dt)
+        print('%d: %0.4g,  # %0.2g m / %0.2g s' % (i, v[-1], dist, dt))
         dist *= 1.1
     return v
 

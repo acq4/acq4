@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
-from CanvasItem import CanvasItem
-from ImageCanvasItem import ImageCanvasItem
-import ScanCanvasItemTemplate
+from __future__ import print_function
+from acq4.util import Qt
+from .CanvasItem import CanvasItem
+from .ImageCanvasItem import ImageCanvasItem
+from . import ScanCanvasItemTemplate
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np
@@ -66,7 +67,7 @@ class ScanCanvasItem(CanvasItem):
         
         
         
-        self._ctrlWidget = QtGui.QWidget()
+        self._ctrlWidget = Qt.QWidget()
         self.ui = ScanCanvasItemTemplate.Ui_Form()
         self.ui.setupUi(self._ctrlWidget)
         self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
@@ -82,9 +83,9 @@ class ScanCanvasItem(CanvasItem):
         self.addScanImageBtn = self.ui.loadSpotImagesBtn
         #self.createGradientBtn = self.ui.createGradientBtn
         #self.removeGradientBtn = self.ui.removeGradientBtn
-        self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
-        #self.createGradientBtn.connect(self.createGradientBtn, QtCore.SIGNAL('clicked()'), self.createGradient)
-        #self.removeGradientBtn.connect(self.removeGradientBtn, QtCore.SIGNAL('clicked()'), self.removeGradient)
+        self.addScanImageBtn.connect(self.addScanImageBtn, Qt.SIGNAL('clicked()'), self.loadScanImage)
+        #self.createGradientBtn.connect(self.createGradientBtn, Qt.SIGNAL('clicked()'), self.createGradient)
+        #self.removeGradientBtn.connect(self.removeGradientBtn, Qt.SIGNAL('clicked()'), self.removeGradient)
         #self.gradientNumber = self.ui.gradSpin
 
     #def addScan(self, dirHandle, **opts):
@@ -187,7 +188,7 @@ class ScanCanvasItem(CanvasItem):
         dh = self.opts['handle']
         dirs = [dh[d] for d in dh.subDirs()]
         if 'Camera' not in dirs[0].subDirs():
-            print "No image data for this scan."
+            print("No image data for this scan.")
             return
         
         spotFrame = self.ui.spotFrameSpin.value()

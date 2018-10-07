@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import division, with_statement
 import re
 from collections import OrderedDict
 from acq4.devices.Camera import Camera, CameraTask
-from PyQt4 import QtCore
+from acq4.util import Qt
+import six
 import time, sys, traceback
 from numpy import *
 from acq4.util.metaarray import *
@@ -64,8 +66,6 @@ class MicroManagerCamera(Camera):
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
-        # import pprint
-        # pprint.pprint(dict(self.listParams()))
         
     def startCamera(self):
         with self.camLock:
@@ -75,6 +75,11 @@ class MicroManagerCamera(Camera):
         with self.camLock:
             self.mmc.stopSequenceAcquisition()
             self.acqBuffer = None
+
+    def isRunning(self):
+        # This is needed to allow calling setParam inside startCamera before the acquisition has actually begun
+        # (but after the acquisition thread has started)
+        return self.mmc.isSequenceRunning()
 
     def _acquireFrames(self, n=1):
         if self.isRunning():
@@ -205,33 +210,53 @@ class MicroManagerCamera(Camera):
         """List properties of specified parameters, or of all parameters if None"""
         if params is None:
             return self._allParams.copy()
-        if isinstance(params, basestring):
+        if isinstance(params, six.string_types):
             return self._allParams[params]
         return dict([(p, self._allParams[p]) for p in params])
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        p = Profiler(disabled=True, delayed=False)
+
         # umanager will refuse to set params while camera is running,
         # so autoRestart doesn't make sense in this context
         if self.isRunning():
-            restart = True
+            restart = autoRestart
             self.stop()
+            p('stop')
         else:
-            restart = False
+            restart = False        
+
+        # Join region params into one request (_setParam can be very slow)
+        regionKeys = ['regionX', 'regionY', 'regionW', 'regionH']
+        nRegionKeys = len([k for k in regionKeys if k in params])
+        if nRegionKeys > 1:
+            rgn = list(self.mmc.getROI(self.camName))
+            for k in regionKeys:
+                if k not in params:
+                    continue
+                i = {'X':0, 'Y':1, 'W':2, 'H':3}[k[-1]]
+                rgn[i] = params[k]
+                del params[k]
+            params['region'] = rgn
 
         newVals = {}
         for k,v in params.items():
             self._setParam(k, v, autoCorrect=autoCorrect)
+            p('setParam %r' % k)
             if k == 'binning':
                 newVals['binningX'], newVals['binningY'] = self.getParam(k)
             elif k == 'region':
                 newVals['regionX'], newVals['regionY'], newVals['regionW'], newVals['regionH'] = self.getParam(k)
             else:
                 newVals[k] = self.getParam(k)
+            p('reget param')
         self.sigParamsChanged.emit(newVals)
+        p('emit')
 
         if restart:
             self.start()
-
+            p('start')
+        
         needRestart = False
         return (newVals, needRestart)
 
@@ -259,6 +284,9 @@ class MicroManagerCamera(Camera):
             self.mmc.setROI(*rgn)
             return
 
+        # translate requested parameter into a list of sub-parameters to set
+        setParams = []
+
         if param.startswith('binning'):
             if self._binningMode is None:
                 # camera does not support binning; only allow values of 1
@@ -270,22 +298,20 @@ class MicroManagerCamera(Camera):
             if param == 'binningX':
                 y = self.getParam('binningY')
                 value = (value, y)
-                param = 'binning'
             elif param == 'binningY':
                 x = self.getParam('binningX')
                 value = (x, value)
-                param = 'binning'
 
             if self._binningMode == 'x':
                 value = '%d' % value[0]
             else:
                 value = '%dx%d' % value
-            param = 'Binning'
+
+            setParams.append(('Binning', value))
 
         elif param == 'exposure':
             # s to ms
-            value = value * 1e3
-            param = 'Exposure'
+            setParams.append(('Exposure', value * 1e3))
 
         elif param == 'triggerMode':
             if self._triggerProp is None:
@@ -293,19 +319,37 @@ class MicroManagerCamera(Camera):
                 if value != 'Normal':
                     raise ValueError("Invalid trigger mode '%s'" % value)
                 return
-            value = self._triggerModes[1][value]
-            param = self._triggerProp
+
+            # translate trigger mode name
+            setParams.append((self._triggerProp, self._triggerModes[1][value]))
+
+            # Hamamatsu cameras require setting a trigger source as well
+            if self._config['mmAdapterName'] == 'HamamatsuHam':
+                if value == 'Normal':
+                    source = 'INTERNAL'
+                elif value == 'TriggerStart':
+                    source = 'EXTERNAL'
+                else:
+                    raise ValueError("Invalid trigger mode '%s'" % value)
+                # On Orca 4 we actually have to toggle the source property
+                # back and forth, otherwise it is sometimes ignored.
+                setParams.append(('TRIGGER SOURCE', 'INTERNAL'))
+                setParams.append(('TRIGGER SOURCE', source))
+
+        else:
+            setParams.append((param, value))
 
         # elif param == 'bitDepth':
         #     param = 'PixelType'
         #     value = '%dbit' % value
 
         with self.camLock:
-            self.mmc.setProperty(self.camName, str(param), str(value))
+            for param, value in setParams:
+                self.mmc.setProperty(self.camName, str(param), str(value))
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         return dict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):

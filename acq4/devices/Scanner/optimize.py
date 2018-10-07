@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 #from debug import Profiler
 
@@ -90,9 +91,9 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(path, '..', '..', 'util'))
     
     import user, time, collections
-    from PyQt4 import QtGui, QtCore
+    from acq4.util import Qt
     import acq4.pyqtgraph as pg
-    app = QtGui.QApplication([])
+    app = Qt.QApplication([])
     
     minTime = 10.
     minDist = 0.5e-3
@@ -105,16 +106,16 @@ if __name__ == '__main__':
         bLocs = [x[0] for x in b]
         bTimes = [x[1] for x in b]
         if len(a) != len(b):
-            print "  WARNING: optimize changed size of list"
+            print("  WARNING: optimize changed size of list")
             return
         for i in range(len(a)):
             if a[i] not in bLocs:
-                print "  WARNING: optimize changed contents of list"
-                print a[i], "not in solution"
+                print("  WARNING: optimize changed contents of list")
+                print(a[i], "not in solution")
                 return
             elif bLocs[i] not in a:
-                print "  WARNING: optimize changed contents of list"
-                print bLocs[i], "not in original"
+                print("  WARNING: optimize changed contents of list")
+                print(bLocs[i], "not in original")
                 return
         #print "List check OK"
 
@@ -138,11 +139,11 @@ if __name__ == '__main__':
                     else:
                         pass
                 bTimes = [x[1] for x in l2]
-                print key, "  \tcompute time:\t%0.1f  \ttotal cost:\t%0.1f  \tmax interval:\t%0.1f\t" % (
+                print(key, "  \tcompute time:\t%0.1f  \ttotal cost:\t%0.1f  \tmax interval:\t%0.1f\t" % (
                     time.time()-start,
                     sum(bTimes),
                     max(bTimes)
-                )
+                ))
                 #print "  total cost:\t%0.1f" % sum(bTimes)
                 #print "  max interval:\t%0.1f" % max(bTimes)
                 
@@ -157,7 +158,7 @@ if __name__ == '__main__':
                 
                 ## number spots
                 #for i in range(len(data)):
-                    #t = QtGui.QGraphicsTextItem()
+                    #t = Qt.QGraphicsTextItem()
                     #t.setHtml('<span style="color: #f00">%d</span>'%i)
                     #t.setFlag(t.ItemIgnoresTransformations, True)
                     #t.setPos(*l2[i][0])
@@ -196,9 +197,9 @@ if __name__ == '__main__':
                 
                 
             view.nextRow()
-            print ""
+            print("")
         view.nextRow()
-        print ""
+        print("")
     view.show()
         
     

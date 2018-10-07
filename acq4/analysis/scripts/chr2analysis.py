@@ -1,3 +1,4 @@
+from __future__ import print_function
 __author__ = 'pbmanis'
 
 from collections import OrderedDict
@@ -33,8 +34,8 @@ class Params(object):
                 continue
             if x == 'list':
                 continue
-            print '   ' + x + ' = ',
-            print eval('self.' + x)
+            print('   ' + x + ' = ', end=" ")
+            print(eval('self.' + x))
 
 class ChR2():
     def __init__(self):
@@ -63,7 +64,7 @@ class ChR2():
         array.
         """
         #global summary
-        print 'protocolInfoLED***\n'
+        print('protocolInfoLED***\n')
         self.devicemode = 'LED'
         nspikes = len(inputs)
         reps = fh.parent().info()['protocol']['conf']['repetitions'] # fh.info()[('protocol', 'repetitions')]
@@ -117,11 +118,11 @@ class ChR2():
             self.devicemode = 'Laser'
             #print inputs
     #        print 'FH parent info: ', fh.parent().info()
-            print '1'
+            print('1')
             reps = fh.parent().info()['protocol']['conf']['repetitions'] # fh.info()[('protocol', 'repetitions')]
-            print '2'
-            print fh.info().keys()
-            print fh.info()
+            print('2')
+            print(list(fh.info().keys()))
+            print(fh.info())
             try:
                 pulseDurIndex = fh.info()['Laser-Blue', 'Shutter.duration']
             except:
@@ -137,19 +138,19 @@ class ChR2():
             dm = re.compile(r'(\d{4,4})\.(\d{2,2})\.(\d{2,2})*')
             dsearch = dm.search(fh.name())
             expname = fh.name()[dsearch.start():] # pull full path for experiment here, but leave out everything above the date
-            print '3'
+            print('3')
             pulseDur = fh.parent().info()['sequenceParams'][('Laser-Blue','Shutter.duration')] # [pulseDurIndex]
-            print '4'
+            print('4')
             pulseDur = pulseDur[pulseDurIndex]
-            print '5'
+            print('5')
             pulseTrainCommandShutter = fh.parent().info()['devices']['Laser-Blue']['channels']['Shutter']
-            print '6'
+            print('6')
             pulseTrainFcn = pulseTrainCommandShutter['waveGeneratorWidget']['function']
             r = re.compile('(?P<type>pulse)\((?P<delay>\d+),\s(?P<param>\w+),\s(?P<value>\d+)\)')
             s = r.match(pulseTrainFcn)
-            print '6.5'
+            print('6.5')
             startTime = float(s.group('delay'))*1e-3   # pulseTrainFcn['start']['value'] # retrieve start time
-            print '7'
+            print('7')
             rep = 0  # fh.info()[('protocol', 'repetitions')]
             ipi = 1  # pulseTrainInfo['interpulse_length']['value'] # retrieve interpulse interval
             npulses = 1 # pulseTrainInfo['pulse_number']['value'] # retrieve number of pulses in train
@@ -157,12 +158,12 @@ class ChR2():
             # figure max of derivative of the data after each stimulus pulse. 5 msec window.
             t = derivative.xvals("Time")
             slopes = np.zeros(npulses)
-            print '8'
+            print('8')
             for n in range(npulses):
                 t0 = startTime + n * ipi
                 t1 = t0 + 3e-3
                 x = np.where((t > t0) & (t <= t1))
-                print 'n, x: ', n, x
+                print('n, x: ', n, x)
                 slopes[n] = np.max(derivative[x])
 
             res = OrderedDict([('Experiment: ', expname), ('File: ', fn), ('startTime', startTime),
@@ -198,23 +199,23 @@ class ChR2():
         kl = []
         excludeKeys = ['Experiment: ', 'SpikeTimes', 'Reps']
         if printDetails:
-            print '----------------------------------'
+            print('----------------------------------')
             if excludeKeys[0] in self.summary[0].keys():
-                print 'Experiment: %s  reps: %d' % (self.summary[0][excludeKeys[0]], self.summary[0]['Reps'])
+                print('Experiment: %s  reps: %d' % (self.summary[0][excludeKeys[0]], self.summary[0]['Reps']))
             for s in self.summary[0].keys():
                 if s in excludeKeys:
                     continue
                 title = title + s + '\t'
                 kl.append(s)
-            print title
+            print(title)
             for i in range(len(self.summary)):
                 for k in kl: # keeps order
                     if k in excludeKeys:
                         continue
-                    print self.summary[i][k], '\t',
-                print ''
-            print '----------------------------------'
-            print '\n'
+                    print(self.summary[i][k], '\t', end=" ")
+                print('')
+            print('----------------------------------')
+            print('\n')
         # generate a summary that ranks data by pulse duration
         # analysis:
         # mean # spikes per stimulus (count spikes from stimulus onset to the ipi following
@@ -265,13 +266,13 @@ class ChR2():
         # print out a summary to copy into another program for plotting, etc.
         # data are put into comma separated columns, with some additional info to identify the
         # data set source.
-        print "\n--------------------------\n"
+        print("\n--------------------------\n")
         textbuf = []  # accumulate into the text buffer so we can copy to clipboard...
         textbuf.append("Summary for Experiment: %s Reps = %d" % (self.summary[0][excludeKeys[0]], self.summary[0]['Reps']))
         if npul > 2:  # summary is across pulses. Should only be one duration...
             textbuf.append(' IPI = %f  Duration = %f\n' % (ipi, duration))
             textbuf.append( "Pulse\tDur\tslope\tspikes\tlatency\tstdlatency\n")
-            print uniqDurs
+            print(uniqDurs)
             for j, d in enumerate(uniqDurs):
                 textbuf.append( "Pulse\tDur\tslope\tspikes\tlatency\tstdlatency\n")
                 for i in range(npul):
@@ -289,8 +290,8 @@ class ChR2():
                # print i, len(meanslope[0])
                 textbuf.append( "%f\t%f\t%f\t%f\t%f\n" % (d, meanslope[i][0], meannspk[i][0], meanlat[i][0], stdlat[i][0]))
         for t in textbuf: # print the contents of the text buffer (which is a list... )
-            print t,
-        print "\n--------------------------\n"
+            print(t, end=" ")
+        print("\n--------------------------\n")
         #print meanlat[0]
         #print stdlat[0]
         #print meannspk[0]

@@ -1,13 +1,14 @@
-from PyQt4 import QtGui, QtCore
-import QueryTemplate
+from __future__ import print_function
+from acq4.util import Qt
+from . import QueryTemplate
 
 
-class DatabaseQueryWidget(QtGui.QWidget):
+class DatabaseQueryWidget(Qt.QWidget):
     
-    sigTableChanged = QtCore.Signal()
+    sigTableChanged = Qt.Signal()
     
     def __init__(self, dm):  ## datamanager tells us which DB is currently loaded.
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dm = dm
         self.ui = QueryTemplate.Ui_Form()
         self.ui.setupUi(self)

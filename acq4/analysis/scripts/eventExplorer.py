@@ -1,4 +1,5 @@
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.opengl as gl
@@ -26,26 +27,26 @@ if 'events' not in locals():
     events = {}
     firstRun = True
 
-    win = QtGui.QMainWindow()
-    #cw = QtGui.QWidget()
+    win = Qt.QMainWindow()
+    #cw = Qt.QWidget()
     layout = pg.LayoutWidget()
-    #layout = QtGui.QGridLayout()
+    #layout = Qt.QGridLayout()
     #layout.setContentsMargins(0,0,0,0)
     #layout.setSpacing(0)
     #cw.setLayout(layout)
     win.setCentralWidget(layout)
 
-    cellCombo = QtGui.QComboBox()
+    cellCombo = Qt.QComboBox()
     cellCombo.setSizeAdjustPolicy(cellCombo.AdjustToContents)
     layout.addWidget(cellCombo)
     
-    reloadBtn = QtGui.QPushButton('reload')
+    reloadBtn = Qt.QPushButton('reload')
     layout.addWidget(reloadBtn)
     
-    separateCheck = QtGui.QCheckBox("color pre/post")
+    separateCheck = Qt.QCheckBox("color pre/post")
     layout.addWidget(separateCheck)
     
-    colorCheck = QtGui.QCheckBox("color y position")
+    colorCheck = Qt.QCheckBox("color y position")
     layout.addWidget(colorCheck)
     
     errLimitSpin = pg.SpinBox(value=0.7, step=0.1)
@@ -60,8 +61,8 @@ if 'events' not in locals():
     postRgnStopSpin = pg.SpinBox(value=0.700, step=0.01, siPrefix=True, suffix='s')
     layout.addWidget(postRgnStopSpin)
 
-    spl1 = QtGui.QSplitter()
-    spl1.setOrientation(QtCore.Qt.Vertical)
+    spl1 = Qt.QSplitter()
+    spl1.setOrientation(Qt.Qt.Vertical)
     layout.addWidget(spl1, row=1, col=0, rowspan=1, colspan=8)
 
     pw1 = pg.PlotWidget()
@@ -69,14 +70,14 @@ if 'events' not in locals():
     pw1.setLabel('left', 'Amplitude', 'A')
     pw1.setLabel('bottom', 'Decay Tau', 's')
 
-    spl2 = QtGui.QSplitter()
-    spl2.setOrientation(QtCore.Qt.Horizontal)
+    spl2 = Qt.QSplitter()
+    spl2.setOrientation(Qt.Qt.Horizontal)
     spl1.addWidget(spl2)
 
     pw2 = pg.PlotWidget(labels={'bottom': ('time', 's')})
     spl2.addWidget(pw2)
     
-    tab = QtGui.QTabWidget()
+    tab = Qt.QTabWidget()
     spl2.addWidget(tab)
     
     
@@ -111,7 +112,7 @@ if 'events' not in locals():
     
 
 
-    print "Reading cell list..."
+    print("Reading cell list...")
     
     #import os, pickle
     #md = os.path.abspath(os.path.split(__file__)[0])
@@ -127,7 +128,7 @@ if 'events' not in locals():
     ## create views that link cell information to events/sites
     db = man.getModule('Data Manager').currentDatabase()
     if not db.hasTable(siteView):
-        print "Creating DB views."
+        print("Creating DB views.")
         db.createView(siteView, ['photostim_sites', 'DirTable_Protocol', 'DirTable_Cell'])  ## seems to be unused.
     if not db.hasTable(eventView):
         db.createView(eventView, ['photostim_events', 'DirTable_Protocol', 'DirTable_Cell'])
@@ -140,7 +141,7 @@ if 'events' not in locals():
     for c in cells:
         cellCombo.addItem(c.name(relativeTo=man.baseDir))
     #cellSpin.setMaximum(len(cells)-1)
-    print "Done."
+    print("Done.")
 
     
     
@@ -158,9 +159,9 @@ def loadCell(cell, reloadData=False):
     nEv = 0
     positionCache = {}
     tcache = {}
-    print "Loading all events for cell", cell
+    print("Loading all events for cell", cell)
     tot = db.select(eventView, 'count()', where={'CellDir': cell})[0]['count()']
-    print tot, "total events.."
+    print(tot, "total events..")
     
     with pg.ProgressDialog('Loading event data...', maximum=tot, wait=0) as dlg:
         for ev in db.iterSelect(eventView, ['ProtocolSequenceDir', 'SourceFile', 'fitAmplitude', 'fitTime', 'fitDecayTau', 'fitRiseTau', 'fitTimeToPeak', 'fitLengthOverDecay', 'fitFractionalError', 'userTransform', 'CellType', 'CellDir', 'ProtocolDir'], where={'CellDir': cell}, toArray=True, chunkSize=200):
@@ -297,7 +298,7 @@ def showCell(**kwds):
     #if lock:
         #return
     #lock = True
-    QtGui.QApplication.processEvents() ## prevents double-spin
+    Qt.QApplication.processEvents() ## prevents double-spin
     #lock = False
     cell = cells[cellCombo.currentIndex()-1]
     
@@ -394,7 +395,7 @@ def showCell(**kwds):
         pg.siFormat(np.median(ev3['fitDecayTau']), error=np.std(ev3['fitDecayTau']), space=False, suffix='s'),
         pg.siFormat(np.median(ev3['fitAmplitude']), error=np.std(ev3['fitAmplitude']), space=False, suffix='A'),
         sri)
-    print re.sub(r'<[^>]+>', '', title)
+    print(re.sub(r'<[^>]+>', '', title))
     
     pw1.setTitle(title)
 
@@ -412,7 +413,7 @@ def showCell(**kwds):
         p = (rec['right'], rec['anterior'], rec['dorsal'])
         evSpots[p] = None
         
-    pos = np.array(evSpots.keys())
+    pos = np.array(list(evSpots.keys()))
     atlasPoints.setData(pos=pos, )
     
     

@@ -1,27 +1,28 @@
 # -*- coding: utf-8 -*-
-import template
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from . import template
+from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4.Manager import logMsg, logExc, getManager
 
 
-class FileLoader(QtGui.QWidget):
+class FileLoader(Qt.QWidget):
     """Interface for 1) displaying directory tree and 2) loading a file from the tree.
     You must call setHost, and the widget will call host.loadFileRequested whenever 
     the user requests to load a file and host.clearFilesRequested whenever the user 
     clicks the clear button."""
     
     
-    sigFileLoaded = QtCore.Signal(object)
-    sigBaseChanged = QtCore.Signal(object)
-    sigSelectedFileChanged = QtCore.Signal(object)
-    sigClearRequested = QtCore.Signal()
+    sigFileLoaded = Qt.Signal(object)
+    sigBaseChanged = Qt.Signal(object)
+    sigSelectedFileChanged = Qt.Signal(object)
+    sigClearRequested = Qt.Signal()
     
     def __init__(self, dataManager, host=None, showFileTree=True):
         self._baseDir = None
         self.dataManager = dataManager
         self.loaded = []
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.ui = template.Ui_Form()
         self.ui.setupUi(self)
         self.setHost(host)
@@ -69,28 +70,28 @@ class FileLoader(QtGui.QWidget):
         
     def loadFile(self, files):
         try:
-            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
             for fh in files:
                 if self.host is None:
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
                 elif self.host.loadFileRequested([fh]):
                     name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-                    item = QtGui.QTreeWidgetItem([name])
+                    item = Qt.QTreeWidgetItem([name])
                     item.file = fh
                     self.ui.fileTree.addTopLevelItem(item)
                     self.sigFileLoaded.emit(fh)
                     self.loaded.append(fh)
         finally:
-            QtGui.QApplication.restoreOverrideCursor()
+            Qt.QApplication.restoreOverrideCursor()
 
     def clearClicked(self):
         """Remove all loaded data. User will be asked whether they really want to clear."""
         ## double-check with user to avoid accidental button presses
         if len(self.loaded) > 0:
-            response = QtGui.QMessageBox.question(self.ui.clearBtn, "Warning", "Really clear all items?", 
-                QtGui.QMessageBox.Ok|QtGui.QMessageBox.Cancel)
-            if response != QtGui.QMessageBox.Ok:
+            response = Qt.QMessageBox.question(self.ui.clearBtn, "Warning", "Really clear all items?", 
+                Qt.QMessageBox.Ok|Qt.QMessageBox.Cancel)
+            if response != Qt.QMessageBox.Ok:
                 return
         else:
             return
@@ -106,9 +107,9 @@ class FileLoader(QtGui.QWidget):
     def addVirtualFiles(self, itemNames, parentName=None):
         """Add names in itemNames to the list of loaded files. If parentName is specified items will be added as children of the parent."""
         for name in itemNames:
-            item = QtGui.QTreeWidgetItem([name])
+            item = Qt.QTreeWidgetItem([name])
             if parentName is not None:
-                parent = self.ui.fileTree.findItems(parentName, QtCore.Qt.MatchExactly)[0]
+                parent = self.ui.fileTree.findItems(parentName, Qt.Qt.MatchExactly)[0]
                 parent.addChild(item)
             else:
                 self.ui.fileTree.addTopLevelItem(item)

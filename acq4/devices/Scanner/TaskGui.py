@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 import random
 import numpy as np
-import optimize ## for determining random scan patterns
+from . import optimize ## for determining random scan patterns
 import os, sys
 
 import acq4.pyqtgraph as pg
@@ -13,7 +14,7 @@ from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
-from TaskTemplate import Ui_Form
+from .TaskTemplate import Ui_Form
 from .scan_program import ScanProgram, ScanProgramPreview
 
 ### Error IDs:
@@ -21,7 +22,7 @@ from .scan_program import ScanProgram, ScanProgramPreview
 
 
 class PositionCtrlGroup(pTypes.GroupParameter):
-    sigAddNewRequested = QtCore.Signal(object, object)
+    sigAddNewRequested = Qt.Signal(object, object)
     def __init__(self):
         opts = {
             'name': 'Position Controls',
@@ -40,7 +41,7 @@ class PositionCtrlGroup(pTypes.GroupParameter):
 
 class ScannerTaskGui(TaskGui):
     
-    #sigSequenceChanged = QtCore.Signal(object)  ## inherited from Device
+    #sigSequenceChanged = Qt.Signal(object)  ## inherited from Device
     
     def __init__(self, dev, taskRunner):
         TaskGui.__init__(self, dev, taskRunner)
@@ -126,7 +127,7 @@ class ScannerTaskGui(TaskGui):
         self.dev.sigGlobalSubdeviceChanged.connect(self.opticStateChanged)
         
         self.testTarget = TargetPoint(name="Test", ptSize=100e-6)
-        self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
+        self.testTarget.setPen(Qt.QPen(Qt.QColor(255, 200, 200)))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
 
@@ -449,7 +450,7 @@ class ScannerTaskGui(TaskGui):
     def getTargetList(self):  ## should probably do some caching here.
         items = self.activeItems()
         locations = []
-        occArea = QtGui.QPainterPath()
+        occArea = Qt.QPainterPath()
         for i in items:
             if isinstance(i, TargetOcclusion):
                 occArea |= i.mapToView(i.shape())
@@ -458,9 +459,9 @@ class ScannerTaskGui(TaskGui):
             pts = i.listPoints()
             for j in range(len(pts)):
                 p = pts[j]
-                point = QtCore.QPointF(p[0], p[1])
+                point = Qt.QPointF(p[0], p[1])
                 if occArea.contains(point):
-                    i.setTargetPen(j, QtGui.QPen(QtGui.QColor(0,0,0,160)))
+                    i.setTargetPen(j, Qt.QPen(Qt.QColor(0,0,0,160)))
                 else:
                     locations.append(p)
                     i.setTargetPen(j, None)
@@ -562,7 +563,7 @@ class ScannerTaskGui(TaskGui):
 
 class TargetPoint(pg.EllipseROI):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, name, ptSize, **args):
         self.name = name
@@ -573,7 +574,7 @@ class TargetPoint(pg.EllipseROI):
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen
-        self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
+        self.setFlag(Qt.QGraphicsItem.ItemIgnoresParentOpacity, True)
         self.params = pTypes.SimpleParameter(name=self.name, type='bool', value=args.get('active', True), removable=True, renamable=True, children=[
         ])
         self.params.item = self
@@ -620,7 +621,7 @@ class TargetPoint(pg.EllipseROI):
 
 class Grid(pg.CrosshairROI):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, name, ptSize, **args):
         pg.CrosshairROI.__init__(self, pos=(0,0), size=args.get('size', [ptSize*4]*2), angle=args.get('angle', 0), **args)
@@ -803,7 +804,7 @@ class Grid(pg.CrosshairROI):
         points = points.view(dtype=float).reshape(len(points), 2)
         
         # get shape of total active region
-        activeArea = QtGui.QPainterPath()
+        activeArea = Qt.QPainterPath()
         for rgn in self.rgns:
             if rgn.value():
                 roi = rgn.item
@@ -876,7 +877,7 @@ class Grid(pg.CrosshairROI):
         
 class TargetOcclusion(pg.PolygonROI):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, name, ptSize, **args):
         self.name = name

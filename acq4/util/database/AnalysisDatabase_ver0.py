@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtSql, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 import numpy as np
 import pickle, re, os
 import acq4.Manager
@@ -7,6 +8,8 @@ import acq4.util.DataManager as DataManager
 import collections
 import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
+import six
+from six.moves import range
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -27,7 +30,7 @@ class SqliteDatabase:
     regardless of the type specified by its column.
     """
     def __init__(self, fileName=':memory:'):
-        self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE")
+        self.db = Qt.QSqlDatabase.addDatabase("QSQLITE")
         self.db.setDatabaseName(fileName)
         self.db.open()
         self._readTableList()
@@ -38,17 +41,17 @@ class SqliteDatabase:
     def exe(self, cmd, data=None, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
         be bound to the query and executed sequentially. Returns the query object."""
-        q = QtSql.QSqlQuery(self.db)
+        q = Qt.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
         else:
             res = []
             if not q.prepare(cmd):
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
             for d in data:
                 #print len(d)
-                for k, v in d.iteritems():
+                for k, v in d.items():
                     q.bindValue(':'+k, v)
                     #print k, v, type(v)
                 #print "==execute with bound data=="
@@ -71,7 +74,7 @@ class SqliteDatabase:
     def select(self, table, fields='*', sql='', toDict=True, toArray=False):
         """fields should be a list of field names"""
         if fields != '*':
-            if isinstance(fields, basestring):
+            if isinstance(fields, six.string_types):
                 fields = fields.split(',')
             qf = []
             for f in fields:
@@ -110,7 +113,7 @@ class SqliteDatabase:
         ## Rememember that _prepareData may change the number of columns!
         records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns)
         
-        fields = records[0].keys()
+        fields = list(records[0].keys())
         insert = "INSERT"
         if replaceOnConflict:
             insert += " OR REPLACE"
@@ -142,7 +145,7 @@ class SqliteDatabase:
 
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
-        return q[0].values()[0]
+        return list(q[0].values())[0]
 
     def replace(self, *args, **kargs):
         return self.insert(*args, replaceOnConflict=True, **kargs)
@@ -160,7 +163,7 @@ class SqliteDatabase:
         if isinstance(fields, list):
             fieldStr = ','.join(fields)
         elif isinstance(fields, dict):
-            fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.iteritems()])
+            fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.items()])
         self('CREATE TABLE %s (%s) %s' % (table, fieldStr, sql))
         self._readTableList()
 
@@ -178,7 +181,7 @@ class SqliteDatabase:
             ret = query.exec_(cmd)
         if not ret:
             if cmd is not None:
-                print "SQL Query:\n    %s" % cmd
+                print("SQL Query:\n    %s" % cmd)
                 raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
             else:
                 raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
@@ -205,7 +208,7 @@ class SqliteDatabase:
                 #raise Exception("Table %s has no field named '%s'. Schema is: %s" % (table, k, str(schema)))
             typ = schema[k].lower()
             if typ == 'blob':
-                funcs[k] = lambda obj: QtCore.QByteArray(pickle.dumps(obj))
+                funcs[k] = lambda obj: Qt.QByteArray(pickle.dumps(obj))
             elif typ == 'int':
                 funcs[k] = int
             elif typ == 'real':
@@ -230,14 +233,14 @@ class SqliteDatabase:
                     if k.lower() != 'rowid':
                         if k not in schema:
                             raise Exception("Field '%s' not present in table '%s'" % (k, table))
-                        print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                        print("Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k]))))
             newData.append(newRec)
         #print "new data:", newData
         return newData
 
     def _queryToDict(self, q):
         res = []
-        while q.next():
+        while next(q):
             res.append(self._readRecord(q.record()))
         return res
 
@@ -252,7 +255,7 @@ class SqliteDatabase:
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(recs)):
+        for i in range(1, len(recs)):
             arr[i] = tuple(recs[i].values())
         return arr
 
@@ -266,17 +269,17 @@ class SqliteDatabase:
                 val = None
             else:
                 val = rec.value(i)
-                if isinstance(val, QtCore.QByteArray):
+                if isinstance(val, Qt.QByteArray):
                     val = pickle.loads(str(val))
                 #v = rec.value(i)   ## required when not using V2 API for QVariant
                 #t = v.type()
-                #if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
+                #if t in [Qt.QVariant.Int, Qt.QVariant.LongLong]:
                     #val = v.toInt()[0]
-                #if t in [QtCore.QVariant.Double]:
+                #if t in [Qt.QVariant.Double]:
                     #val = v.toDouble()[0]
-                #elif t == QtCore.QVariant.String:
+                #elif t == Qt.QVariant.String:
                     #val = str(v.toString())
-                #elif t == QtCore.QVariant.ByteArray:
+                #elif t == Qt.QVariant.ByteArray:
                     #val = pickle.loads(str(v.toByteArray()))
             data[n] = val
         return data
@@ -404,7 +407,7 @@ class AnalysisDatabase(SqliteDatabase):
             table = self.dirTypeName(handle)
             
         if not self.hasTable(table):
-            fields = acq4.Manager.getManager().suggestedDirFields(handle).keys()
+            fields = list(acq4.Manager.getManager().suggestedDirFields(handle).keys())
             for k in info:
                 if k not in fields:
                     fields.append(k)
@@ -474,7 +477,7 @@ class AnalysisDatabase(SqliteDatabase):
         return [x['Table'] for x in res]
     
     def listTables(self):
-        return self.tables.keys()
+        return list(self.tables.keys())
         
     def takeOwnership(self, table, owner):
         self.insert("DataTableOwners", {'Table': table, "Owner": owner})
@@ -492,7 +495,7 @@ class AnalysisDatabase(SqliteDatabase):
             data = data[0]
             
         if isinstance(data, np.ndarray):
-            for i in xrange(len(data.dtype)):
+            for i in range(len(data.dtype)):
                 name = data.dtype.names[i]
                 typ = data.dtype[i].kind
                 if typ == 'i':
@@ -505,12 +508,12 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'blob'
                 fields[name] = typ
         elif isinstance(data, dict):
-            for name, v in data.iteritems():
+            for name, v in data.items():
                 if functions.isFloat(v):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, basestring):
+                elif isinstance(v, six.string_types):
                     typ = 'text'
                 else:
                     typ = 'blob'
@@ -544,7 +547,7 @@ class AnalysisDatabase(SqliteDatabase):
         return True
 
 if __name__ == '__main__':
-    print "Avaliable DB drivers:", list(QtSql.QSqlDatabase.drivers())
+    print("Avaliable DB drivers:", list(Qt.QSqlDatabase.drivers()))
 
     db = SqliteDatabase()
     db("create table 't' ('int' int, 'real' real, 'text' text, 'blob' blob)")
@@ -556,14 +559,14 @@ if __name__ == '__main__':
     for name, val in vals:
         db('delete from t')
         db.insert('t', int=val, real=val, text=val, blob=val)
-        print "Insert %s (%s):" % (name, repr(val))
-        print "  ", db.select('t')[0]
+        print("Insert %s (%s):" % (name, repr(val)))
+        print("  ", db.select('t')[0])
         
-    print "Table extraction test:"
+    print("Table extraction test:")
     for name, val in vals:
         #db('delete from t')
         db.insert('t', int=val, real=val, text=val, blob=val)
         #print "Insert %s (%s):" % (name, repr(val))
         #print "  ", db.select('t')[0]
-    print db.select('t', toArray=True)
+    print(db.select('t', toArray=True))
     

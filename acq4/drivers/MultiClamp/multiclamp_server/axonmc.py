@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from ctypes import *
 import sys, re, types, ctypes, os
 import cheader
@@ -90,10 +91,10 @@ class _MULTICLAMP:
                     arg = c_double(arg)
                 elif fsig[2][1][0] == 'BOOL':
                     if arg:
-                        print "Interpreting parameter as c_int(1)"
+                        print("Interpreting parameter as c_int(1)")
                         arg = c_int(1)
                     else:
-                        print "Interpreting parameter as c_int(0)"
+                        print("Interpreting parameter as c_int(0)")
                         arg = c_int(0)
                 elif fsig[2][1][0] == 'UINT':
                     arg = c_uint(self.nameToInt(arg, f))
@@ -127,11 +128,11 @@ class _MULTICLAMP:
         try:
             return getattr(self.mc, func)(*args)
         except:
-            print func, args
+            print(func, args)
             raise
         
     def error(self, errCode):
-        buf = create_string_buffer('\0' * 256)
+        buf = create_string_buffer(b'\0' * 256)
         try:
             self._call('MCCMSG_BuildErrorText', self.handle, errCode, buf, c_int(256))
             return str(buf.value)
@@ -141,7 +142,7 @@ class _MULTICLAMP:
 
 
     def findMultiClamp(self):
-        serial = create_string_buffer('\0'*16)
+        serial = create_string_buffer(b'\0'*16)
         model = c_uint(0)
         port = c_uint(0)
         devID = c_uint(0)
@@ -194,7 +195,7 @@ class _MULTICLAMP:
             HW_TYPE_MC700B: 'MC700B'
         }
         d = self.devices[devID]
-        if models.has_key(d['model']):
+        if d['model'] in models:
             model = models[d['model']]
         else:
             model = 'UNKNOWN'

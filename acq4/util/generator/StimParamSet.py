@@ -1,3 +1,6 @@
+from __future__ import print_function
+import six
+
 from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 import acq4.pyqtgraph as pg
 import collections
@@ -147,7 +150,7 @@ class SeqParameter(SimpleParameter):
         
     def valueString(self, param):
         units = param.opts.get('units', None)
-        if isinstance(units, basestring) and len(units) > 0:
+        if isinstance(units, six.string_types) and len(units) > 0:
             val = pg.siFormat(param.value(), suffix=units, space='*', precision=5, allowUnicode=False)
         else:
             val = '%0.5g' % param.value()
@@ -262,7 +265,7 @@ class PulseParameter(GroupParameter):
         return fnStr, seq
         
     def setState(self, state):
-        for k, v in state.iteritems():
+        for k, v in state.items():
             if k == 'type':
                 continue
             self.param(k).setState(v)

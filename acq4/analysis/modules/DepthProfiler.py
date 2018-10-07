@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Used for measuring illumination depth profiles from photobleached tissue.
 """
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
@@ -16,12 +17,12 @@ class DepthProfiler(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-        self.ctrl = QtGui.QWidget()
-        l = QtGui.QVBoxLayout()
+        self.ctrl = Qt.QWidget()
+        l = Qt.QVBoxLayout()
         self.ctrl.setLayout(l)
-        self.analyzeBtn = QtGui.QPushButton('Analyze')
+        self.analyzeBtn = Qt.QPushButton('Analyze')
         self.analyzeBtn.clicked.connect(self.updateProfiles)
-        self.saveBtn = QtGui.QPushButton('Save')
+        self.saveBtn = Qt.QPushButton('Save')
         self.saveBtn.clicked.connect(self.save)
         l.addWidget(self.analyzeBtn)
         l.addWidget(self.saveBtn)

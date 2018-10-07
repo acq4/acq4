@@ -1,4 +1,5 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
@@ -6,7 +7,7 @@ from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
 import acq4.util.functions as fn
-import CellHealthCtrlTemplate
+from . import CellHealthCtrlTemplate
 from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
@@ -17,7 +18,7 @@ class CellHealthTracker(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.ctrl = CellHealthCtrlTemplate.Ui_widget()
         self.ctrl.setupUi(self.ctrlWidget)
         self.ctrlStateGroup = pg.WidgetGroup(self.ctrlWidget)
@@ -103,7 +104,7 @@ class CellHealthTracker(AnalysisModule):
         try:
             data = f.read()
         except:
-            print f
+            print(f)
             raise
         #print f.info()
         time = f.info()['__timestamp__']
@@ -166,7 +167,7 @@ class CellHealthTracker(AnalysisModule):
         if fileName is None:
             dh = self.getElement("File Loader").baseDir().name()
             self.fileDialog = FileDialog(None, "Save traces", dh, '*.ma')
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave)
             self.fileDialog.show()
             self.fileDialog.fileSelected.connect(self.saveMA)
             return  
@@ -203,7 +204,7 @@ class CellHealthTracker(AnalysisModule):
         method = str(self.ctrl.methodCombo.currentText())
         #print method
         if method == "Simple Ohm's law":
-            print 'using simple method'
+            print('using simple method')
             if pulseAmp < 0:
                 RsPeak = data['primary'].min()
             else:

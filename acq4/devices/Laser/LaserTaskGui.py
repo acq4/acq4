@@ -1,9 +1,10 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 from acq4.pyqtgraph import PlotWidget
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
 from acq4.pyqtgraph.functions import siFormat
-import taskTemplate
+from . import taskTemplate
 from acq4.util.HelpfulException import HelpfulException
 
 #from FeedbackButton import FeedbackButton
@@ -17,26 +18,26 @@ class LaserTaskGui(DAQGenericTaskGui):
         
         self.cache = {}
         
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
         self.setLayout(self.layout)
         
-        self.splitter1 = QtGui.QSplitter()
-        self.splitter1.setOrientation(QtCore.Qt.Horizontal)
+        self.splitter1 = Qt.QSplitter()
+        self.splitter1.setOrientation(Qt.Qt.Horizontal)
         self.layout.addWidget(self.splitter1)
         
-        self.ctrlLayout = QtGui.QVBoxLayout()
-        wid1 = QtGui.QWidget()
+        self.ctrlLayout = Qt.QVBoxLayout()
+        wid1 = Qt.QWidget()
         wid1.setLayout(self.ctrlLayout)
-        self.plotSplitter = QtGui.QSplitter()
-        self.plotSplitter.setOrientation(QtCore.Qt.Vertical)
+        self.plotSplitter = Qt.QSplitter()
+        self.plotSplitter.setOrientation(Qt.Qt.Vertical)
         self.splitter1.addWidget(wid1)
         self.splitter1.addWidget(self.plotSplitter)
-        #wid = QtGui.QWidget()
-        #hLayout = QtGui.QHBoxLayout()
+        #wid = Qt.QWidget()
+        #hLayout = Qt.QHBoxLayout()
         #wid.setLayout(hLayout)
         #self.ctrlLayout.addLayout(hLayout)
-        wid2 = QtGui.QWidget()
+        wid2 = Qt.QWidget()
         self.ui.setupUi(wid2)
         self.ctrlLayout.addWidget(wid2)
 
@@ -202,7 +203,7 @@ class LaserTaskGui(DAQGenericTaskGui):
             params[k] = range(len(ps[k]))
         ## get power waveforms
         waves = []
-        runSequence(lambda p: waves.append(self.powerWidget.getSingleWave(p)), params, params.keys()) ## appends waveforms for the entire parameter space to waves
+        runSequence(lambda p: waves.append(self.powerWidget.getSingleWave(p)), params, list(params.keys())) ## appends waveforms for the entire parameter space to waves
         
         for w in waves:
             if w is not None:
@@ -210,23 +211,23 @@ class LaserTaskGui(DAQGenericTaskGui):
                 rawWaves = self.getChannelCmds(w, rate)
                 #rawWaves = self.dev.getChannelCmds({'powerWaveform':w}, rate) ## calculate raw waveforms for shutter/qSwitch/pCell from powerWaveform
                 #self.cache[id(w)] = rawWaves ## cache the calculated waveforms
-                self.plotRawCurves(rawWaves, color=QtGui.QColor(100, 100, 100)) ## plot the raw waveform in it's appropriate plot in grey
+                self.plotRawCurves(rawWaves, color=Qt.QColor(100, 100, 100)) ## plot the raw waveform in it's appropriate plot in grey
         
         ## calculate (or pull from cache) and display single-mode wave in red
         single = self.powerWidget.getSingleWave()
         if single is not None:
             #rawSingle = self.cache.get(id(single), self.dev.getChannelCmds({'powerWaveform':single}, rate))
             rawSingle = self.getChannelCmds(single, rate)
-            self.plotRawCurves(rawSingle, color=QtGui.QColor(200, 100, 100))
+            self.plotRawCurves(rawSingle, color=Qt.QColor(200, 100, 100))
     
                       
-    def plotRawCurves(self, data, color=QtGui.QColor(100, 100, 100)):
+    def plotRawCurves(self, data, color=Qt.QColor(100, 100, 100)):
         if 'shutter' in data:
-            self.shutterPlot.plot(y=data['shutter'], x=self.powerWidget.timeVals, pen=QtGui.QPen(color))
+            self.shutterPlot.plot(y=data['shutter'], x=self.powerWidget.timeVals, pen=Qt.QPen(color))
         if 'qSwitch' in data:
-            self.qSwitchPlot.plot(y=data['qSwitch'], x=self.powerWidget.timeVals, pen=QtGui.QPen(color))
+            self.qSwitchPlot.plot(y=data['qSwitch'], x=self.powerWidget.timeVals, pen=Qt.QPen(color))
         if 'pCell' in data:
-            self.pCellPlot.plot(y=data['pCell'], x=self.powerWidget.timeVals, pen=QtGui.QPen(color))
+            self.pCellPlot.plot(y=data['pCell'], x=self.powerWidget.timeVals, pen=Qt.QPen(color))
       
     def clearRawPlots(self):
         for p in ['shutterPlot', 'qSwitchPlot', 'pCellPlot']:

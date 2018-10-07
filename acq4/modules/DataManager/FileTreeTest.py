@@ -1,9 +1,10 @@
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 from FileTreeWidget import *
 from acq4.DataManager import *
 
 
-app = QtGui.QApplication([])
-win = QtGui.QMainWindow()
+app = Qt.QApplication([])
+win = Qt.QMainWindow()
 
 cw = FileTreeWidget()

@@ -1,1 +1,2 @@
-from LEDLightSource import *
+from __future__ import print_function
+from .LEDLightSource import *

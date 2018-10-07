@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+
+import six
+
 from ctypes import *
 import sys, numpy, time, re, os, platform
 from acq4.util.clibrary import *
@@ -149,14 +153,14 @@ class _PVCamClass:
             else:
                 raise Exception("Error getting number of cameras: %s" % self.error(err))
         for i in range(nCams):
-            cName = create_string_buffer('\0' * LIB.CAM_NAME_LEN)
+            cName = create_string_buffer(b'\0' * LIB.CAM_NAME_LEN)
             if LIB.cam_get_name(i, cName)() < 1:
                 raise Exception("Error getting name for camera %d: %s" % (i, self.error()))
             cams.append(cName.value)
         return cams
 
     def getCamera(self, cam):
-        if not self.cams.has_key(cam):
+        if cam not in self.cams:
             self.cams[cam] = _CameraClass(cam, self)
         return self.cams[cam]
     
@@ -177,7 +181,7 @@ class _PVCamClass:
     def error(self, erno=None):
         if erno is None:
             erno = LIB.error_code()()
-        err = create_string_buffer('\0'*LIB.ERROR_MSG_LEN)
+        err = create_string_buffer(b'\0'*LIB.ERROR_MSG_LEN)
         LIB.error_message(erno, err)
         return "%d: %s" % (erno, err.value)
 
@@ -198,12 +202,12 @@ class _PVCamClass:
         if allParams:
             return [p[2][6:] for p in HEADERS.find(re.compile('PARAM_.*'))]
         else:
-            return self.paramTable.keys()
+            return list(self.paramTable.keys())
     
     def paramFromString(self, p):
         """Return the driver's param ID for the given parameter name."""
         
-        if isinstance(p, basestring):
+        if isinstance(p, six.string_types):
             if p == 'bitDepth':
                 p = 'BIT_DEPTH'
             try:
@@ -267,7 +271,7 @@ class _CameraClass:
         try:
             self.paramAttrs['GAIN_INDEX'][0] = self.paramAttrs['GAIN_INDEX'][0][:2] + (1,)    ## why did they set the step value to 0? Who knows?
         except KeyError:
-            print self.paramAttrs
+            print(self.paramAttrs)
             raise Exception("'GAIN_INDEX' missing from camera parameters. Try restarting your camera.")
         
         ## define standard dependencies
@@ -305,7 +309,7 @@ class _CameraClass:
         })
         
         ## Generate list of all remote parameter names
-        self.remoteParamNames = self.paramAttrs.keys()
+        self.remoteParamNames = list(self.paramAttrs.keys())
         for k in self.localParamNames:
             self.remoteParamNames.remove(k)
         
@@ -340,7 +344,7 @@ class _CameraClass:
         return self.pvcam.call(fn, *args, **kargs)
 
     def initCam(self, params=None):
-        buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
+        buf = create_string_buffer(b'\0' * LIB.CCD_NAME_LEN)
         camType = self.call('get_param', self.hCam, LIB.PARAM_CHIP_NAME, LIB.ATTR_CURRENT, buf)[3]
         
         ## Implement default settings for this camera model
@@ -349,13 +353,13 @@ class _CameraClass:
         
         
         if camType in cameraDefaults:
-            print "Loading default settings for", camType
+            print("Loading default settings for", camType)
             camDefaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults[camType]])
             camRanges = dict([(p[0], p[2:]) for p in cameraDefaults[camType]])
             defaults.update(camDefaults)
             ranges.update(camRanges)
         else:
-            print "Warning--camera model '%s' is unrecognized; default settings may be incorrect." % camType
+            print("Warning--camera model '%s' is unrecognized; default settings may be incorrect." % camType)
         
         for k,v in ranges.items():
             #print self.paramAttrs[k], k, v
@@ -372,7 +376,7 @@ class _CameraClass:
             return self.paramAttrs.copy()
         else:
             unList = False
-            if isinstance(params, basestring):
+            if isinstance(params, six.string_types):
                 params = [params]
                 unList = True
                 #try:
@@ -388,7 +392,7 @@ class _CameraClass:
                     params[p] = self.paramAttrs[p]
                 except KeyError:
                     #print self.paramAttrs.keys()
-                    raise Exception("No parameter named '%s'. Params are:" % (p, str(self.paramAttrs.keys())))
+                    raise Exception("No parameter named '%s'. Params are:" % (p, str(list(self.paramAttrs.keys()))))
                 
             if unList:
                 return params[plist[0]]
@@ -420,7 +424,7 @@ class _CameraClass:
         """Set the values of multiple parameters. Format may be {name: value, ...} or [(name, value), ...]"""
         newVals = OrderedDict()
         if isinstance(params, dict):
-            plist = params.items()
+            plist = list(params.items())
         else:
             plist = params
             
@@ -440,11 +444,11 @@ class _CameraClass:
         Normally, camera parameters that do not need to be set (because they are already) will be ignored. However, this can be
         overridden with forceSet."""
         if paramName in self.groupParams:
-            return self.setParams(zip(self.groupParams[paramName], value))
+            return self.setParams(list(zip(self.groupParams[paramName], value)))
         
         ## If this is an enum parameter, convert string values to int before setting
         if paramName in self.enumTable:
-            if isinstance(value, basestring):
+            if isinstance(value, six.string_types):
                 strVal = value
                 value = self.enumTable[paramName][0][value]
             else:
@@ -469,11 +473,11 @@ class _CameraClass:
         param = self.pvcam.paramFromString(paramName)
         self._assertParamReadable(param)
 
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             try:
                 value = getattr(LIB, value)
             except:
-                raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(self.pvcam.defs.keys())))
+                raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(list(self.pvcam.defs.keys()))))
 
         
         #print "   PVCam setParam lookup param"
@@ -703,7 +707,7 @@ class _CameraClass:
             return None
         index = (frame - self.buf.ctypes.data) / self.frameSize
         if index < 0 or index > (self.buf.shape[0]-1):
-            print "Warning: lastFrame got %d!" % index
+            print("Warning: lastFrame got %d!" % index)
             return None
         return index
 
@@ -750,7 +754,7 @@ class _CameraClass:
             ret = self.call('pl_enum_str_length', self.hCam, param, i)
             #ret = LIB.pl_enum_str_length(self.hCam, param, i)
             slen = ret[3]
-            strn = create_string_buffer('\0' * (slen))
+            strn = create_string_buffer(b'\0' * (slen))
             val = c_int()
             self.call('pl_get_enum_param', self.hCam, param, i, byref(val), strn, c_ulong(slen))
             #LIB.pl_get_enum_param(self.hCam, param, i, byref(val), strn, c_ulong(slen))
@@ -771,8 +775,8 @@ class _CameraClass:
             return self._getParam(param, LIB.ATTR_AVAIL) > 0
         except:
             sys.excepthook(*sys.exc_info())
-            print "=============================================="
-            print "Error checking availability of parameter %s" % param
+            print("==============================================")
+            print("Error checking availability of parameter %s" % param)
             return False
             
     def _assertParamAvailable(self, param):
@@ -819,7 +823,7 @@ class _CameraClass:
                 LIB.ATTR_COUNT: LIB.TYPE_UNS32,
                 LIB.ATTR_TYPE: LIB.TYPE_UNS16
             }
-            if typs.has_key(attr):
+            if attr in typs:
                 typ = typs[attr]
             else:
                 typ = self.getParamType(param)
@@ -860,7 +864,7 @@ class _CameraClass:
             if typ != LIB.TYPE_ENUM:
                 continue
             enum = self.getEnumList(n)
-            enums[n] = (dict(zip(enum[0], enum[1])), dict(zip(enum[1], enum[0])))
+            enums[n] = (dict(list(zip(enum[0], enum[1]))), dict(list(zip(enum[1], enum[0]))))
             paramId = self.pvcam.paramFromString(n)
             enums[paramId] = enums[n]
             
@@ -873,7 +877,7 @@ class _CameraClass:
         for r in rem:
             if r in plist:
                 plist.remove(r)
-        plist = filter(self.paramAvailable, plist)
+        plist = list(filter(self.paramAvailable, plist))
         if len(plist) == 0:
             raise Exception('PVCam reported that camera %s has no parameters (this is bad; try restarting your camera)' % self.name)
         params = OrderedDict()
@@ -889,7 +893,7 @@ class _CameraClass:
                     vals = (minval, maxval, stepval)
             elif typ == LIB.TYPE_ENUM:
                 #vals = self.getEnumList(p)[0]
-                vals = self.enumTable[p][0].keys()
+                vals = list(self.enumTable[p][0].keys())
             elif typ == LIB.TYPE_BOOLEAN:
                 vals = [True, False]
             else:
@@ -946,7 +950,7 @@ def mkCObj(typ, value=None):
         LIB.TYPE_VOID_PTR: c_void_p,
         LIB.TYPE_VOID_PTR_PTR: c_void_p
     }
-    if not typs.has_key(typ):
+    if typ not in typs:
         raise Exception("Unknown type %d" % typ)
     if value is None:
         return typs[typ]()

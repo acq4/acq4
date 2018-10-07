@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Mutex.py -  Stand-in extension of Qt's QMutex class
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from PyQt4 import QtCore
+import six
+
+from acq4.util import Qt
 import traceback
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.util.mutex import Mutex, RecursiveMutex
@@ -27,7 +30,7 @@ class ThreadsafeWrapper(object):
         self.__TSOwrapped_object__ = obj
             
         if reentrant:
-            self.__TSOwrap_lock__ = Mutex(QtCore.QMutex.Recursive)
+            self.__TSOwrap_lock__ = Mutex(Qt.QMutex.Recursive)
         else:
             self.__TSOwrap_lock__ = Mutex()
         self.__TSOrecursive__ = recursive
@@ -72,7 +75,7 @@ class ThreadsafeWrapper(object):
     def __wrap_object__(self, obj):
         if not self.__TSOrecursive__:
             return obj
-        if obj.__class__ in [int, float, str, unicode, tuple]:
+        if obj.__class__ in [int, float, str, six.text_type, tuple]:
             return obj
         if id(obj) not in self.__TSOwrapped_objs__:
             self.__TSOwrapped_objs__[id(obj)] = threadsafe(obj, recursive=self.__TSOrecursive__, reentrant=self.__TSOreentrant__)
@@ -91,7 +94,7 @@ def threadsafe(obj, *args, **kargs):
     """Return a thread-safe wrapper around obj. (see ThreadsafeWrapper)
     args and kargs are passed directly to ThreadsafeWrapper.__init__()
     This factory function is necessary for wrapping special methods (like __getitem__)"""
-    if type(obj) in [int, float, str, unicode, tuple, type(None), bool]:
+    if type(obj) in [int, float, str, six.text_type, tuple, type(None), bool]:
         return obj
     clsName = 'Threadsafe_' + obj.__class__.__name__
     attrs = {}
