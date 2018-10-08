@@ -116,8 +116,13 @@ class PrairieView(QtCore.QObject):
     def setSaveDirectory(self, dirPath):
         self.call_pl('-SetSavePath %s' % dirPath)
 
-    def markPoints(self, pos, laserPower, duration, spiralSize, revolutions):
-        self.call_pl("-MarkPoints %f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration, laserPower, spiralSize, revolutions))
+    def markPoints(self, pos, laserPower, duration, spiralSize, revolutions, nPulses, intervals):
+        intervals.append('')
+        cmd = "-MarkPoints "
+        for i in range(nPulses):
+            cmd += "%f %f %f Fidelity %f True %f %f %s"%(pos[0], pos[1], duration[i], laserPower[i], spiralSize, revolutions, str(intervals[i]))
+
+        self.call_pl(cmd)
 
     
     def loadMarkPoints(self, filename=None):
