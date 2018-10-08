@@ -117,11 +117,12 @@ class PrairieView(QtCore.QObject):
         self.call_pl('-SetSavePath %s' % dirPath)
 
     def markPoints(self, pos, laserPower, duration, spiralSize, revolutions, nPulses, intervals):
-        intervals.append('')
+        #intervals.append('')
         cmd = "-MarkPoints "
-        for i in range(nPulses):
-            cmd += "%f %f %f Fidelity %f True %f %f %s"%(pos[0], pos[1], duration[i], laserPower[i], spiralSize, revolutions, str(intervals[i]))
+        for i in range(nPulses-1):
+            cmd += "%f %f %f Fidelity %f True %f %f %s"%(pos[0], pos[1], duration[i], laserPower[i], spiralSize, revolutions, intervals[i]-duration[i])
 
+        cmd += "%f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration[-1], laserPower[-1], spiralSize, revolutions)
         self.call_pl(cmd)
 
     
