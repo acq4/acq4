@@ -130,7 +130,7 @@ class UMP(object):
             cls._single = UMP()
         return cls._single
     
-    def __init__(self):
+    def __init__(self, start_poller=True):
         self.lock = threading.RLock()
         if self._single is not None:
             raise Exception("Won't create another UMP object. Use get_ump() instead.")
@@ -148,6 +148,10 @@ class UMP(object):
 
         self._ump_has_axis_count = hasattr(self.lib, 'ump_get_axis_count_ext')
         self._axis_counts = {}
+
+        self.poller = PollThread(self)
+        if start_poller:
+            self.poller.start()
 
     def sdk_version(self):
         """Return version of UMP SDK.
@@ -190,6 +194,7 @@ class UMP(object):
         with self.lock:
             if self.h is None:
                 raise TypeError("UMP is not open.")
+            # print("Call:", fn, self.h, args)
             rval = getattr(self.lib, 'ump_' + fn)(self.h, *args)
             #if 'get_pos' not in fn:
                 #print "sensapex:", rval, fn, args
@@ -231,11 +236,6 @@ class UMP(object):
         with self.lock:
             self.lib.ump_close(self.h)
             self.h = None
-
-    #def select_dev(self, dev):
-        #"""Select a device from the UMP.
-        #"""
-        #self.call('select_dev', c_int(dev))
 
     def get_pos(self, dev, timeout=None):
         """Return the absolute position of the specified device (in nm).
@@ -363,8 +363,8 @@ class SensapexDevice(object):
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
     
-    def goto_pos(self, pos, speed, block=False):
-        return self.ump.goto_pos(self.devid, pos, speed, block=block)
+    def goto_pos(self, pos, speed, block=False, simultaneous=True):
+        return self.ump.goto_pos(self.devid, pos, speed, block=block, simultaneous=simultaneous)
     
     def is_busy(self):
         return self.ump.is_busy(self.devid)
@@ -377,3 +377,61 @@ class SensapexDevice(object):
 
     def set_active(self, active):
         return self.ump.set_active(self.devid, active)
+
+
+class PollThread(threading.Thread):
+    """Thread to poll for all manipulator position changes.
+
+    Running this thread ensures that calling get_pos will always return the most recent
+    values available.
+
+    An optional callback function is called periodically with a list of
+    device IDs from which position updates have been received.
+    """
+    def __init__(self, ump, callback=None, interval=0.03):
+        self.ump = ump
+        self.callback = callback
+        self.interval = interval
+        self.lock = threading.RLock()
+        self._stop = False
+        threading.Thread.__init__(self)
+        self.daemon = True
+
+    def start(self):
+        self._stop = False
+        threading.Thread.start(self)
+
+    def stop(self):
+        with self.lock:
+            self._stop = True
+
+    def run(self):
+        ump = self.ump
+        while True:
+            try:
+                with self.lock:
+                    if self._stop:
+                        break
+
+                # read all updates waiting in queue
+                devids = ump.recv_all()
+                
+                if len(devids) == 0:
+                    # No packets in queue; just wait for the next one.
+                    # This allows us to reduce overhead when packets are arriving slowly
+                    try:
+                        devids = [ump.recv()]
+                    except UMPError as err:
+                        if err.errno == -3:
+                            # ignore timeouts
+                            continue
+
+                cb = self.callback
+                if cb is not None:
+                    cb(devids)
+                        
+                time.sleep(self.interval)  # rate-limit updates
+            except:
+                print('Error in sensapex poll thread:')
+                sys.excepthook(*sys.exc_info())
+                time.sleep(1)
