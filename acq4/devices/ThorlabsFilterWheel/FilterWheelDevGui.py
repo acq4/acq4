@@ -1,31 +1,31 @@
-from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
+from acq4.util import Qt
 import time
 
 Ui_FilterWheelWidget = Qt.importTemplate('.FilterWheelTemplate')
 
 
-class FilterWheelDevGui(QtGui.QWidget):
+class FilterWheelDevGui(Qt.QWidget):
     
     def __init__(self, dev):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev 
         
         self.ui = Ui_FilterWheelWidget()
         self.ui.setupUi(self)
         
-        self.positionGroup = QtGui.QButtonGroup()
+        self.positionGroup = Qt.QButtonGroup()
         self.positionButtons = []
         for i in range(self.dev.getPositionCount()):
-            self.positionButtons.append(QtGui.QRadioButton())
+            self.positionButtons.append(Qt.QRadioButton())
             self.positionGroup.addButton(self.positionButtons[-1],i)
             self.ui.PositionGridLayout.addWidget(self.positionButtons[-1],2*i+1,1)
-            self.ui.PositionGridLayout.addWidget(QtGui.QLabel(str(self.dev.filters[i].name())),2*i+1,2)
-            self.ui.PositionGridLayout.addWidget(QtGui.QLabel(str(self.dev.filters[i].description())),2*i+2,2)
-            self.connect(self.positionButtons[-1], QtCore.SIGNAL("clicked()"), self.positionButtonClicked)
+            self.ui.PositionGridLayout.addWidget(Qt.QLabel(str(self.dev.filters[i].name())),2*i+1,2)
+            self.ui.PositionGridLayout.addWidget(Qt.QLabel(str(self.dev.filters[i].description())),2*i+2,2)
+            self.connect(self.positionButtons[-1], Qt.SIGNAL("clicked()"), self.positionButtonClicked)
         self.positionGroup.setExclusive(True)
         
         self.updatePosition()

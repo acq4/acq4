@@ -6,6 +6,7 @@ from acq4.devices.Stage import Stage
 from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
 import acq4.pyqtgraph as pg
+from acq4.util import Qt
 import collections
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')

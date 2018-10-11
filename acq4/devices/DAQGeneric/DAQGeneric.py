@@ -9,6 +9,7 @@ from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
 from collections import OrderedDict
 import six
+from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 

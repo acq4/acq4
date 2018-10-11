@@ -10,6 +10,7 @@ from . import FileLogView
 from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar
+from acq4.util import Qt
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 

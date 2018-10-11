@@ -11,6 +11,7 @@ import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
 import time
 from collections import OrderedDict
+from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
 

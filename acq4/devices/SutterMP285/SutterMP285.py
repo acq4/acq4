@@ -13,6 +13,7 @@ import acq4.pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 import six
+from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.devTemplate')
 

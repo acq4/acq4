@@ -9,6 +9,7 @@ from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 import time
 from collections import OrderedDict

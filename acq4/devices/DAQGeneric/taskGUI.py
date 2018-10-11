@@ -11,12 +11,10 @@ import numpy
 import weakref
 from acq4.util.debug import *
 
-Ui_Form = Qt.importTemplate('TaskTemplate')
+Ui_Form = Qt.importTemplate('.TaskTemplate')
 
 
 class DAQGenericTaskGui(TaskGui):
-    
-    #sigSequenceChanged = Qt.Signal(object)  ## defined upstream
     
     def __init__(self, dev, task, ownUi=True):
         TaskGui.__init__(self, dev, task)
