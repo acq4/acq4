@@ -4,17 +4,16 @@ from acq4.pyqtgraph import PlotWidget
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
 from acq4.pyqtgraph.functions import siFormat
-from . import taskTemplate
 from acq4.util.HelpfulException import HelpfulException
 
-#from FeedbackButton import FeedbackButton
+Ui_Form = Qt.importTemplate('.taskTemplate')
+
 
 class LaserTaskGui(DAQGenericTaskGui):
     def __init__(self, dev, taskRunner):
         DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
         
-        self.ui = taskTemplate.Ui_Form()
-        
+        self.ui = Ui_Form()
         
         self.cache = {}
         
@@ -33,10 +32,6 @@ class LaserTaskGui(DAQGenericTaskGui):
         self.plotSplitter.setOrientation(Qt.Qt.Vertical)
         self.splitter1.addWidget(wid1)
         self.splitter1.addWidget(self.plotSplitter)
-        #wid = Qt.QWidget()
-        #hLayout = Qt.QHBoxLayout()
-        #wid.setLayout(hLayout)
-        #self.ctrlLayout.addLayout(hLayout)
         wid2 = Qt.QWidget()
         self.ui.setupUi(wid2)
         self.ctrlLayout.addWidget(wid2)
@@ -63,24 +58,17 @@ class LaserTaskGui(DAQGenericTaskGui):
         self.powerWidget.setMeta('x', units='s', siPrefix=True, dec=True, step=0.5, minStep=1e-6, limits=(None, None))
         
         if self.dev.hasTriggerableShutter:
-            #(self.shutterWidget, self.shutterPlot) = self.createChannelWidget('shutter')
             self.shutterPlot = PlotWidget(name='%s.shutter'%self.dev.name)
             self.shutterPlot.setLabel('left', text='Shutter')
             self.plotSplitter.addWidget(self.shutterPlot)
-            #self.shutterPlot.hide()
         if self.dev.hasQSwitch:
-            #self.qSwitchWidget, self.qSwitchPlot = self.createChannelWidget('qSwitch')
             self.qSwitchPlot = PlotWidget(name='%s.qSwitch'%self.dev.name)
             self.qSwitchPlot.setLabel('left', text='Q-Switch')
             self.plotSplitter.addWidget(self.qSwitchPlot)
-            #self.qSwitchPlot.hide()
         if self.dev.hasPCell:
-            #self.pCellWidget, self.pCellPlot = self.createChannelWidget('pCell')
             self.pCellPlot = PlotWidget(name='%s.pCell'%self.dev.name)
             self.pCellPlot.setLabel('left', text='Pockel Cell', units='V')
             self.plotSplitter.addWidget(self.pCellPlot)
-            #self.pCellPlot.hide()
-            
             
         ## catch self.powerWidget.sigDataChanged and connect it to functions that calculate and plot raw shutter and qswitch traces
         self.powerWidget.sigDataChanged.connect(self.powerCmdChanged)
@@ -91,11 +79,7 @@ class LaserTaskGui(DAQGenericTaskGui):
         
         self.dev.outputPower()
         
-        
     def laserPowerChanged(self, power, valid):
-        #samplePower = self.dev.samplePower(power)  ## we should get another signal for this later..
-        #samplePower = power*self.dev.getParam('scopeTransmission')
-            
         
         ## update label
         if power is None:
@@ -107,8 +91,6 @@ class LaserTaskGui(DAQGenericTaskGui):
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
-        
-
     
     def samplePowerChanged(self, power):
         if power is None:
@@ -169,7 +151,6 @@ class LaserTaskGui(DAQGenericTaskGui):
         rate = self.powerWidget.rate
         wave = self.powerWidget.getSingleWave(params)
         rawCmds = self.getChannelCmds(wave, rate)
-        #rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         
         ### structure task in DAQGeneric-compatible way
         cmd = {}
@@ -189,7 +170,6 @@ class LaserTaskGui(DAQGenericTaskGui):
             rawCmds = self.dev.getChannelCmds({'powerWaveform':powerWave}, rate) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
             self.cache[key] = rawCmds
         return rawCmds
-        
     
     def powerCmdChanged(self):
         self.clearRawPlots()
@@ -209,17 +189,13 @@ class LaserTaskGui(DAQGenericTaskGui):
             if w is not None:
                 ## need to translate w into raw traces, plot them, and cache them (using id(w) as a key)
                 rawWaves = self.getChannelCmds(w, rate)
-                #rawWaves = self.dev.getChannelCmds({'powerWaveform':w}, rate) ## calculate raw waveforms for shutter/qSwitch/pCell from powerWaveform
-                #self.cache[id(w)] = rawWaves ## cache the calculated waveforms
                 self.plotRawCurves(rawWaves, color=Qt.QColor(100, 100, 100)) ## plot the raw waveform in it's appropriate plot in grey
         
         ## calculate (or pull from cache) and display single-mode wave in red
         single = self.powerWidget.getSingleWave()
         if single is not None:
-            #rawSingle = self.cache.get(id(single), self.dev.getChannelCmds({'powerWaveform':single}, rate))
             rawSingle = self.getChannelCmds(single, rate)
             self.plotRawCurves(rawSingle, color=Qt.QColor(200, 100, 100))
-    
                       
     def plotRawCurves(self, data, color=Qt.QColor(100, 100, 100)):
         if 'shutter' in data:

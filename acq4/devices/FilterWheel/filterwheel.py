@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtTest
 from acq4.devices.OptomechDevice import OptomechDevice
-from .FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
 from acq4.util.SequenceRunner import SequenceRunner
 from acq4.devices.Device import *
@@ -13,10 +12,8 @@ import acq4.pyqtgraph as pg
 import time
 from collections import OrderedDict
 
+Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
 
-# Changes:
-#  signal signatures changed
-# Filter is just object, not OptoMech
 
 class FilterWheel(Device, OptomechDevice):
     """Optical filter wheel device for swapping FilterSet devices.

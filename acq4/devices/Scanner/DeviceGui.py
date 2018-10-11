@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from .DeviceTemplate import Ui_Form
 import time, os, sys, gc
 from acq4.util import Qt
-#from acq4.pyqtgraph.graphicsItems import ImageItem
 import acq4.Manager
 from acq4.util.imageAnalysis import *
 from acq4.util.debug import *
 import numpy as np
 import acq4.pyqtgraph as pg
-#import acq4.pyqtgraph.WidgetGroup as WidgetGroup
-#from acq4.pyqtgraph.ProgressDialog import ProgressDialog
 from acq4.util.HelpfulException import HelpfulException
 
+Ui_Form = Qt.importTemplate('.DeviceTemplate')
+
+
 class ScannerDeviceGui(Qt.QWidget):
-    
     
     def __init__(self, dev, win):
         Qt.QWidget.__init__(self)
@@ -41,23 +39,9 @@ class ScannerDeviceGui(Qt.QWidget):
         
         
         ## Populate Device lists
-        #defCam = None
-        #if 'defaultCamera' in self.dev.config:
-            #defCam = self.dev.config['defaultCamera']
         defCam = self.dev.config.get('defaultCamera', None)
-        #defLaser = None
-        #if 'defaultLaser' in self.dev.config:
-            #defLaser = self.dev.config['defaultLaser']
         defLaser = self.dev.config.get('defaultLaser', None)
 
-        #devs = self.dev.dm.listDevices()
-        #for d in devs:
-            #self.ui.cameraCombo.addItem(d)
-            #self.ui.laserCombo.addItem(d)
-            #if d == defCam:
-                #self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
-            #if d == defLaser:
-                #self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
         self.ui.cameraCombo.setTypes('camera')
         self.ui.laserCombo.setTypes('laser')
         
@@ -70,14 +54,6 @@ class ScannerDeviceGui(Qt.QWidget):
         state = self.dev.loadCalibrationDefaults()
         if state is not None:
             self.stateGroup.setState(state)
-        
-        ## create graphics scene
-        #self.image = ImageItem()
-        #self.scene = self.ui.view.scene
-        #self.ui.view.enableMouse()
-        #self.scene.addItem(self.image)
-        #self.ui.view.setAspectLocked(True)
-        #self.ui.view.invertY()
 
         self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
         self.ui.storeCamConfBtn.clicked.connect(self.storeCamConf)
@@ -96,9 +72,6 @@ class ScannerDeviceGui(Qt.QWidget):
         else:
             self.ui.shutterBtn.setText('Open Shutter')
             
-
-            
-            
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         
@@ -113,7 +86,6 @@ class ScannerDeviceGui(Qt.QWidget):
                 item.opticState = obj
                 self.ui.calibrationList.addTopLevelItem(item)
         
-        
     def storeCamConf(self):
         cam = str(self.ui.cameraCombo.currentText())
         self.dev.storeCameraConfig(cam)
@@ -125,17 +97,12 @@ class ScannerDeviceGui(Qt.QWidget):
         try:
             cam = str(self.ui.cameraCombo.currentText())
             laser = str(self.ui.laserCombo.currentText())
-            #obj = self.dev.getObjective()
             opticState = self.dev.getDeviceStateKey()
             
             ## Run calibration
             (cal, spot) = self.runCalibration()
-            #gc.collect() ## a lot of memory is used in running calibration, make sure we collect all the leftovers now
-            #cal = MetaArray((512, 512, 2))
-            #spot = 100e-6
             date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
             
-            #fileName = cam + '_' + laser + '_' + obj + '.ma'
             index = self.dev.getCalibrationIndex()
             
             if laser not in index:
@@ -145,7 +112,6 @@ class ScannerDeviceGui(Qt.QWidget):
             self.dev.writeCalibrationIndex(index)
             
             self.dev.writeCalibrationDefaults(self.stateGroup.state())
-            #cal.write(os.path.join(self.dev.config['calibrationDir'], fileName))
             
             self.updateCalibrationList()
         finally:
@@ -162,7 +128,6 @@ class ScannerDeviceGui(Qt.QWidget):
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
 
-
     def addSpot(self, pos, size):
         """Add a circle to the image"""
         s2 = size/2.0
@@ -174,13 +139,11 @@ class ScannerDeviceGui(Qt.QWidget):
         s.setZValue(100)
         self.spots.append(s)
         
-        
     def clearSpots(self):
         """Clear all circles from the image"""
         for s in self.spots:
             self.ui.view.removeItem(s)
         self.spots = []
-        
 
     def runCalibration(self):
         """The scanner calibration routine:
@@ -196,7 +159,6 @@ class ScannerDeviceGui(Qt.QWidget):
         
         ## Do fast scan of entire allowed command range
         (background, cameraResult, positions) = self.scan()
-        #self.calibrationResult = {'bg': background, 'frames': cameraResult, 'pos': positions}
 
         with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
             dlg.show()
@@ -299,7 +261,6 @@ class ScannerDeviceGui(Qt.QWidget):
         
         self.clearSpots()
         for sl in globalSpotLocations:
-            #self.addSpot(sl, fit[3]*binning[0])
             self.addSpot(sl, spotWidth)
         self.ui.view.autoRange()
         
@@ -322,12 +283,6 @@ class ScannerDeviceGui(Qt.QWidget):
           Cmd.Y  =  F  +  G * Loc.X  +  H * Loc.Y  +  I * Loc.X^2  +  J * Loc.Y^2
         Returns [[A, B, C, D, E], [F, G, H, I, J]]
         """
-#        print "==========="
-#        print loc
-#        print "============"
-#        print cmd
-        #for i in range(loc.shape[0]):
-            #print tuple(loc[i]),  tuple(cmd[i])
         
         ## do a two-stage fit, using only linear parameters first.
         ## this is to make sure the second-order parameters do no interfere with the first-order fit.
@@ -389,9 +344,6 @@ class ScannerDeviceGui(Qt.QWidget):
         nPts = int(rate * duration)
         sweeps = 20
 
-        #cameraTrigger = ones(nPts, dtype=byte)
-
-        ##(cmdMin, cmdMax) = self.dev.config['commandLimits']
         xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
         yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
         xDiff = xRange[1] - xRange[0]
@@ -430,7 +382,6 @@ class ScannerDeviceGui(Qt.QWidget):
                 'exposure': {'record': True}, 
                 },
                 'popState': 'scanProt'},
-            #laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             laser: {'alignMode': True},
             self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
@@ -471,4 +422,3 @@ class ScannerDeviceGui(Qt.QWidget):
             raise Exception("Background measurement frame has different shape %s from scan frames %s" % (str(background.shape), str(frames.shape[1:])))
         
         return (background, result[camera], positions)
-        

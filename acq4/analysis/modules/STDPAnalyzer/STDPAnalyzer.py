@@ -3,12 +3,16 @@ from __future__ import print_function
 from acq4.util import Qt
 from collections import OrderedDict
 from acq4.analysis.AnalysisModule import AnalysisModule
-from . import STDPControlTemplate, STDPPlotsTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from . import STDPFileLoader
+
+Ui_Control = Qt.importTemplate('.STDPControlTemplate')
+Ui_Plots = Qt.importTemplate('.STDPPlotsTemplate')
+
+
 
 class STDPAnalyzer(AnalysisModule):
 
@@ -22,7 +26,7 @@ class STDPAnalyzer(AnalysisModule):
         AnalysisModule.__init__(self, host)
 
         self.ctrlWidget = Qt.QWidget()
-        self.ctrl = STDPControlTemplate.Ui_Form()
+        self.ctrl = Ui_Control()
         self.ctrl.setupUi(self.ctrlWidget)
 
         tables = OrderedDict([
@@ -33,7 +37,7 @@ class STDPAnalyzer(AnalysisModule):
 
        
         self.plotsWidget = Qt.QWidget()
-        self.plots = STDPPlotsTemplate.Ui_Form()
+        self.plots = Ui_Plots()
         self.plots.setupUi(self.plotsWidget)
 
         self.pairingPlot = pg.PlotWidget()

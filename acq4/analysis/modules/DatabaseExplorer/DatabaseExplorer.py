@@ -1,17 +1,12 @@
 from __future__ import print_function
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
-#import acq4.analysis.modules.EventDetector as EventDetector
-#import MapCtrlTemplate
 import acq4.util.DatabaseGui as DatabaseGui
-#from flowchart import *
-#import flowchart.library.EventDetection as FCEventDetection
 import os
 from collections import OrderedDict
 import acq4.util.debug as debug
 import acq4.util.ColorMapper as ColorMapper
 import acq4.pyqtgraph as pg
-#import acq4.pyqtgraph.TreeWidget as TreeWidget
 
 
 class DatabaseExplorer(AnalysisModule):

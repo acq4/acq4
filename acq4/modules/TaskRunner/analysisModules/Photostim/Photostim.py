@@ -3,12 +3,14 @@ from __future__ import print_function
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from acq4.util import Qt
-from .PhotostimTemplate import Ui_Form
 import numpy as np
 import scipy.ndimage
 from acq4.util.metaarray import MetaArray
 from acq4.util.debug import *
 import acq4.pyqtgraph as pg
+
+Ui_Form = Qt.importTemplate('.PhotostimTemplate')
+
 
 class PhotostimModule(AnalysisModule):
     def __init__(self, *args):

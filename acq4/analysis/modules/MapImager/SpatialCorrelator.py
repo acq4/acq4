@@ -1,6 +1,5 @@
 from __future__ import print_function
 from acq4.util import Qt
-from . import SpatialCorrelatorCtrlTemplate
 import math
 from acq4.util.HelpfulException import HelpfulException
 import numpy as np
@@ -8,8 +7,7 @@ import acq4.pyqtgraph as pg
 import acq4.analysis.tools.functions as fn
 import scipy
 
-
-
+Ui_Form = Qt.importTemplate('.SpatialCorrelatorCtrlTemplate')
 
 
 class SpatialCorrelator(Qt.QWidget):
@@ -19,7 +17,7 @@ class SpatialCorrelator(Qt.QWidget):
     def __init__(self):
         Qt.QWidget.__init__(self)
         
-        self.ctrl = SpatialCorrelatorCtrlTemplate.Ui_Form()
+        self.ctrl = Ui_Form()
         self.ctrl.setupUi(self)
         
         self.ctrl.deltaTSpin.setOpts(suffix='s', value=50e-3, dec=True, step=0.1, siPrefix=True)

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.util import Qt
-from . import atlasCtrlTemplate
 import acq4.pyqtgraph as pg
 from acq4.util.debug import Profiler
+
+Ui_Form = Qt.importTemplate('.atlasCtrlTemplate')
+
 
 class Atlas(Qt.QObject):
     
@@ -55,7 +57,7 @@ class AtlasCtrlWidget(Qt.QWidget):
         self.loader.sigBaseChanged.connect(self.baseDirChanged)        
         
         self.ctrl = Qt.QWidget()
-        self.ui = atlasCtrlTemplate.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)        
         self.ui.setSliceBtn.clicked.connect(self.setSliceClicked)
         self.ui.storeBtn.clicked.connect(self.storeBtnClicked)        

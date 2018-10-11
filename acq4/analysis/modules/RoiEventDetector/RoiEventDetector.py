@@ -4,8 +4,9 @@ from acq4.analysis.modules.EventDetector.EventDetector import EventDetector
 from acq4.pyqtgraph.metaarray import MetaArray
 import acq4.pyqtgraph as pg
 import numpy as np
-from . import CtrlTemplate
 from acq4.util import Qt
+
+Ui_Form = Qt.importTemplate('.CtrlTemplate')
 
 
 class RoiEventDetector(EventDetector):
@@ -262,7 +263,7 @@ class Ctrl(Qt.QWidget):
         Qt.QWidget.__init__(self)
         self.host = host
         
-        self.ui = CtrlTemplate.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)
         
     def setFileName(self, name):

@@ -4,9 +4,11 @@ from acq4.util import Qt
 import acq4.pyqtgraph as pg
 import numpy as np
 import acq4.util.functions as fn
-from . import MapConvolverTemplate
 import scipy
 from acq4.analysis.tools import functions as afn
+
+Ui_Form = Qt.importTemplate('.MapConvolverTemplate')
+
 
 class MapConvolver(Qt.QWidget):
     
@@ -16,7 +18,7 @@ class MapConvolver(Qt.QWidget):
     def __init__(self, parent=None, filePath=None, data=None):
         Qt.QWidget.__init__(self, parent)
         
-        self.ui = MapConvolverTemplate.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.spacingSpin.setOpts(suffix='m', value=5e-6, siPrefix=True, dec=False, step=1e-6)
         

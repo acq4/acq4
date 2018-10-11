@@ -3,7 +3,9 @@ from __future__ import division
 
 from acq4.util import Qt
 import numpy as np
-from .contrast_ctrl_template import Ui_Form
+
+Ui_Form = Qt.importTemplate('.contrast_ctrl_template')
+
 
 class ContrastCtrl(Qt.QWidget):
     """Widget for controlling contrast with rapidly updating image content.

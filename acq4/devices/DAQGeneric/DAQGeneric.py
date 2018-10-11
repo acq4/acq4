@@ -7,9 +7,10 @@ import numpy as np
 from .taskGUI import *
 from acq4.util.debug import *
 from acq4.pyqtgraph import siFormat
-from . import DeviceTemplate
 from collections import OrderedDict
 import six
+
+Ui_Form = Qt.importTemplate('.DeviceTemplate')
 
 
 class DataMapping:
@@ -498,7 +499,7 @@ class DAQDevGui(Qt.QWidget):
         row = 0
         for ch in chans:
             wid = Qt.QWidget()
-            ui = DeviceTemplate.Ui_Form()
+            ui = Ui_Form()
             ui.setupUi(wid)
             self.layout.addWidget(wid)
             ui.analogCtrls = [ui.scaleDefaultBtn, ui.scaleSpin, ui.offsetDefaultBtn, ui.offsetSpin, ui.scaleLabel, ui.offsetLabel]

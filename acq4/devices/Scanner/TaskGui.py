@@ -13,9 +13,10 @@ from acq4.util.debug import Profiler
 from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
-
-from .TaskTemplate import Ui_Form
 from .scan_program import ScanProgram, ScanProgramPreview
+
+Ui_Form = Qt.importTemplate('.TaskTemplate')
+
 
 ### Error IDs:
 ###  1: Could not find spot size from calibration. (from ScannerTaskGui.pointSize)

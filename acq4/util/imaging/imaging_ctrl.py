@@ -3,9 +3,10 @@ from __future__ import print_function
 from acq4.util import Qt
 from acq4 import pyqtgraph as pg
 from .frame_display import FrameDisplay
-from .imaging_template import Ui_Form
 from .record_thread import RecordThread
 from acq4.util.debug import printExc
+
+Ui_Form = Qt.importTemplate('.imaging_template')
 
 
 class ImagingCtrl(Qt.QWidget):

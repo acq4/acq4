@@ -2,7 +2,6 @@
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.drivers.ThorlabsFW102C import FilterWheelDriver
 from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
-from acq4.devices.FilterWheel.FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
 from acq4.util.SequenceRunner import SequenceRunner
 from acq4.devices.Device import *
@@ -13,6 +12,9 @@ import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
 import time
 from collections import OrderedDict
+
+Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
+
 
 class FilterWheel(Device, OptomechDevice):
     """ Thorlabs motorized filter wheel (FW102C)

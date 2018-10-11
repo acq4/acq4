@@ -1,13 +1,11 @@
 from PyQt4 import QtGui, QtCore
 from acq4.Manager import getManager, logExc, logMsg
-#from acq4.devices.Laser.devTemplate import Ui_Form
-#from acq4.devices.Laser.LaserDevGui import LaserDevGui
-#from maiTaiTemplate import Ui_MaiTaiStatusWidget
-from FilterWheelTemplate import Ui_FilterWheelWidget
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
 import time
+
+Ui_FilterWheelWidget = Qt.importTemplate('.FilterWheelTemplate')
 
 
 class FilterWheelDevGui(QtGui.QWidget):
