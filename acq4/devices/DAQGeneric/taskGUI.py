@@ -2,7 +2,6 @@
 from __future__ import print_function
 from acq4.util import Qt
 import sys
-from .TaskTemplate import *
 from .DaqChannelGui import *
 from acq4.devices.Device import TaskGui
 from acq4.util.SequenceRunner import *
@@ -11,6 +10,9 @@ from acq4.pyqtgraph import PlotWidget
 import numpy
 import weakref
 from acq4.util.debug import *
+
+Ui_Form = Qt.importTemplate('TaskTemplate')
+
 
 class DAQGenericTaskGui(TaskGui):
     

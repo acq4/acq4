@@ -2,11 +2,14 @@
 from __future__ import print_function
 
 from acq4.util import Qt
-from . import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from acq4.util.SequenceRunner import *
 import numpy
 import weakref
 from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
+
+AOChannelTemplate = Qt.importTemplate('.AOChannelTemplate')
+DOChannelTemplate = Qt.importTemplate('.DOChannelTemplate')
+InputChannelTemplate = Qt.importTemplate('.InputChannelTemplate')
 
 ###### For task GUIs
 
@@ -118,9 +121,9 @@ class OutputChannelGui(DaqChannelGui):
         self.units = ''
         self.currentPlot = None
         if self.config['type'] == 'ao':
-            self.ui = AOChannelTemplate.Ui_Form()
+            self.ui = AOChannelTemplate()
         elif self.config['type'] == 'do':
-            self.ui = DOChannelTemplate.Ui_Form()
+            self.ui = DOChannelTemplate()
         else:
             raise Exception("Unrecognized channel type '%s'" % self.config['type'])
         self.ui.setupUi(self)
@@ -311,7 +314,7 @@ class OutputChannelGui(DaqChannelGui):
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
-        self.ui = InputChannelTemplate.Ui_Form()
+        self.ui = InputChannelTemplate()
         self.ui.setupUi(self)
         self.postUiInit()
         self.clearBeforeNextPlot = False

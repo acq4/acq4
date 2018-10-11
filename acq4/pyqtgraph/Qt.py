@@ -100,7 +100,11 @@ def _loadUiType(uiFile):
     how to make PyQt4 and pyside look the same...
         http://stackoverflow.com/a/8717832
     """
-    import pysideuic
+    if QT_LIB == PYSIDE:
+        from pysideuic import compileUi
+    else:
+        from pyside2uic import compileUi
+
     import xml.etree.ElementTree as xml
     #from io import StringIO
     
@@ -112,7 +116,7 @@ def _loadUiType(uiFile):
         o = _StringIO()
         frame = {}
 
-        pysideuic.compileUi(f, o, indent=0)
+        compileUi(f, o, indent=0)
         pyc = compile(o.getvalue(), '<string>', 'exec')
         exec(pyc, frame)
 
@@ -201,7 +205,7 @@ elif QT_LIB == PYQT5:
 
 elif QT_LIB == PYSIDE2:
     from PySide2 import QtGui, QtCore, QtWidgets
-    
+
     try:
         from PySide2 import QtSvg
     except ImportError as err:
@@ -280,6 +284,7 @@ if QT_LIB in [PYQT5, PYSIDE2]:
 # Common to PySide and PySide2
 if QT_LIB in [PYSIDE, PYSIDE2]:
     QtVersion = QtCore.__version__
+    
     loadUiType = _loadUiType
         
     # PySide does not implement qWait

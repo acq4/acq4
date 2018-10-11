@@ -4,7 +4,6 @@ from __future__ import print_function
 from six.moves import reduce
 
 from acq4.modules.Module import *
-from .TaskRunnerTemplate import *
 from acq4.util import Qt
 import acq4.util.DirTreeWidget as DirTreeWidget
 import acq4.util.configfile as configfile
@@ -22,6 +21,8 @@ from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph as pg
 from acq4.util.StatusBar import StatusBar
 from functools import reduce
+
+Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 
 
 class Window(Qt.QMainWindow):

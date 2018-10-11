@@ -44,7 +44,8 @@ from acq4.util.Mutex import Mutex
 from acq4.util import imaging
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
-from .imagerTemplate import Ui_Form
+
+Ui_Form = Qt.importTemplate('.imagerTemplate') 
 
 
 # Create some useful configurations for the user.
