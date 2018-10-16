@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from RackTemplate import *
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from .RackTemplate import *
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 
 
-class MCDeviceGui(QtGui.QWidget):
+class MCDeviceGui(Qt.QWidget):
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         self.win = win
         self.ui = Ui_Form()

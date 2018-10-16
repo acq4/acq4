@@ -1,12 +1,13 @@
+from __future__ import print_function
 import scipy.ndimage
 import numpy as np
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 
 from acq4 import pyqtgraph as pg
 from .bg_subtract_template import Ui_Form
 
 
-class BgSubtractCtrl(QtGui.QWidget):
+class BgSubtractCtrl(Qt.QWidget):
     """Widget for controlling background subtraction for live imaging.
 
     Provides:
@@ -15,10 +16,10 @@ class BgSubtractCtrl(QtGui.QWidget):
     * background blur for unsharp masking
     * continuous averaging
     """
-    needFrameUpdate = QtCore.Signal()
+    needFrameUpdate = Qt.Signal()
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

@@ -1,5 +1,6 @@
+from __future__ import print_function
 import os
-from AnalysisModule import *
+from .AnalysisModule import *
 
 mdir = os.path.split(__file__)[0]
 MODULES = []
@@ -10,7 +11,7 @@ for f in os.listdir(mdir):
     elif f.endswith('.py'):
         f = os.path.splitext(f)[0]
         if f not in ['__init__', 'AnalysisModule']:
-            print f
+            print(f)
             MODULES.append(f)
 
 def createAnalysisModule(name, runner):

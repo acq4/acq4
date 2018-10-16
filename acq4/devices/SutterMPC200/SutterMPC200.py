@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from ..Stage import Stage, MoveFuture
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
 from acq4.util.Mutex import Mutex
@@ -13,11 +14,11 @@ def __reload__(old):
     SutterMPC200._monitor = old['SutterMPC200']._monitor
 
 
-class ChangeNotifier(QtCore.QObject):
+class ChangeNotifier(Qt.QObject):
     """Used to send raw (unscaled) stage position updates to other devices. 
     In particular, focus motors may use this to hijack unused ROE axes.
     """
-    sigPosChanged = QtCore.Signal(object, object, object)
+    sigPosChanged = Qt.Signal(object, object, object)
 
 
 class SutterMPC200(Stage):

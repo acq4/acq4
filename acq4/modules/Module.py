@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore
+from __future__ import print_function
+from acq4.util import Qt
 
-class Module(QtCore.QObject):
+class Module(Qt.QObject):
 
     # User-readable name for this module
     moduleDisplayName = None
@@ -11,7 +12,7 @@ class Module(QtCore.QObject):
     moduleCategory = None
 
     def __init__(self, manager, name, config):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.name = name
         self.manager = manager
         self.config = config

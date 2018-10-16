@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
-from TaskTemplate import *
+from __future__ import print_function
+from acq4.util import Qt
+from .TaskTemplate import *
 from acq4.devices.Device import TaskGui
 from acq4.util.debug import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
@@ -9,7 +10,7 @@ import sys
 
 class NiDAQTask(TaskGui):
     
-    sigChanged = QtCore.Signal(object)
+    sigChanged = Qt.Signal(object)
     
     def __init__(self, dev, taskRunner):
         TaskGui.__init__(self, dev, taskRunner)

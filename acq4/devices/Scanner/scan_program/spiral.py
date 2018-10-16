@@ -1,8 +1,9 @@
+from __future__ import print_function
 from __future__ import division
 import weakref
 import numpy as np
 import scipy.interpolate
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
@@ -107,17 +108,17 @@ class SpiralScanROI(pg.ROI):
             npts = min(5000, int(30 * abs(self.angles[1] - self.angles[0]) / np.pi))
             pts = sg.path(npts)
             self._path = pg.arrayToQPath(pts[:,0], pts[:,1])
-        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setRenderHint(Qt.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.drawPath(self._path)
 
 
-class SpiralScanControl(QtCore.QObject):
+class SpiralScanControl(Qt.QObject):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, component):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         # self.name = component.name
         self.component = weakref.ref(component)

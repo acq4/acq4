@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 import time, types, os.path, re, sys, weakref
 from collections import OrderedDict
 import numpy as np
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
 import acq4.pyqtgraph as pg
@@ -17,10 +18,10 @@ from acq4.util.metaarray import MetaArray
 from acq4.pyqtgraph import ptime
 
 
-class CameraWindow(QtGui.QMainWindow):
+class CameraWindow(Qt.QMainWindow):
     
-    sigInterfaceAdded = QtCore.Signal(object, object)
-    sigInterfaceRemoved = QtCore.Signal(object, object)
+    sigInterfaceAdded = Qt.Signal(object, object)
+    sigInterfaceRemoved = Qt.Signal(object, object)
 
     def __init__(self, module):
         self.hasQuit = False
@@ -30,7 +31,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.docks = OrderedDict()       # owner: dock
         
         # Start building UI
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         self.setWindowTitle('Camera')
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
@@ -72,8 +73,8 @@ class CameraWindow(QtGui.QMainWindow):
         
         # Add explanatory label if no devices were found
         if not haveDevs:
-            label = QtGui.QLabel("No imaging devices available")
-            label.setAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+            label = Qt.QLabel("No imaging devices available")
+            label.setAlignment(Qt.Qt.AlignHCenter | Qt.Qt.AlignVCenter)
             dock = dockarea.Dock(name="nocamera", widget=label, size=(100, 500), hideTitle=True)
             self.cw.addDock(dock, 'left', self.gvDock)
 
@@ -95,11 +96,11 @@ class CameraWindow(QtGui.QMainWindow):
         self.scaleBar.setParentItem(self.view)
         
         ## Set up status bar labels
-        self.recLabel = QtGui.QLabel()
-        self.rgnLabel = QtGui.QLabel()
-        self.xyLabel = QtGui.QLabel()
-        self.tLabel = QtGui.QLabel()
-        self.vLabel = QtGui.QLabel()
+        self.recLabel = Qt.QLabel()
+        self.rgnLabel = Qt.QLabel()
+        self.xyLabel = Qt.QLabel()
+        self.tLabel = Qt.QLabel()
+        self.vLabel = Qt.QLabel()
         self.vLabel.setFixedWidth(50)
         self.setStatusBar(StatusBar())
         font = self.xyLabel.font()
@@ -113,10 +114,10 @@ class CameraWindow(QtGui.QMainWindow):
         self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
         uiState = module.manager.readConfigFile(self.stateFile)
         if 'geometry' in uiState:
-            geom = QtCore.QRect(*uiState['geometry'])
+            geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         if 'window' in uiState:
-            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(uiState['window'])
             self.restoreState(ws)
         if 'docks' in uiState:
             self.cw.restoreState(uiState['docks'], missing='ignore')
@@ -156,8 +157,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.interfaces[name].quit()
 
     def _removeInterface(self, iface):
-        print "======== remove", iface
-        print self.interfaces
+        print("======== remove", iface)
+        print(self.interfaces)
         name = None
         if isinstance(iface, CameraModuleInterface):
             for k,v in self.interfaces.items():
@@ -279,7 +280,7 @@ class CameraWindow(QtGui.QMainWindow):
         if scale != self.lastCameraScale:
             anchor = self.view.mapViewToDevice(self.lastCameraPosition)
             self.view.scaleBy(scale / self.lastCameraScale)
-            pg.QtGui.QApplication.processEvents()
+            Qt.QApplication.processEvents()
             anchor2 = self.view.mapDeviceToView(anchor)
             diff = pos - anchor2
             self.lastCameraScale = scale
@@ -291,17 +292,17 @@ class CameraWindow(QtGui.QMainWindow):
         self.cameraItemGroup.setTransform(tr)
     
 
-class CameraModuleInterface(QtCore.QObject):
+class CameraModuleInterface(Qt.QObject):
     """ Base class used to plug new interfaces into the camera module.
 
     """
-    sigNewFrame = QtCore.Signal(object, object)  # (self, frame)
+    sigNewFrame = Qt.Signal(object, object)  # (self, frame)
 
     # indicates this is an interface to an imaging device. 
     canImage = True
 
     def __init__(self, dev, mod):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.mod = weakref.ref(mod)
         self.dev = weakref.ref(dev)
         self._hasQuit = False
@@ -365,10 +366,10 @@ class PlotROI(pg.ROI):
         self.addScaleHandle([1, 1], [0, 0])
 
 
-class ROIPlotter(QtGui.QWidget):
+class ROIPlotter(Qt.QWidget):
     # ROI plot ctrls
     def __init__(self, mod):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.mod = weakref.ref(mod)
         self.view = mod.view
 
@@ -378,23 +379,23 @@ class ROIPlotter(QtGui.QWidget):
         self.plotCurves = []
 
         # Set up UI
-        self.roiLayout = QtGui.QGridLayout()
+        self.roiLayout = Qt.QGridLayout()
         self.roiLayout.setSpacing(0)
         self.roiLayout.setContentsMargins(0,0,0,0)
         self.setLayout(self.roiLayout)
 
         # rect
-        rectPath = QtGui.QPainterPath()
+        rectPath = Qt.QPainterPath()
         rectPath.addRect(0, 0, 1, 1)
         self.rectBtn = pg.PathButton(path=rectPath)
 
         # ellipse
-        ellPath = QtGui.QPainterPath()
+        ellPath = Qt.QPainterPath()
         ellPath.addEllipse(0, 0, 1, 1)
         self.ellipseBtn = pg.PathButton(path=ellPath)
 
         # polygon
-        polyPath = QtGui.QPainterPath()
+        polyPath = Qt.QPainterPath()
         polyPath.moveTo(0,0)
         polyPath.lineTo(2,3)
         polyPath.lineTo(3,1)
@@ -404,7 +405,7 @@ class ROIPlotter(QtGui.QWidget):
         self.polygonBtn = pg.PathButton(path=polyPath)
 
         # ruler
-        polyPath = QtGui.QPainterPath()
+        polyPath = Qt.QPainterPath()
         polyPath.moveTo(0, 0)
         polyPath.lineTo(3, -2)
         polyPath.moveTo(0, 0)
@@ -424,7 +425,7 @@ class ROIPlotter(QtGui.QWidget):
         self.roiLayout.addWidget(self.rulerBtn, 1, 1)
         self.roiTimeSpin = pg.SpinBox(value=5.0, suffix='s', siPrefix=True, dec=True, step=0.5, bounds=(0,None))
         self.roiLayout.addWidget(self.roiTimeSpin, 2, 0, 1, 2)
-        self.roiPlotCheck = QtGui.QCheckBox('Plot')
+        self.roiPlotCheck = Qt.QCheckBox('Plot')
         self.roiLayout.addWidget(self.roiPlotCheck, 3, 0, 1, 2)
         
         self.roiPlot = pg.PlotWidget()
@@ -526,12 +527,12 @@ class ROIPlotter(QtGui.QWidget):
         prof.finish()
 
 
-class ImageSequencer(QtGui.QWidget):
+class ImageSequencer(Qt.QWidget):
     """GUI for acquiring z-stacks, timelapse, and mosaic.
     """
     def __init__(self, mod):
         self.mod = weakref.ref(mod)
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
 
         self.imager = None
 
@@ -690,7 +691,7 @@ class ImageSequencer(QtGui.QWidget):
 
 class SequencerThread(Thread):
 
-    sigMessage = QtCore.Signal(object)  # message
+    sigMessage = Qt.Signal(object)  # message
 
     def __init__(self):
         Thread.__init__(self)
@@ -752,7 +753,7 @@ class SequencerThread(Thread):
                             break
                         except RuntimeError:
                             if i == 4:
-                                print "Did not reach focus after 5 iterations (%g != %g)" % (self.prot['imager'].getDevice().getFocusDepth(), depths[depthIndex])
+                                print("Did not reach focus after 5 iterations (%g != %g)" % (self.prot['imager'].getDevice().getFocusDepth(), depths[depthIndex]))
 
                     frame = self.getFrame()
                     self.recordFrame(frame, iter, depthIndex)

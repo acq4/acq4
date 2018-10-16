@@ -1,1 +1,2 @@
-from multiclamp import *
+from __future__ import print_function
+from .multiclamp import *

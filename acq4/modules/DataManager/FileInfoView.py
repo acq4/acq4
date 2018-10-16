@@ -1,28 +1,32 @@
 # -*- coding: utf-8 -*-
-from FileInfoViewTemplate import *
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+
+import six
+
+from .FileInfoViewTemplate import *
+from acq4.util import Qt
 from acq4.util.DataManager import DirHandle
 import acq4.Manager as Manager
 import time
 import acq4.util.configfile as configfile
 from acq4.util.DictView import *
 
-class FocusEventCatcher(QtCore.QObject):
+class FocusEventCatcher(Qt.QObject):
     
-    sigLostFocus = QtCore.Signal(object)
+    sigLostFocus = Qt.Signal(object)
     
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         
     def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.FocusOut:
+        if event.type() == Qt.QEvent.FocusOut:
             self.sigLostFocus.emit(obj)
         return False
 
 
-class FileInfoView(QtGui.QWidget):
+class FileInfoView(Qt.QWidget):
     def __init__(self, parent):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.manager = Manager.getManager()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -47,7 +51,7 @@ class FileInfoView(QtGui.QWidget):
         
         ## Decide on the list of fields to display
         info = file.info()
-        infoKeys = info.keys()
+        infoKeys = list(info.keys())
         fields = self.manager.suggestedDirFields(file)
         
         ## Generate fields, populate if data exists
@@ -81,22 +85,22 @@ class FileInfoView(QtGui.QWidget):
             # now use args to create a widget for this field                
             value = info.get(fieldName, fieldOpts.get('default', None))
             if fieldTyp == 'text':
-                w = QtGui.QTextEdit()
+                w = Qt.QTextEdit()
                 w.setTabChangesFocus(True)
                 if value is not None:
                     w.setText(value)
             elif fieldTyp == 'string':
-                w = QtGui.QLineEdit()
+                w = Qt.QLineEdit()
                 if value is not None:
                     w.setText(value)
             elif fieldTyp == 'list':
-                w = QtGui.QComboBox()
+                w = Qt.QComboBox()
                 w.addItems([''] + fieldOpts['values'])
                 w.setEditable(True)
                 if value is not None:
                     w.lineEdit().setText(value)
             elif fieldTyp == 'bool':
-                w = QtGui.QCheckBox()
+                w = Qt.QCheckBox()
                 if value is not None:
                     w.setChecked(value)
             else:
@@ -110,7 +114,7 @@ class FileInfoView(QtGui.QWidget):
                 w = DictView(info[f])
             else:
                 s = str(info[f])
-                if isinstance(f, basestring) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
+                if isinstance(f, six.string_types) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
                     try:
                         t0 = file.parent().info()['__timestamp__']
                         dt = " [elapsed = %0.3f s]" % (info[f] - t0)
@@ -119,7 +123,7 @@ class FileInfoView(QtGui.QWidget):
                     s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(float(s))) + dt
                     
                     
-                w = QtGui.QLabel(s)
+                w = Qt.QLabel(s)
             if type(f) is tuple:
                 f = '.'.join(f)
             f = str(f).replace('__', '')
@@ -136,13 +140,13 @@ class FileInfoView(QtGui.QWidget):
     def focusLost(self, obj):
         field = self.widgets[obj]
         #print "focus lost", obj, field
-        if isinstance(obj, QtGui.QLineEdit):
+        if isinstance(obj, Qt.QLineEdit):
             val = str(obj.text())
-        elif isinstance(obj, QtGui.QTextEdit):
+        elif isinstance(obj, Qt.QTextEdit):
             val = str(obj.toPlainText())
-        elif isinstance(obj, QtGui.QComboBox):
+        elif isinstance(obj, Qt.QComboBox):
             val = str(obj.currentText())
-        elif isinstance(obj, QtGui.QCheckBox):
+        elif isinstance(obj, Qt.QCheckBox):
             val = obj.isChecked()
         else:
             return

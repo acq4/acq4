@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import sys
 sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 from ctypes import *
@@ -30,19 +31,19 @@ wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 ## Create hidden window so we can catch messages
 def wndProc(hWnd, msg, wParam, lParam):
-    print "Window event:", msg
+    print("Window event:", msg)
     if msg == wmlib.WM_COPYDATA:
-        print "  copydatastruct", lParam
+        print("  copydatastruct", lParam)
         data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
         if data.dwData == msgIds['REQUEST']:
-            print "  got update from MCC"
+            print("  got update from MCC")
             data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
             for f in data._fields_:
-                print "    ", f[0], getattr(data, f[0])
+                print("    ", f[0], getattr(data, f[0]))
             global d
             d = dict([(f[0], getattr(data, f[0])) for f in data._fields_])
         else:
-            print "  unknown message type", data.dwData
+            print("  unknown message type", data.dwData)
     return True
 
 
@@ -52,7 +53,7 @@ def getError():
 #wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, windll.kernel32.GetModuleHandleA(c_int(0)), 0, 0, 0, "", "AxTelegraphWin")
 wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")
 ret = wmlib.RegisterClassA(wndClass)
-print "Register class:", ret()
+print("Register class:", ret())
 if ret() == 0:
     raise Exception("Error registering window class.")
 cwret = wmlib.CreateWindowExA(
@@ -67,7 +68,7 @@ if cwret() == 0:
     raise Exception("Error creating window.", getError())
 
 hWnd = cwret.rval
-print "Create window:", hWnd
+print("Create window:", hWnd)
 
 ## register messages
 messages = ['OPEN', 'CLOSE', 'REQUEST', 'BROADCAST', 'RECONNECT', 'ID']
@@ -102,9 +103,9 @@ def peekMsg():
     else:
         msg = ret[0]
         if msg.message in msgIds.values():
-            print "Peeked Message:", msgIds.keys()[msgIds.values().index(msg.message)]
+            print("Peeked Message:", list(msgIds.keys())[list(msgIds.values()).index(msg.message)])
         else:
-            print "Peeked Message:", msg.message
+            print("Peeked Message:", msg.message)
         return msg
 
 def getMsgs():
@@ -127,7 +128,7 @@ def unpackID(i):
 
 msgs = getMsgs()
 ids = [m.lParam for m in msgs if m.message==msgIds['ID']]
-print "Devices available:", map(unpackID, ids)
+print("Devices available:", list(map(unpackID, ids)))
 
 for i in ids:
     post(msgIds['OPEN'], i)

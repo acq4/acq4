@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import numpy as np
 import pickle, re, os
 import acq4.Manager
@@ -6,7 +7,9 @@ import collections
 import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
 import acq4.util.debug as debug
-from PyQt4 import QtCore
+from acq4.util import Qt
+import six
+from six.moves import range
 import sqlite3
 
 class SqliteDatabase:
@@ -42,7 +45,7 @@ class SqliteDatabase:
         ## no need to remove the connection entirely.
         #import gc
         #gc.collect()  ## try to convince python to clean up the db immediately so we can remove the connection
-        #QtSql.QSqlDatabase.removeDatabase(self._connectionName)
+        #Qt.QSqlDatabase.removeDatabase(self._connectionName)
 
     def exe(self, cmd, data=None, batch=False, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
@@ -111,9 +114,9 @@ class SqliteDatabase:
         """
         p = debug.Profiler("SqliteDatabase.select", disabled=True)
         if columns != '*':
-            #if isinstance(columns, basestring):
+            #if isinstance(columns, six.string_types):
                 #columns = columns.split(',')
-            if not isinstance(columns, basestring):
+            if not isinstance(columns, six.string_types):
                 qf = []
                 for f in columns:
                     if f == '*':
@@ -182,7 +185,7 @@ class SqliteDatabase:
         indicating progress. This *must* be used inside a for loop::
         
             for n,nmax in db.iterInsert(table, data):
-                print "Insert %d%% complete" % (100. * n / nmax)
+                print("Insert %d%% complete" % (100. * n / nmax))
         
         Use the chunkSize argument to determine how many records are inserted per iteration.
         See insert() for a description of all other options.
@@ -202,7 +205,7 @@ class SqliteDatabase:
             records = TableData(self._prepareData(table, records, ignoreUnknownColumns=ignoreExtraColumns, batch=True))
             p.mark("prepared data")
 
-            columns = records.keys()
+            columns = list(records.keys())
             insert = "INSERT"
             if replaceOnConflict:
                 insert += " OR REPLACE"
@@ -269,7 +272,7 @@ class SqliteDatabase:
         
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
-        return q[0].values()[0]
+        return list(q[0].values())[0]
 
     def replace(self, *args, **kargs):
         return self.insert(*args, replaceOnConflict=True, **kargs)
@@ -287,7 +290,7 @@ class SqliteDatabase:
         columns = parseColumnDefs(columns)
         
         columnStr = []
-        for name, conf in columns.iteritems():
+        for name, conf in columns.items():
             columnStr.append('"%s" %s %s' % (name, conf['Type'], conf.get('Constraints', '')))
         columnStr = ','.join(columnStr)
 
@@ -301,7 +304,7 @@ class SqliteDatabase:
         (see sqlite 'CREATE INDEX')
         """
         ine = "IF NOT EXISTS" if ifNotExist else ""
-        if isinstance(columns, basestring):
+        if isinstance(columns, six.string_types):
             columns = [columns]
         name = table + '__' + '_'.join(columns)
         colStr = quoteList(columns)
@@ -323,7 +326,7 @@ class SqliteDatabase:
         """
         if self.tables is None:
             self._readTableList()
-        return self.tables.keys()
+        return list(self.tables.keys())
  
     def removeTable(self, table):
         self('DROP TABLE "%s"' % table)
@@ -349,8 +352,8 @@ class SqliteDatabase:
             
         where = self._prepareData(table, where)[0]
         conds = []
-        for k,v in where.iteritems():
-            if isinstance(v, basestring):
+        for k,v in where.items():
+            if isinstance(v, six.string_types):
                 conds.append('"%s"=\'%s\'' % (k, v))
             else:
                 conds.append('"%s"=%s' % (k,v))
@@ -412,7 +415,7 @@ class SqliteDatabase:
                         if k.lower() != 'rowid':
                             if k not in schema:
                                 raise Exception("Column '%s' not present in table '%s'" % (k, table))
-                            print "Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                            print("Warning: Setting %s column %s.%s with type %s" % (schema[k], table, k, str(type(rec[k]))))
             if batch:
                 for k in newData:
                     newData[k].append(newRec.get(k, None))
@@ -440,7 +443,7 @@ class SqliteDatabase:
         #print rec1, dtype
         arr = np.empty(len(recs), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(recs)):
+        for i in range(1, len(recs)):
             arr[i] = tuple(recs[i].values())
         prof.mark('converted to array')
         prof.finish()
@@ -449,7 +452,7 @@ class SqliteDatabase:
     def _readRecord(self, rec):
         prof = debug.Profiler("_readRecord", disabled=True)
         data = collections.OrderedDict()
-        names = rec.keys()
+        names = list(rec.keys())
         for i in range(len(rec)):
             val = rec[i]
             name = names[i]
@@ -507,10 +510,10 @@ class Transaction:
                 self.db('ROLLBACK TRANSACTION TO %s' % self.name)
                 self.db.tables = None  ## make sure we are forced to re-read the table list after the rollback.
             except Exception:
-                print "WARNING: Error occurred during transaction and rollback failed."
+                print("WARNING: Error occurred during transaction and rollback failed.")
                 
         if self.db._transactions[-1] is not self:
-            print self, self.db._transactions
+            print(self, self.db._transactions)
             raise Exception('Tried to exit transaction before another nested transaction has finished.')
         self.db._transactions.pop(-1)
 
@@ -540,7 +543,7 @@ class TableData:
         elif isinstance(data, list):
             self.mode = 'list'
         elif isinstance(data, dict):
-            types = set(map(type, data.values()))
+            types = set(map(type, list(data.values())))
             ## dict may be a dict-of-lists or a single record
             types -= set([list, np.ndarray]) ## if dict contains any non-sequence values, it is probably a single record.
             if len(types) != 0:
@@ -589,12 +592,12 @@ class TableData:
         #print rec1, dtype
         arr = np.empty(len(self), dtype=dtype)
         arr[0] = tuple(rec1.values())
-        for i in xrange(1, len(self)):
+        for i in range(1, len(self)):
             arr[i] = tuple(self[i].values())
         return arr
             
     def __getitem__array(self, arg):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             return self.data[arg]
         elif isinstance(arg, int):
             return collections.OrderedDict([(k, self.data[k][arg]) for k in self.columnNames()])
@@ -606,7 +609,7 @@ class TableData:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
             
     def __getitem__list(self, arg):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             return [d.get(arg, None) for d in self.data]
         elif isinstance(arg, int):
             return self.data[arg]
@@ -619,15 +622,15 @@ class TableData:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
         
     def __getitem__dict(self, arg):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             return self.data[arg]
         elif isinstance(arg, int):
-            return collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()])
+            return collections.OrderedDict([(k, v[arg]) for k, v in self.data.items()])
         elif isinstance(arg, tuple):
             arg = self._orderArgs(arg)
             return self.data[arg[1]][arg[0]]
         elif isinstance(arg, slice):
-            return TableData(collections.OrderedDict([(k, v[arg]) for k, v in self.data.iteritems()]))
+            return TableData(collections.OrderedDict([(k, v[arg]) for k, v in self.data.items()]))
         else:
             raise Exception("Cannot index TableData with object '%s' (type='%s')" % (str(arg), type(arg)))
 
@@ -638,7 +641,7 @@ class TableData:
             self.data[arg] = val
 
     def __setitem__list(self, arg, val):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             if len(val) != len(self.data):
                 raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data)))
             for i, rec in enumerate(self.data):
@@ -652,7 +655,7 @@ class TableData:
             raise TypeError(type(arg))
         
     def __setitem__dict(self, arg, val):
-        if isinstance(arg, basestring):
+        if isinstance(arg, six.string_types):
             if len(val) != len(self.data[arg]):
                 raise Exception("Values (%d) and data set (%d) are not the same length." % (len(val), len(self.data[arg])))
             self.data[arg] = val
@@ -667,7 +670,7 @@ class TableData:
 
     def _orderArgs(self, args):
         ## return args in (int, str) order
-        if isinstance(args[0], basestring):
+        if isinstance(args[0], six.string_types):
             return (args[1], args[0])
         else:
             return args
@@ -679,18 +682,18 @@ class TableData:
         return TableData([rec.copy() for rec in self.data])
         
     def copy_dict(self):
-        return TableData({k:v[:] for k,v in self.data.iteritems()})
+        return TableData({k:v[:] for k,v in self.data.items()})
         
         
     def __iter__(self):
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             yield self[i]
 
     def __len__(self):
         if self.mode == 'array' or self.mode == 'list':
             return len(self.data)
         else:
-            return max(map(len, self.data.values()))
+            return max(list(map(len, self.data.values())))
 
     def columnNames(self):
         """returns column names in no particular order"""
@@ -699,13 +702,13 @@ class TableData:
         elif self.mode == 'list':
             if len(self.data) == 0:
                 return []
-            return self.data[0].keys()  ## all records must have all keys. 
+            return list(self.data[0].keys())  ## all records must have all keys. 
             #names = set()
             #for row in self.data:
                 #names.update(row.keys())
             #return list(names)
         elif self.mode == 'dict':
-            return self.data.keys()
+            return list(self.data.keys())
             
     def keys(self):
         return self.columnNames()
@@ -740,12 +743,12 @@ def parseColumnDefs(defs, keyOrder=None):
         
     if isinstance(defs, dict):
         ret = collections.OrderedDict()
-        for k, v in defs.iteritems():
+        for k, v in defs.items():
             if isSequence(v):
                 ret[k] = toDict(v)
             elif isinstance(v, dict):
                 ret[k] = v
-            elif isinstance(v, basestring):
+            elif isinstance(v, six.string_types):
                 ret[k] = {'Type': v}
             else:
                 raise Exception("Invalid column-list specification: %s" % str(defs))

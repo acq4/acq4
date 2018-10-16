@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
+from __future__ import print_function
 """
 PlotHelpers.py
 
@@ -20,7 +21,7 @@ def nice_plot(ax, spines, position = 10, axesoff = False):
            using a calbar instead of an axes: calbar = [x0, y0, xs, ys]
            inserting a reference line (grey, 3pt dashed, 0.5pt, at refline = y position)
     """
-    for loc, spine in ax.spines.iteritems():
+    for loc, spine in ax.spines.items():
         if loc in spines:
             spine.set_position(('outward', position)) # outward by 10 points
         else:
@@ -49,7 +50,7 @@ def noaxes(ax):
 
 
 def cleanAxes(ax):
-    for loc, spine in ax.spines.iteritems():
+    for loc, spine in ax.spines.items():
         if loc in ['left', 'bottom']:
             pass
         elif loc in ['right', 'top']:
@@ -77,7 +78,7 @@ def update_font(ax):
     ax.tick_params(axis = 'both', labelsize = 9)
 
 def adjust_spines(ax, spines, direction = 'outward', distance=5, smart=False):
-    for loc, spine in ax.spines.iteritems():
+    for loc, spine in ax.spines.items():
         if loc in spines:
             spine.set_position((direction,distance)) # outward by 10 points
             if smart:
@@ -128,8 +129,8 @@ def calbar(ax, calbar = None, axesoff = True, orient = 'left'):
                 horizontalalignment = 'right', verticalalignment = 'center',
                 fontsize = 11)
         else:
-            print "PlotHelpers.py: I did not understand orientation: %s" % (orient)
-            print "plotting as if set to left... "
+            print("PlotHelpers.py: I did not understand orientation: %s" % (orient))
+            print("plotting as if set to left... ")
             ax.plot([calbar[0], calbar[0], calbar[0]+calbar[2]], 
                 [calbar[1]+calbar[3], calbar[1], calbar[1]],
                 color = 'k', linestyle = '-', linewidth = 1.5)

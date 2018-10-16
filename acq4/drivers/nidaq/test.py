@@ -1,7 +1,8 @@
 #!/cygdrive/c/Python25/python.exe
 # -*- coding: utf-8 -*-
 ## Workaround for symlinks not working in windows
-print "Starting up.."
+from __future__ import print_function
+print("Starting up..")
 
 import sys, time, os
 import numpy as np
@@ -9,37 +10,37 @@ modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, '..', '..', '..'))
 utilPath = os.path.join(acq4Path, 'lib', 'util')
 sys.path = [acq4Path, utilPath] + sys.path
-from nidaq import LIB as lib
+from .nidaq import LIB as lib
 import acq4.util.ptime as ptime
 
 
 if sys.argv[-1] == 'mock':
-    from mock import NIDAQ as n
+    from .mock import NIDAQ as n
 else:
-    from nidaq import NIDAQ as n
+    from .nidaq import NIDAQ as n
 
 
-print "Assert num devs > 0:"
+print("Assert num devs > 0:")
 assert(len(n.listDevices()) > 0)
-print "  OK"
-print "devices: %s" % n.listDevices()
+print("  OK")
+print("devices: %s" % n.listDevices())
 dev = n.listDevices()[0]
 
-print "\nAnalog Channels:"
-print "  AI: ", n.listAIChannels(dev)
-print "  AO: ", n.listAOChannels(dev)
+print("\nAnalog Channels:")
+print("  AI: ", n.listAIChannels(dev))
+print("  AO: ", n.listAOChannels(dev))
 
-print "\nDigital ports:"
-print "  DI: ", n.listDIPorts(dev)
-print "  DO: ", n.listDOPorts(dev)
+print("\nDigital ports:")
+print("  DI: ", n.listDIPorts(dev))
+print("  DO: ", n.listDOPorts(dev))
 
-print "\nDigital lines:"
-print "  DI: ", n.listDILines(dev)
-print "  DO: ", n.listDOLines(dev)
+print("\nDigital lines:")
+print("  DI: ", n.listDILines(dev))
+print("  DO: ", n.listDOLines(dev))
 
 
 def finiteReadTest():
-    print "::::::::::::::::::  Analog Input Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  Analog Input Test  :::::::::::::::::::::")
     task = n.createTask()
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -1., 1., n.Val_Volts, None)
     task.CreateAIVoltageChan("/Dev1/ai1", "", n.Val_Cfg_Default, -10., 10., n.Val_Volts, None)
@@ -54,7 +55,7 @@ def finiteReadTest():
 
 
 def contReadTest():
-    print "::::::::::::::::::  Continuous Read Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  Continuous Read Test  :::::::::::::::::::::")
     task = n.createTask()
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10., 10., n.Val_Volts, None)
     task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_ContSamps, 4000)
@@ -62,7 +63,7 @@ def contReadTest():
     t = ptime.time()
     for i in range(0, 10):
         data, size = task.read(1000)
-        print "Cont read %d - %d samples, %fsec" % (i, size, ptime.time() - t)
+        print("Cont read %d - %d samples, %fsec" % (i, size, ptime.time() - t))
         t = ptime.time()
     task.stop()
 
@@ -70,7 +71,7 @@ def contReadTest():
 ## Output task
 
 def outputTest():
-    print "::::::::::::::::::  Analog Output Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  Analog Output Test  :::::::::::::::::::::")
     task = n.createTask()
     task.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., n.Val_Volts, None)
     task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
@@ -89,7 +90,7 @@ def outputTest():
 ## Synchronized tasks
 
 def syncADTest():
-    print "::::::::::::::::::  A/D  Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  A/D  Test  :::::::::::::::::::::")
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10., 10., n.Val_Volts, None)
     task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
@@ -97,7 +98,7 @@ def syncADTest():
     task2.CreateDIChan("/Dev1/port0", "", n.Val_ChanForAllLines)
     task2.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
     
-    print task2.GetTaskChannels()
+    print(task2.GetTaskChannels())
     task2.start()
     task1.start()
     data1 = task1.read()
@@ -105,13 +106,13 @@ def syncADTest():
     task2.stop()
     task1.stop()
     
-    print data1[0].shape, data1[0].dtype
-    print data1
-    print data2[0].shape, data2[0].dtype
-    print data2
+    print(data1[0].shape, data1[0].dtype)
+    print(data1)
+    print(data2[0].shape, data2[0].dtype)
+    print(data2)
 
 def syncAIOTest():
-    print "::::::::::::::::::  Sync Analog I/O Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  Sync Analog I/O Test  :::::::::::::::::::::")
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10., 10., n.Val_Volts, None)
     task1.CfgSampClkTiming("/Dev1/ao/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
@@ -127,7 +128,7 @@ def syncAIOTest():
     data1 = np.zeros((100,), dtype=np.float64)
     data1[20:40] = 7.0
     data1[60:80] = 5.0
-    print "  Wrote ao samples:", task2.write(data1)
+    print("  Wrote ao samples:", task2.write(data1))
     task1.start()
     task2.start()
     
@@ -136,12 +137,12 @@ def syncAIOTest():
     task1.stop()
     task2.stop()
     
-    print "  Data acquired:", data2[0].shape
+    print("  Data acquired:", data2[0].shape)
     return data2
 
 
 def syncIOTest():
-    print "::::::::::::::::::  Sync I/O Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  Sync I/O Test  :::::::::::::::::::::")
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10., 10., n.Val_Volts, None)
     task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
@@ -173,8 +174,8 @@ def syncIOTest():
     data1 = np.zeros((100,), dtype=np.float64)
     data1[20:40] = 7.0
     data1[60:80] = 5.0
-    print "Wrote ao samples:", task2.write(data1)
-    print "Wrote do samples:", task4.write(data1.astype(uint32))
+    print("Wrote ao samples:", task2.write(data1))
+    print("Wrote do samples:", task4.write(data1.astype(uint32)))
     task2.start()
     task3.start()
     task1.start()
@@ -185,9 +186,9 @@ def syncIOTest():
     task2.stop()
     task3.stop()
     
-    print "Data acquired:"
-    print data2[0].shape
-    print data3[0].shape
+    print("Data acquired:")
+    print(data2[0].shape)
+    print(data3[0].shape)
     return data2
 
 
@@ -199,7 +200,7 @@ def triggerTest():
     
     task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
     task.CfgDigEdgeStartTrig("/Dev1/PFI5", n.Val_Rising)
-    print "Waiting for trigger.."
+    print("Waiting for trigger..")
     
     task.start()
     data = task.read()
@@ -211,7 +212,7 @@ def triggerTest():
 
 st = n.createSuperTask()
 def superTaskTest():
-    print "::::::::::::::::::  SuperTask  Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  SuperTask  Test  :::::::::::::::::::::")
 
     st.addChannel('/Dev1/ai8', 'ai')
     st.addChannel('/Dev1/ai9', 'ai')
@@ -240,7 +241,7 @@ def superTaskTest():
     
     
     data = st.run()
-    print "waiting for trigger.."
+    print("waiting for trigger..")
     
     #for ch in data['chans']:
         #print "Channel:", ch
@@ -249,14 +250,14 @@ def superTaskTest():
         #print "Data:", data[task]['data'][0][ind]
     
     for k in data:
-        print "=====Output", k
+        print("=====Output", k)
         #print data
         #print data[k][0][:, ::20].round()
-        print data[k]['data']
+        print(data[k]['data'])
     return data
 
 def analogSuperTaskTest():
-    print "::::::::::::::::::  Analog SuperTask  Test  :::::::::::::::::::::"
+    print("::::::::::::::::::  Analog SuperTask  Test  :::::::::::::::::::::")
 
     st.addChannel('/Dev1/ai8', 'ai')
     st.addChannel('/Dev1/ai9', 'ai')
@@ -275,13 +276,13 @@ def analogSuperTaskTest():
     
     
     data = st.run()
-    print "waiting for trigger.."
+    print("waiting for trigger..")
     
     for k in data:
-        print "=====Output", k
+        print("=====Output", k)
         #print data
         #print data[k][0][:, ::20].round()
-        print data[k]['data']
+        print(data[k]['data'])
     return data
     
 

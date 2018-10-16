@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 Use NEURON to simulate a simple cell for testing with MockClamp
 """
@@ -8,13 +9,13 @@ import sys, os
 for nrnpath in ['/usr/local/nrn/lib/python']:
     if os.path.isdir(nrnpath):
         sys.path.append(nrnpath)
-from neuron import h
-import neuron
+from .neuron import h
+from . import neuron
 
 # try to load extra mechanisms
 for name in ('i386', 'x86_64'):
     mechlib = os.path.join(os.path.dirname(__file__), name + '/.libs/libnrnmech.so')
-    print "NEURON load:", mechlib
+    print("NEURON load:", mechlib)
     if os.path.isfile(mechlib):
         h.nrn_load_dll(mechlib)
 
@@ -115,8 +116,8 @@ def run(cmd):
 #
 if __name__ == '__main__':
     import pyqtgraph as pg
-    from pyqtgraph.Qt import QtGui
-    app = QtGui.QApplication([])
+    from acq4.util import Qt
+    app = Qt.QApplication([])
     win = pg.GraphicsWindow()
     win.resize(1000,600)
     win.setWindowTitle('Testing hhSim.py')
@@ -130,7 +131,7 @@ if __name__ == '__main__':
     dt = 1e-4
     tb = np.arange(0, npts*dt, dt)
     for i, v in enumerate(x):
-        print 'V: ', v
+        print('V: ', v)
         cmd[i, x1:x2] = v*1e-3
         opts = {
             'mode': 'vc',
@@ -140,8 +141,5 @@ if __name__ == '__main__':
         data[i,:] = run(opts)
         p.plot(tb, data[i])
 
-    QtGui.QApplication.instance().exec_()
-
-    
-    
+    Qt.QApplication.instance().exec_()
     

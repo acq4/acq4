@@ -1,23 +1,24 @@
+from __future__ import print_function
 import numpy as np
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.Qt import QtGui, QtCore
+from acq4.util import Qt
 
 
-class MaskPainter(QtGui.QWidget):
+class MaskPainter(Qt.QWidget):
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
-        self.layout = QtGui.QGridLayout()
+        Qt.QWidget.__init__(self, parent)
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         
         self.view = pg.ImageView()
         self.layout.addWidget(self.view, 0, 0)
         
-        self.ctrlWidget = QtGui.QWidget()
+        self.ctrlWidget = Qt.QWidget()
         self.layout.addWidget(self.ctrlWidget, 0, 1)
         
         self.maskItem = pg.ImageItem()
         self.maskItem.setZValue(10)
-        self.maskItem.setCompositionMode(QtGui.QPainter.CompositionMode_Multiply)
+        self.maskItem.setCompositionMode(Qt.QPainter.CompositionMode_Multiply)
         lut = np.zeros((256, 3), dtype='ubyte')
         lut[:,0:2] = np.arange(256).reshape(256,1)
         self.maskItem.setLookupTable(lut)

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
-from TaskTemplate import *
+from __future__ import print_function
+from acq4.util import Qt
+from .TaskTemplate import *
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import TaskGui
 #from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import numpy as np
 import acq4.pyqtgraph as pg
 #from acq4.pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
-#from PyQt4 import Qwt5 as Qwt
+#from acq4.util import Qt
 
 class CameraTaskGui(DAQGenericTaskGui):
     def __init__(self, dev, taskRunner):
@@ -89,7 +90,10 @@ class CameraTaskGui(DAQGenericTaskGui):
     def taskSequenceStarted(self):
         DAQGenericTaskGui.taskSequenceStarted(self)
         if self.ui.releaseAfterRadio.isChecked():
-            self.dev.pushState('cam_proto_state')
+            # For now, the task gui only changes triggerMode. If we allow
+            # other parameters to be changed from here, then they will have to be added
+            # to the list of parameters to push/pop
+            self.dev.pushState('cam_proto_state', params=['triggerMode'])
         
     def taskFinished(self):
         DAQGenericTaskGui.taskFinished(self)
@@ -108,7 +112,7 @@ class CameraTaskGui(DAQGenericTaskGui):
         state = self.stateGroup.state()
         if state['displayCheck']:
             if result is None or len(result.frames()) == 0:
-                print "No images returned from camera task."
+                print("No images returned from camera task.")
                 self.ui.imageView.clear()
             else:
                 frameTimes, precise = result.frameTimes()

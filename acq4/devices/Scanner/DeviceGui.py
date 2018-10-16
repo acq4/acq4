@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from DeviceTemplate import Ui_Form
+from __future__ import print_function
+from .DeviceTemplate import Ui_Form
 import time, os, sys, gc
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 #from acq4.pyqtgraph.graphicsItems import ImageItem
 import acq4.Manager
 from acq4.util.imageAnalysis import *
@@ -12,11 +13,11 @@ import acq4.pyqtgraph as pg
 #from acq4.pyqtgraph.ProgressDialog import ProgressDialog
 from acq4.util.HelpfulException import HelpfulException
 
-class ScannerDeviceGui(QtGui.QWidget):
+class ScannerDeviceGui(Qt.QWidget):
     
     
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         self.win = win
         self.ui = Ui_Form()
@@ -108,7 +109,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 cal = index[laser][obj]
                 spot = '%0.0f, %0.1f um' % (cal['spot'][0], cal['spot'][1]*1e6)
                 date = cal['date']
-                item = QtGui.QTreeWidgetItem([', '.join(obj), laser, str(spot), date])
+                item = Qt.QTreeWidgetItem([', '.join(obj), laser, str(spot), date])
                 item.opticState = obj
                 self.ui.calibrationList.addTopLevelItem(item)
         
@@ -165,10 +166,10 @@ class ScannerDeviceGui(QtGui.QWidget):
     def addSpot(self, pos, size):
         """Add a circle to the image"""
         s2 = size/2.0
-        s = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
+        s = Qt.QGraphicsEllipseItem(0, 0, 1, 1)
         s.scale(size, size)
         s.setPos(pos[0]-s2, pos[1]-s2)
-        s.setPen(QtGui.QPen(QtGui.QColor(100, 255, 100, 70)))
+        s.setPen(Qt.QPen(Qt.QColor(100, 255, 100, 70)))
         self.ui.view.addItem(s)
         s.setZValue(100)
         self.spots.append(s)
@@ -362,7 +363,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## compute fit error
         errx = abs(erf2(xFit,  loc,  cmd[:, 0])).mean()
         erry = abs(erf2(yFit,  loc,  cmd[:, 1])).mean()
-        print "Fit error:",  errx,  erry
+        print("Fit error:",  errx,  erry)
         self.dev.lastCalData = (loc,  cmd)
         return (list(xFit), list(yFit))
 

@@ -1,8 +1,9 @@
-from PyQt4 import QtGui, QtCore
-from devicePagetemplate import *
+from __future__ import print_function
+from acq4.util import Qt
+from .devicePagetemplate import *
 
-class DevicePageWidget(QtGui.QWidget):
+class DevicePageWidget(Qt.QWidget):
     def __init__(self, w):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.ui = Ui_Form()
         self.ui.setupUi(w)

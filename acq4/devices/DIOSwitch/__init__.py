@@ -1,1 +1,2 @@
-from DIOSwitch import DIOSwitch
+from __future__ import print_function
+from .DIOSwitch import DIOSwitch

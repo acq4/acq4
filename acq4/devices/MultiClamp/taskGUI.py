@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 import sys
 from acq4.devices.Device import TaskGui
 from acq4.util.SequenceRunner import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import numpy
-from TaskTemplate import *
+from .TaskTemplate import *
 from acq4.util.debug import *
 import sip
 
 class MultiClampTaskGui(TaskGui):
     
-    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
+    #sigSequenceChanged = Qt.Signal(object)  ## defined upstream
     
     def __init__(self, dev, taskRunner):
         TaskGui.__init__(self, dev, taskRunner)
@@ -150,7 +151,7 @@ class MultiClampTaskGui(TaskGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, list(params.keys()))
 
         # Plot all waves but disable auto-range first to improve performance.
         autoRange = self.ui.bottomPlotWidget.getViewBox().autoRangeEnabled()
@@ -158,12 +159,12 @@ class MultiClampTaskGui(TaskGui):
         try:
             for w in waves:
                 if w is not None:
-                    self.plotCmdWave(w, color=QtGui.QColor(100, 100, 100), replot=False)
+                    self.plotCmdWave(w, color=Qt.QColor(100, 100, 100), replot=False)
         
             ## display single-mode wave in red
             single = self.getSingleWave()
             if single is not None:
-                p = self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
+                p = self.plotCmdWave(single, color=Qt.QColor(200, 100, 100))
                 p.setZValue(1000)
 
         finally:
@@ -188,14 +189,14 @@ class MultiClampTaskGui(TaskGui):
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name()])
         cur = self.getSingleWave(params) 
         if cur is not None:
-            self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))
+            self.currentCmdPlot = self.plotCmdWave(cur, color=Qt.QColor(100, 200, 100))
             self.currentCmdPlot.setZValue(1001)
         
-    def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
+    def plotCmdWave(self, data, color=Qt.QColor(100, 100, 100), replot=True):
         if data is None:
             return
         plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals)
-        plot.setPen(QtGui.QPen(color))
+        plot.setPen(Qt.QPen(color))
         
         return plot
         
@@ -322,7 +323,7 @@ class MultiClampTaskGui(TaskGui):
             ind = c.findText(s)
             if ind == -1:
                 for i in range(c.count()):
-                    print c.itemText(i)
+                    print(c.itemText(i))
                 raise Exception('Signal "%s" does not exist' % s)
             c.setCurrentIndex(ind)
         
@@ -338,6 +339,6 @@ class MultiClampTaskGui(TaskGui):
     def quit(self):
         TaskGui.quit(self)
         if not sip.isdeleted(self.daqUI):
-            QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+            Qt.QObject.disconnect(self.daqUI, Qt.SIGNAL('changed'), self.daqChanged)
         self.ui.topPlotWidget.close()
         self.ui.bottomPlotWidget.close()

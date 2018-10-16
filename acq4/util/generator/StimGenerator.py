@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 StimGenerator.py -  Stimulus waveform generator + Qt widget
 Copyright 2010  Luke Campagnola
@@ -12,28 +13,29 @@ for evaluation are provided in waveforms.py.
 
 import sys, types, re
 import numpy as np
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from collections import OrderedDict
 import acq4.util.functions as fn
-from GeneratorTemplate import *
-import waveforms
+from .GeneratorTemplate import *
+from . import waveforms
 from acq4.util.debug import *
 
 #from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
-from StimParamSet import StimParamSet
-from SeqParamSet import SequenceParamSet
+from .StimParamSet import StimParamSet
+from .SeqParamSet import SequenceParamSet
+import six
 
 import acq4.util.units as units
 
-class StimGenerator(QtGui.QWidget):
+class StimGenerator(Qt.QWidget):
     
-    sigDataChanged = QtCore.Signal()        ## Emitted when the output of getSingle() is expected to have changed
-    sigStateChanged = QtCore.Signal()       ## Emitted when the output of saveState() is expected to have changed
-    sigParametersChanged = QtCore.Signal()  ## Emitted when the sequence parameter space has changed
-    sigFunctionChanged = QtCore.Signal()    ## Emitted when the waveform-generating function has changed
+    sigDataChanged = Qt.Signal()        ## Emitted when the output of getSingle() is expected to have changed
+    sigStateChanged = Qt.Signal()       ## Emitted when the output of saveState() is expected to have changed
+    sigParametersChanged = Qt.Signal()  ## Emitted when the sequence parameter space has changed
+    sigFunctionChanged = Qt.Signal()    ## Emitted when the waveform-generating function has changed
     
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         #self.timeScale = 1.0
         #self.scale = 1.0
         self.offset = 0.0
@@ -303,7 +305,7 @@ class StimGenerator(QtGui.QWidget):
                 #self.ui.advancedBtn.setChecked(True)
                 self.ui.functionText.setPlainText(state['function'])
             if 'params' in state:
-                if isinstance(state['params'], basestring):  ## for backward compatibility
+                if isinstance(state['params'], six.string_types):  ## for backward compatibility
                     state['params'] = seqListParse(state['params'])
                 #self.ui.advancedBtn.setChecked(True)
                 #self.ui.paramText.setPlainText(state['params'])
@@ -405,7 +407,7 @@ class StimGenerator(QtGui.QWidget):
                 try:
                     ns[k] = float(seq[k][1][params[k]])
                 except IndexError:
-                    print "Requested value %d for param %s, but only %d in the param list." % (params[k], str(k), len(seq[k][1]))
+                    print("Requested value %d for param %s, but only %d in the param list." % (params[k], str(k), len(seq[k][1])))
                     raise
             else:  ## just use single value
                 ns[k] = float(seq[k][0])

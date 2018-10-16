@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.Device import *
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.util.Mutex as Mutex
 from collections import OrderedDict
 
@@ -9,22 +10,19 @@ class LightSource(Device):
     """Device tracking the state and properties of multiple illumination sources.
     """
     # emitted when the on/off status of a light changes
-    sigLightChanged = QtCore.Signal(object, object)  # self, light_name
+    sigLightChanged = Qt.Signal(object, object)  # self, light_name
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self._sources = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
         self._lock = Mutex.Mutex()
-        self._xkeysDevs = []
 
     def addSource(self, name, conf):
         self._sources[name] = conf
         if 'xkey' in conf:
             devname, row, col = self._sources[name]['xkey']
             dev = self.dm.getDevice(devname)
-            if dev not in self._xkeysDevs:
-                dev.sigStateChanged.connect(self._xkeyStateChanged)
-                self._xkeysDevs.append(dev)
+            dev.addKeyCallback((row, col), self._hotkeyPressed, (name,))
 
     def describe(self, onlyActive=True):
         """Return a description of the current state of all active light sources.
@@ -59,17 +57,5 @@ class LightSource(Device):
             bl[row,col] = int(self._sources[name]['active'])
             dev.setBacklights(bl)
 
-    def _xkeyStateChanged(self, dev, changes):
-        keych = changes.get('keys')
-        if keych is None:
-            return
-        for pos, state in keych:
-            if state is False:
-                continue
-            for name, source in self._sources.items():
-                if source.get('xkey')[1:] == pos:
-                    self.setSourceActive(name, not self.sourceActive(name))
-
-
-
-
+    def _hotkeyPressed(self, dev, changes, name):
+        self.setSourceActive(name, not self.sourceActive(name))

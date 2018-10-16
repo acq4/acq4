@@ -1,16 +1,18 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 from acq4.Manager import getManager, logExc, logMsg
-from devTemplate import Ui_Form
+from .devTemplate import Ui_Form
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
+import six
 import time
 
 
-class LaserDevGui(QtGui.QWidget):
+class LaserDevGui(Qt.QWidget):
     
     def __init__(self, dev):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
@@ -182,7 +184,7 @@ class LaserDevGui(QtGui.QWidget):
     def wavelengthComboChanged(self):
         if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."
             return # not selected
-        text = unicode(self.ui.wavelengthCombo.currentText())
+        text = six.text_type(self.ui.wavelengthCombo.currentText())
         wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
         if wl is not None:
             if len(wl) == 1:
@@ -191,7 +193,7 @@ class LaserDevGui(QtGui.QWidget):
                 self.ui.wavelengthSpin.setValue(wl[0])
                 gddValue = self.ui.GDDSpin.setValue(wl[1])
             else:
-                print 'bad entry in devices.cfg for wavelength, GDD value'
+                print('bad entry in devices.cfg for wavelength, GDD value')
     #def microscopeChanged(self):
         #pass
     
@@ -247,7 +249,7 @@ class LaserDevGui(QtGui.QWidget):
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         for opticState, wavelength, trans, power, date in self.dev.getCalibrationList():
-            item = QtGui.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
+            item = Qt.QTreeWidgetItem([str(opticState), str(wavelength), '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
             item.key = opticState
             self.ui.calibrationList.addTopLevelItem(item)
             
@@ -260,7 +262,7 @@ class LaserDevGui(QtGui.QWidget):
                 self.ui.calibrateBtn.setEnabled(False)
                 self.ui.calibrateBtn.setText('Calibrating...')
                 #scope = str(self.ui.microscopeCombo.currentText())
-                powerMeter = unicode(self.ui.meterCombo.currentText())
+                powerMeter = six.text_type(self.ui.meterCombo.currentText())
                 mTime = self.ui.measurementSpin.value()
                 sTime = self.ui.settlingSpin.value()
                 self.dev.calibrate(powerMeter, mTime, sTime)

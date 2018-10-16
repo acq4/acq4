@@ -1,3 +1,4 @@
+from __future__ import print_function
 from  subprocess import check_output
 import re, time
 
@@ -35,8 +36,8 @@ for i in range(len(versions)-1)[::-1]:
 
     citime = time.strptime(times[0][:-6], '%a %Y-%m-%d %H:%M:%S')
 
-    print "python-acq4 (%s-1) UNRELEASED; urgency=low" % versions[i+1].split('-')[1]
-    print ""
+    print("python-acq4 (%s-1) UNRELEASED; urgency=low" % versions[i+1].split('-')[1])
+    print("")
     for line in changes:
         for n in range(len(line)):
             if line[n] != ' ':
@@ -47,16 +48,16 @@ for i in range(len(versions)-1)[::-1]:
         nextline = ''
         for w in words:
             if len(w) + len(nextline) > 79:
-                print nextline
+                print(nextline)
                 nextline = (' '*n) + w
             else:
                 nextline += ' ' + w
-        print nextline
+        print(nextline)
     #print '\n'.join(changes)
-    print ""
-    print " -- Luke <luke.campagnola@gmail.com>  %s -0%d00" % (time.strftime('%a, %d %b %Y %H:%M:%S', citime), time.timezone/3600) 
+    print("")
+    print(" -- Luke <luke.campagnola@gmail.com>  %s -0%d00" % (time.strftime('%a, %d %b %Y %H:%M:%S', citime), time.timezone/3600))
     #print " -- Luke <luke.campagnola@gmail.com>  %s -0%d00" % (times[0], time.timezone/3600) 
-    print ""
+    print("")
 
 #print """python-acq4 (0.9.0-1) UNRELEASED; urgency=low
 #

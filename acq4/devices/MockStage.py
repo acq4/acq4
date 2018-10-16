@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+from acq4.devices.OptomechDevice import *
 import time
 import numpy as np
 from acq4.Manager import getManager
 from acq4.devices.Stage import Stage, MoveFuture
 from acq4.util.Thread import Thread
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.Qt import QtGui, QtCore
+from acq4.util import Qt
 from acq4.pyqtgraph import ptime
 from acq4.util.Mutex import Mutex
 
@@ -24,9 +26,9 @@ class MockStage(Stage):
         
         # Global key press handling
         self.modifierScales = {
-            QtCore.Qt.Key_Control: 4.0,
-            QtCore.Qt.Key_Alt: 0.25,
-            QtCore.Qt.Key_Shift: 0.1,
+            Qt.Qt.Key_Control: 4.0,
+            Qt.Qt.Key_Alt: 0.25,
+            Qt.Qt.Key_Shift: 0.1,
         }
         self.keyDirections = np.array([
             [0, 0, 1],
@@ -39,7 +41,7 @@ class MockStage(Stage):
         self._directionKeys = set()
         self._modifiers = set()
         if 'keys' in config:
-            QtCore.QCoreApplication.instance().installEventFilter(self)
+            Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
 
@@ -70,7 +72,7 @@ class MockStage(Stage):
         """
         #if self._quit:
             #return False
-        if ev.type() not in (QtCore.QEvent.KeyPress, QtCore.QEvent.KeyRelease, QtCore.QEvent.ShortcutOverride):
+        if ev.type() not in (Qt.QEvent.KeyPress, Qt.QEvent.KeyRelease, Qt.QEvent.ShortcutOverride):
             return False
         if ev.isAutoRepeat():
             return False
@@ -79,12 +81,12 @@ class MockStage(Stage):
         keys = self.config.get('keys')
         if key != '' and key in keys:
             direction = keys.index(key)
-            if ev.type() == QtCore.QEvent.KeyRelease:
+            if ev.type() == Qt.QEvent.KeyRelease:
                 self._directionKeys.discard(direction)
             else:
                 self._directionKeys.add(direction)
         elif ev.key() in self.modifierScales:
-            if ev.type() == QtCore.QEvent.KeyRelease:
+            if ev.type() == Qt.QEvent.KeyRelease:
                 self._modifiers.discard(ev.key())
             else:
                 self._modifiers.add(ev.key())
@@ -178,14 +180,14 @@ class MockStageThread(Thread):
     block while waiting for a stage movement to complete.
     """
     
-    positionChanged = QtCore.Signal(object)
+    positionChanged = Qt.Signal(object)
     
     def __init__(self):
         self.pos = np.zeros(3)
         self.target = None
         self.speed = None
         self.velocity = None
-        self.quit = False
+        self._quit = False
         self.lock = Mutex()
         self.interval = 30e-3
         self.lastUpdate = None
@@ -193,7 +195,7 @@ class MockStageThread(Thread):
         Thread.__init__(self)
         
     def start(self):
-        self.quit = False
+        self._quit = False
         self.lastUpdate = ptime.time()
         Thread.start(self)
         
@@ -205,7 +207,7 @@ class MockStageThread(Thread):
             
     def quit(self):
         with self.lock:
-            self.quit = True
+            self._quit = True
             
     def setTarget(self, future, target, speed):
         """Begin moving toward a target position.
@@ -231,7 +233,7 @@ class MockStageThread(Thread):
         lastUpdate = ptime.time()
         while True:
             with self.lock:
-                if self.quit:
+                if self._quit:
                     break
                 target = self.target
                 speed = self.speed
@@ -265,16 +267,16 @@ class MockStageThread(Thread):
         self.positionChanged.emit(pos)
 
 
-#class MockStageInterface(QtGui.QWidget):
+#class MockStageInterface(Qt.QWidget):
     #def __init__(self, dev, win, keys=None):
         #self.win = win
         #self.dev = dev
-        #QtGui.QWidget.__init__(self)
-        #self.layout = QtGui.QGridLayout()
+        #Qt.QWidget.__init__(self)
+        #self.layout = Qt.QGridLayout()
         #self.setLayout(self.layout)
         #self.btn = pg.JoystickButton()
         #self.layout.addWidget(self.btn, 0, 0)
-        #self.label = QtGui.QLabel()
+        #self.label = Qt.QLabel()
         #self.layout.addWidget(self.label)
         #self.dev.sigPositionChanged.connect(self.update)
         #self.btn.sigStateChanged.connect(self.btnChanged)

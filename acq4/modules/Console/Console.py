@@ -1,4 +1,5 @@
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 from acq4.modules.Module import *
 import sys, re, os, time, traceback
 import acq4.util.debug as debug
@@ -38,9 +39,9 @@ class Console(Module):
            
         """
         
-        self.win = QtGui.QMainWindow()
+        self.win = Qt.QMainWindow()
         mp = os.path.dirname(__file__)
-        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
+        self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.win.resize(800,500)
         self.cw = ConsoleWidget(namespace=self.localNamespace, text=msg, editor=EDITOR, module=self)
         self.win.setCentralWidget(self.cw)

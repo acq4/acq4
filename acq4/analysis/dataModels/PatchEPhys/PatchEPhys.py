@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import acq4.util.DataManager as DataManager
 import acq4.util.SequenceRunner as SequenceRunner
 from collections import OrderedDict
@@ -143,10 +144,10 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
         yield None, None
     
     ## set up meta-info for sequence axes
-    seqShape = tuple([len(p) for p in params.itervalues()])
+    seqShape = tuple([len(p) for p in params.values()])
     info = [[] for i in range(len(seqShape))]
     i = 0
-    for k,v in params.iteritems():
+    for k,v in params.items():
         info[i] = {'name': k, 'values': np.array(v)}
         i += 1
     
@@ -663,7 +664,7 @@ class GetClamps():
                 # Check if there is no clamp file for this iteration of the protocol
                 # Usually this indicates that the protocol was stopped early.
                 if data_file_handle is None:
-                    print 'PatchEPhys/GetClamps: Missing data in %s, element: %d' % (directory_name, i)
+                    print('PatchEPhys/GetClamps: Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
                 raise Exception("Error loading data for protocol %s:"
@@ -724,7 +725,7 @@ class GetClamps():
             else:
                 self.values.append(cmd[len(cmd) / 2])
         if traces is None or len(traces) == 0:
-            print "PatchEPhys/GetClamps: No data found in this run..."
+            print("PatchEPhys/GetClamps: No data found in this run...")
             return None
         self.RSeriesUncomp = 0.
         if self.amplifierSettings['WCCompValid']:

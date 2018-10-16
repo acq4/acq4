@@ -1,15 +1,53 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+
+import six
+
 import weakref
 from acq4.util.Mutex import *
 
 
-class InterfaceDirectory(QtCore.QObject):
+class InterfaceMixin(object):
+    """Mixin class used to allow objects to declare which APIs they implement.
+
+    Use addInterface() to declare a supported API::
+
+        class MyObject(InterfaceMixin):
+            def __init__(self):
+                self.addInterface("my_api")
+
+    Use implements() to determine whether an object supports an API:
+
+        if hasattr(obj, 'implements') and obj.implements('my_api'):
+            # safe to call methods defined by my_api
+    
+    """
+    def implements(self, interface=None):
+        """Return True if this device implements the specified API.
+
+        If no API name is given, then return the list of APIs implemented by this device.
+        """
+        ints = getattr(self, '_InterfaceMixin__interfaces', [])
+        if interface is None:
+            return ints
+        return interface in ints
+
+    def addInterface(self, name):
+        """Declare that this device implements a particular API.
+        """
+        if not hasattr(self, '_InterfaceMixin__interfaces'):
+            self.__interfaces = []
+        if name not in self.__interfaces:
+            self.__interfaces.append(name)
+    
+
+class InterfaceDirectory(Qt.QObject):
     """Class for managing a phonebook of interfaces.
     Any object in the program may advertise its services via this directory"""
-    sigInterfaceListChanged = QtCore.Signal(object)
+    sigInterfaceListChanged = Qt.Signal(object)
     
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.lock = Mutex(Mutex.Recursive)
         #self.objList = weakref.WeakValueDictionary() # maps objName:object
         self.nameList = {}                           # maps objName:typeName:None
@@ -21,7 +59,7 @@ class InterfaceDirectory(QtCore.QObject):
         with self.lock:
             #self.objList[name] = obj
         
-            if isinstance(types, basestring):
+            if isinstance(types, six.string_types):
                 types = [types]
             for t in types:
                 if t in self.typeList and name in self.typeList[t] and obj is not self.typeList[t][name]:
@@ -63,9 +101,9 @@ class InterfaceDirectory(QtCore.QObject):
         """Remove all occurrences of object from the interface directory"""
         changedTypes = set()
         
-        for typeName, objList in self.typeList.iteritems():
+        for typeName, objList in self.typeList.items():
             rem = []
-            for objName, obj2 in objList.iteritems():
+            for objName, obj2 in objList.items():
                 if obj is obj2:
                     rem.append(objName)
                     changedTypes.add(typeName)
@@ -86,17 +124,18 @@ class InterfaceDirectory(QtCore.QObject):
         with self.lock:
             if types is None:
                 types = self.typeList.keys()
-                #return dict([(k, dict(v)) for k,v in self.typeList.iteritems()])
+            
             elif isinstance(types, basestring):
-                return self.typeList.get(types, {}).keys()
+                return list(self.typeList.get(types, {}).keys())
                 
             ints = {}
             for t in types:
-                ints[t] = self.typeList.get(t, {}).keys()
-                #for n in self.typeList.get(t, []):
-                    #ints.append(n)
+                ints[t] = list(self.typeList.get(t, {}).keys())
             return ints
             
     def getInterface(self, type, name):
         with self.lock:
             return self.typeList[type][name]
+
+
+

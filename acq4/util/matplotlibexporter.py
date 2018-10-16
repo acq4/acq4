@@ -1,10 +1,11 @@
+from __future__ import print_function
 __author__ = 'pbmanis'
 """
 Copyright 2014  Paul Manis and Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 import re
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 
 try:
@@ -67,7 +68,7 @@ def matplotlibExport(gridlayout=None, title=None):
 
     if not HAVE_MPL:
         raise Exception("Method matplotlibExport requires matplotlib; not importable.")
-    if gridlayout is None or gridlayout.__class__ != QtGui.QGridLayout().__class__:
+    if gridlayout is None or gridlayout.__class__ != Qt.QGridLayout().__class__:
         raise Exception("Method matplotlibExport requires a QGridLayout")
 
     fig = pylab.figure()
@@ -75,7 +76,7 @@ def matplotlibExport(gridlayout=None, title=None):
     # escape filename information so it can be rendered by removing
     # common characters that trip up latex...:
     escs = re.compile('[\\\/_]')
-    print title
+    print(title)
     if title is not None:
         tiname = '%r' % title
         tiname = re.sub(escs, cleanRepl, tiname)[1:-1]
@@ -114,7 +115,7 @@ def export_panel(pgitem, ax):
         x, y = item.getData()
         opts = item.opts
         pen = fn.mkPen(opts['pen'])
-        if pen.style() == QtCore.Qt.NoPen:
+        if pen.style() == Qt.Qt.NoPen:
             linestyle = ''
         else:
             linestyle = '-'
@@ -150,7 +151,7 @@ def cleanAxes(axl):
     if type(axl) is not list:
         axl = [axl]
     for ax in axl:
-        for loc, spine in ax.spines.iteritems():
+        for loc, spine in ax.spines.items():
             if loc in ['left', 'bottom']:
                 pass
             elif loc in ['right', 'top']:
