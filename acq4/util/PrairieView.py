@@ -118,12 +118,14 @@ class PrairieView(QtCore.QObject):
 
     def markPoints(self, pos, laserPower, duration, spiralSize, revolutions, nPulses, intervals):
         #intervals.append('')
-        cmd = "-MarkPoints "
-        for i in range(nPulses-1):
-            cmd += "%f %f %f Fidelity %f True %f %f %s"%(pos[0], pos[1], duration[i], laserPower[i], spiralSize, revolutions, intervals[i]-duration[i])
-
-        cmd += "%f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration[-1], laserPower[-1], spiralSize, revolutions)
-        self.call_pl(cmd)
+        if nPulses==1:
+            self.call_pl("-MarkPoints %f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration[0], laserPower[0], spiralSize, revolutions))
+        else:
+            cmd = "-MarkPoints "
+            for i in range(nPulses-1):
+                cmd += "%f %f %f Fidelity %f True %f %f %s "%(pos[0], pos[1], duration[i], laserPower[i], spiralSize, revolutions, intervals[i]-duration[i])
+            cmd += "%f %f %f Fidelity %f True %f %f"%(pos[0], pos[1], duration[-1], laserPower[-1], spiralSize, revolutions)
+            self.call_pl(cmd)
 
     
     def loadMarkPoints(self, filename=None):
@@ -136,8 +138,6 @@ class PrairieView(QtCore.QObject):
 
     def resetShutter(self):
         self.call_pl("-OverrideHardShutter Fidelity auto")
-
-
 
 
 
