@@ -11,6 +11,7 @@ from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar
 
+
 class Window(QtGui.QMainWindow):
     
     sigClosed = QtCore.Signal()
@@ -18,6 +19,7 @@ class Window(QtGui.QMainWindow):
     def closeEvent(self, ev):
         ev.accept()
         self.sigClosed.emit()
+
 
 class DataManager(Module):
     moduleDisplayName = "Data Manager"
@@ -63,6 +65,7 @@ class DataManager(Module):
         self.ui.fileDisplayTabs.currentChanged.connect(self.tabChanged)
         self.win.sigClosed.connect(self.quit)
         self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
+        self.ui.baseDirText.editingFinished.connect(self.baseDirTextChanged)
         
         self.win.setStatusBar(StatusBar())
 
@@ -140,6 +143,12 @@ class DataManager(Module):
             self.dialog.setDirectory(bd.name())
         self.dialog.show()
 
+    def baseDirTextChanged(self):
+        path = str(self.ui.baseDirText.text())
+        if not os.path.isdir(path):
+            raise ValueError("Path %s does not exist" % path)
+        self.setBaseDir(path)
+            
     def setBaseDir(self, dirName):
         if isinstance(dirName, list):
             if len(dirName) == 1:
