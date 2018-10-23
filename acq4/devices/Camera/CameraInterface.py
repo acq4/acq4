@@ -1,5 +1,6 @@
+from __future__ import print_function
 import time, types, os.path, re, sys
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph import SignalProxy, Point
 import acq4.pyqtgraph.dockarea as dockarea
@@ -10,7 +11,7 @@ import scipy.ndimage
 from acq4.util.debug import printExc, Profiler
 from acq4.util.metaarray import *
 import acq4.Manager as Manager
-from CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
+from .CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.util.imaging import ImagingCtrl
 from acq4.modules.Camera import CameraModuleInterface
@@ -26,7 +27,7 @@ class CameraInterface(CameraModuleInterface):
     directly manages its own GraphicsItems within the camera module's view box.
     """
     
-    sigNewFrame = QtCore.Signal(object, object)  # self, frame
+    sigNewFrame = Qt.Signal(object, object)  # self, frame
     
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
@@ -39,7 +40,7 @@ class CameraInterface(CameraModuleInterface):
         ## setup UI
         self.ui = CameraInterfaceTemplate()
         self.widget = dockarea.DockArea()
-        w = QtGui.QWidget()
+        w = Qt.QWidget()
         self.ui.setupUi(w)
 
         # takes care of displaying image data, 
@@ -112,7 +113,7 @@ class CameraInterface(CameraModuleInterface):
 
         #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
-        self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
+        self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from acq4.util.SpinBox) is delayed.
 
         ## Signals from Camera device
@@ -120,12 +121,21 @@ class CameraInterface(CameraModuleInterface):
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
+        self.cam.sigParamsChanged.connect(self.cameraParamsChanged)
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigStartVideoClicked.connect(self.startAcquireClicked)
         self.imagingCtrl.sigStopVideoClicked.connect(self.stopAcquireClicked)
         self.imagingCtrl.ui.acquireFrameBtn.setEnabled(False)
-        
+
+        # Hotkey signals
+        for action, key in self.cam.camConfig.get('hotkeys', {}).items():
+            if action not in ['snap', 'start']:
+                raise ValueError("Unknown hotkey action %r" % action)
+            
+            dev = Manager.getManager().getDevice(key['device'])
+            dev.addKeyCallback(key['key'], self.hotkeyPressed, (action,))
+    
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
         self.sigNewFrame.emit(self, frame)
@@ -149,7 +159,6 @@ class CameraInterface(CameraModuleInterface):
             bins.reverse()
             for b in bins:
                 self.ui.binningCombo.addItem(str(b))
-
 
         except:
             self.showMessage("Error opening camera")
@@ -182,7 +191,7 @@ class CameraInterface(CameraModuleInterface):
         if scale != self.lastCameraScale:
             anchor = self.view.mapViewToDevice(self.lastCameraPosition)
             self.view.scaleBy(scale / self.lastCameraScale)
-            pg.QtGui.QApplication.processEvents()
+            Qt.QApplication.processEvents()
             anchor2 = self.view.mapDeviceToView(anchor)
             diff = pos - anchor2
             self.lastCameraScale = scale
@@ -224,6 +233,14 @@ class CameraInterface(CameraModuleInterface):
             if not self.cam.wait(10000):
                 printExc("Timed out while waiting for acq thread exit!")
 
+    def hotkeyPressed(self, device, keys, action):
+        callback = {
+            'snap': self.imagingCtrl.saveFrameClicked,
+            'start': self.imagingCtrl.acquireVideoClicked,
+        }.get(action)
+        
+        callback()
+
     def cameraStopped(self):
         self.imagingCtrl.acquisitionStopped()
 
@@ -242,11 +259,16 @@ class CameraInterface(CameraModuleInterface):
         #self.clearFrameBuffer()
         ###self.updateRgnLabel()
 
-    def setUiBinning(self, b):
+    def setUiBinning(self, b, updateCamera=True):
         ind = self.ui.binningCombo.findText(str(b))
         if ind == -1:
             raise Exception("Binning mode %s not in list." % str(b))
-        self.ui.binningCombo.setCurrentIndex(ind)
+
+        if updateCamera:
+            self.ui.binningCombo.setCurrentIndex(ind)
+        else:
+            with self.binningComboProxy.block():
+                self.ui.binningCombo.setCurrentIndex(ind)
 
     def setExposure(self, e=None, autoRestart=True):
         if e is not None:
@@ -268,6 +290,33 @@ class CameraInterface(CameraModuleInterface):
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
+
+    def cameraParamsChanged(self, changes):
+        # camera parameters changed; update ui to match
+        if 'exposure' in changes:
+            with pg.SignalBlock(self.ui.spinExposure.valueChanged, self.setExposure):
+                self.ui.spinExposure.setValue(changes['exposure'])
+
+        if 'binningX' in changes:
+            self.setUiBinning(changes['binningX'], updateCamera=False)
+        elif 'binning' in changes:
+            self.setUiBinning(changes['binning'][0], updateCamera=False)
+        
+        if 'region' in changes:
+            with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+                rgn = changes['region']
+                self.roi.setPos([rgn[0], rgn[1]])
+                self.roi.setSize([rgn[2], rgn[3]])
+        if 'regionX' in changes or 'regionY' in changes:
+            with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+                x = changes.get('regionX', self.roi.pos().x())
+                y = changes.get('regionY', self.roi.pos().y())
+                self.roi.setPos([x, y])
+        if 'regionW' in changes or 'regionH' in changes:
+            with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+                w = changes.get('regionW', self.roi.state['size'][0])
+                h = changes.get('regionH', self.roi.state['size'][1])
+                self.roi.setSize([w, h])
 
     def startAcquireClicked(self, mode):
         """User clicked the acquire video button.
@@ -311,7 +360,7 @@ class CameraItemGroup(DeviceTreeItemGroup):
     def makeGroup(self, dev, subdev):
         grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
         if dev is self.device:
-            bound = QtGui.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound = Qt.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
             bound.setParentItem(grp)
             bound.setPen(pg.mkPen(40, 150, 150))
         return grp
@@ -320,7 +369,7 @@ class CameraItemGroup(DeviceTreeItemGroup):
 class CamROI(pg.ROI):
     """Used for specifying the ROI for a camera to acquire from"""
     def __init__(self, size, parent=None):
-        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
+        pg.ROI.__init__(self, pos=[0,0], size=size, maxBounds=Qt.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 0], [0, 1])
         self.addScaleHandle([0, 1], [1, 0])

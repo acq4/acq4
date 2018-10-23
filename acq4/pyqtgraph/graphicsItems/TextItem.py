@@ -168,8 +168,16 @@ class TextItem(GraphicsObject):
             p.setBrush(self.fill)
             p.setRenderHint(p.Antialiasing, True)
             p.drawPolygon(self.textItem.mapToParent(self.textItem.boundingRect()))
-        
+
+    def setVisible(self, v):
+        GraphicsObject.setVisible(self, v)
+        if v:
+            self.updateTransform()
+    
     def updateTransform(self):
+        if not self.isVisible():
+            return
+
         # update transform such that this item has the correct orientation
         # and scaling relative to the scene, but inherits its position from its
         # parent.

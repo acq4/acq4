@@ -1,11 +1,12 @@
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 #import configfile
 from acq4.Manager import getManager, logExc, logMsg
 from acq4.util.Mutex import Mutex
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.OptomechDevice import OptomechDevice
-from LaserDevGui import LaserDevGui
-from LaserTaskGui import LaserTaskGui
+from .LaserDevGui import LaserDevGui
+from .LaserTaskGui import LaserTaskGui
 import os
 import time
 import numpy as np
@@ -87,9 +88,9 @@ class Laser(DAQGeneric, OptomechDevice):
     { 'pulse': [(0.5*s, 100*uJ), ...] }                     ## (time, pulse energy) pairs
     """
     
-    sigOutputPowerChanged = QtCore.Signal(object, object)  ## power, bool (power within expected range)
-    sigSamplePowerChanged = QtCore.Signal(object)
-    sigWavelengthChanged = QtCore.Signal(object)
+    sigOutputPowerChanged = Qt.Signal(object, object)  ## power, bool (power within expected range)
+    sigSamplePowerChanged = Qt.Signal(object)
+    sigWavelengthChanged = Qt.Signal(object)
     
     def __init__(self, manager, config, name):
         self.config = config
@@ -133,8 +134,8 @@ class Laser(DAQGeneric, OptomechDevice):
         DAQGeneric.__init__(self, manager, daqConfig, name)
         OptomechDevice.__init__(self, manager, config, name)
        
-        self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.variableLock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
+        self.variableLock = Mutex(Qt.QMutex.Recursive)
         self.calibrationIndex = None
         self.pCellCalibration = None
         self.getPowerHistory()
@@ -173,7 +174,7 @@ class Laser(DAQGeneric, OptomechDevice):
                 self.powerHistoryCount = 1
             else:
                 self.powerHistoryCount = len(ph)
-                self.params['expectedPower'] = ph.values()[-1]['expectedPower']
+                self.params['expectedPower'] = list(ph.values())[-1]['expectedPower']
                 return ph
                 
     def appendPowerHistory(self, power):
@@ -396,7 +397,7 @@ class Laser(DAQGeneric, OptomechDevice):
         """Return a list of available calibrations."""
         calList = []
         index = self.getCalibrationIndex()
-        if index.has_key('pCellCalibration'):
+        if 'pCellCalibration' in index:
             index.pop('pCellCalibration')
         #self.microscopes.append(scope)
         for opticState in index:
@@ -610,7 +611,7 @@ class Laser(DAQGeneric, OptomechDevice):
             for i in a:
                 start = i-delayPts
                 if start < 0:
-                    print start, delayPts, i
+                    print(start, delayPts, i)
                     raise HelpfulException("Shutter takes %g seconds to open. Power pulse cannot be started before then." %delay)
                 shutterCmd[start:i+1] = 1
             daqCmd['shutter'] = shutterCmd

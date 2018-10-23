@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.util.debug import *
     
 from acq4.devices.Device import *
 import time, traceback, sys
-from taskGUI import *
+from .taskGUI import *
 #from numpy import byte
 import numpy
 #from scipy.signal import resample, bessel, lfilter
@@ -32,7 +33,7 @@ class NiDAQ(Device):
         else:
             from acq4.drivers.nidaq.nidaq import NIDAQ
             self.n = NIDAQ
-        print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
+        print("Created NiDAQ handle, devices are %s" % repr(self.n.listDevices()))
         self.delayedSet = Mutex.threadsafe({})
     
     def createTask(self, cmd, parentTask):
@@ -81,7 +82,7 @@ class NiDAQ(Device):
         ## take care of any channel-value-set requests that arrived while the device was locked
         try:
             self.delayedSet.lock()
-            for chan, val in self.delayedSet.iteritems():
+            for chan, val in self.delayedSet.items():
                 #print "Set delayed:", chan, val
                 self.setChannelValue(chan, val, ignoreLock=True)
             self.delayedSet.clear()

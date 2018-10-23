@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
-import modules
+from __future__ import print_function
+
+import six
+
+from acq4.util import Qt
+from . import modules
 import acq4.pyqtgraph.dockarea as dockarea
 import acq4.Manager
 #from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
 
-class AnalysisHost(QtGui.QMainWindow):
+class AnalysisHost(Qt.QMainWindow):
     """Window for hosting analysis widgets.
     Provides:
      - File / DB access for module
@@ -16,7 +20,7 @@ class AnalysisHost(QtGui.QMainWindow):
     """
     
     def __init__(self, dataManager=None, dataModel=None, module=None):
-        QtGui.QMainWindow.__init__(self)
+        Qt.QMainWindow.__init__(self)
         self.dm = dataManager
         self.dataModel = dataModel
         self.mod = None
@@ -41,7 +45,7 @@ class AnalysisHost(QtGui.QMainWindow):
         self.mod = modules.load(modName, self)
         
         elems = self.mod.listElements()
-        for name, el in elems.iteritems():
+        for name, el in elems.items():
             w = self.mod.getElement(name, create=True)
             d = dockarea.Dock(name=name, size=el.size())
             if w is not None:
@@ -50,7 +54,7 @@ class AnalysisHost(QtGui.QMainWindow):
             if pos is None:
                 pos = ()
             #print d, pos
-            if isinstance(pos, basestring):
+            if isinstance(pos, six.string_types):
                 pos = (pos,)
             self.dockArea.addDock(d, *pos)
         self.elements = elems

@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Device import *
 from acq4.Manager import logMsg
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph import multiprocess
-from PyQt4 import QtCore
+from acq4.util import Qt
 from numpy import *
 import sys, traceback
-from DeviceGui import *
-from taskGUI import *
+from .DeviceGui import *
+from .taskGUI import *
 from acq4.util.debug import *
 
 
 class MultiClamp(Device):
     
-    sigStateChanged = QtCore.Signal(object)
-    sigHoldingChanged = QtCore.Signal(object, object)  # self, mode
+    sigStateChanged = Qt.Signal(object)
+    sigHoldingChanged = Qt.Signal(object, object)  # self, mode
 
     # remote process used to connect to commander from 32-bit python
     proc = None
@@ -97,7 +98,7 @@ class MultiClamp(Device):
             if time.time() - start > 10:
                 raise Exception("Timed out waiting for first update from multi clamp commander.")
         
-        print "Created MultiClamp device", self.config['channelID']
+        print("Created MultiClamp device", self.config['channelID'])
 
         ## set configured holding values
         if 'vcHolding' in self.config:
@@ -350,7 +351,7 @@ class MultiClampTask(DeviceTask):
             #prof.mark('    Multiclamp: set gains')
 
 
-            if self.cmd.has_key('parameters'):
+            if 'parameters' in self.cmd:
                 self.dev.mc.setParams(self.cmd['parameters'])
 
             #prof.mark('    Multiclamp: set params')
@@ -362,7 +363,7 @@ class MultiClampTask(DeviceTask):
             
             #prof.mark('    Multiclamp: get state')
             
-            if self.cmd.has_key('recordState') and self.cmd['recordState'] is True:
+            if 'recordState' in self.cmd and self.cmd['recordState'] is True:
                 exState = self.dev.mc.getParams(MultiClampTask.recordParams)
                 self.state['ClampParams'] = {}
                 for k in exState:
@@ -428,7 +429,7 @@ class MultiClampTask(DeviceTask):
     def getResult(self):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
-        #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
+        #self.state['startTime'] = self.daqTasks[list(self.daqTasks.keys())[0]].getStartTime()
         with self.dev.lock:
             channels = self.getUsedChannels()
             #print channels
@@ -485,7 +486,7 @@ class MultiClampTask(DeviceTask):
                 arr = concatenate(chanList)
             except:
                 for a in chanList:
-                    print a.shape
+                    print(a.shape)
                 raise
             
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]
@@ -494,7 +495,7 @@ class MultiClampTask(DeviceTask):
             if 'command' in taskInfo:
                 del taskInfo['command']
             info[-1]['Protocol'] = taskInfo
-            info[-1]['startTime'] = result[result.keys()[0]]['info']['startTime']
+            info[-1]['startTime'] = result[list(result.keys())[0]]['info']['startTime']
             
             marr = MetaArray(arr, info=info)
                 

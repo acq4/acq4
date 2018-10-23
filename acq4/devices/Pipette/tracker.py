@@ -1,9 +1,10 @@
+from __future__ import print_function
 import time
 import pickle
 import time
 import numpy as np
 import scipy.optimize, scipy.ndimage
-
+from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
 
@@ -53,7 +54,7 @@ class PipetteTracker(object):
         try:
             start = pg.ptime.time()
             while pg.ptime.time() < start + 5.0:
-                pg.QtGui.QApplication.processEvents()
+                Qt.QApplication.processEvents()
                 frame = self.__nextFrame
                 if frame is not None:
                     self.__nextFrame = None
@@ -456,11 +457,11 @@ class PipetteTracker(object):
 
         if show:
             imv = pg.image()
-            mark1 = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(-5, -5, 10, 10))
+            mark1 = Qt.QGraphicsEllipseItem(Qt.QRectF(-5, -5, 10, 10))
             mark1.setBrush(pg.mkBrush(255, 255, 0, 100))
             mark1.setZValue(100)
             imv.addItem(mark1)
-            mark2 = pg.QtGui.QGraphicsEllipseItem(pg.QtCore.QRectF(-5, -5, 10, 10))
+            mark2 = Qt.QGraphicsEllipseItem(Qt.QRectF(-5, -5, 10, 10))
             mark2.setBrush(pg.mkBrush(255, 0, 0, 100))
             mark2.setZValue(100)
             imv.addItem(mark2)
@@ -594,16 +595,16 @@ class PipetteTracker(object):
 
 
 
-class DriftMonitor(pg.QtGui.QWidget):
+class DriftMonitor(Qt.QWidget):
     def __init__(self, trackers):
         self.trackers = trackers
         self.nextFrame = None
 
-        pg.QtGui.QWidget.__init__(self)
-        self.timer = pg.QtCore.QTimer()
+        Qt.QWidget.__init__(self)
+        self.timer = Qt.QTimer()
         self.timer.timeout.connect(self.update)
 
-        self.layout = pg.QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
 
         self.gv = pg.GraphicsLayoutWidget()
@@ -670,4 +671,4 @@ class DriftMonitor(pg.QtGui.QWidget):
 
     def closeEvent(self, event):
         self.timer.stop()
-        return pg.QtGui.QWidget.closeEvent(self, event)
+        return Qt.QWidget.closeEvent(self, event)

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time
 
 import sys, os
@@ -6,8 +7,8 @@ sys.path.append(os.path.join(d, '../../util'))
 
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from acq4.pyqtgraph import graphicsWindows as gw
-from PyQt4 import QtGui
-from QImagingDriver import *
+from acq4.util import Qt
+from .QImagingDriver import *
 import atexit
 
 
@@ -87,4 +88,4 @@ dll.QCam_ReadSettingsFromCam(cam.handle, byref(s))
 #time.sleep(1.0)
 v = c_ulong()
 dll.QCam_GetParam(byref(s), lib.qprmBinning, byref(v))
-print v.value
+print(v.value)

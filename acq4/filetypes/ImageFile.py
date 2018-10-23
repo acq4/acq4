@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from PIL import Image
 
@@ -63,10 +64,10 @@ if Image.VERSION == '1.1.6':
 
 from numpy import array, ndarray
 from acq4.util.metaarray import MetaArray as MA
-from FileType import *
+from .FileType import *
 
 #import libtiff
-#from PyQt4 import QtCore, QtGui
+#from acq4.util import Qt
 
 class Array(ndarray):  ## just allows us to add some dynamic attributes
     def __new__(cls, arr):
@@ -95,8 +96,8 @@ class ImageFile(FileType):
             #tiff.write_file(os.path.join(dirHandle.name(), fileName), compression='none')
         #else:
             #ims = data.tostring()
-            #img = QtGui.QImage(buffer(ims), data.shape[1], data.shape[0], QtGui.QImage.Format_ARGB32)
-            #w = QtGui.QImageWriter(os.path.join(dirHandle.name(), fileName), ext)
+            #img = Qt.QImage(buffer(ims), data.shape[1], data.shape[0], Qt.QImage.Format_ARGB32)
+            #w = Qt.QImageWriter(os.path.join(dirHandle.name(), fileName), ext)
             #w.write(img)
         return fileName
         
@@ -117,7 +118,7 @@ class ImageFile(FileType):
             #else:
                 #arr = samples[0]
         #else:
-            #img = QtGui.QImage()
+            #img = Qt.QImage()
             #img.load(fileHandle.name())
             #ptr = img.bits()
             #ptr.setsize(img.byteCount())

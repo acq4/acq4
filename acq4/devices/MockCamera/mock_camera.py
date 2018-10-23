@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.Camera import Camera, CameraTask
-from PyQt4 import QtCore
+from acq4.util import Qt
+import six
+from six.moves import range
 import time, sys, traceback
 import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
@@ -57,8 +60,8 @@ class MockCamera(Camera):
             ('exposure',        ((0.001, 10.), True, True, [])),
             #('binning',         ([range(1,10), range(1,10)], True, True, [])),
             #('region',          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, [])),
-            ('binningX',        (range(1,10), True, True, [])),
-            ('binningY',        (range(1,10), True, True, [])),
+            ('binningX',        (list(range(1,10)), True, True, [])),
+            ('binningY',        (list(range(1,10)), True, True, [])),
             ('regionX',         ((0, 511), True, True, ['regionW'])),
             ('regionY',         ((0, 511), True, True, ['regionH'])),
             ('regionW',         ((1, 512), True, True, ['regionX'])),
@@ -131,7 +134,7 @@ class MockCamera(Camera):
                 px = info['pixelSize']
                 pz = info['depths'][1] - info['depths'][0]
                 
-                m = pg.QtGui.QMatrix4x4()
+                m = Qt.QMatrix4x4()
                 pos = info['transform']['pos']
                 m.scale(1/px[0], 1/px[1], 1/pz)
                 m.translate(-pos[0], -pos[1], -info['depths'][0])
@@ -142,8 +145,8 @@ class MockCamera(Camera):
                 origin = [int(origin.x()), int(origin.y()), origin.z()]
                 
                 ## slice data
-                camRect = QtCore.QRect(origin[0], origin[1], w, h)
-                dataRect = QtCore.QRect(0, 0, data.shape[1], data.shape[2])
+                camRect = Qt.QRect(origin[0], origin[1], w, h)
+                dataRect = Qt.QRect(0, 0, data.shape[1], data.shape[2])
                 overlap = camRect.intersected(dataRect)
                 tl = overlap.topLeft() - camRect.topLeft()
                 
@@ -165,7 +168,7 @@ class MockCamera(Camera):
                 #self.background = pg.affineSlice(data, (w,h), origin, vectors, (1, 2, 0), order=1)
             else:
                 tr = pg.SRTTransform(tr)
-                m = QtGui.QTransform()
+                m = Qt.QTransform()
                 
                 m.scale(3e6, 3e6)
                 m.translate(0.0005, 0.0005)
@@ -273,7 +276,7 @@ class MockCamera(Camera):
         if params is None:
             return self.paramRanges
         else:
-            if isinstance(params, basestring):
+            if isinstance(params, six.string_types):
                 return self.paramRanges[params]
                 
             out = OrderedDict()
@@ -302,11 +305,11 @@ class MockCamera(Camera):
 
     def getParams(self, params=None):
         if params is None:
-            params = self.listParams().keys()
+            params = list(self.listParams().keys())
         vals = OrderedDict()
         for k in params:
             if k in self.groupParams:
-                vals[k] = self.getParams(self.groupParams[k]).values()
+                vals[k] = list(self.getParams(self.groupParams[k]).values())
             else:
                 vals[k] = self.params[k]
         return vals
@@ -378,7 +381,7 @@ def mandelbrot(w=500, h=None, maxIter=20, xRange=(-2.0, 1.0), yRange=(-1.2, 1.2)
     z0.imag = y
     z = z0.copy()
 
-    for i in xrange(maxIter):
+    for i in range(maxIter):
         z = z[mask]
         z0 = z0[mask]
         xInd = xInd[mask]

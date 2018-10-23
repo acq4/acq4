@@ -1,4 +1,5 @@
 # -*- coding: utf8 -*-
+from __future__ import print_function
 
 from __future__ import division
 import weakref
@@ -6,7 +7,7 @@ import numpy as np
 from collections import OrderedDict
 
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import QtGui, QtCore
+from acq4.util import Qt
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType, ParameterSystem, SystemSolver
 from .component import ScanProgramComponent
@@ -95,7 +96,7 @@ class RectScanROI(pg.ROI):
 
         #p.drawRect(self.boundingRect())  # causes artifacts at large scale
         br = self.boundingRect()
-        # p.drawPolygon(QtGui.QPolygonF([br.topLeft(), br.topRight(), br.bottomRight(), br.bottomLeft()]))
+        # p.drawPolygon(Qt.QPolygonF([br.topLeft(), br.topRight(), br.bottomRight(), br.bottomLeft()]))
         p.drawLine(br.topLeft(), br.topRight())
         p.drawLine(br.bottomLeft(), br.bottomRight())
         p.drawLine(br.topLeft(), br.bottomLeft())
@@ -104,12 +105,12 @@ class RectScanROI(pg.ROI):
         pg.ROI.paint(self, p, *args)
 
 
-class RectScanControl(QtCore.QObject):
+class RectScanControl(Qt.QObject):
     
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
     
     def __init__(self, component):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         self.blockUpdate = False
         self.component = weakref.ref(component)
@@ -363,7 +364,7 @@ class RectScan(SystemSolver):
         ### select target array based on offset, shape, and stride. 
         # first check that this array is long enough
         if array.shape[0] < offset + shape[0] * stride[0]:
-            print self
+            print(self)
             raise Exception("Array is too small to contain the specified rectangle scan. Available: %d Required: %d" % (array.shape[0], shape[0] * stride[0]))
         
         # select the target sub-array
@@ -419,7 +420,7 @@ class RectScan(SystemSolver):
         stride = self.imageStride
 
         if subpixel and fracOffset != 0:
-            print fracOffset
+            print(fracOffset)
             interp = data[:-1] * (1.0 - fracOffset) + data[1:] * fracOffset
             image = pg.subArray(interp, intOffset, shape, stride)            
         else:
@@ -512,13 +513,13 @@ class RectScan(SystemSolver):
         # print p0, p1, p2
         # print acs, dx, dy
 
-        localPts = map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]]) # w and h of data of image in pixels.
-        globalPts = map(pg.Vector, [p0, p1, p2, [0,0,1]])
+        localPts = list(map(pg.Vector, [[0,0], [ims[2],0], [0,ims[1]], [0,0,1]])) # w and h of data of image in pixels.
+        globalPts = list(map(pg.Vector, [p0, p1, p2, [0,0,1]]))
         m = pg.solve3DTransform(localPts, globalPts)
         m[:,2] = m[:,3]
         m[2] = m[3]
         m[2,2] = 1
-        tr = QtGui.QTransform(*m[:3,:3].transpose().reshape(9))
+        tr = Qt.QTransform(*m[:3,:3].transpose().reshape(9))
         return tr
 
     def frameTimes(self):

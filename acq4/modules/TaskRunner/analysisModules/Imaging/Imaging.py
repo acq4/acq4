@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from __future__ import division
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
-from PyQt4 import QtCore, QtGui
-from imagingTemplate import Ui_Form
+from acq4.util import Qt
+from .imagingTemplate import Ui_Form
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
+from acq4.devices.Microscope import Microscope
 from acq4.util.HelpfulException import HelpfulException
 # import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
 from acq4.devices.Scanner.scan_program.rect import RectScan
@@ -16,17 +18,15 @@ from acq4.pyqtgraph.parametertree import ParameterTree, Parameter
 class ImagingModule(AnalysisModule):
     def __init__(self, *args):
         AnalysisModule.__init__(self, *args)
-        # self.ui = Ui_Form()
-        # self.ui.setupUi(self)
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
-        self.splitter = QtGui.QSplitter()
+        self.splitter = Qt.QSplitter()
         self.layout.addWidget(self.splitter)
         self.ptree = ParameterTree()
         self.splitter.addWidget(self.ptree)
         self.imageView = pg.ImageView()
         self.splitter.addWidget(self.imageView)
-
+        
         self.params = Parameter(name='imager', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
@@ -37,6 +37,8 @@ class ImagingModule(AnalysisModule):
             dict(name='downsample', type='int', value=1, suffix='x', bounds=[1,None]),
             dict(name='display', type='bool', value=True),
             dict(name='scanProgram', type='list', values=[]),
+            dict(name='Objective', type='str', value='Unknown', readonly=True),
+            dict(name='Filter', type='str', value='Unknown', readonly=True),
             ])
         self.ptree.setParameters(self.params, showTop=False)
         self.params.sigTreeStateChanged.connect(self.update)
@@ -44,6 +46,13 @@ class ImagingModule(AnalysisModule):
         self.params.child('decomb', 'auto').sigActivated.connect(self.autoDecomb)
 
         self.man = getManager()
+        self.scannerDev = self.man.getDevice(self.params['scanner'])
+        # find first scope device that is parent of scanner
+        dev = self.scannerDev
+        while dev is not None and not isinstance(dev, Microscope):
+            dev = dev.parentDevice()
+        self.scopeDev = dev
+                
         self.lastFrame = None
         # self.SUF = SUFA.ScannerUtilities()
         # self.ui.alphaSlider.valueChanged.connect(self.imageAlphaAdjust)        
@@ -54,6 +63,11 @@ class ImagingModule(AnalysisModule):
         # self.ui.scannerComboBox.setTypes('scanner')
         # self.ui.detectorComboBox.setTypes('daqChannelGroup')
 
+    def opticsUpdate(self, reset=False):
+        self.params['Objective'] = self.scopeDev.currentObjective.name()
+        if self.filterDevice is not None:
+            self.params['Filter'] = self.filterDevice.currentFilter.name()
+        
     def addDetectorClicked(self):
         self.addNewDetector()
 
@@ -61,7 +75,18 @@ class ImagingModule(AnalysisModule):
         self.params.child('detectors').addChild(
             dict(name=name, type='interface', interfaceTypes=['daqChannelGroup'], value=value, removable=True),
             autoIncrementName=True)
-                
+        
+        for detector in self.params.param('detectors') :
+            det = self.man.getDevice(detector.value())
+            filt = det.getFilterDevice()
+            if filt is not None:
+                self.filterDevice =  self.man.getDevice(filt)
+            else:
+                self.filterDevice = None
+
+        if self.filterDevice is not None:
+            self.filterDevice.sigFilterChanged.connect(self.opticsUpdate)
+        
     def quit(self):
         self.clear()
         AnalysisModule.quit(self)
@@ -156,7 +181,7 @@ class ImagingModule(AnalysisModule):
         # Update list so user can select program component
         supportedTypes = ['rect']
         progs = dict([(prog['name'], prog) for prog in progs if prog['type'] in supportedTypes])
-        self.params.child('scanProgram').setLimits(progs.keys())
+        self.params.child('scanProgram').setLimits(list(progs.keys()))
         selectedProg = self.params['scanProgram']
         if selectedProg not in progs:
             return
@@ -206,7 +231,7 @@ class ImagingModule(AnalysisModule):
 
             # compute global transform
             tr = rs.imageTransform()
-            st = pg.QtGui.QTransform()
+            st = Qt.QTransform()
             st.scale(self.params['downsample'], 1)
             tr = st * tr
             result['transform'] = pg.SRTTransform3D(tr)
@@ -216,7 +241,7 @@ class ImagingModule(AnalysisModule):
             # Display image locally
             self.imageView.setImage(imageData, xvals=frameTimes, levelMode=levelMode)
             self.imageView.getView().setAspectLocked(True)
-#            self.imageView.imageItem.setRect(QtCore.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
+#            self.imageView.imageItem.setRect(Qt.QRectF(0., 0., rs.width, rs.height))  # TODO: rs.width and rs.height might not be correct!
             self.imageView.imageItem.resetTransform()
             self.imageView.imageItem.scale((rs.width/rs.height)/(imageData.shape[1]/imageData.shape[2]), 1.0)
             self.imageView.autoRange()

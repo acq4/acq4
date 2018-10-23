@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 SequenceRunner.py -  Used for running multi-dimensional for-loops
 Copyright 2010  Luke Campagnola
@@ -53,7 +54,7 @@ class SequenceRunner:
         Example: 
           setParameterSpace({'x': linspace(0.2, 0.8, 10), 't': logSpace(0.01, 1.0, 20), 'iter': arange(0, 10), 'option': 7})
         """
-        if type(params) is not types.DictType:
+        if not isinstance(params, dict):
             raise Exception("Parameter specification must be a dict like {'param_name': [params], ...}")
         self._params = params
 
@@ -76,7 +77,7 @@ class SequenceRunner:
         ## Run parameter space recursive loop
         try:
             self.nloop(func=func)
-        except Exception, e:
+        except Exception as e:
             ## If the loop exited due to a break command, that's fine.
             ## Otherwise, re-raise the exception
             if len(e.args) < 1 or e.args[0] != 'break':
@@ -98,7 +99,7 @@ class SequenceRunner:
                     ret = func(**params)
                 else:
                     ret = func(params)
-            except Exception, e:
+            except Exception as e:
                 if len(e.args) > 0 and e.args[0] == 'stop':
                     stop = True
                     if len(e.args) > 1:
@@ -123,7 +124,7 @@ class SequenceRunner:
                 ind2 = ind + [i]
                 try:
                     self.nloop(ind2, func=func)
-                except Exception, e:
+                except Exception as e:
                     if len(e.args) > 0 and e.args[0] == 'break':
                         if e.args[1] <= 1:
                             break
@@ -170,7 +171,7 @@ class SequenceRunner:
             else:
                 params = self._params[i]
                 
-            if type(params) not in (types.ListType, types.TupleType):
+            if not isinstance(params, (list, tuple)):
                 params = [params]
             self._paramSpace[i] = params
         
@@ -183,9 +184,9 @@ class SequenceRunner:
             if dtype is None:
                 dtype = ret.dtype
             shapeExtra = ret.shape
-        elif type(ret) is types.FloatType:
+        elif isinstance(ret, float):
             dtype = float
-        elif type(ret) is types.IntType:
+        elif isinstance(ret, int):
             dtype = int
         else:
             dtype = object
@@ -202,35 +203,35 @@ if __name__ == '__main__':
     #from SequenceRunner import *
     from numpy import *
 
-    print "========== runSequence test: simplest way to invoke sequence ============"
+    print("========== runSequence test: simplest way to invoke sequence ============")
     def fn(x, y):
-        print x, "*", y, "=", x*y
+        print(x, "*", y, "=", x*y)
         return x*y
-    print runSequence(fn, {'x': [1,3,5,7], 'y': [2,4,6,8]}, ['y', 'x'], passArgs=True)
+    print(runSequence(fn, {'x': [1,3,5,7], 'y': [2,4,6,8]}, ['y', 'x'], passArgs=True))
 
 
-    print "\n========== seq.start(fn) test: Sequence using reusable SR object ============"
+    print("\n========== seq.start(fn) test: Sequence using reusable SR object ============")
     seq = SequenceRunner({'x': [1,3,5,7], 'y': [2,4,6,8]}, ['y', 'x'], passArgs=True)
-    print seq.start(fn)
+    print(seq.start(fn))
 
 
 
-    print "\n========== seq.start() test: Sequence using subclassed SR object ============"
+    print("\n========== seq.start() test: Sequence using subclassed SR object ============")
 
     class SR(SequenceRunner):
         def execute(self, x, y, z):
             return x * y + z
 
     s = SR({'x': [1,3,5,7], 'y': [2,4,6,8], 'z': 0.5}, ['y', 'x'], passArgs=True)
-    print s.start()
+    print(s.start())
 
-    print "\n========== seq.start() 3D parameter space test ============"
+    print("\n========== seq.start() 3D parameter space test ============")
     s.setParams({'x': [1,3,5,7], 'y': [2,4,6,8], 'z': [0.5, 0.6, 0.7]})
     s.setOrder(['x', 'z', 'y'])
     a = s.start()
-    print a
+    print(a)
 
-    print "\n========== break test: kernel function may skip parts of the parameter space ============"
+    print("\n========== break test: kernel function may skip parts of the parameter space ============")
     s = SR({'x': [1,3,5,7,9,11,13], 'y': [2,4,6,8,10,12,14]}, ['x', 'y'], passArgs=True)
     def fn(x, y):
         prod = x * y
@@ -239,29 +240,29 @@ if __name__ == '__main__':
         if prod > 60:
             raise Exception('break', 1)
         return prod
-    print s.start(fn, returnMask=True)
+    print(s.start(fn, returnMask=True))
 
 
-    print "\n========== line end test: functions run at specific edges of the parameter space ============"
+    print("\n========== line end test: functions run at specific edges of the parameter space ============")
     s = SR({'x': [1,3,5,7], 'y': [2,4,6,8]}, ['x', 'y'], passArgs=True)
     def fn(x, y):
         return x*y
     def fn2(ind):
-        print "end of row", ind
+        print("end of row", ind)
     s.setEndFuncs([None, fn2])
     s.start(fn)
 
 
 
 
-    print "\n========== nested index test: specific parts of each parameter are flagged for iteration ============"
+    print("\n========== nested index test: specific parts of each parameter are flagged for iteration ============")
     def fn(x, y):
-        print "x:", x, "   y:", y
+        print("x:", x, "   y:", y)
         return 0
     runSequence(fn, {'x': [1,3,[5,6,7],8], 'y': {'a': 1, 'b': [1,2,[3,'x',5],6]}}, ['y["b"][2]', 'x[2]'], passArgs=True)
 
 
-    print "\n========== ndarray return test: kernel function returns an array, return is 2D array ============"
+    print("\n========== ndarray return test: kernel function returns an array, return is 2D array ============")
     def fn(tVals, yVals, nPts):
         """Generate a waveform n points long with steps defined by tVals and yVals"""
         arr = np.zeros((nPts))
@@ -269,5 +270,5 @@ if __name__ == '__main__':
         for i in range(len(yVals)):
             arr[tVals[i]:tVals[i+1]] = yVals[i]
         return arr
-    print runSequence(fn, {'nPts': 10, 'tVals': [0, 3, 8], 'yVals': [0, [-5, -2, 2, 5], 0]}, ['yVals[1]'], passArgs=True)
+    print(runSequence(fn, {'nPts': 10, 'tVals': [0, 3, 8], 'yVals': [0, [-5, -2, 2, 5], 0]}, ['yVals[1]'], passArgs=True))
     

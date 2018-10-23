@@ -1,5 +1,6 @@
+from __future__ import print_function
 
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from acq4 import pyqtgraph as pg
 from .frame_display import FrameDisplay
 from .imaging_template import Ui_Form
@@ -7,7 +8,7 @@ from .record_thread import RecordThread
 from acq4.util.debug import printExc
 
 
-class ImagingCtrl(QtGui.QWidget):
+class ImagingCtrl(Qt.QWidget):
     """Control widget used to interact with imaging devices. 
 
     Provides:
@@ -35,15 +36,15 @@ class ImagingCtrl(QtGui.QWidget):
 
     """
 
-    sigStartVideoClicked = QtCore.Signal(object)  # mode
-    sigStopVideoClicked = QtCore.Signal()
-    sigAcquireFrameClicked = QtCore.Signal(object)  # mode
+    sigStartVideoClicked = Qt.Signal(object)  # mode
+    sigStopVideoClicked = Qt.Signal()
+    sigAcquireFrameClicked = Qt.Signal(object)  # mode
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
 
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
 
         self.frameDisplay = self.frameDisplayClass()
 
@@ -93,7 +94,7 @@ class ImagingCtrl(QtGui.QWidget):
         When this button is clicked, the sigAcquireFrameClicked signal is emitted
         with *name* as the first argument.
         """
-        btn = QtGui.QPushButton(name)
+        btn = Qt.QPushButton(name)
         self.customButtons[0].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[0]), 0)
         btn.clicked.connect(lambda: self.sigAcquireFrameClicked.emit(name))
@@ -104,7 +105,7 @@ class ImagingCtrl(QtGui.QWidget):
         When this button is clicked, the sigAcquireVideoClicked signal is emitted
         with *name* as the first argument.
         """
-        btn = QtGui.QPushButton(name)
+        btn = Qt.QPushButton(name)
         self.customButtons[1].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[1]), 1)
         btn.clicked.connect(lambda: self.acquireVideoClicked(None, name))
@@ -278,7 +279,7 @@ class ImagingCtrl(QtGui.QWidget):
         fr.sigRemoveRequested.disconnect(self.removePinnedFrame)
         
     def clearPinnedFramesClicked(self):
-        if QtGui.QMessageBox.question(self, "Really?", "Clear all pinned frames?", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel) == QtGui.QMessageBox.Ok:
+        if Qt.QMessageBox.question(self, "Really?", "Clear all pinned frames?", Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel) == Qt.QMessageBox.Ok:
             self.clearPinnedFrames()
 
     def clearPinnedFrames(self):

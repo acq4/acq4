@@ -1,5 +1,6 @@
+from __future__ import print_function
 from ..Pipette import Pipette
-from PyQt4 import QtCore
+from acq4.util import Qt
 from ...Manager import getManager
 
 
@@ -14,15 +15,26 @@ class PatchPipette(Pipette):
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
-    sigStateChanged = QtCore.Signal(object)
+    sigStateChanged = Qt.Signal(object)
 
     def __init__(self, deviceManager, config, name):
+        self.pressures = {
+            'out': 'atmosphere',
+            'bath': 0.5,
+            'approach': 0.5,
+            'seal': 'user',
+        }
+
         self._clampName = config.pop('clampDevice', None)
         self._clampDevice = None
 
         Pipette.__init__(self, deviceManager, config, name)
         self.state = "out"
         self.active = False
+
+        self.pressureDevice = None
+        if 'pressureDevice' in config:
+            self.pressureDevice = PressureControl(config['pressureDevice'])
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -43,8 +55,12 @@ class PatchPipette(Pipette):
     def getPressure(self):
         pass
 
-    def setPressure(self):
-        # accepts waveforms as well?
+    def setPressure(self, pressure):
+        if self.pressureDevice is None:
+            return
+        self.pressureDevice.setPressure(pressure)        
+
+    def setSelected(self):
         pass
 
     def approach(self):
@@ -56,6 +72,7 @@ class PatchPipette(Pipette):
         - Automatically hide tip/target markers when the tip is near the target
         """
 
+
     def seal(self):
         """Attempt to seal onto a cell.
 
@@ -66,6 +83,15 @@ class PatchPipette(Pipette):
     def setState(self, state):
         """out, bath, approach, seal, attached, breakin, wholecell
         """
+        if self.pressureDevice is not None and state in self.pressures:
+            p = self.pressures[state]
+            if isinstance(p, str):
+                self.pressureDevice.setSource(p)
+                self.pressureDevice.setPressure(0)
+            else:
+                self.pressureDevice.setPressure(p)
+                self.pressureDevice.setSource('regulator')
+
         self.state = state
         self.sigStateChanged.emit(self)
 
@@ -94,3 +120,31 @@ class PatchPipette(Pipette):
         clamp = self.clampDevice()
         if clamp is not None:
             clamp.autoPipetteOffset()
+
+
+class PressureControl(Qt.QObject):
+    def __init__(self, deviceName):
+        Qt.QObject.__init__(self)
+        man = getManager()
+        self.device = man.getDevice(deviceName)
+
+    def setPressure(self, p):
+        """Set the regulated output pressure to the pipette.
+
+        Note: this does _not_ change the configuration of any values.
+        """
+        self.device.setChanHolding('pressure_out', p)
+
+    def setSource(self, mode):
+        """Configure valves for the specified pressure source: "atmosphere", "user", or "regulator"
+        """
+        if mode == 'atmosphere':
+            self.device.setChanHolding('user_valve', 0)
+            self.device.setChanHolding('regulator_valve', 0)
+        elif mode == 'user':
+            self.device.setChanHolding('user_valve', 1)
+            self.device.setChanHolding('regulator_valve', 0)
+        elif mode == 'regulator':
+            self.device.setChanHolding('regulator_valve', 1)
+        else:
+            raise ValueError("Unknown pressure source %r" % mode)

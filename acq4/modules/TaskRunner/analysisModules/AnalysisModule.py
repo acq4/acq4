@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 
-class AnalysisModule(QtGui.QWidget):
+class AnalysisModule(Qt.QWidget):
     def __init__(self, taskRunner):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.pr = taskRunner
         self.pr.sigNewFrame.connect(self.newFrame)
         self.pr.sigTaskSequenceStarted.connect(self.taskSequenceStarted)

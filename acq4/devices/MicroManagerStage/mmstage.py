@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import time
 import numpy as np
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 from ..Stage import Stage, MoveFuture, StageInterface
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread

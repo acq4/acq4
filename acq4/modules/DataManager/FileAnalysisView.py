@@ -1,26 +1,27 @@
 # -*- coding: utf-8 -*-
 #import acq4.util.PySideImporter  ## Use PySide instead of PyQt
+from __future__ import print_function
 
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import os
 import acq4.util.database as database
-from AnalysisTemplate import *
+from .AnalysisTemplate import *
 import acq4.Manager
 import acq4.analysis.modules as analysis
 import acq4.analysis.AnalysisHost as AnalysisHost
 import acq4.analysis.dataModels as models
-#QtCore.QString = str
+#Qt.QString = str
 #def noop(x):
 #   return x
-#QtCore.QVariant = noop
+#Qt.QVariant = noop
 from acq4.pyqtgraph import FileDialog
 
-class FileAnalysisView(QtGui.QWidget):
+class FileAnalysisView(Qt.QWidget):
     
-    sigDbChanged = QtCore.Signal()
+    sigDbChanged = Qt.Signal()
     
     def __init__(self, parent, mod):
-        QtGui.QWidget.__init__(self, parent)
+        Qt.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.man = acq4.Manager.getManager()
@@ -57,12 +58,12 @@ class FileAnalysisView(QtGui.QWidget):
         else:
             bd = bd.name()
         self.fileDialog = FileDialog(self, "Select Database File", bd, "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
-        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        #self.fileDialog.setFileMode(Qt.QFileDialog.AnyFile)
         self.fileDialog.show()
         self.fileDialog.fileSelected.connect(self.openDb)
             
     def openDb(self, fileName):
-        #fn = str(QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
+        #fn = str(Qt.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
         fileName = str(fileName)
         if fileName == '':
             return
@@ -109,14 +110,14 @@ class FileAnalysisView(QtGui.QWidget):
         if bd is None:
             raise Exception("Must select a base directory before creating database.")
         self.fileDialog = FileDialog(self, "Create Database File", bd.name(), "SQLite Database (*.sqlite *.sql);;All Files (*.*)")
-        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
-        self.fileDialog.setOption(QtGui.QFileDialog.DontConfirmOverwrite)
+        #self.fileDialog.setFileMode(Qt.QFileDialog.AnyFile)
+        self.fileDialog.setAcceptMode(Qt.QFileDialog.AcceptSave) 
+        self.fileDialog.setOption(Qt.QFileDialog.DontConfirmOverwrite)
         self.fileDialog.show()
         self.fileDialog.fileSelected.connect(self.createDb)
         
     def createDb(self, fileName):
-        #fn = str(QtGui.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, QtGui.QFileDialog.DontConfirmOverwrite))
+        #fn = str(Qt.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, Qt.QFileDialog.DontConfirmOverwrite))
         fileName = str(fileName)
         if fileName is '':
             return

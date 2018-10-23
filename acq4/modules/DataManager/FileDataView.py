@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 from acq4.util.DataManager import *
 #import acq4.Manager as Manager
 import acq4.pyqtgraph as pg
@@ -10,11 +11,11 @@ from acq4.util.DictView import *
 import acq4.util.metaarray as metaarray
 import weakref
 
-class FileDataView(QtGui.QSplitter):
+class FileDataView(Qt.QSplitter):
     def __init__(self, parent):
-        QtGui.QSplitter.__init__(self, parent)
+        Qt.QSplitter.__init__(self, parent)
         #self.manager = Manager.getManager()
-        self.setOrientation(QtCore.Qt.Vertical)
+        self.setOrientation(Qt.Qt.Vertical)
         self.current = None
         self.currentType = None
         self.widgets = []
@@ -61,7 +62,7 @@ class FileDataView(QtGui.QSplitter):
                     try:
                         self.widgets[0].setImage(data, autoRange=False)
                     except:
-                        print "widget types:", map(type, self.widgets)
+                        print("widget types:", list(map(type, self.widgets)))
                         raise
                 else:
                     self.clear()

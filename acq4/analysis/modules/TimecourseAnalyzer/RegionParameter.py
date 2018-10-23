@@ -1,3 +1,4 @@
+from __future__ import print_function
 from acq4.pyqtgraph.parametertree import Parameter, ParameterItem, parameterTypes
 import acq4.pyqtgraph as pg
 

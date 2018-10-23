@@ -1,3 +1,4 @@
+from __future__ import print_function
 from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from acq4.util.flowchart import *
@@ -34,10 +35,10 @@ class TimecourseAnalyzer(AnalysisModule):
         tables = OrderedDict([(self.dbIdentity+'.traces', 'TimecourseAnalyzer_traces')])
         self.dbGui = DatabaseGui(dm=host.dataManager(), tables=tables)
 
-        self.ctrl = QtGui.QWidget()
-        self.ctrl.setLayout(QtGui.QVBoxLayout())
-        self.analyzeBtn = QtGui.QPushButton('Analyze')
-        self.storeToDBBtn = QtGui.QPushButton('Store to DB')
+        self.ctrl = Qt.QWidget()
+        self.ctrl.setLayout(Qt.QVBoxLayout())
+        self.analyzeBtn = Qt.QPushButton('Analyze')
+        self.storeToDBBtn = Qt.QPushButton('Store to DB')
         self.ctrl.layout().addWidget(self.analyzeBtn)
         self.ctrl.layout().addWidget(self.storeToDBBtn)
 
@@ -100,7 +101,7 @@ class TimecourseAnalyzer(AnalysisModule):
         #    self.flowchart.nodes()['Plot_001'].setPlot(fp)
 
     def clearFilesRequested(self):
-        print "clear files called."
+        print("clear files called.")
         self.expStart = 0
         self.traces = np.array([], dtype=[('timestamp', float), ('data', object), ('fileHandle', object), ('results', object)])
         self.files = []
@@ -127,11 +128,11 @@ class TimecourseAnalyzer(AnalysisModule):
                 maxi = -1
                 for i, protoDir in enumerate(f.ls()):
                     if not f[protoDir].isDir():
-                        print "Skipping file %s" %f[protoDir].name()
+                        print("Skipping file %s" %f[protoDir].name())
                         continue
                     df = self.dataModel.getClampFile(f[protoDir])
                     if df is None:
-                        print 'Error in reading data file %s' % f[protoDir].name()
+                        print('Error in reading data file %s' % f[protoDir].name())
                         #break
                         continue
                     data = df.read()

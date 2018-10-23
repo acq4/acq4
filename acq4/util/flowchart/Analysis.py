@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from acq4.pyqtgraph.flowchart.library.common import *
 import acq4.util.functions as functions
@@ -130,7 +131,7 @@ class EventFitter(CtrlNode):
                     item2 = pg.PlotDataItem(x=xVals[i], y=eventData[i], pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
-                #plot = self.plot.connections().keys()[0].node().getPlot()
+                #plot = list(self.plot.connections().keys())[0].node().getPlot()
                 #plot.addItem(item)
             
         self.outputData = output
@@ -192,7 +193,7 @@ class EventFitter(CtrlNode):
     def eventFilter(self, obj, event):
         if self.selectedFit is None:
             return False
-        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Delete:
+        if event.type() == Qt.QEvent.KeyPress and event.key() == Qt.Qt.Key_Delete:
             self.deleteSelected()
             return True
         return False
@@ -406,7 +407,7 @@ class CaEventFitter(EventFitter):
                     item2 = pg.PlotDataItem(x=xVals[i], y=eventData[i], pen=(0, 255, 0))
                     item2.setZValue(100)
                     self.plotItems.append(item2)
-                #plot = self.plot.connections().keys()[0].node().getPlot()
+                #plot = list(self.plot.connections().keys())[0].node().getPlot()
                 #plot.addItem(item)
             
         self.outputData = output
@@ -588,15 +589,15 @@ class StatsCalculator(Node):
             ('std', np.std)
         ])
         
-        self.ui = pg.CheckTable(self.funcs.keys())
-        #QtCore.QObject.connect(self.ui, QtCore.SIGNAL('stateChanged'), self.update)
+        self.ui = pg.CheckTable(list(self.funcs.keys()))
+        #Qt.QObject.connect(self.ui, Qt.SIGNAL('stateChanged'), self.update)
         self.ui.sigStateChanged.connect(self.update)
         
     def ctrlWidget(self):
         return self.ui
         
     def process(self, data, regions=None, display=True):
-        keys = data.dtype.fields.keys()
+        keys = list(data.dtype.fields.keys())
         if len(keys) == 0:
             return {'stats': None}  ## Avoid trashing the UI and its state if possible..
         self.ui.updateRows(keys)
@@ -608,11 +609,11 @@ class StatsCalculator(Node):
         
         dataRegions = {'all': data}
         #print "regions:"
-        items = regions.items()
+        items = list(regions.items())
         for name, r in items:
             #print "  ", term, r
             if isinstance(r, dict):
-                items.extend(r.items())
+                items.extend(list(r.items()))
                 continue
             try:
                 mask = (data['fitTime'] > r[0]) * (data['fitTime'] < r[1])
@@ -625,7 +626,7 @@ class StatsCalculator(Node):
             flags = row[1:]
             for i in range(len(flags)):  ## iterate over stats operations
                 if flags[i]:
-                    for rgnName, rgnData in dataRegions.iteritems():  ## iterate over regions
+                    for rgnName, rgnData in dataRegions.items():  ## iterate over regions
                         v = rgnData[name]
                         fn = self.funcs[cols[i]]
                         if len(v) > 0:
@@ -679,8 +680,8 @@ class PointCombiner(Node):
         i = 0
         for pt in points:
             rec = {}
-            keys = pt['recs'].keys()
-            names = pt['recs'][keys[0]].keys()
+            keys = list(pt['recs'].keys())
+            names = list(pt['recs'][keys[0]].keys())
             for name in names:
                 vals = [pt['recs'][k][name] for k in keys] 
                 try:
@@ -713,9 +714,9 @@ class RegionLabeler(Node):
         })
 
     def process(self, events, regions, display=True):
-        terms = regions.keys()
+        terms = list(regions.keys())
         names = [term.node().name() for term in terms]
-        maxLen = max(map(len, names))
+        maxLen = max(list(map(len, names)))
         dtype = [(n, events[n].dtype) for n in events.dtype.names]
         output = np.empty(len(events), dtype=dtype + [('region', '|S%d'%maxLen)])
         

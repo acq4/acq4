@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from __future__ import print_function
+from acq4.util import Qt
 
-class ComboBox(QtGui.QComboBox):
+class ComboBox(Qt.QComboBox):
     """Extends QComboBox with some extra functionality:
     - remembers argument to setValue, restores correct selection after contents have been cleared/repopulated
     """
 
     def __init__(self, *args):
-        QtGui.QComboBox.__init__(self, *args)
+        Qt.QComboBox.__init__(self, *args)
         self.value = None
         self.currentIndexChanged.connect(self.indexChanged)
 
@@ -50,7 +51,7 @@ class ComboBox(QtGui.QComboBox):
         
     def restoreState(w, v):
         if type(v) is int:
-            #ind = self.findData(QtCore.QVariant(v))
+            #ind = self.findData(Qt.QVariant(v))
             ind = self.findData(v)
             if ind > -1:
                 self.setCurrentIndex(ind)

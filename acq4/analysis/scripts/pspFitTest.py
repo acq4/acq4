@@ -1,14 +1,16 @@
+from __future__ import print_function
 import scipy.optimize as opt
 import scipy.weave
 import numpy as np
 import os, sys, user, time
+from six.moves import range
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'util'))
 sys.path.append(path)
 
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
-from PyQt4 import QtGui, QtCore
+from acq4.util import Qt
 
 ## TODO:
 #  fit using rise and decay/rise as parameters so that the ratio can be constrained 
@@ -71,7 +73,7 @@ def testMany(nReps=1000):
 
     global fits2, times2
     fits2, times2 = fitDataSet(xVals, data, fitPsp, guess=guess, bounds=bounds)
-    print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
+    print("Mean fit computation time: %0.2fms" % (times.mean() * 1000))
     
     p = pg.plot()
     p.setLabel('left', 'amplitude', units='A')
@@ -92,9 +94,9 @@ def testMany(nReps=1000):
 
 def testFit(title, psp, data, xVals, fitFn, *args, **kargs):
     global fits, times
-    print "Running fit test", title
+    print("Running fit test", title)
     fits, times = fitDataSet(xVals, data, fitFn, *args, **kargs)
-    print "Mean fit computation time: %0.2fms" % (times.mean() * 1000)
+    print("Mean fit computation time: %0.2fms" % (times.mean() * 1000))
     
     ## compute fractional error
     psp2 = psp.copy()
@@ -138,7 +140,7 @@ def pspFunc(v, x, risePower=1.0):
     try:
         out = v[0] / maxVal * pspInnerFunc(x-v[1], v[2], v[3], risePower)
     except:
-        print v[2], v[3], maxVal, x.shape, x.dtype
+        print(v[2], v[3], maxVal, x.shape, x.dtype)
         raise
     return out
 
@@ -173,7 +175,7 @@ def normalize(fn):
         #y = np.concatenate([y, y2])
         
         if any(np.isinf(guess)) or any(np.isnan(guess)):
-            print "NAN guess:", guess
+            print("NAN guess:", guess)
         
         ## run the fit on normalized data
         fit = fn(x, y, guess, bounds, risePower)
@@ -361,8 +363,8 @@ def fitPspSlsqpExtraAxes(x, y, guess, bounds, risePower=1.0):
     guess = np.append(guess, [0,0]) ## add extra axes to help gradient search
     bounds = np.append(bounds, bounds[0:1]+bounds[1:2], axis=0)
     bounds = np.append(bounds, bounds[1:2]+bounds[2:3], axis=0)
-    print guess
-    print bounds
+    print(guess)
+    print(bounds)
     def errFn(v, x, y, risePower):
         fit = (v[0]+v[4]) * pspInnerFunc(x-(v[1]+v[4]+v[5]), v[2]+v[5], v[3], risePower)
         err = abs(y - fit) * (fit + 1.0)
@@ -403,7 +405,7 @@ def mkData(v, power=1, noise=5e-12, length=5e-3, rate=400e3, downsample=40):
 def mkDataSet(psp, **kargs):
     ## Make an array of data sets from an array of PSP parameters
     it = np.ndindex(psp.shape[:-1])
-    firstInd = it.next()
+    firstInd = next(it)
     first = psp[firstInd]
     x, sample = mkData(first, **kargs)
     data = np.empty(psp.shape[:-1] + sample.shape)
@@ -462,7 +464,7 @@ def showTemplates(v):
         vi = v[i]
         if len(vi) > 4:
             vi = processExtraVars(vi)
-            print "Convert v:", v[i], " => ", vi
+            print("Convert v:", v[i], " => ", vi)
         p.plot(x=x, y=pspFunc(vi, x), pen=(i, v.shape[0]*1.5))
         
 
@@ -499,7 +501,7 @@ def errorSurface(axes=[3, 0], v1=None, v2=None, bounds=None, noise=0.0, n=5000):
     
     inds = np.indices(err.shape).reshape((len(axes), err.size))
     
-    for i in xrange(inds.shape[1]):
+    for i in range(inds.shape[1]):
         ind = tuple(inds[:,i])
         v2a = v2[:]
         for j in range(len(axes)):
@@ -514,7 +516,7 @@ def errorSurface(axes=[3, 0], v1=None, v2=None, bounds=None, noise=0.0, n=5000):
         p.addItem(img)
         b1 = bounds[axes[0]]
         b2 = bounds[axes[1]]
-        img.setRect(QtCore.QRectF(b1[0], b2[0], b1[1]-b1[0], b2[1]-b2[0]))
+        img.setRect(Qt.QRectF(b1[0], b2[0], b1[1]-b1[0], b2[1]-b2[0]))
     elif len(axes) == 3:
         pg.image(err)
         
@@ -530,8 +532,8 @@ def watchFit(data, guess, bounds):
 
 if __name__ == '__main__':
     #np.seterr(all='raise')
-    #from PyQt4 import QtGui
-    #app = QtGui.QApplication([])
+    #from acq4.util import Qt
+    #app = Qt.QApplication([])
     main()
     #showAll()
     #app.exec_()

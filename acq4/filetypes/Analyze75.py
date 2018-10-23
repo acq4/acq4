@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
-from FileType import *
+from .FileType import *
 import numpy as np
 from acq4.util.metaarray import MetaArray
+from functools import reduce
+
 
 class Analyze75(FileType):
     extensions = ['.nii', '.hdr']   ## list of extensions handled by this class
@@ -18,7 +21,7 @@ class Analyze75(FileType):
         
     @classmethod
     def read(cls, fileHandle):
-        if isinstance(fileHandle, basestring):
+        if isinstance(fileHandle, six.string_types):
             fn = fileHandle
         else:
             fn = fileHandle.name()
@@ -30,6 +33,9 @@ class Analyze75(FileType):
 ## Function for reading NiFTI-1 and ANALYZE 7.5 image formats  (.nii and .hdr/.img files)
 import numpy as np
 import os
+import six
+from six.moves import range
+from six.moves import reduce
 
 dataTypes = {
     0: None,
@@ -92,15 +98,15 @@ def readA75(hdrFile):
     hdrFH = open(hdrFile, 'rb')
     
     if nii == 'n+1\0':
-        print "n+1 format; loading data from", hdrFile
+        print("n+1 format; loading data from", hdrFile)
         return parseNii(hdrFH, hdrFile)
     elif nii == 'ni1\0':
         imgFile = os.path.splitext(hdrFile)[0] + '.img'
-        print "ni1 format; loading data from", imgFile
+        print("ni1 format; loading data from", imgFile)
         return parseNii(hdrFH, imgFile)
     else:  ## assume ANALYZE75 format
         imgFile = os.path.splitext(hdrFile)[0] + '.img'
-        print "ANALYZE75 format; loading data from", imgFile
+        print("ANALYZE75 format; loading data from", imgFile)
         return parseA75(hdrFH, imgFile)
 
 
@@ -203,17 +209,17 @@ def parseNii(headerFH, imgFile):
         #edata = headerFH.read(esize-8)
         
         if ecode == 2:
-            print "Header has extended data in DICOM format (ignored)"
+            print("Header has extended data in DICOM format (ignored)")
         elif ecode == 4: 
-            print "Header has extended data in AFNI format (ignored)"
+            print("Header has extended data in AFNI format (ignored)")
         else:
-            print "Header has extended data in unknown format (code=%d; ignored)" % ecode
+            print("Header has extended data in unknown format (code=%d; ignored)" % ecode)
     
     ## do a little parsing
     shape = m.dim[1:m.dim[0]+1]
     size = (m.bitpix / 8) * reduce(lambda a,b: a*b, shape)
     dtype = niiDataTypes[m.datatype]
-    if isinstance(dtype, basestring):
+    if isinstance(dtype, six.string_types):
         raise Exception("Data type not supported: %s"% dtype)
     #print "Dimensions:", dim[0]
     #print "Data shape:", shape
@@ -273,7 +279,7 @@ def parseNii(headerFH, imgFile):
             info[i]['values'] = np.linspace(offset, offset + width, m.dim[i+1])
     
     if m.sform_code > 0:  ## coordinate method 3
-        print "Warning: This data (%s) has an unsupported affine transform." % headerFH.name
+        print("Warning: This data (%s) has an unsupported affine transform." % headerFH.name)
         #print "affine transform:"
         #print srow_x
         #print srow_y
@@ -336,7 +342,7 @@ def shortToByte(data, dMin=None, dMax=None):
         lut[int(diff*i):int(diff*(i+1))] = i
     lut[diff*255:] = 255
     d2 = np.empty(data.shape, dtype=np.ubyte)
-    for i in xrange(data.shape[0]):
+    for i in range(data.shape[0]):
         d2[i] = lut[data[i]]
     return d2
 

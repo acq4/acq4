@@ -2,10 +2,11 @@
 #import CtrlTemplate
 #import acq4.pyqtgraph.WidgetGroup
 #import acq4.util.advancedTypes as advancedTypes
+from __future__ import print_function
 import collections
 import acq4.analysis.atlas.Atlas as Atlas
 import os
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 import acq4.util.DataManager as DataManager
 from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
 import numpy as np
@@ -36,7 +37,7 @@ class AuditoryCortex(Atlas.Atlas):
         quads = self.state['quadrilaterals']
         ind=None
         for i, q in enumerate(quads):
-            if QtGui.QPolygonF([QtCore.QPointF(*x) for x in q]).containsPoint(QtCore.QPointF(pos), QtCore.Qt.OddEvenFill):
+            if Qt.QPolygonF([Qt.QPointF(*x) for x in q]).containsPoint(Qt.QPointF(pos), Qt.Qt.OddEvenFill):
                 ind = i
         if ind == None: ## in case pos is outside the quadrilaterals
             bestMin = 1000
@@ -270,7 +271,7 @@ class PreviousAuditoryCortex(Atlas.Atlas):
             #self.image = canvas.addImage(fh, pos=pos, scale=(scale, scale))
             #self.image.setMovable(False)
             self.images = []
-            self.ctrl = QtGui.QWidget()
+            self.ctrl = Qt.QWidget()
             self.ui = CtrlTemplate.Ui_Form()
             self.ui.setupUi(self.ctrl)
             self.stateGroup = pyqtgraph.WidgetGroup(self.ctrl)
@@ -284,7 +285,7 @@ class PreviousAuditoryCortex(Atlas.Atlas):
             #self.ui.thicknessSpin.valueChanged.connect(self.thicknessSpinChanged)
             self.stateGroup.sigChanged.connect(self.uiChanged)
             #self.ui.reAlignAtlasBtn.clicked.connect(self.reAlignAtlas)
-            #self.connect(canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved) ## old style
+            #self.connect(canvas, Qt.SIGNAL('itemTransformChangeFinished'), self.itemMoved) ## old style
             self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved) ## new style
             
         Atlas.Atlas.__init__(self, state)

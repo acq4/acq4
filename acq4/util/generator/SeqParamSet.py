@@ -1,3 +1,4 @@
+from __future__ import print_function
 import acq4.util.units as units
 from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 import acq4.pyqtgraph as pg

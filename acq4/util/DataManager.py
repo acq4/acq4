@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 DataManager.py - DataManager, FileHandle, and DirHandle classes 
 Copyright 2010  Luke Campagnola
@@ -20,10 +21,10 @@ from acq4.util.configfile import *
 import time
 from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph import SignalProxy, BusyCursor
-from PyQt4 import QtCore, QtGui
+from acq4.util import Qt
 if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-    QtCore.Slot = QtCore.pyqtSlot
+    Qt.Signal = Qt.pyqtSignal
+    Qt.Slot = Qt.pyqtSlot
 import acq4.filetypes as filetypes
 from acq4.util.debug import *
 import copy
@@ -63,7 +64,7 @@ def cleanup():
     getDataManager().cleanup()
 
 
-class DataManager(QtCore.QObject):
+class DataManager(Qt.QObject):
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per file/directory. 
     This class is (supposedly) thread-safe.
     """
@@ -71,12 +72,12 @@ class DataManager(QtCore.QObject):
     INSTANCE = None
     
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         if DataManager.INSTANCE is not None:
             raise Exception("Attempted to create more than one DataManager!")
         DataManager.INSTANCE = self
         self.cache = {}
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         
     def getDirHandle(self, dirName, create=False):
         with self.lock:
@@ -115,11 +116,11 @@ class DataManager(QtCore.QObject):
         """Cache a handle and watch it for changes"""
         self._setCache(fileName, handle)
         ## make sure all file handles belong to the main GUI thread
-        app = QtGui.QApplication.instance()
+        app = Qt.QApplication.instance()
         if app is not None:
             handle.moveToThread(app.thread())
         ## No signals; handles should explicitly inform the manager of changes
-        #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
+        #Qt.QObject.connect(handle, Qt.SIGNAL('changed'), self._handleChanged)
         
     def _handleChanged(self, handle, change, *args):
         with self.lock:
@@ -174,18 +175,18 @@ class DataManager(QtCore.QObject):
         
 
 
-class FileHandle(QtCore.QObject):
+class FileHandle(Qt.QObject):
     
-    sigChanged = QtCore.Signal(object, object, object)  # (self, change, (args))
-    sigDelayedChange = QtCore.Signal(object, object)  # (self, changes)
+    sigChanged = Qt.Signal(object, object, object)  # (self, change, (args))
+    sigDelayedChange = Qt.Signal(object, object)  # (self, changes)
     
     def __init__(self, path, manager):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.manager = manager
         self.delayedChanges = []
         self.path = os.path.abspath(path)
         self.parentDir = None
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
         
     def getFile(self, fn):
@@ -486,9 +487,9 @@ class DirHandle(FileHandle):
                     fd = open(logf, 'r')
                     lines = fd.readlines()
                     fd.close()
-                    log = map(lambda l: eval(l.strip()), lines)
+                    log = [eval(l.strip()) for l in lines]
                 except:
-                    print "****************** Error reading log file %s! *********************" % logf
+                    print("****************** Error reading log file %s! *********************" % logf)
                     raise
             
             if recursive > 0:
@@ -508,7 +509,7 @@ class DirHandle(FileHandle):
         """Return a list of string names for all sub-directories."""
         with self.lock:
             ls = self.ls()
-            subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
+            subdirs = [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
             return subdirs
     
     def incrementFileName(self, fileName, useExt=True):
@@ -519,7 +520,7 @@ class DirHandle(FileHandle):
         else:
             ext = ''
         regex = re.compile(fileName + r'_(\d+)')
-        files = filter(lambda f: regex.match(f), files)
+        files = [f for f in files if regex.match(f)]
         if len(files) > 0:
             files.sort()
             maxVal = int(regex.match(files[-1]).group(1)) + 1
@@ -590,7 +591,7 @@ class DirHandle(FileHandle):
             files = self.lsCache[sortMode]
             
             if normcase:
-                ret = map(os.path.normcase, files)
+                ret = list(map(os.path.normcase, files))
                 return ret
             else:
                 ret = files[:]
@@ -666,7 +667,7 @@ class DirHandle(FileHandle):
             if not self.isManaged():
                 return {}
             index = self._readIndex()
-            if index.has_key(file):
+            if file in index:
                 return index[file]
             else:
                 return {}
@@ -702,7 +703,7 @@ class DirHandle(FileHandle):
             self._childChanged()
             
             ## Write meta-info
-            if not info.has_key('__timestamp__'):
+            if '__timestamp__' not in info:
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
             self.emitChanged('children', fileName)
@@ -736,9 +737,9 @@ class DirHandle(FileHandle):
             
             self._childChanged()
             ## Write meta-info
-            if not info.has_key('__object_type__'):
+            if '__object_type__' not in info:
                 info['__object_type__'] = fileType
-            if not info.has_key('__timestamp__'):
+            if '__timestamp__' not in info:
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
             self.emitChanged('children', fileName)
@@ -774,7 +775,7 @@ class DirHandle(FileHandle):
                 try:
                     del index[fileName]
                 except:
-                    print type(index)
+                    print(type(index))
                     raise
                 self._writeIndex(index, lock=False)
                 self.emitChanged('meta', fileName)
@@ -805,7 +806,7 @@ class DirHandle(FileHandle):
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))
             except:
-                print self.path, name
+                print(self.path, name)
                 raise
             return os.path.exists(fn)
 
@@ -845,7 +846,7 @@ class DirHandle(FileHandle):
                     self._index = readConfigFile(indexFile)
                     self._indexMTime = os.path.getmtime(indexFile)
                 except:
-                    print "***************Error while reading index file %s!*******************" % indexFile
+                    print("***************Error while reading index file %s!*******************" % indexFile)
                     raise
             return self._index
         
@@ -872,7 +873,7 @@ class DirHandle(FileHandle):
         changed = False
         for f in ind:
             if not self.exists(f):
-                print "File %s is no more, removing from index." % (os.path.join(self.name(), f))
+                print("File %s is no more, removing from index." % (os.path.join(self.name(), f)))
                 del ind[f]
                 changed = True
         if changed:

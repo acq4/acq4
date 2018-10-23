@@ -330,7 +330,7 @@ def removePeriodic(data, f0=60.0, dt=None, harmonics=10, samples=4):
     freqs = np.linspace(0.0, (len(ft)-1) * df, len(ft))
     
     ## flatten spikes at f0 and harmonics
-    for i in xrange(1, harmonics + 2):
+    for i in range(1, harmonics + 2):
         f = f0 * i # target frequency
         
         ## determine index range to check for this frequency

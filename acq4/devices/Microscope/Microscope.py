@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 from acq4.devices.OptomechDevice import *
 from acq4.devices.LightSource import LightSource
 from acq4.devices.Stage import Stage
-from deviceTemplate import Ui_Form
+from .deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
 import acq4.pyqtgraph as pg
@@ -22,17 +23,17 @@ class Microscope(Device, OptomechDevice):
       automatically to all rigidly-connected child devices.
     """
     
-    sigObjectiveChanged = QtCore.Signal(object) ## (objective, lastObjective)
-    sigLightChanged = QtCore.Signal(object, object)  # self, lightName
-    sigObjectiveListChanged = QtCore.Signal()
-    sigSurfaceDepthChanged = QtCore.Signal(object)
+    sigObjectiveChanged = Qt.Signal(object) ## (objective, lastObjective)
+    sigLightChanged = Qt.Signal(object, object)  # self, lightName
+    sigObjectiveListChanged = Qt.Signal()
+    sigSurfaceDepthChanged = Qt.Signal(object)
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
         self.config = config
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         self.switchDevice = None
         self.currentSwitchPosition = None
         self.currentObjective = None
@@ -47,9 +48,9 @@ class Microscope(Device, OptomechDevice):
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
         
-        for k1,objs in config['objectives'].iteritems():  ## Set default values for each objective
+        for k1,objs in config['objectives'].items():  ## Set default values for each objective
             self.objectives[k1] = collections.OrderedDict()
-            for k2,o in objs.iteritems():
+            for k2,o in objs.items():
                 obj = Objective(o, self, (k1, k2))
                 self.objectives[k1][k2] = obj
                 #obj.sigTransformChanged.connect(self.objectiveTransformChanged)
@@ -58,7 +59,7 @@ class Microscope(Device, OptomechDevice):
         ## Keep track of the objective currently in use for each position
         ## Format is: { switchPosition1: objective1,  ... }
         self.selectedObjectives = collections.OrderedDict(
-            [(i, self.objectives[i].values()[0]) for i in self.objectives]
+            [(i, list(self.objectives[i].values())[0]) for i in self.objectives]
         )
         for obj in self.selectedObjectives.values():
             self.addSubdevice(obj)
@@ -105,7 +106,7 @@ class Microscope(Device, OptomechDevice):
         """Selects the objective currently in position *index*"""
         index = str(index)
         if index not in self.selectedObjectives:
-            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(self.objectives.keys())))
+            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(list(self.objectives.keys()))))
             
         ## determine new objective, return early if there is no change
         ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
@@ -130,7 +131,7 @@ class Microscope(Device, OptomechDevice):
         Return a list of available objectives. (one objective returned per switch position)
         """
         with self.lock:
-            return self.selectedObjectives.values()
+            return list(self.selectedObjectives.values())
     
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -165,7 +166,7 @@ class Microscope(Device, OptomechDevice):
 
         This method requires a device that provides focus position feedback.
         """
-        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0)).z()
+        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
 
     def setFocusDepth(self, z, speed='fast'):
         """Set the z-position of the focal plane.
@@ -196,7 +197,7 @@ class Microscope(Device, OptomechDevice):
     def globalPosition(self):
         """Return the global position of the scope's center axis at the focal plane.
         """
-        return self.mapToGlobal(QtGui.QVector3D(0, 0, 0))        
+        return self.mapToGlobal(Qt.QVector3D(0, 0, 0))        
 
     def setGlobalPosition(self, pos, speed='fast'):
         """Move the microscope such that its center axis is at a specified global position.
@@ -253,8 +254,8 @@ class Microscope(Device, OptomechDevice):
 
 class Objective(OptomechDevice):
     
-    #class SignalProxyObject(QtCore.QObject):
-        #sigTransformChanged = QtCore.Signal(object) ## self
+    #class SignalProxyObject(Qt.QObject):
+        #sigTransformChanged = Qt.Signal(object) ## self
     
     def __init__(self, config, scope, key):
         #self.__sigProxy = Objective.SignalProxyObject()
@@ -324,12 +325,12 @@ class Objective(OptomechDevice):
 
 
 
-class ScopeGUI(QtGui.QWidget):
+class ScopeGUI(Qt.QWidget):
     """Microscope GUI displayed in Manager window.
     Shows selection of objectives and allows scale/offset to be changed for each."""
     
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
         self.dev.sigObjectiveChanged.connect(self.objectiveChanged)
@@ -343,9 +344,9 @@ class ScopeGUI(QtGui.QWidget):
         row = 1
         for i in self.objList:
             ## For each objective, create a set of widgets for selecting and updating.
-            c = QtGui.QComboBox()
-            r = QtGui.QRadioButton(i)
-            #first = self.objList[i].keys()[0]
+            c = Qt.QComboBox()
+            r = Qt.QRadioButton(i)
+            #first = list(self.objList[i].keys())[0]
             #first = self.objList[i][first]
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
@@ -424,7 +425,7 @@ class ScopeGUI(QtGui.QWidget):
             obj.sigTransformChanged.connect(self.updateSpins)
         
     def updateSpins(self):
-        for k, w in self.objWidgets.iteritems():
+        for k, w in self.objWidgets.items():
             (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
             offset = obj.offset()
@@ -442,8 +443,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def __init__(self, dev, mod):
         CameraModuleInterface.__init__(self, dev, mod)
 
-        self.ctrl = QtGui.QWidget()
-        self.layout = QtGui.QGridLayout()
+        self.ctrl = Qt.QWidget()
+        self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
 
@@ -458,7 +459,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         # Note: this is placed here because there is currently no better place.
         # Ideally, the sample orientation, height, and anatomical identity would be contained 
         # in a Sample or Slice object elsewhere..
-        self.setSurfaceBtn = QtGui.QPushButton('Set Surface')
+        self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 

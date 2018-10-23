@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
+from __future__ import print_function
+from acq4.util import Qt
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.multiprocess as mp
+import six
 import time, os
 import acq4.util.Canvas as Canvas
 import collections
@@ -42,7 +44,7 @@ def loadScanSequence(fh, host):
     
         
     ret = []
-    for key, subDirs in scans.iteritems():
+    for key, subDirs in scans.items():
         if len(scans) > 1:
             name = key
             sname = fh.shortName() + '.' + key
@@ -52,21 +54,21 @@ def loadScanSequence(fh, host):
         scan = Scan(host, fh, subDirs, name=sname, itemName=name)
         ret.append(scan)
     
-    print ret
+    print(ret)
     return ret
 
             
 
-class Scan(QtCore.QObject):
+class Scan(Qt.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)
     ### It handles processing and caching data 
-    sigEventsChanged = QtCore.Signal(object)
-    sigLockStateChanged = QtCore.Signal(object)  # self
-    sigItemVisibilityChanged = QtCore.Signal(object)
-    sigStorageStateChanged = QtCore.Signal(object) #self
+    sigEventsChanged = Qt.Signal(object)
+    sigLockStateChanged = Qt.Signal(object)  # self
+    sigItemVisibilityChanged = Qt.Signal(object)
+    sigStorageStateChanged = Qt.Signal(object) #self
     
     def __init__(self, host, source, dirHandles, name=None, itemName=None):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self._source = source           ## DirHandle to data for this scan
         self.dirHandles = []            ## List of DirHandles, one per spot
         
@@ -222,7 +224,7 @@ class Scan(QtCore.QObject):
         if self.statExample is None:
             return None
         else:
-            return self.statExample.keys()
+            return list(self.statExample.keys())
 
     
     def lockStats(self, lock=True):
@@ -291,7 +293,7 @@ class Scan(QtCore.QObject):
                 color = self.host.getColor(stats)
                 tasker.result.append((i, color, stats, events))
                 
-        print "recolor took %0.2fsec" % (time.time() - start)
+        print("recolor took %0.2fsec" % (time.time() - start))
         
         ## Collect all results, store to caches, and recolor spots
         for i, color, stats, events in result:
@@ -320,7 +322,7 @@ class Scan(QtCore.QObject):
             try:
                 stats = self.host.processStats(events, spot)
             except:
-                print events
+                print(events)
                 raise
             
             ## NOTE: Cache update must be taken care of elsewhere if this function is run in a parallel process!
@@ -484,7 +486,7 @@ class Scan(QtCore.QObject):
         pen = pg.mkPen(pen)
         
         items = []
-        if isinstance(fh, basestring):
+        if isinstance(fh, six.string_types):
             fh = self.source()[fh]
         if fh.isDir():
             fh = self.dataModel.getClampFile(fh)
