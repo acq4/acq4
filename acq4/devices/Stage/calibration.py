@@ -2,9 +2,89 @@ from __future__ import print_function
 import numpy as np
 import scipy.stats, scipy.optimize
 import acq4.pyqtgraph as pg
+from acq4.Manager import getManager
+
+
+class CalibrationWindow(QtGui.QWidget):
+    def __init__(self, device):
+        self.dev = device
+
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+
+        # tree columns:
+        #   stage x, y, z   global x, y, z   error
+        self.pointTree = QtGui.QTreeWidget()
+        self.layout.addWidget(self.pointTree, 0, 0)
+
+        self.btnPanel = QtGui.QWidget()
+        self.btnPanelLayout = QtGui.QHBoxLayout()
+        self.layout.addWidget(self.btnPanel, 1, 0)
+
+        self.addPointBtn = QtGui.QPushButton("add point")
+        self.addPointBtn.setCheckable(True)
+        self.btnPanelLayout.addWidget(self.addPointBtn)
+
+        self.removePointBtn = QtGui.QPushButton("remove point")
+        self.btnPanelLayout.addWidget(self.removePointBtn)
+        
+        self.saveBtn = QtGui.QPushButton("save calibration")
+        self.btnPanelLayout.addWidget(self.saveBtn)
+
+        self.addPointBtn.clicked.connect(self.addPointClicked)
+        self.removePointBtn.clicked.connect(self.removePointClicked)
+        self.saveBtn.clicked.connect(self.saveClicked)
+
+        # more controls:
+        #    Show calibration points (in camera module)
+        #    Force orthogonal axes: xy, xz, yz
+
+        self.loadCalibrationFromDevice()
+
+    def addPointToggled(self):
+        cammod = self.getCameraModule()
+        self._cammod = cammod
+        if self.addPointBtn.isChecked():
+            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked)
+            self.addPointBtn.setText("click new point..")
+        else:
+            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked)
+            self.addPointBtn.setText("add point")
+
+    def cameraModuleClicked(self, ev):
+        if ev.button() != Qt.Qt.LeftButton:
+            return
+
+        pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
+
+        self.calibration.append({'global': pos, 'stage': self.dev.}
+
+        self.addPointBtn.setChecked(False)
+
+    def removePointClicked(self):
+        recalculate()
+
+    def saveClicked(self):
+        self.saveCalibrationToDevice()
+
+    def loadCalibrationFromDevice(self):
+        self.calibration = []
+
+    def saveCalibrationToDevice(self):
+        pass
+
+    def recalculate(self):
+        pass
+
+    def getCameraModule(self):
+        manager = getManager()
+        return manager.listInterfaces('CameraModule')[0]
+
 
 
 class StageCalibration(object):
+    # Old code, never used.. maybe just dump it!
     def __init__(self, stage):
         self.stage = stage
         self.framedelay = None
