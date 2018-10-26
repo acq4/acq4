@@ -88,6 +88,9 @@ class Scientifica(Stage):
         self.monitor = MonitorThread(self, self.monitorObj)
         self.monitor.start()
 
+    def axes(self):
+        return ('x', 'y', 'z')
+
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
         if 'capabilities' in self.config:
@@ -129,7 +132,6 @@ class Scientifica(Stage):
         # Called by superclass when user requests position refresh
         with self.lock:
             pos = self.dev.getPos()
-            pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
             if pos != self._lastPos:
                 self._lastPos = pos
                 emit = True

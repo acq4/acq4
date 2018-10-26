@@ -22,25 +22,6 @@ class Sensapex(Stage):
         self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
         self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         
-        # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
-        a = self.xPitch * np.pi / 180.
-        s = self.scale
-        pts1 = np.array([  # unit vector in sensapex space
-            [0, 0, 0],
-            [1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 1],
-        ])
-        pts2 = np.array([  # corresponding vector in global space
-            [0, 0, 0],
-            [s[0] * np.cos(a), 0, -s[0] * np.sin(a)],
-            [0, s[1], 0],
-            [0, 0, s[2]],
-        ])
-        tr = solve3DTransform(pts1, pts2)
-        tr[3,3] = 1
-        self._internalTransform = Transform3D(tr)
-        self._internalInvTransform = self._internalTransform.inverted()[0]
         
         all_devs = UMP.get_ump().list_devices()
         if self.devid not in all_devs:
@@ -66,6 +47,9 @@ class Sensapex(Stage):
         # TODO: set any extra parameters specified in the config        
         Sensapex.devices[self.devid] = self
 
+    def axes(self):
+        return ('x', 'y', 'z')
+
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
         if 'capabilities' in self.config:
@@ -76,6 +60,29 @@ class Sensapex(Stage):
                 'setPos': (True, True, True),
                 'limits': (False, False, False),
             }
+
+    def axisTransform(self):
+        if self._axisTransform is None:
+            # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
+            a = self.xPitch * np.pi / 180.
+            s = self.scale
+            pts1 = np.array([  # unit vector in sensapex space
+                [0, 0, 0],
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+            ])
+            pts2 = np.array([  # corresponding vector in global space
+                [0, 0, 0],
+                [s[0] * np.cos(a), 0, -s[0] * np.sin(a)],
+                [0, s[1], 0],
+                [0, 0, s[2]],
+            ])
+            tr = solve3DTransform(pts1, pts2)
+            tr[3,3] = 1
+            self._axisTransform = Transform3D(tr)
+            self._inverseAxisTransform = None
+        return self._axisTransform
 
     def stop(self):
         """Stop the manipulator immediately.
@@ -91,7 +98,7 @@ class Sensapex(Stage):
         with self.lock:
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
-            pos = self._internalTransform.map(self.dev.get_pos(timeout=0)[:3])
+            pos = self.dev.get_pos(timeout=0)[:3]
             if self._lastPos is None:
                 dif = 1
             else:

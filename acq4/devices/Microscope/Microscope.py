@@ -6,6 +6,7 @@ from acq4.devices.Stage import Stage
 from .deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.util.debug import printExc
 import acq4.pyqtgraph as pg
 import collections
 
@@ -76,9 +77,11 @@ class Microscope(Device, OptomechDevice):
         if 'objectiveSwitch' in config:
             self.switchDevice = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
             self.objSwitchId = config['objectiveSwitch'][1]           ## Switch ID
-            #self.currentSwitchPosition = str(self.switchDevice.getSwitch(self.objSwitchId))
             self.switchDevice.sigSwitchChanged.connect(self.objectiveSwitchChanged)
-            self.objectiveSwitchChanged()
+            try:
+                self.objectiveSwitchChanged()
+            except:
+                printExc("Could not set initial objective state:")
         else:
             self.setObjectiveIndex(0)
         

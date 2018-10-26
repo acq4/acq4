@@ -58,7 +58,7 @@ class CalibrationWindow(QtGui.QWidget):
 
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
 
-        self.calibration.append({'global': pos, 'stage': self.dev.}
+        # self.calibration.append({'global': pos, 'stage': self.dev.}
 
         self.addPointBtn.setChecked(False)
 

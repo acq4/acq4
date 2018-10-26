@@ -6,7 +6,6 @@ from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
-from .calibration import *
 
 
 class Stage(Device, OptomechDevice):
@@ -138,7 +137,7 @@ class Stage(Device, OptomechDevice):
         movement, this method must be reimplemented.
         """
         tr = pg.SRTTransform3D()
-        offset = self.axisTransform().map(pos)
+        offset = pg.Vector(self.axisTransform().map(pg.Vector(pos)))
         tr.translate(offset)
 
         inv = pg.SRTTransform3D()
@@ -192,7 +191,7 @@ class Stage(Device, OptomechDevice):
             self._stageTransform, self._inverseStageTransform = self._makeStageTransform(pos)
             self._updateTransform()
 
-        self.positionChanged.emit(self, pos, lastPos)
+        self.sigPositionChanged.emit(self, pos, lastPos)
 
     def baseTransform(self):
         """Return the base transform for this Stage.
@@ -484,9 +483,9 @@ class StageInterface(Qt.QWidget):
         cap = dev.capabilities()
         self.nextRow = 0
 
-        for axis in (0, 1, 2):
+        for axis, axisName in enumerate(self.dev.axes()):
             if cap['getPos'][axis]:
-                axLabel = Qt.QLabel('XYZ'[axis])
+                axLabel = Qt.QLabel(axisName)
                 axLabel.setMaximumWidth(15)
                 posLabel = Qt.QLabel('0')
                 self.posLabels[axis] = posLabel
@@ -514,16 +513,14 @@ class StageInterface(Qt.QWidget):
 
     def update(self):
         pos = self.dev.getPosition()
-        for i in range(3):
-            if i not in self.posLabels:
-                continue
+        for i in self.posLabels:
             text = pg.siFormat(pos[i], suffix='m', precision=5)
             self.posLabels[i].setText(text)
 
     def updateLimits(self):
         limits = self.dev.getLimits()
         cap = self.dev.capabilities()
-        for axis in (0, 1, 2):
+        for axis in range(len(cap['limits'])):
             if not cap['limits'][axis]:
                 continue
             for i,limit in enumerate(limits[axis]):
@@ -544,7 +541,7 @@ class StageInterface(Qt.QWidget):
             limit[minmax] = self.dev.getPosition()[axis]
         else:
             limit[minmax] = None
-        self.dev.setLimits(**{'xyz'[axis]: tuple(limit)})
+        self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
 
 class StageHold(object):
