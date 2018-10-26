@@ -173,7 +173,7 @@ class UMP(object):
                         p = self.get_pos(i)
                         devs.append(i)
                     except UMPError as ex:
-                        if ex.errno == -5:  # device does not exist
+                        if ex.errno in (-5, -6):  # device does not exist
                             continue
                         else:
                             raise
@@ -207,7 +207,7 @@ class UMP(object):
                     oserr = self.lib.ump_last_os_errno(self.h)
                     raise UMPError("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
-                    raise UMPError("UMP Error %d: %s" % (err, errstr), err, None)
+                    raise UMPError("UMP Error %d: %s  From %s%r" % (err, errstr, fn, args), err, None)
             # print "   ->", rval
             return rval
 
@@ -250,6 +250,8 @@ class UMP(object):
         timeout = c_int(timeout)
         r = self.call('get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe])
         n_axes = self.axis_count(dev)
+        #if dev == 9:
+        #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
     def goto_pos(self, dev, pos, speed, block=False, simultaneous=True):
@@ -357,9 +359,17 @@ class SensapexDevice(object):
         pos[0] += 10000  # add 10 um to x axis 
         dev.goto_pos(pos, speed=10)
     """
-    def __init__(self, devid):
+    def __init__(self, devid, callback=None, n_axes=None):
         self.devid = int(devid)
         self.ump = UMP.get_ump()
+
+        # some devices will fail when asked how many axes they have; this
+        # allows a manual override.
+        if n_axes is not None:
+            self.ump._axis_counts[devid] = n_axes
+
+        self.ump.poller.add_callback(devid, self._change_callback)
+        self.callback = callback
         
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
@@ -379,6 +389,10 @@ class SensapexDevice(object):
     def set_active(self, active):
         return self.ump.set_active(self.devid, active)
 
+    def _change_callback(self, devid, new_pos, old_pos):
+        if self.callback is not None:
+            self.callback(self, new_pos, old_pos)
+
 
 class PollThread(threading.Thread):
     """Thread to poll for all manipulator position changes.
@@ -391,7 +405,7 @@ class PollThread(threading.Thread):
     """
     def __init__(self, ump, callback=None, interval=0.03):
         self.ump = ump
-        self.callback = callback
+        self.callbacks = {}
         self.interval = interval
         self.lock = threading.RLock()
         self._stop = False
@@ -403,33 +417,42 @@ class PollThread(threading.Thread):
         threading.Thread.start(self)
 
     def stop(self):
+        self._stop = True
+
+    def add_callback(self, dev_id, callback):
         with self.lock:
-            self._stop = True
+            self.callbacks.setdefault(dev_id, []).append(callback)
+
+    def remove_callback(self, dev_id, callback):
+        with self.lock:
+            self.callbacks[dev_id].remove(callback)
 
     def run(self):
         ump = self.ump
+        last_pos = {}
+
         while True:
             try:
-                with self.lock:
-                    if self._stop:
-                        break
+                if self._stop:
+                    break
 
                 # read all updates waiting in queue
-                devids = ump.recv_all()
-                
-                if len(devids) == 0:
-                    # No packets in queue; just wait for the next one.
-                    # This allows us to reduce overhead when packets are arriving slowly
-                    try:
-                        devids = [ump.recv()]
-                    except UMPError as err:
-                        if err.errno == -3:
-                            # ignore timeouts
-                            continue
+                ump.call('receive', 20)
+                #ump.recv_all()
 
-                cb = self.callback
-                if cb is not None:
-                    cb(devids)
+                # check for position changes and invoke callbacks
+                with self.lock:
+                    callbacks = self.callbacks.copy()
+
+                changed_ids = []
+                for dev_id, dev_callbacks in callbacks.items():
+                    if len(callbacks) == 0:
+                        continue
+                    new_pos = ump.get_pos(dev_id, 0)
+                    old_pos = last_pos.get(dev_id)
+                    if new_pos != old_pos:
+                        for cb in dev_callbacks:
+                            cb(dev_id, new_pos, old_pos)
                         
                 time.sleep(self.interval)  # rate-limit updates
             except:
