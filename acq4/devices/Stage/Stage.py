@@ -188,14 +188,11 @@ class Stage(Device, OptomechDevice):
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
     def getPosition(self, refresh=False):
-        """Return the position of the stage.
+        """Return the position of the stage as reported by the controller.
 
         If refresh==False, the last known position is returned. Otherwise, the
         current position is requested from the controller. If request is True,
         then the position request may block if the device is currently busy.
-
-        The position returned is the exact position as reported by the stage hardware
-        multiplied by the scale factor in the device configuration.
         """
         if not refresh:
             with self.lock:

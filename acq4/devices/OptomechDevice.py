@@ -319,6 +319,11 @@ class OptomechDevice(InterfaceMixin):
                 return self.parentDevice().mapToGlobal(obj, subdev)
         
     def _mapTransform(self, obj, tr):
+        """Map an object through a transform.
+
+        *obj* may be tuple, list, QPointF, QVector3D, or ndarray.
+        Mapping multiple points at once is only supported with ndarray.
+        """
         # convert to a type that can be mapped
         retType = None
         if isinstance(obj, (tuple, list)):
@@ -347,11 +352,6 @@ class OptomechDevice(InterfaceMixin):
             return ret
 
         elif isinstance(obj, np.ndarray):
-            # m = np.array(tr.copyDataTo()).reshape(4,4)
-            # m1 = m[:2,:2, np.newaxis]
-            # obj = obj[np.newaxis,...]
-            # m2 = (m1*obj).sum(axis=0)
-            # m2 += m[:2,3,np.newaxis]
             m2 = pg.transformCoordinates(tr, obj)
             return m2
         else:

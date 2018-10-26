@@ -89,14 +89,16 @@ class Sensapex(Stage):
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            # using timeout=0 firces read from cache (the monitor thread ensures
+            # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
             pos = self._internalTransform.map(self.dev.get_pos(timeout=0)[:3])
             if self._lastPos is None:
                 dif = 1
             else:
                 dif = ((np.array(pos) - np.array(self._lastPos))**2).sum()**0.5
-            if dif > 0.1e-6:
+
+            # do not report changes < 100 nm
+            if dif > 100e-9:
                 self._lastPos = pos
                 emit = True
             else:
@@ -195,7 +197,6 @@ class SensapexMoveFuture(MoveFuture):
         self._interrupted = False
         self._errorMsg = None
         self._finished = False
-        #pos = np.array(pos) / np.array(self.dev.scale)
         pos = self.dev._internalInvTransform.map(pos)
         self.dev.dev.goto_pos(pos, speed * 1e6)
         
