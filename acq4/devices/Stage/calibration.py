@@ -10,9 +10,10 @@ class CalibrationWindow(Qt.QWidget):
     def __init__(self, device):
         self.dev = device
         self._cammod = None
+        self._camdev = None
 
         Qt.QWidget.__init__(self)
-        self.resize(800, 400)
+        self.resize(600, 300)
         self.setWindowTitle("Calibration: %s" % device.name())
 
         self.layout = Qt.QGridLayout()
@@ -64,11 +65,21 @@ class CalibrationWindow(Qt.QWidget):
         if ev.button() != Qt.Qt.LeftButton:
             return
 
+        camera = self.getCameraDevice()
+        cameraPos = camera.mapToGlobal([0, 0, 0])
+
         globalPos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
+        globalPos = [globalPos.x(), globalPos.y(), cameraPos[2]]
+        parentDev = self.dev.parentDevice()
+        if parentDev is None:
+            parentPos = globalPos
+        else:
+            parentPos = parentDev.mapFromGlobal(globalPos)
+
         stagePos = self.dev.getPosition()
 
         self.calibration['points'].append((stagePos, globalPos))
-        item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(globalPos), ""])
+        item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""])
         self.pointTree.addTopLevelItem(item)
 
         # self.calibration.append({'global': pos, 'stage': self.dev.}
@@ -100,6 +111,15 @@ class CalibrationWindow(Qt.QWidget):
                 raise Exception("Calibration requires an open camera module")
             self._cammod = manager.getModule(mods[0])
         return self._cammod
+
+    def getCameraDevice(self):
+        if self._camdev is None:
+            manager = getManager()
+            camName = self.dev.config.get('calibrationImagingDevice', None)
+            if camName is None:
+                raise Exception("Calibration requires 'calibrationImagingDevice' key in stage configuration.")
+            self._camdev = manager.getDevice(camName)
+        return self._camdev
 
 
 
