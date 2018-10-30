@@ -167,7 +167,7 @@ class Stage(Device, OptomechDevice):
 
     def inverseAxisTransform(self):
         if self._inverseAxisTransform is None:
-            inv, invertible = self.axisTransform().inverted()[1]
+            inv, invertible = self.axisTransform().inverted()
             if not invertible:
                 raise Exception("Transform is not invertible.")
             self._inverseAxisTransform = inv

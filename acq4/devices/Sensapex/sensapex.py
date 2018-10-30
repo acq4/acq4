@@ -204,7 +204,6 @@ class SensapexMoveFuture(MoveFuture):
         self._interrupted = False
         self._errorMsg = None
         self._finished = False
-        pos = self.dev._internalInvTransform.map(pos)
         self.dev.dev.goto_pos(pos, speed * 1e6)
         
     def wasInterrupted(self):

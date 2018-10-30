@@ -34,14 +34,18 @@ class StageSwitch(Device):
         # used to emit signal when position passes a threshold
         self.switches = {}
         self.switchThresholds = {}
+        devs = set()
         for name, spec in config.get('switches', {}).items():
             spec = spec.copy()
             devName = spec.pop('device')
             dev = dm.getDevice(devName)
             dev.sigPositionChanged.connect(self.stagePosChanged)
-
+            devs.add(dev)
             self.switches[name] = list(spec.keys())[0]  # pick first objective by default
             self.switchThresholds.setdefault(devName, {})[name] = spec
+
+        for dev in devs:
+            self.stagePosChanged(dev, dev.getPosition(), None)
 
     def stagePosChanged(self, dev, pos, old):
         devName = dev.name()
