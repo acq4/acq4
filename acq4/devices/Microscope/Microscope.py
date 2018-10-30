@@ -7,6 +7,7 @@ from .deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.debug import printExc
+from acq4.Manager import getManager
 import acq4.pyqtgraph as pg
 import collections
 
@@ -236,12 +237,17 @@ class Microscope(Device, OptomechDevice):
 
     def focusDevice(self):
         if self._focusDevice is None:
-            p = self
-            while True:
-                if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
-                    self._focusDevice = p
-                    break
-                p = p.parentDevice()
+            if 'focusDevice' in self.config:
+                # check config first
+                self._focusDevice = getManager().getDevice(self.config['focusDevice'])
+            else:
+                # if nothing was specified, then use the first parent stage with z positioning
+                p = self
+                while True:
+                    if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
+                        self._focusDevice = p
+                        break
+                    p = p.parentDevice()
         return self._focusDevice
 
     def positionDevice(self):
@@ -257,13 +263,7 @@ class Microscope(Device, OptomechDevice):
 
 class Objective(OptomechDevice):
     
-    #class SignalProxyObject(Qt.QObject):
-        #sigTransformChanged = Qt.Signal(object) ## self
-    
     def __init__(self, config, scope, key):
-        #self.__sigProxy = Objective.SignalProxyObject()
-        #self.sigTransformChanged = self.__sigProxy.sigTransformChanged
-        #self._config = config
         self._config = config
         self._scope = scope
         self._key = key
@@ -277,12 +277,6 @@ class Objective(OptomechDevice):
             self.setOffset(config['offset'])
         if 'scale' in config:
             self.setScale(config['scale'])
-            
-    #def updateTransform(self):
-        #tr = pg.SRTTransform3D()
-        #tr.translate(self._offset)
-        #tr.scale(self._scale)
-        #self.setDeviceTransform(tr)
     
     def deviceTransform(self):
         return pg.SRTTransform3D(OptomechDevice.deviceTransform(self))
@@ -291,9 +285,6 @@ class Objective(OptomechDevice):
         tr = self.deviceTransform()
         tr.setTranslate(pos)
         self.setDeviceTransform(tr)
-        #self._offset = pg.Vector(pos)
-        #self.sigTransformChanged.emit(self)
-        #self.updateTransform()
     
     def setScale(self, scale):
         if not hasattr(scale, '__len__'):
@@ -302,20 +293,12 @@ class Objective(OptomechDevice):
         tr = self.deviceTransform()
         tr.setScale(scale)
         self.setDeviceTransform(tr)
-        #self._scale = pg.Vector(scale, scale, 1)
-        #self.sigTransformChanged.emit(self)
-        #self.updateTransform()
     
     def offset(self):
         return self.deviceTransform().getTranslation()
-        #return pg.Vector(self._offset)
         
     def scale(self):
         return self.deviceTransform().getScale()
-        #return pg.Vector(self._scale)
-
-    #def name(self):
-        #return self._name
     
     def key(self):
         return self._key
@@ -337,7 +320,7 @@ class ScopeGUI(Qt.QWidget):
         self.win = win
         self.dev = dev
         self.dev.sigObjectiveChanged.connect(self.objectiveChanged)
-        #self.dev.sigPositionChanged.connect(self.positionChanged)
+
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.objList = self.dev._allObjectives()
@@ -349,8 +332,7 @@ class ScopeGUI(Qt.QWidget):
             ## For each objective, create a set of widgets for selecting and updating.
             c = Qt.QComboBox()
             r = Qt.QRadioButton(i)
-            #first = list(self.objList[i].keys())[0]
-            #first = self.objList[i][first]
+
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
