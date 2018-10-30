@@ -6,6 +6,7 @@ from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
+from .calibration import CalibrationWindow
 
 
 class Stage(Device, OptomechDevice):
@@ -480,14 +481,18 @@ class StageInterface(Qt.QWidget):
         self.posLabels = {}
         self.limitChecks = {}
 
+        self.positionLabelWidget = Qt.QWidget()
+        self.layout.addWidget(self.positionLabelWidget, 0, 0)
+        self.positionLabelLayout = Qt.QGridLayout()
+        self.positionLabelWidget.setLayout(self.positionLabelLayout)
+        self.positionLabelLayout.setContentsMargins(0, 0, 0, 0)
+
         self.globalLabel = Qt.QLabel('global')
-        self.layout.addWidget(self.globalLabel, 0, 1)
+        self.positionLabelLayout.addWidget(self.globalLabel, 0, 1)
         self.stageLabel = Qt.QLabel('stage')
-        self.layout.addWidget(self.stageLabel, 0, 2)
+        self.positionLabelLayout.addWidget(self.stageLabel, 0, 2)
 
         cap = dev.capabilities()
-        self.nextRow = self.layout.rowCount()
-
         for axis, axisName in enumerate(self.dev.axes()):
             if cap['getPos'][axis]:
                 axLabel = Qt.QLabel(axisName)
@@ -506,10 +511,16 @@ class StageInterface(Qt.QWidget):
                     for check in (minCheck, maxCheck):
                         check.clicked.connect(self.limitCheckClicked)
 
+                nextRow = self.positionLabelLayout.rowCount()
                 for i,w in enumerate(widgets):
-                    self.layout.addWidget(w, self.nextRow, i)
+                    self.positionLabelLayout.addWidget(w, nextRow, i)
                 self.axCtrls[axis] = widgets
-                self.nextRow += 1
+
+        self.calibrateBtn = Qt.QPushButton('Calibrate')
+        self.layout.addWidget(self.calibrateBtn, self.layout.rowCount(), 0)
+        self.calibrateBtn.clicked.connect(self.calibrateClicked)
+
+        self.calibrateWindow = CalibrationWindow(self.dev)
 
         self.updateLimits()
         self.dev.sigPositionChanged.connect(self.update)
@@ -549,6 +560,10 @@ class StageInterface(Qt.QWidget):
         else:
             limit[minmax] = None
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
+
+    def calibrateClicked(self):
+        self.calibrateWindow.show()
+        self.calibrateWindow.raise_()
 
 
 class StageHold(object):

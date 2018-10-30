@@ -318,12 +318,13 @@ class ScientificaGUI(StageInterface):
 
         # Insert Scientifica-specific controls into GUI
         self.zeroBtn = Qt.QPushButton('Zero position')
-        self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-        self.nextRow += 1
+        nextRow = self.layout.rowCount()
+        self.layout.addWidget(self.zeroBtn, nextRow, 0, 1, 2)
+        nextRow += 1
 
         self.psGroup = Qt.QGroupBox('Rotary Controller')
-        self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-        self.nextRow += 1
+        self.layout.addWidget(self.psGroup, nextRow, 0, 1, 2)
+        nextRow += 1
 
         self.psLayout = Qt.QGridLayout()
         self.psGroup.setLayout(self.psLayout)
