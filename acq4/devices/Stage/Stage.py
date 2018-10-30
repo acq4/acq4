@@ -250,11 +250,11 @@ class Stage(Device, OptomechDevice):
         """
         # imagine what the global transform will look like after we reach the target..
         target = self.targetPosition()
-        tr = self.baseTransform() * self._makeStageTransform(target)
+        tr = self.baseTransform() * self._makeStageTransform(target)[0]
         pd = self.parentDevice()
         if pd is not None:
             tr = pd.globalTransform() * tr
-        return tr.map([0, 0, 0])
+        return self._mapTransform([0, 0, 0], tr)
 
     def getState(self):
         with self.lock:
@@ -512,7 +512,7 @@ class StageInterface(Qt.QWidget):
         self.update()
 
     def update(self):
-        pos = self.dev.getPosition()
+        pos = self.dev.globalPosition()
         for i in self.posLabels:
             text = pg.siFormat(pos[i], suffix='m', precision=5)
             self.posLabels[i].setText(text)

@@ -30,7 +30,9 @@ class Scientifica(Stage):
         port = config.pop('port', None)
         name = config.pop('name', None)
 
-        self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
+        # if user has not provided scale values, we can make a guess
+        config.setdefault('scale', (1e-6, 1e-6, 1e-6))
+
         baudrate = config.pop('baudrate', None)
         ctrl_version = config.pop('version', 2)
         try:
@@ -73,7 +75,7 @@ class Scientifica(Stage):
             else:
                 self.dev.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * abs(self.scale[0])))
+        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * 1e-6))
         
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get('monitorObjective', False)
@@ -126,7 +128,7 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setSpeed(v / abs(self.scale[0]))
+        self.dev.setSpeed(v * 1e6)  # requires um/s
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -171,7 +173,7 @@ class Scientifica(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """
-        s = [int(-v * 1000. / 67. / self.scale[i]) for i,v in enumerate(vel)]
+        s = [int(-v * 1000. / 67. / 1e-6) for i,v in enumerate(vel)]
         print(s)
         self.dev.send('VJ %d %d %d C' % tuple(s))
 
@@ -249,12 +251,12 @@ class ScientificaMoveFuture(MoveFuture):
         self._interrupted = False
         self._errorMSg = None
         self._finished = False
-        pos = np.array(pos) / np.array(self.dev.scale)
+        pos = np.array(pos)
         with self.dev.dev.lock:
-            self.dev.dev.moveTo(pos, speed / abs(self.dev.scale[0]))
+            self.dev.dev.moveTo(pos, speed / 1e-6)
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
-            self.dev.dev.setSpeed(userSpeed / abs(self.dev.scale[0]))
+            self.dev.dev.setSpeed(userSpeed / 1e-6)
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.

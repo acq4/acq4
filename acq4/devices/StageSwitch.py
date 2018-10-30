@@ -40,7 +40,7 @@ class StageSwitch(Device):
             dev = dm.getDevice(devName)
             dev.sigPositionChanged.connect(self.stagePosChanged)
 
-            self.switches[name] = None
+            self.switches[name] = list(spec.keys())[0]  # pick first objective by default
             self.switchThresholds.setdefault(devName, {})[name] = spec
 
     def stagePosChanged(self, dev, pos, old):
