@@ -30,7 +30,8 @@ class Pipette(Device, OptomechDevice):
     This device must be configured with a Stage as its parent.
 
     The local coordinate system of the device is configured such that the electrode is in the 
-    x/z plane, pointing toward +x and -z (assuming the pitch is positive). 
+    x/z plane, pointing toward +x and -z (assuming the pitch is positive). The origin of the
+    local coordinate system is at the tip of the pipette.
 
              \\ +z
               \\ |
@@ -43,6 +44,8 @@ class Pipette(Device, OptomechDevice):
 
     Configuration options:
 
+    * pitch: The angle of the pipette (in degrees) relative to the horizontal plane,
+      Positive values point downward. This option must be specified in the configuration.
     * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
       should be about 1-2mm, emough to avoid collisions between the pipette tip and the sample during search.
       Default is 2 mm.
@@ -77,7 +80,10 @@ class Pipette(Device, OptomechDevice):
         parent = self.parentDevice()
         if not isinstance(parent, Stage):
             raise Exception("Pipette device requires some type of translation stage as its parent.")
-        self.pitch = parent.pitch * np.pi / 180.
+
+        if 'pitch' not in config:
+            raise Exception("pitch configuration option is now required for Pipette devices.")
+        self.pitch = config['pitch'] * np.pi / 180.
         self._camInterfaces = weakref.WeakKeyDictionary()
 
         self.target = None
