@@ -3,36 +3,45 @@ import numpy as np
 import scipy.stats, scipy.optimize
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
+from acq4.util import Qt
 
 
-class CalibrationWindow(QtGui.QWidget):
+class CalibrationWindow(Qt.QWidget):
     def __init__(self, device):
         self.dev = device
+        self._cammod = None
 
-        QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
+        Qt.QWidget.__init__(self)
+        self.resize(800, 400)
+        self.setWindowTitle("Calibration: %s" % device.name())
+
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
 
         # tree columns:
         #   stage x, y, z   global x, y, z   error
-        self.pointTree = QtGui.QTreeWidget()
+        self.pointTree = Qt.QTreeWidget()
+        self.pointTree.setHeaderLabels(['stage pos', 'global pos', 'error'])
+        self.pointTree.setColumnCount(3)
         self.layout.addWidget(self.pointTree, 0, 0)
 
-        self.btnPanel = QtGui.QWidget()
-        self.btnPanelLayout = QtGui.QHBoxLayout()
+        self.btnPanel = Qt.QWidget()
+        self.btnPanelLayout = Qt.QHBoxLayout()
+        self.btnPanelLayout.setContentsMargins(0, 0, 0, 0)
+        self.btnPanel.setLayout(self.btnPanelLayout)
         self.layout.addWidget(self.btnPanel, 1, 0)
 
-        self.addPointBtn = QtGui.QPushButton("add point")
+        self.addPointBtn = Qt.QPushButton("add point")
         self.addPointBtn.setCheckable(True)
         self.btnPanelLayout.addWidget(self.addPointBtn)
 
-        self.removePointBtn = QtGui.QPushButton("remove point")
+        self.removePointBtn = Qt.QPushButton("remove point")
         self.btnPanelLayout.addWidget(self.removePointBtn)
         
-        self.saveBtn = QtGui.QPushButton("save calibration")
+        self.saveBtn = Qt.QPushButton("save calibration")
         self.btnPanelLayout.addWidget(self.saveBtn)
 
-        self.addPointBtn.clicked.connect(self.addPointClicked)
+        self.addPointBtn.toggled.connect(self.addPointToggled)
         self.removePointBtn.clicked.connect(self.removePointClicked)
         self.saveBtn.clicked.connect(self.saveClicked)
 
@@ -44,7 +53,6 @@ class CalibrationWindow(QtGui.QWidget):
 
     def addPointToggled(self):
         cammod = self.getCameraModule()
-        self._cammod = cammod
         if self.addPointBtn.isChecked():
             cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked)
             self.addPointBtn.setText("click new point..")
@@ -56,30 +64,42 @@ class CalibrationWindow(QtGui.QWidget):
         if ev.button() != Qt.Qt.LeftButton:
             return
 
-        pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
+        globalPos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
+        stagePos = self.dev.getPosition()
+
+        self.calibration['points'].append((stagePos, globalPos))
+        item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(globalPos), ""])
+        self.pointTree.addTopLevelItem(item)
 
         # self.calibration.append({'global': pos, 'stage': self.dev.}
 
         self.addPointBtn.setChecked(False)
 
     def removePointClicked(self):
-        recalculate()
+        self.recalculate()
 
     def saveClicked(self):
         self.saveCalibrationToDevice()
 
     def loadCalibrationFromDevice(self):
-        self.calibration = []
+        self.calibration = self.dev.readConfigFile('calibration')
+        self.calibration.setdefault('points', [])
+        self.recalculate()
 
     def saveCalibrationToDevice(self):
-        pass
+        self.dev.writeConfigFile(cal, 'calibration')
 
     def recalculate(self):
         pass
 
     def getCameraModule(self):
-        manager = getManager()
-        return manager.listInterfaces('CameraModule')[0]
+        if self._cammod is None:
+            manager = getManager()
+            mods = manager.listInterfaces('cameraModule')
+            if len(mods) == 0:
+                raise Exception("Calibration requires an open camera module")
+            self._cammod = manager.getModule(mods[0])
+        return self._cammod
 
 
 
