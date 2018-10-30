@@ -480,16 +480,22 @@ class StageInterface(Qt.QWidget):
         self.posLabels = {}
         self.limitChecks = {}
 
+        self.globalLabel = Qt.QLabel('global')
+        self.layout.addWidget(self.globalLabel, 0, 1)
+        self.stageLabel = Qt.QLabel('stage')
+        self.layout.addWidget(self.stageLabel, 0, 2)
+
         cap = dev.capabilities()
-        self.nextRow = 0
+        self.nextRow = self.layout.rowCount()
 
         for axis, axisName in enumerate(self.dev.axes()):
             if cap['getPos'][axis]:
                 axLabel = Qt.QLabel(axisName)
                 axLabel.setMaximumWidth(15)
-                posLabel = Qt.QLabel('0')
-                self.posLabels[axis] = posLabel
-                widgets = [axLabel, posLabel]
+                globalPosLabel = Qt.QLabel('0')
+                stagePosLabel = Qt.QLabel('0')
+                self.posLabels[axis] = (globalPosLabel, stagePosLabel)
+                widgets = [axLabel, globalPosLabel, stagePosLabel]
                 if cap['limits'][axis]:
                     minCheck = Qt.QCheckBox('Min:')
                     minCheck.tag = (axis, 0)
@@ -505,17 +511,18 @@ class StageInterface(Qt.QWidget):
                 self.axCtrls[axis] = widgets
                 self.nextRow += 1
 
-
         self.updateLimits()
         self.dev.sigPositionChanged.connect(self.update)
         self.dev.sigLimitsChanged.connect(self.updateLimits)
         self.update()
 
     def update(self):
-        pos = self.dev.globalPosition()
+        globalPos = self.dev.globalPosition()
+        stagePos = self.dev.getPosition()
         for i in self.posLabels:
-            text = pg.siFormat(pos[i], suffix='m', precision=5)
-            self.posLabels[i].setText(text)
+            text = pg.siFormat(globalPos[i], suffix='m', precision=5)
+            self.posLabels[i][0].setText(text)
+            self.posLabels[i][1].setText(str(stagePos[i]))
 
     def updateLimits(self):
         limits = self.dev.getLimits()
