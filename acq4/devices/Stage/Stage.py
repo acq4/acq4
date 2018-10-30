@@ -151,8 +151,8 @@ class Stage(Device, OptomechDevice):
         The default implementation simply inverts _axisTransform to generate this solution;
         devices with more complex kinematics need to reimplement this method.
         """ 
-        tr = self.stageTransform().translation() + pos_change
-        pos = self.inverseAxisTransform().map(tr)
+        tr = self.stageTransform().getTranslation() + pg.Vector(pos_change)
+        pos = pg.Vector(self.inverseAxisTransform().map(tr))
         return pos
 
     def axisTransform(self):
