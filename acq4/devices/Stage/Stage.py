@@ -520,7 +520,7 @@ class StageInterface(Qt.QWidget):
         self.layout.addWidget(self.calibrateBtn, self.layout.rowCount(), 0)
         self.calibrateBtn.clicked.connect(self.calibrateClicked)
 
-        self.calibrateWindow = CalibrationWindow(self.dev)
+        self.calibrateWindow = None
 
         self.updateLimits()
         self.dev.sigPositionChanged.connect(self.update)
@@ -562,6 +562,8 @@ class StageInterface(Qt.QWidget):
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
     def calibrateClicked(self):
+        if self.calibrateWindow is None:
+            self.calibrateWindow = CalibrationWindow(self.dev)
         self.calibrateWindow.show()
         self.calibrateWindow.raise_()
 

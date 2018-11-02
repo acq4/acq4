@@ -22,7 +22,7 @@ class CalibrationWindow(Qt.QWidget):
         # tree columns:
         #   stage x, y, z   global x, y, z   error
         self.pointTree = Qt.QTreeWidget()
-        self.pointTree.setHeaderLabels(['stage pos', 'global pos', 'error'])
+        self.pointTree.setHeaderLabels(['stage pos', 'parent pos', 'error'])
         self.pointTree.setColumnCount(3)
         self.layout.addWidget(self.pointTree, 0, 0)
 
@@ -78,9 +78,8 @@ class CalibrationWindow(Qt.QWidget):
 
         stagePos = self.dev.getPosition()
 
-        self.calibration['points'].append((stagePos, globalPos))
-        item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""])
-        self.pointTree.addTopLevelItem(item)
+        self.calibration['points'].append((stagePos, parentPos))
+        item = self._addTreeItem(stagePos, parentPos)
 
         # self.calibration.append({'global': pos, 'stage': self.dev.}
 
@@ -95,13 +94,57 @@ class CalibrationWindow(Qt.QWidget):
     def loadCalibrationFromDevice(self):
         self.calibration = self.dev.readConfigFile('calibration')
         self.calibration.setdefault('points', [])
+        for stagePos, parentPos in self.calibration['points']:
+            self._addTreeItem(stagePos, parentPos)
         self.recalculate()
 
     def saveCalibrationToDevice(self):
-        self.dev.writeConfigFile(cal, 'calibration')
+        self.dev.writeConfigFile(self.calibration, 'calibration')
+        m = np.zeros((4, 4))
+        m[:, :3] = self.transform
+        m[3, 3] = 1
+        tr = pg.Transform3D(m)
+        self.dev._axisTransform = tr
+        self.dev._inverseAxisTransform = None
+        self.dev._updateTransform()
+
+    def _addTreeItem(self, stagePos, parentPos):
+        item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""])
+        self.pointTree.addTopLevelItem(item)
+        return item
 
     def recalculate(self):
-        pass
+        # identity affine transform matrix
+        m = np.zeros((4, 3))
+        m[:3] = np.eye(3)
+
+        npts = len(self.calibration['points'])
+        a = np.empty((npts, 4))
+        a[:, 3] = 1  # needed for translation in affine mapping
+        b = np.empty((npts, 3))
+        for i, pt in enumerate(self.calibration['points']):
+            a[i, :3] = pt[0]
+            b[i] = pt[1]
+
+        def mapError(x, a, b):
+            # transform a through matrix x
+            mappedPos = np.dot(a, x.reshape(4, 3))
+
+            # measure distance from each mapped point to the desired point in b
+            return np.linalg.norm(mappedPos - b, axis=1)
+
+        def errFn(x, a, b):
+            # reduce all distance errors to a scalar
+            return np.linalg.norm(mapError(x, a, b))
+
+        # find affine matrix that minimizes error
+        self.result = scipy.optimize.minimize(errFn, m, (a, b))
+        self.transform = self.result.x.reshape(4, 3)
+        error = mapError(self.transform, a, b)
+
+        for i in range(npts):
+            item = self.pointTree.topLevelItem(i)
+            item.setText(2, "%0.3g" % error[i])
 
     def getCameraModule(self):
         if self._cammod is None:
