@@ -93,5 +93,4 @@ def importTemplate(templateName):
         uipath = os.path.join(root, *pathParts) + '.ui'
         if not os.path.isfile(uipath):
             raise ValueError("ui file not found: %r" % uipath)
-        return loadUiType(uipath)
-
+        return loadUiType(uipath, package=pkg)[0]

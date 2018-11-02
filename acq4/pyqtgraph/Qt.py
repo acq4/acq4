@@ -88,17 +88,16 @@ class _StringIO(object):
         return ''.join(map(asUnicode, self.data)).encode('utf8')
 
     
-def _loadUiType(uiFile):
+def _loadUiType(uiFile, package=None):
     """
     PySide lacks a "loadUiType" command like PyQt4's, so we have to convert
     the ui file to py code in-memory first and then execute it in a
     special frame to retrieve the form_class.
 
-    from stackoverflow: http://stackoverflow.com/a/14195313/3781327
+    The *package* argument must be specified if the ui file contains relative
+    imports.
 
-    seems like this might also be a legitimate solution, but I'm not sure
-    how to make PyQt4 and pyside look the same...
-        http://stackoverflow.com/a/8717832
+    from stackoverflow: http://stackoverflow.com/a/14195313/3781327
     """
     if QT_LIB == PYSIDE:
         from pysideuic import compileUi
@@ -106,23 +105,25 @@ def _loadUiType(uiFile):
         from pyside2uic import compileUi
 
     import xml.etree.ElementTree as xml
-    #from io import StringIO
     
     parsed = xml.parse(uiFile)
     widget_class = parsed.find('widget').get('class')
     form_class = parsed.find('class').text
     
-    with open(uiFile, 'r') as f:
-        o = _StringIO()
-        frame = {}
+    if package is None:
+        globalns = {}
+    else:
+        globalns = {'__package__': package}
 
-        compileUi(f, o, indent=0)
-        pyc = compile(o.getvalue(), '<string>', 'exec')
-        exec(pyc, frame)
+    # load, compile, and execute ui code
+    o = _StringIO()
+    compileUi(open(uiFile, 'r'), o, indent=0)
+    pyc = compile(o.getvalue(), uiFile, 'exec')
+    exec(pyc, globalns)
 
-        #Fetch the base_class and form class based on their type in the xml from designer
-        form_class = frame['Ui_%s'%form_class]
-        base_class = eval('QtGui.%s'%widget_class)
+    #Fetch the base_class and form class based on their type in the xml from designer
+    form_class = globalns['Ui_%s'%form_class]
+    base_class = getattr(QtGui, widget_class)
 
     return form_class, base_class
 
