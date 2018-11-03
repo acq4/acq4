@@ -492,6 +492,7 @@ class CameraTask(DAQGenericTask):
         
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger
         ## (bulb and strobe modes only require a restart if the trigger mode is not already set; this is handled later)
+        restart = False
         if params['triggerMode'] == 'TriggerStart':
             restart = True
             

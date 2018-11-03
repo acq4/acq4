@@ -15,7 +15,6 @@ class Sensapex(Stage):
     A Sensapex manipulator.
     """
     
-    monitorThread = None
     devices = {}
     
     def __init__(self, man, config, name):
@@ -46,7 +45,12 @@ class Sensapex(Stage):
         all_devs = UMP.get_ump().list_devices()
         if self.devid not in all_devs:
             raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
-        self.dev = SensapexDevice(self.devid)
+
+        Stage.__init__(self, man, config, name)
+
+        # create handle to this manipulator
+        # note: n_axes is used in cases where the device is not capable of answering this on its own 
+        self.dev = SensapexDevice(self.devid, callback=self._positionChanged, n_axes=config.get('nAxes'))
         # force cache update for this device.
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
@@ -54,20 +58,12 @@ class Sensapex(Stage):
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
 
-        Stage.__init__(self, man, config, name)
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
         self.getPosition(refresh=True)
 
-        # TODO: set any extra parameters specified in the config
-        
-        
-        # thread for polling position changes
-        if Sensapex.monitorThread is None:
-            Sensapex.monitorThread = MonitorThread()
-            Sensapex.monitorThread.start()
-            
+        # TODO: set any extra parameters specified in the config        
         Sensapex.devices[self.devid] = self
 
     def capabilities(self):
@@ -112,6 +108,10 @@ class Sensapex(Stage):
 
         return pos
 
+    def _positionChanged(self, dev, newPos, oldPos):
+        # called by driver poller when position has changed
+        self._getPosition()
+
     def targetPosition(self):
         with self.lock:
             if self._lastMove is None or self._lastMove.isDone():
@@ -122,8 +122,7 @@ class Sensapex(Stage):
     def quit(self):
         Sensapex.devices.pop(self.devid)
         if len(Sensapex.devices) == 0:
-            Sensapex.monitorThread.stop()
-            Sensapex.monitorThread = None
+            UMP.get_ump().poller.stop()
         Stage.quit(self)
 
     def _move(self, abs, rel, speed, linear):
