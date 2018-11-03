@@ -30,7 +30,7 @@ class Stage(Device, OptomechDevice):
 
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = Qt.QMatrix4x4(self.deviceTransform())
+        self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
 
@@ -97,7 +97,7 @@ class Stage(Device, OptomechDevice):
         """Return the transform that maps from the local coordinate system to
         the scaled position reported by the stage hardware.
         """
-        return Qt.QMatrix4x4(self._stageTransform)
+        return self._stageTransform * 1  # *1 makes a copy
 
     def mapToStage(self, obj):
         return self._mapTransform(obj, self._stageTransform)
@@ -172,7 +172,7 @@ class Stage(Device, OptomechDevice):
     def baseTransform(self):
         """Return the base transform for this Stage.
         """
-        return Qt.QMatrix4x4(self._baseTransform)
+        return self._baseTransform * 1  # *1 makes a copy
 
     def setBaseTransform(self, tr):
         """Set the base transform of the stage. 
@@ -180,7 +180,7 @@ class Stage(Device, OptomechDevice):
         This sets the starting position and orientation of the stage before the 
         hardware-reported stage position is taken into account.
         """
-        self._baseTransform = Qt.QMatrix4x4(tr)
+        self._baseTransform = tr * 1  # *1 makes a copy
         self._updateTransform()
 
     def _updateTransform(self):

@@ -16,7 +16,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.metaarray import MetaArray
 from acq4.pyqtgraph import ptime
 
-sequencerTemplate = Qt.importTemplate('.sequencerTemplate')
+SequencerTemplate = Qt.importTemplate('.sequencerTemplate')
 
 
 class CameraWindow(Qt.QMainWindow):

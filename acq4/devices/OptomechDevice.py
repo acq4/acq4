@@ -371,12 +371,12 @@ class OptomechDevice(InterfaceMixin):
         *subdev* may be the name of the device or the device itself.
         """
         with self.__lock:
-            tr = Qt.QMatrix4x4(self.__transform)
+            tr = self.__transform
             
             ## if a subdevice is specified, multiply by the subdevice's transform before returning
             dev = self.getSubdevice(subdev)
             if dev is None:
-                return tr
+                return tr * 1  # *1 makes a copy
             else:
                 return tr * dev.deviceTransform()
     
@@ -386,7 +386,7 @@ class OptomechDevice(InterfaceMixin):
         """
         with self.__lock:
             if self.__inverseTransform == 0:
-                tr = Qt.QMatrix4x4(self.__transform)
+                tr = self.__transform * 1  # *1 makes a copy
                 if tr is None:
                     self.__inverseTransform = None
                 else:
@@ -394,7 +394,7 @@ class OptomechDevice(InterfaceMixin):
                     if not invertible:
                         raise Exception("Transform is not invertible.")
                     self.__inverseTransform = inv
-            tr = Qt.QMatrix4x4(self.__inverseTransform)
+            tr = self.__inverseTransform * 1  # *1 makes a copy
             if subdev == 0:  ## indicates we should skip any subdevices
                 return tr
             ## if a subdevice is specified, multiply by the subdevice's transform before returning
@@ -428,7 +428,7 @@ class OptomechDevice(InterfaceMixin):
             if subdev is None: ## return cached transform
                 if self.__globalTransform == 0:
                     self.__globalTransform = self.__computeGlobalTransform()
-                return Qt.QMatrix4x4(self.__globalTransform)
+                return self.__globalTransform * 1  # *1 makes a copy
             else:
                 return self.__computeGlobalTransform(subdev)
                 
@@ -468,7 +468,7 @@ class OptomechDevice(InterfaceMixin):
                         if not invertible:
                             raise Exception("Transform is not invertible.")
                         self.__inverseGlobalTransform = inv
-                return Qt.QMatrix4x4(self.__inverseGlobalTransform)
+                return self.__inverseGlobalTransform * 1  # *1 makes a copy
             else:
                 return self.__computeGlobalTransform(subdev, inverse=True)
 
