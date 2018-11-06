@@ -87,14 +87,12 @@ class CalibrationWindow(Qt.QWidget):
         self.calibration['points'].append((stagePos, parentPos))
         item = self._addCalibrationPoint(stagePos, parentPos)
 
-        target = Target()
+        target = Target(movable=False)
         self._cammod.window().addItem(target)
         target.setPos(pg.Point(globalPos[:2]))
         target.setDepth(globalPos[2])
         target.setFocusDepth(globalPos[2])
         item.target = target
-
-        # self.calibration.append({'global': pos, 'stage': self.dev.}
 
         self.addPointBtn.setChecked(False)
         self.recalculate()
@@ -130,12 +128,9 @@ class CalibrationWindow(Qt.QWidget):
         self.recalculate()
 
     def saveCalibrationToDevice(self):
+        self.recalculate()
         self.dev.writeConfigFile(self.calibration, 'calibration')
-        m = np.zeros((4, 4))
-        m[:, :3] = self.transform
-        m[3, 3] = 1
-        tr = pg.Transform3D(m.T)
-        self.dev._axisTransform = tr
+        self.dev._axisTransform = self.transform
         self.dev._inverseAxisTransform = None
         self.dev._updateTransform()
 
@@ -148,37 +143,70 @@ class CalibrationWindow(Qt.QWidget):
         return item
 
     def recalculate(self):
-        # identity affine transform matrix
-        m = np.zeros((4, 3))
-        m[:3] = np.eye(3)
+        # identity affine axis transform matrix
 
         npts = len(self.calibration['points'])
-        a = np.empty((npts, 4))
-        a[:, 3] = 1  # needed for translation in affine mapping
-        b = np.empty((npts, 3))
+
+        if npts < 4:
+            for i in range(npts):
+                item = self.pointTree.topLevelItem(i)
+                item.setText(2, "")
+
+            return
+        stagePos = np.empty((npts, 3))
+        parentPos = np.empty((npts, 3))
         for i, pt in enumerate(self.calibration['points']):
-            a[i, :3] = pt[0]
-            b[i] = pt[1]
+            stagePos[i] = pt[0]
+            parentPos[i] = pt[1]
 
-        def mapError(x, a, b):
-            # transform a through matrix x
-            mappedPos = np.dot(a, x.reshape(4, 3))
+        def mapPoint(axisTr, stagePos, localPos):
+            # given a stage position and axis transform, map from localPos to parent coordinate system
+            if isinstance(axisTr, np.ndarray):
+                m = np.eye(4)
+                m[:3] = axisTr.reshape(3, 4)
+                axisTr = pg.Transform3D(m)
+            st = self.dev._makeStageTransform(stagePos, axisTr)[0]
+            tr = pg.Transform3D(self.dev.baseTransform() * st)
+            return tr.map(localPos)
 
-            # measure distance from each mapped point to the desired point in b
-            return np.linalg.norm(mappedPos - b, axis=1)
+        def mapError(axisTr, stagePos, parentPos):
+            # Goal is to map origin to parent position correctly
+            return [mapPoint(axisTr, sp, [0, 0, 0]) - pp for sp, pp in zip(stagePos, parentPos)]
 
-        def errFn(x, a, b):
-            # reduce all distance errors to a scalar
-            return np.linalg.norm(mapError(x, a, b))
+        def errFn(axisTr, stagePos, parentPos):
+            # reduce all point errors to a scalar error metric
+            dist = [np.linalg.norm(err) for err in mapError(axisTr, stagePos, parentPos)]
+            err = np.linalg.norm(dist)
+            if err < best[0]:
+                best[0] = err
+                best[1] = axisTr
+            return err
 
-        # find affine matrix that minimizes error
-        self.result = scipy.optimize.minimize(errFn, m, (a, b))
-        self.transform = self.result.x.reshape(4, 3)
-        error = mapError(self.transform, a, b)
+        def srtErrFn(x, stagePos, parentPos):
+            # for solving with orthogonal axes and uniform scale factor
+            axisTr = vecToSRT(x)
+            return errFn(axisTr, stagePos, parentPos)
 
+        def vecToSRT(x):
+            return pg.SRTTransform3D({'pos': x[:3], 'scale': x[3:6], 'angle': x[6], 'axis': [0, 0, 1]})
+
+        # use first 4 points to get an exact solution
+        m = self.dev._solveAxisTransform(stagePos[:4], parentPos[:4], np.zeros((4, 3)))
+
+        # Fit the entire set of points, using the exact solution as initial guess
+        best = [np.inf, None]
+        self.result = scipy.optimize.minimize(errFn, x0=m, args=(stagePos, parentPos), tol=1e-8)#, options={'eps': 1e-11, 'gtol': 1e-12, 'disp': True}, method='Nelder-Mead')#, method="SLSQP")
+
+        m = np.eye(4)
+        m[:3] = best[1].reshape(3, 4)
+        self.transform = pg.Transform3D(m)
+
+        # measure and display errors for each point
+        error = mapError(self.transform, stagePos, parentPos)
         for i in range(npts):
             item = self.pointTree.topLevelItem(i)
-            item.setText(2, "%0.3g" % error[i])
+            dist = np.linalg.norm(error[i])
+            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6*dist, error[i][0], error[i][1], error[i][2]))
 
     def getCameraModule(self):
         if self._cammod is None:

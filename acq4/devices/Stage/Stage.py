@@ -31,6 +31,8 @@ class Stage(Device, OptomechDevice):
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
         self._baseTransform = Qt.QMatrix4x4(self.deviceTransform())
+        self._inverseBaseTransform = None
+        print(self, self._baseTransform)
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
 
@@ -125,7 +127,7 @@ class Stage(Device, OptomechDevice):
             self._inverseStageTransform = inv
         return pg.SRTTransform3D(self._inverseStageTransform)
 
-    def _makeStageTransform(self, pos):
+    def _makeStageTransform(self, pos, axisTransform=None):
         """Return a stage transform (as should be returned by stageTransform)
         and an optional inverse, given a position reported by the device.
 
@@ -138,7 +140,9 @@ class Stage(Device, OptomechDevice):
         movement, this method must be reimplemented.
         """
         tr = pg.SRTTransform3D()
-        offset = pg.Vector(self.axisTransform().map(pg.Vector(pos)))
+        if axisTransform is None:
+            axisTransform = self.axisTransform()
+        offset = pg.Vector(axisTransform.map(pg.Vector(pos)))
         tr.translate(offset)
 
         inv = pg.SRTTransform3D()
@@ -146,13 +150,13 @@ class Stage(Device, OptomechDevice):
 
         return tr, inv
 
-    def _solveStageTransform(self, pos_change):
+    def _solveStageTransform(self, posChange):
         """Given a desired change of local origin, return the device position required.
 
         The default implementation simply inverts _axisTransform to generate this solution;
         devices with more complex kinematics need to reimplement this method.
         """ 
-        tr = self.stageTransform().getTranslation() + pg.Vector(pos_change)
+        tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
         pos = pg.Vector(self.inverseAxisTransform().map(tr))
         return pos
 
@@ -173,6 +177,16 @@ class Stage(Device, OptomechDevice):
                 raise Exception("Transform is not invertible.")
             self._inverseAxisTransform = inv
         return pg.QtGui.QMatrix4x4(self._inverseAxisTransform)
+
+    def _solveAxisTransform(self, stagePos, parentPos, localPos):
+        """Return an axis transform matrix that maps localPos to parentPos, given
+        stagePos.
+
+
+        """
+        offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
+        m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
+        return m
 
     # def mapToStage(self, obj):
     #     return self._mapTransform(obj, self._stageTransform)
@@ -197,7 +211,17 @@ class Stage(Device, OptomechDevice):
     def baseTransform(self):
         """Return the base transform for this Stage.
         """
-        return Qt.QMatrix4x4(self._baseTransform)
+        return pg.Transform3D(self._baseTransform)
+
+    def inverseBaseTransform(self):
+        """Return the inverse of the base transform for this Stage.
+        """
+        if self._inverseBaseTransform is None:
+            inv, invertible = self.baseTransform().inverted()
+            if not invertible:
+                raise Exception("Transform is not invertible.")
+            self._inverseBaseTransform = inv
+        return pg.Transform3D(self._inverseBaseTransform)
 
     def setBaseTransform(self, tr):
         """Set the base transform of the stage. 
@@ -206,6 +230,7 @@ class Stage(Device, OptomechDevice):
         hardware-reported stage position is taken into account.
         """
         self._baseTransform = Qt.QMatrix4x4(tr)
+        self._inverseBaseTransform = None
         self._updateTransform()
 
     def _updateTransform(self):
