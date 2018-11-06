@@ -13,7 +13,7 @@ from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
+from acq4.util.target import Target
 from .cameraModTemplate import Ui_Form as CamModTemplate
 from .tracker import PipetteTracker
 
@@ -582,13 +582,14 @@ class PipetteCamModInterface(CameraModuleInterface):
             pos = self.mod().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
             self.setTargetPos(pos, z)
-            self.target.setRelativeDepth(0)
+            self.target.setFocusDepth(z)
 
     def setTargetPos(self, pos, z):
         self.dev().setTarget((pos.x(), pos.y(), z))
 
     def targetChanged(self, dev, pos):
         self.target.setPos(pg.Point(pos[:2]))
+        self.target.setDepth(pos[2])
         self.depthTarget.setPos(0, pos[2])
         self.target.setVisible(True)
         self._haveTarget = True
@@ -601,7 +602,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     def targetDragged(self):
         z = self.getDevice().scopeDevice().getFocusDepth()
         self.setTargetPos(self.target.pos(), z)
-        self.target.setRelativeDepth(0)
+        self.target.setFocusDepth(z)
 
     def transformChanged(self):
         # manipulator's global transform has changed; update the center arrow and orientation axis
@@ -637,7 +638,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         except RuntimeError:
             return
         fdepth = self.dev().scopeDevice().getFocusDepth()
-        self.target.setRelativeDepth(fdepth - tdepth)
+        self.target.setFocusDepth(fdepth)
 
     def calibrateAxisChanging(self):
         pos = self.calibrateAxis.pos()
@@ -703,16 +704,6 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())        
-
-
-class Target(TargetItem):
-    def setRelativeDepth(self, depth):
-        # adjust the apparent depth of the target
-        dist = depth * 255 / 50e-6
-        color = (np.clip(dist+256, 0, 255), np.clip(256-dist, 0, 255), 0)
-        self.pen = pg.mkPen(color)
-        self._picture = None
-        self.update()
 
 
 class Axis(pg.ROI):

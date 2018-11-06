@@ -4,6 +4,7 @@ import scipy.stats, scipy.optimize
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
+from acq4.util.target import Target
 
 
 class CalibrationWindow(Qt.QWidget):
@@ -25,6 +26,8 @@ class CalibrationWindow(Qt.QWidget):
         self.pointTree.setHeaderLabels(['stage pos', 'parent pos', 'error'])
         self.pointTree.setColumnCount(3)
         self.layout.addWidget(self.pointTree, 0, 0)
+        self.pointTree.setColumnWidth(0, 200)
+        self.pointTree.setColumnWidth(1, 200)
 
         self.btnPanel = Qt.QWidget()
         self.btnPanelLayout = Qt.QHBoxLayout()
@@ -51,6 +54,9 @@ class CalibrationWindow(Qt.QWidget):
         #    Force orthogonal axes: xy, xz, yz
 
         self.loadCalibrationFromDevice()
+
+        cam = self.getCameraDevice()
+        cam.sigGlobalTransformChanged.connect(self.cameraTransformChanged)
 
     def addPointToggled(self):
         cammod = self.getCameraModule()
@@ -79,13 +85,38 @@ class CalibrationWindow(Qt.QWidget):
         stagePos = self.dev.getPosition()
 
         self.calibration['points'].append((stagePos, parentPos))
-        item = self._addTreeItem(stagePos, parentPos)
+        item = self._addCalibrationPoint(stagePos, parentPos)
+
+        target = Target()
+        self._cammod.window().addItem(target)
+        target.setPos(pg.Point(globalPos[:2]))
+        target.setDepth(globalPos[2])
+        target.setFocusDepth(globalPos[2])
+        item.target = target
 
         # self.calibration.append({'global': pos, 'stage': self.dev.}
 
         self.addPointBtn.setChecked(False)
+        self.recalculate()
+
+    def cameraTransformChanged(self):
+        cam = self.getCameraDevice()
+        fdepth = cam.mapToGlobal([0, 0, 0])[2]
+
+        items = [self.pointTree.topLevelItem(i) for i in range(self.pointTree.topLevelItemCount())]
+        for item in items:
+            if item.target is None:
+                continue
+            item.target.setFocusDepth(fdepth)
 
     def removePointClicked(self):
+        sel = self.pointTree.selectedItems()[0]
+        index = self.pointTree.indexOfTopLevelItem(sel)
+        self.pointTree.takeTopLevelItem(index)
+        if sel.target is not None:
+            sel.target.scene().removeItem(sel.target)
+        items = [self.pointTree.topLevelItem(i) for i in range(self.pointTree.topLevelItemCount())]
+        self.calibration['points'] = [(item.stagePos, item.parentPos) for item in items]
         self.recalculate()
 
     def saveClicked(self):
@@ -95,7 +126,7 @@ class CalibrationWindow(Qt.QWidget):
         self.calibration = self.dev.readConfigFile('calibration')
         self.calibration.setdefault('points', [])
         for stagePos, parentPos in self.calibration['points']:
-            self._addTreeItem(stagePos, parentPos)
+            self._addCalibrationPoint(stagePos, parentPos)
         self.recalculate()
 
     def saveCalibrationToDevice(self):
@@ -103,14 +134,17 @@ class CalibrationWindow(Qt.QWidget):
         m = np.zeros((4, 4))
         m[:, :3] = self.transform
         m[3, 3] = 1
-        tr = pg.Transform3D(m)
+        tr = pg.Transform3D(m.T)
         self.dev._axisTransform = tr
         self.dev._inverseAxisTransform = None
         self.dev._updateTransform()
 
-    def _addTreeItem(self, stagePos, parentPos):
+    def _addCalibrationPoint(self, stagePos, parentPos):
         item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""])
         self.pointTree.addTopLevelItem(item)
+        item.stagePos = stagePos
+        item.parentPos = parentPos
+        item.target = None
         return item
 
     def recalculate(self):
@@ -270,5 +304,6 @@ class StageCalibration(object):
         self.fit = scipy.optimize.leastsq(erf, [0, f0, amp, amp, amp, amp], (x, self.error))[0]
         self.errorPlot.plot(x, fn(self.fit, x), pen='g')
 
-
-
+    def closeEvent(self, ev):
+        for t in self.targets:
+            t.scene().removeItem(t)
