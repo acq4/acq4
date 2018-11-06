@@ -12,6 +12,7 @@ class CalibrationWindow(Qt.QWidget):
         self.dev = device
         self._cammod = None
         self._camdev = None
+        self.transform = None
 
         Qt.QWidget.__init__(self)
         self.resize(600, 300)
@@ -96,6 +97,7 @@ class CalibrationWindow(Qt.QWidget):
 
         self.addPointBtn.setChecked(False)
         self.recalculate()
+        self.saveBtn.setText("*save calibration*")
 
     def cameraTransformChanged(self):
         cam = self.getCameraDevice()
@@ -116,6 +118,7 @@ class CalibrationWindow(Qt.QWidget):
         items = [self.pointTree.topLevelItem(i) for i in range(self.pointTree.topLevelItemCount())]
         self.calibration['points'] = [(item.stagePos, item.parentPos) for item in items]
         self.recalculate()
+        self.saveBtn.setText("*save calibration*")
 
     def saveClicked(self):
         self.saveCalibrationToDevice()
@@ -129,10 +132,9 @@ class CalibrationWindow(Qt.QWidget):
 
     def saveCalibrationToDevice(self):
         self.recalculate()
+        self.calibration['transform'] = None if self.transform is None else [list(row) for row in self.transform.matrix()]
         self.dev.writeConfigFile(self.calibration, 'calibration')
-        self.dev._axisTransform = self.transform
-        self.dev._inverseAxisTransform = None
-        self.dev._updateTransform()
+        self.saveBtn.setText("save calibration")
 
     def _addCalibrationPoint(self, stagePos, parentPos):
         item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""])
@@ -147,12 +149,14 @@ class CalibrationWindow(Qt.QWidget):
 
         npts = len(self.calibration['points'])
 
+        # Need at least 4 points to generate a calibration
         if npts < 4:
             for i in range(npts):
                 item = self.pointTree.topLevelItem(i)
                 item.setText(2, "")
-
+            self.transform = None
             return
+
         stagePos = np.empty((npts, 3))
         parentPos = np.empty((npts, 3))
         for i, pt in enumerate(self.calibration['points']):
@@ -207,6 +211,11 @@ class CalibrationWindow(Qt.QWidget):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
             item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6*dist, error[i][0], error[i][1], error[i][2]))
+
+        # send new transform to device
+        self.dev._axisTransform = self.transform
+        self.dev._inverseAxisTransform = None
+        self.dev._updateTransform()
 
     def getCameraModule(self):
         if self._cammod is None:

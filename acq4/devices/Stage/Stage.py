@@ -32,7 +32,7 @@ class Stage(Device, OptomechDevice):
         # and a dynamic translation provided by the hardware.
         self._baseTransform = Qt.QMatrix4x4(self.deviceTransform())
         self._inverseBaseTransform = None
-        print(self, self._baseTransform)
+
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
 
@@ -56,6 +56,11 @@ class Stage(Device, OptomechDevice):
         self._progressDialog = None
         self._progressTimer = Qt.QTimer()
         self._progressTimer.timeout.connect(self.updateProgressDialog)
+
+        calibration = self.readConfigFile('calibration')
+        axisTr = calibration.get('transform', None)
+        if axisTr is not None:
+            self._axisTransform = pg.Transform3D(axisTr)
 
         dm.declareInterface(name, ['stage'], self)
 
