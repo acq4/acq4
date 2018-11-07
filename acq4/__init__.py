@@ -1,7 +1,7 @@
 from __future__ import print_function
 import os, sys
 
-__version__ = '0.9.2'
+__version__ = '0.9.3'
 
 
 # If we are running from a git repo, generate a more descriptive version number 
