@@ -477,6 +477,7 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.recording = False
         self.stopRecording = False
+        self._stopTime = 0
         self.resultObj = None
         
     def configure(self):
@@ -545,7 +546,7 @@ class CameraTask(DAQGenericTask):
         with self.lock:
             if self.recording:
                 self.frames.append(frame)
-            if self.stopRecording:
+            if self.stopRecording and frame.info()['time'] > self._stopTime:
                 self.recording = False
                 disconnect = True
         if disconnect:   ## Must be done only after unlocking mutex
@@ -556,7 +557,6 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.stopRecording = False
         self.recording = True
-            
         if not self.dev.isRunning():
             self.dev.start(block=True)  ## wait until camera is actually ready to acquire
             
@@ -582,6 +582,7 @@ class CameraTask(DAQGenericTask):
         
         with self.lock:
             self.stopRecording = True
+            self._stopTime = time.time()
         
         if 'popState' in self.camCmd:
             self.dev.popState(self.camCmd['popState'])  ## restores previous settings, stops/restarts camera if needed
@@ -589,6 +590,11 @@ class CameraTask(DAQGenericTask):
     def getResult(self):
         if self.resultObj is None:
             daqResult = DAQGenericTask.getResult(self)
+            while self.recording and time.time() - self._stopTime < 1:
+                # Wait up to 1 second for all frames to arrive from camera thread before returning results.
+                # In some cases, acquisition thread can get bogged down and we may need to wait for it
+                # to catch up.
+                time.sleep(0.05)
             self.resultObj = CameraTaskResult(self, self.frames[:], daqResult)
         return self.resultObj
         
