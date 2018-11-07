@@ -229,9 +229,13 @@ class CalibrationWindow(Qt.QWidget):
     def getCameraDevice(self):
         if self._camdev is None:
             manager = getManager()
-            camName = self.dev.config.get('calibrationImagingDevice', None)
+            camName = self.dev.config.get('imagingDevice', None)
             if camName is None:
-                raise Exception("Calibration requires 'calibrationImagingDevice' key in stage configuration.")
+                cams = manager.listInterfaces('camera')
+                if len(cams) == 1:
+                    camName = cams[0]
+                else:
+                    raise Exception("Calibration requires a single available camera device (found %d) or 'imagingDevice' key in stage configuration." % len(cams))
             self._camdev = manager.getDevice(camName)
         return self._camdev
 

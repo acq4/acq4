@@ -430,6 +430,26 @@ class Stage(Device, OptomechDevice):
         """
         return self._limits[:]
 
+    def homePosition(self):
+        """Return the stored home position of this stage in global coordinates.
+        """
+        return self.readConfigFile('stored_locations').get('home', None)
+
+    def goHome(self, speed='fast'):
+        homePos = self.homePosition()
+        if homePos is None:
+            raise Exception("No home position set for %s" % self.name())
+        return self.moveToGlobal(homePos, speed=speed)
+
+    def setHomePosition(self, pos=None):
+        """Set the home position in global coordinates.
+        """
+        if pos is None:
+            pos = self.globalPosition()
+        locations = self.readConfigFile('stored_locations')
+        locations['home'] = list(pos)
+        self.writeConfigFile(locations, 'stored_locations')
+
 
 class MoveFuture(object):
     """Used to track the progress of a requested move operation.
@@ -546,8 +566,22 @@ class StageInterface(Qt.QWidget):
                     self.positionLabelLayout.addWidget(w, nextRow, i)
                 self.axCtrls[axis] = widgets
 
+        self.btnContainer = Qt.QWidget()
+        self.btnLayout = Qt.QGridLayout()
+        self.btnContainer.setLayout(self.btnLayout)
+        self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
+        self.btnLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.goHomeBtn = Qt.QPushButton('Home')
+        self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
+        self.goHomeBtn.clicked.connect(self.goHomeClicked)
+
+        self.setHomeBtn = Qt.QPushButton('Set Home')
+        self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
+        self.setHomeBtn.clicked.connect(self.setHomeClicked)
+
         self.calibrateBtn = Qt.QPushButton('Calibrate')
-        self.layout.addWidget(self.calibrateBtn, self.layout.rowCount(), 0)
+        self.btnLayout.addWidget(self.calibrateBtn, 0, 2)
         self.calibrateBtn.clicked.connect(self.calibrateClicked)
 
         self.calibrateWindow = None
@@ -590,6 +624,12 @@ class StageInterface(Qt.QWidget):
         else:
             limit[minmax] = None
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
+
+    def goHomeClicked(self):
+        self.dev.goHome()
+
+    def setHomeClicked(self):
+        self.dev.setHomePosition()
 
     def calibrateClicked(self):
         if self.calibrateWindow is None:
