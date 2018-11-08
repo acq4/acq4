@@ -67,7 +67,9 @@ class Pipette(Device, OptomechDevice):
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
-        self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
+        self.config = config
+        self._scopeDev = None
+        self._imagingDev = None
         self._stageOrientation = {'angle': 0, 'inverty': False}
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
@@ -81,23 +83,41 @@ class Pipette(Device, OptomechDevice):
         if not isinstance(parent, Stage):
             raise Exception("Pipette device requires some type of translation stage as its parent.")
 
-        if 'pitch' not in config:
-            raise Exception("pitch configuration option is now required for Pipette devices.")
-        self.pitch = config['pitch'] * np.pi / 180.
         self._camInterfaces = weakref.WeakKeyDictionary()
 
         self.target = None
 
+        self.offset = np.array([0, 0, 0])
+        self.pitch = 30 * np.pi / 108.
+        self.yaw = 0        
+        self.setOrientation(yaw=config.get('yaw'), pitch=config.get('pitch'))
+
         cal = self.readConfigFile('calibration')
         if cal != {}:
-            self.setStageOrientation(cal['angle'], cal['inverty'])
-            self.setDeviceTransform(cal['transform'])
+            self.setOrientation(yaw=cal['angle'])
+            self.setOffset(cal['offset'])
 
         self.tracker = PipetteTracker(self)
         deviceManager.declareInterface(name, ['pipette'], self)
 
     def scopeDevice(self):
+        if self._scopeDev is None:
+            imdev = self.imagingDevice()
+            self._scopeDev = imdev.scopeDev
         return self._scopeDev
+
+    def imagingDevice(self):
+        if self._imagingDev is None:
+            man = getManager()
+            name = self.config.get('imagingDevice', None)
+            if name is None:
+                cams = man.listInterfaces('camera')
+                if len(cams) == 1:
+                    name = cams[0]
+                else:
+                    raise Exception("Pipette requires either a single imaging device available (found %d) or 'imagingDevice' specified in its configuration." % len(cams))
+            self._imagingDev = man.getDevice(name)
+        return self._imagingDev
 
     def quit(self):
         pass
@@ -113,32 +133,59 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
-    def setStageOrientation(self, angle, inverty):
-        tr = pg.SRTTransform3D(self.parentDevice().baseTransform())
-        tr.setScale(1, -1 if inverty else 1)
-        tr.setRotate(angle)
-        self.parentDevice().setBaseTransform(tr)
+    def setOrientation(self, yaw=None, pitch=None):
+        """Set the orientation of the pipette relative to its parent coordinate system.
+
+        The *yaw* angle specifies a rotation in degrees around the vertical (Z) axis, where 0 points
+        in the direction of the parent's +X axis.
+
+        The *pitch* angle specifies the downward angle (degrees) of the pipette relative to the horizontal plane.
+
+        Setting the pipette orientation has two effects:
+        * Motion planning uses this information to avoid dragging the pipette sideways through the sample
+        * The local coordinate system of the Pipette device is rotated such that +X points
+          in the direction of the pipette tip.
+
+        """
+        if yaw is not None:
+            self.yaw = yaw
+        if pitch is not None:
+            self.pitch = pitch
+
+        self._updateTransform()
+
+    def resetGlobalPosition(self, pos):
+        """Set the device transform such that the pipette tip is located at the global position *pos*.
+
+        This method is for recalibration; it does not physically move the device.
+        """
+        lpos = np.array(self.mapFromGlobal(pos))
+        self.setOffset(self.offset + lpos)
+
+    def setOffset(self, offset):
+        self.offset = np.array(offset)
+        self._updateTransform()
+
+    def _updateTransform(self):
+        tr = pg.Transform3D()
+        tr.rotate(self.yaw, pg.Vector(0, 0, 1))
+        tr.rotate(self.pitch, pg.Vector(1, 0, 0))
+        tr.translate(*self.offset)
+        self.setDeviceTransform(tr)
 
         cal = self.readConfigFile('calibration')
-        cal['angle'] = angle
-        cal['inverty'] = inverty
-        self._stageOrientation = cal
+        cal['offset'] = list(self.offset)
+        cal['pitch'] = self.pitch
+        cal['yaw'] = self.yaw
         self.writeConfigFile(cal, 'calibration')
 
-    def setDeviceTransform(self, tr):
-        OptomechDevice.setDeviceTransform(self, tr)
-
-        cal = self.readConfigFile('calibration')
-        cal['transform'] = pg.SRTTransform3D(tr)
-        self.writeConfigFile(cal, 'calibration')
-
-    def getYawAngle(self):
+    def yawAngle(self):
         """Return the yaw (azimuthal angle) of the electrode around the Z-axis.
 
         Value is returned in degrees such that an angle of 0 indicate the tip points along the positive x axis,
         and 90 points along the positive y axis.
         """
-        return self._stageOrientation['angle']
+        return self.yaw
 
     def goHome(self, speed='fast'):
         """Extract pipette tip diagonally, then move pipette far away from the objective.
@@ -264,7 +311,7 @@ class Pipette(Device, OptomechDevice):
             self.advance(idleDepth, speed)
 
         # From here, move directly to idle position
-        angle = self.getYawAngle() * np.pi / 180
+        angle = self.yawAngle() * np.pi / 180
         ds = self._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
         self._moveToGlobal(globalIdlePos, speed)
@@ -374,16 +421,6 @@ class Pipette(Device, OptomechDevice):
         Note: the position in local coordinates is always [0, 0, 0].
         """
         return self.mapToGlobal([0, 0, 0])
-
-    def setGlobalPosition(self, pos):
-        """Set the device transform such that the pipette tip is located at the global position *pos*.
-
-        This method is for recalibration; it does not physically move the device.
-        """
-        lpos = self.mapFromGlobal(pos)
-        tr = self.deviceTransform()
-        tr.translate(*lpos)
-        self.setDeviceTransform(tr)
 
     def _moveToGlobal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in global coordinates.
@@ -502,8 +539,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ctrl = Qt.QWidget()
         self.ui.setupUi(self.ctrl)
 
-        cal = dev._stageOrientation
-        self.calibrateAxis = Axis([0, 0], 0, inverty=cal['inverty'])
+        self.calibrateAxis = Axis([0, 0], 0, inverty=False)
         self.calibrateAxis.setZValue(5000)
         mod.addItem(self.calibrateAxis)
         self.calibrateAxis.setVisible(False)
@@ -530,7 +566,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         if showLabel:
             num = dev.name()[len(basename):]
             self.target.setLabel(num)
-            self.target.setLabelAngle(dev.getYawAngle())
+            self.target.setLabelAngle(dev.yawAngle())
 
         self.depthTarget = Target(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
@@ -622,7 +658,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         # self.depthLine.setValue(pos[2])
         self.depthArrow.setPos(0, pos[2])
 
-        self.target.setLabelAngle(dev.getYawAngle())
+        self.target.setLabelAngle(dev.yawAngle())
 
         if self.ui.setOrientationBtn.isChecked():
             return
@@ -655,11 +691,11 @@ class PipetteCamModInterface(CameraModuleInterface):
         z = dev.scopeDevice().getFocusDepth()
 
         # first orient the parent stage
-        dev.setStageOrientation(angle, size[1] < 0)
+        dev.setOrientation(yaw=angle)
 
         # next set our position offset
         pos = [pos.x(), pos.y(), z]
-        dev.setGlobalPosition(pos)
+        dev.resetGlobalPosition(pos)
 
     def controlWidget(self):
         return self.ctrl
