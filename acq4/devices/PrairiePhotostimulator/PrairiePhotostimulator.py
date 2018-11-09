@@ -134,10 +134,13 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         self.dev.scopeDevice().sigGlobalTransformChanged.connect(self.updatePoints)
 
 
-    def addStimPoint(self, pos):
+    def addStimPoint(self, pos, stimulationPoint=None):
         name, itr = self.getNextName()
         z = self.dev.scopeDevice().getFocusDepth()
-        sp = StimulationPoint(name, itr, pos, z)
+        if stimulationPoint == None:
+            sp = StimulationPoint(name, itr, pos, z)
+        else:
+            sp = stimulationPoint
         self.ui.pointsParamTree.addParameters(sp.params)
         sp.paramItem = sp.params.items.keys()[0] ## get ahold of the treeWidgetItem, possibly should be a weakref instead
         self.stimPoints.append(sp)
@@ -309,15 +312,25 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
 
 
+#class Photostimulation():
+
+#    def __init__(self, stimPoint, laserPower, laserDuration, shape):
+#        self.stimPoint = stimPoint
+#        self.stimPointID = stimPoint.id
+#        self.pos = self.stimPoint.getPos()
+#        self.laserPower = laserPower
+#        self.laserDuration = laserDuration
+#        self.shape = shape
+
 class Photostimulation():
     """A data modelling class that represents a single focal photostimulation."""
-    def __init__(self, stimPoint, laserPower, laserDuration, shape):
-        self.stimPoint = stimPoint
-        self.stimPointID = stimPoint.id
-        self.pos = self.stimPoint.getPos()
-        self.laserPower = laserPower
-        self.laserDuration = laserDuration
-        self.shape = shape
+
+    def __init__(self, info, id):
+        self._info = info
+        self.id = id
+
+    def __getattr__(self, name):
+        return self._info[name]
 
 
 
@@ -340,21 +353,39 @@ class StimulationPoint(QtCore.QObject):
         self.params.sigValueChanged.connect(self.changed)
         self.graphicsItem.sigDragged.connect(self.targetDragged)
 
+#        self.positionHistory = []
+        self.stimulations = []
+
 
     def changed(self, param):
         self.sigStimPointChanged.emit(self)
 
     def targetDragged(self):
+#        self.updateHistory()
         self.sigTargetDragged.emit(self)
 
     def setDepth(self, z):
         self.z = z
+#        self.updateHistory()
         self.changed(z)
 
     def getPos(self):
         ## return position in global coordinates
         return (self.graphicsItem.pos().x(), self.graphicsItem.pos().y(), self.z)
 
+#    def updateHistory(self, timestamp=None, pos=None):
+#        if timestamp is None:
+#            timestamp = time.time()
+#        if pos is None:
+#            pos = self.getPos()
+#        self.positionHistory.append((timestamp, pos))
+
+    def addStimulation(self, data, id):
+        self.stimulations.append({id:Photostimulation(data, id)})
+
+    def updatePosition(self, pos):
+        self.setDepth(pos[2])
+        self.graphicsItem.setPos(pos[0], pos[1])
 
 
 
