@@ -94,7 +94,6 @@ class IgorThread(QtCore.QThread):
         return self._sendRequest('getVariable', args, kwds)
 
     def _sendRequest(self, req, args, kwds):
-        print("IGOR: send", req, args, kwds)
         if isinstance(self.igor, ZMQIgorBridge):
             return getattr(self.igor, req)(*args)
         else:
@@ -105,9 +104,7 @@ class IgorThread(QtCore.QThread):
     def _processRequest(self, req):
         fut, method, args, kwds = req
         try:
-            print("IGOR:", method, args, kwds)
             result = getattr(self.igor, method)(*args, **kwds)
-            print("    result:", result)
             fut.set_result(result)
         except Exception as exc:
             fut.set_exception(exc)
@@ -234,7 +231,6 @@ class ZMQIgorBridge(object):
         future = concurrent.futures.Future()
         call = self.formatCall(cmd, params=args, messageID=messageID)
         try:
-            print("IGOR zmq send:", call)
             self._socket.send_multipart(call)
             self._unresolvedFutures[messageID] = future
         except zmq.error.Again:
@@ -246,14 +242,12 @@ class ZMQIgorBridge(object):
     def _checkRecv(self):
         try:
             reply = json.loads(self._socket.recv_multipart()[-1])
-            print("IGOR zmq recv:", reply)
             messageID = reply.get("messageID", None)
             future = self._unresolvedFutures.get(messageID, None)
             if future is None:
                 raise RuntimeError("No future found for messageID {}".format(messageID))
             try:
                 reply = self.parseReply(reply)
-                print("IGOR recv message ID ", messageID, "result:", reply)
                 future.set_result(reply)
             except IgorCallError as e:
                 future.set_exception(e)
