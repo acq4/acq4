@@ -1,6 +1,7 @@
 from __future__ import print_function
 from acq4.util import Qt
-from . import QueryTemplate
+
+Ui_QueryTemplate = Qt.importTemplate('.QueryTemplate')
 
 
 class DatabaseQueryWidget(Qt.QWidget):
@@ -10,7 +11,7 @@ class DatabaseQueryWidget(Qt.QWidget):
     def __init__(self, dm):  ## datamanager tells us which DB is currently loaded.
         Qt.QWidget.__init__(self)
         self.dm = dm
-        self.ui = QueryTemplate.Ui_Form()
+        self.ui = Ui_QueryTemplate()
         self.ui.setupUi(self)
         self._table = None ## for storing results of queries
         self.dbChanged()

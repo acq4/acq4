@@ -7,14 +7,15 @@ import acq4.pyqtgraph as pg
 from acq4.util.metaarray import MetaArray
 import numpy as np
 
-from . import ctrlTemplate
+Ui_Form = Qt.importTemplate('.ctrlTemplate')
+
 
 class AtlasBuilder(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
         self.ctrlWidget = Qt.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl = Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         
         ## Setup basic GUI

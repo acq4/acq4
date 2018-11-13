@@ -6,9 +6,11 @@ from acq4.devices.Device import TaskGui
 from acq4.util.SequenceRunner import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 import numpy
-from .TaskTemplate import *
 from acq4.util.debug import *
 import sip
+
+Ui_Form = Qt.importTemplate('.TaskTemplate')
+
 
 class MultiClampTaskGui(TaskGui):
     

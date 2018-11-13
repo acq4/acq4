@@ -16,28 +16,22 @@ Refactoring begun 3/21/2015
 from collections import OrderedDict
 import os
 import os.path
-# import traceback
 import itertools
 import functools
-# import gc
 import numpy as np
 import scipy
-
 from acq4.util import Qt
-
-# from acq4.util import DataManager
 from acq4.analysis.AnalysisModule import AnalysisModule
-
 import acq4.pyqtgraph as pg
-# from acq4.pyqtgraph import configfile
-# from acq4.util.metaarray import MetaArray
 import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import acq4.analysis.tools.ScriptProcessor as ScriptProcessor
-from . import ctrlTemplate
 import pprint
 import time
+
+Ui_Form = Qt.importTemplate('.ctrlTemplate')
+
 
 # noinspection PyPep8
 class IVCurve(AnalysisModule):
@@ -111,7 +105,7 @@ class IVCurve(AnalysisModule):
         # --------------graphical elements-----------------
         self._sizeHint = (1280, 900)  # try to establish size of window
         self.ctrlWidget = Qt.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl = Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output

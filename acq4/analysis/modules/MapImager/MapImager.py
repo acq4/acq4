@@ -8,7 +8,6 @@ from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
 import acq4.util.functions as fn
-#import CellHealthCtrlTemplate
 from acq4.util.HelpfulException import HelpfulException
 from acq4.pyqtgraph.widgets.FileDialog import FileDialog
 import sys
@@ -21,12 +20,7 @@ from acq4.util.ContourPlotter.ContourPlotter import ContourPlotter
 import acq4.util.debug as debug
 
 
-
-
-
-class MapImager(AnalysisModule):
-    
-    
+class MapImager(AnalysisModule):    
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         self.dbIdentity = 'MapImager' ## how we identify to the database; this determines which tables we own

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from .DataManagerTemplate import *
 from acq4.modules.Module import *
 from acq4.util.DataManager import *
 import os, re, sys, time
@@ -11,6 +10,10 @@ from . import FileLogView
 from acq4.pyqtgraph import FileDialog
 from acq4.Manager import logMsg, logExc
 from acq4.util.StatusBar import StatusBar
+from acq4.util import Qt
+
+Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
+
 
 
 class Window(Qt.QMainWindow):

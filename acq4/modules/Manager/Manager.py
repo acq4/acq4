@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.modules.Module import *
-from .ManagerTemplate import Ui_MainWindow
 from acq4.util import Qt
 import sys, os
 import acq4.util.configfile as configfile
 from acq4.util.debug import *
 from acq4 import modules
+
+Ui_MainWindow = Qt.importTemplate('.ManagerTemplate')
 
 
 class Manager(Module):

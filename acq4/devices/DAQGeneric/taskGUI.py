@@ -2,7 +2,6 @@
 from __future__ import print_function
 from acq4.util import Qt
 import sys
-from .TaskTemplate import *
 from .DaqChannelGui import *
 from acq4.devices.Device import TaskGui
 from acq4.util.SequenceRunner import *
@@ -12,9 +11,10 @@ import numpy
 import weakref
 from acq4.util.debug import *
 
+Ui_Form = Qt.importTemplate('.TaskTemplate')
+
+
 class DAQGenericTaskGui(TaskGui):
-    
-    #sigSequenceChanged = Qt.Signal(object)  ## defined upstream
     
     def __init__(self, dev, task, ownUi=True):
         TaskGui.__init__(self, dev, task)

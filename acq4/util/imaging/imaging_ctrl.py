@@ -3,9 +3,10 @@ from __future__ import print_function
 from acq4.util import Qt
 from acq4 import pyqtgraph as pg
 from .frame_display import FrameDisplay
-from .imaging_template import Ui_Form
 from .record_thread import RecordThread
 from acq4.util.debug import printExc
+
+Ui_Form = Qt.importTemplate('.imaging_template')
 
 
 class ImagingCtrl(Qt.QWidget):
@@ -201,22 +202,10 @@ class ImagingCtrl(Qt.QWidget):
         printExc("Recording failed! See console for error message.")
 
     def quit(self):
-        try:
-            self.recordThread.finished.disconnect(self.recordThreadStopped)
-        except TypeError:
-            pass
-        try:
-            self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
-        except TypeError:
-            pass
-        try:
-            self.recordThread.sigRecordingFinished.disconnect(self.recordFinished)
-        except TypeError:
-            pass
-        try:
-            self.recordThread.finished.disconnect(self.recordThreadStopped)
-        except TypeError:
-            pass
+        Qt.disconnect(self.recordThread.finished, self.recordThreadStopped)
+        Qt.disconnect(self.recordThread.sigRecordingFailed, self.recordingFailed)
+        Qt.disconnect(self.recordThread.sigRecordingFinished, self.recordFinished)
+        Qt.disconnect(self.recordThread.finished, self.recordThreadStopped)
 
         self.recordThread.quit()
         self.frameDisplay.quit()
@@ -236,7 +225,7 @@ class ImagingCtrl(Qt.QWidget):
         for btn in [self.ui.acquireFrameBtn] + self.customButtons[0]:
             btn.setEnabled(False)
 
-    def acquireVideoClicked(self, b, name=None):
+    def acquireVideoClicked(self, b=None, name=None):
         if name is not None or self.ui.acquireVideoBtn.isChecked():
             self.sigStartVideoClicked.emit(name)
         else:

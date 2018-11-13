@@ -30,7 +30,7 @@ class Stage(Device, OptomechDevice):
 
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = Qt.QMatrix4x4(self.deviceTransform())
+        self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
         self._inverseBaseTransform = None
 
         self._stageTransform = Qt.QMatrix4x4()
@@ -234,7 +234,7 @@ class Stage(Device, OptomechDevice):
         This sets the starting position and orientation of the stage before the 
         hardware-reported stage position is taken into account.
         """
-        self._baseTransform = Qt.QMatrix4x4(tr)
+        self._baseTransform = tr * 1  # *1 makes a copy
         self._inverseBaseTransform = None
         self._updateTransform()
 

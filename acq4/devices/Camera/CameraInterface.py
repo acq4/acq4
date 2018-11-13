@@ -11,10 +11,11 @@ import scipy.ndimage
 from acq4.util.debug import printExc, Profiler
 from acq4.util.metaarray import *
 import acq4.Manager as Manager
-from .CameraInterfaceTemplate import Ui_Form as CameraInterfaceTemplate
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.util.imaging import ImagingCtrl
 from acq4.modules.Camera import CameraModuleInterface
+
+CameraInterfaceTemplate = Qt.importTemplate('.CameraInterfaceTemplate')
 
 
 class CameraInterface(CameraModuleInterface):

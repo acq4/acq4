@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from .RackTemplate import *
 from acq4.util import Qt
 import acq4.pyqtgraph as pg
+
+Ui_Form = Qt.importTemplate('.RackTemplate')
 
 
 class MCDeviceGui(Qt.QWidget):

@@ -1,24 +1,16 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
 from acq4.util.Mutex import Mutex
-#from acq4.devices.Device import *
 from acq4.util import Qt
 import time
 import numpy as np
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from acq4.util.debug import printExc
-from .devGuiTemplate import *
 
-
-
-        #GainChannel: 'DAQ', '/Dev1/ai14'
-        #LPFchannel: 'DAQ', '/Dev1/ai15'
-        #VCommand: 'DAQ', '/Dev1/ao0'
-        #ScaledSignal: 'DAQ', '/Dev1/ai5'
+Ui_devGui = Qt.importTemplate('.devGuiTemplate')
 
 
 class AP200DataMapping(DataMapping):

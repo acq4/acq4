@@ -39,10 +39,6 @@ import PIL as Image
 from acq4.util.metaarray import MetaArray
 import numpy as np
 import scipy
-from . import ctrlTemplate
-import ctrlROIsTemplate
-import ctrlAnalysisTemplate
-import ctrlPhysiologyTemplate
 from acq4.analysis.tools import Utility
 from acq4.analysis.tools import Fitting
 from acq4.analysis.tools import PlotHelpers as PH  # matlab plotting helpers
@@ -58,7 +54,6 @@ try:
 except:
     openCVInstalled = False
     
-#import smc as SMC # Vogelstein's OOPSI analysis for calcium transients
 
 import pylab as PL
 #from mpl_toolkits.axes_grid1 import AxesGrid
@@ -66,6 +61,11 @@ import pylab as PL
 #
 # We use matplotlib/pylab for *some* figure generation.
 #
+Ui_Ctrl = Qt.importTemplate('.ctrlTemplate')
+Ui_ROIs = Qt.importTemplate('.ctrlROIsTemplate')
+Ui_Analysis = Qt.importTemplate('.ctrlAnalysisTemplate')
+Ui_Physiology = Qt.importTemplate('.ctrlPhysiologyTemplate')
+
 
 class pbm_ImageAnalysis(AnalysisModule):
     def __init__(self, host, flowchartDir=None, dbIdentity="ImageAnalysis"):
@@ -128,19 +128,19 @@ class pbm_ImageAnalysis(AnalysisModule):
         self._sizeHint = (1280, 900)   # try to establish size of window
 
         self.ctrlWidget = Qt.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl = Ui_Ctrl()
         self.ctrl.setupUi(self.ctrlWidget)
         
         self.ctrlROIFuncWidget = Qt.QWidget()
-        self.ctrlROIFunc = ctrlROIsTemplate.Ui_Form()
+        self.ctrlROIFunc = Ui_ROIs()
         self.ctrlROIFunc.setupUi(self.ctrlROIFuncWidget)
 
         self.ctrlImageFuncWidget = Qt.QWidget()
-        self.ctrlImageFunc = ctrlAnalysisTemplate.Ui_Form()
+        self.ctrlImageFunc = Ui_Analysis()
         self.ctrlImageFunc.setupUi(self.ctrlImageFuncWidget)
         
         self.ctrlPhysFuncWidget = Qt.QWidget()
-        self.ctrlPhysFunc = ctrlPhysiologyTemplate.Ui_Form()
+        self.ctrlPhysFunc = Ui_Physiology()
         self.ctrlPhysFunc.setupUi(self.ctrlPhysFuncWidget)
         
         self.initDataState()

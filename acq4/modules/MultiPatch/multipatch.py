@@ -9,8 +9,8 @@ from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 import acq4.pyqtgraph as pg
 
-from .multipatchTemplate import Ui_MultiPatch
-from .pipetteTemplate import Ui_PipetteControl
+Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
+Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
 
 class MultiPatch(Module):

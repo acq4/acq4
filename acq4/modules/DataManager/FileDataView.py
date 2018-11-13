@@ -3,13 +3,11 @@ from __future__ import print_function
 
 from acq4.util import Qt
 from acq4.util.DataManager import *
-#import acq4.Manager as Manager
 import acq4.pyqtgraph as pg
-#from acq4.pyqtgraph.MultiPlotWidget import MultiPlotWidget
-#from acq4.pyqtgraph.ImageView import ImageView
 from acq4.util.DictView import *
 import acq4.util.metaarray as metaarray
 import weakref
+
 
 class FileDataView(Qt.QSplitter):
     def __init__(self, parent):

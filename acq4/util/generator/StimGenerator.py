@@ -16,16 +16,17 @@ import numpy as np
 from acq4.util import Qt
 from collections import OrderedDict
 import acq4.util.functions as fn
-from .GeneratorTemplate import *
 from . import waveforms
 from acq4.util.debug import *
 
-#from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 from .StimParamSet import StimParamSet
 from .SeqParamSet import SequenceParamSet
 import six
 
 import acq4.util.units as units
+
+Ui_Form = Qt.importTemplate('.GeneratorTemplate')
+
 
 class StimGenerator(Qt.QWidget):
     
@@ -36,8 +37,6 @@ class StimGenerator(Qt.QWidget):
     
     def __init__(self, parent=None):
         Qt.QWidget.__init__(self, parent)
-        #self.timeScale = 1.0
-        #self.scale = 1.0
         self.offset = 0.0
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -53,8 +52,6 @@ class StimGenerator(Qt.QWidget):
         self.cache = {}       ## cached waveforms
         self.cacheRate = None
         self.cacheNPts = None
-
-        
         
         self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
                        ## mostly information useful in configuring SpinBoxes
@@ -106,28 +103,6 @@ class StimGenerator(Qt.QWidget):
     def widgetGroupInterface(self):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
 
-    #def setTimeScale(self, s):
-        #"""Set the scale factor for X axis. See setScale for description."""
-        #if self.timeScale != s:
-            #self.timeScale = s
-            #self.clearCache()
-            #self.autoUpdate()
-
-    #def setScale(self, s):
-        #"""Set the scale factor to be applied to all generated data.
-        #This allows, for example, to write waveform functions with values
-        #in units of mV and have the resulting data come out in units of V.
-           #pulse(10, 10, 100) => gives pulse 100 units tall, but a scale
-                                 #factor of 1e-3 converts it to 0.1 units
-        #This should become obsolete--instead we would write the function like
-           #pulse(10*ms, 10*ms, 100*mV)
-        #This is more verbose but far less ambiguous.
-        #"""
-        #if self.scale != s:
-            #self.scale = s
-            #self.clearCache()
-            #self.autoUpdate()
-
     def setOffset(self, o):
         """Set the offset to be added to all generated data.
         This allows, for example, writing a pulse waveform such that 0 is 
@@ -168,19 +143,6 @@ class StimGenerator(Qt.QWidget):
     def autoUpdateClicked(self):
         self.autoUpdate()
         self.sigStateChanged.emit()        
-
-    #def errorBtnClicked(self, b):
-        #self.updateWidgets()
-        ##if b:  ## resize error text box if it is too small
-            ##height = self.ui.advSplitter.height()
-            ##sizes = self.ui.advSplitter.sizes()
-            ##if sizes[2] < height/3.:
-                ##diff = (height/3.) - sizes[2]
-                ##sizes[2] = height/3.
-                ##r = float(sizes[0]) / (sizes[0]+sizes[1])
-                ##sizes[0] -= diff * r 
-                ##sizes[1] -= diff * (1-r)
-                ##self.ui.advSplitter.setSizes(sizes)
 
     def forceSimpleClicked(self):
         self.ui.advancedBtn.setChecked(False)

@@ -9,7 +9,6 @@ if __name__ == "__main__":
     sys.path = [os.path.join(d,'lib','util')] + sys.path + [d]
 
 from acq4.util import Qt
-from . import LogWidgetTemplate
 from acq4.pyqtgraph import FeedbackButton
 import acq4.util.configfile as configfile
 from acq4.util.DataManager import DirHandle
@@ -20,11 +19,11 @@ from acq4.pyqtgraph import FileDialog
 from acq4.util.debug import printExc
 import six
 import weakref
-import re
+import os, re
 
-#from acq4.Manager import getManager
 
-#WIN = None
+LogWidgetTemplate = Qt.loadUiType(os.path.join(os.path.dirname(__file__), 'LogWidgetTemplate.ui'))[0]
+
 
 Stylesheet = """
     body {color: #000; font-family: sans;}
@@ -336,7 +335,7 @@ class LogWidget(Qt.QWidget):
     
     def __init__(self, parent, manager):
         Qt.QWidget.__init__(self, parent)
-        self.ui = LogWidgetTemplate.Ui_Form()
+        self.ui = LogWidgetTemplate()
         self.manager = manager
         self.ui.setupUi(self)
         #self.ui.input.hide()

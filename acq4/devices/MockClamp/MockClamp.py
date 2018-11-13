@@ -4,16 +4,17 @@ from __future__ import print_function
 from __future__ import with_statement
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.util.Mutex import Mutex
-#from acq4.devices.Device import *
 from acq4.util import Qt
 import time
 import numpy as np
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from acq4.util.debug import printExc
-from .devTemplate import *
 import subprocess, pickle, os
 import acq4.pyqtgraph.multiprocess as mp
+
+Ui_MockClampDevGui = Qt.importTemplate('.devTemplate')
+
 
 ivModes = {'i=0':'ic', 'vc':'vc', 'ic':'ic'}
 modeNames = ['vc', 'i=0', 'ic']
@@ -69,7 +70,6 @@ class MockClamp(DAQGeneric):
         
     def deviceInterface(self, win):
         return MockClampDevGui(self)
-        
         
     def setHolding(self, mode=None, value=None, force=False):
         global ivModes

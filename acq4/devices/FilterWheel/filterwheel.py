@@ -1,22 +1,20 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtTest
 from acq4.devices.OptomechDevice import OptomechDevice
-from .FilterWheelTaskTemplate import Ui_Form
 from acq4.devices.Microscope import Microscope
 from acq4.util.SequenceRunner import SequenceRunner
 from acq4.devices.Device import *
 from acq4.devices.Device import TaskGui
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from acq4.util import Qt
 import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
 import time
 from collections import OrderedDict
+from acq4.util import Qt
 
+Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
 
-# Changes:
-#  signal signatures changed
-# Filter is just object, not OptoMech
 
 class FilterWheel(Device, OptomechDevice):
     """Optical filter wheel device for swapping FilterSet devices.
@@ -41,14 +39,14 @@ class FilterWheel(Device, OptomechDevice):
                 2: "EYFP_FilterCube"
     """
     
-    sigFilterChanged = QtCore.Signal(object, object)  # self, Filter
-    sigFilterWheelSpeedChanged = QtCore.Signal(object, object)  # self, speed
+    sigFilterChanged = Qt.Signal(object, object)  # self, Filter
+    sigFilterWheelSpeedChanged = Qt.Signal(object, object)  # self, speed
     
     def __init__(self, dm, config, name):
         
         Device.__init__(self, dm, config, name)
         
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QMutex.Recursive)
         
         self._filters = OrderedDict()
         self._slotNames = OrderedDict()
@@ -277,7 +275,7 @@ class FilterWheelFuture(object):
             if self.isDone():
                 break
             if updates is True:
-                QtTest.QTest.qWait(100)
+                Qt.QTest.qWait(100)
             else:
                 time.sleep(0.1)
         
@@ -410,25 +408,25 @@ class FilterWheelTaskGui(TaskGui):
         return self.filterList
             
 
-class FilterWheelDevGui(QtGui.QWidget):
+class FilterWheelDevGui(Qt.QWidget):
     def __init__(self, dev):
-        QtGui.QWidget.__init__(self)
+        Qt.QWidget.__init__(self)
         self.dev = dev
 
-        self.layout = QtGui.QGridLayout()
+        self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
 
-        self.positionBtnLayout = QtGui.QGridLayout()
+        self.positionBtnLayout = Qt.QGridLayout()
         self.layout.addLayout(self.positionBtnLayout, 0, 0)
         self.positionBtnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.positionGroup = QtGui.QButtonGroup()
+        self.positionGroup = Qt.QButtonGroup()
         self.positionButtons = []
         cols = 3
         slotNames = self.dev.slotNames()
         for i in range(self.dev.getPositionCount()):
             name = slotNames[i]
-            btn = QtGui.QPushButton("%d: %s" % (i, name))
+            btn = Qt.QPushButton("%d: %s" % (i, name))
             btn.setCheckable(True)
             btn.filterPosition = i
             self.positionButtons.append(btn)

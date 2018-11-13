@@ -4,16 +4,17 @@ from __future__ import division
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from acq4.util import Qt
-from .imagingTemplate import Ui_Form
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
 import acq4.util.metaarray as metaarray
 from acq4.devices.Microscope import Microscope
 from acq4.util.HelpfulException import HelpfulException
-# import acq4.devices.Scanner.ScanUtilityFuncs as SUFA
 from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.pyqtgraph.parametertree import ParameterTree, Parameter
+
+Ui_Form = Qt.importTemplate('.imagingTemplate')
+
 
 class ImagingModule(AnalysisModule):
     def __init__(self, *args):

@@ -8,13 +8,13 @@ labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from acq4.util import Qt
 import acq4.pyqtgraph as pg
-#import acq4.pyqtgraph.ColorButton as ColorButton
-#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
 import numpy as np
-import builderTemplate
 import acq4.util.metaarray as metaarray
 import acq4.util.debug as debug
 import user
+
+Ui_Form = Qt.importTemplate('.builderTemplate')
+
 
 Qt.QApplication.setGraphicsSystem('raster')
 app = Qt.QApplication([])
@@ -22,7 +22,7 @@ app = Qt.QApplication([])
 win = Qt.QMainWindow()
 cw = Qt.QWidget()
 win.setCentralWidget(cw)
-ui = builderTemplate.Ui_Form()
+ui = Ui_Form()
 ui.setupUi(cw)
 win.show()
 win.resize(800,600)

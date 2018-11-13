@@ -9,11 +9,13 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
 import os, time
-from . import devTemplate
 import acq4.pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 import six
+from acq4.util import Qt
+
+Ui_Form = Qt.importTemplate('.devTemplate')
 
 
 class SutterMP285(Device, OptomechDevice):
@@ -157,12 +159,11 @@ class SutterMP285(Device, OptomechDevice):
 class SMP285Interface(Qt.QWidget):
     def __init__(self, dev, win):
         Qt.QWidget.__init__(self)
-        self.ui = devTemplate.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)
         
         self.win = win
         self.dev = dev
-        #Qt.QObject.connect(self.dev, Qt.SIGNAL('positionChanged'), self.update)
         self.dev.sigPositionChanged.connect(self.update)
         self.update()
         
@@ -189,7 +190,6 @@ class SMP285Interface(Qt.QWidget):
                 self.limitSpins[axis][limit].valueChanged.connect(mkLimitCallback(self.updateLimit, axis, limit))
                 self.limitChecks[axis][limit].toggled.connect(mkLimitCallback(self.enableLimit, axis, limit))
                 pos, enabled = self.dev.limits[axis][limit]
-                #self.limitLabels[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
                 self.limitSpins[axis][limit].setValue(pos)
                 self.limitChecks[axis][limit].setChecked(enabled)
         
@@ -199,29 +199,23 @@ class SMP285Interface(Qt.QWidget):
         self.ui.joyBtn.sigStateChanged.connect(self.joyStateChanged)
         self.ui.coarseStepRadio.toggled.connect(self.resolutionChanged)
         self.ui.fineStepRadio.toggled.connect(self.resolutionChanged)
-
         
     def getLimit(self, axis, limit):
         ## called when the limit buttons are pressed in the GUI - gets limit and stores in the spin box
         pos = self.dev.getPosition()[axis]
         self.limitSpins[axis][limit].setValue(pos)
         self.updateLimit(axis, limit)
-        #self.dev.setLimit(axis, limit, val=pos)
-        #self.limitChecks[axis][limit].setChecked(True)
 
     def updateLimit(self, axis, limit):
         ## called when the limit buttons are pressed in the GUI
         pos = self.limitSpins[axis][limit].value() 
-        #self.dev.getPosition()[axis]
         self.dev.setLimit(axis, limit, val=pos)
         self.limitChecks[axis][limit].setChecked(True)
-        
 
     def enableLimit(self, axis, limit):
         ## called when the limit checks are toggled in the GUI
         en = self.limitChecks[axis][limit].isChecked()
         self.dev.setLimit(axis, limit, enabled=en)
-        
         
     def maxSpeedChanged(self):
         self.dev.setMaxSpeed(self.ui.maxSpeedSpin.value())
@@ -231,8 +225,6 @@ class SMP285Interface(Qt.QWidget):
         
     def update(self):
         pos = self.dev.getPosition()
-        #for i in [0,1,2]:
-            #if pos[i] < self.limit
 
         text = [pg.siFormat(x, suffix='m', precision=5) for x in pos]
         self.ui.xPosLabel.setText(text[0])
@@ -240,18 +232,18 @@ class SMP285Interface(Qt.QWidget):
         self.ui.zPosLabel.setText(text[2])
 
     def updateClicked(self):
-        # self.dev.mThread.updatePos()
         self.dev.getPosition(refresh=True)
         
     def joyStateChanged(self, btn, v):
         ms = self.ui.maxSpeedSpin.value()
         self.dev.mThread.setVelocity([v[0]*ms, v[1]*ms, 0])
 
+
 class TimeoutError(Exception):
     pass
-        
-class SutterMP285Thread(Thread):
 
+
+class SutterMP285Thread(Thread):
     sigPositionChanged = Qt.Signal(object)
     sigError = Qt.Signal(object)
 
@@ -261,19 +253,13 @@ class SutterMP285Thread(Thread):
         self.scale = scale
         self.mp285 = driver
         self.driverLock = driverLock
-        #self.monitor = True
         self.update = False
         self.resolution = 'fine'
         self.dev = dev
-        #self.port = port
-        #self.pos = [0, 0, 0]
-        #self.baud = baud
         self.velocity = [0,0,0]
         self.limits = deepcopy(limits)
         self.limitChanged = False
         self.maxSpeed = maxSpd
-        
-        #self.posxyz = [ 0, 0, 0]
         
     def setResolution(self, res):
         with self.lock:
@@ -288,9 +274,6 @@ class SutterMP285Thread(Thread):
         with self.lock:
             self.maxSpeed = s
             
-    #def setMonitor(self, mon):
-        #with self.lock:
-            #self.monitor = mon
     def updatePos(self):
         with self.lock:
             self.update = True
@@ -301,16 +284,7 @@ class SutterMP285Thread(Thread):
         
     def run(self):
         self.stopThread = False
-        #self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
-        #time.sleep(3) ## Wait a few seconds for the mouse to say hello
-        ## clear buffer before starting
-        #if self.sp.inWaiting() > 0:
-            #print "Discarding %d bytes" % self.sp.inWaiting()
-            #self.sp.read(self.sp.inWaiting())
-        #import wingdbstub
         print("  Starting MP285 thread: 0x%x" % int(Qt.QThread.currentThreadId()))
-        #import sip
-        #print "    also known as 0x%x" % sip.unwrapinstance(self)
         velocity = np.array([0,0,0])
         pos = [0,0,0]
         

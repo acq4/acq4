@@ -3,12 +3,13 @@ from __future__ import print_function
 from acq4.modules.TaskRunner.analysisModules import AnalysisModule
 from acq4.Manager import getManager
 from acq4.util import Qt
-from .UncagingTemplate import Ui_Form
-#from acq4.pyqtgraph import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
 from acq4.util.metaarray import MetaArray
 from acq4.util.debug import *
+
+Ui_Form = Qt.importTemplate('.UncagingTemplate')
+
 
 class UncagingModule(AnalysisModule):
     def __init__(self, *args):

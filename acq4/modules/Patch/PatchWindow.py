@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from .PatchTemplate import *
 from acq4.util import Qt
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
@@ -16,6 +15,8 @@ from acq4.pyqtgraph import siFormat
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
 from acq4.util.StatusBar import StatusBar
+
+Ui_Form = Qt.importTemplate('.PatchTemplate')
 
 
 class PatchWindow(Qt.QMainWindow):

@@ -3,13 +3,15 @@ from __future__ import print_function
 from acq4.devices.OptomechDevice import *
 from acq4.devices.LightSource import LightSource
 from acq4.devices.Stage import Stage
-from .deviceTemplate import Ui_Form
 from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.debug import printExc
 from acq4.Manager import getManager
 import acq4.pyqtgraph as pg
+from acq4.util import Qt
 import collections
+
+Ui_Form = Qt.importTemplate('.deviceTemplate')
 
 
 class Microscope(Device, OptomechDevice):

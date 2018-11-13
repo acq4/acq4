@@ -4,10 +4,12 @@ from acq4.util import Qt
 from collections import OrderedDict
 from .Map import Map
 import acq4.util.DatabaseGui as DatabaseGui
-from . import MapCtrlTemplate
 from acq4.Manager import logMsg, logExc
 import acq4.pyqtgraph as pg
 import os
+
+Ui_Form = Qt.importTemplate('.MapCtrlTemplate')
+
 
 class DBCtrl(Qt.QWidget):
     """GUI for reading and writing to the database."""
@@ -32,9 +34,8 @@ class DBCtrl(Qt.QWidget):
         self.layout.addWidget(self.dbgui)
         for name in ['getTableName', 'getDb']:
             setattr(self, name, getattr(self.dbgui, name))
-        #self.scanTree = TreeWidget.TreeWidget()
-        #self.layout.addWidget(self.scanTree)
-        self.ui = MapCtrlTemplate.Ui_Form()
+
+        self.ui = Ui_Form()
         self.mapWidget = Qt.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
@@ -66,8 +67,6 @@ class DBCtrl(Qt.QWidget):
     def scanTreeItemChanged(self, item, col):
         item.changed(col)
         
-        
-        
     def newMap(self, rec=None):
         m = Map(self.host, rec)
         self.maps.append(m)
@@ -77,7 +76,6 @@ class DBCtrl(Qt.QWidget):
 
     def mapItemChanged(self, item, col):
         self.writeMapRecord(item.map)
-        
 
     def writeMapRecord(self, map):
         dbui = self.host.getElement('Database')
@@ -89,15 +87,11 @@ class DBCtrl(Qt.QWidget):
         table = dbui.getTableName(ident)
         
         rec = map.getRecord()
-        #if cell is not None:
-            #pt, rid = db.addDir(cell)
-            #rec['cell'] = rid
+
         if rec['cell'] is None:
             return
         cell = rec['cell']
-        
-        #fields = db.describeData(rec)
-        #fields['cell'] = 'int'
+
         db.checkTable(table, ident, Map.mapFields, create=True)
         
         if map.rowID is None:
@@ -127,7 +121,6 @@ class DBCtrl(Qt.QWidget):
         db.delete(table, where={'rowid':rowID})
         
         self.host.unregisterMap(map)
-        
 
     def listMaps(self, cells):
         """List all maps associated with the file handle for each cell in a list"""
@@ -148,10 +141,6 @@ class DBCtrl(Qt.QWidget):
             if db.tableOwner(table) != ident:
                 raise Exception("Table %s not owned by %s" % (table, ident))
             
-            #row = db.getDirRowID(cell)
-            #if row is None:
-                #return
-                
             maps = db.select(table, ['rowid','*'], where={'cell': cell})
             #print maps
             for rec in maps:
