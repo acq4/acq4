@@ -88,7 +88,7 @@ class _StringIO(object):
         return ''.join(map(asUnicode, self.data)).encode('utf8')
 
     
-def _loadUiType(uiFile, package=None):
+def loadUiType(uiFile, package=None):
     """
     PySide lacks a "loadUiType" command like PyQt4's, so we have to convert
     the ui file to py code in-memory first and then execute it in a
@@ -101,8 +101,12 @@ def _loadUiType(uiFile, package=None):
     """
     if QT_LIB == PYSIDE:
         from pysideuic import compileUi
-    else:
+    elif QT_LIB == PYSIDE2:
         from pyside2uic import compileUi
+    elif QT_LIB == PYQT4:
+        from PyQt4.uic import compileUi
+    elif QT_LIB == PYQT5:
+        from PyQt5.uic import compileUi
 
     import xml.etree.ElementTree as xml
     
@@ -285,8 +289,6 @@ if QT_LIB in [PYQT5, PYSIDE2]:
 # Common to PySide and PySide2
 if QT_LIB in [PYSIDE, PYSIDE2]:
     QtVersion = QtCore.__version__
-    
-    loadUiType = _loadUiType
         
     # PySide does not implement qWait
     if not isinstance(QtTest, FailedImport):
@@ -307,8 +309,6 @@ if QT_LIB in [PYQT4, PYQT5]:
     import sip
     def isQObjectAlive(obj):
         return not sip.isdeleted(obj)
-    
-    loadUiType = uic.loadUiType
 
     QtCore.Signal = QtCore.pyqtSignal
     
