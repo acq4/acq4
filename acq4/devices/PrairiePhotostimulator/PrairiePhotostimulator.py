@@ -95,7 +95,6 @@ class PrairiePhotostimulator(Device, OptomechDevice):
 
 
 class PrairiePhotostimModGui(QtGui.QWidget):
-
     def __init__(self, dev, parent):
         QtGui.QWidget.__init__(self, parent)
 
@@ -130,7 +129,6 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
         self.stimPoints = []
         self.counter = 0
-        #self.ui.iterationsSpin.setValue(1)
 
         self.parent().prairieImagerDevice.sigNewFrame.connect(self.newFrame)
         self.dev.scopeDevice().sigGlobalTransformChanged.connect(self.updatePoints)
@@ -312,7 +310,7 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
 
 class Photostimulation():
-
+    """A data modelling class that represents a single focal photostimulation."""
     def __init__(self, stimPoint, laserPower, laserDuration, shape):
         self.stimPoint = stimPoint
         self.stimPointID = stimPoint.id
