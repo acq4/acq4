@@ -129,6 +129,8 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
         self.stimPoints = []
         self.counter = 0
+        self.lastFrame = None
+        self.ui.markPointsBtn.setEnabled(False)
 
         self.parent().prairieImagerDevice.sigNewFrame.connect(self.newFrame)
         self.dev.scopeDevice().sigGlobalTransformChanged.connect(self.updatePoints)
@@ -149,6 +151,13 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         self.updatePoints()
         return sp.graphicsItem
 
+    def clearPoints(self):
+        self.ui.pointsParamTree.clear()
+        for pt in self.stimPoints:
+            pt.graphicsItem.scene().removeItem(pt.graphicsItem)
+
+        self.stimPoints = []
+
     def getNextName(self):
         self.counter += 1
         return ("Point", self.counter)
@@ -158,6 +167,7 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         return self._activePoints
 
     def newFrame(self, frame):
+        self.ui.markPointsBtn.setEnabled(True)
         self.lastFrame = frame
         self.updatePoints()
 
@@ -292,35 +302,6 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
 
 
-
-        
-
-        return d
-
-    #frame = man.getModule('PrairieViewStimulator').window().interface.lastFrame
-
-    # def stimulate(self, pt):
-    #     pos = mapToPrairie(pt.getPos())
-    #     laserPower = self.spiralParams['laser power']
-    #     size = self.spiralParams['size']
-    #     spiralSize = self.mapToPrairie((size, size))[0]
-    #     revolutions = self.spiralParams['spiral revolutions']
-    #     duration = self.spiralParams['duration']*1000
-    #     self.dev.stimulate(pos, laserPower, duration, spiralSize, revolutions)
-
-
-
-
-
-#class Photostimulation():
-
-#    def __init__(self, stimPoint, laserPower, laserDuration, shape):
-#        self.stimPoint = stimPoint
-#        self.stimPointID = stimPoint.id
-#        self.pos = self.stimPoint.getPos()
-#        self.laserPower = laserPower
-#        self.laserDuration = laserDuration
-#        self.shape = shape
 
 class Photostimulation():
     """A data modelling class that represents a single focal photostimulation."""
