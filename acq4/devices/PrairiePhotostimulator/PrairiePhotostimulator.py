@@ -231,17 +231,25 @@ class PrairiePhotostimModGui(QtGui.QWidget):
             f.write(json.dumps(pts))
 
     def reloadCache(self, view=None):
+        if self.lastFrame is None:
+            raise Exception("Cannot load points without frame from PrairieImager for reference.")
 
         with open(self.cacheFile, 'rb') as f:
             pts = json.loads(f.read())
 
-        for pt in pts:
-            id, pos = pt
-            point = StimulationPoint('Point', id, pos[:-1], pos[-1])
-            self.addStimPoint(pos[:-1], point)
-            if view is not None:
-                view.addItem(point.graphicsItem)
-
+        try:
+            self.clearPoints()
+            for pt in pts:
+                id, pos = pt
+                point = StimulationPoint('Point', id, pos[:-1], pos[-1])
+                self.addStimPoint(pos[:-1], point)
+                if view is not None:
+                    view.addItem(point.graphicsItem)
+        except:
+            ## rewrite points into cache file so we don't lose them if there was an error in reloading them
+            with open(self.cacheFile, 'wb') as f:
+                f.write(json.dumps(pts))
+            raise
 
 
 
