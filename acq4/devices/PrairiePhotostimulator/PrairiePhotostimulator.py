@@ -160,6 +160,7 @@ class PrairiePhotostimModGui(QtGui.QWidget):
             pt.graphicsItem.scene().removeItem(pt.graphicsItem)
 
         self.stimPoints = []
+        self.counter = 0
 
     def getNextName(self):
         self.counter += 1
