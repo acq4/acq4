@@ -12,6 +12,7 @@ import os
 from collections import OrderedDict
 import numpy as np
 import acq4.util.units as units
+import json
 
 
 baseDicts = {
@@ -135,6 +136,8 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         self.parent().prairieImagerDevice.sigNewFrame.connect(self.newFrame)
         self.dev.scopeDevice().sigGlobalTransformChanged.connect(self.updatePoints)
 
+        self.cacheFile = os.path.join(os.path.dirname(__file__), 'photostimulationPoints_temp.cache')
+
 
     def addStimPoint(self, pos, stimulationPoint=None):
         name, itr = self.getNextName()
@@ -213,6 +216,32 @@ class PrairiePhotostimModGui(QtGui.QWidget):
 
             else:
                 print('Not sure how to update %s at %s, value %s' %(pt.name, str(pos), pt.params.value()))
+
+        if len(self.stimPoints) > 0: # don't overwrite cache when we reopen the module and load an image
+            self.saveCache()
+
+    def saveCache(self):
+
+        pts = []
+        for pt in self.stimPoints:
+            pts.append((pt.id, pt.getPos()))
+
+        with open(self.cacheFile, 'wb') as f:
+            f.write(json.dumps(pts))
+
+    def reloadCache(self, view=None):
+
+        with open(self.cacheFile, 'rb') as f:
+            pts = json.loads(f.read())
+
+        for pt in pts:
+            id, pos = pt
+            point = StimulationPoint('Point', id, pos[:-1], pos[-1])
+            self.addStimPoint(pos[:-1], point)
+            if view is not None:
+                view.addItem(point.graphicsItem)
+
+
 
 
     # # def createMarkPointsXML(self):
