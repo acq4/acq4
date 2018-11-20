@@ -249,6 +249,8 @@ class Stage(Device, OptomechDevice):
         current position is requested from the controller. If request is True,
         then the position request may block if the device is currently busy.
         """
+        if self._lastPos is None:
+            refresh = True
         if not refresh:
             with self.lock:
                 return self._lastPos[:]
