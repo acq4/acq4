@@ -208,26 +208,17 @@ class Pipette(Device, OptomechDevice):
             return self._calibratedPitch
 
     def yawRadians(self):
-        return self.yawAngle() * np.pi / 108.
+        return self.yawAngle() * np.pi / 180.
 
     def pitchRadians(self):
-        return self.pitchAngle() * np.pi / 108.    
+        return self.pitchAngle() * np.pi / 180.    
 
     def goHome(self, speed='fast'):
-        """Extract pipette tip diagonally, then move pipette far away from the objective.
-
-        This method currently makes several assumptions:
-
-        * The position [0, 0, 0] on the parent stage device is a suitable home position (usually true for MPC200 stages)
-        * The electrode is aligned with the x/z plane of the parent stage
+        """Extract pipette tip diagonally, then move stage to home position.
         """
         stage = self.parentDevice()
-        # stage's home position in local coords
-        # this assumes that [0, 0, 0] is a good home position, but 
-        # eventually this needs to be more configurable..
         stagePos = stage.globalPosition()
-
-        stageHome = stage.mapToGlobal(stage.mapFromStage([0, 0, 0]))
+        stageHome = stage.homePosition()
         globalMove = np.asarray(stageHome) - np.asarray(stagePos) # this is how much electrode should move in global coordinates
 
         startPosGlobal = self.globalPosition()
@@ -243,20 +234,19 @@ class Pipette(Device, OptomechDevice):
             waypoint = self.mapToGlobal([endPos[0], 0, dz])
             path = [
                 (waypoint, speed, True),
-                # (endPosGlobal, speed, False)
+                (endPosGlobal, speed, False)
             ]
         else:
             dx = -endPos[2] / np.tan(self.pitchRadians())
-            waypoint1 = self.mapToGlobal([dx, 0, endPos[2]])
-            waypoint2 = self.mapToGlobal([endPos[0], 0, endPos[2]])
+            waypoint = self.mapToGlobal([dx, 0, endPos[2]])
             if dx > 0:  # in case home z position is below the current z pos.
                 path = [
-                    (waypoint2, speed, False),
+                    (endPosGlobal, speed, False),
                 ]
             else:
                 path = [
-                    (waypoint1, speed, True),
-                    (waypoint2, speed, False),
+                    (waypoint, speed, True),
+                    (endPosGlobal, speed, False),
                 ]
 
         return self._movePath(path)
@@ -360,7 +350,7 @@ class Pipette(Device, OptomechDevice):
         for pos, speed, linear in path2:
             if fut is not None:
                 fut.wait(updates=True)
-            fut =self._moveToGlobal(pos, speed, linear=linear)
+            fut = self._moveToGlobal(pos, speed, linear=linear)
         return fut
     
     def _approachPath(self, target, speed):
