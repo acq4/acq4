@@ -102,10 +102,10 @@ class Sensapex(Stage):
             if self._lastPos is None:
                 dif = 1
             else:
-                dif = ((np.array(pos) - np.array(self._lastPos))**2).sum()**0.5
+                dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
-            if dif > 100e-9:
+            if dif > 100:
                 self._lastPos = pos
                 emit = True
             else:
