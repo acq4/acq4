@@ -237,8 +237,8 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
             pip.goApproach(speed)
-            pip.setState('approach')
             if isinstance(pip, PatchPipette):
+                pip.setState('approach')
                 pip.autoPipetteOffset()
 
     def moveToTarget(self):

@@ -229,7 +229,7 @@ class SensapexMoveFuture(MoveFuture):
         # did we reach target?
         pos = self.dev._getPosition()
         dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
-        if dif < 300:  # require 300nm accuracy
+        if dif < 3000:  # require 3um accuracy
             # reached target
             self._finished = True
             return 1
