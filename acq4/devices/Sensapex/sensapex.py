@@ -99,13 +99,11 @@ class Sensapex(Stage):
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
             pos = self.dev.get_pos(timeout=0)[:3]
-            if self._lastPos is None:
-                dif = 1
-            else:
+            if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
-            if dif > 100:
+            if self._lastPos is None or dif > 100:
                 self._lastPos = pos
                 emit = True
             else:
@@ -129,7 +127,7 @@ class Sensapex(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
-        Sensapex.devices.pop(self.devid)
+        Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
             UMP.get_ump().poller.stop()
         Stage.quit(self)
@@ -231,7 +229,7 @@ class SensapexMoveFuture(MoveFuture):
         # did we reach target?
         pos = self.dev._getPosition()
         dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
-        if dif < 2.5e-6:
+        if dif < 300:  # require 300nm accuracy
             # reached target
             self._finished = True
             return 1
