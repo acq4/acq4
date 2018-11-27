@@ -1,2 +1,2 @@
 from __future__ import print_function
-from .pipette import Pipette
+from .pipette import Pipette, PipetteDeviceGui
