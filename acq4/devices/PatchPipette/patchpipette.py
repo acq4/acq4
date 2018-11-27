@@ -235,7 +235,7 @@ class PatchPipetteDeviceGui(PipetteDeviceGui):
         self.cleanBtnLayout.addWidget(self.setCleanBtn)
         self.cleanBtnLayout.addWidget(self.setRinseBtn)
         row = self.layout.rowCount()
-        self.layout.addItem(self.cleanBtnLayout, row, 0)
+        self.layout.addLayout(self.cleanBtnLayout, row, 0)
 
         self.cleanBtn.clicked.connect(self.cleanClicked)
         self.setCleanBtn.clicked.connect(self.setCleanClicked)

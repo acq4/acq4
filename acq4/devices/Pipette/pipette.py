@@ -867,15 +867,16 @@ class PipetteDeviceGui(Qt.QWidget):
         self.setLayout(self.layout)
 
         self.posLabelLayout = Qt.QHBoxLayout()
-        self.layout.addItem(self.posLabelLayout, 0, 0)
+        self.layout.addLayout(self.posLabelLayout, 0, 0)
 
         self.posLabels = [Qt.QLabel(), Qt.QLabel(), Qt.QLabel()]
         for l in self.posLabels:
             self.posLabelLayout.addWidget(l)
 
         self.dev.sigGlobalTransformChanged.connect(self.pipetteMoved)
+        self.pipetteMoved()
 
     def pipetteMoved(self):
         pos = self.dev.globalPosition()
         for i in range(3):
-            self.posLabels[i] = "%0.3g um" % (pos[i] * 1e6)
+            self.posLabels[i].setText("%0.3g um" % (pos[i] * 1e6))
