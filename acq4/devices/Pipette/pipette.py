@@ -449,6 +449,17 @@ class Pipette(Device, OptomechDevice):
         dx = -dz / np.tan(self.pitchRadians())
         return self._moveToLocal([dx, 0, dz], speed, linear=True)
 
+    def retractFromSurface(self, speed='slow'):
+        """Retract the pipette along its axis until it is above the slice surface.
+        """
+        depth = self.globalPosition()[2]
+        appDepth = self.approachDepth()
+        if depth < appDepth:
+            return self.advance(appDepth, speed=speed)
+        else:
+            # just to make sure we always return a Future
+            return self.advance(depth, speed=speed)
+
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
 

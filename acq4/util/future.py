@@ -28,7 +28,7 @@ class Future(Qt.QObject):
     def currentState(self):
         return self._state
 
-    def _setState(self, state):
+    def setState(self, state):
         self._state = state
         self.sigStateChanged.emit(self, state)
 

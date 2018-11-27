@@ -129,6 +129,10 @@ class PatchPipette(Pipette):
         config = self.config.get('cleaning', {})
         return PatchPipetteCleanFuture(self, config)
 
+    def deviceInterface(self, win):
+        """Return a widget with a UI to put in the device rack"""
+        return PatchPipetteDeviceGui(self, win)
+
 
 class PatchPipetteCleanFuture(Future):
     """Tracks the progress of a patch pipette cleaning task.
@@ -153,26 +157,32 @@ class PatchPipetteCleanFuture(Future):
 
     def _clean(self):
         # Called in worker thread
-        config = self.config
+        config = self.config.copy()
+        dev = self.dev
         resetPos = None
+        print(config)
         try:
+            dev.retractFromSurface().wait()
+
             for stage in ('clean', 'rinse'):
+                print(stage)
                 self._checkStop()
 
                 sequence = config[stage + 'Sequence']
-                if len(sequence == 0):
+                if len(sequence) == 0:
+                    print("skip")
                     continue
                 pos = config[stage + 'Pos']
                 approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
 
-                self.dev.moveToGlobal(approachPos, 'fast').wait()
+                dev._moveToGlobal(approachPos, 'fast').wait()
                 self._checkStop()
                 resetPos = approachPos
-                self.dev.moveToGlobal(pos, 'fast').wait()
+                dev._moveToGlobal(pos, 'fast').wait()
                 self._checkStop()
 
                 for pressure, delay in sequence:
-                    self.dev.setPressure(pressure)
+                    dev.setPressure(pressure)
                     self._checkStop(delay)
 
         except self.StopRequested:
@@ -184,12 +194,12 @@ class PatchPipetteCleanFuture(Future):
             self._taskDone()
         finally:
             try:
-                self.dev.setPressure(0)
+                dev.setPressure(0)
             except Exception:
                 printExc("Error resetting pressure after clean")
             
             if resetPos is not None:
-                self.dev.moveToGlobal(resetPos)
+                dev._moveToGlobal(resetPos, 'fast')
 
 
 class PressureControl(Qt.QObject):
@@ -229,7 +239,7 @@ class PatchPipetteDeviceGui(PipetteDeviceGui):
         self.cleanBtn = Qt.QPushButton('Clean Pipette')
         self.setCleanBtn = Qt.QPushButton('Set Clean Pos')
         self.setRinseBtn = Qt.QPushButton('Set Rinse Pos')
-        self.cleanBtnLayout = Qt.HBoxLayout()
+        self.cleanBtnLayout = Qt.QHBoxLayout()
         self.cleanBtnLayout.addWidget(self.cleanBtn)
         self.cleanBtn.setCheckable(True)
         self.cleanBtnLayout.addWidget(self.setCleanBtn)
@@ -256,7 +266,7 @@ class PatchPipetteDeviceGui(PipetteDeviceGui):
         self.cleanBtn.setChecked(False)
 
     def setCleanClicked(self):
-        self.dev.storePosition('clean')
+        self.dev.savePosition('clean')
 
     def setRinseClicked(self):
-        self.dev.storePosition('rinse')
+        self.dev.savePosition('rinse')
