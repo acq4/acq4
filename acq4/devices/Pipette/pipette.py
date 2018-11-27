@@ -111,11 +111,11 @@ class Pipette(Device, OptomechDevice):
         cache[name] = list(pos)
         self.writeConfigFile(cache, 'stored_positions')
 
-    def loadPosition(self, name):
+    def loadPosition(self, name, default=None):
         """Return a previously saved position.
         """
         cache = self.readConfigFile('stored_positions')
-        return cache[name]
+        return cache.get(name, default)
 
     def scopeDevice(self):
         if self._scopeDev is None:

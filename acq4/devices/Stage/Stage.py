@@ -546,7 +546,6 @@ class MovePathFuture(object):
         self._wasInterrupted = False
         self._errorMessage = None
         self._stopped = False
-        self._finishEvent = threading.Event()
 
         self._moveThread = threading.Thread(target=self._movePath)
         self._moveThread.start()
@@ -598,9 +597,7 @@ class MovePathFuture(object):
 
     def _movePath(self):
         try:
-            print("Move path")
             for i, step in enumerate(self.path):
-                print(step)
                 fut = self.dev.move(**step)
                 fut._pathStep = i
                 self._currentFuture = fut
@@ -612,24 +609,20 @@ class MovePathFuture(object):
                     if self._stopped:
                         fut.stop()
                         break
-                print("step done")
                 
                 if self._stopped:
                     self._errorMessage = "Move was cancelled"
                     self._wasInterrupted = True
-                    print("stopped")
                     break
 
                 if fut.wasInterrupted():
                     self._errorMessage = fut.errorMessage()
                     self._wasInterrupted = True
-                    print("interrupted")
                     break
         except Exception as exc:
             self._errorMessage = "Error in path move thread: %s" % exc
             self._wasInterrupted = True
         finally:
-            print("done.")
             self._done = True
 
 

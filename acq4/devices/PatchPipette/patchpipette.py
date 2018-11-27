@@ -1,8 +1,11 @@
 from __future__ import print_function
+import time, threading
 from ..Pipette import Pipette, PipetteDeviceGui
 from acq4.util import Qt
+from acq4.util.future import Future
 from ...Manager import getManager
 from acq4.util.Thread import Thread
+from acq4.util.debug import printExc
 
 
 class PatchPipette(Pipette):
@@ -123,16 +126,70 @@ class PatchPipette(Pipette):
             clamp.autoPipetteOffset()
 
     def cleanPipette(self):
-        return self.controlThread.cleanPipette()
+        config = self.config.get('cleaning', {})
+        return PatchPipetteCleanFuture(self, config)
 
 
-class PipetteControlThread(Thread):
-    def __init__(self, dev):
+class PatchPipetteCleanFuture(Future):
+    """Tracks the progress of a patch pipette cleaning task.
+    """
+    def __init__(self, dev, config):
+        Future.__init__(self)
+
         self.dev = dev
-        Thread.__init__(self)
 
-    def run(self):
-        currentFuture = None
+        self.config = {
+            'cleanSequence': [(-5, 30.), (5, 45)],
+            'rinseSequence': [(-5, 30.), (5, 45)],
+            'approachHeight': 5e-3,
+            'cleanPos': dev.loadPosition('clean'),
+            'rinsePos': dev.loadPosition('rinse', None),
+        }
+        self.config.update(config)
+
+        self._stopRequested = False
+        self._moveThread = threading.Thread(target=self._clean)
+        self._moveThread.start()
+
+    def _clean(self):
+        # Called in worker thread
+        config = self.config
+        resetPos = None
+        try:
+            for stage in ('clean', 'rinse'):
+                self._checkStop()
+
+                sequence = config[stage + 'Sequence']
+                if len(sequence == 0):
+                    continue
+                pos = config[stage + 'Pos']
+                approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
+
+                self.dev.moveToGlobal(approachPos, 'fast').wait()
+                self._checkStop()
+                resetPos = approachPos
+                self.dev.moveToGlobal(pos, 'fast').wait()
+                self._checkStop()
+
+                for pressure, delay in sequence:
+                    self.dev.setPressure(pressure)
+                    self._checkStop(delay)
+
+        except self.StopRequested:
+            self._taskDone(interrupted=True)
+        except Exception as exc:
+            printExc("Error during pipette cleaning:")
+            self._taskDone(interrupted=True, error=str(exc))
+        else:
+            self._taskDone()
+        finally:
+            try:
+                self.dev.setPressure(0)
+            except Exception:
+                printExc("Error resetting pressure after clean")
+            
+            if resetPos is not None:
+                self.dev.moveToGlobal(resetPos)
 
 
 class PressureControl(Qt.QObject):
