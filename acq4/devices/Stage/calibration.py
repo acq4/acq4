@@ -239,6 +239,18 @@ class CalibrationWindow(Qt.QWidget):
             self._camdev = manager.getDevice(camName)
         return self._camdev
 
+    def closeEvent(self, ev):
+        for i in range(self.pointTree.topLevelItemCount()):
+            target = self.pointTree.topLevelItem(i).target
+            if target is not None:
+                target.hide()
+
+    def show(self):
+        Qt.QWidget.show(self)
+        for i in range(self.pointTree.topLevelItemCount()):
+            target = self.pointTree.topLevelItem(i).target
+            if target is not None:
+                target.show()
 
 
 class StageCalibration(object):
@@ -344,7 +356,3 @@ class StageCalibration(object):
         amp = self.error.max()
         self.fit = scipy.optimize.leastsq(erf, [0, f0, amp, amp, amp, amp], (x, self.error))[0]
         self.errorPlot.plot(x, fn(self.fit, x), pen='g')
-
-    def closeEvent(self, ev):
-        for t in self.targets:
-            t.scene().removeItem(t)
