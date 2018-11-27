@@ -1,7 +1,8 @@
 from __future__ import print_function
-from ..Pipette import Pipette
+from ..Pipette import Pipette, PipetteDeviceGui
 from acq4.util import Qt
 from ...Manager import getManager
+from acq4.util.Thread import Thread
 
 
 class PatchPipette(Pipette):
@@ -121,6 +122,18 @@ class PatchPipette(Pipette):
         if clamp is not None:
             clamp.autoPipetteOffset()
 
+    def cleanPipette(self):
+        return self.controlThread.cleanPipette()
+
+
+class PipetteControlThread(Thread):
+    def __init__(self, dev):
+        self.dev = dev
+        Thread.__init__(self)
+
+    def run(self):
+        currentFuture = None
+
 
 class PressureControl(Qt.QObject):
     def __init__(self, deviceName):
@@ -148,3 +161,45 @@ class PressureControl(Qt.QObject):
             self.device.setChanHolding('regulator_valve', 1)
         else:
             raise ValueError("Unknown pressure source %r" % mode)
+
+
+class PatchPipetteDeviceGui(PipetteDeviceGui):
+    def __init__(self, dev, win):
+        self.cleanFuture = None
+
+        PipetteDeviceGui.__init__(self, dev, win)
+
+        self.cleanBtn = Qt.QPushButton('Clean Pipette')
+        self.setCleanBtn = Qt.QPushButton('Set Clean Pos')
+        self.setRinseBtn = Qt.QPushButton('Set Rinse Pos')
+        self.cleanBtnLayout = Qt.HBoxLayout()
+        self.cleanBtnLayout.addWidget(self.cleanBtn)
+        self.cleanBtn.setCheckable(True)
+        self.cleanBtnLayout.addWidget(self.setCleanBtn)
+        self.cleanBtnLayout.addWidget(self.setRinseBtn)
+        row = self.layout.rowCount()
+        self.layout.addItem(self.cleanBtnLayout, row, 0)
+
+        self.cleanBtn.clicked.connect(self.cleanClicked)
+        self.setCleanBtn.clicked.connect(self.setCleanClicked)
+        self.setRinseBtn.clicked.connect(self.setRinseClicked)
+
+    def cleanClicked(self):
+        if self.cleanBtn.isChecked():
+            self.cleanBtn.setText("Cleaning..")
+            self.cleanFuture = self.dev.cleanPipette()
+            self.cleanFuture.sigFinished.connect(self.cleaningFinished)
+        else:
+            if self.cleanFuture is not None and not self.cleanFuture.isDone():
+                self.cleanFuture.stop()
+            self.cleanBtn.setText("Clean Pipette")
+
+    def cleaningFinished(self):
+        self.cleanBtn.setText("Clean Pipette")
+        self.cleanBtn.setChecked(False)
+
+    def setCleanClicked(self):
+        self.dev.storePosition('clean')
+
+    def setRinseClicked(self):
+        self.dev.storePosition('rinse')

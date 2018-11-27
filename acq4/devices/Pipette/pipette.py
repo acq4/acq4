@@ -99,6 +99,24 @@ class Pipette(Device, OptomechDevice):
         self.tracker = PipetteTracker(self)
         deviceManager.declareInterface(name, ['pipette'], self)
 
+    def savePosition(self, name, pos=None):
+        """Store a position in global coordinates for later use.
+
+        If no position is provided, then the current position of the pipette tip is used.
+        """
+        if pos is None:
+            pos = self.globalPosition()
+
+        cache = self.readConfigFile('stored_positions')
+        cache[name] = list(pos)
+        self.writeConfigFile(cache, 'stored_positions')
+
+    def loadPosition(self, name):
+        """Return a previously saved position.
+        """
+        cache = self.readConfigFile('stored_positions')
+        return cache[name]
+
     def scopeDevice(self):
         if self._scopeDev is None:
             imdev = self.imagingDevice()
@@ -123,7 +141,7 @@ class Pipette(Device, OptomechDevice):
     
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
-        return None
+        return PipetteDeviceGui(self, win)
 
     def cameraModuleInterface(self, mod):
         if self._opts['showCameraModuleUI'] is False:
@@ -838,3 +856,26 @@ class Axis(pg.ROI):
         p.scale(w, h)
         p.drawPath(self._path)
 
+
+class PipetteDeviceGui(Qt.QWidget):
+    def __init__(self, dev, win):
+        Qt.QWidget.__init__(self)
+        self.win = win
+        self.dev = dev
+
+        self.layout = Qt.QGridLayout()
+        self.setLayout(self.layout)
+
+        self.posLabelLayout = Qt.QHBoxLayout()
+        self.layout.addItem(self.posLabelLayout, 0, 0)
+
+        self.posLabels = [Qt.QLabel(), Qt.QLabel(), Qt.QLabel()]
+        for l in self.posLabels:
+            self.posLabelLayout.addWidget(l)
+
+        self.dev.sigGlobalTransformChanged.connect(self.pipetteMoved)
+
+    def pipetteMoved(self):
+        pos = self.dev.globalPosition()
+        for i in range(3):
+            self.posLabels[i] = "%0.3g um" % (pos[i] * 1e6)
