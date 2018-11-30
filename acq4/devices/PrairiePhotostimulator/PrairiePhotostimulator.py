@@ -421,6 +421,30 @@ class PhotostimTarget(TargetItem):
         self.setLabel(str(label))
         self.setPos(pg.Point(pos)) 
 
+        #### Set up context menu
+        self.menu = QtGui.QMenu()
+        self.menu.setTitle("StimulationPoint")
+
+        ## set up on-cell/off-cell buttons
+        act = QtGui.QWidgetAction(self)
+        w = QtGui.QWidget()
+        l = QtGui.QVBoxLayout()
+        l.setContentsMargins(3,3,3,3)
+        l.setSpacing(3)
+        w.setLayout(l)
+        self.onCellBtn = QtGui.QRadioButton("On-cell")
+        self.onCellBtn.setChecked(True)
+        l.addWidget(self.onCellBtn)
+        self.offCellBtn = QtGui.QRadioButton("Off-cell")
+        l.addWidget(self.offCellBtn)
+        act.setDefaultWidget(w)
+        self.onCellBtn.toggled.connect(self.cellBtnToggled)
+        self.menu.addAction(act)
+
+        act2 = QtGui.QAction("Run z-axis supplemental stimulation", self.menu)
+        self.menu.addAction(act2)
+        act2.triggered.connect(self.suppStimRequested)
+
     def setEnabledPen(self, b):
         if b:
             self.pen = self.enabledPen
@@ -439,6 +463,29 @@ class PhotostimTarget(TargetItem):
         self.pen = pg.mkPen(color)
         self._picture = None
         self.update()
+
+    def getMenu(self):
+        return self.menu
+
+    def raiseContextMenu(self, ev):
+        #if not self.contextMenuEnabled():
+        #    return
+        menu = self.getMenu()
+        menu = self.scene().addParentContextMenus(self, menu, ev)
+        pos = ev.screenPos()
+        menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+
+    def mouseClickEvent(self, ev):
+        if ev.button() == QtCore.Qt.RightButton:
+            self.raiseContextMenu(ev)
+            ev.accept()
+
+    def cellBtnToggled(self, b):
+        QtCore.QTimer.singleShot(300, self.menu.hide)
+        print("CellBtnToggled", b)
+
+    def suppStimRequested(self):
+        print('suppStimRequested')
 
 class SeqParameter(pTypes.GroupParameter):
     def __init__(self, **args):
