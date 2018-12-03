@@ -371,9 +371,12 @@ class StimulationPoint(QtCore.QObject):
 
         self.params.sigValueChanged.connect(self.changed)
         self.graphicsItem.sigDragged.connect(self.targetDragged)
+        self.graphicsItem.sigCellBtnToggled.connect(self.cellBtnToggled)
 
 #        self.positionHistory = []
         self.stimulations = []
+
+        self.onCell = True
 
 
     def changed(self, param):
@@ -406,10 +409,28 @@ class StimulationPoint(QtCore.QObject):
         self.setDepth(pos[2])
         self.graphicsItem.setPos(pos[0], pos[1])
 
+    def cellBtnToggled(self, b):
+        if b:
+            self.onCell = True
+        else:
+            self.onCell = False
+
+    def saveState(self):
+        d = {}
+        d['id'] = self.id
+        d['position'] = self.getPos()
+        d['name'] = self.name
+        d['onCell'] = self.onCell
+
+        return d
+
+
 
 
 class PhotostimTarget(TargetItem):
     ## inherits from TargetItem, GraphicsObject, GraphicsItem, QGraphicsObject
+
+    sigCellBtnToggled = QtCore.Signal(object)
 
     def __init__(self, pos, label):
         self.enabledPen = pg.mkPen((0, 255, 255))
@@ -432,11 +453,11 @@ class PhotostimTarget(TargetItem):
         l.setContentsMargins(3,3,3,3)
         l.setSpacing(3)
         w.setLayout(l)
-        self.onCellBtn = QtGui.QRadioButton("On-cell")
+        self.onCellBtn = QtGui.QCheckBox("On-cell")
         self.onCellBtn.setChecked(True)
         l.addWidget(self.onCellBtn)
-        self.offCellBtn = QtGui.QRadioButton("Off-cell")
-        l.addWidget(self.offCellBtn)
+        #self.offCellBtn = QtGui.QRadioButton("Off-cell")
+        #l.addWidget(self.offCellBtn)
         act.setDefaultWidget(w)
         self.onCellBtn.toggled.connect(self.cellBtnToggled)
         self.menu.addAction(act)
@@ -483,6 +504,7 @@ class PhotostimTarget(TargetItem):
     def cellBtnToggled(self, b):
         QtCore.QTimer.singleShot(300, self.menu.hide)
         print("CellBtnToggled", b)
+        self.sigCellBtnToggled.emit(b)
 
     def suppStimRequested(self):
         print('suppStimRequested')
