@@ -2,5 +2,5 @@
 import os, inspect
 from . import (CellCanvasItem, ImageCanvasItem, MarkersCanvasItem, 
                MultiPatchLogCanvasItem, ScanCanvasItem, simpleitems,
-               AtlasCanvasItem)
+               AtlasCanvasItem, PhotoStimulationLogCanvasItem)
 from .itemtypes import registerItemType, getItemType, itemTypes

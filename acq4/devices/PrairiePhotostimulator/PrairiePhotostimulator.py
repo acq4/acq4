@@ -410,13 +410,14 @@ class StimulationPoint(QtCore.QObject):
 
 class PhotostimTarget(TargetItem):
     ## inherits from TargetItem, GraphicsObject, GraphicsItem, QGraphicsObject
+    sigClicked = QtCore.Signal(object)
 
-    def __init__(self, pos, label):
+    def __init__(self, pos, label, **opts):
         self.enabledPen = pg.mkPen((0, 255, 255))
         self.disabledPen = pg.mkPen((150,150,150))
         self.enabledBrush = pg.mkBrush((0,0,255,100))
         self.disabledBrush = pg.mkBrush((0,0,255,0))
-        TargetItem.__init__(self, pen=self.enabledPen, brush=self.enabledBrush)
+        TargetItem.__init__(self, pen=self.enabledPen, brush=self.enabledBrush, **opts)
 
         self.setLabel(str(label))
         self.setPos(pg.Point(pos)) 
@@ -439,6 +440,10 @@ class PhotostimTarget(TargetItem):
         self.pen = pg.mkPen(color)
         self._picture = None
         self.update()
+
+    def mouseClickEvent(self, ev):
+        ev.accept()
+        self.sigClicked.emit()
 
 class SeqParameter(pTypes.GroupParameter):
     def __init__(self, **args):
