@@ -112,6 +112,7 @@ class ImageFile(FileType):
         except IOError:
             import tifffile
             img = tifffile.imread(fileHandle.name())
+            img = img.transpose()
 
         arr = array(img)
         if arr.ndim == 0:
