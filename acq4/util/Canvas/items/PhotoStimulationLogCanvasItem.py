@@ -45,9 +45,8 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
             return 0
 
     def addStimPoint(self, pt):
-        #pt.graphicsItem.setMovable(False)
+        pt.graphicsItem.setMovable(False)
         pt.graphicsItem.setParentItem(self._graphicsItem)
-        pt.graphicsItem.sigClicked.connect(self.pointClicked)
 
         children = []
         for i in range(self.headstageCount):
@@ -57,12 +56,8 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
 
         param = pg.parametertree.Parameter.create(name=pt.name, autoIncrementName=False, type='group', renamable=False, removable=False, children=children)
         self.params.addChild(param)
-        pt.graphicsItem.param = weakref.ref(param)
 
 
-    def pointClicked(self, gItem):
-        ## graphicsItem was clicked, highlight its param in paramtree
-        self.params.setCurrentItem(gItem.param)
 
 registerItemType(PhotoStimulationLogCanvasItem)
 
