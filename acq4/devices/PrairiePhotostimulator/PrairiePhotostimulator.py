@@ -443,7 +443,7 @@ class PhotostimTarget(TargetItem):
 
     def mouseClickEvent(self, ev):
         ev.accept()
-        self.sigClicked.emit()
+        self.sigClicked.emit(self)
 
 class SeqParameter(pTypes.GroupParameter):
     def __init__(self, **args):
