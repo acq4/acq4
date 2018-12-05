@@ -123,3 +123,6 @@ class TargetItem(GraphicsObject):
         if self.movable:
             ev.acceptDrags(QtCore.Qt.LeftButton)
 
+    def setMovable(self, movable):
+        self.movable = movable
+
