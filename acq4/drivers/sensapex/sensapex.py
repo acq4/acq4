@@ -254,22 +254,41 @@ class UMP(object):
         #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, block=False, simultaneous=True):
+    def goto_pos(self, dev, pos, speed, block=False, simultaneous=True, linear=True):
         """Request the specified device to move to an absolute position (in nm).
         
-        *speed* is given in um/sec.
+        *speed* is given in um/sec, and may be either scalar or vector.
         
         If *block* is True, then this method only returns after ``is_busy()``
         return False.
 
         If *simultaneous* is True, then all axes begin moving at the same time.
+
+        If *linear* is True, then axis speeds are scaled to produce mroe linear movement.
         """
-        pos = list(pos) + [0] * (4-len(pos))
-        mode = int(bool(simultaneous))  # all axes move simultaneously
-        args = [c_int(int(x)) for x in [dev] + pos + [speed, mode]]
-        with self.lock:
-            self.call('goto_position_ext', *args)
-            self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
+        if linear:
+            # for linear movement, `take_step_ext` allows speed to be given per-axis
+            # but potentially generates small position errors due to unstable encoder readout
+            assert simultaneous is True, "Cannot make linear movement with simultaneous=False"
+            current_pos = self.get_pos(dev)
+            diff = [p-c for p,c in zip(pos, current_pos)]
+            dist = np.linalg.norm(diff)
+            speed = [max(1, speed * abs(d / dist)) for d in diff]
+            speed = speed + [0] * (4-len(speed))
+            diff = diff + [0] * (4-len(diff))
+            args = [c_int(int(x)) for x in [dev] + diff + speed]
+            with self.lock:
+                self.call('take_step_ext', *args)
+                self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
+
+        else:
+            pos = list(pos) + [0] * (4-len(pos))
+            mode = int(bool(simultaneous))  # all axes move simultaneously
+            speed = max(1, speed)  # speed < 1 crashes the uMp
+            args = [c_int(int(x)) for x in [dev] + pos + [speed, mode]]
+            with self.lock:
+                self.call('goto_position_ext', *args)
+                self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
             
         if block:
             while True:
@@ -374,8 +393,8 @@ class SensapexDevice(object):
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
     
-    def goto_pos(self, pos, speed, block=False, simultaneous=True):
-        return self.ump.goto_pos(self.devid, pos, speed, block=block, simultaneous=simultaneous)
+    def goto_pos(self, pos, speed, block=False, simultaneous=True, linear=True):
+        return self.ump.goto_pos(self.devid, pos, speed, block=block, simultaneous=simultaneous, linear=linear)
     
     def is_busy(self):
         return self.ump.is_busy(self.devid)
