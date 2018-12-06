@@ -251,6 +251,9 @@ class MultiClamp(Device):
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
         
+    def getMode(self):
+        return self.mc.getMode()
+
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
         with self.lock:

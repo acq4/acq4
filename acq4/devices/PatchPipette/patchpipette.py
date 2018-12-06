@@ -1,11 +1,13 @@
 from __future__ import print_function
 import time, threading
+import numpy as np
 from ..Pipette import Pipette, PipetteDeviceGui
 from acq4.util import Qt
 from acq4.util.future import Future
 from ...Manager import getManager
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
+from acq4.pyqtgraph import ptime
 
 
 class PatchPipette(Pipette):
@@ -39,6 +41,8 @@ class PatchPipette(Pipette):
         self.pressureDevice = None
         if 'pressureDevice' in config:
             self.pressureDevice = PressureControl(config['pressureDevice'])
+
+        self._initTestPulse(config.get('testPulse', {}))
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -75,7 +79,6 @@ class PatchPipette(Pipette):
         - May increase pressure
         - Automatically hide tip/target markers when the tip is near the target
         """
-
 
     def seal(self):
         """Attempt to seal onto a cell.
@@ -133,6 +136,19 @@ class PatchPipette(Pipette):
         """Return a widget with a UI to put in the device rack"""
         return PatchPipetteDeviceGui(self, win)
 
+    def _testPulseFinished(self, dev, params, result):
+        self._lastTestPulse = (params, result)
+
+    def _initTestPulse(self, params):
+        self._testPulseThread = TestPulseThread(self, params)
+        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
+
+    def startTestPulse(self):
+        self._testPulseThread.start()
+
+    def stopTestPulse(self):
+        self._testPulseThread.stop()
+
 
 class PatchPipetteCleanFuture(Future):
     """Tracks the progress of a patch pipette cleaning task.
@@ -152,8 +168,8 @@ class PatchPipetteCleanFuture(Future):
         self.config.update(config)
 
         self._stopRequested = False
-        self._moveThread = threading.Thread(target=self._clean)
-        self._moveThread.start()
+        self._thread = threading.Thread(target=self._clean)
+        self._thread.start()
 
     def _clean(self):
         # Called in worker thread
@@ -200,6 +216,162 @@ class PatchPipetteCleanFuture(Future):
             
             if resetPos is not None:
                 dev._moveToGlobal(resetPos, 'fast')
+
+
+class TestPulseThread(Thread):
+
+    sigTestPulseFinished = Qt.Signal(object, object, object)  # device, params, result
+
+    class StopRequested(Exception):
+        pass
+
+    def __init__(self, dev, params):
+        Thread.__init__(self)
+        self.dev = dev
+        self._stop = False
+        self.params = {
+            'clampMode': None,
+            'interval': None,
+            'sampleRate': 100000,
+            'downsample': 4,
+            'vcPreDuration': 10e-3,
+            'vcPulseDuration': 10e-3,
+            'vcPostDuration': 10e-3,
+            'vcHolding': None,
+            'vcAmplitude': -10e-3,
+            'icPreDuration': 10e-3,
+            'icPulseDuration': 30e-3,
+            'icPostDuration': 10e-3,
+            'icHolding': None,
+            'icAmplitude': -10e-12,
+            '_index': 0,
+        }
+        self._lastTask = None
+
+        self._clampDev = self.dev.clampDevice()
+        self._daqName = list(self._clampDev.listChannels().values())[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
+        self._clampName = self._clampDev.name()
+        self._manager = getManager()
+
+        self.setParameters(**params)
+
+    def setParameters(self, **kwds):
+        newParams = self.params.copy()
+        for k,v in kwds.items():
+            if k not in self.params:
+                raise KeyError("Unknown parameter %s" % k)
+            newParams[k] = v
+        newParams['_index'] += 1
+        self.params = newParams
+
+    def start(self):
+        self._stop = False
+        Thread.start(self)
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        while True:
+            try:
+                self._checkStop()
+                start = ptime.time()
+                self.runOnce(_checkStop=True)
+
+                interval = self.params['interval']
+                if interval is None:
+                    # start again immediately
+                    continue
+                
+                # otherwise, wait until interval is over
+                while True:
+                    nextRun = start + self.params['interval']
+                    now = ptime.time()
+                    if now >= nextRun:
+                        break
+                    time.sleep(min(0.03, nextRun-now))
+                    self._checkStop()
+            except self.StopRequested:
+                break
+            except Exception:
+                printExc("Error in test pulse thread:")
+                time.sleep(2.0)
+
+    def runOnce(self, _checkStop=False):
+        self._clampDev.reserve()
+        try:
+            currentMode = self._clampDev.getMode()
+            params = self.params
+            runMode = currentMode if params['clampMode'] is None else params['clampMode']
+            if runMode == 'I=0':
+                runMode = 'IC'
+
+            # Can't reuse tasks yet; remove this when we can.
+            self._lastTask = None
+
+            if self._lastTask is None or self._lastTask._paramIndex != params['_index'] or self._lastTask._clampMode != runMode:
+                taskParams = params.copy()
+
+                # select parameters to use based on clamp mode
+                for k in params:
+                    # rename like icPulseDuration => pulseDuration
+                    if k[:2] == runMode.lower():
+                        taskParams[k[2].lower() + k[3:]] = taskParams[k]
+                    # remove all ic__ and vc__ params
+                    if k[:2] in ('ic', 'vc'):
+                        taskParams.pop(k)
+                    taskParams['clampMode'] = runMode
+
+                task = self.createTask(taskParams)
+                task._paramIndex = params['_index']
+                task._clampMode = runMode
+                self._lastTask = task
+            else:
+                task = self._lastTask
+            
+            task.execute()
+
+            while not task.isDone():
+                if _checkStop:
+                    self._checkStop()
+                time.sleep(0.01)
+
+            result = task.getResult()
+            self.sigTestPulseFinished.emit(self.dev, taskParams, result)
+        finally:
+            self._clampDev.release()
+        
+        return params, result
+
+    def createTask(self, params):
+        duration = params['preDuration'] + params['pulseDuration'] + params['postDuration']
+        numPts = int(float(duration * params['sampleRate']))
+        mode = params['clampMode']
+
+        cmdData = np.empty(numPts)
+        holding = params['holding'] or self._clampDev.getHolding(mode)
+        cmdData[:] = holding
+
+        start = int(params['preDuration'] * params['sampleRate'])
+        stop = start + int(params['pulseDuration'] * params['sampleRate'])
+        cmdData[start:stop] += params['amplitude']
+        
+        cmd = {
+            'protocol': {'duration': duration},
+            self._daqName: {'rate': params['sampleRate'], 'numPts': numPts, 'downsample': params['downsample']},
+            self._clampName: {
+                'mode': mode,
+                'command': cmdData,
+            }
+        }
+        if params['holding'] is not None:
+            cmd[self._clampName]['holding'] = params['holding']
+
+        return self._manager.createTask(cmd)
+
+    def _checkStop(self):
+        if self._stop:
+            raise self.StopRequested()
 
 
 class PressureControl(Qt.QObject):
