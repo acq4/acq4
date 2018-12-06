@@ -217,6 +217,10 @@ class ConsoleWidget(QtGui.QWidget):
             self.output.insertPlainText(strn)
         #self.stdout.write(strn)
     
+    def fileno(self):
+        # Need to implement this since we temporarily occlude sys.stdout, and someone may be looking for it (faulthandler, for example)
+        return 1
+
     def displayException(self):
         """
         Display the current exception and stack.
