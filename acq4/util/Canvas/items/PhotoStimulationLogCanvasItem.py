@@ -30,7 +30,7 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
         #self.params.addNew = self.addMarker
         #self.params.sigTreeStateChanged.connect(self._paramsChanged)
 
-        self._ctrl = PhotoStimulationLogItemCtrlWidget(self)
+        self._ctrl = PhotoStimulationLogItemCtrlWidget(self, self.headstageCount)
         self.layout.addWidget(self._ctrl, self.layout.rowCount(), 0, 1, 2)
 
         for pt in self.data.listPoints():
@@ -63,25 +63,52 @@ registerItemType(PhotoStimulationLogCanvasItem)
 
 
 class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
-    def __init__(self, canvasitem):
+    def __init__(self, canvasitem, headstageCount):
         QtGui.QWidget.__init__(self)
         self.canvasitem = weakref.ref(canvasitem)
 
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
+
+        self.headstageGroup = QtGui.QGroupBox("Headstages used:")
+        self.layout.addWidget(self.headstageGroup, 0,0, 1,-1)
+        self.hsLayout = QtGui.QGridLayout()
+        self.hsLayout.setContentsMargins(2,2,2,2)
+        self.headstageGroup.setLayout(self.hsLayout)
+        self.headstageChecks = {}
+        for i in range(headstageCount):
+            w = QtGui.QCheckBox('%i'%i)
+            self.headstageChecks[i] = w
+            row = (i)/2
+            column = i%2
+            self.hsLayout.addWidget(w, row, column)
+
+        for c in self.headstageChecks.itervalues():
+            c.setCheckState(False)
+            c.stateChanged.connect(self.headstagesCheckChanged)
+
         
         self.ptree = pg.parametertree.ParameterTree(showHeader=False)
         self.ptree.setParameters(canvasitem.params)
-        self.layout.addWidget(self.ptree, 0, 0, 1, 2)
+        self.layout.addWidget(self.ptree, 1, 0, 1, 2)
 
         self.saveJsonBtn = QtGui.QPushButton('Save Json')
-        self.layout.addWidget(self.saveJsonBtn, 1, 0)
+        self.layout.addWidget(self.saveJsonBtn, 2, 0)
         self.saveJsonBtn.clicked.connect(self.saveJson)
         
         #self.copyJsonBtn = QtGui.QPushButton('Copy Json')
         #self.layout.addWidget(self.copyJsonBtn, 1, 0)
         #self.copyJsonBtn.clicked.connect(self.copyJson)
+
+    def headstagesCheckChanged(self):
+        for point in self.ptree.topLevelItem(0).param.children():
+            for hs in point.children():
+                if self.headstageChecks[int(hs.name()[-1])].isChecked():
+                    hs.show()
+                else:
+                    hs.hide()
+
 
     def saveJson(self):
         filename = QtGui.QFileDialog.getSaveFileName(None, "Save markers", path, "JSON files (*.json)")
