@@ -124,12 +124,12 @@ class Camera(DAQGeneric, OptomechDevice):
                 printExc("Error default setting camera parameters:")
 
         # set up preset hotkeys
-        for name, preset in self.camConfig.get('presets', {}).items():
+        for presetName, preset in self.camConfig.get('presets', {}).items():
             if 'hotkey' not in preset:
                 continue
             dev = dm.getDevice(preset['hotkey']['device'])
             key = preset['hotkey']['key']
-            dev.addKeyCallback(key, self.presetHotkeyPressed, (name,))
+            dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
 
         #print "Camera: no config params to set."
         dm.declareInterface(name, ['camera'], self)
