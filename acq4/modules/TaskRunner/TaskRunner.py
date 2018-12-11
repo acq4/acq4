@@ -75,6 +75,12 @@ class TaskRunner(Module):
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+
+        # On systems with low memory, this flag can be set to improve memory usage at the cost of performance.
+        # Works by running garbage collection between consecutive task runs to avoid accumulation of large garbage objects.
+        # Since most modern systems have adequate memory, this is now disabled by default.
+        self._reduceMmemoryUsage = config.get('reduceMemoryUsage', False)
+
         self.lastProtoTime = None
         self.loopEnabled = False
         self.devListItems = {}
@@ -532,7 +538,8 @@ class TaskRunner(Module):
             self.loopEnabled = True
             
         # good time to collect garbage
-        gc.collect()
+        if self._reduceMemoryUsage:
+            gc.collect()
 
         self.lastProtoTime = ptime.time()
         ## Disable all start buttons
@@ -583,7 +590,8 @@ class TaskRunner(Module):
         self.enableStartBtns(False)
         
         # good time to collect garbage
-        gc.collect()
+        if self._reduceMemoryUsage:
+            gc.collect()
         
         ## Find all top-level items in the sequence parameter list
         try:
@@ -795,7 +803,8 @@ class TaskRunner(Module):
         prof.finish()
         
         # good time to collect garbage
-        gc.collect()
+        if self._reduceMemoryUsage:
+            gc.collect()
             
     def loop(self):
         """Run one iteration when in loop mode"""
@@ -979,7 +988,8 @@ class TaskThread(Thread):
                     
     def runOnce(self, params=None):
         # good time to collect garbage
-        gc.collect()
+        if self.ui._reduceMemoryUsage:
+            gc.collect()
         
         prof = Profiler("TaskRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()
