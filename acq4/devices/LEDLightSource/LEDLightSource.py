@@ -17,7 +17,7 @@ class LEDLightSource(LightSource):
             dev = dm.getDevice(device)
             dev.sigHoldingChanged.connect(self._mkcb(dev))
 
-            conf['active'] = bool(dev.getChanHolding(chan))
+            conf['active'] = dev.getChanHolding(chan) > 0
             self.addSource(name, conf)
             self._channelsByName[name] = (dev, chan)
             self._channelNames[(dev, chan)] = name
@@ -37,5 +37,6 @@ class LEDLightSource(LightSource):
 
     def setSourceActive(self, name, active):
         dev, chan = self._channelsByName[name]
-        dev.setChanHolding(chan,  float(active))
+        level = float(active) * self._sources[name].get('onValue', 1.0)
+        dev.setChanHolding(chan,  level)
 
