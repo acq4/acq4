@@ -400,7 +400,7 @@ class StimulationPoint(QtCore.QObject):
 #        self.positionHistory.append((timestamp, pos))
 
     def addStimulation(self, data, id):
-        self.stimulations.append({id:Photostimulation(data, id)})
+        self.stimulations.append({id:data})
 
     def updatePosition(self, pos):
         self.setDepth(pos[2])

@@ -8,6 +8,8 @@ import acq4.pyqtgraph as pg
 import numpy as np
 #from .MarkersCanvasItem import MarkersCanvasItem
 from .itemtypes import registerItemType
+from collections import OrderedDict
+import json
 
 
 class PhotoStimulationLogCanvasItem(CanvasItem):
@@ -56,6 +58,7 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
 
         param = pg.parametertree.Parameter.create(name=pt.name, autoIncrementName=False, type='group', renamable=False, removable=False, children=children)
         self.params.addChild(param)
+        param.point = pt
 
 
 
@@ -111,13 +114,41 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
 
 
     def saveJson(self):
-        filename = QtGui.QFileDialog.getSaveFileName(None, "Save markers", path, "JSON files (*.json)")
+        filename = QtGui.QFileDialog.getSaveFileName(None, "Save connections", "", "JSON files (*.json)")
         if filename == '':
             return
         if not filename.endswith('.json'):
             filename += '.json'
 
-        print "Need to implement saving!"
+        data = OrderedDict()
+        data['Headstages'] = OrderedDict()
+
+        for hs in self.headstageChecks.keys():
+            data['Headstages']['electrode_%i'%hs] = OrderedDict()
+            ### Need to add position info here
+            data['Headstages']['electrode_%i'%hs]['Connections'] = OrderedDict()
+
+        for point in self.ptree.topLevelItem(0).param.children():
+            for hs in point.children():
+                cx = hs.value()
+                if cx == 0:
+                    cnx_str = None
+                elif cx == 1:
+                    cnx_str = 'inhibitory'
+                elif cx == 2:
+                    cnx_str = 'excitatory'
+                elif cx == 3:
+                    cnx_str = 'tbd'
+                elif cx == 4:
+                    cnx_str = 'no cnx'
+                data['Headstages']['electrode_%s'%hs.name()[-1]]['Connections'][point.name()] = cnx_str
+
+            data[point.name()] = point.point.stimulations
+
+        with open(filename, 'w') as outfile:
+            json.dump(data, outfile, indent=4)
+
+
 
     #def copyJson(self):
     #    pass
