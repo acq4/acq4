@@ -260,7 +260,7 @@ class UMP(object):
     def goto_pos(self, dev, pos, speed, block=False, simultaneous=True, linear=True):
         """Request the specified device to move to an absolute position (in nm).
         
-        *speed* is given in um/sec, and may be either scalar or vector.
+        *speed* is given in um/sec.
         
         If *block* is True, then this method only returns after ``is_busy()``
         return False.
@@ -274,8 +274,10 @@ class UMP(object):
             # but potentially generates small position errors due to unstable encoder readout
             assert simultaneous is True, "Cannot make linear movement with simultaneous=False"
             current_pos = self.get_pos(dev)
-            diff = [p-c for p,c in zip(pos, current_pos)]
-            dist = np.linalg.norm(diff)
+            diff = [float(p-c) for p,c in zip(pos, current_pos)]
+            dist = max(1, np.linalg.norm(diff))
+
+            # speeds < 7 um/sec produce large position errors
             speed = [max(1, speed * abs(d / dist)) for d in diff]
             speed = speed + [0] * (4-len(speed))
             diff = diff + [0] * (4-len(diff))
@@ -295,10 +297,11 @@ class UMP(object):
             
         if block:
             while True:
-                self.receive()
                 if not self.is_busy(dev):
                     break
                 time.sleep(0.005)
+            pos2 = np.array(self.get_pos(dev))
+            dif = pos2 - np.array(pos[:3])
 
     def is_busy(self, dev):
         """Return True if the specified device is currently moving.
