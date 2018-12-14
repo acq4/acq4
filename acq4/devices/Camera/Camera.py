@@ -373,15 +373,16 @@ class Camera(DAQGeneric, OptomechDevice):
         objs = self.scopeDev.listObjectives()
         return [self.getBoundary(o) for o in objs]
     
-    def mapToSensor(self, pos):
-        """Return the sub-pixel location on the sensor that corresponds to global position pos"""
-        ss = self.getScopeState()
-        boundary = self.getBoundary()
-        boundary.translate(*ss['scopePosition'][:2])
-        size = self.sensorSize
-        x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
-        y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
-        return (x, y)
+    # deprecated: not used anywhere, and I'm not sure it's correct.
+    # def mapToSensor(self, pos):
+    #     """Return the sub-pixel location on the sensor that corresponds to global position pos"""
+    #     ss = self.getScopeState()
+    #     boundary = self.getBoundary()
+    #     boundary.translate(*ss['scopePosition'][:2])
+    #     size = self.sensorSize
+    #     x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
+    #     y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
+    #     return (x, y)
         
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
@@ -396,7 +397,21 @@ class Camera(DAQGeneric, OptomechDevice):
         self.scopeState['centerPosition'] = o
         self.scopeState['pixelSize'] = abs(p)
         self.scopeState['id'] += 1  ## hint to acquisition thread that state has changed
+
+    def globalCenterPosition(self, mode='sensor'):
+        """Return the global position of the center of the camera sensor (mode='sensor') or ROI (mode='roi').
+        """
+        if mode == 'sensor':
+            size = self.getParam('sensorSize')
+            center = np.array(list(size) + [0]) / 2.0
+        elif mode == 'roi':
+            rgn = self.getParam('region')
+            center = [rgn[0] + rgn[2] / 2.0, rgn[1] + rgn[3] / 2.0, 0]
+        else:
+            raise ValueError("mode argument must be 'sensor' or 'roi'")
         
+        return self.mapToGlobal(center)
+
     def objectiveChanged(self, obj=None):
         if obj is None:
             obj = self.scopeDev.getObjective()

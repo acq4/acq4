@@ -276,7 +276,7 @@ class Pipette(Device, OptomechDevice):
         This position is used when searching for new electrodes.
 
         Set *distance* to adjust the search position along the pipette's x-axis. Positive values
-        move the tip farther from the microscipe center to reduce the probability of collisions.
+        move the tip farther from the microscope center to reduce the probability of collisions.
         Negative values move the pipette past the center of the microscope to improve the
         probability of seeing the tip immediately. 
         """
@@ -286,11 +286,19 @@ class Pipette(Device, OptomechDevice):
         if surfaceDepth is None:
             raise Exception("Cannot determine search position; surface depth is not defined.")
         searchDepth = surfaceDepth + self._opts['searchHeight']
-        if scope.getFocusDepth() < searchDepth:
-            scope.setFocusDepth(searchDepth).wait(updates=True)
+
+        cam = self.imagingDevice()
+        focusDepth = cam.getFocusDepth()
+
+        # move scope such that camera will be focused at searchDepth
+        if focusDepth < searchDepth:
+            scopeFocus = scope.getFocusDepth()
+            scope.setFocusDepth(scopeFocus + searchDepth - focusDepth).wait(updates=True)
 
         # Here's where we want the pipette tip in global coordinates:
-        globalTarget = scope.mapToGlobal([0, 0, self._opts['searchTipHeight'] - self._opts['searchHeight']])
+        globalTarget = cam.globalCenterPosition('roi')
+        globalTarget[2] += self._opts['searchTipHeight'] - self._opts['searchHeight']
+
         # adjust for distance argument:
         localTarget = self.mapFromGlobal(globalTarget)
         localTarget[0] -= distance
