@@ -234,6 +234,9 @@ class UMP(object):
     def close(self):
         """Close the UMP device.
         """
+        if self.poller.is_alive:
+            self.poller.stop()
+            self.poller.join()
         with self.lock:
             self.lib.ump_close(self.h)
             self.h = None
