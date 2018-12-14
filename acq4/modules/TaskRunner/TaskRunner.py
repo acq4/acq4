@@ -79,7 +79,7 @@ class TaskRunner(Module):
         # On systems with low memory, this flag can be set to improve memory usage at the cost of performance.
         # Works by running garbage collection between consecutive task runs to avoid accumulation of large garbage objects.
         # Since most modern systems have adequate memory, this is now disabled by default.
-        self._reduceMmemoryUsage = config.get('reduceMemoryUsage', False)
+        self._reduceMemoryUsage = config.get('reduceMemoryUsage', False)
 
         self.lastProtoTime = None
         self.loopEnabled = False
