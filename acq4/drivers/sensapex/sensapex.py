@@ -124,11 +124,11 @@ class UMP(object):
     _single = None
     
     @classmethod
-    def get_ump(cls):
+    def get_ump(cls, start_poller=True):
         """Return a singleton UMP instance.
         """
         if cls._single is None:
-            cls._single = UMP()
+            cls._single = UMP(start_poller)
         return cls._single
     
     def __init__(self, start_poller=True):
@@ -234,7 +234,7 @@ class UMP(object):
     def close(self):
         """Close the UMP device.
         """
-        if self.poller.is_alive:
+        if self.poller.is_alive():
             self.poller.stop()
             self.poller.join()
         with self.lock:
