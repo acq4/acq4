@@ -362,22 +362,13 @@ class Pipette(Device, OptomechDevice):
         # move along a path defined in global coordinates. 
         # Format is [(pos, speed, linear), ...]
         # returns the movefuture of the last move.
+        stagePath = []
+        for pos, speed, linear in path:
+            stagePos = self._solveGlobalStagePosition(pos)
+            stagePath.append({'globalPos': stagePos, 'speed': speed, 'linear': linear})
 
-        # Simplify path if possible
-        pos = self.globalPosition()
-        path2 = []
-        for step in path:
-            pos2 = np.asarray(step[0])
-            if np.linalg.norm(pos2 - pos) > 1e-6:
-                path2.append(step)
-            pos = pos2
-
-        fut = None
-        for pos, speed, linear in path2:
-            if fut is not None:
-                fut.wait(updates=True)
-            fut = self._moveToGlobal(pos, speed, linear=linear)
-        return fut
+        stage = self.parentDevice()
+        return stage.movePath(stagePath)
     
     def _approachPath(self, target, speed):
         # Return steps (in global coords) needed to move to approach position
@@ -479,10 +470,17 @@ class Pipette(Device, OptomechDevice):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
         """
+        stagePos = self._solveGlobalStagePosition(pos)
+        stage = self.parentDevice()
+        return stage.moveToGlobal(stagePos, speed, linear=linear)
+
+    def _solveGlobalStagePosition(self, pos):
+        """Return global stage position required in order to move pipette to a global position.
+        """
         dif = np.asarray(pos) - np.asarray(self.globalPosition())
         stage = self.parentDevice()
         spos = np.asarray(stage.globalPosition())
-        return stage.moveToGlobal(spos + dif, speed, linear=linear)
+        return spos + dif
 
     def _moveToLocal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in local coordinates.

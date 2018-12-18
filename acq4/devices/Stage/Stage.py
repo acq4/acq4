@@ -314,33 +314,40 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, abs=None, rel=None, speed=None, progress=False, linear=False):
+    def move(self, abs=None, rel=None, globalPos=None, speed=None, progress=False, linear=False):
         """Move the device to a new position.
         
-        Must specify either *abs* for an absolute position, or *rel* for a
-        relative position. Either argument must be a sequence (x, y, z) with
-        values in meters. Optionally, values may be None to indicate no 
-        movement along that axis.
+        Position may be specified using one of three arguments:
+
+        * *abs* specifies the absolute position in the stage coordinate system (as defined by the device)
+        * *rel* specifies a relative step in the stage coordinate system (as defined by the device)
+        * *globalPos* specifies the position (in meters) in the global coordinate system
+
+        Optionally, *abs* or *rel* values may be None to indicate no movement along that axis.
         
         If the *speed* argument is given, it temporarily overrides the default
         speed that was defined by the last call to setSpeed().
+
+        If *linear* is True, then the movement is required to be in a straight line. By default,
+        this argument is True because nonlinear movements can cause unexpected collisions. In some
+        cases, however, using linear=False can allow the manipulator to move more quickly
+        (this is hardware dependent).
         
         If *progress* is True, then display a progress bar until the move is complete.
 
-        If *linear* is True, then the movement is required to be in a straight line.
-
         Return a MoveFuture instance that can be used to monitor the progress 
         of the move.
-
-        Note: the position must be expressed in the same coordinate system as returned 
-        by getPosition().
         """
         if speed is None:
             speed = self._defaultSpeed
         if speed is None:
             raise TypeError("Must specify speed or set default speed before moving.")
-        if abs is None and rel is None:
-            raise TypeError("Must specify one of abs or rel arguments.")
+        if abs is None and rel is None and globalPos is None:
+            raise TypeError("Must specify one of abs, rel, or globalPos arguments.")
+
+        if globalPos is not None:
+            localPos = self.mapFromGlobal(globalPos)
+            abs = self._solveStageTransform(localPos)
 
         mfut = self._move(abs, rel, speed, linear=linear)
 
@@ -355,13 +362,31 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
+        
+    def moveBy(self, pos, speed, progress=False, linear=False):
+        """Move by the specified relative distance. See move() for more 
+        information.
+        """
+        return self.move(rel=pos, speed=speed, progress=progress, linear=linear)
 
-    def moveToGlobal(self, pos, speed, linear=False):
+    def moveTo(self, pos, speed, progress=False, linear=False):
+        """Move to the specified absolute position. See move() for more 
+        information.
+        """
+        return self.move(abs=pos, speed=speed, progress=progress, linear=linear)
+
+    def moveToGlobal(self, pos, speed, progress=False, linear=False):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        localPos = self.mapFromGlobal(pos)
-        stagePos = self._solveStageTransform(localPos)
-        return self.moveTo(stagePos, speed, linear=linear)
+        return self.move(globalPos=pos, speed=speed, progress=progress, linear=linear)
+
+    def movePath(self, path):
+        """Move the stage along a path with multiple waypoints.
+
+        The format of *path* is a list of dicts, where each dict specifies keyword arguments
+        to self.move().
+        """
+        return MovePathFuture(self, path)
 
     def _toAbsolutePosition(self, abs, rel):
         """Helper function to convert absolute or relative position (possibly 
@@ -381,26 +406,6 @@ class Stage(Device, OptomechDevice):
                 if x is not None:
                     pos[i] += x
         return pos
-        
-    def moveBy(self, pos, speed, progress=False, linear=False):
-        """Move by the specified relative distance. See move() for more 
-        information.
-        """
-        return self.move(rel=pos, speed=speed, progress=progress, linear=linear)
-
-    def moveTo(self, pos, speed, progress=False, linear=False):
-        """Move to the specified absolute position. See move() for more 
-        information.
-        """
-        return self.move(abs=pos, speed=speed, progress=progress, linear=linear)
-
-    def movePath(self, path):
-        """Move the stage along a path with multiple waypoints.
-
-        The format of *path* is a list of dicts, where each dict specifies keyword arguments
-        to self.move().
-        """
-        return MovePathFuture(self, path)
 
     def stop(self):
         """Stop moving the device immediately.
