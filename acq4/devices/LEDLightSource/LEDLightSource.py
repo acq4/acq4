@@ -26,7 +26,9 @@ class LEDLightSource(LightSource):
         return lambda chan, val: self._channelStateChanged(dev, chan, val)
 
     def _channelStateChanged(self, dev, channel, value):
-        name = self._channelNames[(dev, channel)]
+        name = self._channelNames.get((dev, channel), None)
+        if name is None:
+            return
         state = bool(value)
         if self._sources[name]['active'] != state:
             self._sources[name]['active'] = state
