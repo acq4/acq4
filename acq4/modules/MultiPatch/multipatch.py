@@ -34,9 +34,9 @@ class PipetteControl(Qt.QWidget):
         self.pip = pipette
         self.moving = False
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
-        self.pip.sigDataChanged.connect(self.updatePlots)
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.stateChanged)
+            self.pip.sigTestPulseFinished.connect(self.updatePlots)
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
@@ -68,13 +68,12 @@ class PipetteControl(Qt.QWidget):
 
     def updatePlots(self):
         """Update the pipette data plots."""
-        # TODO: Make the information plotted selectable for future
-        #       case where we have more than just Rss and Rpeak
-        t = self.pip.TPData["time"]
-        rss = self.pip.TPData["Rss"]
-        peak = self.pip.TPData["Rpeak"]
-        self.leftPlot.plot(t, rss, clear=True)
-        self.rightPlot.plot(t, peak, clear=True)
+        tp = self.pip.lastTestPulse()
+        data = tp.data
+        pri = data['Channel': 'primary']
+        units = pri._info[-1]['ClampState']['primaryUnits'] 
+        self.leftPlot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
+        self.leftPlot.setLabels(left=('', units))
 
     def stateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""

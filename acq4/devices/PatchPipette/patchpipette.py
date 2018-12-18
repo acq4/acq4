@@ -22,6 +22,7 @@ class PatchPipette(Pipette):
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
     sigStateChanged = Qt.Signal(object)
+    sigTestPulseFinished = Qt.Signal(object, object)
 
     def __init__(self, deviceManager, config, name):
         self.pressures = {
@@ -33,6 +34,7 @@ class PatchPipette(Pipette):
 
         self._clampName = config.pop('clampDevice', None)
         self._clampDevice = None
+        self._lastTestPulse = None
 
         Pipette.__init__(self, deviceManager, config, name)
         self.state = "out"
@@ -136,8 +138,9 @@ class PatchPipette(Pipette):
         """Return a widget with a UI to put in the device rack"""
         return PatchPipetteDeviceGui(self, win)
 
-    def _testPulseFinished(self, dev, params, result):
-        self._lastTestPulse = (params, result)
+    def _testPulseFinished(self, dev, result):
+        self._lastTestPulse = result
+        self.sigTestPulseFinished.emit(self, result)
 
     def _initTestPulse(self, params):
         self._testPulseThread = TestPulseThread(self, params)
@@ -148,6 +151,9 @@ class PatchPipette(Pipette):
 
     def stopTestPulse(self):
         self._testPulseThread.stop()
+
+    def lastTestPulse(self):
+        return self._lastTestPulse
 
 
 class PatchPipetteCleanFuture(Future):
@@ -220,7 +226,7 @@ class PatchPipetteCleanFuture(Future):
 
 class TestPulseThread(Thread):
 
-    sigTestPulseFinished = Qt.Signal(object, object, object)  # device, params, result
+    sigTestPulseFinished = Qt.Signal(object, object)  # device, result
 
     class StopRequested(Exception):
         pass
@@ -337,7 +343,8 @@ class TestPulseThread(Thread):
                 time.sleep(0.01)
 
             result = task.getResult()
-            self.sigTestPulseFinished.emit(self.dev, taskParams, result)
+            tp = TestPulse(self._clampDev, taskParams, result)
+            self.sigTestPulseFinished.emit(self.dev, tp)
         finally:
             self._clampDev.release()
         
@@ -372,6 +379,21 @@ class TestPulseThread(Thread):
     def _checkStop(self):
         if self._stop:
             raise self.StopRequested()
+
+
+class TestPulse(object):
+    """Represents a single test pulse run, used to analyze and extract features.
+    """
+    def __init__(self, dev, taskParams, result):
+        self.dev = dev
+        self.devName = dev.name()
+        self.taskParams = taskParams
+        self.result = result
+
+    @property
+    def data(self):
+        return self.result[self.devName]
+
 
 
 class PressureControl(Qt.QObject):
