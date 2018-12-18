@@ -5,9 +5,9 @@ sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 import ctypes
 import struct, os, threading, time, weakref
 from acq4.util.clibrary import *
-#from Mutex import *
 
-DEBUG=False
+
+DEBUG = False
 if DEBUG:
     print("MultiClampTelegraph Debug:", DEBUG)
 __all__ = ['MultiClampTelegraph', 'wmlib']
@@ -49,16 +49,15 @@ class MultiClampTelegraph:
         self.debug = debug
         if self.debug:
             print("Initializing MultiClampTelegraph")
-        #self.devices = dict([(self.mkDevId(d), [d, None]) for d in devices])
+
         ## remember index of each device for communicating through callback
         self.channels = channels
         self.devIndex = dict([(self.mkDevId(channels[k]), k) for k in channels])  
         #print "DEV index:", self.devIndex
         self.callback = callback
         self.lock = threading.RLock(verbose=debug)
-        #self.lock = Mutex(Mutex.Recursive)
-        self.thread = threading.Thread(name="MultiClampTelegraph")
-        self.thread.run = self.messageLoop
+        self.thread = threading.Thread(name="MultiClampTelegraph", target=self.messageLoop)
+        self.thread.daemon = True
         self.startMessageThread()
         
     def mkDevId(self, desc):
@@ -97,7 +96,6 @@ class MultiClampTelegraph:
             print("MultiClampTelegraph.stopMessageThread called.")
         with self.lock:
             self.stopThread = True
-        
 
     def updateState(self, devID, state):
         #with self.lock:

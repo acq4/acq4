@@ -208,12 +208,6 @@ class MultiClampChannel:
         elif primary == 1:
             self.setParam('SecondarySignal', sig)
 
-    def getPrimarySignalInfo(self):
-        return self.getSignalInfo(0)
-
-    def getSecondarySignalInfo(self):
-        return self.getSignalInfo(1)
-
     def setPrimarySignal(self, signal):
         return self.setSignal(signal, 0)
 

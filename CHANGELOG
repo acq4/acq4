@@ -43,6 +43,7 @@ acq4-0.10 (unreleased)
         Fixed NiDAQ reporting incorrect sample rate in task runner
         Fixed problems with DockArea not restoring its state correctly
     Maintenance:
+        Major code overhaul towards support for Python 3 and Qt 5 (these are not supported yet, but most of the code refactoring is done)
         Performance improvements for 2p imaging and stage input
         util.database now uses built-in sqlite3 module instead of QtSql
 
