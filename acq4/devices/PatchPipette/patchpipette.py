@@ -413,49 +413,45 @@ class TestPulseThread(Thread):
                 time.sleep(2.0)
 
     def runOnce(self, _checkStop=False):
-        self._clampDev.reserve()
-        try:
-            currentMode = self._clampDev.getMode()
-            params = self.params
-            runMode = currentMode if params['clampMode'] is None else params['clampMode']
-            if runMode == 'I=0':
-                runMode = 'IC'
+        currentMode = self._clampDev.getMode()
+        params = self.params
+        runMode = currentMode if params['clampMode'] is None else params['clampMode']
+        if runMode == 'I=0':
+            runMode = 'IC'
 
-            # Can't reuse tasks yet; remove this when we can.
-            self._lastTask = None
+        # Can't reuse tasks yet; remove this when we can.
+        self._lastTask = None
 
-            if self._lastTask is None or self._lastTask._paramIndex != params['_index'] or self._lastTask._clampMode != runMode:
-                taskParams = params.copy()
+        if self._lastTask is None or self._lastTask._paramIndex != params['_index'] or self._lastTask._clampMode != runMode:
+            taskParams = params.copy()
 
-                # select parameters to use based on clamp mode
-                for k in params:
-                    # rename like icPulseDuration => pulseDuration
-                    if k[:2] == runMode.lower():
-                        taskParams[k[2].lower() + k[3:]] = taskParams[k]
-                    # remove all ic__ and vc__ params
-                    if k[:2] in ('ic', 'vc'):
-                        taskParams.pop(k)
-                    taskParams['clampMode'] = runMode
+            # select parameters to use based on clamp mode
+            for k in params:
+                # rename like icPulseDuration => pulseDuration
+                if k[:2] == runMode.lower():
+                    taskParams[k[2].lower() + k[3:]] = taskParams[k]
+                # remove all ic__ and vc__ params
+                if k[:2] in ('ic', 'vc'):
+                    taskParams.pop(k)
+                taskParams['clampMode'] = runMode
 
-                task = self.createTask(taskParams)
-                task._paramIndex = params['_index']
-                task._clampMode = runMode
-                self._lastTask = task
-            else:
-                task = self._lastTask
-            
-            task.execute()
+            task = self.createTask(taskParams)
+            task._paramIndex = params['_index']
+            task._clampMode = runMode
+            self._lastTask = task
+        else:
+            task = self._lastTask
+        
+        task.execute()
 
-            while not task.isDone():
-                if _checkStop:
-                    self._checkStop()
-                time.sleep(0.01)
+        while not task.isDone():
+            if _checkStop:
+                self._checkStop()
+            time.sleep(0.01)
 
-            result = task.getResult()
-            tp = TestPulse(self._clampDev, taskParams, result)
-            self.sigTestPulseFinished.emit(self.dev, tp)
-        finally:
-            self._clampDev.release()
+        result = task.getResult()
+        tp = TestPulse(self._clampDev, taskParams, result)
+        self.sigTestPulseFinished.emit(self.dev, tp)
         
         return params, result
 
