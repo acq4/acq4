@@ -63,6 +63,7 @@ class Pipette(Device, OptomechDevice):
     """
 
     sigTargetChanged = Qt.Signal(object, object)
+    sigCalibrationChanged = Qt.Signal(object)
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -188,6 +189,7 @@ class Pipette(Device, OptomechDevice):
         cal['offset'] = list(offset)
         self.writeConfigFile(cal, 'calibration')
         self._updateTransform()
+        self.sigCalibrationChanged.emit(self)
 
     def _updateTransform(self):
         tr = pg.Transform3D()

@@ -22,6 +22,7 @@ class PatchPipette(Pipette):
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
+    sigActiveChanged = Qt.Signal(object)
     sigTestPulseFinished = Qt.Signal(object, object)
 
     # This attribute can be modified to insert a custom state manager. 
@@ -34,6 +35,8 @@ class PatchPipette(Pipette):
         Pipette.__init__(self, deviceManager, config, name)
         self.state = "out"
         self.active = False
+        self.broken = False
+        self.calibrated = False
 
         self.pressureDevice = None
         if 'pressureDevice' in config:
@@ -43,9 +46,14 @@ class PatchPipette(Pipette):
         self._initTestPulse(config.get('testPulse', {}))
         self._initStateManager()
 
+        self.sigCalibrationChanged.connect(self._pipetteCalibrationChanged)
+
         # restore last known state for this pipette
-        lastState = self.readConfigFile('last_state').get('state', 'out')
-        self.setState(lastState)
+        lastState = self.readConfigFile('last_state')
+        self.setState(lastState.get('state', 'out'))
+        self.setActive(lastState.get('active', False))
+        self.broken = lastState.get('broken', False)
+        self.calibrated = lastState.get('calibrated', False)
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -100,8 +108,17 @@ class PatchPipette(Pipette):
         """
         oldState = self.state
         self.state = state
-        self.writeConfigFile({'state': state}, 'last_state')
+        self._writeStateFile()
         self.sigStateChanged.emit(self, state, oldState)
+
+    def _writeStateFile(self):
+        state = {
+            'state': self.state,
+            'active': self.active,
+            'calibrated': self.calibrated,
+            'broken': self.broken,
+        }
+        self.writeConfigFile(state, 'last_state')
 
     def getState(self):
         return self.state
@@ -114,8 +131,19 @@ class PatchPipette(Pipette):
         * longer wait time if needed
         """
 
+    def newPipette(self):
+        """A new physical pipette has been attached; reset any per-pipette state.
+        """
+        self.broken = False
+        self.calibrated = False
+        # todo: set calibration to average 
+
+    def _pipetteCalibrationChanged(self):
+        self.calibrated = True
+
     def setActive(self, active):
         self.active = active
+        self.sigActiveChanged.emit(self)
 
     def autoPipetteOffset(self):
         clamp = self.clampDevice
@@ -179,15 +207,25 @@ class PatchPipetteStateManager(object):
         self.dev.sigStateChanged.connect(self.stateChanged)
 
     def testPulseFinished(self, dev, result):
+        """Called when a test pulse is finished
+        """
         pass
 
     def transformChanged(self):
+        """Called when pipette moves relative to global coordinate system
+        """
         pass
 
     def stateChanged(self, oldState, newState):
+        """Called when state has changed (possibly by user)
+        """
         pass
 
     def requestStateChange(self, state):
+        if state == 'out':
+            # assume that pipette has been changed
+            self.dev.newPipette()
+
         self.setupPressureForState(state)
         self.setupClampForState(state)
         self.dev._setState(state)
