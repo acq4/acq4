@@ -7,7 +7,7 @@ from acq4.util.future import Future
 from ...Manager import getManager
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
-from acq4.pyqtgraph import ptime
+from acq4.pyqtgraph import ptime, disconnect
 
 
 class PatchPipette(Pipette):
@@ -21,20 +21,15 @@ class PatchPipette(Pipette):
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
-    sigStateChanged = Qt.Signal(object)
+    sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
     sigTestPulseFinished = Qt.Signal(object, object)
 
-    def __init__(self, deviceManager, config, name):
-        self.pressures = {
-            'out': 'atmosphere',
-            'bath': 0.5,
-            'approach': 0.5,
-            'seal': 'user',
-        }
+    # This attribute can be modified to insert a custom state manager. 
+    defaultStateManagerClass = None
 
-        self._clampName = config.pop('clampDevice', None)
-        self._clampDevice = None
-        self._lastTestPulse = None
+    def __init__(self, deviceManager, config, name):
+        clampName = config.pop('clampDevice', None)
+        self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
 
         Pipette.__init__(self, deviceManager, config, name)
         self.state = "out"
@@ -43,8 +38,14 @@ class PatchPipette(Pipette):
         self.pressureDevice = None
         if 'pressureDevice' in config:
             self.pressureDevice = PressureControl(config['pressureDevice'])
-
+        
+        self._lastTestPulse = None
         self._initTestPulse(config.get('testPulse', {}))
+        self._initStateManager()
+
+        # restore last known state for this pipette
+        lastState = self.readConfigFile('last_state').get('state', 'out')
+        self.setState(lastState)
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -92,17 +93,15 @@ class PatchPipette(Pipette):
     def setState(self, state):
         """out, bath, approach, seal, attached, breakin, wholecell
         """
-        if self.pressureDevice is not None and state in self.pressures:
-            p = self.pressures[state]
-            if isinstance(p, str):
-                self.pressureDevice.setSource(p)
-                self.pressureDevice.setPressure(0)
-            else:
-                self.pressureDevice.setPressure(p)
-                self.pressureDevice.setSource('regulator')
+        self._stateManager.requestStateChange(state)
 
+    def _setState(self, state):
+        """Called by state manager when state has changed.
+        """
+        oldState = self.state
         self.state = state
-        self.sigStateChanged.emit(self)
+        self.writeConfigFile({'state': state}, 'last_state')
+        self.sigStateChanged.emit(self, state, oldState)
 
     def getState(self):
         return self.state
@@ -118,15 +117,8 @@ class PatchPipette(Pipette):
     def setActive(self, active):
         self.active = active
 
-    def clampDevice(self):
-        if self._clampDevice is None:
-            if self._clampName is None:
-                return None
-            self._clampDevice = getManager().getDevice(self._clampName)
-        return self._clampDevice
-
     def autoPipetteOffset(self):
-        clamp = self.clampDevice()
+        clamp = self.clampDevice
         if clamp is not None:
             clamp.autoPipetteOffset()
 
@@ -146,14 +138,93 @@ class PatchPipette(Pipette):
         self._testPulseThread = TestPulseThread(self, params)
         self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
 
-    def startTestPulse(self):
-        self._testPulseThread.start()
-
-    def stopTestPulse(self):
-        self._testPulseThread.stop()
+    def enableTestPulse(self, enable=True):
+        if enable:
+            self._testPulseThread.start()
+        else:
+            self._testPulseThread.stop()
 
     def lastTestPulse(self):
         return self._lastTestPulse
+
+    def _initStateManager(self):
+        # allow external modification of state manager class
+        cls = self.defaultStateManagerClass or PatchPipetteStateManager
+        self._stateManager = cls(self)
+
+
+class PatchPipetteStateManager(object):
+    """Used to monitor the status of a patch pipette and automatically transition between states.
+    """
+    def __init__(self, dev):
+        self.pressureStates = {
+            'out': 'atmosphere',
+            'bath': 0.5,
+            'approach': 0.5,
+            'seal': 'user',
+        }
+        self.clampStates = {   # mode, holding, TP
+            'out': ('vc', 0, False),
+            'bath': ('vc', 0, True),
+            'approach': ('vc', 0, True),
+            'seal': ('vc', 0, True),
+            'attached': ('vc', -70e-3, True),
+            'breakin': ('vc', -70e-3, True),
+            'wholecell': ('vc', -70e-3, True),
+        }
+
+        self.dev = dev
+        self.dev.sigTestPulseFinished.connect(self.testPulseFinished)
+        self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        self.dev.sigStateChanged.connect(self.stateChanged)
+
+    def testPulseFinished(self, dev, result):
+        pass
+
+    def transformChanged(self):
+        pass
+
+    def stateChanged(self, oldState, newState):
+        pass
+
+    def requestStateChange(self, state):
+        self.setupPressureForState(state)
+        self.setupClampForState(state)
+        self.dev._setState(state)
+
+    def setupPressureForState(self, state):
+        """Configure pressure for the requested state.
+        """
+        pdev = self.dev.pressureDevice
+        if pdev is None:
+            return
+        pressure = self.pressureStates.get(state, None)
+        if pressure is None:
+            return
+        
+        if isinstance(pressure, str):
+            pdev.setSource(pressure)
+            pdev.setPressure(0)
+        else:
+            pdev.setPressure(pressure)
+            pdev.setSource('regulator')
+
+    def setupClampForState(self, state):
+        cdev = self.dev.clampDevice
+        mode, holding, tp = self.clampStates.get(state, (None, None, None))
+
+        if mode is not None:
+            cdev.setMode(mode)
+        if holding is not None:
+            cdev.setHolding(holding)
+        if tp is not None:
+            self.dev.enableTestPulse(tp)
+
+    def quit(self):
+        disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
+        disconnect(self.dev.sigGlobalTransformChanged, self.transformChanged)
+        disconnect(self.dev.sigStateChanged, self.stateChanged)
+
 
 
 class PatchPipetteCleanFuture(Future):
@@ -254,7 +325,7 @@ class TestPulseThread(Thread):
         }
         self._lastTask = None
 
-        self._clampDev = self.dev.clampDevice()
+        self._clampDev = self.dev.clampDevice
         self._daqName = list(self._clampDev.listChannels().values())[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
         self._clampName = self._clampDev.name()
         self._manager = getManager()
