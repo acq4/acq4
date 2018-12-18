@@ -57,6 +57,8 @@ class PipetteControl(Qt.QWidget):
         self.rightPlot.setXLink(self.leftPlot.getViewBox())
         self.ui.plotLayout.addWidget(self.gv)
 
+        self.stateChanged(pipette)
+
     def solo(self):
         return self.ui.soloBtn.isChecked()
 
