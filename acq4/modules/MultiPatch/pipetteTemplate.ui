@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>333</width>
-    <height>75</height>
+    <width>414</width>
+    <height>74</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -21,31 +21,12 @@
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="margin">
-    <number>0</number>
+    <number>2</number>
    </property>
    <property name="spacing">
-    <number>3</number>
+    <number>2</number>
    </property>
-   <item row="1" column="4">
-    <widget class="QPushButton" name="targetBtn">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>40</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="text">
-      <string>target</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="3" colspan="2">
+   <item row="0" column="2" colspan="2">
     <widget class="QComboBox" name="stateCombo">
      <item>
       <property name="text">
@@ -89,26 +70,46 @@
      </item>
     </widget>
    </item>
-   <item row="0" column="5" rowspan="4">
-    <widget class="QWidget" name="plotLayoutWidget" native="true">
+   <item row="2" column="2" colspan="2">
+    <widget class="QPushButton" name="lockBtn">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <layout class="QHBoxLayout" name="plotLayout">
-      <property name="spacing">
-       <number>0</number>
-      </property>
-      <property name="margin">
-       <number>0</number>
-      </property>
-     </layout>
+     <property name="text">
+      <string>Lock</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1" rowspan="4">
+    <widget class="QPushButton" name="selectBtn">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>30</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="text">
+      <string>Sel</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item row="0" column="0" rowspan="4">
-    <widget class="QPushButton" name="selectBtn">
+    <widget class="QPushButton" name="activeBtn">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Maximum" vsizetype="Minimum">
        <horstretch>0</horstretch>
@@ -136,7 +137,44 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="4">
+   <item row="0" column="4" rowspan="4">
+    <widget class="QWidget" name="plotLayoutWidget" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <layout class="QHBoxLayout" name="plotLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="margin">
+       <number>0</number>
+      </property>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QPushButton" name="targetBtn">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>40</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="text">
+      <string>target</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="3">
     <widget class="QPushButton" name="tipBtn">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -152,50 +190,6 @@
      </property>
      <property name="text">
       <string>tip</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="3">
-    <widget class="QPushButton" name="soloBtn">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>30</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="text">
-      <string>Solo</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="3">
-    <widget class="QPushButton" name="lockBtn">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>30</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="text">
-      <string>Lock</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
      </property>
     </widget>
    </item>

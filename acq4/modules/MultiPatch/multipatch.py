@@ -28,6 +28,8 @@ class PipetteControl(Qt.QWidget):
 
     sigMoveStarted = Qt.Signal(object)
     sigMoveFinished = Qt.Signal(object)
+    sigSelectChanged = Qt.Signal(object, object)
+    sigLockChanged = Qt.Signal(object, object)
 
     def __init__(self, pipette, parent=None):
         Qt.QWidget.__init__(self, parent)
@@ -36,37 +38,62 @@ class PipetteControl(Qt.QWidget):
         self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.stateChanged)
+            self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
-        self.ui.stateCombo.activated.connect(self.changeState)
+        self.ui.stateCombo.activated.connect(self.stateComboChanged)
 
         n = re.sub(r'[^\d]+', '', pipette.name())
-        self.ui.selectBtn.setText(n)
+        self.ui.activeBtn.setText(n)
 
         for ch in self.children():
             ch.pipette = pipette
             ch.pipCtrl = self
 
+        self.ui.activeBtn.clicked.connect(self.activeClicked)
+        self.ui.selectBtn.clicked.connect(self.selectClicked)
+        self.ui.lockBtn.clicked.connect(self.lockClicked)
+        self.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
+        self.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
+
         self.gv = pg.GraphicsLayoutWidget()
         self.leftPlot = self.gv.addPlot()
         self.rightPlot = self.gv.addPlot()
-        self.rightPlot.setXLink(self.leftPlot.getViewBox())
+        self.rightPlot.setLabels(left=('Rss', 'Ohm'))
         self.ui.plotLayout.addWidget(self.gv)
 
         self.stateChanged(pipette)
 
-    def solo(self):
-        return self.ui.soloBtn.isChecked()
+    def active(self):
+        return self.ui.activeBtn.isChecked()
+
+    def activeClicked(self, b):
+        self.pip.setActive(b)
+
+    def pipActiveChanged(self, pip, active):
+        self.ui.activeBtn.setChecked(active)
 
     def selected(self):
         return self.ui.selectBtn.isChecked()
 
+    def selectClicked(self):
+        self.sigSelectChanged.emit(self, self.selected())
+
+    def setSelected(self, sel):
+        self.ui.selectBtn.setChecked(sel)
+
     def locked(self):
         return self.ui.lockBtn.isChecked()
+    
+    def lockClicked(self):
+        self.sigLockChanged.emit(self, self.locked())
+
+    def setLocked(self, lock):
+        self.ui.lockBtn.setChecked(lock)
 
     def updatePlots(self):
         """Update the pipette data plots."""
@@ -76,6 +103,8 @@ class PipetteControl(Qt.QWidget):
         units = pri._info[-1]['ClampState']['primaryUnits'] 
         self.leftPlot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
         self.leftPlot.setLabels(left=('', units))
+        tph = self.pip.testPulseHistory()
+        self.rightPlot.plot(tph['time'] - tph['time'][0], tph['steadyStateResistance'], clear=True)
 
     def stateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
@@ -83,7 +112,7 @@ class PipetteControl(Qt.QWidget):
         index = self.ui.stateCombo.findText(state)
         self.ui.stateCombo.setCurrentIndex(index)
 
-    def changeState(self, stateIndex):
+    def stateComboChanged(self, stateIndex):
         if isinstance(self.pip, PatchPipette):
             state = str(self.ui.stateCombo.itemText(stateIndex))
             self.pip.setState(state)
@@ -98,6 +127,14 @@ class PipetteControl(Qt.QWidget):
         self.moveTimer.stop()
         self.moving = False
         self.sigMoveFinished.emit(self)
+
+    def focusTipBtnClicked(self, state):
+        speed = self.selectedSpeed(default='slow')
+        self.focusTip(speed)
+
+    def focusTargetBtnClicked(self, state):
+        speed = self.selectedSpeed(default='slow')
+        self.focusTarget(speed)
 
 
 class MultiPatchWindow(Qt.QWidget):
@@ -143,14 +180,14 @@ class MultiPatchWindow(Qt.QWidget):
 
             self.ui.matrixLayout.addWidget(ctrl, i, 0)
 
-            ctrl.ui.selectBtn.clicked.connect(self.selectBtnClicked)
-            ctrl.ui.soloBtn.clicked.connect(self.soloBtnClicked)
-            ctrl.ui.lockBtn.clicked.connect(self.lockBtnClicked)
-            ctrl.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
-            ctrl.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
+            pip.sigActiveChanged.connect(self.pipetteActiveChanged)
+            ctrl.sigSelectChanged.connect(self.pipetteSelectChanged)
+            ctrl.sigLockChanged.connect(self.pipetteLockChanged)
 
             self.pipCtrls.append(ctrl)
             ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
+
+            pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
 
         self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
@@ -163,7 +200,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.approachBtn.clicked.connect(self.moveApproach)
         self.ui.toTargetBtn.clicked.connect(self.moveToTarget)
         self.ui.homeBtn.clicked.connect(self.moveHome)
-        self.ui.idleBtn.clicked.connect(self.moveIdle)
+        # self.ui.idleBtn.clicked.connect(self.moveIdle)
         self.ui.coarseSearchBtn.clicked.connect(self.coarseSearch)
         self.ui.fineSearchBtn.clicked.connect(self.fineSearch)
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
@@ -258,18 +295,6 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             pip.goIdle(speed)
-
-    def selectedPipettes(self):
-        sel = []
-        for ctrl in self.pipCtrls:
-            if ctrl.solo():
-                # solo mode
-                if ctrl.locked():
-                    return []
-                return [ctrl.pip]
-            if ctrl.selected() and not ctrl.locked():
-                sel.append(ctrl.pip)
-        return sel
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -384,39 +409,23 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.pips:
             pip.hideMarkers(hide)
 
-    def soloBtnClicked(self, state):
-        pip = self.sender().pipette
-        if state is True:
-            # uncheck all other solo buttons
+    def pipetteTestPulseEnabled(self, enabled):
+        pass
+
+    def pipetteActiveChanged(self, active):
+        self.selectionChanged()
+
+    def pipetteSelectChanged(self, pipctrl, sel):
+        if sel:
+            # unselect all other pipettes
             for ctrl in self.pipCtrls:
-                if ctrl.pip is pip:
+                if ctrl is pipctrl:
                     continue
-                ctrl.ui.soloBtn.setChecked(False)
+                ctrl.setSelected(False)
 
         self.selectionChanged()
 
-        if state is True and isinstance(pip, PatchPipette):
-            pip.setSelected()
-
-    def lockBtnClicked(self, state):
-        pip = self.sender().pipette
-        # lock manipulator movement, pressure
-        self.selectionChanged()
-
-    def focusTipBtnClicked(self, state):
-        pip = self.sender().pipette
-        speed = self.selectedSpeed(default='slow')
-        pip.focusTip(speed)
-
-    def focusTargetBtnClicked(self, state):
-        pip = self.sender().pipette
-        speed = self.selectedSpeed(default='slow')
-        pip.focusTarget(speed)
-
-    def selectBtnClicked(self, b):
-        pip = self.sender().pipette
-        if isinstance(pip, PatchPipette):
-            pip.setActive(b)
+    def pipetteLockChanged(self, state):
         self.selectionChanged()
 
     def selectionChanged(self):
@@ -430,6 +439,18 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.updateXKeysBacklight()
 
+    def selectedPipettes(self):
+        sel = []
+        for ctrl in self.pipCtrls:
+            if ctrl.selected():
+                # solo mode
+                if ctrl.locked():
+                    return []
+                return [ctrl.pip]
+            if ctrl.active() and not ctrl.locked():
+                sel.append(ctrl.pip)
+        return sel
+
     def updateXKeysBacklight(self):
         if self.xkdev is None:
             return
@@ -438,12 +459,12 @@ class MultiPatchWindow(Qt.QWidget):
         bl = self.xkdev.getBacklights()
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
-            bl[0, i+4, 0] = 1 if ctrl.selected() else 0
+            bl[0, i+4, 0] = 1 if ctrl.active() else 0
             bl[0, i+4, 1] = 2 if ctrl.moving else 0
             bl[1, i+4, 1] = 1 if pip in sel else 0
             bl[1, i+4, 0] = 1 if ctrl.locked() else 0
             bl[2, i+4, 1] = 1 if pip in sel else 0
-            bl[2, i+4, 0] = 1 if ctrl.solo() else 0
+            bl[2, i+4, 0] = 1 if ctrl.selected() else 0
 
         bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
         bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
@@ -462,6 +483,8 @@ class MultiPatchWindow(Qt.QWidget):
                         if key[1] > 3:
                             row = key[0]
                             col = key[1] - 4
+                            if col >= len(self.pips):
+                                continue
                             actions = {0:'selectBtn', 1:'lockBtn', 2:'soloBtn', 3:'tipBtn', 4:'targetBtn'}
                             if row in actions:
                                 btnName = actions[row]
@@ -557,4 +580,3 @@ class MultiPatchWindow(Qt.QWidget):
         for rec in recs:
             self.storageFile.write(json.dumps(rec) + ",\n")
         self.storageFile.flush()
-

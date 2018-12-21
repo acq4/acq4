@@ -22,8 +22,10 @@ class PatchPipette(Pipette):
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
     """
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
-    sigActiveChanged = Qt.Signal(object)
-    sigTestPulseFinished = Qt.Signal(object, object)
+    sigActiveChanged = Qt.Signal(object, object)  # self, active
+    sigTestPulseFinished = Qt.Signal(object, object)  # self, TestPulse
+    sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
+    sigUserPressureEnabled = Qt.Signal(object, object)  # self, enabled
 
     # This attribute can be modified to insert a custom state manager. 
     defaultStateManagerClass = None
@@ -41,6 +43,7 @@ class PatchPipette(Pipette):
         self.pressureDevice = None
         if 'pressureDevice' in config:
             self.pressureDevice = PressureControl(config['pressureDevice'])
+        self.userPressure = False
         
         self._lastTestPulse = None
         self._initTestPulse(config.get('testPulse', {}))
@@ -137,13 +140,14 @@ class PatchPipette(Pipette):
         self.broken = False
         self.calibrated = False
         # todo: set calibration to average 
+        self.resetTestPulseHistory()
 
     def _pipetteCalibrationChanged(self):
         self.calibrated = True
 
     def setActive(self, active):
         self.active = active
-        self.sigActiveChanged.emit(self)
+        self.sigActiveChanged.emit(self, active)
 
     def autoPipetteOffset(self):
         clamp = self.clampDevice
@@ -160,17 +164,43 @@ class PatchPipette(Pipette):
 
     def _testPulseFinished(self, dev, result):
         self._lastTestPulse = result
+        if self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
+            newTPH = np.empty(self._testPulseHistory.shape[0]*2, dtype=self._testPulseHistory.dtype)
+            newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
+            self._testPulseHistory = newTPH
+        analysis = result.analysis()
+        self._testPulseHistory[self._testPulseHistorySize]['time'] = result.startTime()
+        for k in analysis:
+            self._testPulseHistory[self._testPulseHistorySize][k] = analysis[k]
+        self._testPulseHistorySize += 1
+
         self.sigTestPulseFinished.emit(self, result)
 
     def _initTestPulse(self, params):
+        self.resetTestPulseHistory()
         self._testPulseThread = TestPulseThread(self, params)
         self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
 
-    def enableTestPulse(self, enable=True):
+    def testPulseHistory(self):
+        return self._testPulseHistory[:self._testPulseHistorySize].copy()
+
+    def resetTestPulseHistory(self):
+        self._lastTestPulse = None
+        self._testPulseHistory = np.empty(1000, dtype=[
+            ('time', 'float'),
+            ('baselinePotential', 'float'),
+            ('baselineCurrent', 'float'),
+            ('peakResistance', 'float'),
+            ('steadyStateResistance', 'float'),
+        ])
+            
+        self._testPulseHistorySize = 0
+
+    def enableTestPulse(self, enable=True, block=False):
         if enable:
             self._testPulseThread.start()
         else:
-            self._testPulseThread.stop()
+            self._testPulseThread.stop(block=block)
 
     def lastTestPulse(self):
         return self._lastTestPulse
@@ -179,6 +209,10 @@ class PatchPipette(Pipette):
         # allow external modification of state manager class
         cls = self.defaultStateManagerClass or PatchPipetteStateManager
         self._stateManager = cls(self)
+
+    def quit(self):
+        self.enableTestPulse(False, block=True)
+        self._stateManager.quit()
 
 
 class PatchPipetteStateManager(object):
@@ -205,6 +239,7 @@ class PatchPipetteStateManager(object):
         self.dev.sigTestPulseFinished.connect(self.testPulseFinished)
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.dev.sigStateChanged.connect(self.stateChanged)
+        self.dev.sigActiveChanged.connect(self.activeChanged)
 
     def testPulseFinished(self, dev, result):
         """Called when a test pulse is finished
@@ -222,6 +257,15 @@ class PatchPipetteStateManager(object):
         pass
 
     def requestStateChange(self, state):
+        """Pipette has requested a state change; either accept and configure the new
+        state or reject the new state.
+
+        Return the name of the state that has been chosen.
+        """
+        self.configureState(state)
+        return state
+
+    def configureState(self, state):
         if state == 'out':
             # assume that pipette has been changed
             self.dev.newPipette()
@@ -253,10 +297,22 @@ class PatchPipetteStateManager(object):
 
         if mode is not None:
             cdev.setMode(mode)
-        if holding is not None:
-            cdev.setHolding(holding)
+            if holding is not None:
+                cdev.setHolding(value=holding)
+
+        if state == 'approach':
+            cdev.autoPipetteOffset()
+            self.dev.resetTestPulseHistory()
+        
         if tp is not None:
             self.dev.enableTestPulse(tp)
+
+    def activeChanged(self, active):
+        if active:
+            self.configureState(self.dev.state)
+        else:
+            self.dev.enableTestPulse(False)
+            self.dev.pressureDevice.setSource('atmosphere')
 
     def quit(self):
         disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
@@ -341,7 +397,7 @@ class TestPulseThread(Thread):
         pass
 
     def __init__(self, dev, params):
-        Thread.__init__(self)
+        Thread.__init__(self, name="TestPulseThread(%s)"%dev.name())
         self.dev = dev
         self._stop = False
         self.params = {
@@ -383,9 +439,12 @@ class TestPulseThread(Thread):
         self._stop = False
         Thread.start(self)
 
-    def stop(self):
+    def stop(self, block=False):
         self._stop = True
-
+        if block:
+            if not self.wait(10000):
+                raise RuntimeError("Timed out waiting for test pulse thread exit.")
+                
     def run(self):
         while True:
             try:
@@ -451,6 +510,7 @@ class TestPulseThread(Thread):
 
         result = task.getResult()
         tp = TestPulse(self._clampDev, taskParams, result)
+        tp.analysis()
         self.sigTestPulseFinished.emit(self.dev, tp)
         
         return params, result
@@ -474,6 +534,7 @@ class TestPulseThread(Thread):
             self._clampName: {
                 'mode': mode,
                 'command': cmdData,
+                'recordState': ['BridgeBalResist', 'BridgeBalEnable'],
             }
         }
         if params['holding'] is not None:
@@ -494,11 +555,48 @@ class TestPulse(object):
         self.devName = dev.name()
         self.taskParams = taskParams
         self.result = result
+        self._analysis = None
 
     @property
     def data(self):
         return self.result[self.devName]
 
+    def startTime(self):
+        return self.result[self.devName]._info[-1]['startTime']
+
+    def analysis(self):
+        if self._analysis is not None:
+            return self._analysis
+        analysis = {}
+        params = self.taskParams
+        pri = self.data['Channel': 'primary']
+        base = pri['Time': 0:params['preDuration']]
+        peak = pri['Time': params['preDuration']:params['preDuration']+2e-3]
+        steady  = pri['Time': params['preDuration']:params['preDuration']+params['pulseDuration']-2e-3]
+        peakValue = peak.max()
+        steadyValue = np.median(steady)
+        baseValue = np.median(base)
+
+        if params['clampMode'] == 'VC':
+            analysis['baselinePotential'] = params['holding'] or 0
+            analysis['baselineCurrent'] = baseValue
+            analysis['peakResistance'] = params['amplitude'] / (peakValue - baseValue)
+            analysis['steadyStateResistance'] = params['amplitude'] / (steadyValue - baseValue)
+
+        else:
+            bridge = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalResist']
+            bridgeOn = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalEnable']
+            if not bridgeOn:
+                bridge = 0.0
+            analysis['baselineCurrent'] = params['holding'] or 0
+            analysis['baselinePotential'] = baseValue
+            analysis['peakResistance'] = bridge + (peakValue - baseValue) / params['amplitude']
+            analysis['steadyStateResistance'] = bridge + (steadyValue - baseValue) / params['amplitude']
+
+        analysis['peakResistance'] = np.clip(analysis['peakResistance'], 0, 20e9)
+        analysis['steadyStateResistance'] = np.clip(analysis['steadyStateResistance'], 0, 20e9)
+
+        self._analysis = analysis
 
 
 class PressureControl(Qt.QObject):
