@@ -829,7 +829,7 @@ class Manager(Qt.QObject):
                 #pdb.set_trace()
                     
                 print("Requesting all devices shut down..")
-                for d in self.devices:
+                for d in list(self.devices.keys())[::-1]:  # shut down in reverse order
                     print("    %s" % d)
                     try:
                         self.devices[d].quit()
@@ -1018,7 +1018,8 @@ class Task:
                         self.tasks[devName].start()
                     except:
                         self.startedDevs.remove(devName)
-                        raise HelpfulException("Error starting device '%s'; aborting task." % devName)
+                        print("Error starting device '%s'; aborting task." % devName)
+                        raise
                     prof.mark('start %s' % devName)
                 self.startTime = ptime.time()
                 
@@ -1054,7 +1055,7 @@ class Task:
                 self.stop()
                 #print "  %d execute complete" % self.id
             except: 
-                #printExc("==========  Error in task execution:  ==============")
+                printExc("==========  Error in task execution:  ==============")
                 self.abort()
                 self._releaseAll()
                 raise
@@ -1196,16 +1197,15 @@ class Task:
 
     def _releaseAll(self):
         with self.taskLock:
-            #print self.id,"Task.releaseAll:"
+            # print(self.id, "Task.releaseAll:")
             for t in self.lockedDevs[:]:
-                #print "  %d releasing" % self.id, t
+                # print("  %d releasing" % self.id, t)
                 try:
                     self.tasks[t].release()
                     self.lockedDevs.remove(t)
                 except:
-                    printExc("Error while releasing hardware for task %s:" % t)
-                    
-                    #print "  %d released" % self.id, t
+                    printExc("Error while releasing hardware for task %s:" % t)                    
+                    # print("  %d released" % self.id, t)
 
     def abort(self):
         """Stop all tasks, to not attempt to get data."""
