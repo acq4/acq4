@@ -353,21 +353,26 @@ class MultiClampTask(DeviceTask):
 
             #prof.mark('    Multiclamp: set gains')
 
-
             if 'parameters' in self.cmd:
                 self.dev.mc.setParams(self.cmd['parameters'])
 
             #prof.mark('    Multiclamp: set params')
 
-
-                
             #self.state = self.dev.mc.getState()
             self.state = self.dev.getLastState()
             
             #prof.mark('    Multiclamp: get state')
             
-            if 'recordState' in self.cmd and self.cmd['recordState'] is True:
-                exState = self.dev.mc.getParams(MultiClampTask.recordParams)
+            recordState = self.cmd.get('recordState', False)
+            if 'recordState' is not False:
+                if recordState is True:
+                    recordParams = MultiClampTask.recordParams
+                elif isinstance(recordState, list):
+                    recordParams = recordState
+                else:
+                    raise TypeError("MultiClamp task command['recordParams'] must be bool or list")
+
+                exState = self.dev.mc.getParams(recordParams)
                 self.state['ClampParams'] = {}
                 for k in exState:
                     self.state['ClampParams'][k] = exState[k]
