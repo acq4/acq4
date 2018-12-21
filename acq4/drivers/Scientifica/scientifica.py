@@ -167,7 +167,12 @@ class Scientifica(SerialDevice):
     def send(self, msg, timeout=5):
         with self.lock:
             self.write(msg + '\r')
-            result = self.readUntil(b'\r', timeout=timeout)[:-1]
+            try:
+                result = self.readUntil(b'\r', timeout=timeout)[:-1]
+                self.readAll() # should be nothing left in the buffer at this point
+            except TimeoutError:
+                self.readAll()
+                raise
             if result.startswith(b'E,'):
                 errno = int(result.strip()[2:])
                 exc = RuntimeError("Received error %d from Scientifica controller (request: %r)" % (errno, msg))
@@ -204,7 +209,7 @@ class Scientifica(SerialDevice):
         """
         return self.send('desc %s' % desc)
 
-    def getPos(self):
+    def getPos(self, _tryagain=True):
         """Get current manipulator position reported by controller in micrometers.
 
         Usually the stage reports this value in units of 0.1 micrometers (and it is converted to um
@@ -214,10 +219,20 @@ class Scientifica(SerialDevice):
             ## request position
             if self._version < 3:
                 packet = self.send('POS')
-                return [int(x) / 10. for x in packet.split(b'\t')]
+                scale = 10.
             else:
                 packet = self.send('P')
-                return [int(x) / 100. for x in packet.split(b'\t')]
+                scale = 100.
+            try:
+                return [int(x) / scale for x in packet.split(b'\t')]
+            except ValueError:
+                if _tryagain:
+                    # packet corruption; clear and try again
+                    # this can happen if a previous command failed to retrieve its result from the serial buffer
+                    self.readAll()
+                    return self.getPos(_tryagain=False)
+                else:
+                    raise
 
     _param_commands = {
         'maxSpeed': ('TOP', 'TOP %f', float),
