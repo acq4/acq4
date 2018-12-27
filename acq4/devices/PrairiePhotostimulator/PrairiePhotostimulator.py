@@ -119,7 +119,6 @@ class PrairiePhotostimModGui(QtGui.QWidget):
         for name in ['default', 'start', 'stop']:
             for p in [self.laserDurationParam, self.intervalParam]:
                 p.param(name).setOpts(siPrefix=True, suffix='s', limits=[0, None])
-                print name, p
             self.laserPowerParam.param(name).setOpts(limits=[0,100])
         self.laserDurationParam.param('default').setOpts(value=0.01)
 
@@ -503,7 +502,7 @@ class PhotostimTarget(TargetItem):
 
     def cellBtnToggled(self, b):
         QtCore.QTimer.singleShot(300, self.menu.hide)
-        print("CellBtnToggled", b)
+        #print("CellBtnToggled", b)
         self.sigCellBtnToggled.emit(b)
 
     def suppStimRequested(self):
