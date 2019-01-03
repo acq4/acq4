@@ -7,7 +7,7 @@ from acq4.util.future import Future
 from ...Manager import getManager
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
-from acq4.pyqtgraph import ptime, disconnect
+from acq4.pyqtgraph import ptime, disconnect, metaarray
 
 
 class PatchPipette(Pipette):
@@ -420,18 +420,19 @@ class TestPulseThread(Thread):
         self.params = {
             'clampMode': None,
             'interval': None,
-            'sampleRate': 100000,
-            'downsample': 4,
-            'vcPreDuration': 10e-3,
+            'sampleRate': 500000,
+            'downsample': 20,
+            'vcPreDuration': 5e-3,
             'vcPulseDuration': 10e-3,
-            'vcPostDuration': 10e-3,
+            'vcPostDuration': 5e-3,
             'vcHolding': None,
             'vcAmplitude': -10e-3,
             'icPreDuration': 10e-3,
-            'icPulseDuration': 30e-3,
-            'icPostDuration': 10e-3,
+            'icPulseDuration': 50e-3,
+            'icPostDuration': 30e-3,
             'icHolding': None,
             'icAmplitude': -10e-12,
+            'average': 4,
             '_index': 0,
         }
         self._lastTask = None
@@ -534,20 +535,22 @@ class TestPulseThread(Thread):
 
     def createTask(self, params):
         duration = params['preDuration'] + params['pulseDuration'] + params['postDuration']
-        numPts = int(float(duration * params['sampleRate']))
+        numPts = int(float(duration * params['sampleRate']) * params['downsample']) // params['downsample']
+        params['numPts'] = numPts  # send this back for analysis
         mode = params['clampMode']
 
-        cmdData = np.empty(numPts)
+        cmdData = np.empty(numPts * params['average'])
         holding = params['holding'] or self._clampDev.getHolding(mode)
         cmdData[:] = holding
 
-        start = int(params['preDuration'] * params['sampleRate'])
-        stop = start + int(params['pulseDuration'] * params['sampleRate'])
-        cmdData[start:stop] += params['amplitude']
+        for i in range(params['average']):
+            start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
+            stop = start + int(params['pulseDuration'] * params['sampleRate'])
+            cmdData[start:stop] += params['amplitude']
         
         cmd = {
-            'protocol': {'duration': duration},
-            self._daqName: {'rate': params['sampleRate'], 'numPts': numPts, 'downsample': params['downsample']},
+            'protocol': {'duration': duration * params['average']},
+            self._daqName: {'rate': params['sampleRate'], 'numPts': numPts * params['average'], 'downsample': params['downsample']},
             self._clampName: {
                 'mode': mode,
                 'command': cmdData,
@@ -573,10 +576,26 @@ class TestPulse(object):
         self.taskParams = taskParams
         self.result = result
         self._analysis = None
+        self._average = None
 
     @property
     def data(self):
-        return self.result[self.devName]
+        if self._average is None:
+            params = self.taskParams
+            result = self.result[self.devName]
+            if params['average'] == 1:
+                self._average = result
+            else:
+                numPts = params['numPts'] // params['downsample']
+                pri = result['Channel': 'primary']
+                avg = np.zeros(numPts)
+                for i in range(params['average']):
+                    avg += pri[i*numPts:(i+1)*numPts]
+                avg /= params['average']
+                self._average = result['Time':0:numPts].copy()
+                self._average['Channel': 'primary']._data[:] = avg
+
+        return self._average
 
     def startTime(self):
         return self.result[self.devName]._info[-1]['startTime']
@@ -587,6 +606,7 @@ class TestPulse(object):
         analysis = {}
         params = self.taskParams
         pri = self.data['Channel': 'primary']
+
         base = pri['Time': 0:params['preDuration']]
         peak = pri['Time': params['preDuration']:params['preDuration']+2e-3]
         steady  = pri['Time': params['preDuration']:params['preDuration']+params['pulseDuration']-2e-3]
