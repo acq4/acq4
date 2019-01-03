@@ -55,8 +55,10 @@ class MCDeviceGui(Qt.QWidget):
 
             istate = self.dev.getLastState('IC')
             vstate = self.dev.getLastState('VC')
-            self.ui.icHoldingSpin.setValue(istate['holding'])
-            self.ui.vcHoldingSpin.setValue(vstate['holding'])
+            if istate is not None:
+                self.ui.icHoldingSpin.setValue(istate['holding'])
+            if vstate is not None:
+                self.ui.vcHoldingSpin.setValue(vstate['holding'])
 
         finally:
             self.state.sigChanged.connect(self.uiStateChanged)
