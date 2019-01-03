@@ -209,6 +209,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         self.ui.reSealBtn.clicked.connect(self.reSeal)
+        self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
 
         self.ui.fastBtn.clicked.connect(lambda: self.ui.slowBtn.setChecked(False))
         self.ui.slowBtn.clicked.connect(lambda: self.ui.fastBtn.setChecked(False))
@@ -410,8 +411,13 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.pips:
             pip.hideMarkers(hide)
 
-    def pipetteTestPulseEnabled(self, enabled):
-        pass
+    def pipetteTestPulseEnabled(self, pip, enabled):
+        if self.selectedPipettes() == [pip]:
+            self.updateSelectedPipControls()
+
+    def testPulseClicked(self):
+        for pip in self.selectedPipettes():
+            pip.enableTestPulse(self.ui.testPulseBtn.isChecked())
 
     def pipetteActiveChanged(self, active):
         self.selectionChanged()
@@ -437,8 +443,22 @@ class MultiPatchWindow(Qt.QWidget):
         if none:
             self.ui.calibrateBtn.setChecked(False)
             self.ui.setTargetBtn.setChecked(False)
-
+            self.ui.selectedGroupBox.setTitle("Selected:")
+            self.ui.selectedGroupBox.setEnabled(False)
+        else:
+            if solo:
+                self.ui.selectedGroupBox.setTitle("Selected: %s" % (pips[0].name()))
+            elif len(pips) > 1:
+                self.ui.selectedGroupBox.setTitle("Selected: multiple")
+            self.ui.selectedGroupBox.setEnabled(True)
+            self.updateSelectedPipControls()
+        
         self.updateXKeysBacklight()
+
+    def updateSelectedPipControls(self):
+        pips = self.selectedPipettes()
+        tp = any([pip.testPulseEnabled() for pip in pips])
+        self.ui.testPulseBtn.setChecked(tp)
 
     def selectedPipettes(self):
         sel = []

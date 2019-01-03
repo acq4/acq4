@@ -54,9 +54,10 @@ class PatchPipette(Pipette):
         # restore last known state for this pipette
         lastState = self.readConfigFile('last_state')
         self.setState(lastState.get('state', 'out'))
-        self.setActive(lastState.get('active', False))
         self.broken = lastState.get('broken', False)
         self.calibrated = lastState.get('calibrated', False)
+        self.setActive(False)  # Always start pipettes disabled rather than restoring last state?
+        # self.setActive(lastState.get('active', False))
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -201,6 +202,9 @@ class PatchPipette(Pipette):
             self._testPulseThread.start()
         else:
             self._testPulseThread.stop(block=block)
+
+    def testPulseEnabled(self):
+        return self._testPulseThread.isRunning()
 
     def lastTestPulse(self):
         return self._lastTestPulse
