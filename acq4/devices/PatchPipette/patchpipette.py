@@ -223,7 +223,7 @@ class PatchPipetteStateManager(object):
     """Used to monitor the status of a patch pipette and automatically transition between states.
 
     State manager affects:
-     - pipette state ('bath', 'seal', 'wholecell', etc.)
+     - pipette state ('bath', 'seal', 'whole cell', etc.)
      - clamp mode
      - clamp holding value
      - pressure
@@ -242,8 +242,8 @@ class PatchPipetteStateManager(object):
             'approach': ('vc', 0, True),
             'seal': ('vc', 0, True),
             'attached': ('vc', -70e-3, True),
-            'breakin': ('vc', -70e-3, True),
-            'wholecell': ('vc', -70e-3, True),
+            'break in': ('vc', -70e-3, True),
+            'whole cell': ('vc', -70e-3, True),
         }
 
         self.dev = dev

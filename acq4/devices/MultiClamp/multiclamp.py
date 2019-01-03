@@ -364,7 +364,7 @@ class MultiClampTask(DeviceTask):
             #prof.mark('    Multiclamp: get state')
             
             recordState = self.cmd.get('recordState', False)
-            if 'recordState' is not False:
+            if recordState is not False:
                 if recordState is True:
                     recordParams = MultiClampTask.recordParams
                 elif isinstance(recordState, list):
