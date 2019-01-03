@@ -506,7 +506,7 @@ class MultiPatchWindow(Qt.QWidget):
                             col = key[1] - 4
                             if col >= len(self.pips):
                                 continue
-                            actions = {0:'selectBtn', 1:'lockBtn', 2:'soloBtn', 3:'tipBtn', 4:'targetBtn'}
+                            actions = {0:'activeBtn', 1:'lockBtn', 2:'selectBtn', 3:'tipBtn', 4:'targetBtn'}
                             if row in actions:
                                 btnName = actions[row]
                                 btn = getattr(self.pipCtrls[col].ui, btnName)
