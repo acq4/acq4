@@ -12,7 +12,10 @@ class Future(Qt.QObject):
     class StopRequested(Exception):
         """Raised by _checkStop if stop() has been invoked.
         """
-        pass
+
+    class Timeout(Exception):
+        """Raised by wait() if the timeout period elapses.
+        """
 
     def __init__(self):
         Qt.QObject.__init__(self)
@@ -22,7 +25,7 @@ class Future(Qt.QObject):
         self._isDone = False
         self._wasInterrupted = False
         self._errorMessage = None
-        self._stopRequested = True
+        self._stopRequested = False
         self._state = 'starting'
 
     def currentState(self):
@@ -99,7 +102,7 @@ class Future(Qt.QObject):
         start = ptime.time()
         while True:
             if (timeout is not None) and (ptime.time() > start + timeout):
-                raise ValueError("Timeout waiting for task to complete.")
+                raise self.Timeout("Timeout waiting for task to complete.")
                 
             if self.isDone():
                 break
