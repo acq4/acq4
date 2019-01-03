@@ -1,5 +1,9 @@
 from __future__ import print_function
 import time, threading
+try:
+    import queue
+except ImportError:
+    import Queue as Queue
 import numpy as np
 from ..Pipette import Pipette, PipetteDeviceGui
 from acq4.util import Qt
@@ -156,8 +160,7 @@ class PatchPipette(Pipette):
             clamp.autoPipetteOffset()
 
     def cleanPipette(self):
-        config = self.config.get('cleaning', {})
-        return PatchPipetteCleanFuture(self, config)
+        return self._stateManager.cleanPipette()
 
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
@@ -218,9 +221,149 @@ class PatchPipette(Pipette):
         self.enableTestPulse(False, block=True)
         self._stateManager.quit()
 
+    def goHome(self, speed):
+        Pipette.goHome(self, speed)
+        self.setState('out')
+
+    def goApproach(self, speed):
+        self._stateManager.goApproach(speed)
+
+
+class PipetteJobFuture(Future):
+    """Future that runs a job in a background thread.
+
+    This class is the base for other job classes and just takes care of some boilerplate:
+     - assembling config from defaults and init args
+     - starting thread
+     - handling various job failure / finish modes
+    """
+    def __init__(self, dev, config):
+        Future.__init__(self)
+
+        self.dev = dev
+
+        self.config = self.defaultConfig()
+        self.config.update(config)
+
+        self._thread = threading.Thread(target=self._runJob)
+        self._thread.start()
+
+    def defaultConfig(self):
+        raise NotImplementedError()
+
+    def run(self):
+        raise NotImplementedError()
+
+    def cleanup(self, interrupted):
+        """Called after job completes, whether it failed or succeeded.
+        """
+        pass
+
+    def _runJob(self):
+        try:
+            # run must be reimplemented in subclass and call self._checkStop() frequently
+            self.run()
+
+        except self.StopRequested:
+            interrupted = True
+            error = None
+        except Exception as exc:
+            interrupted = True
+            error = str(exc)
+            printExc("Error during %s:" % self.jobName)
+        else:
+            interrupted = False
+            error = None
+        finally:
+            try:
+                self.cleanup(interrupted)
+            except Exception:
+                printExc("Error during %s cleanup:" % self.jobName)
+
+            self._taskDone(interrupted=interrupted, error=error)
+
+
+class PatchPipetteApproachFuture(PipetteJobFuture):
+    """Handles patch approach mode:
+
+    - Optionally moves pipette to beginning approach position
+    - Optionally advances pipette slowly toward target
+    - Monitors resistance for pipette break
+    - Monitors resistance for cell detection
+    """
+    jobName = 'cell approach'
+    def defaultConfig(self):
+        cfg = {
+            'doInitialMove': True,
+            'initialMoveSpeed': 'fast',
+        }
+        return cfg
+
+    def run(self):
+        config = self.config
+        dev = self.dev
+
+        if config['doInitialMove']:
+            fut = dev.goApproach(speed=config['initialMoveSpeed'])
+            fut.wait()
+
+
+
+class PatchPipetteCleanFuture(PipetteJobFuture):
+    """Tracks the progress of a patch pipette cleaning task.
+    """
+    jobName = 'pipette clean'
+
+    def defaultConfig(self):
+        config = {
+            'cleanSequence': [(-5, 30.), (5, 45)],
+            'rinseSequence': [(-5, 30.), (5, 45)],
+            'approachHeight': 5e-3,
+            'cleanPos': self.dev.loadPosition('clean'),
+            'rinsePos': self.dev.loadPosition('rinse', None),
+        }
+        return config
+
+    def run(self):
+        # Called in worker thread
+        self.resetPos = None
+        config = self.config.copy()
+        dev = self.dev
+
+        dev.retractFromSurface().wait()
+
+        for stage in ('clean', 'rinse'):
+            self._checkStop()
+
+            sequence = config[stage + 'Sequence']
+            if len(sequence) == 0:
+                continue
+            pos = config[stage + 'Pos']
+            approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
+
+            dev._moveToGlobal(approachPos, 'fast').wait()
+            self._checkStop()
+            self.resetPos = approachPos
+            dev._moveToGlobal(pos, 'fast').wait()
+            self._checkStop()
+
+            for pressure, delay in sequence:
+                dev.setPressure(pressure)
+                self._checkStop(delay)
+
+    def cleanup(self, interrupted):
+        dev = self.dev
+        try:
+            dev.setPressure(0)
+        except Exception:
+            printExc("Error resetting pressure after clean")
+        
+        if self.resetPos is not None:
+            dev._moveToGlobal(self.resetPos, 'fast')
+
 
 class PatchPipetteStateManager(object):
-    """Used to monitor the status of a patch pipette and automatically transition between states.
+    """Used to handle state transitions and to spawn background threads for pipette automation
 
     State manager affects:
      - pipette state ('bath', 'seal', 'whole cell', etc.)
@@ -228,7 +371,13 @@ class PatchPipetteStateManager(object):
      - clamp holding value
      - pressure
      - test pulse
+     - pipette position
     """
+    jobTypes = {
+        'clean': PatchPipetteCleanFuture,
+        'approach': PatchPipetteApproachFuture,
+    }
+
     def __init__(self, dev):
         self.pressureStates = {
             'out': 'atmosphere',
@@ -251,6 +400,8 @@ class PatchPipetteStateManager(object):
         self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
+
+        self.currentJob = None
 
     def testPulseFinished(self, dev, result):
         """Called when a test pulse is finished
@@ -335,75 +486,36 @@ class PatchPipetteStateManager(object):
         disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
         disconnect(self.dev.sigGlobalTransformChanged, self.transformChanged)
         disconnect(self.dev.sigStateChanged, self.stateChanged)
+        self.stopJob()
 
+    ## Background job handling
 
-
-class PatchPipetteCleanFuture(Future):
-    """Tracks the progress of a patch pipette cleaning task.
-    """
-    def __init__(self, dev, config):
-        Future.__init__(self)
-
-        self.dev = dev
-
-        self.config = {
-            'cleanSequence': [(-5, 30.), (5, 45)],
-            'rinseSequence': [(-5, 30.), (5, 45)],
-            'approachHeight': 5e-3,
-            'cleanPos': dev.loadPosition('clean'),
-            'rinsePos': dev.loadPosition('rinse', None),
-        }
-        self.config.update(config)
-
-        self._stopRequested = False
-        self._thread = threading.Thread(target=self._clean)
-        self._thread.start()
-
-    def _clean(self):
-        # Called in worker thread
-        config = self.config.copy()
-        dev = self.dev
-        resetPos = None
-        print(config)
-        try:
-            dev.retractFromSurface().wait()
-
-            for stage in ('clean', 'rinse'):
-                print(stage)
-                self._checkStop()
-
-                sequence = config[stage + 'Sequence']
-                if len(sequence) == 0:
-                    print("skip")
-                    continue
-                pos = config[stage + 'Pos']
-                approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
-
-                dev._moveToGlobal(approachPos, 'fast').wait()
-                self._checkStop()
-                resetPos = approachPos
-                dev._moveToGlobal(pos, 'fast').wait()
-                self._checkStop()
-
-                for pressure, delay in sequence:
-                    dev.setPressure(pressure)
-                    self._checkStop(delay)
-
-        except self.StopRequested:
-            self._taskDone(interrupted=True)
-        except Exception as exc:
-            printExc("Error during pipette cleaning:")
-            self._taskDone(interrupted=True, error=str(exc))
-        else:
-            self._taskDone()
-        finally:
+    def stopJob(self):
+        job = self.currentJob
+        if job is not None:
+            job.stop()
             try:
-                dev.setPressure(0)
+                job.wait(timeout=10)
+            except job.Timeout:
+                printExc("Timed out waiting for job %s to complete" % job)
             except Exception:
-                printExc("Error resetting pressure after clean")
-            
-            if resetPos is not None:
-                dev._moveToGlobal(resetPos, 'fast')
+                # hopefully someone else is watching this future for errors!
+                pass
+
+    def startJob(self, jobType, *args, **kwds):
+        self.stopJob()
+        jobClass = self.jobTypes[jobType]
+        fut = jobClass(*args, **kwds)
+        self.currentJob = fut
+        return fut
+
+    def cleanPipette(self):
+        config = self.dev.config.get('cleaning', {})
+        return self.startJob('clean', dev=self.dev, config=config)
+
+    def goApproach(self, speed):
+        config = {'initialMoveSpeed': speed}
+        return self.startJob('approach', dev=self.dev, config=config)
 
 
 class TestPulseThread(Thread):
