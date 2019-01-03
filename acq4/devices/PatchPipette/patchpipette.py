@@ -217,6 +217,13 @@ class PatchPipette(Pipette):
 
 class PatchPipetteStateManager(object):
     """Used to monitor the status of a patch pipette and automatically transition between states.
+
+    State manager affects:
+     - pipette state ('bath', 'seal', 'wholecell', etc.)
+     - clamp mode
+     - clamp holding value
+     - pressure
+     - test pulse
     """
     def __init__(self, dev):
         self.pressureStates = {
@@ -277,6 +284,9 @@ class PatchPipetteStateManager(object):
     def setupPressureForState(self, state):
         """Configure pressure for the requested state.
         """
+        if not self.dev.active:
+            return
+
         pdev = self.dev.pressureDevice
         if pdev is None:
             return
@@ -292,6 +302,9 @@ class PatchPipetteStateManager(object):
             pdev.setSource('regulator')
 
     def setupClampForState(self, state):
+        if not self.dev.active:
+            return
+
         cdev = self.dev.clampDevice
         mode, holding, tp = self.clampStates.get(state, (None, None, None))
 
@@ -307,7 +320,7 @@ class PatchPipetteStateManager(object):
         if tp is not None:
             self.dev.enableTestPulse(tp)
 
-    def activeChanged(self, active):
+    def activeChanged(self, pip, active):
         if active:
             self.configureState(self.dev.state)
         else:

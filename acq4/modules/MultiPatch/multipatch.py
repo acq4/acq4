@@ -67,6 +67,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.plotLayout.addWidget(self.gv)
 
         self.stateChanged(pipette)
+        self.pipActiveChanged()
 
     def active(self):
         return self.ui.activeBtn.isChecked()
@@ -74,8 +75,8 @@ class PipetteControl(Qt.QWidget):
     def activeClicked(self, b):
         self.pip.setActive(b)
 
-    def pipActiveChanged(self, pip, active):
-        self.ui.activeBtn.setChecked(active)
+    def pipActiveChanged(self):
+        self.ui.activeBtn.setChecked(self.pip.active)
 
     def selected(self):
         return self.ui.selectBtn.isChecked()
