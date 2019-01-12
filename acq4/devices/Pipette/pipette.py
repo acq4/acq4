@@ -99,6 +99,10 @@ class Pipette(Device, OptomechDevice):
         self.tracker = PipetteTracker(self)
         deviceManager.declareInterface(name, ['pipette'], self)
 
+        target = self.readConfigFile('target').get('targetGlobalPosition', None)
+        if target is not None:
+            self.setTarget(target)
+
     def savePosition(self, name, pos=None):
         """Store a position in global coordinates for later use.
 
@@ -558,6 +562,7 @@ class Pipette(Device, OptomechDevice):
 
     def setTarget(self, target):
         self.target = np.array(target)
+        self.writeConfigFile({'targetGlobalPosition': list(self.target)}, 'target')
         self.sigTargetChanged.emit(self, self.target)
 
     def targetPosition(self):
