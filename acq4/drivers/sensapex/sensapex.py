@@ -277,8 +277,8 @@ class UMP(object):
             diff = [float(p-c) for p,c in zip(pos, current_pos)]
             dist = max(1, np.linalg.norm(diff))
 
-            # speeds < 7 um/sec produce large position errors
-            speed = [max(1, speed * abs(d / dist)) for d in diff]
+            # speeds < 32 um/sec produce large position errors
+            speed = [max(32, speed * abs(d / dist)) for d in diff]
             speed = speed + [0] * (4-len(speed))
             diff = diff + [0] * (4-len(diff))
             args = [c_int(int(x)) for x in [dev] + diff + speed]
