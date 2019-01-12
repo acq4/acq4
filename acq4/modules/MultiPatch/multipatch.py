@@ -1,3 +1,4 @@
+# coding: utf8
 from __future__ import print_function
 import os, re
 import numpy as np
@@ -45,6 +46,9 @@ class PipetteControl(Qt.QWidget):
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
+
+        for state in pipette.listStates():
+            self.ui.stateCombo.addItem(state)
         self.ui.stateCombo.activated.connect(self.stateComboChanged)
 
         n = re.sub(r'[^\d]+', '', pipette.name())
@@ -62,9 +66,16 @@ class PipetteControl(Qt.QWidget):
 
         self.gv = pg.GraphicsLayoutWidget()
         self.leftPlot = self.gv.addPlot()
+        self.leftPlot.enableAutoRange(True, True)
         self.rightPlot = self.gv.addPlot()
-        self.rightPlot.setLabels(left=('Rss', 'Ohm'))
+        self.rightPlot.setLogMode(y=True, x=False)
+        self.rightPlot.setYRange(6, 10)
+        self.rightPlot.setLabels(left=('Rss', u'Ω'))
         self.ui.plotLayout.addWidget(self.gv)
+
+        self.tpLabel = Qt.QGraphicsTextItem()
+        self.tpLabel.setParentItem(self.leftPlot.vb)
+        self.tpLabel.setDefaultTextColor(pg.mkColor('w'))
 
         self.stateChanged(pipette)
         self.pipActiveChanged()
@@ -106,6 +117,9 @@ class PipetteControl(Qt.QWidget):
         self.leftPlot.setLabels(left=('', units))
         tph = self.pip.testPulseHistory()
         self.rightPlot.plot(tph['time'] - tph['time'][0], tph['steadyStateResistance'], clear=True)
+
+        tpa = tp.analysis()
+        self.tpLabel.setPlainText(pg.siFormat(tpa['steadyStateResistance'], suffix=u'Ω'))
 
     def stateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
@@ -278,7 +292,6 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.goApproach(speed)
             if isinstance(pip, PatchPipette):
-                pip.setState('approach')
                 pip.autoPipetteOffset()
 
     def moveToTarget(self):
@@ -290,8 +303,6 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             pip.goHome(speed)
-            if isinstance(pip, PatchPipette):
-                pip.setState('out')
 
     def moveIdle(self):
         speed = self.selectedSpeed(default='fast')
@@ -412,8 +423,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.hideMarkers(hide)
 
     def pipetteTestPulseEnabled(self, pip, enabled):
-        if self.selectedPipettes() == [pip]:
-            self.updateSelectedPipControls()
+        self.updateSelectedPipControls()
 
     def testPulseClicked(self):
         for pip in self.selectedPipettes():
@@ -592,8 +602,8 @@ class MultiPatchWindow(Qt.QWidget):
 
     def resetHistory(self):
         self.eventHistory = []
-        for pc in self.pipCtrls:
-            pip = pc.pip
+        for pip in self.selectedPipettes():
+            pip.resetTestPulseHistory()
 
     def writeRecords(self, recs):
         if self.storageFile is None:

@@ -29,9 +29,19 @@ class Future(Qt.QObject):
         self._state = 'starting'
 
     def currentState(self):
+        """Return the current state of this future.
+
+        The state can be any string used to indicate the progress this future is making in its task.
+        """
         return self._state
 
     def setState(self, state):
+        """Set the current state of this future.
+
+        The state can be any string used to indicate the progress this future is making in its task.
+        """
+        if state == self._state:
+            return
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -58,7 +68,7 @@ class Future(Qt.QObject):
             self._errorMessage = reason
         self._stopRequested = True
 
-    def _taskDone(self, interrupted=False, error=None):
+    def _taskDone(self, interrupted=False, error=None, state=None):
         """Called by subclasses when the task is done (regardless of the reason)
         """
         if self._isDone:
@@ -69,9 +79,9 @@ class Future(Qt.QObject):
             self._errorMessage = error
         self._wasInterrupted = interrupted
         if interrupted:
-            self.setState('error')
+            self.setState(state or 'interrupted')
         else:
-            self.setState('success')
+            self.setState(state or 'complete')
         self.sigFinished.emit(self)
 
     def wasInterrupted(self):

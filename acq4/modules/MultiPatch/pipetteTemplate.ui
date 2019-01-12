@@ -27,48 +27,7 @@
     <number>2</number>
    </property>
    <item row="0" column="2" colspan="2">
-    <widget class="QComboBox" name="stateCombo">
-     <item>
-      <property name="text">
-       <string>out</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>bath</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>approach</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>seal</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>attached</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>break in</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>whole cell</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>outside-out</string>
-      </property>
-     </item>
-    </widget>
+    <widget class="QComboBox" name="stateCombo"/>
    </item>
    <item row="2" column="2" colspan="2">
     <widget class="QPushButton" name="lockBtn">
