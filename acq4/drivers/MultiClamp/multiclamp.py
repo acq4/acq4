@@ -117,9 +117,10 @@ class MultiClampChannel:
     def getParam(self, param):
         if self.debug:
             print("MCChannel.getParam called. param:", param)
-        self.select()
-        fn = 'Get' + param
-        v = self.mc.call(fn)[1]
+        with self.mc.lock:
+            self.select()
+            fn = 'Get' + param
+            v = self.mc.call(fn)[1]
         
         ## perform return value mapping for a few specific functions
         if fn in INV_NAME_MAPS:
@@ -137,16 +138,18 @@ class MultiClampChannel:
 
         if self.debug:
             print("MCChannel.setParam called. param: %s   value: %s" % (str(param), str(value)))
-        self.select()
-        fn = "Set" + param
-        
-        ## Perform value mapping for a few functions (SetMode, SetPrimarySignal, SetSecondarySignal)
-        if fn in NAME_MAPS:
-            if value not in NAME_MAPS[fn]:
-                raise Exception("Argument to %s must be one of %s" % (fn, list(NAME_MAPS[fn].keys())))
-            value = NAME_MAPS[fn][value]
-        #print fn, value
-        self.mc.call(fn, value)
+
+        with self.mc.lock:
+            self.select()
+            fn = "Set" + param
+            
+            ## Perform value mapping for a few functions (SetMode, SetPrimarySignal, SetSecondarySignal)
+            if fn in NAME_MAPS:
+                if value not in NAME_MAPS[fn]:
+                    raise Exception("Argument to %s must be one of %s" % (fn, list(NAME_MAPS[fn].keys())))
+                value = NAME_MAPS[fn][value]
+            #print fn, value
+            self.mc.call(fn, value)
 
     def getParams(self, params):
         """Reads multiple parameters from multiclamp.
@@ -232,8 +235,9 @@ class MultiClampChannel:
         self.mc.call('SelectMultiClamp', **self.axonDesc)
 
     def autoPipetteOffset(self):
-        self.select()
-        self.mc.call('AutoPipetteOffset')
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoPipetteOffset')
 
 
 class MultiClamp:
