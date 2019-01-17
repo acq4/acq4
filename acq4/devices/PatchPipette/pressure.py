@@ -10,7 +10,7 @@ class PressureControl(Qt.QObject):
         self.device = man.getDevice(deviceName)
 
     def setPressure(self, p):
-        """Set the regulated output pressure to the pipette.
+        """Set the regulated output pressure (in Pascals) to the pipette.
 
         Note: this does _not_ change the configuration of any values.
         """

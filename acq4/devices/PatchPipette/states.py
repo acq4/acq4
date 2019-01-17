@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+import scipy.stats
 import threading
 try:
     import queue
@@ -174,6 +175,7 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
     def defaultConfig(self):
         return {
             'autoAdvance': True,
+            'advanceMode': 'vertical',
             'advanceInterval': 0.5,
             'advanceStepDistance': 1e-6,
             'maxAdvanceDistance': 20e-6,
@@ -191,6 +193,7 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
         recentTestPulses = deque(maxlen=config['slowDetectionSteps'] + 1)
         lastMove = ptime.time() - config['advanceInterval']
         initialPosition = np.array(dev.globalPosition())
+        stepCount = 0
 
         while True:
             self._checkStop()
@@ -217,7 +220,7 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
             if ssr > initialResistance + config['fastDetectionThreshold']:
                 self.setState("cell detected (fast criteria)")
                 self._taskDone()
-                return "on cell"
+                return "seal"
 
             # slow cell detection
             if len(recentTestPulses) > config['slowDetectionSteps']:
@@ -225,7 +228,7 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
                     self.setState("cell detected (slow criteria)")
                     self._taskDone()
-                    return "on cell"
+                    return "seal"
 
             pos = np.array(dev.globalPosition())
             dist = np.linalg.norm(pos - initialPosition)
@@ -236,16 +239,24 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
                 return None
 
             # advance to next position
-            targetPos = np.array(dev.targetPosition())
-            targetVector = targetPos - pos
-            stepPos = pos + config['advanceStepDistance'] * targetVector / np.linalg.norm(targetVector)
             self._checkStop()
             self.setState("advancing pipette")
+            if config['advanceMode'] == 'vertical':
+                stepPos = initialPosition + (stepCount + 1) * np.array([0, 0, -config['advanceStepDistance']])
+            elif config['advanceMode'] == 'axial':
+                stepPos = initialPosition + dev.globalDirection() * (stepCount + 1) * config['advanceStepDistance']
+            elif config['advanceMode'] == 'target':
+                targetPos = np.array(dev.targetPosition())
+                targetVector = targetPos - pos
+                stepPos = pos + config['advanceStepDistance'] * targetVector / np.linalg.norm(targetVector)
+            else:
+                raise ValueError("advanceMode must be 'vertical', 'axial', or 'target'  (got %r)" % config['advanceMode'])
             fut = dev._moveToGlobal(stepPos, speed=config['advanceSpeed'])
             while True:
                 self._checkStop()
                 fut.wait(timeout=0.2)
                 if fut.isDone():
+                    stepCount += 1
                     break
 
 
@@ -264,21 +275,34 @@ class PatchPipetteSealFuture(PipetteJobFuture):
 
     def defaultConfig(self):
         return {
+            'pressureMode': 'auto',   # 'auto' or 'user'
             'holdingThreshold': 100e6,
             'holdingPotential': -70e-3,
             'sealThreshold': 1e9,
+            'nSlopeSamples': 5,
+            'autoSealTimeout': 380.0,
         }
 
     def run(self):
         config = self.config
         dev = self.dev
 
+        recentTestPulses = deque(maxlen=config['nSlopeSamples'])
         initialTP = dev.lastTestPulse()
         initialResistance = initialTP.analysis()['steadyStateResistance']
         dev.updatePatchRecord(resistanceBeforeSeal=initialResistance)
+        startTime = ptime.time()
+        pressure = 0
 
         self.setState('beginning seal')
-        dev.setPressure('user')
+        mode = config['pressureMode']
+        if mode == 'user':
+            dev.setPressure('user')
+        elif mode == 'auto':
+            dev.setPressure('atmosphere')
+        else:
+            raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
+        
         holdingSet = False
 
         while True:
@@ -286,6 +310,7 @@ class PatchPipetteSealFuture(PipetteJobFuture):
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)            
+            recentTestPulses.extend(tps)
             if len(tps) == 0:
                 continue
             tp = tps[-1]
@@ -301,6 +326,34 @@ class PatchPipetteSealFuture(PipetteJobFuture):
                 self.setState('gigaohm seal detected')
                 self._taskDone()
                 return 'cell attached'
+            
+            if mode == 'auto':
+                dt = ptime.time() - startTime
+                if dt < 5:
+                    # start with 5 seconds at atmosphereic pressure
+                    continue
+
+                if dt > config['autoSealTimeout']:
+                    self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
+                    return None
+
+                # update pressure
+                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+                time = np.array([tp.startTime() for tp in recentTestPulses])
+                slope = scipy.stats.linregress(time, res).slope
+                if slope < 1e6: 
+                    pressure += 200
+                elif slope < 100e6:
+                    pass
+                elif slope > 200e6:
+                    pressure -= 200
+
+                pressure = np.clip(pressure, -10e3, 0)
+                dev.setPressure(pressure)
+
+    def cleanup(self, interrupted):
+        self.dev.setPressure('atmosphere')
+
 
 
 class PatchPipetteCleanFuture(PipetteJobFuture):

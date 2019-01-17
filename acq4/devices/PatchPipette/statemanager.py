@@ -32,15 +32,16 @@ class PatchPipetteStateManager(object):
     def __init__(self, dev):
         self.pressureStates = {
             'out': 'atmosphere',
-            'bath': 0.5,
+            'bath': 3500.,  # 0.5 PSI
             'seal': 'user',
         }
         self.clampStates = {   # mode, holding, TP
             'out': ('vc', 0, False),
             'bath': ('vc', 0, True),
             'cell detect': ('vc', 0, True),
+            'on cell': ('vc', 0, True),
             'seal': ('vc', 0, True),
-            'attached': ('vc', -70e-3, True),
+            'cell attached': ('vc', -70e-3, True),
             'break in': ('vc', -70e-3, True),
             'whole cell': ('vc', -70e-3, True),
         }
