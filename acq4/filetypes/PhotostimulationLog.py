@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from .FileType import FileType
 #from ..modules.MultiPatch.logfile import IrregularTimeSeries
-from ..devices.PrairiePhotostimulator import StimulationPoint
+from ..devices.TwoPhotonPhotostimulator.StimulationPoint import StimulationPoint
 import json
 
 class PhotostimulationLog(FileType):

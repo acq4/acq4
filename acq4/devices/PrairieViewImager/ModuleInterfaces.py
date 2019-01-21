@@ -111,7 +111,8 @@ class PVImagerCamModInterface(CameraModuleInterface):
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
         self.lastFrame = frame
-        self.imageItem.setTransform(frame.globalTransform().as2D())   
+        self.imageItem.setTransform(frame.globalTransform().as2D())
+        self.sigNewFrame.emit(self, frame)
 
 
 
