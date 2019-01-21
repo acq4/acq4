@@ -1,5 +1,6 @@
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
+import acq4.pyqtgraph as pg
 
 class Photostimulation():
     """A data modelling class that represents a single focal photostimulation."""

@@ -3,7 +3,7 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Camera.CameraWindow import CameraModuleInterface
 from PyQt4 import QtGui, QtCore
 import moduleTemplate
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 #from acq4.util.generator.SeqParamSet import SeqParameter ## too annoying, just copy/paste and adjust our own
 import xml.etree.ElementTree as et
@@ -13,6 +13,7 @@ from collections import OrderedDict
 import numpy as np
 import acq4.util.units as units
 import json
+from StimulationPoint import StimulationPoint
 
 class TwoPhotonPhotostimulator(Device, OptomechDevice):
 
@@ -116,7 +117,7 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
         ##return a list of active points (ones that are in view and checked)
         return self._activePoints
 
-    def newFrame(self, frame):
+    def newFrame(self, imager, frame):
         self.ui.markPointsBtn.setEnabled(True)
         self.lastFrame = frame
         self.updatePoints()
@@ -128,7 +129,7 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
     def updatePoints(self):
 
         self._activePoints = []
-        focusDepth = self.dev.scopeDevice().getFocusDepth()
+        focusDepth = self.dev().scopeDevice().getFocusDepth()
         focusWidth = self.ui.focusWidthSpin.value()
 
 
