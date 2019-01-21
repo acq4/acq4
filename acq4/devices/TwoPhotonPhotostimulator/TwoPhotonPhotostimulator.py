@@ -70,8 +70,8 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
         self.ui.stimulusParamTree.addParameters(self.laserDurationParam)
         self.ui.stimulusParamTree.addParameters(self.intervalParam)
 
-        self.ui.focusWidthSpin.setOpts(value=10e-6, minStep=1e-6, suffix='m', siPrefix=True)
-        self.ui.focusDepthSpin.setOpts(value=40e-6, minStep=1e-6, suffix='m', siPrefix=True)
+        self.ui.focusWidthSpin.setOpts(value=10e-6, minStep=1e-6, dec=True, suffix='m', siPrefix=True, bounds=[0,None])
+        self.ui.focusDepthSpin.setOpts(value=40e-6, minStep=1e-6, dec=True, suffix='m', siPrefix=True, bounds=[0,None])
 
         self.stimPoints = []
         self.counter = 0
@@ -91,8 +91,8 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
             sp = StimulationPoint(name, itr, pos, z)
         else:
             sp = stimulationPoint
-        self.mod.addItem(sp.graphicsItem)
-        self.mod.getDepthView().addItem(sp.depthGraphicsItem)
+        self.mod().addItem(sp.graphicsItem, pos=pos)
+        self.mod().getDepthView().addItem(sp.depthGraphicsItem, pos=(0, z))
         self.ui.pointsParamTree.addParameters(sp.params)
         sp.paramItem = sp.params.items.keys()[0] ## get ahold of the treeWidgetItem, possibly should be a weakref instead
         self.stimPoints.append(sp)
@@ -105,6 +105,7 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
         self.ui.pointsParamTree.clear()
         for pt in self.stimPoints:
             pt.graphicsItem.scene().removeItem(pt.graphicsItem)
+            pt.depthGraphicsItem.scene().removeItem(pt.depthGraphicsItem)
 
         self.stimPoints = []
         self.counter = 0
@@ -123,7 +124,7 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
         self.updatePoints()
 
     def targetDragged(self, pt):
-        z = self.dev.scopeDevice().getFocusDepth()
+        z = self.dev().scopeDevice().getFocusDepth()
         pt.setDepth(z)
 
     def updatePoints(self):
@@ -266,13 +267,41 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
     #             ptElement.set(k,str(v))
 
     #     return et.ElementTree(seriesElement)
+    def getStimulationOrder(self):
+        """Return a list of tuples containing focus depths and points to stimulate.
+        Example: [(depth1, [pt1, pt2, pt5]), (depth2, [pt3, pt4]), ...] 
+        """
+        pts = self.activePoints()
+        pts = sorted(pts, key=lambda pt:pt.z, reverse=True)
+
+        width = self.ui.focusWidthSpin.value()
+
+        res = []
+
+        for i in range(len(pts)):
+            if len(pts) == 0:
+                break
+            p0 = []
+            p0.append(pts.pop(0))
+            zs = []
+            zs.append(p0[0].z)
+            for i, pt in enumerate(pts):
+                if pt.z > p0[0].z - (2*width):
+                    p0.append(pts.pop(i))
+                    zs.append(p0[-1].z)
+            depth = np.mean(zs)
+            res.append((depth, p0))
+
+        return res
+
+
 
     def getStimulationCmd(self, pt):
         ## return a list of dicts with per point info that Prairie needs
-        frame = self.parent().window().interface.lastFrame
+        frame = self.lastFrame
         d = {}
-        d['pos'] = self.dev.mapToPrairie(pt.getPos(), frame)
-        d['spiralSize'] = self.dev.spiralSizeToPrairie(self.spiralParams['size'], frame)
+        d['pos'] = self.dev().mapToPrairie(pt.getPos(), frame)
+        d['spiralSize'] = self.dev().spiralSizeToPrairie(self.spiralParams['size'], frame)
         d['spiralRevolutions'] = self.spiralParams['spiral revolutions']
         n = self.spiralParams['number of stimuli']
         d['nPulses'] = n

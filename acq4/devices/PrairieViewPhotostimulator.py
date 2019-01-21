@@ -1,4 +1,5 @@
 from acq4.devices.TwoPhotonPhotostimulator.TwoPhotonPhotostimulator import TwoPhotonPhotostimulator
+import acq4.pyqtgraph as pg
 
 class PrairieViewPhotostimulator(TwoPhotonPhotostimulator):
 

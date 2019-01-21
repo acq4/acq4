@@ -1,6 +1,8 @@
 from PyQt4 import QtGui, QtCore
 from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
 import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
+import numpy as np
 
 class Photostimulation():
     """A data modelling class that represents a single focal photostimulation."""
@@ -51,6 +53,7 @@ class StimulationPoint(QtCore.QObject):
 
     def setDepth(self, z):
         self.z = z
+        self.depthGraphicsItem.setPos(0, z)
 #        self.updateHistory()
         self.changed(z)
 
@@ -95,15 +98,16 @@ class PhotostimTarget(TargetItem):
 
     sigCellBtnToggled = QtCore.Signal(object)
 
-    def __init__(self, pos, label, contextMenuEnabled=True):
+    def __init__(self, pos, label, contextMenuEnabled=True, **args):
         #self.enabledPen = pg.mkPen((0, 255, 255))
         #self.disabledPen = pg.mkPen((150,150,150))
         #self.enabledBrush = pg.mkBrush((0,0,255,100))
         #self.disabledBrush = pg.mkBrush((0,0,255,0))
-        TargetItem.__init__(self)
+        TargetItem.__init__(self, **args)
 
         self.setLabel(str(label))
         self.setPos(pg.Point(pos))
+        print("PhotostimTarget:", pos)
 
         #### Set up context menu
         self.menu = QtGui.QMenu()
@@ -136,10 +140,10 @@ class PhotostimTarget(TargetItem):
 
     def setEnabledPen(self, b):
         if b:
-            self.pen = pg.mkPen(self.pen, width=5)
+            self.pen = pg.mkPen(color=self.pen.color(), width=3)
             #self.brush = self.enabledBrush
         else:
-            self.pen = pg.mkPen(self.pen, width=1)
+            self.pen = pg.mkPen(color=self.pen.color(), width=1)
             #self.brush = self.disabledBrush
 
         self._picture = None
