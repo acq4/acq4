@@ -184,38 +184,20 @@ class PatchPipetteApproachState(PatchPipetteState):
     stateName = 'approach'
 
     def defaultConfig(self):
-        return {'defaultNextState': 'bath'}
-
-    def run(self):
-        # move to approach position + auto pipette offset
-        self.dev.clampDevice.autoPipetteOffset()
-        self.dev.resetTestPulseHistory()
-
-
-class PatchPipetteCellAttachedState(PatchPipetteState):
-    stateName = 'cell attached'
-    def defaultConfig(self):
         return {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': -70e-3,
-            'initialTestPulseEnable': True,
-            'autoBreakInDelay': 5,
+            'nextState': 'cell detect',
+            'fallbackState': 'bath',
         }
 
     def run(self):
-        config = self.config
-        delay = config['autoBreakInDelay']
-        if delay is None:
-            return
-
-        self.setState('Delaying %f sec until break in' % delay)
-        start = ptime.time()
-        while ptime.time() - start < delay:
+        # move to approach position + auto pipette offset
+        fut = self.dev.goApproach('fast')
+        self.dev.clampDevice.autoPipetteOffset()
+        self.dev.resetTestPulseHistory()
+        while not fut.isDone():
             self._checkStop()
             time.sleep(0.1)
-
-        return 'break in'
+        return self.config['nextState']
 
 
 class PatchPipetteWholeCellState(PatchPipetteState):
@@ -530,99 +512,118 @@ class PatchPipetteSealState(PatchPipetteState):
 
 
 
-class PatchPipetteBreakInState(PatchPipetteState):
-    """Handles rupturing cell membrane to gain whole cell access
-
-    """
-    stateName = 'break in'
-    def __init__(self, *args, **kwds):
-        PatchPipetteState.__init__(self, *args, **kwds)
-
+class PatchPipetteCellAttachedState(PatchPipetteState):
+    stateName = 'cell attached'
     def defaultConfig(self):
         return {
-            'initialPressure': None,
+            'initialPressure': 'atmosphere',
             'initialClampMode': 'vc',
-            'initialClampHolding': 0,
+            'initialClampHolding': -70e-3,
             'initialTestPulseEnable': True,
-            'pressureMode': 'auto',   # 'auto' or 'user'
-            'holdingThreshold': 100e6,
-            'holdingPotential': -70e-3,
-            'sealThreshold': 1e9,
-            'nSlopeSamples': 5,
-            'autoSealTimeout': 380.0,
+            'autoBreakInDelay': 5,
+            'breakInThreshold': 800e6,
+            'holdingCurrentThreshold': -1e-9,
         }
 
     def run(self):
         self.monitorTestPulse()
         config = self.config
-        dev = self.dev
-
-        recentTestPulses = deque(maxlen=config['nSlopeSamples'])
-        initialTP = dev.lastTestPulse()
-        initialResistance = initialTP.analysis()['steadyStateResistance']
-        dev.updatePatchRecord(resistanceBeforeSeal=initialResistance)
         startTime = ptime.time()
-        pressure = 0
-
-        self.setState('beginning seal')
-        mode = config['pressureMode']
-        if mode == 'user':
-            dev.setPressure('user')
-        elif mode == 'auto':
-            dev.setPressure('atmosphere')
-        else:
-            raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
-        
-        holdingSet = False
-
+        delay = config['autoBreakInDelay']
         while True:
+            if delay is not None and ptime.time() - startTime > delay:
+                return 'break in'
+
             self._checkStop()
 
-            # pull in all new test pulses (hopefully only one since the last time we checked)
-            tps = self.getTestPulses(timeout=0.2)            
-            recentTestPulses.extend(tps)
+            tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
                 continue
+
             tp = tps[-1]
-            ssr = tp.analysis()['steadyStateResistance']
-
-            if not holdingSet and ssr > config['holdingThreshold']:
-                self.setState('enable holding potential')
-                dev.clampDevice.setHolding(config['holdingPotential'])
-                holdingSet = True
-
-            if ssr > config['sealThreshold']:
-                dev.setPressure('atmosphere')
-                self.setState('gigaohm seal detected')
-                self._taskDone()
-                return 'cell attached'
+            holding = tp.analysis()['baselineCurrent']
+            if holding < self.config['holdingCurrentThreshold']:
+                self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
+                return
             
-            if mode == 'auto':
-                dt = ptime.time() - startTime
-                if dt < 5:
-                    # start with 5 seconds at atmosphereic pressure
-                    continue
+            ssr = tp.analysis()['steadyStateResistance']
+            if ssr < config['breakInThreshold']:
+                return 'whole cell'
 
-                if dt > config['autoSealTimeout']:
-                    self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
-                    return None
 
-                # update pressure
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-                time = np.array([tp.startTime() for tp in recentTestPulses])
-                slope = scipy.stats.linregress(time, res).slope
-                if slope < 1e6: 
-                    pressure += 200
-                elif slope < 100e6:
-                    pass
-                elif slope > 200e6:
-                    pressure -= 200
+class PatchPipetteBreakInState(PatchPipetteState):
+    stateName = 'break in'
+    def defaultConfig(self):
+        return {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': -70e-3,
+            'initialTestPulseEnable': True,
+            'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
+            'pulseDurations': [200e-3, 200e-3, 200e-3, 200e-3, 200e-3, 200e-3, 200e-3, 300e-3, 400e-3, 500e-3],
+            'pulsePressures': [-20e3, -25e3, -30e3, -40e3, -50e3, -60e3, -60e3, -65e3, -65e3, -65e3],
+            'pulseInterval': 2,
+            'breakInThreshold': 800e6,
+            'holdingCurrentThreshold': -1e-9,
+            'fallbackState': 'fouled',
+        }
 
-                pressure = np.clip(pressure, -10e3, 0)
-                dev.setPressure(pressure)
+    def run(self):
+        self.monitorTestPulse()
+        config = self.config
+        lastPulse = ptime.time()
+        attempt = 0
 
-    def cleanup(self, interrupted):
-        self.dev.setPressure('atmosphere')
+        while True:
+            status = self.checkBreakIn()
+            if status is True:
+                return 'whole cell'
+            elif status is False:
+                return
+
+            if ptime.time() - lastPulse > config['pulseInterval']:
+                nPulses = config['nPulses'][attempt]
+                pdur = config['pulseDurations'][attempt]
+                press = config['pulsePressures'][attempt]
+                self.setState('Break in attempt %d' % attempt)
+                status = self.attemptBreakIn(nPulses, pdur, press)
+                if status is True:
+                    return 'whole cell'
+                elif status is False:
+                    return
+                lastPulse = ptime.time()
+                attempt += 1
+        
+            if attempt >= len(config['nPulses']):
+                self._taskDone(interrupted=True, error='Breakin failed after %d attempts' % attempt)
+                return
+
+    def attemptBreakIn(self, nPulses, duration, pressure):
+        for i in range(nPulses):
+            # get the next test pulse
+            status = self.checkBreakIn()
+            if status is not None:
+                return status
+            
+            self.dev.setPressure(pressure)
+            time.sleep(duration)
+            self.dev.setPressure('atmosphere')
+                
+    def checkBreakIn(self):                
+        while True:
+            self._checkStop()
+            tps = self.getTestPulses(timeout=0.2)
+            if len(tps) > 0:
+                break
+        tp = tps[-1]
+
+        holding = tp.analysis()['baselineCurrent']
+        if holding < self.config['holdingCurrentThreshold']:
+            self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
+            return False
+
+        ssr = tp.analysis()['steadyStateResistance']
+        return ssr < self.config['breakInThreshold']
 
 
 
