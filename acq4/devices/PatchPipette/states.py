@@ -223,7 +223,7 @@ class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
     def defaultConfig(self):
         return {
-            'initialPressure': 'atmosphere',
+            'initialPressure': None,
             'initialClampMode': 'vc',
             'initialClampHolding': 0,
             'initialTestPulseEnable': True,
