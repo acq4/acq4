@@ -56,8 +56,8 @@ class PatchPipetteState(Future):
             # set up test pulse monitoring
             self.testPulseResults = queue.Queue()
             
-            if self.run is not None:
-                # start background thread if possible. 
+            if self.run is not None and self.dev.active:
+                # start background thread if the device is "active" and the subclass has a run() method 
                 self._thread = threading.Thread(target=self._runJob)
                 self._thread.start()
             else:
@@ -97,8 +97,9 @@ class PatchPipetteState(Future):
             if holding is not None:
                 cdev.setHolding(value=holding)
 
+        # enable test pulse if config requests it AND the device is "active"
         if tp is not None:
-            self.dev.enableTestPulse(tp)
+            self.dev.enableTestPulse(tp and self.dev.active)
 
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults

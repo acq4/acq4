@@ -71,6 +71,7 @@ class PatchPipetteStateManager(object):
         if active:
             self.configureState(self.dev.state)
         else:
+            self.stopJob()
             self.dev.enableTestPulse(False)
             self.dev.pressureDevice.setSource('atmosphere')
 
