@@ -6,39 +6,104 @@ try:
     import queue
 except ImportError:
     import Queue as queue
-from acq4.pyqtgraph import ptime
+from acq4.pyqtgraph import ptime, disconnect
 from acq4.util.future import Future
 from collections import deque
 from acq4.util.debug import printExc
 
 
-class PipetteJobFuture(Future):
-    """Future that runs a job in a background thread.
+class PatchPipetteState(Future):
+    """Base class for implementing the details of a patch pipette state:
+    
+    - Set initial pressure, clamp parameters, position, etc when starting the state
+    - Optionally run a background thread; usually this will monitor pipette resistance
+      and affect the pipette pressure, holding value, or position.
 
-    This class is the base for other job classes and just takes care of some boilerplate:
+    This class is the base for other state subclasses classes and just takes care of some boilerplate:
      - assembling config from defaults and init args
-     - starting thread
+     - set initial device state
+     - starting thread (if run() method is implemented)
      - handling various job failure / finish modes
+     - communicating next state transition to the state manager
     """
-    def __init__(self, dev, config=None, monitorTestPulse=False):
+
+    # State classes may implement a run() method to be called in a background thread
+    run = None
+
+    def __init__(self, dev, config=None):
         Future.__init__(self)
 
         self.dev = dev
 
         # indicates state that should be transitioned to next, if any.
-        # This is set by the return value of run()
+        # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = None
 
+        # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
         if config is not None:
             self.config.update(config)
 
-        self.testPulseResults = queue.Queue()
-        if monitorTestPulse:
-            dev.sigTestPulseFinished.connect(self.testPulseFinished)
+    def initializeState(self):
+        """Initialize pressure, clamp, etc. and start background thread when entering this state.
 
-        self._thread = threading.Thread(target=self._runJob)
-        self._thread.start()
+        This method is called by the state manager.
+        """
+        try:
+            self.initializePressure()
+            self.initializeClamp()
+
+            # set up test pulse monitoring
+            self.testPulseResults = queue.Queue()
+            
+            if self.run is not None:
+                # start background thread if possible. 
+                self._thread = threading.Thread(target=self._runJob)
+                self._thread.start()
+            else:
+                # otherwise, just mark the task complete
+                self._taskDone(interrupted=False, error=None)
+        except Exception as exc:
+            self._taskDone(interrupted=True, error=str(exc))
+
+    def initializePressure(self):
+        """Set initial pressure based on the config key 'initialPressure'
+        """
+        pdev = self.dev.pressureDevice
+        if pdev is None:
+            return
+        pressure = self.config.get('initialPressure')
+        if pressure is None:
+            return
+        
+        if isinstance(pressure, str):
+            pdev.setSource(pressure)
+            pdev.setPressure(0)
+        else:
+            pdev.setPressure(pressure)
+            pdev.setSource('regulator')
+
+    def initializeClamp(self):
+        """Set initial clamp parameters based on the config keys
+        'initialClampMode', 'initialClampHolding', and 'initialTestPulseEnable'.
+        """
+        cdev = self.dev.clampDevice
+        mode = self.config.get('initialClampMode')
+        holding = self.config.get('initialClampHolding')
+        tp = self.config.get('initialTestPulseEnable')
+
+        if mode is not None:
+            cdev.setMode(mode)
+            if holding is not None:
+                cdev.setHolding(value=holding)
+
+        if tp is not None:
+            self.dev.enableTestPulse(tp)
+
+    def monitorTestPulse(self):
+        """Begin acquiring test pulse data in self.testPulseResults
+        """
+        self.dev.sigTestPulseFinished.connect(self.testPulseFinished)
 
     def testPulseFinished(self, pip, result):
         self.testPulseResults.put(result)
@@ -58,12 +123,7 @@ class PipetteJobFuture(Future):
         return tps
 
     def defaultConfig(self):
-        raise NotImplementedError()
-
-    def run(self):
-        """Implements the actual work done by this job.
-
-        Opyionally returns the name of the next state that should be transitioned to.
+        """Subclasses may reimplement this method to return a default configuration dict.
         """
         raise NotImplementedError()
 
@@ -73,50 +133,136 @@ class PipetteJobFuture(Future):
         pass
 
     def _runJob(self):
+        """Function invoked in background thread.
+
+        This calls the custom run() method for the state subclass and handles the possible
+        error / exit / completion states.
+        """
         try:
             # run must be reimplemented in subclass and call self._checkStop() frequently
             self.nextState = self.run()
 
         except self.StopRequested:
+            # state was stopped early by calling stop()
             interrupted = True
             error = None
         except Exception as exc:
+            # state aborted due to an error
             interrupted = True
             error = str(exc)
-            printExc("Error during %s:" % self.jobName)
+            printExc("Error during %s:" % self.stateName)
         else:
+            # state completed successfully
             interrupted = False
             error = None
         finally:
             try:
                 self.cleanup(interrupted)
             except Exception:
-                printExc("Error during %s cleanup:" % self.jobName)
+                printExc("Error during %s cleanup:" % self.stateName)
+            disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
             
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error)
 
 
-class PatchPipetteBathFuture(PipetteJobFuture):
+class PatchPipetteOutState(PatchPipetteState):
+    stateName = 'out'
+
+    def defaultConfig(self):
+        return {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': False,
+        }
+    
+    def initializeState(self):
+        # assume that pipette has been changed
+        self.dev.newPipette()
+
+
+class PatchPipetteApproachState(PatchPipetteState):
+    stateName = 'approach'
+
+    def defaultConfig(self):
+        nextState = 'bath'
+        return {}
+
+    def run(self):
+        # move to approach position + auto pipette offset
+        self.dev.clampDevice.autoPipetteOffset()
+        self.dev.resetTestPulseHistory()
+
+
+class PatchPipetteAttachedState(PatchPipetteState):
+    stateName = 'attached'
+    def defaultConfig(self):
+        return {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': -70e-3,
+            'initialTestPulseEnable': True,
+        }
+
+
+class PatchPipetteWholeCellState(PatchPipetteState):
+    stateName = 'whole cell'
+    def defaultConfig(self):
+        return {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': -70e-3,
+            'initialTestPulseEnable': True,
+        }
+
+
+class PatchPipetteBrokenState(PatchPipetteState):
+    stateName = 'broken'
+    def defaultConfig(self):
+        return {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
+        }
+
+
+class PatchPipetteFouledState(PatchPipetteState):
+    stateName = 'fouled'
+    def defaultConfig(self):
+        return {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
+        }
+
+
+class PatchPipetteBathState(PatchPipetteState):
     """Handles detection of changes while in recording chamber
 
     - monitor resistance to detect entry into bath
     - auto pipette offset and record initial resistance
     - monitor resistance for pipette break / clog
     """
-    jobName = 'bath'
+    stateName = 'bath'
     def __init__(self, *args, **kwds):
-        kwds['monitorTestPulse'] = True
-        PipetteJobFuture.__init__(self, *args, **kwds)
+        PatchPipetteState.__init__(self, *args, **kwds)
 
     def defaultConfig(self):
         return {
+            'initialPressure': 3500.,  # 0.5 PSI
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
             'bathThreshold': 50e6,
             'breakThreshold': -1e6,
             'clogThreshold': 1e6,
         }
 
     def run(self):
+        self.monitorTestPulse()
         config = self.config
         dev = self.dev
         initialResistance = None
@@ -161,19 +307,22 @@ class PatchPipetteBathFuture(PipetteJobFuture):
                 return 'fouled'
 
 
-class PatchPipetteCellDetectFuture(PipetteJobFuture):
+class PatchPipetteCellDetectState(PatchPipetteState):
     """Handles cell detection:
 
     - monitor resistance for cell proximity => seal mode
     - monitor resistance for pipette break
     """
-    jobName = 'cell detect'
+    stateName = 'cell detect'
     def __init__(self, *args, **kwds):
-        kwds['monitorTestPulse'] = True
-        PipetteJobFuture.__init__(self, *args, **kwds)
+        PatchPipetteState.__init__(self, *args, **kwds)
 
     def defaultConfig(self):
         return {
+            'initialPressure': None,
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
             'autoAdvance': True,
             'advanceMode': 'vertical',
             'advanceInterval': 0.5,
@@ -187,6 +336,7 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
         }
 
     def run(self):
+        self.monitorTestPulse()
         config = self.config
         dev = self.dev
         initialResistance = None
@@ -260,7 +410,7 @@ class PatchPipetteCellDetectFuture(PipetteJobFuture):
                     break
 
 
-class PatchPipetteSealFuture(PipetteJobFuture):
+class PatchPipetteSealState(PatchPipetteState):
     """Handles sealing onto cell
 
     - monitor resistance to detect loose seal and GOhm seal
@@ -268,13 +418,16 @@ class PatchPipetteSealFuture(PipetteJobFuture):
     - modulate pressure to improve likelihood of forming seal
     - cut pressure after GOhm and transition to cell attached
     """
-    jobName = 'seal'
+    stateName = 'seal'
     def __init__(self, *args, **kwds):
-        kwds['monitorTestPulse'] = True
-        PipetteJobFuture.__init__(self, *args, **kwds)
+        PatchPipetteState.__init__(self, *args, **kwds)
 
     def defaultConfig(self):
         return {
+            'initialPressure': None,
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
             'pressureMode': 'auto',   # 'auto' or 'user'
             'holdingThreshold': 100e6,
             'holdingPotential': -70e-3,
@@ -284,6 +437,7 @@ class PatchPipetteSealFuture(PipetteJobFuture):
         }
 
     def run(self):
+        self.monitorTestPulse()
         config = self.config
         dev = self.dev
 
@@ -356,13 +510,113 @@ class PatchPipetteSealFuture(PipetteJobFuture):
 
 
 
-class PatchPipetteCleanFuture(PipetteJobFuture):
+class PatchPipetteBreakInState(PatchPipetteState):
+    """Handles rupturing cell membrane to gain whole cell access
+
+    """
+    stateName = 'break in'
+    def __init__(self, *args, **kwds):
+        PatchPipetteState.__init__(self, *args, **kwds)
+
+    def defaultConfig(self):
+        return {
+            'initialPressure': None,
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
+            'pressureMode': 'auto',   # 'auto' or 'user'
+            'holdingThreshold': 100e6,
+            'holdingPotential': -70e-3,
+            'sealThreshold': 1e9,
+            'nSlopeSamples': 5,
+            'autoSealTimeout': 380.0,
+        }
+
+    def run(self):
+        self.monitorTestPulse()
+        config = self.config
+        dev = self.dev
+
+        recentTestPulses = deque(maxlen=config['nSlopeSamples'])
+        initialTP = dev.lastTestPulse()
+        initialResistance = initialTP.analysis()['steadyStateResistance']
+        dev.updatePatchRecord(resistanceBeforeSeal=initialResistance)
+        startTime = ptime.time()
+        pressure = 0
+
+        self.setState('beginning seal')
+        mode = config['pressureMode']
+        if mode == 'user':
+            dev.setPressure('user')
+        elif mode == 'auto':
+            dev.setPressure('atmosphere')
+        else:
+            raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
+        
+        holdingSet = False
+
+        while True:
+            self._checkStop()
+
+            # pull in all new test pulses (hopefully only one since the last time we checked)
+            tps = self.getTestPulses(timeout=0.2)            
+            recentTestPulses.extend(tps)
+            if len(tps) == 0:
+                continue
+            tp = tps[-1]
+            ssr = tp.analysis()['steadyStateResistance']
+
+            if not holdingSet and ssr > config['holdingThreshold']:
+                self.setState('enable holding potential')
+                dev.clampDevice.setHolding(config['holdingPotential'])
+                holdingSet = True
+
+            if ssr > config['sealThreshold']:
+                dev.setPressure('atmosphere')
+                self.setState('gigaohm seal detected')
+                self._taskDone()
+                return 'cell attached'
+            
+            if mode == 'auto':
+                dt = ptime.time() - startTime
+                if dt < 5:
+                    # start with 5 seconds at atmosphereic pressure
+                    continue
+
+                if dt > config['autoSealTimeout']:
+                    self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
+                    return None
+
+                # update pressure
+                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+                time = np.array([tp.startTime() for tp in recentTestPulses])
+                slope = scipy.stats.linregress(time, res).slope
+                if slope < 1e6: 
+                    pressure += 200
+                elif slope < 100e6:
+                    pass
+                elif slope > 200e6:
+                    pressure -= 200
+
+                pressure = np.clip(pressure, -10e3, 0)
+                dev.setPressure(pressure)
+
+    def cleanup(self, interrupted):
+        self.dev.setPressure('atmosphere')
+
+
+
+class PatchPipetteCleanState(PatchPipetteState):
     """Tracks the progress of a patch pipette cleaning task.
     """
-    jobName = 'pipette clean'
+    stateName = 'pipette clean'
 
     def defaultConfig(self):
         config = {
+            'initialPressure': 'atmosphere',
+            'initialClampMode': 'vc',
+            'initialClampHolding': 0,
+            'initialTestPulseEnable': True,
             'cleanSequence': [(-5, 30.), (5, 45)],
             'rinseSequence': [(-5, 30.), (5, 45)],
             'approachHeight': 5e-3,
@@ -372,6 +626,7 @@ class PatchPipetteCleanFuture(PipetteJobFuture):
         return config
 
     def run(self):
+        self.monitorTestPulse()
         # Called in worker thread
         self.resetPos = None
         config = self.config.copy()

@@ -1,12 +1,8 @@
 from __future__ import print_function
-from .states import (
-    PatchPipetteBathFuture, 
-    PatchPipetteCleanFuture, 
-    PatchPipetteCellDetectFuture, 
-    PatchPipetteSealFuture, 
-)
+from collections import OrderedDict
 from acq4.pyqtgraph import disconnect
 from acq4.util.debug import printExc
+from . import states
 
 
 class PatchPipetteStateManager(object):
@@ -19,53 +15,31 @@ class PatchPipetteStateManager(object):
      - pressure
      - test pulse
      - pipette position
-    """
-    allowedStates = ['out', 'clean', 'bath', 'approach', 'cell detect', 'seal', 'attached', 'break in', 'whole cell', 'broken', 'fouled']
 
-    jobTypes = {
-        'bath': PatchPipetteBathFuture,
-        'clean': PatchPipetteCleanFuture,
-        'cell detect': PatchPipetteCellDetectFuture,
-        'seal': PatchPipetteSealFuture,
-    }
+    Note: all the real work is done in the individual state classes (see acq4.devices.PatchPipette.states)
+    """
+    stateHandlers = OrderedDict([
+        ('out', states.PatchPipetteOutState),
+        ('clean', states.PatchPipetteCleanState),
+        ('bath', states.PatchPipetteBathState),
+        ('approach', states.PatchPipetteApproachState),
+        ('cell detect', states.PatchPipetteCellDetectState),
+        ('seal', states.PatchPipetteSealState),
+        ('attached', states.PatchPipetteAttachedState),
+        ('break in', states.PatchPipetteBreakInState),
+        ('whole cell', states.PatchPipetteWholeCellState),
+        ('broken', states.PatchPipetteBrokenState),
+        ('fouled', states.PatchPipetteFouledState),
+    ])
 
     def __init__(self, dev):
-        self.pressureStates = {
-            'out': 'atmosphere',
-            'bath': 3500.,  # 0.5 PSI
-            'seal': 'user',
-        }
-        self.clampStates = {   # mode, holding, TP
-            'out': ('vc', 0, False),
-            'bath': ('vc', 0, True),
-            'cell detect': ('vc', 0, True),
-            'on cell': ('vc', 0, True),
-            'seal': ('vc', 0, True),
-            'cell attached': ('vc', -70e-3, True),
-            'break in': ('vc', -70e-3, True),
-            'whole cell': ('vc', -70e-3, True),
-        }
-
         self.dev = dev
-        self.dev.sigTestPulseFinished.connect(self.testPulseFinished)
-        self.dev.sigGlobalTransformChanged.connect(self.transformChanged)
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
-
         self.currentJob = None
 
-    def testPulseFinished(self, dev, result):
-        """Called when a test pulse is finished
-        """
-        pass
-
-    def transformChanged(self):
-        """Called when pipette moves relative to global coordinate system
-        """
-        pass
-
     def listStates(self):
-        return self.allowedStates[:]
+        return list(self.stateHandlers.keys())
 
     def stateChanged(self, oldState, newState):
         """Called when state has changed (possibly by user)
@@ -78,60 +52,20 @@ class PatchPipetteStateManager(object):
 
         Return the name of the state that has been chosen.
         """
-        if state not in self.allowedStates:
+        if state not in self.stateHandlers:
             raise Exception("Unknown patch pipette state %r" % state)
         self.configureState(state)
         return state
 
-    def configureState(self, state):
-        if state == 'out':
-            # assume that pipette has been changed
-            self.dev.newPipette()
-
-        self.setupPressureForState(state)
-        self.setupClampForState(state)
+    def configureState(self, state, *args, **kwds):
+        self.stopJob()
+        stateHandler = self.stateHandlers[state]
+        job = stateHandler(self.dev, *args, **kwds)
+        self.currentJob = job
+        job.sigStateChanged.connect(self.jobStateChanged)
+        job.sigFinished.connect(self.jobFinished)
         self.dev._setState(state)
-        if state in self.jobTypes:
-            self.startJob(state)
-
-    def setupPressureForState(self, state):
-        """Configure pressure for the requested state.
-        """
-        if not self.dev.active:
-            return
-
-        pdev = self.dev.pressureDevice
-        if pdev is None:
-            return
-        pressure = self.pressureStates.get(state, None)
-        if pressure is None:
-            return
-        
-        if isinstance(pressure, str):
-            pdev.setSource(pressure)
-            pdev.setPressure(0)
-        else:
-            pdev.setPressure(pressure)
-            pdev.setSource('regulator')
-
-    def setupClampForState(self, state):
-        if not self.dev.active:
-            return
-
-        cdev = self.dev.clampDevice
-        mode, holding, tp = self.clampStates.get(state, (None, None, None))
-
-        if mode is not None:
-            cdev.setMode(mode)
-            if holding is not None:
-                cdev.setHolding(value=holding)
-
-        if state == 'approach':
-            cdev.autoPipetteOffset()
-            self.dev.resetTestPulseHistory()
-        
-        if tp is not None:
-            self.dev.enableTestPulse(tp)
+        job.initializeState()
 
     def activeChanged(self, pip, active):
         if active:
@@ -141,9 +75,8 @@ class PatchPipetteStateManager(object):
             self.dev.pressureDevice.setSource('atmosphere')
 
     def quit(self):
-        disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
-        disconnect(self.dev.sigGlobalTransformChanged, self.transformChanged)
         disconnect(self.dev.sigStateChanged, self.stateChanged)
+        disconnect(self.dev.sigActiveChanged, self.activeChanged)
         self.stopJob()
 
     ## Background job handling
@@ -162,15 +95,6 @@ class PatchPipetteStateManager(object):
             disconnect(job.sigStateChanged, self.jobStateChanged)
             disconnect(job.sigFinished, self.jobFinished)
 
-    def startJob(self, jobType, *args, **kwds):
-        self.stopJob()
-        jobClass = self.jobTypes[jobType]
-        job = jobClass(self.dev, *args, **kwds)
-        self.currentJob = job
-        job.sigStateChanged.connect(self.jobStateChanged)
-        job.sigFinished.connect(self.jobFinished)
-        return job
-
     def jobStateChanged(self, job, state):
         self.dev.logEvent("stateManagerEvent", info=state)
 
@@ -179,11 +103,3 @@ class PatchPipetteStateManager(object):
         disconnect(job.sigFinished, self.jobFinished)
         if job.nextState is not None:
             self.requestStateChange(job.nextState)
-
-    def cleanPipette(self):
-        config = self.dev.config.get('cleaning', {})
-        return self.startJob('clean', dev=self.dev, config=config)
-
-    def startApproach(self, speed):
-        config = {'initialMoveSpeed': speed}
-        return self.startJob('approach', dev=self.dev, config=config)
