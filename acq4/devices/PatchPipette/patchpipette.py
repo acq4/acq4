@@ -118,14 +118,21 @@ class PatchPipette(Pipette):
         pass
 
     def setPressure(self, pressure):
-        """Set the pressure (float) or pressure source (str).
+        """Set the pipette pressure (float; in Pa) or pressure source (str).
+
+        If float, then the pressure regulator is set to the specified pressure in Pa and
+        the source is set to 'regulator'. If str, then the source is set to the specified
+        value and the regulator pressure is set to 0.
         """
-        if self.pressureDevice is None:
+        pdev = self.pressureDevice
+        if pdev is None:
             return
         if isinstance(pressure, str):
-            self.pressureDevice.setSource(pressure)
+            pdev.setSource(pressure)
+            pdev.setPressure(0)
         else:
-            self.pressureDevice.setPressure(pressure)        
+            pdev.setPressure(pressure)
+            pdev.setSource('regulator')
 
     def setSelected(self):
         pass

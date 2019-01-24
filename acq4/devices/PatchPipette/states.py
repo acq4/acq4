@@ -1,7 +1,8 @@
 from __future__ import print_function
+import threading
+import time
 import numpy as np
 import scipy.stats
-import threading
 try:
     import queue
 except ImportError:
@@ -35,16 +36,16 @@ class PatchPipetteState(Future):
 
         self.dev = dev
 
-        # indicates state that should be transitioned to next, if any.
-        # This is usually set by the return value of run(), and must be invoked by the state manager.
-        self.nextState = None
-
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
         if config is not None:
             self.config.update(config)
 
-    def initializeState(self):
+        # indicates state that should be transitioned to next, if any.
+        # This is usually set by the return value of run(), and must be invoked by the state manager.
+        self.nextState = self.config.get('fallbackState', None)
+
+    def initialize(self):
         """Initialize pressure, clamp, etc. and start background thread when entering this state.
 
         This method is called by the state manager.
@@ -76,12 +77,7 @@ class PatchPipetteState(Future):
         if pressure is None:
             return
         
-        if isinstance(pressure, str):
-            pdev.setSource(pressure)
-            pdev.setPressure(0)
-        else:
-            pdev.setPressure(pressure)
-            pdev.setSource('regulator')
+        self.dev.setPressure(pressure)
 
     def initializeClamp(self):
         """Set initial clamp parameters based on the config keys
@@ -178,7 +174,8 @@ class PatchPipetteOutState(PatchPipetteState):
             'initialTestPulseEnable': False,
         }
     
-    def initializeState(self):
+    def initialize(self):
+        PatchPipetteState.initialize(self)
         # assume that pipette has been changed
         self.dev.newPipette()
 
@@ -187,8 +184,7 @@ class PatchPipetteApproachState(PatchPipetteState):
     stateName = 'approach'
 
     def defaultConfig(self):
-        nextState = 'bath'
-        return {}
+        return {'defaultNextState': 'bath'}
 
     def run(self):
         # move to approach position + auto pipette offset
@@ -196,15 +192,30 @@ class PatchPipetteApproachState(PatchPipetteState):
         self.dev.resetTestPulseHistory()
 
 
-class PatchPipetteAttachedState(PatchPipetteState):
-    stateName = 'attached'
+class PatchPipetteCellAttachedState(PatchPipetteState):
+    stateName = 'cell attached'
     def defaultConfig(self):
         return {
             'initialPressure': 'atmosphere',
             'initialClampMode': 'vc',
             'initialClampHolding': -70e-3,
             'initialTestPulseEnable': True,
+            'autoBreakInDelay': 5,
         }
+
+    def run(self):
+        config = self.config
+        delay = config['autoBreakInDelay']
+        if delay is None:
+            return
+
+        self.setState('Delaying %f sec until break in' % delay)
+        start = ptime.time()
+        while ptime.time() - start < delay:
+            self._checkStop()
+            time.sleep(0.1)
+
+        return 'break in'
 
 
 class PatchPipetteWholeCellState(PatchPipetteState):
@@ -324,6 +335,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             'initialClampMode': 'vc',
             'initialClampHolding': 0,
             'initialTestPulseEnable': True,
+            'fallbackState': 'bath',
             'autoAdvance': True,
             'advanceMode': 'vertical',
             'advanceInterval': 0.5,
@@ -443,14 +455,20 @@ class PatchPipetteSealState(PatchPipetteState):
         dev = self.dev
 
         recentTestPulses = deque(maxlen=config['nSlopeSamples'])
-        initialTP = dev.lastTestPulse()
+        while True:
+            initialTP = dev.lastTestPulse()
+            if initialTP is not None:
+                break
+            self._checkStop()
+            time.sleep(0.05)
+        
         initialResistance = initialTP.analysis()['steadyStateResistance']
         dev.updatePatchRecord(resistanceBeforeSeal=initialResistance)
         startTime = ptime.time()
         pressure = 0
 
-        self.setState('beginning seal')
         mode = config['pressureMode']
+        self.setState('beginning seal (mode: %r)' % mode)
         if mode == 'user':
             dev.setPressure('user')
         elif mode == 'auto':
@@ -494,16 +512,17 @@ class PatchPipetteSealState(PatchPipetteState):
 
                 # update pressure
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-                time = np.array([tp.startTime() for tp in recentTestPulses])
-                slope = scipy.stats.linregress(time, res).slope
+                times = np.array([tp.startTime() for tp in recentTestPulses])
+                slope = scipy.stats.linregress(times, res).slope
                 if slope < 1e6: 
-                    pressure += 200
+                    pressure -= 200
                 elif slope < 100e6:
                     pass
                 elif slope > 200e6:
-                    pressure -= 200
+                    pressure += 200
 
                 pressure = np.clip(pressure, -10e3, 0)
+                self.setState('Rpip slope: %g MOhm/sec   Pressure: %g Pa' % (slope/1e6, pressure))
                 dev.setPressure(pressure)
 
     def cleanup(self, interrupted):

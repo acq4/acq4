@@ -25,7 +25,7 @@ class PatchPipetteStateManager(object):
         ('approach', states.PatchPipetteApproachState),
         ('cell detect', states.PatchPipetteCellDetectState),
         ('seal', states.PatchPipetteSealState),
-        ('attached', states.PatchPipetteAttachedState),
+        ('cell attached', states.PatchPipetteCellAttachedState),
         ('break in', states.PatchPipetteBreakInState),
         ('whole cell', states.PatchPipetteWholeCellState),
         ('broken', states.PatchPipetteBrokenState),
@@ -65,7 +65,7 @@ class PatchPipetteStateManager(object):
         job.sigStateChanged.connect(self.jobStateChanged)
         job.sigFinished.connect(self.jobFinished)
         self.dev._setState(state)
-        job.initializeState()
+        job.initialize()
 
     def activeChanged(self, pip, active):
         if active:
