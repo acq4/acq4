@@ -70,9 +70,6 @@ class PatchPipetteState(Future):
     def initializePressure(self):
         """Set initial pressure based on the config key 'initialPressure'
         """
-        pdev = self.dev.pressureDevice
-        if pdev is None:
-            return
         pressure = self.config.get('initialPressure')
         if pressure is None:
             return

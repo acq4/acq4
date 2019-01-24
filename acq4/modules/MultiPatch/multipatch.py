@@ -189,6 +189,9 @@ class MultiPatchWindow(Qt.QWidget):
             pip.sigTargetChanged.connect(self.pipetteTargetChanged)
             if isinstance(pip, PatchPipette):
                 pip.sigStateChanged.connect(self.pipetteStateChanged)
+                pip.sigPressureChanged.connect(self.pipettePressureChanged)
+                pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
+                pip.sigTestPulseFinished.connect(self.pipetteTestPulseFinished)
             ctrl = PipetteControl(pip)
             ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
             ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
@@ -201,8 +204,6 @@ class MultiPatchWindow(Qt.QWidget):
 
             self.pipCtrls.append(ctrl)
             ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
-
-            pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
 
         self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
@@ -558,12 +559,24 @@ class MultiPatchWindow(Qt.QWidget):
                  "event": "move_start"}
         self.recordEvent(**event)
 
+    def pipetteTestPulseFinished(self, pipette, result):
+        event = {"device": str(pipette.name()), "event": "test_pulse"}
+        event.update(result.analysis())
+        self.recordEvent(**event)
+
     def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
         pos = pip.pip.globalPosition()
         event = {"device": str(pip.pip.name()),
                  "event": "move_stop",
                  "position": (pos[0], pos[1], pos[2])}
+        self.recordEvent(**event)
+
+    def pipettePressureChanged(self, pipette, source, pressure):
+        event = {"device": str(pipette.name()),
+                 "event": "pressure_changed",
+                 "source": source,
+                 'pressure': pressure}
         self.recordEvent(**event)
 
     def pipetteTargetChanged(self, pipette, target):

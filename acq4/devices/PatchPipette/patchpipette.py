@@ -26,7 +26,7 @@ class PatchPipette(Pipette):
     sigActiveChanged = Qt.Signal(object, object)  # self, active
     sigTestPulseFinished = Qt.Signal(object, object)  # self, TestPulse
     sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
-    sigUserPressureEnabled = Qt.Signal(object, object)  # self, enabled
+    sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
 
     # This attribute can be modified to insert a custom state manager. 
     defaultStateManagerClass = None
@@ -128,11 +128,16 @@ class PatchPipette(Pipette):
         if pdev is None:
             return
         if isinstance(pressure, str):
-            pdev.setSource(pressure)
-            pdev.setPressure(0)
-        else:
+            source = pressure
+            pressure = 0
+            pdev.setSource(source)
             pdev.setPressure(pressure)
-            pdev.setSource('regulator')
+        else:
+            source = 'regulator'
+            pdev.setPressure(pressure)
+            pdev.setSource(source)
+
+        self.sigPressureChanged.emit(self, source, pressure)
 
     def setSelected(self):
         pass
