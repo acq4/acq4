@@ -469,8 +469,8 @@ class PatchPipetteSealState(PatchPipetteState):
             ssr = tp.analysis()['steadyStateResistance']
 
             if not holdingSet and ssr > config['holdingThreshold']:
-                self.setState('enable holding potential')
-                dev.clampDevice.setHolding(config['holdingPotential'])
+                self.setState('enable holding potential %0.1f mV' % (config['holdingPotential']*1000))
+                dev.clampDevice.setHolding(mode=None, value=config['holdingPotential'])
                 holdingSet = True
 
             if ssr > config['sealThreshold']:
@@ -557,7 +557,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
             'initialClampHolding': -70e-3,
             'initialTestPulseEnable': True,
             'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
-            'pulseDurations': [200e-3, 200e-3, 200e-3, 200e-3, 200e-3, 200e-3, 200e-3, 300e-3, 400e-3, 500e-3],
+            'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
             'pulsePressures': [-20e3, -25e3, -30e3, -40e3, -50e3, -60e3, -60e3, -65e3, -65e3, -65e3],
             'pulseInterval': 2,
             'breakInThreshold': 800e6,
@@ -606,7 +606,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
             time.sleep(duration)
             self.dev.setPressure('atmosphere')
                 
-    def checkBreakIn(self):                
+    def checkBreakIn(self):
         while True:
             self._checkStop()
             tps = self.getTestPulses(timeout=0.2)
@@ -620,7 +620,8 @@ class PatchPipetteBreakInState(PatchPipetteState):
             return False
 
         ssr = tp.analysis()['steadyStateResistance']
-        return ssr < self.config['breakInThreshold']
+        if ssr < self.config['breakInThreshold']:
+            return True
 
 
 
