@@ -193,7 +193,7 @@ class MockStageThread(Thread):
         Thread.__init__(self)
         
     def start(self):
-        self.quit = False
+        self._quit = False
         self.lastUpdate = ptime.time()
         Thread.start(self)
         
