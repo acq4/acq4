@@ -193,7 +193,7 @@ class CLibrary:
             for k in ['values', 'functions', 'types', 'structs', 'unions', 'enums', None]:
                 if k is None:
                     #obj = getattr(self._lib_, name)  # pull directly from the lib as a last resort?
-                    raise NameError(name)
+                    raise AttributeError(name)
                 obj = None
                 for n in names:
                     if n in self._defs_[k]:
