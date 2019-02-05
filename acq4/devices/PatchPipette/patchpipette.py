@@ -162,7 +162,7 @@ class PatchPipette(Pipette):
     def setState(self, state):
         """out, bath, approach, seal, attached, breakin, wholecell
         """
-        self._stateManager.requestStateChange(state)
+        return self._stateManager.requestStateChange(state)
 
     def listStates(self):
         """Return a list of all known state names this pipette can be set to.
@@ -292,6 +292,9 @@ class PatchPipette(Pipette):
         # allow external modification of state manager class
         cls = self.defaultStateManagerClass or PatchPipetteStateManager
         self._stateManager = cls(self)
+
+    def stateManager(self):
+        return self._stateManager
 
     def quit(self):
         self.enableTestPulse(False, block=True)

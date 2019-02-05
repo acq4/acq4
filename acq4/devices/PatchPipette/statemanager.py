@@ -1,11 +1,12 @@
 from __future__ import print_function
 from collections import OrderedDict
+from acq4.util.Qt import QtCore
 from acq4.pyqtgraph import disconnect
 from acq4.util.debug import printExc
 from . import states
 
 
-class PatchPipetteStateManager(object):
+class PatchPipetteStateManager(QtCore.QObject):
     """Used to handle state transitions and to spawn background threads for pipette automation
 
     State manager affects:
@@ -32,7 +33,10 @@ class PatchPipetteStateManager(object):
         ('fouled', states.PatchPipetteFouledState),
     ])
 
+    sigStateChanged = QtCore.Signal(object, object)  # self, PatchPipetteState
+
     def __init__(self, dev):
+        QtCore.QObject.__init__(self)
         self.dev = dev
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
@@ -54,8 +58,7 @@ class PatchPipetteStateManager(object):
         """
         if state not in self.stateHandlers:
             raise Exception("Unknown patch pipette state %r" % state)
-        self.configureState(state)
-        return state
+        return self.configureState(state)
 
     def configureState(self, state, *args, **kwds):
         self.stopJob()
@@ -66,6 +69,8 @@ class PatchPipetteStateManager(object):
         job.sigFinished.connect(self.jobFinished)
         self.dev._setState(state)
         job.initialize()
+        self.sigStateChanged.emit(self, job)
+        return job
 
     def activeChanged(self, pip, active):
         if active:
