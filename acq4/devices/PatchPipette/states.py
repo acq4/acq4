@@ -626,7 +626,9 @@ class PatchPipetteBreakInState(PatchPipetteState):
 
 
 class PatchPipetteCleanState(PatchPipetteState):
-    """Tracks the progress of a patch pipette cleaning task.
+    """Pipette cleaning state.
+
+    Cycles +/- pressure in a "clean" bath followed by an optional "rinse" bath.
     """
     stateName = 'pipette clean'
 
@@ -636,8 +638,8 @@ class PatchPipetteCleanState(PatchPipetteState):
             'initialClampMode': 'vc',
             'initialClampHolding': 0,
             'initialTestPulseEnable': True,
-            'cleanSequence': [(-5, 30.), (5, 45)],
-            'rinseSequence': [(-5, 30.), (5, 45)],
+            'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
+            'rinseSequence': [(-35e3, 3.0), (100e3, 10.0)],
             'approachHeight': 5e-3,
             'cleanPos': self.dev.loadPosition('clean'),
             'rinsePos': self.dev.loadPosition('rinse', None),
