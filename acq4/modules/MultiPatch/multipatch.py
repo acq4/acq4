@@ -36,7 +36,7 @@ class PipetteControl(Qt.QWidget):
         Qt.QWidget.__init__(self, parent)
         self.pip = pipette
         self.moving = False
-        self.pip.sigGlobalTransformChanged.connect(self.positionChanged)
+        self.pip.pipetteDevice.sigGlobalTransformChanged.connect(self.positionChanged)
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.stateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
@@ -170,7 +170,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.setWindowIcon(Qt.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
 
         man = getManager()
-        pipNames = man.listInterfaces('pipette')
+        pipNames = man.listInterfaces('patchpipette')
         self.pips = [man.getDevice(name) for name in pipNames]
         self.pips.sort(key=lambda p: int(re.sub(r'[^\d]+', '', p.name())))
 
@@ -186,7 +186,7 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
-            pip.sigTargetChanged.connect(self.pipetteTargetChanged)
+            pip.pipetteDevice.sigTargetChanged.connect(self.pipetteTargetChanged)
             if isinstance(pip, PatchPipette):
                 pip.sigStateChanged.connect(self.pipetteStateChanged)
                 pip.sigPressureChanged.connect(self.pipettePressureChanged)
@@ -272,33 +272,33 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
         if len(pips) == 1:
-            pips[0].goAboveTarget(speed=speed)
+            pips[0].pipetteDevice.goAboveTarget(speed=speed)
             return
 
         fut = []
         wp = []
         for pip in pips:
-            w1, w2 = pip.aboveTargetPath()
+            w1, w2 = pip.pipetteDevice.aboveTargetPath()
             wp.append(w2)
-            fut.append(pip._moveToGlobal(w1, speed))
+            fut.append(pip.pipetteDevice._moveToGlobal(w1, speed))
         for f in fut:
             f.wait(updates=True)
         for pip, waypoint in zip(pips, wp):
-            pip._moveToGlobal(waypoint, 'slow')
+            pip.pipetteDevice._moveToGlobal(waypoint, 'slow')
 
         self.calibrateWithStage(pips, wp)
 
     def moveApproach(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.goApproach(speed)
+            pip.pipetteDevice.goApproach(speed)
             if isinstance(pip, PatchPipette):
                 pip.autoPipetteOffset()
 
     def moveToTarget(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.goTarget(speed)
+            pip.pipetteDevice.goTarget(speed)
 
     def moveHome(self):
         speed = self.selectedSpeed(default='fast')
@@ -308,7 +308,7 @@ class MultiPatchWindow(Qt.QWidget):
     def moveIdle(self):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
-            pip.goIdle(speed)
+            pip.pipetteDevice.goIdle(speed)
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -338,7 +338,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in pips:
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
-            pip.goSearch(speed, distance=distance)
+            pip.pipetteDevice.goSearch(speed, distance=distance)
 
     def calibrateWithStage(self, pipettes, positions):
         """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
@@ -393,7 +393,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.resetGlobalPosition(pos)
+        pip.pipetteDevice.resetGlobalPosition(pos)
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
@@ -413,7 +413,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.setTarget(pos)
+        pip.pipetteDevice.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)
@@ -421,7 +421,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     def hideBtnToggled(self, hide):
         for pip in self.pips:
-            pip.hideMarkers(hide)
+            pip.pipetteDevice.hideMarkers(hide)
 
     def pipetteTestPulseEnabled(self, pip, enabled):
         self.updateSelectedPipControls()
@@ -566,7 +566,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
-        pos = pip.pip.globalPosition()
+        pos = pip.pip.pipetteDevice.globalPosition()
         event = {"device": str(pip.pip.name()),
                  "event": "move_stop",
                  "position": (pos[0], pos[1], pos[2])}

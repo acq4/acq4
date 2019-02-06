@@ -1,13 +1,12 @@
 from __future__ import print_function
-from ..Device import DeviceGui
 from acq4.util import Qt
 
 
-class PatchPipetteDeviceGui(DeviceGui):
+class PatchPipetteDeviceGui(Qt.QWidget):
     def __init__(self, dev, win):
         self.cleanFuture = None
 
-        DeviceGui.__init__(self, dev, win)
+        Qt.QWidget.__init__(self)
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
 

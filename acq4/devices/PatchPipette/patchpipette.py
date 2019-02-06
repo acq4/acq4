@@ -64,6 +64,7 @@ class PatchPipette(Device):
         self._initStateManager()
 
         self.pipetteDevice.sigCalibrationChanged.connect(self._pipetteCalibrationChanged)
+        deviceManager.declareInterface(name, ['patchpipette'], self)
 
         # restore last known state for this pipette
         lastState = self.readConfigFile('last_state')
@@ -310,4 +311,4 @@ class PatchPipette(Device):
 
     def goHome(self, speed):
         self.setState('out')
-        return self.pipetteDevice.goHome(self, speed)
+        return self.pipetteDevice.goHome(speed)
