@@ -1,13 +1,15 @@
 from __future__ import print_function
-from ..Pipette import PipetteDeviceGui
+from ..Device import DeviceGui
 from acq4.util import Qt
 
 
-class PatchPipetteDeviceGui(PipetteDeviceGui):
+class PatchPipetteDeviceGui(DeviceGui):
     def __init__(self, dev, win):
         self.cleanFuture = None
 
-        PipetteDeviceGui.__init__(self, dev, win)
+        DeviceGui.__init__(self, dev, win)
+        self.layout = Qt.QGridLayout()
+        self.setLayout(self.layout)
 
         self.cleanBtn = Qt.QPushButton('Clean Pipette')
         self.setCleanBtn = Qt.QPushButton('Set Clean Pos')

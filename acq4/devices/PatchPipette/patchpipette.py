@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy as np
-from ..Pipette import Pipette
+from ..Device import Device
 from acq4.util import Qt
 from ...Manager import getManager
 from acq4.util.Mutex import Mutex
@@ -11,7 +11,7 @@ from .pressure import PressureControl
 from .statemanager import PatchPipetteStateManager
 
 
-class PatchPipette(Pipette):
+class PatchPipette(Device):
     """Represents a single patch pipette, manipulator, and headstage.
 
     This class extends from the Pipette device class to provide automation and visual feedback
@@ -32,10 +32,12 @@ class PatchPipette(Pipette):
     defaultStateManagerClass = None
 
     def __init__(self, deviceManager, config, name):
+        pipName = config.pop('pipetteDevice', None)
+        self.pipetteDevice = deviceManager.getDevice(pipName)
         clampName = config.pop('clampDevice', None)
         self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
 
-        Pipette.__init__(self, deviceManager, config, name)
+        Device.__init__(self, deviceManager, config, name)
         self._eventLog = []  # chronological record of events 
         self._eventLogLock = Mutex()
         
@@ -61,7 +63,7 @@ class PatchPipette(Pipette):
 
         self._initStateManager()
 
-        self.sigCalibrationChanged.connect(self._pipetteCalibrationChanged)
+        self.pipetteDevice.sigCalibrationChanged.connect(self._pipetteCalibrationChanged)
 
         # restore last known state for this pipette
         lastState = self.readConfigFile('last_state')
@@ -71,6 +73,12 @@ class PatchPipette(Pipette):
         # self.calibrated = lastState.get('calibrated', False)
         # self.setActive(False)  # Always start pipettes disabled rather than restoring last state?
         # # self.setActive(lastState.get('active', False))
+
+    def scopeDevice(self):
+        return self.pipetteDevice.scopeDevice()
+
+    def imagingDevice(self):
+        return self.pipetteDevice.imagingDevice()
 
     def getPatchStatus(self):
         """Return a dict describing the status of the patched cell.
@@ -302,4 +310,4 @@ class PatchPipette(Pipette):
 
     def goHome(self, speed):
         self.setState('out')
-        return Pipette.goHome(self, speed)
+        return self.pipetteDevice.goHome(self, speed)
