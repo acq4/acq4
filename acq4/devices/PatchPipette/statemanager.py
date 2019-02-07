@@ -1,12 +1,12 @@
 from __future__ import print_function
 from collections import OrderedDict
-from acq4.util.Qt import QtCore
+from acq4.util import Qt
 from acq4.pyqtgraph import disconnect
 from acq4.util.debug import printExc
 from . import states
 
 
-class PatchPipetteStateManager(QtCore.QObject):
+class PatchPipetteStateManager(Qt.QObject):
     """Used to handle state transitions and to spawn background threads for pipette automation
 
     State manager affects:
@@ -33,10 +33,10 @@ class PatchPipetteStateManager(QtCore.QObject):
         ('fouled', states.PatchPipetteFouledState),
     ])
 
-    sigStateChanged = QtCore.Signal(object, object)  # self, PatchPipetteState
+    sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
 
     def __init__(self, dev):
-        QtCore.QObject.__init__(self)
+        Qt.QObject.__init__(self)
         self.dev = dev
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
