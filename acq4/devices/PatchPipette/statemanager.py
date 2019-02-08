@@ -42,6 +42,9 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
 
+        # default state configuration parameters
+        self.stateConfig = {}  # {state: {config options}}
+
     def listStates(self):
         return list(self.stateHandlers.keys())
 
@@ -63,6 +66,12 @@ class PatchPipetteStateManager(Qt.QObject):
     def configureState(self, state, *args, **kwds):
         self.stopJob()
         stateHandler = self.stateHandlers[state]
+
+        # assemble state config from defaults and anything specified in args here
+        config = self.stateConfig.get(state, {}).copy()
+        config.update(kwds.pop('config', {}))
+        kwds['config'] = config
+
         job = stateHandler(self.dev, *args, **kwds)
         self.currentJob = job
         job.sigStateChanged.connect(self.jobStateChanged)

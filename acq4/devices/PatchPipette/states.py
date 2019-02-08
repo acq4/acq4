@@ -119,7 +119,7 @@ class PatchPipetteState(Future):
     def defaultConfig(self):
         """Subclasses may reimplement this method to return a default configuration dict.
         """
-        raise NotImplementedError()
+        return self._defaultConfig
 
     def cleanup(self, interrupted):
         """Called after job completes, whether it failed or succeeded.
@@ -163,13 +163,12 @@ class PatchPipetteState(Future):
 class PatchPipetteOutState(PatchPipetteState):
     stateName = 'out'
 
-    def defaultConfig(self):
-        return {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': False,
-        }
+    _defaultConfig = {
+        'initialPressure': 'atmosphere',
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': False,
+    }
     
     def initialize(self):
         PatchPipetteState.initialize(self)
@@ -180,15 +179,14 @@ class PatchPipetteOutState(PatchPipetteState):
 class PatchPipetteApproachState(PatchPipetteState):
     stateName = 'approach'
 
-    def defaultConfig(self):
-        return {
-            'nextState': 'cell detect',
-            'fallbackState': 'bath',
-        }
+    _defaultConfig = {
+        'nextState': 'cell detect',
+        'fallbackState': 'bath',
+    }
 
     def run(self):
         # move to approach position + auto pipette offset
-        fut = self.dev.goApproach('fast')
+        fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.resetTestPulseHistory()
         while not fut.isDone():
@@ -199,35 +197,32 @@ class PatchPipetteApproachState(PatchPipetteState):
 
 class PatchPipetteWholeCellState(PatchPipetteState):
     stateName = 'whole cell'
-    def defaultConfig(self):
-        return {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': -70e-3,
-            'initialTestPulseEnable': True,
-        }
+    _defaultConfig = {
+        'initialPressure': 'atmosphere',
+        'initialClampMode': 'vc',
+        'initialClampHolding': -70e-3,
+        'initialTestPulseEnable': True,
+    }
 
 
 class PatchPipetteBrokenState(PatchPipetteState):
     stateName = 'broken'
-    def defaultConfig(self):
-        return {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': True,
-        }
+    _defaultConfig = {
+        'initialPressure': 'atmosphere',
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': True,
+    }
 
 
 class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
-    def defaultConfig(self):
-        return {
-            'initialPressure': None,
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': True,
-        }
+    _defaultConfig = {
+        'initialPressure': None,
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': True,
+    }
 
 
 class PatchPipetteBathState(PatchPipetteState):
@@ -241,16 +236,16 @@ class PatchPipetteBathState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         PatchPipetteState.__init__(self, *args, **kwds)
 
-    def defaultConfig(self):
-        return {
-            'initialPressure': 3500.,  # 0.5 PSI
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': True,
-            'bathThreshold': 50e6,
-            'breakThreshold': -1e6,
-            'clogThreshold': 1e6,
-        }
+    _defaultConfig = {
+        'initialPressure': 3500.,  # 0.5 PSI
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': True,
+        'bathThreshold': 50e6,
+        'breakThreshold': -1e6,
+        'clogThreshold': 1e6,
+        'targetDistanceThreshold': 10e-6
+    }
 
     def run(self):
         self.monitorTestPulse()
@@ -292,6 +287,10 @@ class PatchPipetteBathState(PatchPipetteState):
                 self._taskDone(interrupted=True, error="Pipette broken")
                 return 'broken'
 
+            # if close to target, switch to cell detect
+            # pos = dev.globalPosition()
+            # target = dev.
+
             if ssr > initialResistance + config['clogThreshold']:
                 self.setState('clogged pipette detected')
                 self._taskDone(interrupted=True, error="Pipette clogged")
@@ -308,24 +307,23 @@ class PatchPipetteCellDetectState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         PatchPipetteState.__init__(self, *args, **kwds)
 
-    def defaultConfig(self):
-        return {
-            'initialPressure': None,
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': True,
-            'fallbackState': 'bath',
-            'autoAdvance': True,
-            'advanceMode': 'vertical',
-            'advanceInterval': 0.5,
-            'advanceStepDistance': 1e-6,
-            'maxAdvanceDistance': 20e-6,
-            'advanceSpeed': 32e-6,
-            'fastDetectionThreshold': 1e6,
-            'slowDetectionThreshold': 0.3e6,
-            'slowDetectionSteps': 3,
-            'breakThreshold': -1e6,
-        }
+    _defaultConfig = {
+        'initialPressure': None,
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': True,
+        'fallbackState': 'bath',
+        'autoAdvance': True,
+        'advanceMode': 'vertical',
+        'advanceInterval': 0.5,
+        'advanceStepDistance': 1e-6,
+        'maxAdvanceDistance': 20e-6,
+        'advanceSpeed': 32e-6,
+        'fastDetectionThreshold': 1e6,
+        'slowDetectionThreshold': 0.3e6,
+        'slowDetectionSteps': 3,
+        'breakThreshold': -1e6,
+    }
 
     def run(self):
         self.monitorTestPulse()
@@ -334,7 +332,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         initialResistance = None
         recentTestPulses = deque(maxlen=config['slowDetectionSteps'] + 1)
         lastMove = ptime.time() - config['advanceInterval']
-        initialPosition = np.array(dev.globalPosition())
+        initialPosition = np.array(dev.pipetteDevice.globalPosition())
         stepCount = 0
 
         while True:
@@ -344,6 +342,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             self.setState("checking test pulses")
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
+                print("no TP")
                 continue
 
             recentTestPulses.extend(tps)
@@ -351,7 +350,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             ssr = tp.analysis()['steadyStateResistance']
             if initialResistance is None:
                 initialResistance = ssr
-
+            print(ssr)
 
             # check for pipette break
             if ssr < initialResistance + config['breakThreshold']:
@@ -372,7 +371,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                     self._taskDone()
                     return "seal"
 
-            pos = np.array(dev.globalPosition())
+            pos = np.array(dev.pipetteDevice.globalPosition())
             dist = np.linalg.norm(pos - initialPosition)
 
             # fail if pipette has moved too far before detection
@@ -393,7 +392,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                 stepPos = pos + config['advanceStepDistance'] * targetVector / np.linalg.norm(targetVector)
             else:
                 raise ValueError("advanceMode must be 'vertical', 'axial', or 'target'  (got %r)" % config['advanceMode'])
-            fut = dev._moveToGlobal(stepPos, speed=config['advanceSpeed'])
+            fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
             while True:
                 self._checkStop()
                 fut.wait(timeout=0.2)
@@ -414,19 +413,18 @@ class PatchPipetteSealState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         PatchPipetteState.__init__(self, *args, **kwds)
 
-    def defaultConfig(self):
-        return {
-            'initialPressure': None,
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': True,
-            'pressureMode': 'auto',   # 'auto' or 'user'
-            'holdingThreshold': 100e6,
-            'holdingPotential': -70e-3,
-            'sealThreshold': 1e9,
-            'nSlopeSamples': 5,
-            'autoSealTimeout': 380.0,
-        }
+    _defaultConfig = {
+        'initialPressure': None,
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': True,
+        'pressureMode': 'user',   # 'auto' or 'user'
+        'holdingThreshold': 100e6,
+        'holdingPotential': -70e-3,
+        'sealThreshold': 1e9,
+        'nSlopeSamples': 5,
+        'autoSealTimeout': 380.0,
+    }
 
     def run(self):
         self.monitorTestPulse()
@@ -511,16 +509,15 @@ class PatchPipetteSealState(PatchPipetteState):
 
 class PatchPipetteCellAttachedState(PatchPipetteState):
     stateName = 'cell attached'
-    def defaultConfig(self):
-        return {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': -70e-3,
-            'initialTestPulseEnable': True,
-            'autoBreakInDelay': 5,
-            'breakInThreshold': 800e6,
-            'holdingCurrentThreshold': -1e-9,
-        }
+    _defaultConfig = {
+        'initialPressure': 'atmosphere',
+        'initialClampMode': 'vc',
+        'initialClampHolding': -70e-3,
+        'initialTestPulseEnable': True,
+        'autoBreakInDelay': None,
+        'breakInThreshold': 800e6,
+        'holdingCurrentThreshold': -1e-9,
+    }
 
     def run(self):
         self.monitorTestPulse()
@@ -550,20 +547,19 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
 
 class PatchPipetteBreakInState(PatchPipetteState):
     stateName = 'break in'
-    def defaultConfig(self):
-        return {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': -70e-3,
-            'initialTestPulseEnable': True,
-            'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
-            'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
-            'pulsePressures': [-20e3, -25e3, -30e3, -40e3, -50e3, -60e3, -60e3, -65e3, -65e3, -65e3],
-            'pulseInterval': 2,
-            'breakInThreshold': 800e6,
-            'holdingCurrentThreshold': -1e-9,
-            'fallbackState': 'fouled',
-        }
+    _defaultConfig = {
+        'initialPressure': 'atmosphere',
+        'initialClampMode': 'vc',
+        'initialClampHolding': -70e-3,
+        'initialTestPulseEnable': True,
+        'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
+        'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
+        'pulsePressures': [-20e3, -25e3, -30e3, -40e3, -50e3, -60e3, -60e3, -65e3, -65e3, -65e3],
+        'pulseInterval': 2,
+        'breakInThreshold': 800e6,
+        'holdingCurrentThreshold': -1e-9,
+        'fallbackState': 'fouled',
+    }
 
     def run(self):
         self.monitorTestPulse()
@@ -632,19 +628,15 @@ class PatchPipetteCleanState(PatchPipetteState):
     """
     stateName = 'pipette clean'
 
-    def defaultConfig(self):
-        config = {
-            'initialPressure': 'atmosphere',
-            'initialClampMode': 'vc',
-            'initialClampHolding': 0,
-            'initialTestPulseEnable': True,
-            'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
-            'rinseSequence': [(-35e3, 3.0), (100e3, 10.0)],
-            'approachHeight': 5e-3,
-            'cleanPos': self.dev.loadPosition('clean'),
-            'rinsePos': self.dev.loadPosition('rinse', None),
-        }
-        return config
+    _defaultConfig = {
+        'initialPressure': 'atmosphere',
+        'initialClampMode': 'vc',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': True,
+        'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
+        'rinseSequence': [(-35e3, 3.0), (100e3, 10.0)],
+        'approachHeight': 5e-3,
+    }
 
     def run(self):
         self.monitorTestPulse()
@@ -663,13 +655,15 @@ class PatchPipetteCleanState(PatchPipetteState):
             sequence = config[stage + 'Sequence']
             if len(sequence) == 0:
                 continue
-            pos = config[stage + 'Pos']
+
+            self.dev.loadPosition(stage)
+
             approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
 
-            dev._moveToGlobal(approachPos, 'fast').wait()
+            dev.pipetteDevice._moveToGlobal(approachPos, 'fast').wait()
             self._checkStop()
             self.resetPos = approachPos
-            dev._moveToGlobal(pos, 'fast').wait()
+            dev.pipetteDevice._moveToGlobal(pos, 'fast').wait()
             self._checkStop()
 
             for pressure, delay in sequence:
@@ -684,5 +678,5 @@ class PatchPipetteCleanState(PatchPipetteState):
             printExc("Error resetting pressure after clean")
         
         if self.resetPos is not None:
-            dev._moveToGlobal(self.resetPos, 'fast')
+            dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast')
             dev.setState('out')
