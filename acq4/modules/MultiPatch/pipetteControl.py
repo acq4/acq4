@@ -1,4 +1,6 @@
+# coding: utf8
 import re
+import acq4.pyqtgraph as pg
 from acq4.util import Qt
 from acq4.devices.PatchPipette import PatchPipette
 
@@ -18,7 +20,7 @@ class PipetteControl(Qt.QWidget):
         self.moving = False
         self.pip.pipetteDevice.sigGlobalTransformChanged.connect(self.positionChanged)
         if isinstance(pipette, PatchPipette):
-            self.pip.sigStateChanged.connect(self.stateChanged)
+            self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
         self.moveTimer = Qt.QTimer()
@@ -27,22 +29,24 @@ class PipetteControl(Qt.QWidget):
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
 
-        for state in pipette.listStates():
-            self.ui.stateCombo.addItem(state)
-        self.ui.stateCombo.activated.connect(self.stateComboChanged)
-
         n = re.sub(r'[^\d]+', '', pipette.name())
         self.ui.activeBtn.setText(n)
-
-        for ch in self.children():
-            ch.pipette = pipette
-            ch.pipCtrl = self
 
         self.ui.activeBtn.clicked.connect(self.activeClicked)
         self.ui.selectBtn.clicked.connect(self.selectClicked)
         self.ui.lockBtn.clicked.connect(self.lockClicked)
         self.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
         self.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
+
+        self.stateMenu = Qt.QMenu()
+        for state in pipette.listStates():
+            self.stateMenu.addAction(state)
+        #self.ui.stateCombo.activated.connect(self.stateComboChanged)
+
+        self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
+        self._pc2 = MousePressCatch(self.ui.modeText, self.modeTextClicked)
+        self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
+        self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
 
         self.gv = pg.GraphicsLayoutWidget()
         self.leftPlot = self.gv.addPlot()
@@ -57,8 +61,10 @@ class PipetteControl(Qt.QWidget):
         self.tpLabel.setParentItem(self.leftPlot.vb)
         self.tpLabel.setDefaultTextColor(pg.mkColor('w'))
 
-        self.stateChanged(pipette)
+        self.patchStateChanged(pipette)
         self.pipActiveChanged()
+        self.clampStateChanged(self.pip.clampDevice.getState())
+        self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
 
     def active(self):
         return self.ui.activeBtn.isChecked()
@@ -101,16 +107,31 @@ class PipetteControl(Qt.QWidget):
         tpa = tp.analysis()
         self.tpLabel.setPlainText(pg.siFormat(tpa['steadyStateResistance'], suffix=u'Ω'))
 
-    def stateChanged(self, pipette):
+    def patchStateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
         state = pipette.getState()
-        index = self.ui.stateCombo.findText(state)
-        self.ui.stateCombo.setCurrentIndex(index)
+        self.ui.stateText.setText(state)
 
-    def stateComboChanged(self, stateIndex):
-        if isinstance(self.pip, PatchPipette):
-            state = str(self.ui.stateCombo.itemText(stateIndex))
-            self.pip.setState(state)
+    def clampStateChanged(self, state):
+        self.ui.modeText.setText(state['mode'])
+
+    def clampHoldingChanged(self, clamp, mode):
+        hval = clamp.getHolding(mode)
+        if mode.lower() == 'vc':
+            self.ui.holdingSpin.setValue(hval*1e3)
+            self.ui.holdingSpin.setSingleStep(5)
+        else:
+            self.ui.holdingSpin.setValue(hval*1e12)
+            self.ui.holdingSpin.setSingleStep(50)
+
+    def stateTextClicked(self, sender, event):
+        self.stateMenu.popup(sender.mapToGlobal(event.pos()))
+
+    def modeTextClicked(self, sender, event):
+        if str(self.ui.modeText.text()).lower() == 'vc':
+            self.pip.clampDevice.setMode('ic')
+        else:
+            self.pip.clampDevice.setMode('vc')
 
     def positionChanged(self):
         self.moveTimer.start(500)
@@ -130,3 +151,17 @@ class PipetteControl(Qt.QWidget):
     def focusTargetBtnClicked(self, state):
         speed = self.selectedSpeed(default='slow')
         self.focusTarget(speed)
+
+
+class MousePressCatch(Qt.QObject):
+    sigMousePress = Qt.Signal(object, object)  # receiver, event
+    def __init__(self, receiver, callback):
+        Qt.QObject.__init__(self)
+        self.receiver = receiver
+        receiver.installEventFilter(self)
+        self.sigMousePress.connect(callback)
+
+    def eventFilter(self, obj, event):
+        if event.type() == event.MouseButtonPress:
+            self.sigMousePress.emit(self.receiver, event)
+        return False
