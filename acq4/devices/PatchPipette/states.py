@@ -28,6 +28,9 @@ class PatchPipetteState(Future):
      - communicating next state transition to the state manager
     """
 
+    # state subclasses must set a string name
+    stateName = None
+
     # State classes may implement a run() method to be called in a background thread
     run = None
 
@@ -87,7 +90,6 @@ class PatchPipetteState(Future):
         tp = self.config.get('initialTestPulseEnable')
         bias = self.config.get('initialAutoBiasEnable')
         biasTarget = self.config.get('initialAutoBiasTarget')
-        print("init!", self, self.config)
 
         if mode is not None:
             cdev.setMode(mode)
@@ -167,6 +169,9 @@ class PatchPipetteState(Future):
             
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error)
+
+    def __repr__(self):
+        return '<%s "%s">' % (type(self).__name__, self.stateName)
 
 
 class PatchPipetteOutState(PatchPipetteState):
@@ -353,7 +358,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             self.setState("checking test pulses")
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
-                print("no TP")
                 continue
 
             recentTestPulses.extend(tps)

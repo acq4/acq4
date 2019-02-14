@@ -1,5 +1,9 @@
 from __future__ import print_function
 from collections import OrderedDict
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 from acq4.util import Qt
 from acq4.pyqtgraph import disconnect
 from acq4.util.debug import printExc
@@ -34,6 +38,7 @@ class PatchPipetteStateManager(Qt.QObject):
     ])
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
+    _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
 
     def __init__(self, dev):
         Qt.QObject.__init__(self)
@@ -44,6 +49,8 @@ class PatchPipetteStateManager(Qt.QObject):
 
         # default state configuration parameters
         self.stateConfig = {}  # {state: {config options}}
+
+        self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
     def listStates(self):
         return list(self.stateHandlers.keys())
@@ -59,9 +66,27 @@ class PatchPipetteStateManager(Qt.QObject):
 
         Return the name of the state that has been chosen.
         """
-        if state not in self.stateHandlers:
-            raise Exception("Unknown patch pipette state %r" % state)
-        return self.configureState(state)
+        # state changes involve the construction of numerous QObjects with signal/slot connections;
+        # the indivudual state classes assume that they are owned by a thread with an event loop.
+        # SO: we need to process state transitions in the main thread. If this method is called
+        # from the main thread, then the emit() below will be processed immediately. Otherwise,
+        # we wait until the main thread processes the signal and sends back the result.
+        returnQueue = queue.Queue()
+        self._sigStateChangeRequested.emit(state, returnQueue)
+        ret = returnQueue.get(timeout=10)
+        if isinstance(ret, Exception):
+            raise ret
+        else:
+            return ret
+
+    def _stateChangeRequested(self, state, returnQueue):
+        try:
+            if state not in self.stateHandlers:
+                raise Exception("Unknown patch pipette state %r" % state)
+            ret = self.configureState(state)
+        except Exception as exc:
+            ret = exc
+        returnQueue.put(ret)
 
     def configureState(self, state, *args, **kwds):
         self.stopJob()

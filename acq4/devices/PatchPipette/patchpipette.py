@@ -174,7 +174,9 @@ class PatchPipette(Device):
         """
 
     def setState(self, state):
-        """out, bath, approach, seal, attached, breakin, wholecell
+        """Attempt to set the state (out, bath, seal, whole cell, etc.) of this patch pipette.
+
+        The actual resulting state is returned.
         """
         return self._stateManager.requestStateChange(state)
 
