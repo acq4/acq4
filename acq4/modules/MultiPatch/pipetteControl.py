@@ -31,7 +31,7 @@ class PipetteControl(Qt.QWidget):
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
         self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, format='{value:0.0f} {suffix}')
-        self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3)
+        self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
 
         self.displayWidgets = [
             self.ui.stateText,
