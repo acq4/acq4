@@ -65,10 +65,16 @@ class Pipette(Device, OptomechDevice):
     sigTargetChanged = Qt.Signal(object, object)
     sigCalibrationChanged = Qt.Signal(object)
 
+    # move start/finish are used for recording coarse movement information;
+    # they are not emitted for every transform change.
+    sigMoveStarted = Qt.Signal(object)
+    sigMoveFinished = Qt.Signal(object)
+
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self.config = config
+        self.moving = False
         self._scopeDev = None
         self._imagingDev = None
         self._stageOrientation = {'angle': 0, 'inverty': False}
@@ -93,6 +99,11 @@ class Pipette(Device, OptomechDevice):
         self.offset = np.array(cal.get('offset', [0, 0, 0]))
         self._calibratedPitch = cal.get('pitch', None)
         self._calibratedYaw = cal.get('yaw', cal.get('angle', None))  # backward support for old 'angle' config key
+
+        # timer used to emit sigMoveFinished when no motion is detected for a certain period 
+        self.moveTimer = Qt.QTimer()
+        self.moveTimer.timeout.connect(self.positionChangeFinished)
+        self.sigGlobalTransformChanged.connect(self.positionChanged)
 
         self._updateTransform()
 
@@ -591,6 +602,17 @@ class Pipette(Device, OptomechDevice):
     def focusTarget(self, speed='slow'):
         pos = self.targetPosition()
         self.scopeDevice().setGlobalPosition(pos, speed=speed)
+
+    def positionChanged(self):
+        self.moveTimer.start(500)
+        if self.moving is False:
+            self.moving = True
+            self.sigMoveStarted.emit(self)
+
+    def positionChangeFinished(self):
+        self.moveTimer.stop()
+        self.moving = False
+        self.sigMoveFinished.emit(self)
 
 
 class PipetteCamModInterface(CameraModuleInterface):

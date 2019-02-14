@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+from collections import OrderedDict
 from ..Device import Device
 from acq4.util import Qt
 from ...Manager import getManager
@@ -30,8 +31,12 @@ class PatchPipette(Device):
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
     sigAutoBiasChanged = Qt.Signal(object, object, object)  # self, enabled, target
 
-    # This attribute can be modified to insert a custom state manager. 
+    # catch-all signal for event logging
+    sigNewEvent = Qt.Signal(object, object)  # self, event
+
+    # These attributes can be modified to customize state management, test pulse acquisition, and auto bias
     defaultStateManagerClass = PatchPipetteStateManager
+    defaultTestPulseThreadClass = TestPulseThread
     defaultAutoBiasClass = AutoBiasHandler
 
     def __init__(self, deviceManager, config, name):
@@ -69,6 +74,10 @@ class PatchPipette(Device):
         self._initStateManager()
 
         self.pipetteDevice.sigCalibrationChanged.connect(self._pipetteCalibrationChanged)
+        self.pipetteDevice.sigMoveStarted.connect(self._pipetteMoveStarted)
+        self.pipetteDevice.sigMoveFinished.connect(self._pipetteMoveFinished)
+        self.pipetteDevice.sigTargetChanged.connect(self._pipetteTargetChanged)
+
         deviceManager.declareInterface(name, ['patchpipette'], self)
 
         # restore last known state for this pipette
@@ -152,6 +161,7 @@ class PatchPipette(Device):
             pdev.setSource(source)
 
         self.sigPressureChanged.emit(self, source, pressure)
+        self.emitNewEvent(OrderedDict([('event', 'pressureChanged'), ('source', source), ('pressure', pressure)]))
 
     def setSelected(self):
         pass
@@ -193,6 +203,7 @@ class PatchPipette(Device):
         self._writeStateFile()
         self.logEvent("stateChange", state=state)
         self.sigStateChanged.emit(self, state, oldState)
+        self.emitNewEvent(OrderedDict([('event', 'state_changed'), ('state', state), ('old_state', oldState)]))
 
     def _writeStateFile(self):
         state = {
@@ -236,10 +247,16 @@ class PatchPipette(Device):
 
     def _pipetteCalibrationChanged(self):
         self.calibrated = True
+        self.emitNewEvent(OrderedDict([('event', 'pipette_calibrated')]))
+
+    def _pipetteTransformChanged(self, pip, movedDevice):
+        pos = pip.globalPosition()
+        self.emitNewEvent(OrderedDict([('event', 'pipetteTransformChanged'), ('globalPosition', pos)]))
 
     def setActive(self, active):
         self.active = active
         self.sigActiveChanged.emit(self, active)
+        self.emitNewEvent(OrderedDict([('event', 'active_changed'), ('active', active)]))
 
     def autoPipetteOffset(self):
         clamp = self.clampDevice
@@ -266,10 +283,13 @@ class PatchPipette(Device):
         self._testPulseHistorySize += 1
 
         self.sigTestPulseFinished.emit(self, result)
+        event = OrderedDict([('event', 'test_pulse')])
+        event.update(result.analysis())
+        self.emitNewEvent(event)
 
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
-        self._testPulseThread = TestPulseThread(self, params)
+        self._testPulseThread = self.defaultTestPulseThreadClass(self, params)
         self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
         self._testPulseThread.started.connect(self.testPulseEnabledChanged)
         self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
@@ -300,6 +320,7 @@ class PatchPipette(Device):
 
     def testPulseEnabledChanged(self):
         self.sigTestPulseEnabled.emit(self, self.testPulseEnabled)
+        self.emitNewEvent(OrderedDict([('event', 'testPulseEnabled'), ('enabled', self.testPulseEnabled)]))
 
     def lastTestPulse(self):
         return self._lastTestPulse
@@ -310,6 +331,7 @@ class PatchPipette(Device):
     def enableAutoBias(self, enable=True):
         self._autoBiasHandler.setParams(enabled=enable)
         self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
+        self.emitNewEvent(OrderedDict([('event', 'autoBiasEnabled'), ('enabled', enable), ('target', self.autoBiasTarget())]))
 
     def autoBiasEnabled(self):
         return self._autoBiasHandler.getParam('enabled')
@@ -317,6 +339,7 @@ class PatchPipette(Device):
     def setAutoBiasTarget(self, v):
         self._autoBiasHandler.setParams(targetPotential=v)
         self.sigAutoBiasChanged.emit(self, self.autoBiasEnabled(), v)
+        self.emitNewEvent(OrderedDict([('event', 'autoBiasTargetChanged'), ('enabled', self.autoBiasEnabled()), ('target', v)]))
 
     def autoBiasTarget(self):
         return self._autoBiasHandler.getParam('targetPotential')
@@ -335,3 +358,29 @@ class PatchPipette(Device):
     def goHome(self, speed):
         self.setState('out')
         return self.pipetteDevice.goHome(speed)
+
+    def _pipetteMoveStarted(self, pip):
+        self.emitNewEvent(OrderedDict([
+            ('event', 'move_start'),
+        ]))
+
+    def _pipetteMoveFinished(self, pip):
+        pos = self.pipetteDevice.globalPosition()
+        self.emitNewEvent(OrderedDict([
+            ('event', 'move_stop'), 
+            ('position', [pos[0], pos[1], pos[2]]),
+        ]))
+
+    def _pipetteTargetChanged(self, pip, pos):
+        self.emitNewEvent(OrderedDict([
+            ('event', 'target_changed'), 
+            ('target_position', [pos[0], pos[1], pos[2]]),
+        ]))
+
+    def emitNewEvent(self, event):
+        newEv = OrderedDict([
+            ('device', self.name()),
+            ('timestamp', ptime.time()),
+        ])
+        newEv.update(event)
+        self.sigNewEvent.emit(self, newEv)

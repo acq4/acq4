@@ -61,6 +61,8 @@ class MultiPatchWindow(Qt.QWidget):
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
             pip.pipetteDevice.sigTargetChanged.connect(self.pipetteTargetChanged)
+            pip.pipetteDevice.sigMoveStarted.connect(self.pipetteMoveStarted)
+            pip.pipetteDevice.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
                 pip.sigStateChanged.connect(self.pipetteStateChanged)
                 pip.sigPressureChanged.connect(self.pipettePressureChanged)
@@ -69,8 +71,6 @@ class MultiPatchWindow(Qt.QWidget):
             ctrl = PipetteControl(pip)
             if i > 0:
                 ctrl.hideHeader()
-            ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
-            ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
 
             self.ui.matrixLayout.addWidget(ctrl, i, 0)
 
@@ -368,7 +368,7 @@ class MultiPatchWindow(Qt.QWidget):
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
             bl[0, i+4, 0] = 1 if ctrl.active() else 0
-            bl[0, i+4, 1] = 2 if ctrl.moving else 0
+            bl[0, i+4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
             bl[1, i+4, 1] = 1 if pip in sel else 0
             bl[1, i+4, 0] = 1 if ctrl.locked() else 0
             bl[2, i+4, 1] = 1 if pip in sel else 0

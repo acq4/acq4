@@ -9,24 +9,18 @@ Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
 class PipetteControl(Qt.QWidget):
 
-    sigMoveStarted = Qt.Signal(object)
-    sigMoveFinished = Qt.Signal(object)
     sigSelectChanged = Qt.Signal(object, object)
     sigLockChanged = Qt.Signal(object, object)
 
     def __init__(self, pipette, parent=None):
         Qt.QWidget.__init__(self, parent)
         self.pip = pipette
-        self.moving = False
-        self.pip.pipetteDevice.sigGlobalTransformChanged.connect(self.positionChanged)
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
             self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
             self.pip.sigPressureChanged.connect(self.pressureChanged)
-        self.moveTimer = Qt.QTimer()
-        self.moveTimer.timeout.connect(self.positionChangeFinished)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
@@ -176,17 +170,6 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.setMode('IC')
         else:
             self.pip.clampDevice.setMode('VC')
-
-    def positionChanged(self):
-        self.moveTimer.start(500)
-        if self.moving is False:
-            self.moving = True
-            self.sigMoveStarted.emit(self)
-
-    def positionChangeFinished(self):
-        self.moveTimer.stop()
-        self.moving = False
-        self.sigMoveFinished.emit(self)
 
     def focusTipBtnClicked(self, state):
         speed = self.selectedSpeed(default='slow')
