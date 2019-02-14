@@ -23,11 +23,24 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
+            self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
+            self.pip.sigPressureChanged.connect(self.pressureChanged)
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
+        self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, format='{value:0.0f} {suffix}')
+        self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3)
+
+        self.displayWidgets = [
+            self.ui.stateText,
+            self.ui.modeText,
+            self.ui.holdingSpin,
+            self.ui.pressureSpin,
+        ]
+        for w in self.displayWidgets:
+            w.setFixedHeight(20)
 
         n = re.sub(r'[^\d]+', '', pipette.name())
         self.ui.activeBtn.setText(n)
@@ -37,11 +50,11 @@ class PipetteControl(Qt.QWidget):
         self.ui.lockBtn.clicked.connect(self.lockClicked)
         self.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
         self.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
+        self.ui.autoBiasBtn.clicked.connect(self.autoBiasClicked)
 
         self.stateMenu = Qt.QMenu()
         for state in pipette.listStates():
-            self.stateMenu.addAction(state)
-        #self.ui.stateCombo.activated.connect(self.stateComboChanged)
+            act = self.stateMenu.addAction(state, self.stateActionClicked)
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
         self._pc2 = MousePressCatch(self.ui.modeText, self.modeTextClicked)
@@ -114,24 +127,55 @@ class PipetteControl(Qt.QWidget):
 
     def clampStateChanged(self, state):
         self.ui.modeText.setText(state['mode'])
+        self.updateHoldingInfo(mode=state['mode'])
 
     def clampHoldingChanged(self, clamp, mode):
+        self.updateHoldingInfo(mode=mode)
+
+    def autoBiasChanged(self, pip, enabled, target):
+        self.updateHoldingInfo()
+
+    def updateHoldingInfo(self, mode=None):
+        clamp = self.pip.clampDevice
+        if mode is None:
+            mode = clamp.getMode()
         hval = clamp.getHolding(mode)
-        if mode.lower() == 'vc':
-            self.ui.holdingSpin.setValue(hval*1e3)
+
+        if self.pip.autoBiasEnabled():
+            if mode == 'VC':
+                self.ui.holdingSpin.setValue(hval*1e3)
+                self.ui.autoBiasBtn.setText('bias: vc')
+            else:
+                biasTarget = self.pip.autoBiasTarget()
+                self.ui.holdingSpin.setValue(biasTarget*1e3)
+                self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
+            self.ui.holdingSpin.setOpts(suffix='mV')
             self.ui.holdingSpin.setSingleStep(5)
+            self.ui.autoBiasBtn.setChecked(True)
         else:
-            self.ui.holdingSpin.setValue(hval*1e12)
-            self.ui.holdingSpin.setSingleStep(50)
+            if mode == 'VC':
+                self.ui.holdingSpin.setValue(hval*1e3)
+                self.ui.holdingSpin.setOpts(suffix='mV')
+                self.ui.holdingSpin.setSingleStep(5)
+            else:
+                self.ui.holdingSpin.setValue(hval*1e12)
+                self.ui.holdingSpin.setOpts(suffix='pA')
+                self.ui.holdingSpin.setSingleStep(50)
+            self.ui.autoBiasBtn.setChecked(False)
+            self.ui.autoBiasBtn.setText('bias: off')
+
+    def stateActionClicked(self):
+        state = str(self.sender().text())
+        self.pip.setState(state)
 
     def stateTextClicked(self, sender, event):
         self.stateMenu.popup(sender.mapToGlobal(event.pos()))
 
     def modeTextClicked(self, sender, event):
         if str(self.ui.modeText.text()).lower() == 'vc':
-            self.pip.clampDevice.setMode('ic')
+            self.pip.clampDevice.setMode('IC')
         else:
-            self.pip.clampDevice.setMode('vc')
+            self.pip.clampDevice.setMode('VC')
 
     def positionChanged(self):
         self.moveTimer.start(500)
@@ -151,6 +195,21 @@ class PipetteControl(Qt.QWidget):
     def focusTargetBtnClicked(self, state):
         speed = self.selectedSpeed(default='slow')
         self.focusTarget(speed)
+
+    def hideHeader(self):
+        for col in range(self.ui.gridLayout.columnCount()):
+            item = self.ui.gridLayout.itemAtPosition(0, col)
+            if item is not None:
+                item.widget().hide()
+
+    def autoBiasClicked(self):
+        self.pip.enableAutoBias(self.ui.autoBiasBtn.isChecked())
+        self.updateHoldingInfo()
+
+    def pressureChanged(self, pip, source, pressure):
+        self.ui.pressureSpin.setValue(pressure)
+        self.ui.atmPressureBtn.setChecked(source=='atmosphere')
+        self.ui.userPressureBtn.setChecked(source=='user')
 
 
 class MousePressCatch(Qt.QObject):

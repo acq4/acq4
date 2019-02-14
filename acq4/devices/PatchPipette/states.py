@@ -66,6 +66,7 @@ class PatchPipetteState(Future):
                 self._taskDone(interrupted=False, error=None)
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc))
+            raise
 
     def initializePressure(self):
         """Set initial pressure based on the config key 'initialPressure'
@@ -84,15 +85,23 @@ class PatchPipetteState(Future):
         mode = self.config.get('initialClampMode')
         holding = self.config.get('initialClampHolding')
         tp = self.config.get('initialTestPulseEnable')
+        bias = self.config.get('initialAutoBiasEnable')
+        biasTarget = self.config.get('initialAutoBiasTarget')
+        print("init!", self, self.config)
 
         if mode is not None:
             cdev.setMode(mode)
             if holding is not None:
-                cdev.setHolding(value=holding)
+                cdev.setHolding(mode=mode, value=holding)
 
         # enable test pulse if config requests it AND the device is "active"
         if tp is not None:
             self.dev.enableTestPulse(tp and self.dev.active)
+
+        if bias is not None:
+            self.dev.enableAutoBias(bias)
+        if biasTarget is not None:
+            self.dev.setAutoBiasTarget(biasTarget)
 
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults
@@ -165,7 +174,7 @@ class PatchPipetteOutState(PatchPipetteState):
 
     _defaultConfig = {
         'initialPressure': 'atmosphere',
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': False,
     }
@@ -199,9 +208,11 @@ class PatchPipetteWholeCellState(PatchPipetteState):
     stateName = 'whole cell'
     _defaultConfig = {
         'initialPressure': 'atmosphere',
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
+        'initialAutoBiasEnable': True,
+        'initialAutoBiasTarget': -70e-3,
     }
 
 
@@ -209,7 +220,7 @@ class PatchPipetteBrokenState(PatchPipetteState):
     stateName = 'broken'
     _defaultConfig = {
         'initialPressure': 'atmosphere',
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
     }
@@ -219,7 +230,7 @@ class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
     _defaultConfig = {
         'initialPressure': None,
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
     }
@@ -238,7 +249,7 @@ class PatchPipetteBathState(PatchPipetteState):
 
     _defaultConfig = {
         'initialPressure': 3500.,  # 0.5 PSI
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
         'bathThreshold': 50e6,
@@ -309,7 +320,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 
     _defaultConfig = {
         'initialPressure': None,
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
         'fallbackState': 'bath',
@@ -415,7 +426,7 @@ class PatchPipetteSealState(PatchPipetteState):
 
     _defaultConfig = {
         'initialPressure': None,
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
         'pressureMode': 'user',   # 'auto' or 'user'
@@ -511,7 +522,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
     stateName = 'cell attached'
     _defaultConfig = {
         'initialPressure': 'atmosphere',
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
         'autoBreakInDelay': None,
@@ -549,7 +560,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
     stateName = 'break in'
     _defaultConfig = {
         'initialPressure': 'atmosphere',
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
         'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
@@ -630,7 +641,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
     _defaultConfig = {
         'initialPressure': 'atmosphere',
-        'initialClampMode': 'vc',
+        'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
         'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
@@ -656,7 +667,7 @@ class PatchPipetteCleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            self.dev.loadPosition(stage)
+            pos = self.dev.loadPosition(stage)
 
             approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
 

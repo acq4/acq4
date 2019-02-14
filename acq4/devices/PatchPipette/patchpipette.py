@@ -9,6 +9,7 @@ from .devgui import PatchPipetteDeviceGui
 from .testpulse import TestPulseThread
 from .pressure import PressureControl
 from .statemanager import PatchPipetteStateManager
+from .autobias import AutoBiasHandler
 
 
 class PatchPipette(Device):
@@ -27,9 +28,11 @@ class PatchPipette(Device):
     sigTestPulseFinished = Qt.Signal(object, object)  # self, TestPulse
     sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
+    sigAutoBiasChanged = Qt.Signal(object, object, object)  # self, enabled, target
 
     # This attribute can be modified to insert a custom state manager. 
-    defaultStateManagerClass = None
+    defaultStateManagerClass = PatchPipetteStateManager
+    defaultAutoBiasClass = AutoBiasHandler
 
     def __init__(self, deviceManager, config, name):
         pipName = config.pop('pipetteDevice', None)
@@ -60,6 +63,8 @@ class PatchPipette(Device):
         
         self._lastTestPulse = None
         self._initTestPulse(config.get('testPulse', {}))
+        self._autoBiasHandler = None
+        self._initAutoBias()
 
         self._initStateManager()
 
@@ -91,7 +96,7 @@ class PatchPipette(Device):
         * input resistance
         * access resistance
         * capacitance
-        * clamp mode ('ic' or 'vc')
+        * clamp mode ('IC' or 'VC')
         * timestamp of last measurement
 
         """
@@ -297,10 +302,26 @@ class PatchPipette(Device):
     def lastTestPulse(self):
         return self._lastTestPulse
 
+    def _initAutoBias(self):
+        self._autoBiasHandler = self.defaultAutoBiasClass(self)
+
+    def enableAutoBias(self, enable=True):
+        self._autoBiasHandler.setParams(enabled=enable)
+        self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
+
+    def autoBiasEnabled(self):
+        return self._autoBiasHandler.getParam('enabled')
+
+    def setAutoBiasTarget(self, v):
+        self._autoBiasHandler.setParams(targetPotential=v)
+        self.sigAutoBiasChanged.emit(self, self.autoBiasEnabled(), v)
+
+    def autoBiasTarget(self):
+        return self._autoBiasHandler.getParam('targetPotential')
+
     def _initStateManager(self):
         # allow external modification of state manager class
-        cls = self.defaultStateManagerClass or PatchPipetteStateManager
-        self._stateManager = cls(self)
+        self._stateManager = self.defaultStateManagerClass(self)
 
     def stateManager(self):
         return self._stateManager

@@ -67,6 +67,8 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
                 pip.sigTestPulseFinished.connect(self.pipetteTestPulseFinished)
             ctrl = PipetteControl(pip)
+            if i > 0:
+                ctrl.hideHeader()
             ctrl.sigMoveStarted.connect(self.pipetteMoveStarted)
             ctrl.sigMoveFinished.connect(self.pipetteMoveFinished)
 

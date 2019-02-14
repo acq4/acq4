@@ -10,6 +10,8 @@ from acq4.util.debug import printExc
 
 
 class TestPulseThread(Thread):
+    """Background thread that runs periodic test pulsees on a single patch clamp channel.
+    """
 
     sigTestPulseFinished = Qt.Signal(object, object)  # device, result
 
@@ -203,6 +205,9 @@ class TestPulse(object):
 
     def startTime(self):
         return self.result[self.devName]._info[-1]['startTime']
+
+    def clampMode(self):
+        return self.taskParams['clampMode']
 
     def analysis(self):
         with self._analysisLock:
