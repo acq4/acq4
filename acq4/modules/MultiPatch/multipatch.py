@@ -60,9 +60,9 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
-            pip.pipetteDevice.sigTargetChanged.connect(self.pipetteTargetChanged)
-            pip.pipetteDevice.sigMoveStarted.connect(self.pipetteMoveStarted)
-            pip.pipetteDevice.sigMoveFinished.connect(self.pipetteMoveFinished)
+            pip.sigTargetChanged.connect(self.pipetteTargetChanged)
+            pip.sigMoveStarted.connect(self.pipetteMoveStarted)
+            pip.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
                 pip.sigStateChanged.connect(self.pipetteStateChanged)
                 pip.sigPressureChanged.connect(self.pipettePressureChanged)
@@ -79,7 +79,6 @@ class MultiPatchWindow(Qt.QWidget):
             ctrl.sigLockChanged.connect(self.pipetteLockChanged)
 
             self.pipCtrls.append(ctrl)
-            ctrl.leftPlot.setXLink(self.pipCtrls[0].leftPlot.getViewBox())
 
         self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
@@ -431,7 +430,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
-        event = {"device": str(pip.pip.name()),
+        event = {"device": str(pip.name()),
                  "event": "move_start"}
         self.recordEvent(**event)
 
@@ -442,8 +441,8 @@ class MultiPatchWindow(Qt.QWidget):
 
     def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
-        pos = pip.pip.pipetteDevice.globalPosition()
-        event = {"device": str(pip.pip.name()),
+        pos = pip.pipetteDevice.globalPosition()
+        event = {"device": str(pip.name()),
                  "event": "move_stop",
                  "position": (pos[0], pos[1], pos[2])}
         self.recordEvent(**event)

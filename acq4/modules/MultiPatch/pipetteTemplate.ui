@@ -103,7 +103,7 @@
       </size>
      </property>
      <property name="text">
-      <string>Pres (kPa)</string>
+      <string>Pressure</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -449,6 +449,43 @@
        </widget>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="regulatorPressureBtn">
+          <property name="text">
+           <string>R</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="userPressureBtn">
+          <property name="text">
+           <string>U</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="atmospherePressureBtn">
+          <property name="text">
+           <string>A</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
        <widget class="QPushButton" name="autoPressureBtn">
         <property name="text">
          <string>auto</string>
@@ -457,33 +494,6 @@
          <bool>true</bool>
         </property>
        </widget>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_3">
-        <property name="spacing">
-         <number>0</number>
-        </property>
-        <item>
-         <widget class="QPushButton" name="userPressureBtn">
-          <property name="text">
-           <string>user</string>
-          </property>
-          <property name="checkable">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="atmPressureBtn">
-          <property name="text">
-           <string>atm</string>
-          </property>
-          <property name="checkable">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-       </layout>
       </item>
       <item>
        <spacer name="verticalSpacer_4">

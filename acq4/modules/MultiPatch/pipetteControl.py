@@ -24,7 +24,7 @@ class PipetteControl(Qt.QWidget):
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
-        self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, format='{value:0.0f} {suffix}')
+        self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, suffix='V', siPrefix=True, step=5e-3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
         self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
 
         self.displayWidgets = [
@@ -45,6 +45,11 @@ class PipetteControl(Qt.QWidget):
         self.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
         self.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
         self.ui.autoBiasBtn.clicked.connect(self.autoBiasClicked)
+        self.ui.regulatorPressureBtn.clicked.connect(self.regulatorPressureClicked)
+        self.ui.userPressureBtn.clicked.connect(self.userPressureClicked)
+        self.ui.atmospherePressureBtn.clicked.connect(self.atmospherePressureClicked)
+        self.ui.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
+        self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
 
         self.stateMenu = Qt.QMenu()
         for state in pipette.listStates():
@@ -124,10 +129,18 @@ class PipetteControl(Qt.QWidget):
         self.updateHoldingInfo(mode=state['mode'])
 
     def clampHoldingChanged(self, clamp, mode):
-        self.updateHoldingInfo(mode=mode)
+        self.updateHoldingInfo()
 
     def autoBiasChanged(self, pip, enabled, target):
         self.updateHoldingInfo()
+
+    def holdingSpinChanged(self):
+        val = self.ui.holdingSpin.value()
+        mode = self.pip.clampDevice.getMode()
+        if mode == 'VC' or (mode == 'IC' and self.pip.autoBiasEnabled()):
+            self.pip.setAutoBiasTarget(val)        
+        if not (mode == 'IC' and self.pip.autoBiasEnabled()):
+            self.pip.clampDevice.setHolding(mode, val)
 
     def updateHoldingInfo(self, mode=None):
         clamp = self.pip.clampDevice
@@ -137,26 +150,29 @@ class PipetteControl(Qt.QWidget):
 
         if self.pip.autoBiasEnabled():
             if mode == 'VC':
-                self.ui.holdingSpin.setValue(hval*1e3)
+                spinVal = hval
+                units = 'V'
                 self.ui.autoBiasBtn.setText('bias: vc')
             else:
                 biasTarget = self.pip.autoBiasTarget()
-                self.ui.holdingSpin.setValue(biasTarget*1e3)
+                spinVal = biasTarget
+                units = 'V'
                 self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
-            self.ui.holdingSpin.setOpts(suffix='mV')
-            self.ui.holdingSpin.setSingleStep(5)
             self.ui.autoBiasBtn.setChecked(True)
         else:
             if mode == 'VC':
-                self.ui.holdingSpin.setValue(hval*1e3)
-                self.ui.holdingSpin.setOpts(suffix='mV')
-                self.ui.holdingSpin.setSingleStep(5)
+                spinVal = hval
+                units = 'V'
             else:
-                self.ui.holdingSpin.setValue(hval*1e12)
-                self.ui.holdingSpin.setOpts(suffix='pA')
-                self.ui.holdingSpin.setSingleStep(50)
+                spinVal = hval
+                units = 'A'
             self.ui.autoBiasBtn.setChecked(False)
             self.ui.autoBiasBtn.setText('bias: off')
+
+        with pg.SignalBlock(self.ui.holdingSpin.valueChanged, self.holdingSpinChanged):
+            self.ui.holdingSpin.setValue(spinVal)
+            step = 5e-3 if units == 'V' else 50e-12
+            self.ui.holdingSpin.setOpts(suffix=units, step=step)
 
     def stateActionClicked(self):
         state = str(self.sender().text())
@@ -189,10 +205,31 @@ class PipetteControl(Qt.QWidget):
         self.pip.enableAutoBias(self.ui.autoBiasBtn.isChecked())
         self.updateHoldingInfo()
 
+    def regulatorPressureClicked(self):
+        self.pip.pressureDevice.setPressure(source='regulator')
+
+    def userPressureClicked(self):
+        self.pip.pressureDevice.setPressure(source='user')
+
+    def atmospherePressureClicked(self):
+        self.pip.pressureDevice.setPressure(source='atmosphere')
+
+    def pressureSpinChanged(self):
+        self.pip.pressureDevice.setPressure(pressure=self.ui.pressureSpin.value())
+
     def pressureChanged(self, pip, source, pressure):
-        self.ui.pressureSpin.setValue(pressure)
-        self.ui.atmPressureBtn.setChecked(source=='atmosphere')
+        with pg.SignalBlock(self.ui.pressureSpin.valueChanged, self.pressureSpinChanged):
+            self.ui.pressureSpin.setValue(pressure)
+        self.ui.atmospherePressureBtn.setChecked(source=='atmosphere')
         self.ui.userPressureBtn.setChecked(source=='user')
+        self.ui.regulatorPressureBtn.setChecked(source=='regulator')
+
+        style = {
+            'regulator': 'background-color: #FCC; color: #000', 
+            'user': 'background-color: #CCF; color: #AAA', 
+            'atmosphere': 'color: #AAA', 
+        }.get(source, '')
+        self.ui.pressureSpin.setStyleSheet(style)            
 
 
 class MousePressCatch(Qt.QObject):
