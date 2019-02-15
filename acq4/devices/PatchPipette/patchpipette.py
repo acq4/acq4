@@ -30,6 +30,9 @@ class PatchPipette(Device):
     sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
     sigAutoBiasChanged = Qt.Signal(object, object, object)  # self, enabled, target
+    sigMoveStarted = Qt.Signal(object)  # self
+    sigMoveFinished = Qt.Signal(object, object)  # self, position
+    sigTargetChanged = Qt.Signal(object, object)  # self, target
 
     # catch-all signal for event logging
     sigNewEvent = Qt.Signal(object, object)  # self, event
@@ -64,6 +67,7 @@ class PatchPipette(Device):
         self.pressureDevice = None
         if 'pressureDevice' in config:
             self.pressureDevice = PressureControl(config['pressureDevice'])
+            self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
         
         self._lastTestPulse = None
@@ -137,29 +141,7 @@ class PatchPipette(Device):
                 'wholeCellEndTime': None,
             }
 
-    def getPressure(self):
-        pass
-
-    def setPressure(self, pressure):
-        """Set the pipette pressure (float; in Pa) or pressure source (str).
-
-        If float, then the pressure regulator is set to the specified pressure in Pa and
-        the source is set to 'regulator'. If str, then the source is set to the specified
-        value and the regulator pressure is set to 0.
-        """
-        pdev = self.pressureDevice
-        if pdev is None:
-            return
-        if isinstance(pressure, str):
-            source = pressure
-            pressure = 0
-            pdev.setSource(source)
-            pdev.setPressure(pressure)
-        else:
-            source = 'regulator'
-            pdev.setPressure(pressure)
-            pdev.setSource(source)
-
+    def pressureChanged(self, dev, source, pressure):
         self.sigPressureChanged.emit(self, source, pressure)
         self.emitNewEvent(OrderedDict([('event', 'pressureChanged'), ('source', source), ('pressure', pressure)]))
 
@@ -360,18 +342,21 @@ class PatchPipette(Device):
         return self.pipetteDevice.goHome(speed)
 
     def _pipetteMoveStarted(self, pip):
+        self.sigMoveStarted.emit(self)
         self.emitNewEvent(OrderedDict([
             ('event', 'move_start'),
         ]))
 
     def _pipetteMoveFinished(self, pip):
         pos = self.pipetteDevice.globalPosition()
+        self.sigMoveFinished.emit(self, pos)
         self.emitNewEvent(OrderedDict([
             ('event', 'move_stop'), 
             ('position', [pos[0], pos[1], pos[2]]),
         ]))
 
     def _pipetteTargetChanged(self, pip, pos):
+        self.sigTargetChanged.emit(self, pos)
         self.emitNewEvent(OrderedDict([
             ('event', 'target_changed'), 
             ('target_position', [pos[0], pos[1], pos[2]]),

@@ -462,7 +462,7 @@ class PollThread(threading.Thread):
                     break
 
                 # read all updates waiting in queue
-                ump.call('receive', 20)
+                ump.call('receive', 30)
                 #ump.recv_all()
 
                 # check for position changes and invoke callbacks

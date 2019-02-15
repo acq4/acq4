@@ -72,13 +72,11 @@ class PatchPipetteState(Future):
             raise
 
     def initializePressure(self):
-        """Set initial pressure based on the config key 'initialPressure'
+        """Set initial pressure based on the config keys 'initialPressureSource' and 'initialPressure'
         """
-        pressure = self.config.get('initialPressure')
-        if pressure is None:
-            return
-        
-        self.dev.setPressure(pressure)
+        pressure = self.config.get('initialPressure', None)
+        source = self.config.get('initialPressureSource', None)
+        self.dev.pressureDevice.setPressure(source=source, pressure=pressure)
 
     def initializeClamp(self):
         """Set initial clamp parameters based on the config keys
@@ -178,7 +176,7 @@ class PatchPipetteOutState(PatchPipetteState):
     stateName = 'out'
 
     _defaultConfig = {
-        'initialPressure': 'atmosphere',
+        'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': False,
@@ -212,7 +210,7 @@ class PatchPipetteApproachState(PatchPipetteState):
 class PatchPipetteWholeCellState(PatchPipetteState):
     stateName = 'whole cell'
     _defaultConfig = {
-        'initialPressure': 'atmosphere',
+        'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
@@ -224,7 +222,7 @@ class PatchPipetteWholeCellState(PatchPipetteState):
 class PatchPipetteBrokenState(PatchPipetteState):
     stateName = 'broken'
     _defaultConfig = {
-        'initialPressure': 'atmosphere',
+        'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -234,7 +232,6 @@ class PatchPipetteBrokenState(PatchPipetteState):
 class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
     _defaultConfig = {
-        'initialPressure': None,
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -254,6 +251,7 @@ class PatchPipetteBathState(PatchPipetteState):
 
     _defaultConfig = {
         'initialPressure': 3500.,  # 0.5 PSI
+        'initialPressureSource': 'regulator',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -324,7 +322,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         PatchPipetteState.__init__(self, *args, **kwds)
 
     _defaultConfig = {
-        'initialPressure': None,
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -429,7 +426,6 @@ class PatchPipetteSealState(PatchPipetteState):
         PatchPipetteState.__init__(self, *args, **kwds)
 
     _defaultConfig = {
-        'initialPressure': None,
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -462,9 +458,9 @@ class PatchPipetteSealState(PatchPipetteState):
         mode = config['pressureMode']
         self.setState('beginning seal (mode: %r)' % mode)
         if mode == 'user':
-            dev.setPressure('user')
+            dev.pressureDevice.setPressure(source='user')
         elif mode == 'auto':
-            dev.setPressure('atmosphere')
+            dev.pressureDevice.setPressure(source='atmosphere')
         else:
             raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
         
@@ -487,7 +483,7 @@ class PatchPipetteSealState(PatchPipetteState):
                 holdingSet = True
 
             if ssr > config['sealThreshold']:
-                dev.setPressure('atmosphere')
+                dev.pressureDevice.setPressure(source='atmosphere')
                 self.setState('gigaohm seal detected')
                 self._taskDone()
                 return 'cell attached'
@@ -515,17 +511,17 @@ class PatchPipetteSealState(PatchPipetteState):
 
                 pressure = np.clip(pressure, -10e3, 0)
                 self.setState('Rpip slope: %g MOhm/sec   Pressure: %g Pa' % (slope/1e6, pressure))
-                dev.setPressure(pressure)
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
 
     def cleanup(self, interrupted):
-        self.dev.setPressure('atmosphere')
+        self.dev.pressureDevice.setPressure(source='atmosphere')
 
 
 
 class PatchPipetteCellAttachedState(PatchPipetteState):
     stateName = 'cell attached'
     _defaultConfig = {
-        'initialPressure': 'atmosphere',
+        'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
@@ -563,7 +559,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
 class PatchPipetteBreakInState(PatchPipetteState):
     stateName = 'break in'
     _defaultConfig = {
-        'initialPressure': 'atmosphere',
+        'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
@@ -612,10 +608,9 @@ class PatchPipetteBreakInState(PatchPipetteState):
             status = self.checkBreakIn()
             if status is not None:
                 return status
-            
-            self.dev.setPressure(pressure)
+            self.dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             time.sleep(duration)
-            self.dev.setPressure('atmosphere')
+            self.dev.setPressure(source='atmosphere')
                 
     def checkBreakIn(self):
         while True:
@@ -644,7 +639,7 @@ class PatchPipetteCleanState(PatchPipetteState):
     stateName = 'pipette clean'
 
     _defaultConfig = {
-        'initialPressure': 'atmosphere',
+        'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -682,13 +677,13 @@ class PatchPipetteCleanState(PatchPipetteState):
             self._checkStop()
 
             for pressure, delay in sequence:
-                dev.setPressure(pressure)
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self._checkStop(delay)
 
     def cleanup(self, interrupted):
         dev = self.dev
         try:
-            dev.setPressure(0)
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
         
