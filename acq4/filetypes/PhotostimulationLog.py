@@ -23,7 +23,7 @@ class PhotostimulationLog(FileType):
         Otherwise return False.
         The default implementation just checks for the correct name extensions."""
         name = fileHandle.shortName()
-        if name.startswith('PhotoStimulationLog_') and name.endswith('.log'):
+        if (name.startswith('PhotoStimulationLog_') or name.startswith('PrairieStimulation')) and name.endswith('.log'):
             return cls.priority
         return False
 
@@ -37,18 +37,37 @@ class PhotostimLog(object):
 
     def read(self, filename):
 
-        for line in open(filename, 'rb').readlines():
+        with open(filename, 'rb') as f:
+            line = f.readline()
+            vline = json.loads(line.rstrip(',\r\n'))
+            version = vline.get('version', None)
+            if version == None:
+                f.seek(0)
 
-            stim = json.loads(line.rstrip(',\r\n'))
-            id = stim.keys()[0]
 
-            pt = stim[id]['stimulationPoint']
+            for line in f.readlines():
 
-            if pt not in self._points.keys():
-                self._points[pt] = StimulationPoint('Point', pt, stim[id]['pos'][:-1], stim[id]['pos'][-1])
 
-            self._points[pt].addStimulation(stim[id], id)
-            self._points[pt].updatePosition(stim[id]['pos'])
+                stim = json.loads(line.rstrip(',\r\n'))
+
+                i = stim.keys()[0]
+
+                if version == None:
+                    ptid = stim[i]['stimulationPoint']
+                else:
+                    ptid = stim[i]['stimulationPoint']['id']
+
+                if version == 2:
+                    pos = stim[i]['stimPointPos']
+                else:
+                    pos = stim[i]['pos']
+
+                if ptid not in self._points.keys():
+                    self._points[ptid] = StimulationPoint('Point', ptid, pos[:-1], pos[-1])
+
+                self._points[ptid].addStimulation(stim[i], ptid)
+
+                self._points[ptid].updatePosition(pos)
 
         #raise Exception("Stop here!")
 

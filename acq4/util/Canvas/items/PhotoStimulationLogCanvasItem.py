@@ -37,6 +37,7 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
 
         for pt in self.data.listPoints():
             self.addStimPoint(pt)
+        self._ctrl.headstagesCheckChanged() ## trigger params to be hidden until headstages are checked
 
     @classmethod
     def checkFile(cls, fh):
@@ -80,12 +81,26 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         self.hsLayout.setContentsMargins(2,2,2,2)
         self.headstageGroup.setLayout(self.hsLayout)
         self.headstageChecks = {}
+        self.headstageLabels = {}
+        self.headstageROIs = []
         for i in range(headstageCount):
             w = QtGui.QCheckBox('%i'%i)
+            l = QtGui.QLabel("Pos: , Angle: ")
             self.headstageChecks[i] = w
-            row = (i)/2
-            column = i%2
-            self.hsLayout.addWidget(w, row, column)
+            self.headstageLabels[i] = l
+            #row = i
+            #column = i%2
+            #self.hsLayout.addWidget(w, row, column)
+            self.hsLayout.addWidget(w, i, 0)
+            self.hsLayout.addWidget(l, i, 1)
+            roi = pg.EllipseROI((0,0), (14,10))
+            self.headstageROIs.append(roi)
+            roi.setParentItem(canvasitem._graphicsItem)
+            roi.hide()
+            roi.sigRegionChanged.connect(self.headstageROImoved)
+
+
+
 
         for c in self.headstageChecks.itervalues():
             c.setCheckState(False)
@@ -105,12 +120,34 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         #self.copyJsonBtn.clicked.connect(self.copyJson)
 
     def headstagesCheckChanged(self):
+        for i, hsCheck in self.headstageChecks.iteritems():
+            if hsCheck.isChecked():
+                self.headstageROIs[i].show()
+                self.updatePosLabel(i)
+            else:
+                self.headstageROIs[i].hide()
+                self.clearPosLabel(i)
+
         for point in self.ptree.topLevelItem(0).param.children():
             for hs in point.children():
                 if self.headstageChecks[int(hs.name()[-1])].isChecked():
                     hs.show()
                 else:
                     hs.hide()
+
+    def updatePosLabel(self, headstageNumber):
+        i = headstageNumber
+        pos = self.headstageROIs[i].pos()
+        ang = self.headstageROIs[i].angle() + 90. ## +90 is to mimic what Alice did in new_text_ui.py
+        self.headstageLabels[i].setText("Pos:%s, Angle:%s"%(str(pos), str(ang)))
+
+    def clearPosLabel(self, headstageNumber):
+        i = headstageNumber
+        self.headstageLabels[i].setText("Pos: , Angle: ")
+
+    def headstageROImoved(self, roi):
+        i = self.headstageROIs.index(roi)
+        self.updatePosLabel(i)
 
 
     def saveJson(self):
