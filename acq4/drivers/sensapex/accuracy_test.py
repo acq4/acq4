@@ -41,26 +41,38 @@ errplots[2].setXLink(plots[0])
 
 
 
-start = time.time()
+
+start = pg.ptime.time()
 pos = [[], [], []]
 tgt = [[], [], []]
 err = [[], [], []]
+bus = []
 times = []
+
+lastupdate = pg.ptime.time()
+
 def update(update_error=False):
+    global lastupdate
     p = dev.get_pos()
-    now = time.time() - start
+    s = dev.is_busy()
+    bus.append(int(s))
+    now = pg.ptime.time() - start
     times.append(now)
     for i in range(3):
         pos[i].append((p[i] - p1[i]) * 1e-9)
         tgt[i].append((target[i] - p1[i]) * 1e-9)
-        plots[i].plot(times, tgt[i], pen='r', clear=True)
-        plots[i].plot(times, pos[i])
         if update_error:
             err[i].append(pos[i][-1] - tgt[i][-1])
-            errplots[i].plot(times, err[i], clear=True, connect='finite')
         else:
             err[i].append(np.nan)
-    app.processEvents()
+
+def update_plots():
+    for i in range(3):
+        plots[i].clear()
+        plots[i].addItem(pg.PlotCurveItem(times, bus, pen=(0, 255, 0, 50), brush=(0, 255, 0, 50), fillLevel=0), ignoreBounds=True)
+        plots[i].plot(times, tgt[i], pen='r')
+        plots[i].plot(times, pos[i])
+        errplots[i].plot(times, err[i], clear=True, connect='finite')
 
 
 p1 = dev.get_pos()
@@ -80,15 +92,18 @@ for i in range(10):
     dev.goto_pos(target, speed=1000, linear=True) 
     while dev.is_busy():
         update()
-    for i in range(10):
+    waitstart = pg.ptime.time()
+    while pg.ptime.time() - waitstart < 2.0:
         update(update_error=True)
-        time.sleep(0.05)
+        # time.sleep(0.05)
     p2 = dev.get_pos(timeout=200)
     positions.append(p2)
     diff = (p2 - target) * 1e-9
     diffs.append(diff)
     errs.append(np.linalg.norm(diff))
     print(diff, errs[-1])
+
+update_plots()
 
 dev.goto_pos(p1, 1000)
 print("mean:", np.mean(errs), " max:", np.max(errs))

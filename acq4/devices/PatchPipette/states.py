@@ -629,6 +629,13 @@ class PatchPipetteBreakInState(PatchPipetteState):
         if ssr < self.config['breakInThreshold']:
             return True
 
+    def cleanup(self, interrupted):
+        dev = self.dev
+        try:
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        except Exception:
+            printExc("Error resetting pressure after clean")
+
 
 
 class PatchPipetteCleanState(PatchPipetteState):
@@ -680,6 +687,8 @@ class PatchPipetteCleanState(PatchPipetteState):
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self._checkStop(delay)
+
+        return 'out'          
 
     def cleanup(self, interrupted):
         dev = self.dev

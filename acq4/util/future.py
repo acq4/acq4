@@ -106,8 +106,8 @@ class Future(Qt.QObject):
 
         If *updates* is True, process Qt events while waiting.
 
-        If a timeout is specified and the task takes too long, then raise ValueError.
-        If the task completes for another reason, then raise RuntimeError.
+        If a timeout is specified and the task takes too long, then raise Future.Timeout.
+        If the task ends incomplete for another reason, then raise RuntimeError.
         """
         start = ptime.time()
         while True:
