@@ -610,7 +610,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
                 return status
             self.dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             time.sleep(duration)
-            self.dev.setPressure(source='atmosphere')
+            self.dev.pressureDevice.setPressure(source='atmosphere')
                 
     def checkBreakIn(self):
         while True:
@@ -646,6 +646,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
         'rinseSequence': [(-35e3, 3.0), (100e3, 10.0)],
         'approachHeight': 5e-3,
+        'fallbackState': 'out',
     }
 
     def run(self):
@@ -655,9 +656,9 @@ class PatchPipetteCleanState(PatchPipetteState):
         config = self.config.copy()
         dev = self.dev
 
-        dev.setState('cleaning')
+        self.setState('cleaning')
 
-        dev.retractFromSurface().wait()
+        dev.pipetteDevice.retractFromSurface().wait()
 
         for stage in ('clean', 'rinse'):
             self._checkStop()
@@ -666,7 +667,7 @@ class PatchPipetteCleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            pos = self.dev.loadPosition(stage)
+            pos = dev.pipetteDevice.loadPosition(stage)
 
             approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
 
@@ -689,4 +690,4 @@ class PatchPipetteCleanState(PatchPipetteState):
         
         if self.resetPos is not None:
             dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast')
-            dev.setState('out')
+            

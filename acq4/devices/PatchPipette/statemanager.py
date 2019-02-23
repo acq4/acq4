@@ -55,6 +55,13 @@ class PatchPipetteStateManager(Qt.QObject):
     def listStates(self):
         return list(self.stateHandlers.keys())
 
+    def setStateConfig(self, config):
+        """Set configuration options to be used when initializing states.
+
+        Must be a dict like {'statename': {'opt': value}, ...}.
+        """
+        self.stateConfig = config        
+
     def stateChanged(self, oldState, newState):
         """Called when state has changed (possibly by user)
         """
@@ -73,7 +80,10 @@ class PatchPipetteStateManager(Qt.QObject):
         # we wait until the main thread processes the signal and sends back the result.
         returnQueue = queue.Queue()
         self._sigStateChangeRequested.emit(state, returnQueue)
-        ret = returnQueue.get(timeout=10)
+        try:
+            ret = returnQueue.get(timeout=10)
+        except queue.Empty:
+            raise Exception("State change request timed out.")
         if isinstance(ret, Exception):
             raise ret
         else:

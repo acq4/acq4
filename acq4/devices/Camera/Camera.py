@@ -406,11 +406,23 @@ class Camera(DAQGeneric, OptomechDevice):
             center = np.array(list(size) + [0]) / 2.0
         elif mode == 'roi':
             rgn = self.getParam('region')
-            center = [rgn[0] + rgn[2] / 2.0, rgn[1] + rgn[3] / 2.0, 0]
+            center = np.array([rgn[0] + rgn[2] / 2.0, rgn[1] + rgn[3] / 2.0, 0])
         else:
             raise ValueError("mode argument must be 'sensor' or 'roi'")
         
         return self.mapToGlobal(center)
+
+    def moveCenterToGlobal(self, position, speed, center='roi'):
+        """Move this camera's stage such that its center is focused on a given global position.
+
+        The center to focus may be either the 'sensor' or the 'roi'.
+        """
+        scope = self.scopeDev
+        camCenter = np.array(self.globalCenterPosition(center))
+        scopeCenter = np.array(pg.Vector(scope.globalPosition()))
+        
+        scopePos = scopeCenter + np.array(position) - camCenter
+        fut = scope.setGlobalPosition(scopePos, speed=speed)
 
     def objectiveChanged(self, obj=None):
         if obj is None:
