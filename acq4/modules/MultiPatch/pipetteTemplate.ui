@@ -158,6 +158,16 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="autoHoldingBtn">
+        <property name="text">
+         <string>auto</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="verticalSpacer_3">
         <property name="orientation">
          <enum>Qt::Vertical</enum>

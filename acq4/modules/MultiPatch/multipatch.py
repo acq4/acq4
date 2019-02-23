@@ -80,13 +80,21 @@ class MultiPatchWindow(Qt.QWidget):
 
             self.pipCtrls.append(ctrl)
 
-        self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
+        # set up patch profile menu
+        profiles = list(module.config.get('patchProfiles', {}).keys())
+        if 'default' not in profiles:
+            profiles.insert(0, 'default')
+        for profile in profiles:
+            self.ui.profileCombo.addItem(profile)
+
+        self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
+        # self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
 
-        self.ui.moveInBtn.clicked.connect(self.moveIn)
-        self.ui.stepInBtn.clicked.connect(self.stepIn)
-        self.ui.stepOutBtn.clicked.connect(self.stepOut)
+        # self.ui.moveInBtn.clicked.connect(self.moveIn)
+        # self.ui.stepInBtn.clicked.connect(self.stepIn)
+        # self.ui.stepOutBtn.clicked.connect(self.stepOut)
         self.ui.aboveTargetBtn.clicked.connect(self.moveAboveTarget)
         self.ui.approachBtn.clicked.connect(self.moveApproach)
         self.ui.toTargetBtn.clicked.connect(self.moveToTarget)
@@ -99,7 +107,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         self.ui.reSealBtn.clicked.connect(self.reSeal)
-        self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
+        # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
 
         self.ui.fastBtn.clicked.connect(lambda: self.ui.slowBtn.setChecked(False))
         self.ui.slowBtn.clicked.connect(lambda: self.ui.fastBtn.setChecked(False))
@@ -123,19 +131,24 @@ class MultiPatchWindow(Qt.QWidget):
             if d is not None:
                 self.surfaceDepthChanged(d)
 
-    def moveIn(self):
-        for pip in self.selectedPipettes():
-            pip.startAdvancing(10e-6)
+    def profileComboChanged(self):
+        profile = self.module.config['patchProfiles'].get(self.ui.profileCombo.currentText(), {})
+        for pip in self.pips:
+            pip.stateManager().setStateConfig(profile)
 
-    def stepIn(self):
-        speed = self.selectedSpeed(default='slow')
-        for pip in self.selectedPipettes():
-            pip.advanceTowardTarget(self.ui.stepSizeSpin.value(), speed)
+    # def moveIn(self):
+    #     for pip in self.selectedPipettes():
+    #         pip.startAdvancing(10e-6)
 
-    def stepOut(self):
-        speed = self.selectedSpeed(default='slow')
-        for pip in self.selectedPipettes():
-            pip.retract(self.ui.stepSizeSpin.value(), speed)
+    # def stepIn(self):
+    #     speed = self.selectedSpeed(default='slow')
+    #     for pip in self.selectedPipettes():
+    #         pip.advanceTowardTarget(self.ui.stepSizeSpin.value(), speed)
+
+    # def stepOut(self):
+    #     speed = self.selectedSpeed(default='slow')
+    #     for pip in self.selectedPipettes():
+    #         pip.retract(self.ui.stepSizeSpin.value(), speed)
 
     def reSeal(self):
         speed = self.module.config.get('reSealSpeed', 1e-6)
@@ -301,9 +314,9 @@ class MultiPatchWindow(Qt.QWidget):
     def pipetteTestPulseEnabled(self, pip, enabled):
         self.updateSelectedPipControls()
 
-    def testPulseClicked(self):
-        for pip in self.selectedPipettes():
-            pip.enableTestPulse(self.ui.testPulseBtn.isChecked())
+    # def testPulseClicked(self):
+    #     for pip in self.selectedPipettes():
+    #         pip.enableTestPulse(self.ui.testPulseBtn.isChecked())
 
     def pipetteActiveChanged(self, active):
         self.selectionChanged()
@@ -343,8 +356,8 @@ class MultiPatchWindow(Qt.QWidget):
 
     def updateSelectedPipControls(self):
         pips = self.selectedPipettes()
-        tp = any([pip.testPulseEnabled() for pip in pips])
-        self.ui.testPulseBtn.setChecked(tp)
+        # tp = any([pip.testPulseEnabled() for pip in pips])
+        # self.ui.testPulseBtn.setChecked(tp)
 
     def selectedPipettes(self):
         sel = []
