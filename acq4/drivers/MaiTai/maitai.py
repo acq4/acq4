@@ -89,7 +89,7 @@ class MaiTai(SerialDevice):
     Class for communicating with Spectra-Physics Mai Tai laser via serial port.
     
     """
-    def __init__(self, port, baud=9600):
+    def __init__(self, port, baud=38400):
         """
         port: serial COM port (0 => com1)"""
 
