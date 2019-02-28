@@ -8,13 +8,14 @@ class Photostimulation():
     """A data modelling class that represents a single focal photostimulation."""
 
     def __init__(self, info, id):
-        self._info = info
+        #self._info = info
         self.id = id
+        self.info = info
+        self.info['id'] = id
 
-    def __getattr__(self, name):
-        return self._info[name] ## this is a problem, it makes all the other attributes 
-        #of the class unreachable and really a datamodelling class should model data anyway
-
+    def __repr__(self):
+        return self.info.__repr__()
+     
 
 
 
@@ -69,7 +70,7 @@ class StimulationPoint(QtCore.QObject):
 #        self.positionHistory.append((timestamp, pos))
 
     def addStimulation(self, data, id):
-        self.stimulations.append({id:Photostimulation(data, id)})
+        self.stimulations.append({id:data})
 
     def updatePosition(self, pos):
         self.setDepth(pos[2])
