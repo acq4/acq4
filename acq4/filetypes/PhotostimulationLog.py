@@ -65,7 +65,7 @@ class PhotostimLog(object):
                 if ptid not in self._points.keys():
                     self._points[ptid] = StimulationPoint('Point', ptid, pos[:-1], pos[-1])
 
-                self._points[ptid].addStimulation(stim[i], ptid)
+                self._points[ptid].addStimulation(stim[i], i)
 
                 self._points[ptid].updatePosition(pos)
 

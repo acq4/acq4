@@ -93,7 +93,7 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             #self.hsLayout.addWidget(w, row, column)
             self.hsLayout.addWidget(w, i, 0)
             self.hsLayout.addWidget(l, i, 1)
-            roi = pg.EllipseROI((0,0), (14,10))
+            roi = pg.EllipseROI((0,0), (0.00001,0.000015))
             self.headstageROIs.append(roi)
             roi.setParentItem(canvasitem._graphicsItem)
             roi.hide()
@@ -158,15 +158,30 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             filename += '.json'
 
         data = OrderedDict()
+        data['version'] = 1
         data['Headstages'] = OrderedDict()
+        data['StimulationPoints'] = OrderedDict()
 
         for hs in self.headstageChecks.keys():
+            if not self.headstageChecks[hs].isChecked():
+                continue
             data['Headstages']['electrode_%i'%hs] = OrderedDict()
             ### Need to add position info here
+            d = {}
+            d['x_pos'] = 0.0001
+            d['y_pos'] = 0.0002
+            d['z_pos'] = 0.0003
+            d['angle'] = 75
+            data['Headstages']['electrode_%i'%hs].update(d)
+            
+
             data['Headstages']['electrode_%i'%hs]['Connections'] = OrderedDict()
+
 
         for point in self.ptree.topLevelItem(0).param.children():
             for hs in point.children():
+                if not self.headstageChecks[int(hs.name()[-1])].isChecked():
+                    continue
                 cx = hs.value()
                 if cx == 0:
                     cnx_str = None
@@ -180,7 +195,9 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
                     cnx_str = 'no cnx'
                 data['Headstages']['electrode_%s'%hs.name()[-1]]['Connections'][point.name()] = cnx_str
 
-            data[point.name()] = point.point.stimulations
+
+        #data[point.name()] = point.point.stimulations
+            data['StimulationPoints'][point.name()] = point.point.saveState()
 
         with open(filename, 'w') as outfile:
             json.dump(data, outfile, indent=4)
