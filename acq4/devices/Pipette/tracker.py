@@ -96,7 +96,7 @@ class PipetteTracker(object):
         else:
             tipPos = self.dev.globalPosition()
         tipPos = np.array([tipPos[0], tipPos[1]])
-        angle = self.dev.getYawAngle() * np.pi / 180.
+        angle = self.dev.yawRadians()
         da = 10 * np.pi / 180  # half-angle of the tip
         pxw = frame.info()['pixelSize'][0]
         # compute back points of a triangle that circumscribes the tip
@@ -443,6 +443,11 @@ class PipetteTracker(object):
         at each location.
 
         All tip locations must be within the field of view.
+
+        If *show* is True, then a window is displayed showing each test image as it is acquired,
+        with a yellow marker showing the _target_ position of the pipette, a red marker showing
+        the _detected_ position of the pipette, and a blue marker showing the _reported_ position
+        of the pipette.
         """
         startTime = time.time()
         start = np.array(self.dev.globalPosition())
@@ -450,21 +455,28 @@ class PipetteTracker(object):
         inds = np.mgrid[0:nSteps[0], 0:nSteps[1], 0:nSteps[2]].reshape((3, npts)).transpose()
         order = np.arange(npts)
         np.random.shuffle(order)
-
+        misses = 0
         err = np.zeros(nSteps + (3,))
 
         stepSize = np.array(stepSize)
 
         if show:
             imv = pg.image()
-            mark1 = Qt.QGraphicsEllipseItem(Qt.QRectF(-5, -5, 10, 10))
+            # target marker
+            mark1 = Qt.QGraphicsEllipseItem(Qt.QRectF(-8, -8, 16, 16))
             mark1.setBrush(pg.mkBrush(255, 255, 0, 100))
             mark1.setZValue(100)
             imv.addItem(mark1)
+            # visually detected marker
             mark2 = Qt.QGraphicsEllipseItem(Qt.QRectF(-5, -5, 10, 10))
             mark2.setBrush(pg.mkBrush(255, 0, 0, 100))
             mark2.setZValue(100)
             imv.addItem(mark2)
+            # manipulator reported marker
+            mark3 = Qt.QGraphicsEllipseItem(Qt.QRectF(-5, -5, 10, 10))
+            mark3.setBrush(pg.mkBrush(0, 0, 255, 200))
+            mark3.setZValue(100)
+            imv.addItem(mark3)
 
         # loop over all points in random order, and such that we do heavy computation while
         # pipette is moving.
@@ -498,17 +510,24 @@ class PipetteTracker(object):
                             imv.setImage(frame.data()[0])
                             p1 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos))
                             p2 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos + err[tuple(ind)]))
+                            p3 = frame.globalTransform().inverted()[0].map(pg.Vector(reportedPos))
                             mark1.setPos(p1.x(), p1.y())
                             mark2.setPos(p2.x(), p2.y())
+                            mark3.setPos(p3.x(), p3.y())
 
                     # wait for previous moves to complete
                     mfut.wait(updates=True)
                     ffut.wait(updates=True)
 
                     # step back to actual target position
-                    self.dev._moveToGlobal(pos, speed).wait(updates=True)
+                    try:
+                        self.dev._moveToGlobal(pos, speed).wait(updates=True)
+                    except RuntimeError as exc:
+                        misses += 1
+                        pg.debug.printExc("Manipulator missed target:")
 
                     frame = self.takeFrame()
+                    reportedPos = self.dev.globalPosition()
 
                     if dlg.wasCanceled():
                         return None
@@ -524,7 +543,10 @@ class PipetteTracker(object):
             'inds': inds,
             'offsets': offsets,
             'time': time.time() - startTime,
+            'misses': misses,
         }
+
+        print("Manipulator missed target %d times" % misses)
 
         filename = self.dev.configFileName('error_map.np')
         np.save(open(filename, 'wb'), self.errorMap)
