@@ -1,26 +1,27 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import division, print_function
 
 from six.moves import reduce
+import time, gc
+import sys, os
+from collections import OrderedDict
+from functools import reduce
 
 from acq4.modules.Module import *
 from acq4.util import Qt
 import acq4.util.DirTreeWidget as DirTreeWidget
 import acq4.util.configfile as configfile
-from collections import OrderedDict
 from acq4.util.SequenceRunner import *
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.Manager import getManager, logMsg, logExc
 from acq4.util.debug import *
 import acq4.util.ptime as ptime
-from . import analysisModules
-import time, gc
-import sys, os
 from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph as pg
 from acq4.util.StatusBar import StatusBar
-from functools import reduce
+from acq4.util.future import Future
+from . import analysisModules
 
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 
@@ -530,9 +531,13 @@ class TaskRunner(Module):
         self.runSingle(store=True)
         
     def testSingle(self):
-        self.runSingle(store=False)
+        return self.runSingle(store=False)
     
     def runSingle(self, store=True):
+        """Start a single task run (using default values for all sequence parameters).
+
+        Return a TaskFuture instance that can be used to monitor progress and results.
+        """
         
         if self.protoStateGroup.state()['loop']:
             self.loopEnabled = True
@@ -569,23 +574,28 @@ class TaskRunner(Module):
             #print prot
             self.sigTaskSequenceStarted.emit({})
             #print "runSingle: Starting taskThread.."
-            self.taskThread.startTask(prot)
+            future = self.taskThread.startTask(prot)
             #print "runSingle: taskThreadStarted"
         except:
             exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
             #print "Error starting task. "
-            raise HelpfulException("Error occurred while starting task", exc=exc)      
+            raise HelpfulException("Error occurred while starting task", exc=exc)
+
+        return future
    
     def runSequenceClicked(self):
-        self.runSequence(store=True)
-        
+        self.runSequence(store=True)        
    
     def testSequence(self):
-        self.runSequence(store=False)
+        return self.runSequence(store=False)
        
     def runSequence(self, store=True):
+        """Start a sequence task run.
+
+        Return a TaskFuture instance that can be used to monitor progress and results.
+        """
         ## Disable all start buttons
         self.enableStartBtns(False)
         
@@ -637,12 +647,13 @@ class TaskRunner(Module):
             self.sigTaskSequenceStarted.emit({})
             logMsg('Started %s task sequence of length %i' %(self.currentTask.name(),pLen), importance=6)
             #print 'PR task positions:
-            self.taskThread.startTask(prot, paramInds)
+            future = self.taskThread.startTask(prot, paramInds)
             
         except:
             self.enableStartBtns(True)
-
             raise
+
+        return future
         
     def generateTask(self, dh, params=None, progressDlg=None):
         #prof = Profiler("Generate Task: %s" % str(params))
@@ -944,6 +955,7 @@ class TaskThread(Thread):
         self.abortThread = False
         self.paused = False
         self._currentTask = None
+        self._currentFuture = None
         self._systrace = None
                 
     def startTask(self, task, paramSpace=None):
@@ -952,10 +964,19 @@ class TaskThread(Thread):
             while self.isRunning():
                 raise Exception("Already running another task")
             self.task = task
+
+            paramSize = 1
+            if paramSpace is not None:
+                for param, inds in paramSpace.items():
+                    paramSize *= len(inds)
+                
+            self._currentFuture = TaskFuture(self, task, paramSize)
             self.paramSpace = paramSpace
             self.lastRunTime = None
             self.start() ### causes self.run() to be called from new thread
             logMsg("Task started.", importance=1)
+
+            return self._currentFuture
     
     def pause(self, pause):
         with self.lock:
@@ -980,11 +1001,16 @@ class TaskThread(Thread):
             else:
                 runSequence(self.runOnce, self.paramSpace, list(self.paramSpace.keys()))
             
-        except:
+        except Exception as exc:
             self.task = None  ## free up this memory
             self.paramSpace = None
             printExc("Error in task thread, exiting.")
+            self._currentFuture._taskDone(interrupted=True, error=str(exc))
+            self._currentFuture = None
             self.sigExitFromError.emit()
+        else:
+            self._currentFuture._taskDone()
+            self._currentFuture = None
                     
     def runOnce(self, params=None):
         # good time to collect garbage
@@ -1089,9 +1115,11 @@ class TaskThread(Thread):
         finally:
             with self.lock:
                 self._currentTask = None
+            self._currentFuture._taskCount += 1
         prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
+        self._currentFuture.newFrame(frame)
         self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
         if self.stopThread:
@@ -1107,8 +1135,10 @@ class TaskThread(Thread):
             if self.stopThread:
                 raise Exception('stop')
         
-    def stop(self, block=False):
+    def stop(self, block=False, task=None):
         with self.lock:
+            if task is not None and self._currentTask is not task:
+                return
             self.stopThread = True
         if block:
             if not self.wait(10000):
@@ -1122,4 +1152,30 @@ class TaskThread(Thread):
                 self.abortThread = True
 
 
+class TaskFuture(Future):
+    """Used to check on progress for a running task or task sequence.
 
+    Instances of this class are returned from TaskRunner.runSingle() and .runSequence().
+
+    Results are stored in self.results if the future is initialized with
+    collectResults=True (this is False by default to avoid memory overuse).
+    """
+    def __init__(self, thread, task, nTasks, collectResults=False):
+        self._taskThread = thread
+        self._task = task
+        self._nTasks = nTasks
+        self._taskCount = 0
+        self._collectResults = collectResults
+        self.results = []
+        Future.__init__(self)
+
+    def percentDone(self):
+        return self._taskCount / self._nTasks
+
+    def stop(self): 
+        self._taskThread.stop(task=self._task)
+        return Future.stop(self)
+
+    def newFrame(self, frame):
+        if self._collectResults:
+            self.results.append(frame)
