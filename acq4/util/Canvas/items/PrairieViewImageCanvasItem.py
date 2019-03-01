@@ -74,13 +74,13 @@ class PrairieViewImageCanvasItem(ImageCanvasItem):
     def get_zseries_metainfo(self, xml_attrs):
 
         xPos = xml_attrs['ZSeries']['XAxis'] * 1e-6 ## convert from um to m
-        yPos = xml_attrs['ZSeries']['YAxis'] * 1e-6
+        yPos = -xml_attrs['ZSeries']['YAxis'] * 1e-6
         zPos = []
         for f in xml_attrs['ZSeries']['Frames']:
             zPos.append(f['ZAxis'] * 1e-6)
 
         scale = (xml_attrs['Environment']['XAxis_umPerPixel']*1e-6,
-                 xml_attrs['Environment']['YAxis_umPerPixel']*1e-6,
+                 -xml_attrs['Environment']['YAxis_umPerPixel']*1e-6,
                  xml_attrs['Environment']['ZAxis_umPerPixel']*1e-6)
 
         opts = {}
@@ -89,5 +89,6 @@ class PrairieViewImageCanvasItem(ImageCanvasItem):
         opts['scale'] = scale
 
         return opts
+
 
 registerItemType(PrairieViewImageCanvasItem)
