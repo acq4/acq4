@@ -25,6 +25,10 @@ class MultiPatch(Module):
         self.win = MultiPatchWindow(self)
         self.win.show()
 
+    def quit(self):
+        self.win.saveConfig()
+        return Module.quit(self)
+
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
@@ -130,6 +134,25 @@ class MultiPatchWindow(Qt.QWidget):
             d = self.microscope.getSurfaceDepth()
             if d is not None:
                 self.surfaceDepthChanged(d)
+
+        self.loadConfig()
+
+    def saveConfig(self):
+        geom = self.geometry()
+        config = {
+            'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
+        }
+        configfile = os.path.join('modules', self.module.name + '.cfg')
+        man = getManager()
+        man.writeConfigFile(config, configfile)
+
+    def loadConfig(self):
+        configfile = os.path.join('modules', self.module.name + '.cfg')
+        man = getManager()
+        config = man.readConfigFile(configfile)
+        if 'geometry' in config:
+            geom = Qt.QRect(*config['geometry'])
+            self.setGeometry(geom)
 
     def profileComboChanged(self):
         profile = self.module.config['patchProfiles'].get(self.ui.profileCombo.currentText(), {})
