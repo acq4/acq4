@@ -710,18 +710,20 @@ class Manager(Qt.QObject):
         """
         with self.lock:
             if isinstance(d, six.string_types):
-                self.baseDir = self.dirHandle(d, create=False)
+                dh = self.dirHandle(d, create=False)
             elif isinstance(d, DataManager.DirHandle):
-                self.baseDir = d
+                dh = d
             else:
                 raise Exception("Invalid argument type: ", type(d), d)
-            # Nah--only create the index if we really need it. Otherwise we get .index files left everywhere.
-            # if not self.baseDir.isManaged():
-            #     self.baseDir.createIndex()
 
-        #self.emit(Qt.SIGNAL('baseDirChanged'))
-        self.sigBaseDirChanged.emit()
-        self.setCurrentDir(self.baseDir)
+            changed = False
+            if self.baseDir is not dh:
+                self.baseDir = dh
+                changed = True
+
+        if changed:
+            self.sigBaseDirChanged.emit()
+            self.setCurrentDir(self.baseDir)
 
     def dirHandle(self, d, create=False):
         """Return a directory handle for the specified directory string."""
