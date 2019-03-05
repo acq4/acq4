@@ -84,7 +84,10 @@ class NiDAQ(Device):
             self.delayedSet.lock()
             for chan, val in self.delayedSet.items():
                 #print "Set delayed:", chan, val
-                self.setChannelValue(chan, val, ignoreLock=True)
+                try:
+                    self.setChannelValue(chan, val, ignoreLock=True)
+                except Exception:
+                    printExc("Error resetting channel value:")
             self.delayedSet.clear()
         finally:
             self.delayedSet.unlock()
