@@ -162,15 +162,18 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         data['Headstages'] = OrderedDict()
         data['StimulationPoints'] = OrderedDict()
 
+        cells = self.getCellPositions()
+
         for hs in self.headstageChecks.keys():
             if not self.headstageChecks[hs].isChecked():
                 continue
             data['Headstages']['electrode_%i'%hs] = OrderedDict()
             ### Need to add position info here
-            d = {}
-            d['x_pos'] = 0.0001
-            d['y_pos'] = 0.0002
-            d['z_pos'] = 0.0003
+            d = OrderedDict()
+            d['cellName'] = cells[hs][0]
+            d['x_pos'] = cells[hs][1][0]
+            d['y_pos'] = cells[hs][1][1]
+            d['z_pos'] = cells[hs][1][2]
             d['angle'] = 75
             data['Headstages']['electrode_%i'%hs].update(d)
             
@@ -201,6 +204,22 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
 
         with open(filename, 'w') as outfile:
             json.dump(data, outfile, indent=4)
+
+    def getCellPositions(self):
+        markers = []
+        for item in self.canvasitem().canvas.items:
+            if item._typeName == "Markers":
+                markers.append(item)
+
+        if len(markers) == 0:
+            raise Exception("Could not find any cell markers. Please load a MultiPatchLog and create Markers.")
+        elif len(markers) > 1:
+            raise Exception("Found %i markers items. Not sure which one to use." % len(markers))
+        else:
+            return markers[0].saveState()['markers']
+
+
+
 
 
 
