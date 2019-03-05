@@ -209,9 +209,10 @@ class MultiPatchWindow(Qt.QWidget):
 
     def reSeal(self):
         speed = self.module.config.get('reSealSpeed', 1e-6)
-        distance = self.module.config.get('reSealDistance', 150e-6)
+        # distance = self.module.config.get('reSealDistance', 150e-6)
         for pip in self.selectedPipettes():
-            pip.retract(distance, speed)
+            # pip.retract(distance, speed)
+            pip.startAdvancing(speed)
         
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
