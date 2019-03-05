@@ -81,23 +81,23 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         self.hsLayout.setContentsMargins(2,2,2,2)
         self.headstageGroup.setLayout(self.hsLayout)
         self.headstageChecks = {}
-        self.headstageLabels = {}
-        self.headstageROIs = []
+        #self.headstageLabels = {}
+        #self.headstageROIs = []
         for i in range(headstageCount):
             w = QtGui.QCheckBox('%i'%i)
-            l = QtGui.QLabel("Pos: , Angle: ")
+            #l = QtGui.QLabel("Pos: , Angle: ")
             self.headstageChecks[i] = w
-            self.headstageLabels[i] = l
-            #row = i
-            #column = i%2
-            #self.hsLayout.addWidget(w, row, column)
-            self.hsLayout.addWidget(w, i, 0)
-            self.hsLayout.addWidget(l, i, 1)
-            roi = pg.EllipseROI((0,0), (0.00001,0.000015))
-            self.headstageROIs.append(roi)
-            roi.setParentItem(canvasitem._graphicsItem)
-            roi.hide()
-            roi.sigRegionChanged.connect(self.headstageROImoved)
+            #self.headstageLabels[i] = l
+            row = i/2
+            column = i%2
+            self.hsLayout.addWidget(w, row, column)
+            #self.hsLayout.addWidget(w, i, 0)
+            #self.hsLayout.addWidget(l, i, 1)
+            #roi = pg.EllipseROI((0,0), (0.00001,0.000015))
+            #self.headstageROIs.append(roi)
+            #roi.setParentItem(canvasitem._graphicsItem)
+            #roi.hide()
+            #roi.sigRegionChanged.connect(self.headstageROImoved)
 
 
 
@@ -120,13 +120,13 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         #self.copyJsonBtn.clicked.connect(self.copyJson)
 
     def headstagesCheckChanged(self):
-        for i, hsCheck in self.headstageChecks.iteritems():
-            if hsCheck.isChecked():
-                self.headstageROIs[i].show()
-                self.updatePosLabel(i)
-            else:
-                self.headstageROIs[i].hide()
-                self.clearPosLabel(i)
+        # for i, hsCheck in self.headstageChecks.iteritems():
+        #     if hsCheck.isChecked():
+        #         self.headstageROIs[i].show()
+        #         self.updatePosLabel(i)
+        #     else:
+        #         self.headstageROIs[i].hide()
+        #         self.clearPosLabel(i)
 
         for point in self.ptree.topLevelItem(0).param.children():
             for hs in point.children():
@@ -135,19 +135,19 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
                 else:
                     hs.hide()
 
-    def updatePosLabel(self, headstageNumber):
-        i = headstageNumber
-        pos = self.headstageROIs[i].pos()
-        ang = self.headstageROIs[i].angle() + 90. ## +90 is to mimic what Alice did in new_text_ui.py
-        self.headstageLabels[i].setText("Pos:%s, Angle:%s"%(str(pos), str(ang)))
+    # def updatePosLabel(self, headstageNumber):
+    #     i = headstageNumber
+    #     pos = self.headstageROIs[i].pos()
+    #     ang = self.headstageROIs[i].angle() + 90. ## +90 is to mimic what Alice did in new_text_ui.py
+    #     self.headstageLabels[i].setText("Pos:%s, Angle:%s"%(str(pos), str(ang)))
 
-    def clearPosLabel(self, headstageNumber):
-        i = headstageNumber
-        self.headstageLabels[i].setText("Pos: , Angle: ")
+    # def clearPosLabel(self, headstageNumber):
+    #     i = headstageNumber
+    #     self.headstageLabels[i].setText("Pos: , Angle: ")
 
-    def headstageROImoved(self, roi):
-        i = self.headstageROIs.index(roi)
-        self.updatePosLabel(i)
+    # def headstageROImoved(self, roi):
+    #     i = self.headstageROIs.index(roi)
+    #     self.updatePosLabel(i)
 
 
     def saveJson(self):
@@ -163,6 +163,7 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         data['StimulationPoints'] = OrderedDict()
 
         cells = self.getCellPositions()
+        angle = self.getCortexAngle()
 
         for hs in self.headstageChecks.keys():
             if not self.headstageChecks[hs].isChecked():
@@ -174,7 +175,7 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             d['x_pos'] = cells[hs][1][0]
             d['y_pos'] = cells[hs][1][1]
             d['z_pos'] = cells[hs][1][2]
-            d['angle'] = 75
+            d['angle'] = angle
             data['Headstages']['electrode_%i'%hs].update(d)
             
 
@@ -219,7 +220,18 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             return markers[0].saveState()['markers']
 
 
+    def getCortexAngle(self):
+        items = []
+        for item in self.canvasitem().canvas.items:
+            if item._typeName == "CortexMarker":
+                items.append(item)
 
+        if len(items) == 0:
+            raise Exception("Could not find a CortexMarker used to measure angle. Please add one.")
+        elif len(items) > 1:
+            raise Exception("Found %i CortexMarker items. Not sure which to use.")
+        else:
+            return items[0].graphicsItem().angle
 
 
 
