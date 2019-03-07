@@ -39,8 +39,9 @@ class TargetItem(GraphicsObject):
             self._updateLabel()
 
     def setLabelAngle(self, angle):
-        self.labelAngle = angle
-        self._updateLabel()
+        if self.labelAngle != angle:
+            self.labelAngle = angle
+            self._updateLabel()
 
     def boundingRect(self):
         if self._picture is None:
