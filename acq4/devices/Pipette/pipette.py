@@ -554,6 +554,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.transformChanged()
 
     def setOrientationToggled(self):
+        self.updateCalibrateAxis()
         self.calibrateAxis.setVisible(self.ui.setOrientationBtn.isChecked())
 
     def selectedSpeed(self):
@@ -599,31 +600,44 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def transformChanged(self):
         # manipulator's global transform has changed; update the center arrow and orientation axis
-        dev = self.getDevice()
-        pos = dev.mapToGlobal([0, 0, 0])
-        x = dev.mapToGlobal([1, 0, 0])
-
-        p1 = pg.Point(x[:2])
-        p2 = pg.Point(pos[:2])
-        p3 = pg.Point(1, 0)
-        angle = (p1 - p2).angle(p3)
-        if angle is None:
-            angle = 0
+        pos, angle = self.analyzeTransform()
 
         self.centerArrow.setPos(pos[0], pos[1])
         self.centerArrow.setStyle(angle=180-angle)
         # self.depthLine.setValue(pos[2])
         self.depthArrow.setPos(0, pos[2])
 
-        self.target.setLabelAngle(dev.getYawAngle())
+        dev = self.getDevice()
+        yaw = dev.getYawAngle()
+        self.target.setLabelAngle(yaw)
 
-        if self.ui.setOrientationBtn.isChecked():
-            return
+    def analyzeTransform(self):
+        """Return the position and yaw angle of the device transform
+        """
+        p = pg.debug.Profiler(disabled=True)
+        dev = self.getDevice()
+        p('getdev')
+        pos = dev.mapToGlobal([0, 0, 0])
+        p('map1')
 
+        x = dev.mapToGlobal([1, 0, 0])
+        p('map2')
+
+        p1 = pg.Point(x[:2])
+        p2 = pg.Point(pos[:2])
+        p3 = pg.Point(1, 0)
+        p('points')
+        angle = (p1 - p2).angle(p3)
+        if angle is None:
+            angle = 0
+        p('angle')
+        return pos, angle
+
+    def updateCalibrateAxis(self):
+        pos, angle = self.analyzeTransform()
         with pg.SignalBlock(self.calibrateAxis.sigRegionChangeFinished, self.calibrateAxisChanged):
             self.calibrateAxis.setPos(pos[:2])
             self.calibrateAxis.setAngle(angle)
-            ys = self.calibrateAxis.size()[1]
 
     def focusChanged(self):
         try:
@@ -789,3 +803,7 @@ class Axis(pg.ROI):
         p.scale(w, h)
         p.drawPath(self._path)
 
+    def setAngle(self, angle):
+        if self.state['angle'] == angle:
+            return
+        pg.ROI.setAngle(self, angle)

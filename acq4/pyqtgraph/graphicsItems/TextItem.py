@@ -67,26 +67,33 @@ class TextItem(GraphicsObject):
         """
         if color is not None:
             self.setColor(color)
-        self.textItem.setPlainText(text)
-        self.updateTextPos()
-        
-    def setPlainText(self, *args):
+        self.setPlainText(text)
+
+    def setPlainText(self, text):
         """
         Set the plain text to be rendered by this item. 
         
         See QtGui.QGraphicsTextItem.setPlainText().
         """
-        self.textItem.setPlainText(*args)
-        self.updateTextPos()
+        if text != self.toPlainText():
+            self.textItem.setPlainText(text)
+            self.updateTextPos()
+
+    def toPlainText(self):
+        return self.textItem.toPlainText()
         
-    def setHtml(self, *args):
+    def setHtml(self, html):
         """
         Set the HTML code to be rendered by this item. 
         
         See QtGui.QGraphicsTextItem.setHtml().
         """
-        self.textItem.setHtml(*args)
-        self.updateTextPos()
+        if self.toHtml() != html:
+            self.textItem.setHtml(html)
+            self.updateTextPos()
+        
+    def toHtml(self):
+        return self.textItem.toHtml()
         
     def setTextWidth(self, *args):
         """
