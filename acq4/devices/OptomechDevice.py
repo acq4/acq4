@@ -251,20 +251,15 @@ class OptomechDevice(InterfaceMixin):
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
         with self.__lock:
-            p = pg.debug.Profiler(disabled=False, delayed=True)
             tr = self.globalTransform(subdev)
-            p('global tr')
             if tr is not None:
                 mapped = self._mapTransform(obj, tr)
-                p('map')
                 return mapped
 
-            
             ## If our transformation is nonlinear, then the local mapping step must be done separately.
             subdev = self._subdevDict(subdev)
             o2 = self.mapToParentDevice(obj, subdev)
             parent = self.parentDevice()
-            p('nonlinear')
             if parent is None:
                 return o2
             else:
