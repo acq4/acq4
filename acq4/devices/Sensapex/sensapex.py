@@ -240,7 +240,7 @@ class SensapexMoveFuture(MoveFuture):
             self._errorMsg = "Move did not complete (target=%s, position=%s, dif=%s)." % (self.targetPos, pos, dif)
             return -1
 
-    def _stopped(self):
+    def _stopped(self, tryAgain=0):
         # Called when the manipulator is stopped, possibly interrupting this move.
         status = self._getStatus()
         if status == 1:
@@ -250,7 +250,13 @@ class SensapexMoveFuture(MoveFuture):
             self._errorMsg = "Move was interrupted before completion."
         elif status == 0:
             # not actually stopped! This should not happen.
-            raise RuntimeError("Interrupted move but manipulator is still running!")
+            if tryAgain < 5:
+                # wait a bit, just to be sure..
+                print("TRYAGAIN:", tryAgain)
+                time.sleep(0.1)
+                return self._stopped(tryAgain=tryAgain+1)
+            else:
+                raise RuntimeError("Interrupted move but manipulator is still running!")
         else:
             raise Exception("Unknown status: %s" % status)
 
