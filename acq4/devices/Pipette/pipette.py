@@ -806,4 +806,4 @@ class Axis(pg.ROI):
     def setAngle(self, angle):
         if self.state['angle'] == angle:
             return
-        ROI.setAngle(self)
+        pg.ROI.setAngle(self, angle)
