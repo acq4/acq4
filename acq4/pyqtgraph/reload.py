@@ -54,13 +54,16 @@ def reloadAll(prefix=None, debug=False):
         
         ## ignore if the .pyc is newer than the .py (or if there is no pyc or py)
         py = os.path.splitext(mod.__file__)[0] + '.py'
+        if not os.path.isfile(py):
+            # skip modules that lie about their __file__
+            continue
         pyc = py + 'c'
-        if py not in changed and os.path.isfile(pyc) and os.path.isfile(py) and os.stat(pyc).st_mtime >= os.stat(py).st_mtime:
+        if py not in changed and os.path.isfile(pyc) and os.stat(pyc).st_mtime >= os.stat(py).st_mtime:
             #if debug:
                 #print "Ignoring module %s; unchanged" % str(mod)
             continue
         changed.append(py)  ## keep track of which modules have changed to insure that duplicate-import modules get reloaded.
-        
+
         try:
             reload(mod, debug=debug)
         except:
