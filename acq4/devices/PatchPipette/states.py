@@ -144,7 +144,7 @@ class PatchPipetteState(Future):
         try:
             # run must be reimplemented in subclass and call self._checkStop() frequently
             self.nextState = self.run()
-
+            interrupted = self.wasInterrupted()
         except self.StopRequested:
             # state was stopped early by calling stop()
             interrupted = True
@@ -362,7 +362,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             ssr = tp.analysis()['steadyStateResistance']
             if initialResistance is None:
                 initialResistance = ssr
-            print(ssr)
 
             # check for pipette break
             if ssr < initialResistance + config['breakThreshold']:
@@ -389,7 +388,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             # fail if pipette has moved too far before detection
             if dist > config['maxAdvanceDistance']:
                 self._taskDone(interrupted=True, error="No cell found within maximum search distance")
-                return None
+                return config['fallbackState']
 
             # advance to next position
             self._checkStop()
