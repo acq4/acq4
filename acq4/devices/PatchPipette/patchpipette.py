@@ -37,6 +37,9 @@ class PatchPipette(Device):
     # catch-all signal for event logging
     sigNewEvent = Qt.Signal(object, object)  # self, event
 
+    # emitted every time we finish a patch attempt
+    sigPatchAttemptFinished = Qt.Signal(object, object)  # self, patch record
+
     # These attributes can be modified to customize state management, test pulse acquisition, and auto bias
     defaultStateManagerClass = PatchPipetteStateManager
     defaultTestPulseThreadClass = TestPulseThread
@@ -52,17 +55,16 @@ class PatchPipette(Device):
         self._eventLog = []  # chronological record of events 
         self._eventLogLock = Mutex()
         
-        # key measurements made during patch process
-        self._patchRecord = {}
-        self._patchRecordLock = Mutex()
-        self.resetPatchRecord()
-
         # current state variables
         self.state = "out"
         self.active = False
         self.broken = False
         self.fouled = False
         self.calibrated = False
+
+        # key measurements made during patch process and lifetime of pipette
+        self._patchRecord = None
+        self._pipetteRecord = None
 
         self.pressureDevice = None
         if 'pressureDevice' in config:
@@ -99,47 +101,75 @@ class PatchPipette(Device):
     def imagingDevice(self):
         return self.pipetteDevice.imagingDevice()
 
-    def getPatchStatus(self):
-        """Return a dict describing the status of the patched cell.
-
-        Includes keys:
-        * state ('bath', 'sealing', 'on-cell', 'whole-cell', etc..)
-        * resting potential
-        * resting current
-        * input resistance
-        * access resistance
-        * capacitance
-        * clamp mode ('IC' or 'VC')
-        * timestamp of last measurement
-
+    def newPipette(self):
+        """A new physical pipette has been attached; reset any per-pipette state.
         """
-        # maybe 'state' should be available via a different method?
+        self.broken = False
+        self.fouled = False
+        self.calibrated = False
+        self._pipetteRecord = None
+        self.finishPatchRecord()
+        # todo: set calibration to average 
 
-    def updatePatchRecord(self, **kwds):
-        with self._patchRecordLock:
-            self._patchRecord.update(kwds)
-
-    def resetPatchRecord(self):
-        with self._patchRecordLock:
-            self._patchRecord = {
-                'initialResistance': None,
-                'initialOffset': None,
-                'fouledBeforeSeal': None,
-                'resistanceBeforeSeal': None,
-                'maxSealResistance': None,
-                'resistanceAfterBlowout': None,
-                'offsetBeforeSeal': None,
-                'offsetAfterBlowout': None,
-                'detectedCell': None,
-                'attemptedSeal': False,
-                'sealSuccessful': None,
-                'attemptedBreakin': False,
-                'breakinSuccessful': None,
-                'initialBaselineCurrent': None,
-                'initialBaselinePotential': None,
-                'wholeCellBeginTime': None,
-                'wholeCellEndTime': None,
+    def pipetteRecord(self):
+        if self._pipetteRecord is None:
+            self._pipetteRecord = {
+                'originalResistance': None,
+                'cleanCount': 0,
             }
+        return self._pipetteRecord
+
+    def newPatchAttempt(self):
+        """Ready to begin a new patch attempt; reset TP history and patch record.
+        """
+        self.finishPatchRecord()
+        self.resetTestPulseHistory()
+
+    def _resetPatchRecord(self):
+        self.finishPatchRecord()
+        piprec = self.pipetteRecord()
+        self._patchRecord = OrderedDict([
+            ('patchPipette', self.name()),
+            ('pipetteOriginalResistance', piprec['originalResistance']),
+            ('pipetteCleanCount', piprec['cleanCount']),
+            ('initialResistance', None),
+            ('initialOffset', None),
+            ('attemptedCellDetect', False),
+            ('detectedCell', None),
+            ('cellDetectInitialTarget', None),
+            ('cellDetectFinalTarget', None),
+            ('attemptedSeal', False),
+            ('sealSuccessful', None),
+            ('fouledBeforeSeal', None),
+            ('resistanceBeforeSeal', None),
+            ('maxSealResistance', None),
+            ('resistanceBeforeBreakin', None),
+            ('offsetBeforeSeal', None),
+            ('attemptedBreakin', False),
+            ('breakinSuccessful', None),
+            ('spontaneousBreakin', None),
+            ('initialBaselineCurrent', None),
+            ('initialBaselinePotential', None),
+            ('wholeCellStartTime', None),
+            ('wholeCellStopTime', None),
+            ('wholeCellPosition', None),
+            ('resealResistance', None),
+            ('resistanceAfterBlowout', None),
+            ('offsetAfterBlowout', None),
+            ('complete', False),
+        ])
+
+    def patchRecord(self):
+        if self._patchRecord is None:
+            self._resetPatchRecord()
+        return self._patchRecord
+
+    def finishPatchRecord(self):
+        if self._patchRecord is None:
+            return
+        self._patchRecord['complete'] = True
+        self.sigPatchAttemptFinished.emit(self, self._patchRecord)
+        self._patchRecord = None
 
     def pressureChanged(self, dev, source, pressure):
         self.sigPressureChanged.emit(self, source, pressure)
@@ -211,21 +241,6 @@ class PatchPipette(Device):
         * -4, -6, -8 psi if needed
         * longer wait time if needed
         """
-
-    def newPipette(self):
-        """A new physical pipette has been attached; reset any per-pipette state.
-        """
-        self.broken = False
-        self.fouled = False
-        self.calibrated = False
-        # todo: set calibration to average 
-        self.newPatchAttempt()
-
-    def newPatchAttempt(self):
-        """Ready to begin a new patch attempt; reset TP history and patch record.
-        """
-        self.resetPatchRecord()
-        self.resetTestPulseHistory()
 
     def _pipetteCalibrationChanged(self):
         self.calibrated = True
