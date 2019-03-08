@@ -173,9 +173,8 @@ class Scientifica(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """
-        s = [int(-v * 1000. / 67. / 1e-6) for i,v in enumerate(vel)]
-        print(s)
-        self.dev.send('VJ %d %d %d C' % tuple(s))
+        s = [int(1e8 * v) for i,v in enumerate(vel)]
+        self.dev.send('VJ -%d %d %d' % tuple(s))
 
     def _checkObjective(self):
         with self.lock:

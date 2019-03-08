@@ -386,15 +386,16 @@ def glColor(*args, **kargs):
     return (c.red()/255., c.green()/255., c.blue()/255., c.alpha()/255.)
 
     
-
-def makeArrowPath(headLen=20, tipAngle=20, tailLen=20, tailWidth=3, baseAngle=0):
+def makeArrowPath(headLen=20, tipAngle=20, tailLen=20, tailWidth=3, baseAngle=0, headWidth=None):
     """
     Construct a path outlining an arrow with the given dimensions.
     The arrow points in the -x direction with tip positioned at 0,0.
     If *tipAngle* is supplied (in degrees), it overrides *headWidth*.
     If *tailLen* is None, no tail will be drawn.
     """
-    headWidth = headLen * np.tan(tipAngle * 0.5 * np.pi/180.)
+    if tipAngle is not None:        
+        headWidth = headLen * np.tan(tipAngle * 0.5 * np.pi/180.)
+
     path = QtGui.QPainterPath()
     path.moveTo(0,0)
     path.lineTo(headLen, -headWidth)

@@ -146,8 +146,6 @@ class CameraInterface(CameraModuleInterface):
         
     def openCamera(self, ind=0):
         try:
-            self.bitDepth = self.cam.getParam('bitDepth')
-            #self.setLevelRange()
             self.camSize = self.cam.getParam('sensorSize')
             self.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.cam.getScopeDevice()

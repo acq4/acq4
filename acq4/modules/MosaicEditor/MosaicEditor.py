@@ -495,6 +495,7 @@ class MosaicEditor(AnalysisModule):
         loadfail = []
         for itemState in state['items']:
             fname = itemState.get('filename')
+
             if fname is None:
                 # create item from scratch and restore state
                 itemtype = itemState.get('type')
@@ -504,6 +505,10 @@ class MosaicEditor(AnalysisModule):
                     continue
                 item = self.addItem(type=itemtype, name=itemState['name'])
             else:
+                # normalize file name for this OS
+                revsep = {'/':'\\', '\\':'/'}[os.path.sep]
+                fname = fname.replace(revsep, os.path.sep)
+
                 # create item by loading file and restore state
                 if root is None:
                     fh = DataManager.getHandle(fh)
