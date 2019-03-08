@@ -23,6 +23,7 @@ class TestPulseThread(Thread):
         self.dev = dev
         self._stop = False
         self.params = {
+            'testPulseClass': TestPulse,
             'clampMode': None,
             'interval': None,
             'sampleRate': 500000,
@@ -121,8 +122,10 @@ class TestPulseThread(Thread):
             task._paramIndex = params['_index']
             task._clampMode = runMode
             self._lastTask = task
+            self._lastTaskParams = taskParams
         else:
             task = self._lastTask
+            taskParams = self._lastTaskParams
         
         task.execute()
 
@@ -132,7 +135,8 @@ class TestPulseThread(Thread):
             time.sleep(0.01)
 
         result = task.getResult()
-        tp = TestPulse(self._clampDev, taskParams, result)
+        tpClass = taskParams['testPulseClass']
+        tp = tpClass(self._clampDev, taskParams, result)
         tp.analysis()
         self.sigTestPulseFinished.emit(self.dev, tp)
         

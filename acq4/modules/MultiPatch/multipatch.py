@@ -10,6 +10,7 @@ from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 import acq4.pyqtgraph as pg
 from .pipetteControl import PipetteControl
+from .mockPatch import MockPatch
 
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
@@ -76,7 +77,11 @@ class MultiPatchWindow(Qt.QWidget):
             if i > 0:
                 ctrl.hideHeader()
 
+            # insert mock patching ui if requested
             self.ui.matrixLayout.addWidget(ctrl, i, 0)
+            if module.config.get('enableMockPatch', False):
+                pip.mockpatch = MockPatch(pip)
+                self.ui.matrixLayout.addWidget(pip.mockpatch.widget, i, 1)
 
             pip.sigActiveChanged.connect(self.pipetteActiveChanged)
             ctrl.sigSelectChanged.connect(self.pipetteSelectChanged)
