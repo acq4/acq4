@@ -548,6 +548,7 @@ MosaicEditor.registerItemType(items.getItemType('RulerCanvasItem'))
 MosaicEditor.registerItemType(items.getItemType('MarkersCanvasItem'))
 MosaicEditor.registerItemType(items.getItemType('CellCanvasItem'))
 MosaicEditor.registerItemType(items.getItemType('AtlasCanvasItem'))
+MosaicEditor.registerItemType(items.getItemType('CortexMarkerCanvasItem'))
 
 
 
