@@ -128,6 +128,9 @@ class OptomechDevice(InterfaceMixin):
         # the device to connect (usually this is just 'default').
         self.__parentPort = None
 
+        # keep track of children so that we can inform them quickly when a parent transform has changed
+        self.__children = []
+
         # Cached transforms from this device to global
         # 0 indicates the cache is invalid. None indicates the transform is non-affine,
         # and might not be cacheable.
@@ -218,6 +221,7 @@ class OptomechDevice(InterfaceMixin):
                 self.__parent.sigGlobalopticsChanged.disconnect(self.__parentOpticsChanged)
                 self.__parent.sigGlobalSubdeviceChanged.disconnect(self.__parentSubdeviceChanged)
                 self.__parent.sigGlobalSubdeviceListChanged.disconnect(self.__parentSubdeviceListChanged)
+                self.__parent.__children.remove(self)
 
             # look up device from its name
             if isinstance(parent, six.string_types):
@@ -237,6 +241,7 @@ class OptomechDevice(InterfaceMixin):
             parent.sigGlobalOpticsChanged.connect(self.__parentOpticsChanged)
             parent.sigGlobalSubdeviceChanged.connect(self.__parentSubdeviceChanged)
             parent.sigGlobalSubdeviceListChanged.connect(self.__parentSubdeviceListChanged)
+            parent.__children.append(self)
             self.__parent = parent
             self.__parentPort = port
         
@@ -573,11 +578,15 @@ class OptomechDevice(InterfaceMixin):
             parents.append(p)
         return parents
 
-    def invalidateCachedTransforms(self):
+    def invalidateCachedTransforms(self, invalidateLocal=True):
         with self.__lock:
-            self.__inverseTransform = 0
+            if invalidateLocal:
+                self.__inverseTransform = 0
             self.__globalTransform = 0
             self.__inverseGlobalTransform = 0
+            # child global transforms must also be invalidated before any change signals are emitted
+            for ch in self.__children:
+                ch.invalidateCachedTransforms(invalidateLocal=False)
             
     def addSubdevice(self, subdev):
         subdev.setParentDevice(self)
