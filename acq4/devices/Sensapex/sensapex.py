@@ -228,7 +228,14 @@ class SensapexMoveFuture(MoveFuture):
             return 0
         # did we reach target?
         pos = self.dev._getPosition()
-        dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
+        dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
+
+        if dif > 3000:
+            # uMp bug: some versions have a race condition that occasionally
+            # causes bad position values to be returned immediately after a move has finished
+            pos = self.dev._getPosition()
+            dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
+
         if dif < 3000:  # require 3um accuracy
             # reached target
             self._finished = True
