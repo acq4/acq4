@@ -21,7 +21,7 @@ class MockPatch(object):
         return tp
 
     def resetState(self):
-        self.sealResistance = 0.0
+        self.sealResistance = 0
         self.maxSealResistance = 2e9
         self.pipResistance = 5e6
         self.accessResistance = 1e12
@@ -51,17 +51,23 @@ class MockPatch(object):
             self.sealResistance = 2e6 * approachFactor
 
         else:
-            # seal speed can double if we add pressure
-            sealFactor = 1 + np.clip(-pressure / 20e3, 0, 1)
-            sealSpeed = (0.00001 * sealFactor) ** dt
-            sealCond = 1.0 / self.sealResistance
-            maxSealCond = 1.0 / self.maxSealResistance
-            sealCond = sealCond * (1.0 - sealSpeed) + maxSealCond * sealSpeed
-            self.sealResistance = 1.0 / sealCond
+            if targetDistance > 5e-6:
+                self.sealResistance = 0
+            else:
+                # seal speed can double if we add pressure
+                if self.sealResistance > 0 and targetDistance < 5e-6:
+                    sealFactor = 1 + np.clip(-pressure / 20e3, 0, 1)
+                    sealSpeed = (0.00001 * sealFactor) ** dt
+                    sealCond = 1.0 / self.sealResistance
+                    maxSealCond = 1.0 / self.maxSealResistance
+                    sealCond = sealCond * (1.0 - sealSpeed) + maxSealCond * sealSpeed
+                    self.sealResistance = 1.0 / sealCond
 
-            if pressure < -30e3:
+            if pressure < -27e3:
                 # break in
                 self.accessResistance = 5e6
+
+        self.sealResistance = max(self.sealResistance, 100)
 
         ssr = self.pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/(self.accessResistance + self.inputResistance))
         pr = self.pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/self.accessResistance)
