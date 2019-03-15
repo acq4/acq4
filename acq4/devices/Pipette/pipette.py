@@ -266,22 +266,22 @@ class Pipette(Device, OptomechDevice):
             # diagonal move to 
             dz = -endPos[0] * np.tan(self.pitchRadians())
             waypoint = self.mapToGlobal([endPos[0], 0, dz])
-            path = [
-                (waypoint, speed, True),
-                (endPosGlobal, speed, False)
-            ]
         else:
             dx = -endPos[2] / np.tan(self.pitchRadians())
             waypoint = self.mapToGlobal([dx, 0, endPos[2]])
             if dx > 0:  # in case home z position is below the current z pos.
-                path = [
-                    (endPosGlobal, speed, False),
-                ]
-            else:
-                path = [
-                    (waypoint, speed, True),
-                    (endPosGlobal, speed, False),
-                ]
+                waypoint = None
+        
+        if waypoint is None:
+            path = [(endPosGlobal, speed, False)]
+        else:
+            # sanity check
+            for i in range(3):
+                waypoint[i] = np.clip(waypoint[i], startPosGlobal[i], endPosGlobal[i])
+            path = [
+                (waypoint, speed, True),
+                (endPosGlobal, speed, False),
+            ]
 
         return self._movePath(path)
 
@@ -449,7 +449,8 @@ class Pipette(Device, OptomechDevice):
         return surface + self._opts['approachHeight']
 
     def depthBelowSurface(self):
-        """Return the current depth of the pipette tip below the sample surface.
+        """Return the current depth of the pipette tip below the sample surface
+        (positive values are below the surface).
         """
         scope = self.scopeDevice()
         surface = scope.getSurfaceDepth()
