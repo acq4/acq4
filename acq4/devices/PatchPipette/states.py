@@ -158,14 +158,12 @@ class PatchPipetteState(Future):
             # state aborted due to an error
             interrupted = True
             error = str(exc)
-            printExc("Error during %s:" % self.stateName)
         else:
             # state completed successfully
             interrupted = False
             error = None
         finally:
             disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
-            
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error)
 
@@ -301,13 +299,12 @@ class PatchPipetteBathState(PatchPipetteState):
                 bathResistances = []
                 continue
 
-            self.setState('bath detected' % ssr)
             bathResistances.append(ssr)
 
             if initialResistance is None:
                 if len(bathResistances) > 8:
                     initialResistance = np.median(bathResistances)
-                    self.setState('initial resistance measured: %f' % initialResistance)
+                    self.setState('initial resistance measured: %0.2f MOhm' % (initialResistance * 1e-6))
 
                     # record initial resistance
                     patchrec = dev.patchRecord()
@@ -341,6 +338,9 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 
     - monitor resistance for cell proximity => seal mode
     - monitor resistance for pipette break
+
+    TODO: 
+    - Obstacle avoidance
     """
     stateName = 'cell detect'
     def __init__(self, *args, **kwds):
@@ -352,11 +352,14 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         'initialTestPulseEnable': True,
         'fallbackState': 'bath',
         'autoAdvance': True,
-        'advanceMode': 'vertical',
-        'advanceInterval': 0.5,
+        'advanceMode': 'target',
+        'advanceContinuous': True,
+        'advanceStepInterval': 0.1,
         'advanceStepDistance': 1e-6,
-        'maxAdvanceDistance': 20e-6,
-        'advanceSpeed': 32e-6,
+        'maxAdvanceDistance': None,
+        'maxAdvanceDistancePastTarget': 10e-6,
+        'maxAdvanceDepthBelowSurface': None,
+        'advanceSpeed': 2e-6,
         'fastDetectionThreshold': 1e6,
         'slowDetectionThreshold': 0.3e6,
         'slowDetectionSteps': 3,
@@ -364,31 +367,35 @@ class PatchPipetteCellDetectState(PatchPipetteState):
     }
 
     def run(self):
+        self.contAdvanceFuture = None
+        self.lastMove = 0.0
+        self.stepCount = 0
+        self.advanceSteps = None
+
         self.monitorTestPulse()
+
         config = self.config
         dev = self.dev
         patchrec = dev.patchRecord()
         patchrec['attemptedCellDetect'] = True
         initialResistance = None
         recentTestPulses = deque(maxlen=config['slowDetectionSteps'] + 1)
-        lastMove = ptime.time() - config['advanceInterval']
         initialPosition = np.array(dev.pipetteDevice.globalPosition())
-        stepCount = 0
         patchrec['cellDetectInitialTarget'] = tuple(dev.pipetteDevice.targetPosition())
 
         while True:
             self._checkStop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
-            self.setState("checking test pulses")
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
                 continue
-
             recentTestPulses.extend(tps)
+
             tp = tps[-1]
             ssr = tp.analysis()['steadyStateResistance']
             if initialResistance is None:
+                # take note of initial resistance
                 initialResistance = ssr
 
             # check for pipette break
@@ -413,38 +420,125 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                     patchrec['detectedCell'] = True
                     return "seal"
 
-            pos = np.array(dev.pipetteDevice.globalPosition())
-            dist = np.linalg.norm(pos - initialPosition)
-
-            # fail if pipette has moved too far before detection
-            if dist > config['maxAdvanceDistance']:
-                self._taskDone(interrupted=True, error="No cell found within maximum search distance")
-                patchrec['detectedCell'] = False
-                return config['fallbackState']
-
-            # advance to next position
             self._checkStop()
-            self.setState("advancing pipette")
-            if config['advanceMode'] == 'vertical':
-                stepPos = initialPosition + (stepCount + 1) * np.array([0, 0, -config['advanceStepDistance']])
-            elif config['advanceMode'] == 'axial':
-                stepPos = initialPosition + dev.globalDirection() * (stepCount + 1) * config['advanceStepDistance']
-            elif config['advanceMode'] == 'target':
-                targetPos = np.array(dev.pipetteDevice.targetPosition())
-                targetVector = targetPos - pos
-                dist = np.linalg.norm(targetVector)
-                stepPos = pos + config['advanceStepDistance'] * targetVector / dist
+
+            if config['advanceContinuous']:
+                # Start continuous move if needed
+                if self.contAdvanceFuture is None:
+                    print(initialPosition)
+                    print(self.getSearchEndpoint())
+                    self.startContinuousMove()
+                if self.contAdvanceFuture.isDone():
+                    self.contAdvanceFuture.wait()  # check for move errors
+                    self._taskDone(interrupted=True, error="No cell found before end of search path")
+                    patchrec['detectedCell'] = False
+                    return config['fallbackState']
             else:
-                raise ValueError("advanceMode must be 'vertical', 'axial', or 'target'  (got %r)" % config['advanceMode'])
-            fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
-            while True:
-                self._checkStop()
-                fut.wait(timeout=0.2)
-                if fut.isDone():
-                    stepCount += 1
-                    break
+                # advance to next position if stepping
+                if self.advanceSteps is None:
+                    self.advanceSteps = self.getAdvanceSteps()
+                    print(len(self.advanceSteps))
+                    print(self.advanceSteps)
+                if self.stepCount >= len(self.advanceSteps):
+                    self._taskDone(interrupted=True, error="No cell found before end of search path")
+                    patchrec['detectedCell'] = False
+                    return config['fallbackState']
+                
+                # make sure we obey advanceStepInterval
+                now = ptime.time()
+                if now - self.lastMove < config['advanceStepInterval']:
+                    continue
+                self.lastMove = now
+
+                self.singleStep()
+
+    def getSearchEndpoint(self):
+        """Return the final position along the pipette search path, taking into account 
+        maxAdvanceDistance, maxAdvanceDepthBelowSurface, and maxAdvanceDistancePastTarget.
+        """
+        config = self.config
+        dev = self.dev
+        pip = dev.pipetteDevice
+        pos = np.array(pip.globalPosition())
+        surface = pip.scopeDevice().getSurfaceDepth()
+        target = np.array(pip.targetPosition())
+
+        # what direction are we moving?
+        if config['advanceMode'] == 'vertical':
+            direction = np.array([0.0, 0.0, -1.0])
+        elif config['advanceMode'] == 'axial':
+            direction = pip.globalDirection()
+        elif config['advanceMode'] == 'target':
+            direction = target - pos
+        else:
+            raise ValueError("advanceMode must be 'vertical', 'axial', or 'target'  (got %r)" % config['advanceMode'])
+        direction = direction / np.linalg.norm(direction)
+
+        endpoint = None
+
+        # max search distance
+        if config['maxAdvanceDistance'] is not None:
+            endpoint = pos + direction * config['maxAdvanceDistance']            
+
+        # max surface depth 
+        if config['maxAdvanceDepthBelowSurface'] is not None and direction[2] < 0:
+            endDepth = surface - config['maxAdvanceDepthBelowSurface']
+            dz = endDepth - pos[2]
+            depthEndpt = pos + direction * (dz / direction[2])
+            # is the surface depth endpoint closer?
+            if endpoint is None or np.linalg.norm(endpoint-pos) > np.linalg.norm(depthEndpt-pos):
+                endpoint = depthEndpt
+
+        # max distance past target
+        if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
+            targetEndpt = target + direction * config['maxAdvanceDistancePastTarget']
+            # is the target endpoint closer?
+            if endpoint is None or np.linalg.norm(endpoint-pos) > np.linalg.norm(targetEndpt-pos):
+                endpoint = targetEndpt
+
+        if endpoint is None:
+            raise Exception("Cell detect state requires one of maxAdvanceDistance, maxAdvanceDepthBelowSurface, or maxAdvanceDistancePastTarget.")
+
+        return endpoint
+
+    def startContinuousMove(self):
+        """Begin moving pipette continuously along search path.
+        """
+        endpoint = self.getSearchEndpoint()
+        self.contAdvanceFuture = self.dev.pipetteDevice._moveToGlobal(endpoint, speed=self.config['advanceSpeed'])
+
+    def getAdvanceSteps(self):
+        """Return the list of step positions to take along the search path.
+        """
+        config = self.config
+        endpoint = self.getSearchEndpoint()
+        pos = np.array(self.dev.pipetteDevice.globalPosition())
+        diff = endpoint - pos
+        dist = np.linalg.norm(diff)
+        nSteps = int(dist / config['advanceStepDistance'])
+        step = diff * config['advanceStepDistance'] / dist
+        return pos[np.newaxis, :] + step[np.newaxis, :] * np.arange(nSteps)[:, np.newaxis]
+
+    def singleStep(self):
+        """Advance a single step in the search path and block until the move has finished.
+        """
+        config = self.config
+        dev = self.dev
+
+        stepPos = self.advanceSteps[self.stepCount]
+        self.stepCount += 1
+        fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
+        while True:
+            self._checkStop()
+            fut.wait(timeout=0.2)
+            if fut.isDone():
+                break
 
     def cleanup(self):
+        print("CLEANUP!")
+        if self.contAdvanceFuture is not None:
+            print(" STOP!")
+            self.contAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
         PatchPipetteState.cleanup(self)

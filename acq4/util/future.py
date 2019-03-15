@@ -79,7 +79,7 @@ class Future(Qt.QObject):
             self._errorMessage = error
         self._wasInterrupted = interrupted
         if interrupted:
-            self.setState(state or 'interrupted')
+            self.setState(state or 'interrupted: %s' % error)
         else:
             self.setState(state or 'complete')
         self.sigFinished.emit(self)
