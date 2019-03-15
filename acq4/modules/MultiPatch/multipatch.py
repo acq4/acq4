@@ -112,10 +112,12 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.coarseSearchBtn.clicked.connect(self.coarseSearch)
         self.ui.fineSearchBtn.clicked.connect(self.fineSearch)
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
+        self.ui.cellDetectBtn.clicked.connect(self.cellDetectClicked)
         self.ui.sealBtn.clicked.connect(self.sealClicked)
+        self.ui.breakInBtn.clicked.connect(self.breakInClicked)
+        self.ui.reSealBtn.clicked.connect(self.reSealClicked)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
-        self.ui.reSealBtn.clicked.connect(self.reSeal)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
 
         self.ui.fastBtn.clicked.connect(lambda: self.ui.slowBtn.setChecked(False))
@@ -160,7 +162,20 @@ class MultiPatchWindow(Qt.QWidget):
             self.setGeometry(geom)
 
     def profileComboChanged(self):
+        default = self.module.config['patchProfiles'].get('default')
         profile = self.module.config['patchProfiles'].get(self.ui.profileCombo.currentText(), {})
+
+        if default is not None:
+            # mix defaults in with selected profile
+            p = {}
+            for k in set(list(default.keys()) + list(profile.keys())):
+                p[k] = default.get(k, {}).copy()
+                p[k].update(profile.get(k, {}))
+            profile = p
+
+        from pprint import pprint
+        pprint(profile)
+
         for pip in self.pips:
             pip.stateManager().setStateConfig(profile)
 
@@ -178,13 +193,6 @@ class MultiPatchWindow(Qt.QWidget):
     #     for pip in self.selectedPipettes():
     #         pip.retract(self.ui.stepSizeSpin.value(), speed)
 
-    def reSeal(self):
-        speed = self.module.config.get('reSealSpeed', 1e-6)
-        # distance = self.module.config.get('reSealDistance', 150e-6)
-        for pip in self.selectedPipettes():
-            # pip.retract(distance, speed)
-            pip.startAdvancing(speed)
-        
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
@@ -470,6 +478,24 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('seal')
 
+    def breakInClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('break in')
+
+    def cellDetectClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('cell detect')
+
+    def reSealClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('reseal')
+        
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
         event = {"device": str(pip.name()),
