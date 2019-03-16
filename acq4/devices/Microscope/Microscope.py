@@ -378,6 +378,7 @@ class ScopeGUI(QtGui.QWidget):
             ss.sigValueChanged.connect(self.scaleSpinChanged)
             row += 1
         self.updateSpins()
+        self.setupObjectiveToggleShortcut()
     
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio
@@ -435,6 +436,28 @@ class ScopeGUI(QtGui.QWidget):
             ys.setValue(offset.y())
             zs.setValue(offset.z())
             ss.setValue(obj.scale().x())
+
+    def setupObjectiveToggleShortcut(self):
+        keys = self.dev.config.get('shortcut', None)
+        if keys == None:
+            return
+
+        if len(self.objList) > 2:
+            print("WARNING: Cannot set up objective toggle shortcuts for more than 2 objectives. No shortcuts were set up.")
+            return
+            
+        shortcut = QtGui.QShortcut(QtGui.QKeySequence(keys), self, context=QtCore.Qt.ApplicationShortcut)
+        shortcut.activated.connect(self.shortcutPressed)
+
+    def shortcutPressed(self):
+        unchecked = None
+        for r in self.objList:
+            if not self.objWidgets[r][0].isChecked():
+                unchecked = self.objWidgets[r][0]
+                break
+        unchecked.setChecked(True)
+        self.objRadioClicked()
+
 
 
 class ScopeCameraModInterface(CameraModuleInterface):
