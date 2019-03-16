@@ -254,18 +254,19 @@ class MosaicEditor(AnalysisModule):
             if f.isFile():  # add specified files
                 item = self.addFile(f)
             elif f.isDir():  # Directories are more complicated
-                if self.dataModel.dirType(f) == 'Cell':  #  If it is a cell, just add the cell "Marker" to the plot
-                    item = self.canvas.addFile(f)
-                else:  # in all other directory types, look for MetaArray files
-                    filesindir = glob.glob(f.name() + '/*.ma')
-                    for fd in filesindir:  # add files in the directory (ma files: e.g., images, videos)
-                        try:
-                            fdh = DataManager.getFileHandle(fd) # open file to get handle.
-                        except IOError:
-                            continue # just skip file
-                        item = self.addFile(fdh)
-                    if len(filesindir) == 0:  # add protocol sequences
-                        item = self.addFile(f)
+                #if self.dataModel.dirType(f) == 'Cell':  #  If it is a cell, just add the cell "Marker" to the plot ## this is broken because dataModel is None
+                #    item = self.canvas.addFile(f)
+                #else:  
+                # in all other directory types, look for MetaArray files
+                filesindir = glob.glob(f.name() + '/*.ma')
+                for fd in filesindir:  # add files in the directory (ma files: e.g., images, videos)
+                    try:
+                        fdh = DataManager.getFileHandle(fd) # open file to get handle.
+                    except IOError:
+                        continue # just skip file
+                    item = self.addFile(fdh)
+                if len(filesindir) == 0:  # add protocol sequences
+                    item = self.addFile(f)
         self.canvas.autoRange()
 
     def addFile(self, f, name=None, inheritTransform=True):
