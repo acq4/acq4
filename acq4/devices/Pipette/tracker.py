@@ -438,7 +438,7 @@ class PipetteTracker(object):
         return pos, val
 
     def mapErrors(self, nSteps=(5, 5, 7), stepSize=(50e-6, 50e-6, 50e-6),  padding=60e-6,
-                  threshold=0.4, speed='slow', show=False, intermediateDist=60e-6):
+                  threshold=0.4, speed='slow', show=False, intermediateDist=60e-6, moveStageXY=True):
         """Move pipette tip randomly to locations in a grid and measure the position error
         at each location.
 
@@ -496,8 +496,16 @@ class PipetteTracker(object):
                         offset *= intermediateDist / (offset**2).sum()**0.5
                         offsets.append(offset)
 
+                        # move manipulator
                         mfut = self.dev._moveToGlobal(pos + offset, speed)
-                        ffut = self.dev.scopeDevice().setFocusDepth(pos[2], speed)
+
+                        # move camera
+                        if moveStageXY:
+                            cpos = pos
+                        else:
+                            cpos = imager.globalCenterPosition('roi')
+                            cpos[2] = pos[2]
+                        ffut = imager.moveCenterToGlobal(cpos, speed, center='roi')
                     if i > 0:
                         ind = inds[order[i-1]]
 
