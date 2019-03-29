@@ -449,6 +449,7 @@ class PipetteTracker(object):
         the _detected_ position of the pipette, and a blue marker showing the _reported_ position
         of the pipette.
         """
+        imager = self._getImager()
         startTime = time.time()
         start = np.array(self.dev.globalPosition())
         npts = nSteps[0] * nSteps[1] * nSteps[2]
@@ -567,9 +568,9 @@ class PipetteTracker(object):
             self.errorMap = np.load(open(filename, 'rb'))[np.newaxis][0]
 
         err = self.errorMap
-        imx = pg.image(err['err'][..., 0].transpose(1, 0, 2), title='X error')
-        imy = pg.image(err['err'][..., 1], title='Y error')
-        imz = pg.image(err['err'][..., 2], title='Z error')
+        imx = pg.image(err['err'][..., 0].transpose(2, 0, 1), title='X error', axes={'t':0, 'x':1, 'y':2})
+        imy = pg.image(err['err'][..., 1].transpose(2, 0, 1), title='Y error', axes={'t':0, 'x':1, 'y':2})
+        imz = pg.image(err['err'][..., 2].transpose(2, 0, 1), title='Z error', axes={'t':0, 'x':1, 'y':2})
 
         # get N,3 array of offset values used to randomize hysteresis
         off = np.vstack(err['offsets'])

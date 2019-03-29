@@ -422,7 +422,7 @@ class Camera(DAQGeneric, OptomechDevice):
         scopeCenter = np.array(pg.Vector(scope.globalPosition()))
         
         scopePos = scopeCenter + np.array(position) - camCenter
-        fut = scope.setGlobalPosition(scopePos, speed=speed)
+        return scope.setGlobalPosition(scopePos, speed=speed)
 
     def objectiveChanged(self, obj=None):
         if obj is None:
