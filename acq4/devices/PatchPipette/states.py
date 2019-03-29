@@ -91,6 +91,7 @@ class PatchPipetteState(Future):
         mode = self.config.get('initialClampMode')
         holding = self.config.get('initialClampHolding')
         tp = self.config.get('initialTestPulseEnable')
+        tpParams = self.config.get('initialTestPulseParameters')
         bias = self.config.get('initialAutoBiasEnable')
         biasTarget = self.config.get('initialAutoBiasTarget')
 
@@ -102,6 +103,8 @@ class PatchPipetteState(Future):
         # enable test pulse if config requests it AND the device is "active"
         if tp is not None:
             self.dev.enableTestPulse(tp and self.dev.active)
+        if tpParams is not None:
+            self.dev.setTestPulseParameters(**tpParams)
 
         if bias is not None:
             self.dev.enableAutoBias(bias)

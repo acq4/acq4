@@ -319,6 +319,9 @@ class PatchPipette(Device):
         self.sigTestPulseEnabled.emit(self, self.testPulseEnabled)
         self.emitNewEvent(OrderedDict([('event', 'testPulseEnabled'), ('enabled', self.testPulseEnabled)]))
 
+    def setTestPulseParameters(self, **params):
+        self._testPulseThread.setParameters(**params)
+
     def lastTestPulse(self):
         return self._lastTestPulse
 
