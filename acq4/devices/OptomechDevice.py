@@ -149,7 +149,7 @@ class OptomechDevice(InterfaceMixin):
         self.__subdevices = collections.OrderedDict()
         self.__subdevice = None
 
-        self.__lock = Mutex(recursive=True)
+        self.__lock = Mutex(recursive=True, debug=True)
         
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
@@ -195,14 +195,12 @@ class OptomechDevice(InterfaceMixin):
 
     def parentDevice(self):
         """Return this device's parent, or None if there is no parent."""
-        with self.__lock:
-            return self.__parent
+        return self.__parent
             
     def parentPort(self):
         """Return the port on this device's parent to which this device is attached.
         """
-        with self.__lock:
-            return self.__parentPort
+        return self.__parentPort
 
     def setParentDevice(self, parent, port='default'):
         """Set the parent of this device.
@@ -247,82 +245,74 @@ class OptomechDevice(InterfaceMixin):
         
     def mapToParentDevice(self, obj, subdev=None):
         """Map from local coordinates to the parent device (or to global if there is no parent)"""
-        with self.__lock:
-            tr = self.deviceTransform(subdev)
-            if tr is None:
-                raise Exception('Cannot map--device classes with no affine transform must override map methods.')
-            return self._mapTransform(obj, tr)
+        tr = self.deviceTransform(subdev)
+        if tr is None:
+            raise Exception('Cannot map--device classes with no affine transform must override map methods.')
+        return self._mapTransform(obj, tr)
     
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
-        with self.__lock:
-            tr = self.globalTransform(subdev)
-            if tr is not None:
-                mapped = self._mapTransform(obj, tr)
-                return mapped
+        tr = self.globalTransform(subdev)
+        if tr is not None:
+            mapped = self._mapTransform(obj, tr)
+            return mapped
 
-            ## If our transformation is nonlinear, then the local mapping step must be done separately.
-            subdev = self._subdevDict(subdev)
-            o2 = self.mapToParentDevice(obj, subdev)
-            parent = self.parentDevice()
-            if parent is None:
-                return o2
-            else:
-                return parent.mapToGlobal(o2, subdev)
+        ## If our transformation is nonlinear, then the local mapping step must be done separately.
+        subdev = self._subdevDict(subdev)
+        o2 = self.mapToParentDevice(obj, subdev)
+        parent = self.parentDevice()
+        if parent is None:
+            return o2
+        else:
+            return parent.mapToGlobal(o2, subdev)
     
     def mapToDevice(self, device, obj, subdev=None):
         """Map *obj* from local coordinates to *device*'s coordinate system."""
-        with self.__lock:
-            subdev = self._subdevDict(subdev)
-            return device.mapFromGlobal(self.mapToGlobal(obj, subdev), subdev)
+        subdev = self._subdevDict(subdev)
+        return device.mapFromGlobal(self.mapToGlobal(obj, subdev), subdev)
     
     def mapFromParentDevice(self, obj, subdev=None):
         """Map *obj* from parent coordinates (or from global if there is no parent) to local coordinates."""
-        with self.__lock:
-            tr = self.inverseDeviceTransform(subdev)
-            if tr is None:
-                raise Exception('Cannot map--device classes with no affine transform must override map methods.')
-            return self._mapTransform(obj, tr)
+        tr = self.inverseDeviceTransform(subdev)
+        if tr is None:
+            raise Exception('Cannot map--device classes with no affine transform must override map methods.')
+        return self._mapTransform(obj, tr)
     
     def mapFromGlobal(self, obj, subdev=None):
         """Map *obj* from global to local coordinates."""
-        with self.__lock:
-            tr = self.inverseGlobalTransform(subdev)
-            if tr is not None:
-                return self._mapTransform(obj, tr)
-        
-            ## If our transformation is nonlinear, then the local mapping step must be done separately.
-            subdev = self._subdevDict(subdev)
-            parent = self.parentDevice()
-            if parent is None:
-                obj = parent.mapFromGlobal(obj, subdev)
-            return self.mapFromParent(obj, subdev)
+        tr = self.inverseGlobalTransform(subdev)
+        if tr is not None:
+            return self._mapTransform(obj, tr)
+    
+        ## If our transformation is nonlinear, then the local mapping step must be done separately.
+        subdev = self._subdevDict(subdev)
+        parent = self.parentDevice()
+        if parent is None:
+            obj = parent.mapFromGlobal(obj, subdev)
+        return self.mapFromParent(obj, subdev)
     
     def mapFromDevice(self, device, obj, subdev=None):
         """Map *obj* from the coordinate system of the specified *device* to local coordiantes."""
-        with self.__lock:
-            subdev = self._subdevDict(subdev)
-            return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
+        subdev = self._subdevDict(subdev)
+        return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
     
     def mapGlobalToParent(self, obj, subdev=None):
         """Map *obj* from global coordinates to the parent device coordinates.
         If this device has no parent, then *obj* is returned unchanged.
         """
-        with self.__lock:
-            if self.parentDevice() is None:
-                return obj
-            else:
-                return self.parentDevice().mapFromGlobal(obj, subdev)
+        if self.parentDevice() is None:
+            return obj
+        else:
+            return self.parentDevice().mapFromGlobal(obj, subdev)
             
     def mapParentToGlobal(self, obj, subdev=None):
         """Map *obj* from parent device coordinates to global coordinates.
         If this device has no parent, then *obj* is returned unchanged.
         """
-        with self.__lock:
-            if self.parentDevice() is None:
-                return obj
-            else:
-                return self.parentDevice().mapToGlobal(obj, subdev)
+        if self.parentDevice() is None:
+            return obj
+        else:
+            return self.parentDevice().mapToGlobal(obj, subdev)
         
     def _mapTransform(self, obj, tr):
         """Map an object through a transform.
@@ -426,29 +416,27 @@ class OptomechDevice(InterfaceMixin):
         If *subdev* is given, it must be a dictionary of {deviceName: subdevice} or
         {deviceName: subdeviceName} pairs specifying the state to compute.
         """
-        with self.__lock:
-            if subdev is None: ## return cached transform
-                if self.__globalTransform == 0:
-                    self.__globalTransform = self.__computeGlobalTransform()
-                return self.__globalTransform * 1  # *1 makes a copy
-            else:
-                return self.__computeGlobalTransform(subdev)
+        if subdev is None: ## return cached transform
+            if self.__globalTransform == 0:
+                self.__globalTransform = self.__computeGlobalTransform()
+            return self.__globalTransform * 1  # *1 makes a copy
+        else:
+            return self.__computeGlobalTransform(subdev)
                 
     def __computeGlobalTransform(self, subdev=None, inverse=False):
         ## subdev must be a dict
-        with self.__lock:
-            parent = self.parentDevice()
-            if parent is None:
-                parentTr = pg.SRTTransform3D()
-            else:
-                parentTr = parent.globalTransform(subdev)
-            if parentTr is None:
-                return None
-            deviceTr = self.deviceTransform(subdev)
-            if deviceTr is None:
-                return None
+        parent = self.parentDevice()
+        if parent is None:
+            parentTr = pg.SRTTransform3D()
+        else:
+            parentTr = parent.globalTransform(subdev)
+        if parentTr is None:
+            return None
+        deviceTr = self.deviceTransform(subdev)
+        if deviceTr is None:
+            return None
 
-            transform = parentTr * deviceTr
+        transform = parentTr * deviceTr
                 
         if inverse:
             inv, invertible = transform.inverted()
@@ -584,9 +572,9 @@ class OptomechDevice(InterfaceMixin):
                 self.__inverseTransform = 0
             self.__globalTransform = 0
             self.__inverseGlobalTransform = 0
-            # child global transforms must also be invalidated before any change signals are emitted
-            for ch in self.__children:
-                ch.invalidateCachedTransforms(invalidateLocal=False)
+        # child global transforms must also be invalidated before any change signals are emitted
+        for ch in self.__children:
+            ch.invalidateCachedTransforms(invalidateLocal=False)
             
     def addSubdevice(self, subdev):
         subdev.setParentDevice(self)
