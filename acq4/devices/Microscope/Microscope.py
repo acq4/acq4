@@ -86,7 +86,7 @@ class Microscope(Device, OptomechDevice):
             except:
                 printExc("Could not set initial objective state:")
         else:
-            self.setObjectiveIndex(0)
+            self.objectiveIndexChanged(0)
         
         cal = self.readConfigFile('calibration')
         if 'surfaceDepth' in cal:
@@ -106,23 +106,31 @@ class Microscope(Device, OptomechDevice):
         if self.objSwitchId not in change: ## the switch(es) that changed are not relevant to this device
             return
         state = str(change[self.objSwitchId])
-        self.setObjectiveIndex(state)
-    
+        self.objectiveIndexChanged(state)
+
     def setObjectiveIndex(self, index):
-        """Selects the objective currently in position *index*"""
+        """Selects the objective currently in position *index*
+        
+        This method is called when the user selects an objective index from the manager UI."""
+        # by default, we just accept; subclasses may reimplement
+        self.objectiveIndexChanged(index)
+    
+    def objectiveIndexChanged(self, index):
+        # called when the objective index has changed.
         index = str(index)
         if index not in self.selectedObjectives:
             raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(list(self.objectives.keys()))))
             
         ## determine new objective, return early if there is no change
         ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
-        lastObj = self.currentObjective
-        self.currentSwitchPosition = index
-        self.currentObjective = self.getObjective()
-        if self.currentObjective == lastObj:
-            return
-        
-        self.setCurrentSubdevice(self.currentObjective)
+        with self.lock:
+            lastObj = self.currentObjective
+            self.currentSwitchPosition = index
+            self.currentObjective = self.getObjective()
+            if self.currentObjective == lastObj:
+                return    
+            
+        self.setCurrentSubdevice(self.currentObjective)        
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
     def getObjective(self):
@@ -146,13 +154,13 @@ class Microscope(Device, OptomechDevice):
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
-        ##This is _not_ the same as setObjectiveIndex.
+        ##This is _not_ the same as objectiveIndexChanged.
         index = obj.key()[0]
         with self.lock:
             self.removeSubdevice(self.selectedObjectives[index])
             self.selectedObjectives[index] = obj
             self.addSubdevice(obj)
-        self.setObjectiveIndex(self.currentSwitchPosition) # update self.currentObjective, send signals (if needed)
+        self.objectiveIndexChanged(self.currentSwitchPosition) # update self.currentObjective, send signals (if needed)
         self.sigObjectiveListChanged.emit()
 
     def _allObjectives(self):
