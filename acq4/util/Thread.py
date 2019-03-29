@@ -1,13 +1,13 @@
 from __future__ import print_function
+import threading
 from acq4.util import Qt
 from .debug import enableFaulthandler
 
 class Thread(Qt.QThread):
-    """ Simple wrapper around QThread that allows customization of behavior for all threads
-    across ACQ4.
+    """Wrapper around QThread that implements debugging tools:
 
-    Currently, this class only modifies the run() method to enable fault handling for
-    the new thread.
+    - handles thread naming for debugging
+    - modifies the run() method to enable fault handling for the new thread
     """
     def __init__(self, *args, **kwds):
         name = kwds.pop('name', None)

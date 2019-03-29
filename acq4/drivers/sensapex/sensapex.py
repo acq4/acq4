@@ -257,7 +257,7 @@ class UMP(object):
         #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, block=False, simultaneous=True, linear=True):
+    def goto_pos(self, dev, pos, speed, block=False, simultaneous=True, linear=False):
         """Request the specified device to move to an absolute position (in nm).
         
         *speed* is given in um/sec.
@@ -267,7 +267,7 @@ class UMP(object):
 
         If *simultaneous* is True, then all axes begin moving at the same time.
 
-        If *linear* is True, then axis speeds are scaled to produce mroe linear movement.
+        If *linear* is True, then axis speeds are scaled to produce more linear movement.
         """
         if linear:
             # for linear movement, `take_step_ext` allows speed to be given per-axis
@@ -277,8 +277,7 @@ class UMP(object):
             diff = [float(p-c) for p,c in zip(pos, current_pos)]
             dist = max(1, np.linalg.norm(diff))
 
-            # speeds < 32 um/sec produce large position errors
-            speed = [max(32, speed * abs(d / dist)) for d in diff]
+            speed = [max(1, speed * abs(d / dist)) for d in diff]
             speed = speed + [0] * (4-len(speed))
             diff = diff + [0] * (4-len(diff))
             args = [c_int(int(x)) for x in [dev] + diff + speed]
