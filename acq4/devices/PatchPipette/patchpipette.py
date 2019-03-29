@@ -8,7 +8,6 @@ from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph import ptime
 from .devgui import PatchPipetteDeviceGui
 from .testpulse import TestPulseThread
-from .pressure import PressureControl
 from .statemanager import PatchPipetteStateManager
 from .autobias import AutoBiasHandler
 
@@ -68,7 +67,7 @@ class PatchPipette(Device):
 
         self.pressureDevice = None
         if 'pressureDevice' in config:
-            self.pressureDevice = PressureControl(config['pressureDevice'])
+            self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
         
