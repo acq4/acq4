@@ -22,8 +22,9 @@ class Sensapex(Stage):
         self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
         self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         
-        
-        all_devs = UMP.get_ump().list_devices()
+        address = config.pop('address', None)
+        group = config.pop('group', None)
+        all_devs = UMP.get_ump(address=address, group=group).list_devices()
         if self.devid not in all_devs:
             raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
 

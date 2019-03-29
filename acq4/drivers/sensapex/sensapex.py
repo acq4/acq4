@@ -106,9 +106,6 @@ else:
         ]
 
 
-
-
-
 class UMPError(Exception):
     def __init__(self, msg, errno, oserrno):
         Exception.__init__(self, msg)
@@ -124,14 +121,15 @@ class UMP(object):
     _single = None
     
     @classmethod
-    def get_ump(cls, start_poller=True):
+    def get_ump(cls, address=None, group=None, start_poller=True):
         """Return a singleton UMP instance.
         """
+        # question: can we have multiple UMP instances with different address/group ?
         if cls._single is None:
-            cls._single = UMP(start_poller)
+            cls._single = UMP(address=address, group=group, start_poller=start_poller)
         return cls._single
     
-    def __init__(self, start_poller=True):
+    def __init__(self, address=None, group=None, start_poller=True):
         self.lock = threading.RLock()
         if self._single is not None:
             raise Exception("Won't create another UMP object. Use get_ump() instead.")
@@ -140,7 +138,7 @@ class UMP(object):
         self.lib.ump_errorstr.restype = c_char_p
 
         self.h = None
-        self.open()
+        self.open(address=address, group=group)
 
         # view cached position and state data as a numpy array
         self._positions = np.frombuffer(self.h.contents.last_positions, 
@@ -215,18 +213,20 @@ class UMP(object):
         self._timeout = timeout
         self.call('ump_set_timeout', timeout)
 
-    def open(self, address=None):
+    def open(self, address=None, group=None):
         """Open the UMP device at the given address.
         
         The default address "169.254.255.255" should suffice in most situations.
         """
         if address is None:
             address = LIBUMP_DEF_BCAST_ADDRESS
+        if group is None:
+            group = LIBUMP_DEF_GROUP
 
         if self.h is not None:
             raise TypeError("UMP is already open.")
         addr = ctypes.create_string_buffer(address)
-        ptr = self.lib.ump_open(addr, c_uint(self._timeout), c_int(LIBUMP_DEF_GROUP))
+        ptr = self.lib.ump_open(addr, c_uint(self._timeout), c_int(group))
         if ptr <= 0:
             raise RuntimeError("Error connecting to UMP:", self.lib.ump_errorstr(ptr))
         self.h = pointer(ump_state.from_address(ptr))
