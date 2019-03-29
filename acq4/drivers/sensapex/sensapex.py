@@ -160,13 +160,13 @@ class UMP(object):
         self.lib.ump_get_version.restype = ctypes.c_char_p
         return self.lib.ump_get_version()
         
-    def list_devices(self, max_id=16):
+    def list_devices(self, max_id=20):
         """Return a list of all connected device IDs.
         """
         devs = []
         with self.lock:
             old_timeout = self._timeout
-            self.set_timeout(10)
+            self.set_timeout(300)
             try:
                 for i in range(min(max_id, LIBUMP_MAX_MANIPULATORS)):
                     try:
@@ -186,7 +186,7 @@ class UMP(object):
             return 4
         c = self._axis_counts.get(dev, None)
         if c is None:
-            c = self.call('get_axis_count_ext', dev)
+            c = self.call('ump_get_axis_count_ext', dev)
             self._axis_counts[dev] = c
         return c
 
@@ -196,7 +196,7 @@ class UMP(object):
             if self.h is None:
                 raise TypeError("UMP is not open.")
             # print("Call:", fn, self.h, args)
-            rval = getattr(self.lib, 'ump_' + fn)(self.h, *args)
+            rval = getattr(self.lib, fn)(self.h, *args)
             #if 'get_pos' not in fn:
                 #print "sensapex:", rval, fn, args
             if rval < 0:
@@ -213,7 +213,7 @@ class UMP(object):
 
     def set_timeout(self, timeout):
         self._timeout = timeout
-        self.call('set_timeout', timeout)
+        self.call('ump_set_timeout', timeout)
 
     def open(self, address=None):
         """Open the UMP device at the given address.
@@ -222,6 +222,7 @@ class UMP(object):
         """
         if address is None:
             address = LIBUMP_DEF_BCAST_ADDRESS
+
         if self.h is not None:
             raise TypeError("UMP is already open.")
         addr = ctypes.create_string_buffer(address)
@@ -247,11 +248,14 @@ class UMP(object):
         If *timeout* == 0, then the position is returned directly from cache
         and not queried from the device.
         """
+
         if timeout is None:
             timeout = self._timeout
         xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
         timeout = c_int(timeout)
-        r = self.call('get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe])
+       
+        r = self.call('ump_get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe]) 
+
         n_axes = self.axis_count(dev)
         #if dev == 9:
         #    return [-x.value for x in xyzwe[:n_axes]]
@@ -277,12 +281,16 @@ class UMP(object):
             diff = [float(p-c) for p,c in zip(pos, current_pos)]
             dist = max(1, np.linalg.norm(diff))
 
-            speed = [max(1, speed * abs(d / dist)) for d in diff]
+            # speeds < 32 um/sec produce large position errors
+            speed = [max(32, speed * abs(d / dist)) for d in diff]
+
             speed = speed + [0] * (4-len(speed))
             diff = diff + [0] * (4-len(diff))
             args = [c_int(int(x)) for x in [dev] + diff + speed]
+            
+
             with self.lock:
-                self.call('take_step_ext', *args)
+                self.call('ump_take_step_ext', *args)
                 self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
 
         else:
@@ -291,7 +299,7 @@ class UMP(object):
             speed = max(1, speed)  # speed < 1 crashes the uMp
             args = [c_int(int(x)) for x in [dev] + pos + [speed, mode]]
             with self.lock:
-                self.call('goto_position_ext', *args)
+                self.call('ump_goto_position_ext', *args)
                 self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
             
         if block:
@@ -306,29 +314,49 @@ class UMP(object):
         """Return True if the specified device is currently moving.
         """
         with self.lock:
-            #self.receive()
-            status = self.call('get_status_ext', c_int(dev))
+            self.call('ump_receive', 20)
+            status = self.call('ump_get_status_ext', c_int(dev))
             return bool(self.lib.ump_is_busy_status(status))
     
     def stop_all(self):
         """Stop all manipulators.
         """
-        self.call('stop_all')
+        self.call('ump_stop_all')
         
     def stop(self, dev):
         """Stop the specified manipulator.
         """
-        self.call('stop_ext', c_int(dev))
+        self.call('ump_stop_ext', c_int(dev))
 
     def select(self, dev):
         """Select a device on the TCU.
         """
-        self.call('cu_select_manipulator', dev)
+        self.call('ump_cu_select_manipulator', dev)
 
     def set_active(self, dev, active):
         """Set whether TCU remote control can move a manipulator.
         """
-        self.call('cu_set_active', dev, int(active))
+        self.call('ump_cu_set_active', dev, int(active))
+
+    def set_pressure(self, dev, channel, value):
+        return self.call('umv_set_pressure', dev, int(channel), int (value))
+
+    def get_pressure(self, dev, channel):
+        return self.call('umv_get_pressure', dev, int(channel))
+
+    def set_valve(self, dev, channel, value):
+        return self.call('umv_set_valve', dev, int(channel), int (value))
+
+    def get_valve(self, dev, channel):
+        return self.call('umv_get_valve', dev, int(channel))
+
+    def set_custom_slow_speed(self, dev, enabled):
+        feature_custom_slow_speed = 32
+        return self.call('ump_set_ext_feature', c_int(dev), c_int(feature_custom_slow_speed), c_int(enabled))
+    
+    def get_custom_slow_speed(self,dev):
+        feature_custom_slow_speed = 32
+        return self.call('ump_get_ext_feature',c_int(dev), c_int(feature_custom_slow_speed))
 
     def recv(self):
         """Receive one position or status update packet and return the ID
@@ -342,11 +370,12 @@ class UMP(object):
         recv_all at a slower rate).
         """
         # MUST use timelimit=0 to ensure at most one packet is received.
-        count = self.call('receive', 0)
+        count = self.call('ump_receive', 0)
         if count == 0:
             errstr = self.lib.ump_errorstr(LIBUMP_TIMEOUT)
             raise UMPError(errstr, LIBUMP_TIMEOUT, None)
         return self.h.contents.last_device_received
+
 
     def recv_all(self):
         """Receive all queued position/status update packets and return a list
@@ -371,6 +400,7 @@ class UMP(object):
                 self.set_timeout(old_timeout)
         
         return list(devs)
+
 
 
 class SensapexDevice(object):
@@ -398,8 +428,8 @@ class SensapexDevice(object):
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
     
-    def goto_pos(self, pos, speed, block=False, simultaneous=True, linear=True):
-        return self.ump.goto_pos(self.devid, pos, speed, block=block, simultaneous=simultaneous, linear=linear)
+    def goto_pos(self, pos, speed, block=False, simultaneous=True, linear=False):
+        return self.ump.goto_pos(self.devid, pos, speed, block=block, simultaneous=simultaneous, linear=False)
     
     def is_busy(self):
         return self.ump.is_busy(self.devid)
@@ -417,6 +447,20 @@ class SensapexDevice(object):
         if self.callback is not None:
             self.callback(self, new_pos, old_pos)
 
+    def set_pressure(self, channel, value):
+        return self.ump.set_pressure(self.devid, int(channel), int (value))
+
+    def get_pressure(self, channel):
+        return self.ump.get_pressure(self.devid, int(channel))
+
+    def set_valve(self, channel, value):
+        return self.ump.set_valve(self.devid, int(channel), int (value))
+
+    def get_valve(self, channel):
+        return self.ump.get_valve(self.devid, int(channel)) 
+
+    def set_custom_slow_speed(self, enabled):
+        return self.ump.set_custom_slow_speed(self.devid, enabled)
 
 class PollThread(threading.Thread):
     """Thread to poll for all manipulator position changes.
@@ -461,18 +505,18 @@ class PollThread(threading.Thread):
                     break
 
                 # read all updates waiting in queue
-                ump.call('receive', 30)
-                #ump.recv_all()
+                ump.call('ump_receive', 0)
 
+                #ump.recv_all()
+                
                 # check for position changes and invoke callbacks
                 with self.lock:
                     callbacks = self.callbacks.copy()
 
-                changed_ids = []
                 for dev_id, dev_callbacks in callbacks.items():
                     if len(callbacks) == 0:
                         continue
-                    new_pos = ump.get_pos(dev_id, 0)
+                    new_pos = ump.get_pos(dev_id, timeout=20)
                     old_pos = last_pos.get(dev_id)
                     if new_pos != old_pos:
                         for cb in dev_callbacks:
