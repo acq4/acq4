@@ -35,19 +35,19 @@ class SensapexPressureControl(PressureControl):
             if match:
                 self.source = source
                 break
-        self.pressure = (self.device.get_pressure(self.pressureChannel) - self.voltageOffset) / self.pressureScale
+        self.pressure = (self.dev.get_pressure(self.pressureChannel) - self.voltageOffset) / self.pressureScale
 
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals) to the pipette.
 
         Note: this does _not_ change the configuration of any values.
         """
-        self.device.set_pressure(self.pressure_channel, p * self.pressureScale + self.voltageOffset)
+        self.dev.set_pressure(self.pressure_channel, p * self.pressureScale + self.voltageOffset)
         self.pressure = p
 
     def _setSource(self, source):
         """Configure valves for the specified pressure source: "atmosphere", "user", or "regulator"
         """
         for chan, val in self.sources[source].items():
-            self.device.set_valve(int(chan), val)
+            self.dev.set_valve(int(chan), val)
         self.source = source
