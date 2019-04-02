@@ -42,7 +42,7 @@ class SensapexPressureControl(PressureControl):
 
         Note: this does _not_ change the configuration of any values.
         """
-        self.dev.set_pressure(self.pressure_channel, p * self.pressureScale + self.voltageOffset)
+        self.dev.set_pressure(self.pressureChannel, p * self.pressureScale + self.voltageOffset)
         self.pressure = p
 
     def _setSource(self, source):
