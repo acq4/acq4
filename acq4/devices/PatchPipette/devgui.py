@@ -5,6 +5,7 @@ from acq4.util import Qt
 class PatchPipetteDeviceGui(Qt.QWidget):
     def __init__(self, dev, win):
         self.cleanFuture = None
+        self.dev = dev
 
         Qt.QWidget.__init__(self)
         self.layout = Qt.QGridLayout()
@@ -28,7 +29,7 @@ class PatchPipetteDeviceGui(Qt.QWidget):
     def cleanClicked(self):
         if self.cleanBtn.isChecked():
             self.cleanBtn.setText("Cleaning..")
-            self.cleanFuture = self.dev.cleanPipette()
+            self.cleanFuture = self.dev.setState('clean')
             self.cleanFuture.sigFinished.connect(self.cleaningFinished)
         else:
             if self.cleanFuture is not None and not self.cleanFuture.isDone():
@@ -40,7 +41,7 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.cleanBtn.setChecked(False)
 
     def setCleanClicked(self):
-        self.dev.savePosition('clean')
+        self.dev.pipetteDevice.savePosition('clean')
 
     def setRinseClicked(self):
-        self.dev.savePosition('rinse')
+        self.dev.pipetteDevice.savePosition('rinse')

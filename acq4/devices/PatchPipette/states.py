@@ -538,9 +538,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                 break
 
     def cleanup(self):
-        print("CLEANUP!")
         if self.contAdvanceFuture is not None:
-            print(" STOP!")
             self.contAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
