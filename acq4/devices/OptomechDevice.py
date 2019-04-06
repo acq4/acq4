@@ -149,7 +149,7 @@ class OptomechDevice(InterfaceMixin):
         self.__subdevices = collections.OrderedDict()
         self.__subdevice = None
 
-        self.__lock = Mutex(recursive=True, debug=True)
+        self.__lock = Mutex(recursive=True, debug=False)
         
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
