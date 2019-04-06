@@ -231,12 +231,6 @@ class SensapexMoveFuture(MoveFuture):
         pos = self.dev._getPosition()
         dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
 
-        if dif > 3000:
-            # uMp bug: some versions have a race condition that occasionally
-            # causes bad position values to be returned immediately after a move has finished
-            pos = self.dev._getPosition()
-            dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
-
         if dif < 3000:  # require 3um accuracy
             # reached target
             self._finished = True
@@ -245,7 +239,7 @@ class SensapexMoveFuture(MoveFuture):
             # missed
             self._finished = True
             self._interrupted = True
-            self._errorMsg = "Move did not complete (target=%s, position=%s, dif=%s)." % (self.targetPos, pos, dif)
+            self._errorMsg = "Move did not complete (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.startPos, self.targetPos, pos, dif, self.speed)
             return -1
 
     def _stopped(self, tryAgain=0):

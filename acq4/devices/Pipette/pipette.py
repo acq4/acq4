@@ -499,7 +499,11 @@ class Pipette(Device, OptomechDevice):
         """
         stagePos = self._solveGlobalStagePosition(pos)
         stage = self.parentDevice()
-        return stage.moveToGlobal(stagePos, speed, linear=linear)
+        try:
+            return stage.moveToGlobal(stagePos, speed, linear=linear)
+        except Exception as exc:
+            print("Error moving %s to global position %r:" % (self, pos))
+            raise
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.

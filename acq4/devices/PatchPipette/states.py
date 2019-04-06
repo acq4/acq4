@@ -347,6 +347,10 @@ class PatchPipetteCellDetectState(PatchPipetteState):
     """
     stateName = 'cell detect'
     def __init__(self, *args, **kwds):
+        self.contAdvanceFuture = None
+        self.lastMove = 0.0
+        self.stepCount = 0
+        self.advanceSteps = None
         PatchPipetteState.__init__(self, *args, **kwds)
 
     _defaultConfig = {
@@ -370,10 +374,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
     }
 
     def run(self):
-        self.contAdvanceFuture = None
-        self.lastMove = 0.0
-        self.stepCount = 0
-        self.advanceSteps = None
 
         self.monitorTestPulse()
 
@@ -901,6 +901,8 @@ class PatchPipetteCleanState(PatchPipetteState):
                 self._checkStop(delay)
 
         dev._pipetteRecord['cleanCount'] += 1
+        dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
+        self.resetPos = None
         return 'out'          
 
     def cleanup(self):
