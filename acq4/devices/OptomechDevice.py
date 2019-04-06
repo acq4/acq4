@@ -417,9 +417,11 @@ class OptomechDevice(InterfaceMixin):
         {deviceName: subdeviceName} pairs specifying the state to compute.
         """
         if subdev is None: ## return cached transform
-            if self.__globalTransform == 0:
-                self.__globalTransform = self.__computeGlobalTransform()
-            return self.__globalTransform * 1  # *1 makes a copy
+            gtr = self.__globalTransform
+            if gtr == 0:
+                gtr = self.__computeGlobalTransform()
+                self.__globalTransform = gtr
+            return gtr * 1  # *1 makes a copy
         else:
             return self.__computeGlobalTransform(subdev)
                 
