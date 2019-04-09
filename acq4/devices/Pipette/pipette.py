@@ -923,10 +923,10 @@ class Axis(pg.ROI):
         p.scale(w, h)
         p.drawPath(self._path)
 
-    def setAngle(self, angle):
+    def setAngle(self, angle, update=True):
         if self.state['angle'] == angle:
             return
-        pg.ROI.setAngle(self, angle)
+        pg.ROI.setAngle(self, angle, update=update)
 
 
 class PipetteDeviceGui(Qt.QWidget):
