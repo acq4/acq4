@@ -469,6 +469,10 @@ class Stage(Device, OptomechDevice):
 class MoveFuture(object):
     """Used to track the progress of a requested move operation.
     """
+    class Timeout(Exception):
+        """Raised by wait() if the timeout period elapses.
+        """
+
     def __init__(self, dev, pos, speed):
         self.startTime = pg.ptime.time()
         self.dev = dev
@@ -537,9 +541,9 @@ class MoveFuture(object):
         if not self.isDone() or self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
-                raise RuntimeError("Move did not complete.")
+                raise self.Timeout("Move did not complete.")
             else:
-                raise RuntimeError("Move did not complete: %s" % err)
+                raise self.Timeout("Move did not complete: %s" % err)
 
 
 class MovePathFuture(object):
@@ -609,7 +613,7 @@ class MovePathFuture(object):
                 while not fut.isDone():
                     try:
                         fut.wait(timeout=0.1)
-                    except RuntimeError:
+                    except fut.Timeout:
                         pass
                     if self._stopped:
                         fut.stop()

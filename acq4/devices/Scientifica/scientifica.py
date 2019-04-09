@@ -248,7 +248,7 @@ class ScientificaMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, userSpeed):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
-        self._errorMSg = None
+        self._errorMsg = None
         self._finished = False
         pos = np.array(pos)
         with self.dev.dev.lock:
