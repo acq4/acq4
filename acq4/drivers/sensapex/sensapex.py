@@ -273,34 +273,42 @@ class UMP(object):
 
         If *linear* is True, then axis speeds are scaled to produce more linear movement.
         """
-        if linear:
-            # for linear movement, `take_step_ext` allows speed to be given per-axis
-            # but potentially generates small position errors due to unstable encoder readout
-            assert simultaneous is True, "Cannot make linear movement with simultaneous=False"
+        # slow_speed_changed = False
+        # previous_custom_slow_speed = self.get_custom_slow_speed(dev)
+        #if type(speed) in (tuple, list) and all(i > 50 for i in speed):
+        # if type(speed) in (tuple, list) and any((i < 50 and i > 0) for i in speed):
+        #     print("slow speed mode enabled")
+        #     self.set_custom_slow_speed(dev, True)
+        #     slow_speed_changed = True
+        # else:
+        #     if type(speed) not in (tuple, list):
+        #         if speed < 50:
+        #             print("slow speed mode enabled")
+        #             self.set_custom_slow_speed(dev, True)
+        #             slow_speed_changed = True
+
+        pos = list(pos) + [0] * (4-len(pos))
+        mode = int(bool(simultaneous))  # all axes move simultaneously
+        try:
+            args = [c_int(int(x)) for x in [dev] + pos + [speed,speed,speed,speed, mode]]
+            speed = max(1, speed)  # speed < 1 crashes the uMp
+        except:
+            pass
+
+        try:
             current_pos = self.get_pos(dev)
             diff = [float(p-c) for p,c in zip(pos, current_pos)]
             dist = max(1, np.linalg.norm(diff))
-
-            # speeds < 32 um/sec produce large position errors
             speed = [max(32, speed * abs(d / dist)) for d in diff]
-
             speed = speed + [0] * (4-len(speed))
-            diff = diff + [0] * (4-len(diff))
-            args = [c_int(int(x)) for x in [dev] + diff + speed]
-            
-
-            with self.lock:
-                self.call('ump_take_step_ext', *args)
-                self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
-
-        else:
-            pos = list(pos) + [0] * (4-len(pos))
-            mode = int(bool(simultaneous))  # all axes move simultaneously
-            speed = max(1, speed)  # speed < 1 crashes the uMp
-            args = [c_int(int(x)) for x in [dev] + pos + [speed, mode]]
-            with self.lock:
-                self.call('ump_goto_position_ext', *args)
-                self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
+            args = [c_int(int(x)) for x in [dev] + pos + speed + [mode]]
+        except:
+            pass            
+        
+        with self.lock:
+            print (args)
+            self.call('ump_goto_position_ext2', *args)
+            self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
             
         if block:
             while True:
@@ -309,6 +317,51 @@ class UMP(object):
                 time.sleep(0.005)
             pos2 = np.array(self.get_pos(dev))
             dif = pos2 - np.array(pos[:3])
+
+        """Request the specified device to move to an absolute position (in nm).
+        
+        *speed* is given in um/sec.
+        
+        If *block* is True, then this method only returns after ``is_busy()``
+        return False.
+
+        If *simultaneous* is True, then all axes begin moving at the same time.
+
+        If *linear* is True, then axis speeds are scaled to produce more linear movement.
+        """
+        # if linear:
+        #     # for linear movement, `take_step_ext` allows speed to be given per-axis
+        #     # but potentially generates small position errors due to unstable encoder readout
+        #     assert simultaneous is True, "Cannot make linear movement with simultaneous=False"
+        #     current_pos = self.get_pos(dev)
+        #     diff = [float(p-c) for p,c in zip(pos, current_pos)]
+        #     dist = max(1, np.linalg.norm(diff))
+
+        #     # speeds < 32 um/sec produce large position errors
+        #     speed = [max(32, speed * abs(d / dist)) for d in diff]
+
+        #     speed = speed + [0] * (4-len(speed))
+        #     diff = diff + [0] * (4-len(diff))
+        #     args = [c_int(int(x)) for x in [dev] + diff + speed]
+            
+
+        #     with self.lock:
+        #         self.call('ump_take_step_ext', *args)
+        #         self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
+
+        # else:
+        
+
+        
+        #args = [c_int(int(x)) for x in [dev] + pos + goto_speeds + [mode] ]
+        #print (args)
+        #with self.lock:
+        #    self.call('ump_goto_position_ext', *args)
+        #    self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
+            
+
+        # if slow_speed_changed:
+        #     self.set_custom_slow_speed(dev, previous_custom_slow_speed)
 
     def is_busy(self, dev):
         """Return True if the specified device is currently moving.
