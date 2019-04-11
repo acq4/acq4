@@ -314,7 +314,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, abs=None, rel=None, globalPos=None, speed=None, progress=False, linear=False):
+    def move(self, abs=None, rel=None, globalPos=None, speed=None, progress=False, linear=False, **kwds):
         """Move the device to a new position.
         
         Position may be specified using one of three arguments:
@@ -349,7 +349,7 @@ class Stage(Device, OptomechDevice):
             localPos = self.mapFromGlobal(globalPos)
             abs = self._solveStageTransform(localPos)
 
-        mfut = self._move(abs, rel, speed, linear=linear)
+        mfut = self._move(abs, rel, speed, linear=linear, **kwds)
 
         if progress:
             self._progressDialog = Qt.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
@@ -547,6 +547,9 @@ class MoveFuture(object):
 
 
 class MovePathFuture(object):
+    class Timeout(Exception):
+        """Raised by wait() if the timeout period elapses.
+        """
     def __init__(self, dev, path):
         self.dev = dev
         self.path = path
@@ -607,6 +610,7 @@ class MovePathFuture(object):
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
+                print("Move path step %d    %r" % (i, step))
                 fut = self.dev.move(**step)
                 fut._pathStep = i
                 self._currentFuture = fut
