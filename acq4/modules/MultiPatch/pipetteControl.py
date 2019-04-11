@@ -12,9 +12,10 @@ class PipetteControl(Qt.QWidget):
     sigSelectChanged = Qt.Signal(object, object)
     sigLockChanged = Qt.Signal(object, object)
 
-    def __init__(self, pipette, parent=None):
+    def __init__(self, pipette, mainWin, parent=None):
         Qt.QWidget.__init__(self, parent)
         self.pip = pipette
+        self.mainWin = mainWin
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
@@ -188,11 +189,11 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.setMode('VC')
 
     def focusTipBtnClicked(self, state):
-        speed = self.selectedSpeed(default='slow')
+        speed = self.mainWin.selectedSpeed(default='slow')
         self.focusTip(speed)
 
     def focusTargetBtnClicked(self, state):
-        speed = self.selectedSpeed(default='slow')
+        speed = self.mainWin.selectedSpeed(default='slow')
         self.focusTarget(speed)
 
     def hideHeader(self):
