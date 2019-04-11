@@ -224,6 +224,7 @@ class SensapexMoveFuture(MoveFuture):
             else:
                 return 1
         busy = self.dev.dev.is_busy()
+
         if busy:
             # Still moving
             return 0

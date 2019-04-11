@@ -242,7 +242,7 @@ class UMP(object):
             self.lib.ump_close(self.h)
             self.h = None
 
-    def get_pos(self, dev, timeout=None):
+    def get_pos(self, dev, timeout=0):
         """Return the absolute position of the specified device (in nm).
         
         If *timeout* == 0, then the position is returned directly from cache
@@ -307,9 +307,10 @@ class UMP(object):
         
         with self.lock:
             print (args)
-            self.call('ump_goto_position_ext2', *args)
+            self.call('ump_goto_position_ext2', *args)            
             self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
-            
+        
+        #time.sleep(0.01)   
         if block:
             while True:
                 if not self.is_busy(dev):
@@ -367,9 +368,8 @@ class UMP(object):
         """Return True if the specified device is currently moving.
         """
         with self.lock:
-            self.call('ump_receive', 20)
             status = self.call('ump_get_status_ext', c_int(dev))
-            return bool(self.lib.ump_is_busy_status(status))
+            return  bool(self.lib.ump_is_busy_status(c_int(status)))
     
     def stop_all(self):
         """Stop all manipulators.
@@ -558,7 +558,7 @@ class PollThread(threading.Thread):
                     break
 
                 # read all updates waiting in queue
-                ump.call('ump_receive', 0)
+                ump.call('ump_receive', c_int(int(self.interval*1000)))
 
                 #ump.recv_all()
                 
@@ -575,7 +575,7 @@ class PollThread(threading.Thread):
                         for cb in dev_callbacks:
                             cb(dev_id, new_pos, old_pos)
                         
-                time.sleep(self.interval)  # rate-limit updates
+                # time.sleep(self.interval)  # rate-limit updates
             except:
                 print('Error in sensapex poll thread:')
                 sys.excepthook(*sys.exc_info())
