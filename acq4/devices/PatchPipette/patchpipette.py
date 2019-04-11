@@ -100,6 +100,14 @@ class PatchPipette(Device):
     def imagingDevice(self):
         return self.pipetteDevice.imagingDevice()
 
+    def focusOnTip(self, speed):
+        imdev = self.imagingDevice()
+        return imdev.moveCenterToGlobal(self.pipette.globalPosition(), speed=speed)
+
+    def focusOnTarget(self, speed):
+        imdev = self.imagingDevice()
+        return imdev.moveCenterToGlobal(self.pipette.targetPosition(), speed=speed)
+
     def newPipette(self):
         """A new physical pipette has been attached; reset any per-pipette state.
         """
