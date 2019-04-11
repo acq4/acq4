@@ -2,6 +2,7 @@ try:
     import queue
 except ImportError:
     import Queue as queue
+import sys, traceback
 from .future import Future
 from . import Qt
 
@@ -41,7 +42,8 @@ class ThreadCallFuture(Future):
             self._taskDone()
         except Exception as exc:
             self.exc = exc
-            self._taskDone(interrupted=True, error=str(exc))
+            err = traceback.format_exception(*sys.exc_info())
+            self._taskDone(interrupted=True, error=err)
 
     def __call__(self):
         self.wait()
