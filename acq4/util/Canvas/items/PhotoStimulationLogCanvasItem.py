@@ -19,12 +19,12 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
 
     def __init__(self, handle, **opts):
         opts.pop('viewRect', None)
-        
+
         self.data = handle.read()
         self.headstageCount = 4
 
         item = pg.ItemGroup()
-        o = {'scalable': False, 'rotatable': False, 'movable': False}
+        o = {'scalable': False, 'rotatable': False, 'movable': False, 'handle':handle}
         opts.update(o)        
         CanvasItem.__init__(self, item, **opts)
 
@@ -60,6 +60,32 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
         param = pg.parametertree.Parameter.create(name=pt.name, autoIncrementName=False, type='group', renamable=False, removable=False, children=children)
         self.params.addChild(param)
         param.point = pt
+
+    def saveState(self, relativeTo=None):
+        state = CanvasItem.saveState(self, relativeTo)
+        #state['filename'] = self.handle
+        state['points'] = {}
+        for param in self.params.children():
+            d = param.point.saveState()
+            d['param'] = param.saveState()
+            state['points'][param.name()] = d
+        state['headstageChecks'] = {k:v.isChecked() for k,v in self._ctrl.headstageChecks.items()}
+        return state
+
+    def restoreState(self, state):
+        points = state.pop('points')
+        headstageChecks = state.pop('headstageChecks')
+        CanvasItem.restoreState(self, state)
+
+        #for param in self.params.children():
+        #    self.params.removeChild(param)
+        #    param.point.graphicsItem.scene().removeItem(param.point.graphicsItem)
+
+        for param in self.params.children():
+            param.restoreState(points[param.name()]['param'])
+
+        for k, chk in self._ctrl.headstageChecks.items():
+            chk.setChecked(headstageChecks[str(k)])
 
 
 
