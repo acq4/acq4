@@ -108,7 +108,7 @@ class PhotostimTarget(TargetItem):
 
         self.setLabel(str(label))
         self.setPos(pg.Point(pos))
-        print("PhotostimTarget:", pos)
+        #print("PhotostimTarget:", pos)
 
         #### Set up context menu
         self.menu = QtGui.QMenu()
