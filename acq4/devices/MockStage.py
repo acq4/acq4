@@ -267,7 +267,7 @@ class MockStageThread(Thread):
     
     def _setPosition(self, pos):
         self.pos = np.array(pos)
-        self.positionChanged.emit(pos)
+        self.positionChanged.emit(self.pos)
 
 
 #class MockStageInterface(Qt.QWidget):
