@@ -56,6 +56,9 @@ class MockStage(Stage):
                 'limits': (False, False, False),
             }
 
+    def axes(self):
+        return ('x', 'y', 'z')
+
     def _move(self, abs, rel, speed, linear):
         """Called by base stage class when the user requests to move to an
         absolute or relative position.
