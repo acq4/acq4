@@ -62,6 +62,26 @@ class Stage(Device, OptomechDevice):
         if axisTr is not None:
             self._axisTransform = pg.Transform3D(axisTr)
 
+        # set up joystick callbacks if requested
+        jsdevs = set()
+        self._jsAxes = set()   # just used to listen for specific events
+        self._jsButtons = set()
+        if 'joystick' in config:
+            for axis, axcfg in config['joystick'].items():
+                jsname, jsaxis = axcfg['axis']
+                try:
+                    js = dm.getDevice(jsname)
+                except Exception:
+                    print('Joystick device "%s" not found; disabling control from this device.' % jsname)
+                    continue
+                jsdevs.add(js)
+                self._jsAxes.add((js, jsaxis))
+                for jsname, button, scale in axcfg.get('modifiers', []):
+                    js = dm.getDevice(jsname)
+                    self._jsButtons.add((js, button))
+        for jsdev in jsdevs:
+            jsdev.sigStateChanged.connect(self.joystickChanged)
+
         dm.declareInterface(name, ['stage'], self)
 
     def quit(self):
@@ -407,6 +427,12 @@ class Stage(Device, OptomechDevice):
                     pos[i] += x
         return pos
 
+    def setVelocity(self, vel):
+        """Begin moving the stage with a constant velocity.
+        """
+        # pick a far-away distance within limits
+        print(vel)
+
     def stop(self):
         """Stop moving the device immediately.
         """
@@ -464,6 +490,31 @@ class Stage(Device, OptomechDevice):
         locations = self.readConfigFile('stored_locations')
         locations['home'] = list(pos)
         self.writeConfigFile(locations, 'stored_locations')
+
+    def joystickChanged(self, js, event):
+        if 'axis' in event:
+            ax = event['axis']
+            if (js, ax) not in self._jsAxes:
+                return
+        else:
+            btn = event['button']
+            if (js, btn) not in self._jsButtons:
+                return
+
+        # calculate new velocity
+        jsStates = {}
+        vel = [None, None, None]
+        for axis, axcfg in self.config['joystick'].items():
+            axis = int(axis)
+            jsname, jsaxis = axcfg['axis']
+            state = jsStates.setdefault(jsname, self.dm.getDevice(jsname).state())
+            vel[axis] = axcfg['speed'] * state['axes'][jsaxis]
+            for jsname, button, scale in axcfg.get('modifiers', []):
+                state = jsStates.setdefault(jsname, self.dm.getDevice(jsname).state())
+                if state['buttons'][button]:
+                    vel[axis] *= scale
+
+        self.setVelocity(vel)
 
 
 class MoveFuture(object):

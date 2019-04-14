@@ -2,6 +2,7 @@ from __future__ import print_function
 from collections import OrderedDict
 from importlib import import_module
 from . import Device
+from ..util.debug import printExc
 
 
 def getDeviceClass(name):
