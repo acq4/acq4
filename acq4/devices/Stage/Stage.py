@@ -582,27 +582,28 @@ class MoveFuture(object):
         If the move did not complete, raise an exception.
         """
         start = ptime.time()
-        while (timeout is None) or (ptime.time() < start + timeout):
+        while True:
             if self.isDone():
                 break
             if updates is True:
                 Qt.QTest.qWait(100)
             else:
                 time.sleep(0.1)
-        if not self.isDone() or self.wasInterrupted():
+            if (timeout is not None) and (ptime.time() > start + timeout):
+                raise self.Timeout("Timed out waiting for move to complete.")
+
+        if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
-                raise self.Timeout("Move did not complete.")
+                raise RuntimeError("Move did not complete.")
             else:
-                raise self.Timeout("Move did not complete: %s" % err)
+                raise RuntimeError("Move did not complete: %s" % err)
 
 
-class MovePathFuture(object):
-    class Timeout(Exception):
-        """Raised by wait() if the timeout period elapses.
-        """
+class MovePathFuture(MoveFuture):
     def __init__(self, dev, path):
-        self.dev = dev
+        MoveFuture.__init__(self, dev, None, None)
+
         self.path = path
         self._currentFuture = None
         self._done = False
@@ -635,29 +636,6 @@ class MovePathFuture(object):
             fut.stop()
         self._stopped = True
 
-    def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, has been interrupted, or the
-        specified timeout has elapsed.
-
-        If *updates* is True, process Qt events while waiting.
-
-        If the move did not complete, raise an exception.
-        """
-        start = ptime.time()
-        while (timeout is None) or (ptime.time() < start + timeout):
-            if self.isDone():
-                break
-            if updates is True:
-                Qt.QTest.qWait(100)
-            else:
-                time.sleep(0.1)
-        if not self.isDone() or self.wasInterrupted():
-            err = self.errorMessage()
-            if err is None:
-                raise RuntimeError("Move did not complete.")
-            else:
-                raise RuntimeError("Move did not complete: %s" % err)
-
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
@@ -680,7 +658,7 @@ class MovePathFuture(object):
                     break
 
                 if fut.wasInterrupted():
-                    self._errorMessage = fut.errorMessage()
+                    self._errorMessage = "Path step %d/%d: %s" % (i+1, len(self.path), fut.errorMessage())
                     self._wasInterrupted = True
                     break
         except Exception as exc:
