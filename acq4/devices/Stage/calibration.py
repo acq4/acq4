@@ -194,12 +194,30 @@ class CalibrationWindow(Qt.QWidget):
         def vecToSRT(x):
             return pg.SRTTransform3D({'pos': x[:3], 'scale': x[3:6], 'angle': x[6], 'axis': [0, 0, 1]})
 
-        # use first 4 points to get an exact solution
-        m = self.dev._solveAxisTransform(stagePos[:4], parentPos[:4], np.zeros((4, 3)))
+        # use random combinations of 4 points to get an average of exact solutions
+        n_iter = min(100, 4**(stagePos.shape[0]-4))
+        m = []
+        for i in range(n_iter):
+            inds = list(range(len(stagePos)))
+            np.random.shuffle(inds)
+            Xa = stagePos[inds[:4]]
+            Ya = parentPos[inds[:4]]
+            m1 = self.dev._solveAxisTransform(Xa, Ya, np.zeros((4, 3)))
+            m.append(m1)
+        mGuess = np.mean(np.dstack(m), axis=2)
 
         # Fit the entire set of points, using the exact solution as initial guess
         best = [np.inf, None]
-        self.result = scipy.optimize.minimize(errFn, x0=m, args=(stagePos, parentPos), tol=1e-8)#, options={'eps': 1e-11, 'gtol': 1e-12, 'disp': True}, method='Nelder-Mead')#, method="SLSQP")
+        self.result = scipy.optimize.minimize(errFn, x0=mGuess, args=(stagePos, parentPos), 
+            tol=1e-16,
+            options={
+                # 'eps': 1e-16, 
+                'gtol': 1e-16, 
+                # 'disp': True,
+                'maxiter': 20000,
+            }, 
+            method='Nelder-Mead',
+        )
 
         m = np.eye(4)
         m[:3] = best[1].reshape(3, 4)
