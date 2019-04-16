@@ -164,7 +164,7 @@ class UMP(object):
         devs = []
         with self.lock:
             old_timeout = self._timeout
-            self.set_timeout(300)
+            self.set_timeout(20)
             try:
                 for i in range(min(max_id, LIBUMP_MAX_MANIPULATORS)):
                     try:
@@ -286,12 +286,12 @@ class UMP(object):
         #             print("slow speed mode enabled")
         #             self.set_custom_slow_speed(dev, True)
         #             slow_speed_changed = True
-
+        
         pos = list(pos) + [0] * (4-len(pos))
         mode = int(bool(simultaneous))  # all axes move simultaneously
         try:
-            args = [c_int(int(x)) for x in [dev] + pos + [speed,speed,speed,speed, mode]]
             speed = max(1, speed)  # speed < 1 crashes the uMp
+            args = [c_int(int(x)) for x in [dev] + pos + [speed,speed,speed,speed, mode]]
         except:
             pass
 
@@ -307,8 +307,9 @@ class UMP(object):
         
         with self.lock:
             print (args)
-            self.call('ump_goto_position_ext2', *args)            
-            self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
+            self.call('ump_goto_position_ext2', *args)
+            self.call('ump_receive', 1)             
+            #self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
         
         #time.sleep(0.01)   
         if block:
@@ -368,6 +369,7 @@ class UMP(object):
         """Return True if the specified device is currently moving.
         """
         with self.lock:
+            self.call('ump_receive', 10)
             status = self.call('ump_get_status_ext', c_int(dev))
             return  bool(self.lib.ump_is_busy_status(c_int(status)))
     
