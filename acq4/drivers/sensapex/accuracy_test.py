@@ -54,7 +54,7 @@ lastupdate = pg.ptime.time()
 
 def update(update_error=False):
     global lastupdate
-    p = dev.get_pos()
+    p = dev.get_pos(timeout=20)
     s = dev.is_busy()
     m = not move_req.finished
     bus.append(int(s))
@@ -85,8 +85,8 @@ errs = []
 targets = []
 positions = []
 moves = []
-for i in range(30):
-    d = (np.random.random(size=3) * 10e3).astype(int)
+for i in range(3):
+    d = (np.random.random(size=3) * 100e3).astype(int)
     # d[0] = 0
     # d[1] *= 0.01
     # d[2] *= 0.01

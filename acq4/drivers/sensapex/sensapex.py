@@ -270,7 +270,7 @@ class UMP(object):
         #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, block=False, simultaneous=True, linear=False):
+    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False):
         """Request the specified device to move to an absolute position (in nm).
 
         Parameters
@@ -281,8 +281,6 @@ class UMP(object):
             X,Y,Z,(W) coordinates to move to
         speed : float
             Manipulator speed in um/sec
-        block : bool
-            If True, then this method only returns after the move has completed
         simultaneous: bool
             If True, then all axes begin moving at the same time
         linear : bool
@@ -321,14 +319,6 @@ class UMP(object):
 
             self.call('ump_goto_position_ext2', *args)
 
-        if block:
-            while True:
-                if not self.is_busy(dev):
-                    break
-                time.sleep(0.005)
-            pos2 = np.array(self.get_pos(dev))
-            dif = pos2 - np.array(pos[:3])
-
         return next_move
 
     def is_busy(self, dev):
@@ -346,7 +336,7 @@ class UMP(object):
         with self.lock:
             self.call('ump_stop_all')
             for dev in self._last_move:
-                move = self._last_move.pop(dev)
+                move = self._last_move.pop(dev, None)
                 move._interrupt('stop all requested before move finished')
 
     def stop(self, dev):
@@ -354,7 +344,7 @@ class UMP(object):
         """
         with self.lock:
             self.call('ump_stop_ext', c_int(dev))
-            move = self._last_move.pop(dev)
+            move = self._last_move.pop(dev, None)
             if move is not None:
                 move._interrupt('stop requested before move finished')
 
@@ -396,7 +386,7 @@ class UMP(object):
             self.set_timeout(0)
             try:
                 while True:
-                    count = self.call('ump_receive', c_int(0))
+                    count = self.call('ump_receive', c_int(1))
                     if count == 0:
                         break
             finally:
@@ -472,8 +462,8 @@ class SensapexDevice(object):
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
     
-    def goto_pos(self, pos, speed, block=False, simultaneous=True, linear=False):
-        return self.ump.goto_pos(self.devid, pos, speed, block=block, simultaneous=simultaneous, linear=False)
+    def goto_pos(self, pos, speed, simultaneous=True, linear=False):
+        return self.ump.goto_pos(self.devid, pos, speed, simultaneous=simultaneous, linear=False)
     
     def is_busy(self):
         return self.ump.is_busy(self.devid)
