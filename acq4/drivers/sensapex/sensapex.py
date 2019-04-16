@@ -4,6 +4,7 @@ import numpy as np
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure)
+from acq4.util import ptime
 
 path = os.path.abspath(os.path.dirname(__file__))
 if sys.platform == 'win32':
@@ -134,15 +135,24 @@ class UMP(object):
         if self._single is not None:
             raise Exception("Won't create another UMP object. Use get_ump() instead.")
         self._timeout = 200
+
+        # duration that manipulator must be not busy before a move is considered complete.
+        self.move_expire_time = 50e-3
+        
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
 
         self.h = None
         self.open(address=address, group=group)
 
+        # keep track of requested moves and whether they completed, failed, or were interrupted.
+        self._last_move = {}  # {device: MoveRequest}
+        # last time each device was seen moving
+        self._last_busy_time = {}
+
         # view cached position and state data as a numpy array
-        self._positions = np.frombuffer(self.h.contents.last_positions, 
-            dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUMP_MAX_MANIPULATORS)
+        # self._positions = np.frombuffer(self.h.contents.last_positions, 
+        #     dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUMP_MAX_MANIPULATORS)
         self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUMP_MAX_MANIPULATORS)
 
         self._ump_has_axis_count = hasattr(self.lib, 'ump_get_axis_count_ext')
@@ -248,7 +258,6 @@ class UMP(object):
         If *timeout* == 0, then the position is returned directly from cache
         and not queried from the device.
         """
-
         if timeout is None:
             timeout = self._timeout
         xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
@@ -263,55 +272,54 @@ class UMP(object):
 
     def goto_pos(self, dev, pos, speed, block=False, simultaneous=True, linear=False):
         """Request the specified device to move to an absolute position (in nm).
-        
-        *speed* is given in um/sec.
-        
-        If *block* is True, then this method only returns after ``is_busy()``
-        return False.
 
-        If *simultaneous* is True, then all axes begin moving at the same time.
+        Parameters
+        ----------
+        dev : int
+            ID of device to move
+        pos : array-like
+            X,Y,Z,(W) coordinates to move to
+        speed : float
+            Manipulator speed in um/sec
+        block : bool
+            If True, then this method only returns after the move has completed
+        simultaneous: bool
+            If True, then all axes begin moving at the same time
+        linear : bool
+            If True, then axis speeds are scaled to produce more linear movement
 
-        If *linear* is True, then axis speeds are scaled to produce more linear movement.
+        Returns
+        -------
+        move_id : int
+            Unique ID that can be used to retrieve the status of this move at a later time.
         """
-        # slow_speed_changed = False
-        # previous_custom_slow_speed = self.get_custom_slow_speed(dev)
-        #if type(speed) in (tuple, list) and all(i > 50 for i in speed):
-        # if type(speed) in (tuple, list) and any((i < 50 and i > 0) for i in speed):
-        #     print("slow speed mode enabled")
-        #     self.set_custom_slow_speed(dev, True)
-        #     slow_speed_changed = True
-        # else:
-        #     if type(speed) not in (tuple, list):
-        #         if speed < 50:
-        #             print("slow speed mode enabled")
-        #             self.set_custom_slow_speed(dev, True)
-        #             slow_speed_changed = True
-        
-        pos = list(pos) + [0] * (4-len(pos))
+        pos_arg = list(pos) + [0] * (4-len(pos))
         mode = int(bool(simultaneous))  # all axes move simultaneously
-        try:
-            speed = max(1, speed)  # speed < 1 crashes the uMp
-            args = [c_int(int(x)) for x in [dev] + pos + [speed,speed,speed,speed, mode]]
-        except:
-            pass
 
-        try:
-            current_pos = self.get_pos(dev)
-            diff = [float(p-c) for p,c in zip(pos, current_pos)]
-            dist = max(1, np.linalg.norm(diff))
-            speed = [max(32, speed * abs(d / dist)) for d in diff]
+        current_pos = self.get_pos(dev)
+        diff = [float(p-c) for p,c in zip(pos_arg, current_pos)]
+        dist = max(1, np.linalg.norm(diff))
+
+        if linear:
+            speed = [max(1, speed * abs(d / dist)) for d in diff]
             speed = speed + [0] * (4-len(speed))
-            args = [c_int(int(x)) for x in [dev] + pos + speed + [mode]]
-        except:
-            pass            
-        
+        else:
+            speed = [max(1, speed)] * 4  # speed < 1 crashes the uMp
+
+        args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode]]
+
+        duration = dist / speed
+
         with self.lock:
-            print (args)
+            last_move = self._last_move.pop(dev, None)
+            if last_move is not None:
+                last_move._interrupt()
+
+            next_move = MoveRequest(dev, current_pos, pos, speed, duration)
+            self._last_move[dev] = next_move
+
             self.call('ump_goto_position_ext2', *args)
-            self.call('ump_receive', 1)             
-            #self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
-        
-        #time.sleep(0.01)   
+
         if block:
             while True:
                 if not self.is_busy(dev):
@@ -320,68 +328,34 @@ class UMP(object):
             pos2 = np.array(self.get_pos(dev))
             dif = pos2 - np.array(pos[:3])
 
-        """Request the specified device to move to an absolute position (in nm).
-        
-        *speed* is given in um/sec.
-        
-        If *block* is True, then this method only returns after ``is_busy()``
-        return False.
-
-        If *simultaneous* is True, then all axes begin moving at the same time.
-
-        If *linear* is True, then axis speeds are scaled to produce more linear movement.
-        """
-        # if linear:
-        #     # for linear movement, `take_step_ext` allows speed to be given per-axis
-        #     # but potentially generates small position errors due to unstable encoder readout
-        #     assert simultaneous is True, "Cannot make linear movement with simultaneous=False"
-        #     current_pos = self.get_pos(dev)
-        #     diff = [float(p-c) for p,c in zip(pos, current_pos)]
-        #     dist = max(1, np.linalg.norm(diff))
-
-        #     # speeds < 32 um/sec produce large position errors
-        #     speed = [max(32, speed * abs(d / dist)) for d in diff]
-
-        #     speed = speed + [0] * (4-len(speed))
-        #     diff = diff + [0] * (4-len(diff))
-        #     args = [c_int(int(x)) for x in [dev] + diff + speed]
-            
-
-        #     with self.lock:
-        #         self.call('ump_take_step_ext', *args)
-        #         self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
-
-        # else:
-        
-
-        
-        #args = [c_int(int(x)) for x in [dev] + pos + goto_speeds + [mode] ]
-        #print (args)
-        #with self.lock:
-        #    self.call('ump_goto_position_ext', *args)
-        #    self.h.contents.last_status[dev] = 1  # mark this manipulator as busy
-            
-
-        # if slow_speed_changed:
-        #     self.set_custom_slow_speed(dev, previous_custom_slow_speed)
+        return next_move
 
     def is_busy(self, dev):
         """Return True if the specified device is currently moving.
+
+        Note: this should not be used to determine whether a move has completed;
+        use MoveRequest.finished or .finished_event as returned from goto_pos().
         """
-        with self.lock:
-            self.call('ump_receive', 10)
-            status = self.call('ump_get_status_ext', c_int(dev))
-            return  bool(self.lib.ump_is_busy_status(c_int(status)))
-    
+        status = self.call('ump_get_status_ext', c_int(dev))
+        return bool(self.lib.ump_is_busy_status(c_int(status)))
+
     def stop_all(self):
         """Stop all manipulators.
         """
-        self.call('ump_stop_all')
-        
+        with self.lock:
+            self.call('ump_stop_all')
+            for dev in self._last_move:
+                move = self._last_move.pop(dev)
+                move._interrupt()
+
     def stop(self, dev):
         """Stop the specified manipulator.
         """
-        self.call('ump_stop_ext', c_int(dev))
+        with self.lock:
+            self.call('ump_stop_ext', c_int(dev))
+            move = self._last_move.pop(dev)
+            if move is not None:
+                move._interrupt()
 
     def select(self, dev):
         """Select a device on the TCU.
@@ -413,49 +387,61 @@ class UMP(object):
         feature_custom_slow_speed = 32
         return self.call('ump_get_ext_feature',c_int(dev), c_int(feature_custom_slow_speed))
 
-    def recv(self):
-        """Receive one position or status update packet and return the ID
-        of the device that sent the packet.
-
-        Raises UMPError if the recv times out.
-        
-        Note: packets arrive from the manipulators rapidly while they are
-        moving. These packets will quickly accumulate in the socket buffer
-        if this method is not called frequently enough (alternatively, use
-        recv_all at a slower rate).
-        """
-        # MUST use timelimit=0 to ensure at most one packet is received.
-        count = self.call('ump_receive', 0)
-        if count == 0:
-            errstr = self.lib.ump_errorstr(LIBUMP_TIMEOUT)
-            raise UMPError(errstr, LIBUMP_TIMEOUT, None)
-        return self.h.contents.last_device_received
-
-
     def recv_all(self):
-        """Receive all queued position/status update packets and return a list
-        of devices that were updated.
+        """Receive all queued position/status update packets.
         """
-        devs = set()
         with self.lock:
             old_timeout = self._timeout
             self.set_timeout(0)
             try:
                 while True:
-                    try:
-                        d = self.recv()
-                    except UMPError as exc:
-                        if exc.errno == -3:
-                            # timeout; no packets remaining
-                            break
-                    if d is None or d > 0:
-                        devs.add(d)
-                    
+                    count = self.call('ump_receive', c_int(0))
+                    if count == 0:
+                        break
             finally:
                 self.set_timeout(old_timeout)
-        
-        return list(devs)
 
+            self._update_moves()
+
+    def _update_moves(self):
+        with self.lock:
+            # strategy for determining whether a move has completed is just to 
+            # see whether the manipulator has been stopped for a minimum interval
+            # (self.move_expire_time)
+            now = ptime.time()
+            for dev,move in self._last_move.items():
+                if self.is_busy(dev):
+                    self._last_busy_time[dev] = now
+                cmp_time = max(self._last_busy_time.get(dev, 0), move.start_time)
+                if now - cmp_time > self.move_expire_time:
+                    self._last_move.pop(dev)
+                    move._finish(self.get_pos(dev, timeout=0))
+
+
+class MoveRequest(object):
+    """Simple class for tracking the status of requested moves.
+    """
+    def __init__(self, dev, start_pos, target_pos, speed, duration):
+        self.dev = dev
+        self.start_time = ptime.time()
+        self.estimated_duration = duration
+        self.start_pos = start_pos
+        self.target_pos = target_pos
+        self.speed = speed
+        self.finished = False
+        self.interrupted = False
+        self.last_pos = None
+        self.finished_event = threading.Event()
+
+    def _interrupt(self):
+        self.interrupted = True
+        self.finished = True
+        self.finished_event.set()
+
+    def _finish(self, pos):
+        self.last_pos = pos
+        self.finished = True
+        self.finished_event.set()
 
 
 class SensapexDevice(object):
@@ -517,6 +503,7 @@ class SensapexDevice(object):
     def set_custom_slow_speed(self, enabled):
         return self.ump.set_custom_slow_speed(self.devid, enabled)
 
+
 class PollThread(threading.Thread):
     """Thread to poll for all manipulator position changes.
 
@@ -560,9 +547,7 @@ class PollThread(threading.Thread):
                     break
 
                 # read all updates waiting in queue
-                ump.call('ump_receive', c_int(int(self.interval*1000)))
-
-                #ump.recv_all()
+                ump.recv_all()
                 
                 # check for position changes and invoke callbacks
                 with self.lock:
@@ -571,14 +556,18 @@ class PollThread(threading.Thread):
                 for dev_id, dev_callbacks in callbacks.items():
                     if len(callbacks) == 0:
                         continue
-                    new_pos = ump.get_pos(dev_id, timeout=20)
+                    new_pos = ump.get_pos(dev_id, timeout=0)
                     old_pos = last_pos.get(dev_id)
                     if new_pos != old_pos:
                         for cb in dev_callbacks:
                             cb(dev_id, new_pos, old_pos)
-                        
-                # time.sleep(self.interval)  # rate-limit updates
-            except:
+
+                time.sleep(self.interval)
+
+            except Exception:
                 print('Error in sensapex poll thread:')
                 sys.excepthook(*sys.exc_info())
                 time.sleep(1)
+            except:
+                print("Uncaught")
+                raise
