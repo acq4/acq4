@@ -47,6 +47,7 @@ pos = [[], [], []]
 tgt = [[], [], []]
 err = [[], [], []]
 bus = []
+mov = []
 times = []
 
 lastupdate = pg.ptime.time()
@@ -55,7 +56,9 @@ def update(update_error=False):
     global lastupdate
     p = dev.get_pos()
     s = dev.is_busy()
+    m = not move_req.finished
     bus.append(int(s))
+    mov.append(int(m))
     now = pg.ptime.time() - start
     times.append(now)
     for i in range(3):
@@ -69,9 +72,10 @@ def update(update_error=False):
 def update_plots():
     for i in range(3):
         plots[i].clear()
-        plots[i].addItem(pg.PlotCurveItem(times, bus, pen=(0, 255, 0, 50), brush=(0, 255, 0, 50), fillLevel=0), ignoreBounds=True)
+        plots[i].addItem(pg.PlotCurveItem(times, bus[:-1], stepMode=True, pen=None, brush=(0, 255, 0, 40), fillLevel=0), ignoreBounds=True)
+        plots[i].addItem(pg.PlotCurveItem(times, mov[:-1], stepMode=True, pen=None, brush=(255, 0, 0, 40), fillLevel=0), ignoreBounds=True)
         plots[i].plot(times, tgt[i], pen='r')
-        plots[i].plot(times, pos[i])
+        plots[i].plot(times, pos[i], symbol='o', symbolSize=5)
         errplots[i].plot(times, err[i], clear=True, connect='finite')
 
 
@@ -81,27 +85,29 @@ errs = []
 targets = []
 positions = []
 moves = []
-for i in range(10):
-    d = (np.random.random(size=3) * 1e6).astype(int)
-    #d[0] = 0
-    #d[1] *= 0.01
-    #d[2] *= 0.01
+for i in range(30):
+    d = (np.random.random(size=3) * 10e3).astype(int)
+    # d[0] = 0
+    # d[1] *= 0.01
+    # d[2] *= 0.01
     moves.append(d)
     target = p1 + d
     targets.append(target)
-    dev.goto_pos(target, speed=1000, linear=True) 
-    while dev.is_busy():
-        update()
+    move_req = dev.goto_pos(target, speed=2000, linear=False) 
+    while not move_req.finished:
+        update(update_error=False)
+        time.sleep(0.002)
     waitstart = pg.ptime.time()
-    while pg.ptime.time() - waitstart < 2.0:
+    while pg.ptime.time() - waitstart < 1.0:
         update(update_error=True)
+        time.sleep(0.002)
         # time.sleep(0.05)
     p2 = dev.get_pos(timeout=200)
     positions.append(p2)
     diff = (p2 - target) * 1e-9
     diffs.append(diff)
     errs.append(np.linalg.norm(diff))
-    print(diff, errs[-1])
+    print(i, diff, errs[-1])
 
 update_plots()
 
