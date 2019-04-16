@@ -90,8 +90,6 @@ class Sensapex(Stage):
         """
         with self.lock:
             self.dev.stop()
-            if self._lastMove is not None:
-                self._lastMove._stopped()
             self._lastMove = None
 
     def _getPosition(self):
@@ -135,65 +133,11 @@ class Sensapex(Stage):
 
     def _move(self, abs, rel, speed, linear):
         with self.lock:
-            if self._lastMove is not None and not self._lastMove.isDone():
-                self.stop()
             pos = self._toAbsolutePosition(abs, rel)
             speed = self._interpretSpeed(speed)
-
             self._lastMove = SensapexMoveFuture(self, pos, speed)
             return self._lastMove
 
-    #def deviceInterface(self, win):
-        #return SensapexGUI(self, win)
-
-
-class MonitorThread(Thread):
-    """Thread to poll for all Sensapex manipulator position changes.
-    """
-    def __init__(self):
-        self.lock = Mutex(recursive=True)
-        self.stopped = False
-        Thread.__init__(self)
-
-    def start(self):
-        self.stopped = False
-        Thread.start(self)
-
-    def stop(self):
-        with self.lock:
-            self.stopped = True
-
-    def run(self):
-        ump = UMP.get_ump()
-        devices = Sensapex.devices
-        while True:
-            try:
-                with self.lock:
-                    if self.stopped:
-                        break
-                    
-                # read all updates waiting in queue
-                devids = ump.recv_all()
-                
-                if len(devids) == 0:
-                    # no packets in queue; just wait for the next one.
-                    try:
-                        devids = [ump.recv()]
-                    except UMPError as err:
-                        if err.errno == -3:
-                            # ignore timeouts
-                            continue
-                for devid in devids:
-                    dev = devices.get(devid, None)
-                    if dev is not None:
-                        # received an update packet for this device; ask it to update its position
-                        dev._getPosition()
-                        
-                time.sleep(0.03)  # rate-limit updates to 30 Hz 
-            except:
-                debug.printExc('Error in Sensapex monitor thread:')
-                time.sleep(1)
-                
 
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
@@ -203,67 +147,54 @@ class SensapexMoveFuture(MoveFuture):
         self._interrupted = False
         self._errorMsg = None
         self._finished = False
-        self.dev.dev.goto_pos(pos, speed * 1e6)
+        self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6)
+        self._checked = False
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
         """
-        return self._interrupted
+        return self._moveReq.interrupted
 
     def isDone(self):
         """Return True if the move is complete.
-        """
-        return self._getStatus() != 0
+        """        
+        return self._moveReq.finished
 
-    def _getStatus(self):
-        # check status of move unless we already know it is complete.
-        # 0: still moving; 1: finished successfully; -1: finished unsuccessfully
-        if self._finished:
-            if self._interrupted:
-                return -1
-            else:
-                return 1
-        busy = self.dev.dev.is_busy()
-
-        if busy:
-            # Still moving
-            return 0
-        # did we reach target?
-        pos = self.dev._getPosition()
-        dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
-
-        if dif < 3000:  # require 3um accuracy
-            # reached target
-            self._finished = True
-            return 1
-        else:
-            # missed
-            self._finished = True
-            self._interrupted = True
-            self._errorMsg = "Move did not complete (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.startPos, self.targetPos, pos, dif, self.speed)
-            return -1
-
-    def _stopped(self, tryAgain=0):
-        # Called when the manipulator is stopped, possibly interrupting this move.
-        status = self._getStatus()
-        if status == 1:
-            # finished; ignore stop
+    def _checkError(self):
+        if self._checked or not self.isDone():
             return
-        elif status == -1:
-            self._errorMsg = "Move was interrupted before completion."
-        elif status == 0:
-            # not actually stopped! This should not happen.
-            if tryAgain < 5:
-                # wait a bit, just to be sure..
-                print("TRYAGAIN:", tryAgain)
-                time.sleep(0.1)
-                return self._stopped(tryAgain=tryAgain+1)
-            else:
-                raise RuntimeError("Interrupted move but manipulator is still running!")
-        else:
-            raise Exception("Unknown status: %s" % status)
 
+        # interrupted?
+        if self._moveReq.interrupted:
+            self._errorMsg = self._moveReq.interrupt_reason
+        else:
+            # did we reach target?
+            pos = self._moveReq.last_pos
+            dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
+            if dif > 1000:  # require 1um accuracy
+                # missed
+                self._errorMsg = "Manipulator stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.startPos, self.targetPos, pos, dif, self.speed)
+
+        self._checked = True
+
+    def wait(self, timeout=None, updates=False):
+            """Block until the move has completed, has been interrupted, or the
+            specified timeout has elapsed.
+
+            If *updates* is True, process Qt events while waiting.
+
+            If the move did not complete, raise an exception.
+            """
+            if updates is False:
+                # if we don't need gui updates, then block on the finished_event for better performance
+                if not self._moveReq.finished_event.wait(timeout=timeout):
+                    raise self.Timeout("Timed out waiting for move to complete.")
+                self._raiseError()
+            else:
+                return MoveFuture.wait(self, timeout=timeout, updates=updates)
+    
     def errorMessage(self):
+        self._checkError()
         return self._errorMsg
 
 

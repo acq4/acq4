@@ -138,7 +138,7 @@ class UMP(object):
 
         # duration that manipulator must be not busy before a move is considered complete.
         self.move_expire_time = 50e-3
-        
+
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
 
@@ -313,7 +313,8 @@ class UMP(object):
         with self.lock:
             last_move = self._last_move.pop(dev, None)
             if last_move is not None:
-                last_move._interrupt()
+                self.call('ump_stop_ext', c_int(dev))
+                last_move._interrupt("started another move before the previous finished")
 
             next_move = MoveRequest(dev, current_pos, pos, speed, duration)
             self._last_move[dev] = next_move
@@ -346,7 +347,7 @@ class UMP(object):
             self.call('ump_stop_all')
             for dev in self._last_move:
                 move = self._last_move.pop(dev)
-                move._interrupt()
+                move._interrupt('stop all requested before move finished')
 
     def stop(self, dev):
         """Stop the specified manipulator.
@@ -355,7 +356,7 @@ class UMP(object):
             self.call('ump_stop_ext', c_int(dev))
             move = self._last_move.pop(dev)
             if move is not None:
-                move._interrupt()
+                move._interrupt('stop requested before move finished')
 
     def select(self, dev):
         """Select a device on the TCU.
@@ -430,10 +431,12 @@ class MoveRequest(object):
         self.speed = speed
         self.finished = False
         self.interrupted = False
+        self.interrupt_reason = None
         self.last_pos = None
         self.finished_event = threading.Event()
 
-    def _interrupt(self):
+    def _interrupt(self, reason):
+        self.interrupt_reason = reason
         self.interrupted = True
         self.finished = True
         self.finished_event.set()

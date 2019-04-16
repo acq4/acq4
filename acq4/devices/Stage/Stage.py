@@ -592,12 +592,16 @@ class MoveFuture(object):
             if (timeout is not None) and (ptime.time() > start + timeout):
                 raise self.Timeout("Timed out waiting for move to complete.")
 
-        if self.wasInterrupted():
-            err = self.errorMessage()
-            if err is None:
-                raise RuntimeError("Move did not complete.")
-            else:
-                raise RuntimeError("Move did not complete: %s" % err)
+        self._raiseError()
+    
+    def _raiseError(self):
+        """Raise an exception if the move did not complete, otherwise just return.
+        """
+        err = self.errorMessage()
+        if err is not None:
+            raise RuntimeError("Move did not complete: %s" % err)
+        elif self.wasInterrupted():
+            raise RuntimeError("Move did not complete.")
 
 
 class MovePathFuture(MoveFuture):
