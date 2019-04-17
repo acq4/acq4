@@ -142,6 +142,13 @@ class UMP(object):
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
 
+        min_version = (0, 812)
+        min_version_str = 'v'+'.'.join(map(str, min_version))
+        version_str = self.sdk_version()
+        version = tuple(map(int, version_str.lstrip('v').split('.')))
+
+        assert version >= min_version, "SDK version %s or later required (your version is %s)" % (min_version_str, version_str)
+
         self.h = None
         self.open(address=address, group=group)
 
@@ -153,7 +160,7 @@ class UMP(object):
         # view cached position and state data as a numpy array
         # self._positions = np.frombuffer(self.h.contents.last_positions, 
         #     dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUMP_MAX_MANIPULATORS)
-        self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUMP_MAX_MANIPULATORS)
+        #self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUMP_MAX_MANIPULATORS)
 
         self._ump_has_axis_count = hasattr(self.lib, 'ump_get_axis_count_ext')
         self._axis_counts = {}
