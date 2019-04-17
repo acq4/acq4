@@ -1,11 +1,15 @@
 from __future__ import print_function
-import os, sys, time
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-
+import os, sys, time, argparse
 from sensapex import SensapexDevice, UMP, UMPError
 import user
 
-ump = UMP.get_ump()
+
+parser = argparse.ArgumentParser(
+    description="Test for sensapex devices; prints position and status updates continuously.")
+parser.add_argument('--group', type=int, default=0, help="Device group number")
+args = parser.parse_args()
+
+ump = UMP.get_ump(group=args.group)
 devids = ump.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 

@@ -171,22 +171,10 @@ class UMP(object):
     def list_devices(self, max_id=20):
         """Return a list of all connected device IDs.
         """
-        devs = []
-        with self.lock:
-            old_timeout = self._timeout
-            self.set_timeout(20)
-            try:
-                for i in range(min(max_id, LIBUMP_MAX_MANIPULATORS)):
-                    try:
-                        p = self.get_pos(i)
-                        devs.append(i)
-                    except UMPError as ex:
-                        if ex.errno in (-5, -6):  # device does not exist
-                            continue
-                        else:
-                            raise
-            finally:
-                self.set_timeout(old_timeout)
+        devarray = (c_int*max_id)()
+        r = self.call('ump_get_device_list', byref(devarray) )
+        devs = [devarray[i] for i in xrange(r)]
+        
         return devs
 
     def axis_count(self, dev):
