@@ -173,7 +173,7 @@ class SensapexMoveFuture(MoveFuture):
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
             if dif > 1000:  # require 1um accuracy
                 # missed
-                self._errorMsg = "Manipulator stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.startPos, self.targetPos, pos, dif, self.speed)
+                self._errorMsg = "%s stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed)
 
         self._checked = True
 
@@ -188,7 +188,7 @@ class SensapexMoveFuture(MoveFuture):
             if updates is False:
                 # if we don't need gui updates, then block on the finished_event for better performance
                 if not self._moveReq.finished_event.wait(timeout=timeout):
-                    raise self.Timeout("Timed out waiting for move to complete.")
+                    raise self.Timeout("Timed out waiting for %s move to complete." % self.dev.name())
                 self._raiseError()
             else:
                 return MoveFuture.wait(self, timeout=timeout, updates=updates)

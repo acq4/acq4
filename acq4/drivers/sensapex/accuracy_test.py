@@ -1,18 +1,28 @@
 
 from __future__ import print_function
-import os, sys, time
+import os, sys, time, argparse
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
 
-ump = UMP.get_ump()
+
+parser = argparse.ArgumentParser(
+    description="Test for sensapex devices; perform a series of random moves while rapidly polling the device position and state.")
+parser.add_argument('device', type=int, help="Device ID to test")
+parser.add_argument('--group', type=int, default=0, help="Device group number")
+parser.add_argument('--speed', type=int, default=1000, help="Movement speed in um/sec")
+parser.add_argument('--distance', type=int, default=10, help="Max distance to travel in um (relative to current position)")
+parser.add_argument('--iter', type=int, default=10, help="Number of positions to test")
+args = parser.parse_args()
+
+ump = UMP.get_ump(group=args.group)
 devids = ump.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 
 print("SDK version:", ump.sdk_version())
 print("Found device IDs:", devids)
 
-dev = devs[int(sys.argv[1])]
+dev = devs[args.device]
 
 app = pg.mkQApp()
 win = pg.GraphicsLayoutWidget()
@@ -85,15 +95,15 @@ errs = []
 targets = []
 positions = []
 moves = []
-for i in range(3):
-    d = (np.random.random(size=3) * 100e3).astype(int)
+for i in range(args.iter):
+    d = (np.random.random(size=3) * args.distance*1000).astype(int)
     # d[0] = 0
     # d[1] *= 0.01
     # d[2] *= 0.01
     moves.append(d)
     target = p1 + d
     targets.append(target)
-    move_req = dev.goto_pos(target, speed=2000, linear=False) 
+    move_req = dev.goto_pos(target, speed=args.speed, linear=False) 
     while not move_req.finished:
         update(update_error=False)
         time.sleep(0.002)
@@ -111,10 +121,8 @@ for i in range(3):
 
 update_plots()
 
-dev.goto_pos(p1, 1000)
+dev.goto_pos(p1, args.speed)
 print("mean:", np.mean(errs), " max:", np.max(errs))
 
-# plt = pg.plot(labels={'left': ('error', 'm'), 'bottom': 'trial'})
-# plt.plot([abs(e[0]) for e in diffs], pen=None, symbol='o', symbolBrush='r')
-# plt.plot([abs(e[1]) for e in diffs], pen=None, symbol='o', symbolBrush='g')
-# plt.plot([abs(e[2]) for e in diffs], pen=None, symbol='o', symbolBrush='b')
+if sys.flags.interactive == 0:
+    app.exec_()
