@@ -10,7 +10,6 @@ class CortexMarkerCanvasItem(CanvasItem):
     
     def __init__(self, points=None, **kwds):
         vr = kwds.pop('viewRect', None)
-        #raise Exception('stop!')
         if points is None:
             if vr is None:
                 points = ((0, 0), (1, 1))
@@ -18,29 +17,14 @@ class CortexMarkerCanvasItem(CanvasItem):
                 p1 = vr.center()
                 p2 = p1 + 0.2 * (vr.topRight()-p1)
                 points = ((p1.x(), p1.y()), (p2.x(), p2.y()))
-        #item = pg.graphicsItems.ROI.RulerROI(points)
+
         item = CortexMarkerROI(points, movable=False)
-        #kwds['movable'] = False
         CanvasItem.__init__(self, item, **kwds)
-        #item.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
-        #item.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
 
-    # def updateTransform(self):
-    #     print("++++++++")
-    #     print('  base:', self.baseTransform)
-    #     print('  user:', self.userTransform)
-    #     print('  temp:', self.tempTransform)
-    #     s = self.baseTransform * self.userTransform * self.tempTransform
-    #     print('  Total:', s)
-    #     print('    piaPos:', self.graphicsItem().mapToParent(self.graphicsItem().listPoints()[0]))
-    #     print('    roiPos:', self.graphicsItem().pos())
 
-    #     CanvasItem.updateTransform(self)
 
     def saveState(self, relativeTo=None):
         state = CanvasItem.saveState(self, relativeTo)
-        # state['piaPos'] = tuple(self.graphicsItem().handles[0]['item'].pos()) ## problem! need to map through self.userTransform
-        # state['wmPos'] = tuple(self.graphicsItem().handles[1]['item'].pos())
         roi = self.graphicsItem()
         state['piaPos'] = tuple(pg.Point(roi.mapToParent(roi.listPoints()[0])))
         state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.listPoints()[1])))
@@ -56,9 +40,10 @@ class CortexMarkerCanvasItem(CanvasItem):
         roi.setPos(pg.Point(state['roiPos']))
         roi.handles[0]['item'].setPos(roi.mapFromParent(pg.Point(state['piaPos'])))
         roi.handles[1]['item'].setPos(roi.mapFromParent(pg.Point(state['wmPos'])))
-    #     self.graphicsItem().handles[0]['item'].setPos(pg.Point(state['piaPos']))
-    #     self.graphicsItem().handles[1]['item'].setPos(pg.Point(state['wmPos']))
 
+        ## tell roi to incorporate handle movements
+        roi.movePoint(roi.handles[0]['item'], roi.handles[0]['item'].scenePos(), coords='scene')
+        roi.movePoint(roi.handles[1]['item'], roi.handles[1]['item'].scenePos(), coords='scene')
 
     def showSelectBox(self):
         self.selectBox.hide()
@@ -68,10 +53,6 @@ registerItemType(CortexMarkerCanvasItem)
 class CortexMarkerROI(pg.graphicsItems.ROI.LineSegmentROI):
     def __init__(self, *args, **kwds):
         pg.graphicsItems.ROI.LineSegmentROI.__init__(self, *args, **kwds)
-
-        #self._textBr1 = QtCore.QRectF()
-        #self._textBr2 = QtCore.QRectF()
-        #self._textBr3 = QtCore.QRectF()
 
     def paint(self, p, *args):
         pg.graphicsItems.ROI.LineSegmentROI.paint(self, p, *args)
@@ -100,8 +81,6 @@ class CortexMarkerROI(pg.graphicsItems.ROI.LineSegmentROI):
         r2 = QtCore.QRectF(p2.x(), p2.y()+10, 40,25)
         p.drawText(r2, "White Matter")
 
-        p.drawRect(self.shape().boundingRect().adjusted(1, 1, -1,-1))
-
     def boundingRect(self):
         r = pg.graphicsItems.ROI.LineSegmentROI.boundingRect(self)
         #return r
@@ -116,25 +95,3 @@ class CortexMarkerROI(pg.graphicsItems.ROI.LineSegmentROI):
         yBuf = 80*pxh
         return r.adjusted(-xBuf, -yBuf, xBuf, yBuf)
 
-
-    def shape(self):
-        p = QtGui.QPainterPath()
-    
-        h1 = self.endpoints[0].pos()
-        h2 = self.endpoints[1].pos()
-        dh = h2-h1
-        if dh.length() == 0:
-            return p
-        pxv = self.pixelVectors(dh)[1]
-        if pxv is None:
-            return p
-            
-        pxv *= 4
-        
-        p.moveTo(h1+pxv)
-        p.lineTo(h2+pxv)
-        p.lineTo(h2-pxv)
-        p.lineTo(h1-pxv)
-        p.lineTo(h1+pxv)
-      
-        return p
