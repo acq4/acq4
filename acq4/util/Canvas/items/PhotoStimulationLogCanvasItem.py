@@ -137,9 +137,13 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         self.ptree.setParameters(canvasitem.params)
         self.layout.addWidget(self.ptree, 1, 0, 1, 2)
 
-        self.saveJsonBtn = QtGui.QPushButton('Save Json')
-        self.layout.addWidget(self.saveJsonBtn, 2, 0)
-        self.saveJsonBtn.clicked.connect(self.saveJson)
+        self.saveOldJsonBtn = QtGui.QPushButton('Save Old Json')
+        self.layout.addWidget(self.saveOldJsonBtn, 2, 0)
+        self.saveOldJsonBtn.clicked.connect(self.saveOldJson)
+
+        self.saveNewJsonBtn = QtGui.QPushButton('Save New Json')
+        self.layout.addWidget(self.saveNewJsonBtn, 2, 1)
+        self.saveNewJsonBtn.clicked.connect(self.saveNewJson)
         
         #self.copyJsonBtn = QtGui.QPushButton('Copy Json')
         #self.layout.addWidget(self.copyJsonBtn, 1, 0)
@@ -176,7 +180,7 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
     #     self.updatePosLabel(i)
 
 
-    def saveJson(self):
+    def saveOldJson(self):
         filename = QtGui.QFileDialog.getSaveFileName(None, "Save connections", "", "JSON files (*.json)")
         if filename == '':
             return
@@ -189,7 +193,7 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         data['StimulationPoints'] = OrderedDict()
 
         cells = self.getCellPositions()
-        angle = self.getCortexAngle()
+        angle = self.getCortexMarkerState()['sliceAngle']
 
         for hs in self.headstageChecks.keys():
             if not self.headstageChecks[hs].isChecked():
@@ -246,7 +250,8 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             return markers[0].saveState()['markers']
 
 
-    def getCortexAngle(self):
+    def getCortexMarkerState(self):
+        """Return a dict with 'piaPos', 'wmPos', 'sliceAngle'."""
         items = []
         for item in self.canvasitem().canvas.items:
             if item._typeName == "CortexMarker":
@@ -257,9 +262,73 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         elif len(items) > 1:
             raise Exception("Found %i CortexMarker items. Not sure which to use.")
         else:
-            return items[0].graphicsItem().angle
+            state = items[0].saveState()
+            return {'sliceAngle':state['sliceAngle'],
+                    'piaPos': state['piaPos'],
+                    'wmPos':state['wmPos']
+                    }
 
 
+    def saveNewJson(self):
+        filename = QtGui.QFileDialog.getSaveFileName(None, "Save connections", "", "JSON files (*.json)")
+        if filename == '':
+            return
+        if not filename.endswith('.json'):
+            filename += '.json'
+
+        data = OrderedDict()
+        data['version'] = 2
+        data['Headstages'] = OrderedDict()
+        data['StimulationPoints'] = OrderedDict()
+        data['CortexMarker'] = self.getCortexMarkerState()
+
+
+        cells = self.getCellPositions()
+
+        for hs in self.headstageChecks.keys():
+            if not self.headstageChecks[hs].isChecked():
+                continue
+            data['Headstages']['electrode_%i'%hs] = OrderedDict()
+            ### Need to add position info here
+            d = OrderedDict()
+            d['cellName'] = cells[hs][0]
+            d['x_pos'] = cells[hs][1][0]
+            d['y_pos'] = cells[hs][1][1]
+            d['z_pos'] = cells[hs][1][2]
+            d['angle'] = data['CortexMarker']['sliceAngle']
+            data['Headstages']['electrode_%i'%hs].update(d)
+            
+
+            data['Headstages']['electrode_%i'%hs]['Connections'] = OrderedDict()
+
+
+        for point in self.ptree.topLevelItem(0).param.children():
+            for hs in point.children():
+                if not self.headstageChecks[int(hs.name()[-1])].isChecked():
+                    continue
+                cx = hs.value()
+                if cx == 0:
+                    cnx_str = None
+                elif cx == 1:
+                    cnx_str = 'inhibitory'
+                elif cx == 2:
+                    cnx_str = 'excitatory'
+                elif cx == 3:
+                    cnx_str = 'tbd'
+                elif cx == 4:
+                    cnx_str = 'no cnx'
+                data['Headstages']['electrode_%s'%hs.name()[-1]]['Connections'][point.name()] = cnx_str
+
+
+        #data[point.name()] = point.point.stimulations
+            d = point.point.saveState()
+            d['stimulations'] = point.point.stimulations
+            d['images'] = list(set([x[x.keys()[0]]['prairieImage'] for x in d['stimulations']]))
+            data['StimulationPoints'][point.name()] = d
+
+
+        with open(filename, 'w') as outfile:
+            json.dump(data, outfile, indent=4)
 
     #def copyJson(self):
     #    pass
