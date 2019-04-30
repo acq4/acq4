@@ -147,6 +147,86 @@ class CalibrationWindow(Qt.QWidget):
     def recalculate(self):
         # identity affine axis transform matrix
 
+        # method: user generates many calibration points that are all colinear along each of the
+        # stage axes. In this way, we can independently determine the orientation of each stage axis,
+        # and combine these into a full transformation matrix.
+
+        npts = len(self.calibration['points'])
+
+        # build arrays of calibration points
+        stagePos = np.empty((npts, 3))
+        parentPos = np.empty((npts, 3))
+        for i, pt in enumerate(self.calibration['points']):
+            stagePos[i] = pt[0]
+            parentPos[i] = pt[1]
+
+        def changeAxis(p1, p2):
+            # Which single axis has changed between 2 points?
+            diff = np.abs(p2-p1)
+            axis = np.argmax(diff)
+            if diff[axis] > 10e-6 and diff[(axis+1)%3] < 1e-6 and diff[(axis+2)%3] < 1e-6:
+                return axis
+            else:
+                return None
+
+        # find the point groupings for each axis
+        axisPoints = [set(), set(), set()]
+        currentAxis = None
+        for i in range(1, npts):
+            currentAxis = changeAxis(stagePos[i-1], stagePos[i])
+            if currentAxis is None:
+                continue
+            axisPoints[currentAxis].add(i-1)
+            axisPoints[currentAxis].add(i)
+                
+        stagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0,1,2)]
+        parentPos = [parentPos[list(axisPoints[ax])] for ax in (0,1,2)]
+
+        # find optimal linear mapping for each axis
+        m = np.eye(4)
+        for i in (0,1,2):
+            for j in (0,1,2):
+                line = scipy.stats.linregress(stagePos[j], parentPos[j][:,i])
+                m[i, j] = line.slope
+
+        self.transform = pg.Transform3D(m)
+
+        # measure and display errors for each point
+        def mapPoint(axisTr, stagePos, localPos):
+            # given a stage position and axis transform, map from localPos to parent coordinate system
+            if isinstance(axisTr, np.ndarray):
+                m = np.eye(4)
+                m[:3] = axisTr.reshape(3, 4)
+                axisTr = pg.Transform3D(m)
+            st = self.dev._makeStageTransform(stagePos, axisTr)[0]
+            tr = pg.Transform3D(self.dev.baseTransform() * st)
+            return tr.map(localPos)
+
+        def mapError(axisTr, stagePos, parentPos):
+            # Goal is to map origin to parent position correctly
+            return [mapPoint(axisTr, sp, [0, 0, 0]) - pp for sp, pp in zip(stagePos, parentPos)]
+
+        error = mapError(self.transform, stagePos, parentPos)
+        for i in range(npts):
+            item = self.pointTree.topLevelItem(i)
+            dist = np.linalg.norm(error[i])
+            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6*dist, error[i][0], error[i][1], error[i][2]))
+
+        # send new transform to device
+        self.dev._axisTransform = self.transform
+        self.dev._inverseAxisTransform = None
+        self.dev._updateTransform()
+
+    def _recalculate(self):
+        # identity affine axis transform matrix
+
+        # method: given >= 4 arbitrarily-located calibration points, attempt to find the 
+        # affine transform that best matches all points.
+
+        # For any 4 point-pairs, we can get an exact solution that may not work as well for other points.
+        # With more points, we can try to pick an optimal transform that minimizes errors, but this
+        # turns out to be a tricky minimization problem.
+
         npts = len(self.calibration['points'])
 
         # Need at least 4 points to generate a calibration
