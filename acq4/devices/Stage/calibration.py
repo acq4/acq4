@@ -164,7 +164,7 @@ class CalibrationWindow(Qt.QWidget):
             # Which single axis has changed between 2 points?
             diff = np.abs(p2-p1)
             axis = np.argmax(diff)
-            if diff[axis] > 10e-6 and diff[(axis+1)%3] < 1e-6 and diff[(axis+2)%3] < 1e-6:
+            if diff[axis] > 10e3 and diff[(axis+1)%3] < 1e3 and diff[(axis+2)%3] < 1e3:
                 return axis
             else:
                 return None
@@ -187,16 +187,21 @@ class CalibrationWindow(Qt.QWidget):
                 self.transform = None
                 return
                 
-        stagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0,1,2)]
-        parentPos = [parentPos[list(axisPoints[ax])] for ax in (0,1,2)]
+        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0,1,2)]
+        axParentPos = [parentPos[list(axisPoints[ax])] for ax in (0,1,2)]
 
         # find optimal linear mapping for each axis
         m = np.eye(4)
         for i in (0,1,2):
             for j in (0,1,2):
-                line = scipy.stats.linregress(stagePos[j], parentPos[j][:,i])
+                line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:,i])
                 m[i, j] = line.slope
 
+        transform = pg.Transform3D(m)
+
+        # find optimal offset
+        offset = (parentPos - pg.transformCoordinates(transform, stagePos, transpose=True)).mean(axis=0)
+        m[:3, 3] = offset
         self.transform = pg.Transform3D(m)
 
         # measure and display errors for each point
