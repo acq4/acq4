@@ -178,6 +178,14 @@ class CalibrationWindow(Qt.QWidget):
                 continue
             axisPoints[currentAxis].add(i-1)
             axisPoints[currentAxis].add(i)
+
+        for ax in (0,1,2):
+            if len(axisPoints[ax]) < 2:
+                for i in range(npts):
+                    item = self.pointTree.topLevelItem(i)
+                    item.setText(2, "")
+                self.transform = None
+                return
                 
         stagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0,1,2)]
         parentPos = [parentPos[list(axisPoints[ax])] for ax in (0,1,2)]
