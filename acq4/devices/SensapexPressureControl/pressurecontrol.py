@@ -21,8 +21,8 @@ class SensapexPressureControl(PressureControl):
         PressureControl.__init__(self, manager, config, name)
 
         self.pressureChannel = config.pop('pressureChannel')
-        self.pressureScale = config.pop('pressureScale')
-        self.voltageOffset = config.pop('voltageOffset')
+        self.pressureScale = config.pop('pressureScale') * 1e6
+        self.voltageOffset = config.pop('voltageOffset') * 1e6
         self.sources = config.pop('sources')
 
         # try to infer current source from channel state
