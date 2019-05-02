@@ -161,7 +161,7 @@ class PipetteTracker(object):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()['pixelSize'][0] * 100
 
-    def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=8, tipLength=None):
+    def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=4, tipLength=None):
         """Collect a series of images of the pipette tip at various focal depths.
 
         The collected images are used as reference templates for determining the most likely location 

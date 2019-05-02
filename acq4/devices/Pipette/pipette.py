@@ -837,7 +837,10 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.getDevice().tracker.autoCalibrate()
 
     def getRefFramesClicked(self):
-        self.getDevice().tracker.takeReferenceFrames()
+        dev = self.getDevice()
+        zrange = dev.config.get('referenceZRange', None)
+        zstep = dev.config.get('referenceZStep', None)
+        dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep)
 
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())        
