@@ -325,8 +325,9 @@ class UMP(object):
         Note: this should not be used to determine whether a move has completed;
         use MoveRequest.finished or .finished_event as returned from goto_pos().
         """
-        status = self.call('ump_get_status_ext', c_int(dev))
-        return bool(self.lib.ump_is_busy_status(c_int(status)))
+        # status = self.call('ump_get_status_ext', c_int(dev))
+        # return bool(self.lib.ump_is_busy_status(c_int(status)))
+        return self.call('ump_get_drive_status_ext', c_int(dev)) != 0        
 
     def stop_all(self):
         """Stop all manipulators.
@@ -399,11 +400,12 @@ class UMP(object):
             # (self.move_expire_time)
             now = ptime.time()
             for dev,move in self._last_move.items():
-                if self.is_busy(dev):
-                    self._last_busy_time[dev] = now
-                cmp_time = max(self._last_busy_time.get(dev, 0), move.start_time)
+                # if self.is_busy(dev):
+                #     self._last_busy_time[dev] = now
+                # cmp_time = max(self._last_busy_time.get(dev, 0), move.start_time)
 
-                if now - cmp_time > self.move_expire_time:  
+                # if now - cmp_time > self.move_expire_time:  
+                if not self.is_busy(dev):
                     # did we reach target?
                     pos = self.get_pos(dev, timeout=0)
                     dif = np.linalg.norm(np.array(pos) - np.array(move.target_pos))
