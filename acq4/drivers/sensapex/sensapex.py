@@ -265,7 +265,7 @@ class UMP(object):
         #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False):
+    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False, max_acceleration=0, attempts = 0):
         """Request the specified device to move to an absolute position (in nm).
 
         Parameters
@@ -292,7 +292,7 @@ class UMP(object):
         current_pos = self.get_pos(dev)
         diff = [float(p-c) for p,c in zip(pos_arg, current_pos)]
         dist = max(1, np.linalg.norm(diff))
-
+        original_speed = speed
         if linear:
             speed = [max(1, speed * abs(d / dist)) for d in diff]
             speed = speed + [0] * (4-len(speed))
@@ -304,14 +304,17 @@ class UMP(object):
         duration = dist / speed
 
         with self.lock:
-            last_move = self._last_move.pop(dev, None)
-            if last_move is not None:
-                self.call('ump_stop_ext', c_int(dev))
-                last_move._interrupt("started another move before the previous finished")
+            if attempts == 0:
+                last_move = self._last_move.pop(dev, None)
+                if last_move is not None:
+                    self.call('ump_stop_ext', c_int(dev))
+                    last_move._interrupt("started another move before the previous finished")
 
-            next_move = MoveRequest(dev, current_pos, pos, speed, duration)
-            self._last_move[dev] = next_move
-
+                next_move = MoveRequest(dev, current_pos, pos, original_speed, duration,attempts)
+                self._last_move[dev] = next_move
+            else:
+                 next_move = self._last_move[dev]
+            print("ump_goto_pos_ext2%r" % args)
             self.call('ump_goto_position_ext2', *args)
 
         return next_move
@@ -399,15 +402,30 @@ class UMP(object):
                 if self.is_busy(dev):
                     self._last_busy_time[dev] = now
                 cmp_time = max(self._last_busy_time.get(dev, 0), move.start_time)
-                if now - cmp_time > self.move_expire_time:
-                    self._last_move.pop(dev)
-                    move._finish(self.get_pos(dev, timeout=0))
+
+                if now - cmp_time > self.move_expire_time:  
+                    # did we reach target?
+                    pos = self.get_pos(dev, timeout=0)
+                    dif = np.linalg.norm(np.array(pos) - np.array(move.target_pos))
+                    
+                    if dif > 1000 and dev==19 and move.attempts < 10:  # require 100 nm accuracy for stage
+                        move.attempts += 1
+                        self._last_busy_time[dev] = now
+                        move.speed = move.speed / 2
+                        if move.speed < 100:
+                            move_speed = 100
+                        move = self.goto_pos(dev, move.target_pos, move.speed, attempts = move.attempts)
+                        print ("STAGE MOVE LOOP:", str(move.attempts), str(dif))
+                    else:
+                        print (str(dif))
+                        self._last_move.pop(dev)
+                        move._finish(self.get_pos(dev, timeout=10))
 
 
 class MoveRequest(object):
     """Simple class for tracking the status of requested moves.
     """
-    def __init__(self, dev, start_pos, target_pos, speed, duration):
+    def __init__(self, dev, start_pos, target_pos, speed, duration, attempts):
         self.dev = dev
         self.start_time = ptime.time()
         self.estimated_duration = duration
@@ -418,6 +436,7 @@ class MoveRequest(object):
         self.interrupted = False
         self.interrupt_reason = None
         self.last_pos = None
+        self.attempts = attempts
         self.finished_event = threading.Event()
 
     def _interrupt(self, reason):
@@ -457,8 +476,8 @@ class SensapexDevice(object):
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
     
-    def goto_pos(self, pos, speed, simultaneous=True, linear=False):
-        return self.ump.goto_pos(self.devid, pos, speed, simultaneous=simultaneous, linear=False)
+    def goto_pos(self, pos, speed, simultaneous=True, linear=False, max_acceleration=0):
+        return self.ump.goto_pos(self.devid, pos, speed, simultaneous=simultaneous, linear=False, max_acceleration=max_acceleration)
     
     def is_busy(self):
         return self.ump.is_busy(self.devid)

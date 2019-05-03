@@ -13,6 +13,7 @@ parser.add_argument('--group', type=int, default=0, help="Device group number")
 parser.add_argument('--speed', type=int, default=1000, help="Movement speed in um/sec")
 parser.add_argument('--distance', type=int, default=10, help="Max distance to travel in um (relative to current position)")
 parser.add_argument('--iter', type=int, default=10, help="Number of positions to test")
+parser.add_argument('--acceleration', type=int, default=0, help="Max speed acceleration")
 args = parser.parse_args()
 
 ump = UMP.get_ump(group=args.group)
@@ -103,7 +104,7 @@ for i in range(args.iter):
     moves.append(d)
     target = p1 + d
     targets.append(target)
-    move_req = dev.goto_pos(target, speed=args.speed, linear=False) 
+    move_req = dev.goto_pos(target, speed=args.speed, linear=False, max_acceleration=args.acceleration) 
     while not move_req.finished:
         update(update_error=False)
         time.sleep(0.002)
