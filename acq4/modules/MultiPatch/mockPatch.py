@@ -21,6 +21,7 @@ class MockPatch(object):
         return tp
 
     def resetState(self):
+        self.radius = 7e-6
         self.sealResistance = 0
         self.maxSealResistance = 2e9
         self.pipResistance = 5e6
@@ -46,8 +47,8 @@ class MockPatch(object):
 
         if pressure > 0:
             self.resetState()
-            # seal resistance increases by 2 MOhm as we push from 5 to 3 um from target
-            approachFactor = 5e5 * np.clip(5e-6 - targetDistance, 0, 2e-6)
+            # seal resistance increases by 2 MOhm as we push in from the cell radius
+            approachFactor = 5e5 * np.clip(self.radius - targetDistance, 0, 2e-6)
             self.sealResistance = 2e6 * approachFactor
 
         else:
@@ -57,7 +58,7 @@ class MockPatch(object):
                 # seal speed can double if we add pressure
                 if self.sealResistance > 0 and targetDistance < 5e-6:
                     sealFactor = 1 + np.clip(-pressure / 20e3, 0, 1)
-                    sealSpeed = (0.00001 * sealFactor) ** dt
+                    sealSpeed = 1.0 - np.exp(-dt / (2.0/sealFactor))
                     sealCond = 1.0 / self.sealResistance
                     maxSealCond = 1.0 / self.maxSealResistance
                     sealCond = sealCond * (1.0 - sealSpeed) + maxSealCond * sealSpeed
