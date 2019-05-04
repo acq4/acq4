@@ -443,6 +443,8 @@ class Manager(Qt.QObject):
         return dev
     
     def getDevice(self, name):
+        """Return a device instance given its name.
+        """
         with self.lock:
             name = str(name)
             if name not in self.devices:
@@ -451,8 +453,20 @@ class Manager(Qt.QObject):
             return self.devices[name]
 
     def listDevices(self):
+        """Return a list of available devices.
+        """
         with self.lock:
             return list(self.devices.keys())
+
+    def reserveDevices(self, devices, timeout=10.0):
+        """Return a DeviceLocker that can be used to reserve multiple devices simultaneously::
+
+            with manager.reserveDevices(['Camera', 'Clamp1', 'Stage']):
+                # .. do stuff
+
+        """
+        devices = [self.getDevice(d) if isinstance(d, six.string_types) else d for d in devices]
+        return DeviceLocker(self, devices, timeout=timeout)
 
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
         """Create a new instance of an user interface module. 
@@ -735,30 +749,6 @@ class Manager(Qt.QObject):
         #return self.dataManager.getHandle(d)
         return DataManager.getFileHandle(d)
         
-    def lockReserv(self):
-        """Lock the reservation system so that only one task may reserve its set of devices at a time.
-        This prevents deadlocks where two tasks use the same two devices but reserve them in opposite order."""
-        if self.taskLock.tryLock(10e3):
-            return True
-        else:
-            raise Exception("Timed out waiting for task reservation system")
-        
-    def unlockReserv(self):
-        """Unlock reservation system"""
-        self.taskLock.unlock()
-        
-    #def logMsg(self, msg, tags=None):
-        #if tags is None:
-            #tags = {}
-        #cd = self.getCurrentDir()
-        #cd.logMsg(msg, tags)
-        
-    #def logMsg(self, *args, **kwargs):
-        #self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
-        
-    #def logExc(self, *args, **kwargs):
-        #self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
-        
     def showLogWindow(self):
         self.logWindow.show()
         
@@ -847,13 +837,55 @@ class Manager(Qt.QObject):
             #print "  done."
             print("\n    ciao.")
         Qt.QApplication.quit()
-        #pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
-                    # this avoids otherwise irritating exit crashes.
+
+
+class DeviceLocker(object):
+    def __init__(self, manager, devices, timeout=10.0):
+        # make sure we lock devices in a predictable order; this is what prevents deadlocks
+        self.devices = sorted(devices, key=lambda d: d.name())
+        self.locked = []
+        self.timeout = timeout
+        self.lockErr = None
+
+    def tryLock(self, timeout=None):
+        try:
+            for device in self.devices:
+                devLocked = device.reserve(block=True, timeout=timeout)
+                if not devLocked:
+                    self.lockErr = "Timed out waiting for %s" % device.name()
+                    self.unlock()
+                    return False
+                self.locked.append(device)
+
+            return True
+        except Exception:
+            self.unlock()
+            raise
+
+    def lock(self):
+        locked = self.tryLock(timeout=self.timeout)
+        if not locked:
+            self.unlock()
+            raise RuntimeError("Failed to lock devices: %s" % self.lockErr)
+
+    def unlock(self):
+        for device in self.locked:
+            try:
+                device.release()
+            except:
+                pass
+        self.locked = []
+
+    def __enter__(self):
+        self.lock()
+        return self
+
+    def __exit__(self, *args):
+        self.unlock()
 
 
 class Task:
     id = 0
-    
     
     def __init__(self, dm, command):
         self.dm = dm
@@ -861,8 +893,8 @@ class Task:
         self.result = None
         
         self.taskLock = Mutex(recursive=True)
+        self.deviceLock = None
         
-        self.lockedDevs = []
         self.startedDevs = []
         self.startTime = None
         self.stopTime = None
@@ -956,7 +988,6 @@ class Task:
         if processEvents is true, then Qt events are processed while waiting for the task to complete.        
         """
         with self.taskLock:
-            self.lockedDevs = []
             self.startedDevs = []
             self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
@@ -973,18 +1004,7 @@ class Task:
             
                 #print self.id, "Task.execute:", self.tasks
                 ## Reserve all hardware
-                self.dm.lockReserv()
-                try:
-                    for devName in self.tasks:
-                        #print "  %d Task.execute: Reserving hardware" % self.id, devName
-                        res = self.tasks[devName].reserve(block=True)
-                        self.lockedDevs.append(devName)
-                        #print "  %d Task.execute: reserved" % self.id, devName
-                except:
-                    #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
-                    raise
-                finally:
-                    self.dm.unlockReserv()
+                self.reserveDevices()
                     
                 prof.mark('reserve')
 
@@ -1059,11 +1079,10 @@ class Task:
             except: 
                 printExc("==========  Error in task execution:  ==============")
                 self.abort()
-                self._releaseAll()
+                self.releaseDevices()
                 raise
             finally:
                 prof.finish()
-        
         
     def isDone(self):
         """Return True if all tasks are completed and ready to return results.
@@ -1183,7 +1202,7 @@ class Task:
                 if self.stopTime is None:
                     self.stopTime = ptime.time()
                 
-                self._releaseAll()
+                self.releaseDevices()
                 prof.mark("release all")
                 prof.finish()
                 
@@ -1197,17 +1216,20 @@ class Task:
             self.stop()
             return self.result
 
-    def _releaseAll(self):
-        with self.taskLock:
-            # print(self.id, "Task.releaseAll:")
-            for t in self.lockedDevs[:]:
-                # print("  %d releasing" % self.id, t)
-                try:
-                    self.tasks[t].release()
-                    self.lockedDevs.remove(t)
-                except:
-                    printExc("Error while releasing hardware for task %s:" % t)                    
-                    # print("  %d released" % self.id, t)
+    def reserveDevices(self):
+        if self.deviceLock is None:
+            try:
+                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()))
+                self.deviceLock.lock()
+            except Exception:
+                self.deviceLock = None
+                raise
+
+    def releaseDevices(self):
+        if self.deviceLock is None:
+            return
+        self.deviceLock.unlock()
+        self.deviceLock = None
 
     def abort(self):
         """Stop all tasks, to not attempt to get data."""

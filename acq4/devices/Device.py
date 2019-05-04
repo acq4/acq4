@@ -76,7 +76,13 @@ class Device(Qt.QObject, InterfaceMixin):
         return self.dm.appendConfigFile(data, fileName)
 
     def reserve(self, block=True, timeout=20):
-        #print "Device %s attempting lock.." % self.name()
+        """Reserve this device globally.
+
+        This lock allows subsystems to request exclusive access to the device. If
+        mutiple devices need to be locked simultaneously, then it is strongly
+        recommended to use Manager.reserveDevices() instead in order to avoid deadlocks.
+        """
+        # print("Device %s attempting lock.." % self.name())
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
@@ -87,18 +93,19 @@ class Device(Qt.QObject, InterfaceMixin):
         else:
             l = self._lock_.tryLock()
             if not l:
-                #print "Device %s lock failed." % self.name()
+                # print("Device %s lock failed." % self.name())
                 return False
                 #print "  Device is currently locked from:"
                 #print self._lock_tb_
                 #raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
-        #print "Device %s lock ok" % self.name()
+        # print("Device %s lock ok" % self.name())
         return True
         
     def release(self):
         try:
             self._lock_.unlock()
+            # print("Device %s unlocked" % self.name())
             self._lock_tb_ = None
         except:
             printExc("WARNING: Failed to release device lock for %s" % self.name())
@@ -183,18 +190,6 @@ class DeviceTask(object):
             parentTask.addStartDependency(self, 'device')
         """
         pass
-    
-    
-    def reserve(self, block=True, timeout=20):
-        """
-        Called by the parent task before configuration to reserve this 
-        hardware. This prevents tasks running in other threads from accessing
-        the same hardware simultaneously.
-        
-        The default implementation calls self.dev.reserve(...). Most subclasses
-        will not need to override this method.
-        """
-        return self.dev.reserve(block=block, timeout=timeout)
 
     def getStartOrder(self):
         """
@@ -234,12 +229,6 @@ class DeviceTask(object):
         The default implementation does nothing.
         """
         pass
-    
-    def release(self):
-        """
-        Release any resources that were acquired during the call to reserve().
-        """
-        self.dev.release()
     
     def getResult(self):
         """
