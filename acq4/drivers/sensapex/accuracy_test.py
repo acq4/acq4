@@ -13,6 +13,7 @@ parser.add_argument('--group', type=int, default=0, help="Device group number")
 parser.add_argument('--speed', type=int, default=1000, help="Movement speed in um/sec")
 parser.add_argument('--distance', type=int, default=10, help="Max distance to travel in um (relative to current position)")
 parser.add_argument('--iter', type=int, default=10, help="Number of positions to test")
+parser.add_argument('--acceleration', type=int, default=0, help="Max speed acceleration")
 args = parser.parse_args()
 
 ump = UMP.get_ump(group=args.group)
@@ -92,18 +93,16 @@ def update_plots():
 p1 = dev.get_pos()
 diffs = []
 errs = []
-targets = []
 positions = []
-moves = []
+moves = (np.random.random(size=(args.iter, 3)) * args.distance*1000).astype(int)
+targets = np.array(p1)[np.newaxis, :] + moves
+# speeds = [args.speed] * args.iter
+targets = np.array([[15431718, 7349832, 17269820], [15432068, 7349816, 17249852]] * 5)
+speeds = [100, 2] * args.iter
+
 for i in range(args.iter):
-    d = (np.random.random(size=3) * args.distance*1000).astype(int)
-    # d[0] = 0
-    # d[1] *= 0.01
-    # d[2] *= 0.01
-    moves.append(d)
-    target = p1 + d
-    targets.append(target)
-    move_req = dev.goto_pos(target, speed=args.speed, linear=False) 
+    target = targets[i]
+    move_req = dev.goto_pos(target, speed=speeds[i], linear=False, max_acceleration=args.acceleration) 
     while not move_req.finished:
         update(update_error=False)
         time.sleep(0.002)

@@ -156,6 +156,7 @@ class PatchPipetteState(Future):
             # run must be reimplemented in subclass and call self._checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
+            error = None
         except self.StopRequested:
             # state was stopped early by calling stop()
             interrupted = True
@@ -163,6 +164,7 @@ class PatchPipetteState(Future):
         except Exception as exc:
             # state aborted due to an error
             interrupted = True
+            printExc("Error in %s state %s" % (self.dev.name(), self.stateName))
             error = str(exc)
         else:
             # state completed successfully
@@ -890,6 +892,8 @@ class PatchPipetteCleanState(PatchPipetteState):
                 continue
 
             pos = dev.pipetteDevice.loadPosition(stage)
+            if pos is None:
+                raise Exception("Device %s does not have a stored %s position." % (dev.pipetteDevice.name(), stage))
 
             approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
 

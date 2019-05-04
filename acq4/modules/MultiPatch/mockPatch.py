@@ -45,6 +45,7 @@ class MockPatch(object):
         mode = pip.clampDevice.getMode()
         holding = pip.clampDevice.getHolding(mode)
 
+        # print("target: %s um   pressure: %s kPa" % (targetDistance*1e6, pressure*1e-3))
         if pressure > 0:
             self.resetState()
             # seal resistance increases by 2 MOhm as we push in from the cell radius
@@ -52,17 +53,18 @@ class MockPatch(object):
             self.sealResistance = 2e6 * approachFactor
 
         else:
-            if targetDistance > 5e-6:
+            if targetDistance > self.radius:
                 self.sealResistance = 0
             else:
                 # seal speed can double if we add pressure
-                if self.sealResistance > 0 and targetDistance < 5e-6:
+                if self.sealResistance > 0:
                     sealFactor = 1 + np.clip(-pressure / 20e3, 0, 1)
-                    sealSpeed = 1.0 - np.exp(-dt / (2.0/sealFactor))
+                    sealSpeed = 1.0 - np.exp(-dt / (1.0/sealFactor))
                     sealCond = 1.0 / self.sealResistance
                     maxSealCond = 1.0 / self.maxSealResistance
                     sealCond = sealCond * (1.0 - sealSpeed) + maxSealCond * sealSpeed
                     self.sealResistance = 1.0 / sealCond
+                    # print("sf: %s  ss: %s  sr: %s" % (sealFactor, sealSpeed, self.sealResistance))
 
             if pressure < -27e3:
                 # break in
@@ -71,6 +73,7 @@ class MockPatch(object):
         self.sealResistance = max(self.sealResistance, 100)
 
         ssr = self.pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/(self.accessResistance + self.inputResistance))
+        # print("ssr: %s  pr: %s  sr: %s  ar: %s  ir: %s" % (ssr, self.pipResistance, self.sealResistance, self.accessResistance, self.inputResistance))
         pr = self.pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/self.accessResistance)
         i = (holding - self.membranePotential) / ssr
 
