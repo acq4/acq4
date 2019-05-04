@@ -10,7 +10,7 @@ from acq4.util.debug import printExc
 
 
 class TestPulseThread(Thread):
-    """Background thread that runs periodic test pulsees on a single patch clamp channel.
+    """Background thread that runs periodic test pulses on a single patch clamp channel.
     """
 
     sigTestPulseFinished = Qt.Signal(object, object)  # device, result
@@ -26,6 +26,12 @@ class TestPulseThread(Thread):
             'testPulseClass': TestPulse,
             'clampMode': None,
             'interval': None,
+            'autoBiasEnabled': True,
+            'autoBiasTarget': -70e-3,  # if None, use VC holding
+            'autoBiasFollowRate': 0.5,
+            'autoBiasMinCurrent': -1.5e-9,
+            'autoBiasMaxCurrent': 1.5e9,
+            'autoBiasVCCarryover': 0.7,
             'sampleRate': 500000,
             'downsample': 20,
             'vcPreDuration': 5e-3,
@@ -33,12 +39,13 @@ class TestPulseThread(Thread):
             'vcPostDuration': 5e-3,
             'vcHolding': None,
             'vcAmplitude': -10e-3,
+            'vcAverage': 4,
             'icPreDuration': 10e-3,
             'icPulseDuration': 80e-3,
             'icPostDuration': 80e-3,
             'icHolding': None,
             'icAmplitude': -10e-12,
-            'average': 4,
+            'icAverage': 4,
             '_index': 0,
         }
         self._lastTask = None
@@ -58,6 +65,9 @@ class TestPulseThread(Thread):
             newParams[k] = v
         newParams['_index'] += 1
         self.params = newParams
+
+    def getParameter(self, param):
+        return self.params[param]
 
     def start(self):
         self._stop = False
@@ -127,20 +137,41 @@ class TestPulseThread(Thread):
             task = self._lastTask
             taskParams = self._lastTaskParams
         
-        task.execute()
+        # if clamp mode changed while we were fiddling around, then abort.
+        task.reserveDevices()
+        try:
+            if self._clampDev.getMode() != currentMode:
+                task.releaseDevices()
+                return
+            
+            task.execute()
+                
+            while not task.isDone():
+                if _checkStop:
+                    self._checkStop()
+                time.sleep(0.01)
+        
+            tp = None
+            if params['autoBiasEnabled']:
+                # update bias before unlocking
+                result = task.getResult()
+                tp = self._makeTpResult(taskParams, result)
+                self.updateAutoBias(tp)
+        finally:
+            task.releaseDevices()
 
-        while not task.isDone():
-            if _checkStop:
-                self._checkStop()
-            time.sleep(0.01)
+        if tp is None:
+            # no auto bias, release before doing analysis
+            result = task.getResult()
+            tp = self._makeTpResult(taskParams, result)
 
-        result = task.getResult()
+        self.sigTestPulseFinished.emit(self.dev, tp)
+
+    def _makeTpResult(self, taskParams, result):
         tpClass = taskParams['testPulseClass']
         tp = tpClass(self._clampDev, taskParams, result)
         tp.analysis()
-        self.sigTestPulseFinished.emit(self.dev, tp)
-        
-        return params, result
+        return tp
 
     def createTask(self, params):
         duration = params['preDuration'] + params['pulseDuration'] + params['postDuration']
@@ -174,6 +205,29 @@ class TestPulseThread(Thread):
     def _checkStop(self):
         if self._stop:
             raise self.StopRequested()
+
+    def updateAutoBias(self, tp):
+        analysis = tp.analysis()
+        mode = tp.clampMode()
+        if mode.lower() == 'vc':
+            # set ic holding from baseline current, multiplied by some factor for a little more added safety.
+            self.dev.clampDevice.setHolding('IC', analysis['baselineCurrent'] * self.params['autoBiasVCCarryover'])
+        else:
+            target = self.params['autoBiasTarget']
+            if target is None:
+                target = self.params['vcHolding']
+
+            rm = np.clip(analysis['steadyStateResistance'], 1e6, 10e9)
+            vm = analysis['baselinePotential']
+
+            dv = target - vm
+            di = dv / rm
+
+            holding = self.dev.clampDevice.getHolding(mode)
+            newHolding = holding + di * self.params['autoBiasFollowRate']
+            newHolding = np.clip(newHolding, self.params['autoBiasMinCurrent'], self.params['autoBiasMaxCurrent'])
+
+            self.dev.clampDevice.setHolding(mode, newHolding)
 
 
 class TestPulse(object):

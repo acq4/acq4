@@ -99,6 +99,9 @@ class PatchPipetteState(Future):
             cdev.setMode(mode)
             if holding is not None:
                 cdev.setHolding(mode=mode, value=holding)
+            if tpParams is None:
+                tpParams = {}
+            tpParams.setdefault('clampMode', mode)
 
         # enable test pulse if config requests it AND the device is "active"
         if tp is not None:

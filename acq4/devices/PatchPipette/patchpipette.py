@@ -9,7 +9,6 @@ from acq4.pyqtgraph import ptime
 from .devgui import PatchPipetteDeviceGui
 from .testpulse import TestPulseThread
 from .statemanager import PatchPipetteStateManager
-from .autobias import AutoBiasHandler
 
 
 class PatchPipette(Device):
@@ -39,10 +38,9 @@ class PatchPipette(Device):
     # emitted every time we finish a patch attempt
     sigPatchAttemptFinished = Qt.Signal(object, object)  # self, patch record
 
-    # These attributes can be modified to customize state management, test pulse acquisition, and auto bias
+    # These attributes can be modified to customize state management and test pulse acquisition
     defaultStateManagerClass = PatchPipetteStateManager
     defaultTestPulseThreadClass = TestPulseThread
-    defaultAutoBiasClass = AutoBiasHandler
 
     def __init__(self, deviceManager, config, name):
         pipName = config.pop('pipetteDevice', None)
@@ -55,7 +53,6 @@ class PatchPipette(Device):
         self._eventLogLock = Mutex()
         
         # current state variables
-        self.state = "out"
         self.active = False
         self.broken = False
         self.fouled = False
@@ -73,8 +70,6 @@ class PatchPipette(Device):
         
         self._lastTestPulse = None
         self._initTestPulse(config.get('testPulse', {}))
-        self._autoBiasHandler = None
-        self._initAutoBias()
 
         self._initStateManager()
 
@@ -214,11 +209,9 @@ class PatchPipette(Device):
         """
         return self._stateManager.listStates()
 
-    def _setState(self, state):
+    def _setState(self, state, oldState):
         """Called by state manager when state has changed.
         """
-        oldState = self.state
-        self.state = state
         self._writeStateFile()
         self.logEvent("stateChange", state=state)
         self.sigStateChanged.emit(self, state, oldState)
@@ -226,7 +219,7 @@ class PatchPipette(Device):
 
     def _writeStateFile(self):
         state = {
-            'state': self.state,
+            'state': self._stateManager.getState(),
             'active': self.active,
             'calibrated': self.calibrated,
             'broken': self.broken,
@@ -234,7 +227,7 @@ class PatchPipette(Device):
         self.writeConfigFile(state, 'last_state')
 
     def getState(self):
-        return self.state
+        return self._stateManager.getState()
 
     def logEvent(self, eventType, **kwds):
         with self._eventLogLock:
@@ -332,28 +325,27 @@ class PatchPipette(Device):
     def lastTestPulse(self):
         return self._lastTestPulse
 
-    def _initAutoBias(self):
-        self._autoBiasHandler = self.defaultAutoBiasClass(self)
-
     def enableAutoBias(self, enable=True):
-        self._autoBiasHandler.setParams(enabled=enable)
+        self.setTestPulseParameters(autoBiasEnabled=enable)
         self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
         self.emitNewEvent(OrderedDict([('event', 'autoBiasEnabled'), ('enabled', enable), ('target', self.autoBiasTarget())]))
 
     def autoBiasEnabled(self):
-        return self._autoBiasHandler.getParam('enabled')
+        return self._testPulseThread.getParameter('autoBiasEnabled')
 
     def setAutoBiasTarget(self, v):
-        self._autoBiasHandler.setParams(targetPotential=v)
-        self.sigAutoBiasChanged.emit(self, self.autoBiasEnabled(), v)
-        self.emitNewEvent(OrderedDict([('event', 'autoBiasTargetChanged'), ('enabled', self.autoBiasEnabled()), ('target', v)]))
+        self.setTestPulseParameters(autoBiasTarget=v)
+        enabled = self.autoBiasEnabled()
+        self.sigAutoBiasChanged.emit(self, enabled, v)
+        self.emitNewEvent(OrderedDict([('event', 'autoBiasTargetChanged'), ('enabled', enabled), ('target', v)]))
 
     def autoBiasTarget(self):
-        return self._autoBiasHandler.getParam('targetPotential')
+        return self._testPulseThread.getParameter('autoBiasTarget')
 
     def _initStateManager(self):
         # allow external modification of state manager class
         self._stateManager = self.defaultStateManagerClass(self)
+        self.setState('out')
 
     def stateManager(self):
         return self._stateManager

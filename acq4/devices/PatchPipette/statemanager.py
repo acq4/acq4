@@ -1,4 +1,5 @@
 from __future__ import print_function
+import sys
 from collections import OrderedDict
 try:
     import queue
@@ -52,6 +53,13 @@ class PatchPipetteStateManager(Qt.QObject):
 
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
+    def getState(self):
+        """Return the name of the currently active state.
+        """
+        if self.currentJob is None:
+            return None
+        return self.currentJob.stateName
+
     def listStates(self):
         return list(self.stateHandlers.keys())
 
@@ -81,44 +89,61 @@ class PatchPipetteStateManager(Qt.QObject):
         returnQueue = queue.Queue()
         self._sigStateChangeRequested.emit(state, returnQueue)
         try:
-            ret = returnQueue.get(timeout=10)
+            success, ret = returnQueue.get(timeout=10)
         except queue.Empty:
             raise Exception("State change request timed out.")
-        if isinstance(ret, Exception):
-            raise ret
-        else:
+        
+        if success:
             return ret
+        else:
+            sys.excepthook(*ret)
+            raise RuntimeError("Error requesting state change; original exception appears above.")
 
     def _stateChangeRequested(self, state, returnQueue):
         try:
             if state not in self.stateHandlers:
                 raise Exception("Unknown patch pipette state %r" % state)
-            ret = self.configureState(state)
+            ret = (True, self.configureState(state))
         except Exception as exc:
-            ret = exc
+            ret = (False, sys.exc_info())
         returnQueue.put(ret)
 
     def configureState(self, state, *args, **kwds):
+        oldJob = self.currentJob
+        allowReset = kwds.pop('_allowReset', True)
         self.stopJob()
-        stateHandler = self.stateHandlers[state]
+        try:
+            stateHandler = self.stateHandlers[state]
 
-        # assemble state config from defaults and anything specified in args here
-        config = self.stateConfig.get(state, {}).copy()
-        config.update(kwds.pop('config', {}))
-        kwds['config'] = config
+            # assemble state config from defaults and anything specified in args here
+            config = self.stateConfig.get(state, {}).copy()
+            config.update(kwds.pop('config', {}))
+            kwds['config'] = config
 
-        job = stateHandler(self.dev, *args, **kwds)
-        self.currentJob = job
-        job.sigStateChanged.connect(self.jobStateChanged)
-        job.sigFinished.connect(self.jobFinished)
-        self.dev._setState(state)
-        job.initialize()
-        self.sigStateChanged.emit(self, job)
-        return job
+            job = stateHandler(self.dev, *args, **kwds)
+            job.sigStateChanged.connect(self.jobStateChanged)
+            job.sigFinished.connect(self.jobFinished)
+            oldState = None if oldJob is None else oldJob.stateName
+            self.currentJob = job
+            self.dev._setState(state, oldState)
+            job.initialize()
+            self.sigStateChanged.emit(self, job)
+            return job
+        except Exception:
+            exc = sys.exc_info()
+            # in case of failure, attempt to restore previous state
+            self.currentJob = None
+            if not allowReset or oldJob is None:
+                raise
+            try:
+                self.configureState(oldJob.stateName, _allowReset=False)
+            except Exception:
+                printExc("Error occurred while trying to reset state from a previous error:")
+            raise exc[0], exc[1], exc[2]
 
     def activeChanged(self, pip, active):
         if active:
-            self.configureState(self.dev.state)
+            self.configureState(self.getState())
         else:
             self.stopJob()
             self.dev.enableTestPulse(False)
