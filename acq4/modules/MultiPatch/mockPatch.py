@@ -36,7 +36,7 @@ class MockPatch(object):
         self.lastUpdate = now
 
         pip = self.pipette
-        state = pip.state
+        state = pip.getState()
         targetDistance = np.linalg.norm(pip.pipetteDevice.targetPosition() - pip.pipetteDevice.globalPosition())
         if pip.pressureDevice.source == 'regulator':
             pressure = pip.pressureDevice.pressure

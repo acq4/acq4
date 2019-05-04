@@ -126,22 +126,52 @@ class PipetteControl(Qt.QWidget):
         self.ui.stateText.setText(state)
 
     def clampStateChanged(self, state):
-        self.ui.modeText.setText(state['mode'])
-        self.updateHoldingInfo(mode=state['mode'])
+        if self.clampMode() != state['mode']:
+            self.ui.modeText.setText(state['mode'])
+            self.updateHoldingInfo(mode=state['mode'])
 
     def clampHoldingChanged(self, clamp, mode):
-        self.updateHoldingInfo()
+        clamp = self.pip.clampDevice
+        currentMode = str(self.ui.modeText.text()).upper()
+        if mode != currentMode:
+            return
+        # self.updateHoldingInfo()
+        hval = clamp.getHolding(mode)
+        if currentMode == 'IC':
+            if self.pip.autoBiasEnabled():
+                self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
+            else:
+                self._setHoldingSpin(hval, 'A')
+        elif currentMode == 'VC':
+            self._setHoldingSpin(hval, 'V')
 
     def autoBiasChanged(self, pip, enabled, target):
-        self.updateHoldingInfo()
+        self.updateAutoBiasSpin()
+
+    def updateAutoBiasSpin(self):
+        if self.pip.autoBiasEnabled() and self.clampMode() == 'IC':
+            biasTarget = self.pip.autoBiasTarget()
+            self._setHoldingSpin(biasTarget, 'V')
 
     def holdingSpinChanged(self):
+        # NOTE: The spin emits a delayed signal when the user changes its value. 
+        # That means if we are not careful, some other signal could reset the value
+        # of the spin before it has even emitted the change signal, causing the user's
+        # requested change to be cancelled.
         val = self.ui.holdingSpin.value()
-        mode = self.pip.clampDevice.getMode()
+        mode = self.clampMode()
         if mode == 'VC' or (mode == 'IC' and self.pip.autoBiasEnabled()):
-            self.pip.setAutoBiasTarget(val)        
+            print("Set auto bias target:", val)
+            self.pip.setAutoBiasTarget(val)
         if not (mode == 'IC' and self.pip.autoBiasEnabled()):
             self.pip.clampDevice.setHolding(mode, val)
+
+    def clampMode(self):
+        """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
+        """
+        return str(self.ui.modeText.text()).upper()
+
+    # def updateHoldingSpin(self):
 
     def updateHoldingInfo(self, mode=None):
         clamp = self.pip.clampDevice
@@ -157,6 +187,9 @@ class PipetteControl(Qt.QWidget):
             else:
                 biasTarget = self.pip.autoBiasTarget()
                 spinVal = biasTarget
+                print("Update bias spin:", spinVal)
+                import traceback
+                traceback.print_stack()
                 units = 'V'
                 self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
             self.ui.autoBiasBtn.setChecked(True)
@@ -170,23 +203,32 @@ class PipetteControl(Qt.QWidget):
             self.ui.autoBiasBtn.setChecked(False)
             self.ui.autoBiasBtn.setText('bias: off')
 
+        self._setHoldingSpin(spinVal, units)
+
+    def _setHoldingSpin(self, value, units):
         with pg.SignalBlock(self.ui.holdingSpin.valueChanged, self.holdingSpinChanged):
-            self.ui.holdingSpin.setValue(spinVal)
+            self.ui.holdingSpin.setValue(value)
             step = 5e-3 if units == 'V' else 50e-12
             self.ui.holdingSpin.setOpts(suffix=units, step=step)
 
     def stateActionClicked(self):
         state = str(self.sender().text())
-        self.pip.setState(state)
+        try:
+            self.pip.setState(state)
+        except:
+            self.patchStateChanged(self.pip)
+            raise
 
     def stateTextClicked(self, sender, event):
         self.stateMenu.popup(sender.mapToGlobal(event.pos()))
 
     def modeTextClicked(self, sender, event):
-        if str(self.ui.modeText.text()).lower() == 'vc':
+        if self.clampMode() == 'VC':
             self.pip.clampDevice.setMode('IC')
+            self.pip.setTestPulseParameters(clampMode='IC')
         else:
             self.pip.clampDevice.setMode('VC')
+            self.pip.setTestPulseParameters(clampMode='VC')
 
     def focusTipBtnClicked(self, state):
         speed = self.mainWin.selectedSpeed(default='slow')
