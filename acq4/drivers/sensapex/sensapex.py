@@ -406,8 +406,8 @@ class UMP(object):
 
                 # if now - cmp_time > self.move_expire_time:  
                 if not self.is_busy(dev):
-                    # did we reach target?
-                    pos = self.get_pos(dev, timeout=0)
+                    # Did we reach target? Request a full position update; cache may not be caught up yet.
+                    pos = self.get_pos(dev, timeout=-1)
                     dif = np.linalg.norm(np.array(pos) - np.array(move.target_pos))
                     
                     if dif > 1000 and dev==19 and move.attempts < 10:  # require 100 nm accuracy for stage

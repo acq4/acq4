@@ -14,9 +14,11 @@ parser.add_argument('--speed', type=int, default=1000, help="Movement speed in u
 parser.add_argument('--distance', type=int, default=10, help="Max distance to travel in um (relative to current position)")
 parser.add_argument('--iter', type=int, default=10, help="Number of positions to test")
 parser.add_argument('--acceleration', type=int, default=0, help="Max speed acceleration")
+parser.add_argument('--high-res', action='store_true', default=False, dest='high_res', help="Use high-resolution time sampling rather than poller's schedule")
 args = parser.parse_args()
 
 ump = UMP.get_ump(group=args.group)
+time.sleep(2)
 devids = ump.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 
@@ -65,7 +67,8 @@ lastupdate = pg.ptime.time()
 
 def update(update_error=False):
     global lastupdate
-    p = dev.get_pos(timeout=20)
+    timeout = -1 if args.high_res else 0
+    p = dev.get_pos(timeout=timeout)
     s = dev.is_busy()
     m = not move_req.finished
     bus.append(int(s))
@@ -96,9 +99,20 @@ errs = []
 positions = []
 moves = (np.random.random(size=(args.iter, 3)) * args.distance*1000).astype(int)
 targets = np.array(p1)[np.newaxis, :] + moves
-# speeds = [args.speed] * args.iter
-targets = np.array([[15431718, 7349832, 17269820], [15432068, 7349816, 17249852]] * 5)
-speeds = [100, 2] * args.iter
+speeds = [args.speed] * args.iter
+
+# targets = np.array([[15431718, 7349832, 17269820], [15432068, 7349816, 17249852]] * 5)
+# speeds = [100, 2] * args.iter
+
+# targets = np.array([[13073580, 13482162, 17228380], [9280157.0, 9121206.0, 12198605.]] * 5)
+# speeds = [1000] * args.iter
+
+# targets = np.array([[9335078, 10085446, 12197238], [14793665.0, 11658668.0, 17168934.]] * 5)
+# speeds = [1000] * args.iter
+
+
+
+dev.stop()
 
 for i in range(args.iter):
     target = targets[i]
