@@ -325,9 +325,8 @@ class UMP(object):
         Note: this should not be used to determine whether a move has completed;
         use MoveRequest.finished or .finished_event as returned from goto_pos().
         """
-        # status = self.call('ump_get_status_ext', c_int(dev))
-        # return bool(self.lib.ump_is_busy_status(c_int(status)))
-        return self.call('ump_get_drive_status_ext', c_int(dev)) != 0        
+        # idle/complete=0; moving>0; failed<0
+        return self.call('ump_get_drive_status_ext', c_int(dev)) > 0        
 
     def stop_all(self):
         """Stop all manipulators.
