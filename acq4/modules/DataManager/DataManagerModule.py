@@ -4,6 +4,7 @@ from .DataManagerTemplate import *
 from acq4.modules.Module import *
 from acq4.util.DataManager import *
 import os, re, sys, time
+import six
 from acq4.util.debug import *
 from . import FileAnalysisView
 from acq4.LogWindow import LogButton, LogWindow
@@ -90,7 +91,7 @@ class DataManager(Module):
         pass
 
     def selectFile(self, path):
-        if isinstance(path, str):
+        if isinstance(path, six.string_types):
             path = getHandle(path)
         self.ui.fileTreeWidget.select(path)
 
