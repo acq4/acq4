@@ -317,6 +317,7 @@ class UMP(object):
             print("ump_goto_pos_ext2%r" % args)
             self.call('ump_goto_position_ext2', *args)
 
+
         return next_move
 
     def is_busy(self, dev):
@@ -409,7 +410,7 @@ class UMP(object):
                     pos = self.get_pos(dev, timeout=-1)
                     dif = np.linalg.norm(np.array(pos) - np.array(move.target_pos))
                     
-                    if dif > 1000 and dev==19 and move.attempts < 10:  # require 100 nm accuracy for stage
+                    if dif > 1000 and dev==19 and move.attempts < 0:  # require 100 nm accuracy for stage
                         move.attempts += 1
                         self._last_busy_time[dev] = now
                         move.speed = move.speed / 2
