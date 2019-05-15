@@ -25,6 +25,7 @@ class StimulationPoint(QtCore.QObject):
 
     sigStimPointChanged = QtCore.Signal(object)
     sigTargetDragged = QtCore.Signal(object)
+    sigZAxisStimRequested = QtCore.Signal(object)
 
     def __init__(self, name, itr, pos, z):
         QtCore.QObject.__init__(self)
@@ -38,6 +39,7 @@ class StimulationPoint(QtCore.QObject):
         self.params.sigValueChanged.connect(self.changed)
         self.graphicsItem.sigDragged.connect(self.targetDragged)
         self.graphicsItem.sigCellBtnToggled.connect(self.cellBtnToggled)
+        self.graphicsItem.sigZaxisStimRequested.connect(self.zAxisStimRequested)
 
 #        self.positionHistory = []
         self.stimulations = []
@@ -91,6 +93,8 @@ class StimulationPoint(QtCore.QObject):
 
         return d
 
+    def zAxisStimRequested(self):
+        self.sigZAxisStimRequested.emit(self)
 
 
 
@@ -98,6 +102,7 @@ class PhotostimTarget(TargetItem):
     ## inherits from TargetItem, GraphicsObject, GraphicsItem, QGraphicsObject
 
     sigCellBtnToggled = QtCore.Signal(object)
+    sigZaxisStimRequested = QtCore.Signal()
 
     def __init__(self, pos, label, contextMenuEnabled=True, **args):
         #self.enabledPen = pg.mkPen((0, 255, 255))
@@ -180,4 +185,4 @@ class PhotostimTarget(TargetItem):
         self.sigCellBtnToggled.emit(b)
 
     def suppStimRequested(self):
-        print('suppStimRequested')
+        self.sigZaxisStimRequested.emit()

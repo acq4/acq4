@@ -38,6 +38,9 @@ class TwoPhotonPhotostimulator(Device, OptomechDevice):
 
 
 class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
+
+    sigZAxisStimRequested = QtCore.Signal(object)
+
     def __init__(self, dev, cameraModule):
         CameraModuleInterface.__init__(self, dev, cameraModule)
 
@@ -98,6 +101,7 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
         self.stimPoints.append(sp)
         sp.sigStimPointChanged.connect(self.updatePoints)
         sp.sigTargetDragged.connect(self.targetDragged)
+        sp.sigZAxisStimRequested.connect(self.zAxisStimRequested)
         self.updatePoints()
         return sp.graphicsItem
 
@@ -225,6 +229,9 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
                 f.write(json.dumps(pts))
             raise
 
+    def zAxisStimRequested(self, pt):
+        self.sigZAxisStimRequested.emit(pt)
+
 
 
     # # def createMarkPointsXML(self):
@@ -267,9 +274,10 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
     #             ptElement.set(k,str(v))
 
     #     return et.ElementTree(seriesElement)
+
     def getStimulationOrder(self):
-        """Return a list of tuples containing focus depths and points to stimulate.
-        Example: [(depth1, [pt1, pt2, pt5]), (depth2, [pt3, pt4]), ...] 
+        """Return a list of tuples containing focus depths and list of point/position dicts to stimulate.
+        Example: [(depth1, [{'pt':pt1,'pos':(x,y,z)}, {'pt':pt2,'pos':(x,y,z)]), (depth2, [{'pt':pt3,'pos':(x,y,z)},{'pt':pt4, 'pos':(x,y,z)}]), ...] 
         """
         pts = self.activePoints()
         pts = sorted(pts, key=lambda pt:pt.z, reverse=True)
@@ -282,25 +290,27 @@ class TwoPhotonPhotostimCamModInterface(CameraModuleInterface):
             if len(pts) == 0:
                 break
             p0 = []
-            p0.append(pts.pop(0))
+            p0.append({'pt':pts.pop(0)})
             zs = []
-            zs.append(p0[0].z)
+            zs.append(p0[0]['pt'].z)
             for i, pt in enumerate(pts):
-                if pt.z > p0[0].z - (2*width):
-                    p0.append(pts.pop(i))
-                    zs.append(p0[-1].z)
+                if pt.z > p0[0]['pt'].z - (2*width):
+                    p0.append({'pt':pts.pop(i)})
+                    zs.append(p0[-1]['pt'].z)
             depth = np.mean(zs)
+            for d in p0:
+                d['pos'] = (d['pt'].getPos()[0], d['pt'].getPos()[1], depth)
             res.append((depth, p0))
 
         return res
 
 
 
-    def getStimulationCmd(self, pt):
+    def getStimulationCmd(self, pos):
         ## return a list of dicts with per point info that Prairie needs
         frame = self.lastFrame
         d = {}
-        d['pos'] = self.dev().mapToPrairie(pt.getPos(), frame)
+        d['pos'] = self.dev().mapToPrairie(pos[:2], frame)
         d['spiralSize'] = self.dev().spiralSizeToPrairie(self.spiralParams['size'], frame)
         d['spiralRevolutions'] = self.spiralParams['spiral revolutions']
         n = self.spiralParams['number of stimuli']
