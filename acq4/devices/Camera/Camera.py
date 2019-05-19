@@ -773,17 +773,11 @@ class AcquireThread(Thread):
     def __init__(self, dev):
         Thread.__init__(self)
         self.dev = dev
-        #self.cam = self.dev.getCamera()
         self.camLock = self.dev.camLock
-        #size = self.cam.getSize()
-        #self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'No Trigger'}
-        #self.state = self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode'])
         self.stopThread = False
         self.lock = Mutex()
         self.acqBuffer = None
-        #self.frameId = 0
         self.bufferTime = 5.0
-        #self.ringSize = 30
         self.tasks = []
         
         ## This thread does not run an event loop,
@@ -793,7 +787,6 @@ class AcquireThread(Thread):
     
     def __del__(self):
         if hasattr(self, 'cam'):
-            #self.cam.stop()
             self.dev.stopCamera()
     
     def start(self, *args):
@@ -810,32 +803,8 @@ class AcquireThread(Thread):
         with self.connectMutex:
             if method in self.connections:
                 self.connections.remove(method)
-    #
-    #def setParam(self, param, value):
-    #    #print "PVCam:setParam", param, value
-    #    start = False
-    #    if self.isRunning():
-    #        start = True
-    #        #print "Camera.setParam: Stopping camera before setting parameter.."
-    #        self.stop(block=True)
-    #        #print "Camera.setParam: camera stopped"
-    #    with self.lock:
-    #        self.state[param] = value
-    #    if start:
-    #        #self.start(Qt.QThread.HighPriority)
-    #        self.start()
-    #    
     
     def run(self):
-        #import cProfile
-        ##cProfile.runctx('self._run()', globals(), locals(), sort='cumulative')
-        #pr = cProfile.Profile()
-        #pr.enable()
-        #self._run()
-        #pr.disable()
-        #pr.print_stats(sort='cumulative')
-        
-    #def _run(self):
         size = self.dev.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
@@ -849,7 +818,6 @@ class AcquireThread(Thread):
         mode = camState['triggerMode']
         
         try:
-            #self.dev.setParam('ringSize', self.ringSize, autoRestart=False)
             self.dev.startCamera()
             
             lastFrameTime = lastStopCheck = ptime.time()
