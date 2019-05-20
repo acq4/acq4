@@ -30,6 +30,7 @@ class PipetteMotionPlanner(object):
             self.stop()
 
         self.future = self._move()
+        return self.future
 
     def stop(self):
         if self.future is not None:
@@ -124,32 +125,20 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         return pip._moveToGlobal(globalTarget, speed)
 
 
-class TargetMotionPlanner(PipetteMotionPlanner):
-    def _move(self):
-        pip = self.pip
-        speed = self.speed
-
-        target = pip.targetPosition()
-        pos = pip.globalPosition()
-        if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
-            return
-        path = pip._approachPath(target, speed)
-        path.append([target, 100e-6, True])
-        return pip._movePath(path)
-
-
 class ApproachMotionPlanner(PipetteMotionPlanner):
     def _move(self):
         pip = self.pip
         speed = self.speed
 
         target = pip.targetPosition()
-        return pip._movePath(pip._approachPath(target, speed))
+        return pip._movePath(self.approachPath(target, speed))
     
-    def _approachPath(self, target, speed):
+    def approachPath(self, target, speed):
+        pip = self.pip
+
         # Return steps (in global coords) needed to move to approach position
-        stbyDepth = self.approachDepth()
-        pos = self.globalPosition()
+        stbyDepth = pip.approachDepth()
+        pos = pip.globalPosition()
 
         # steps are in global coordinates.
         path = []
@@ -157,22 +146,22 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
         # If tip is below the surface, then first pull out slowly along pipette axis
         if pos[2] < stbyDepth:
             dz = stbyDepth - pos[2]
-            dx = -dz / np.tan(self.pitchRadians())
+            dx = -dz / np.tan(pip.pitchRadians())
             last = np.array([dx, 0., dz])
-            path.append([self.mapToGlobal(last), 100e-6, True])  # slow removal from sample
+            path.append([pip.mapToGlobal(last), 100e-6, True])  # slow removal from sample
         else:
             last = np.array([0., 0., 0.])
 
         # local vector pointing in direction of electrode tip
-        evec = np.array([1., 0., -np.tan(self.pitchRadians())])
+        evec = np.array([1., 0., -np.tan(pip.pitchRadians())])
         evec /= np.linalg.norm(evec)
 
         # target in local coordinates
-        ltarget = self.mapFromGlobal(target)
+        ltarget = pip.mapFromGlobal(target)
 
         # compute approach position (axis aligned to target, at standby depth or higher)
         dz2 = max(0, stbyDepth - target[2])
-        dx2 = -dz2 / np.tan(self.pitchRadians())
+        dx2 = -dz2 / np.tan(pip.pitchRadians())
         stby = ltarget + np.array([dx2, 0., dz2])
 
         # compute intermediate position (point along approach axis that is closest to the current position)
@@ -183,10 +172,24 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
 
         if np.linalg.norm(stby - last) > 1e-6:
             if (closest[2] > stby[2]) and (np.linalg.norm(stby - closest) > 1e-6):
-                path.append([self.mapToGlobal(closest), speed, True])
-            path.append([self.mapToGlobal(stby), speed, True])
+                path.append([pip.mapToGlobal(closest), speed, True])
+            path.append([pip.mapToGlobal(stby), speed, True])
 
         return path
+
+
+class TargetMotionPlanner(ApproachMotionPlanner):
+    def _move(self):
+        pip = self.pip
+        speed = self.speed
+
+        target = pip.targetPosition()
+        pos = pip.globalPosition()
+        if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
+            return
+        path = self.approachPath(target, speed)
+        path.append([target, 100e-6, True])
+        return pip._movePath(path)
 
 
 class AboveTargetMotionPlanner(PipetteMotionPlanner):
@@ -200,13 +203,14 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         speed = self.speed
 
         scope = pip.scopeDevice()
-        waypoint1, waypoint2 = pip.aboveTargetPath()
+        waypoint1, waypoint2 = self.aboveTargetPath()
 
         pfut = pip._moveToGlobal(waypoint1, speed)
         sfut = scope.setGlobalPosition(waypoint2)
         pfut.wait(updates=True)
         pip._moveToGlobal(waypoint2, 'slow').wait(updates=True)
         sfut.wait(updates=True)
+        return sfut
 
     def aboveTargetPath(self):
         """Return the path to the "above target" recalibration position.
@@ -217,20 +221,21 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
            at the second waypoint. 
         2. This position is centered on the target, a small distance above the sample surface.
         """
-        target = self.targetPosition()
+        pip = self.pip
+        target = pip.targetPosition()
 
         # will recalibrate 50 um above surface
-        scope = self.scopeDevice()
+        scope = pip.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
         waypoint2 = np.array(target)
         waypoint2[2] = surfaceDepth + 50e-6
 
         # Need to arrive at this point via approach angle to correct for hysteresis
-        lwp = self.mapFromGlobal(waypoint2)
+        lwp = pip.mapFromGlobal(waypoint2)
         dz = 100e-6
         lwp[2] += dz
-        lwp[0] -= dz / np.tan(self.pitchRadians())
-        waypoint1 = self.mapToGlobal(lwp)
+        lwp[0] -= dz / np.tan(pip.pitchRadians())
+        waypoint1 = pip.mapToGlobal(lwp)
 
         return waypoint1, waypoint2
 
@@ -262,4 +267,5 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         angle = pip.yawRadians()
         ds = pip._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
-        pip._moveToGlobal(globalIdlePos, speed)
+        
+        return pip._moveToGlobal(globalIdlePos, speed)
