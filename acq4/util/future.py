@@ -153,7 +153,7 @@ class Future(Qt.QObject):
     def waitFor(self, futures, timeout=20.0):
         """Wait for multiple futures to complete while also checking for stop requests on self.
         """
-        if isinstance(futures, Future):
+        if not isinstance(futures, (list, tuple)):
             futures = [futures]
         if len(futures) == 0:
             return
