@@ -897,7 +897,7 @@ class PatchPipetteCleanState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self._checkStop(delay)
 
-        dev._pipetteRecord['cleanCount'] += 1
+        dev.pipetteRecord()['cleanCount'] += 1
         dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
         self.resetPos = None
         return 'out'          
