@@ -205,9 +205,7 @@ class PatchPipetteApproachState(PatchPipetteState):
         fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.resetTestPulseHistory()
-        while not fut.isDone():
-            self._checkStop()
-            time.sleep(0.1)
+        self.waitFor(fut)
         return self.config['nextState']
 
 
@@ -536,11 +534,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         stepPos = self.advanceSteps[self.stepCount]
         self.stepCount += 1
         fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
-        while True:
-            self._checkStop()
-            fut.wait(timeout=0.2)
-            if fut.isDone():
-                break
+        self.waitFor(fut)
 
     def cleanup(self):
         if self.contAdvanceFuture is not None:
@@ -823,9 +817,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         config = self.config
 
         fut = self.dev.pipetteDevice.retractFromSurface()
-        while True:
-            fut.wait(timeout=0.1)
-            self._checkStop()
+        self.waitFor(fut)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         time.sleep(config['blowoutDuration'])
