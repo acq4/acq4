@@ -891,7 +891,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.wait([dev.pipetteDevice._moveToGlobal(pos, 'fast')])
+            self.waitFor([dev.pipetteDevice._moveToGlobal(pos, 'fast')])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -906,7 +906,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         # motion planning is in its own method to make it easier to customize
         approachPos = [pos[0], pos[1], pos[2] + self.config['approachHeight']]
         dev = self.dev
-        self.wait([dev.pipetteDevice._moveToGlobal(approachPos, 'fast')])
+        self.waitFor([dev.pipetteDevice._moveToGlobal(approachPos, 'fast')])
         self.resetPos = approachPos
 
     def cleanup(self):
