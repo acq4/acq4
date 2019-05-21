@@ -49,6 +49,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         stage = pip.parentDevice()
         stagePos = stage.globalPosition()
         stageHome = stage.homePosition()
+        assert stageHome is not None, "No home position defined for %s" % stage.name()
         globalMove = np.asarray(stageHome) - np.asarray(stagePos) # this is how much electrode should move in global coordinates
 
         startPosGlobal = pip.globalPosition()
