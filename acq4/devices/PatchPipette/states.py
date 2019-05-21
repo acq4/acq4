@@ -895,13 +895,11 @@ class PatchPipetteCleanState(PatchPipetteState):
             if pos is None:
                 raise Exception("Device %s does not have a stored %s position." % (dev.pipetteDevice.name(), stage))
 
-            approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
+            self.gotoApproachPosition(pos)
 
-            dev.pipetteDevice._moveToGlobal(approachPos, 'fast').wait()
-            self._checkStop()
-            self.resetPos = approachPos
-            dev.pipetteDevice._moveToGlobal(pos, 'fast').wait()
-            self._checkStop()
+            # todo: if needed, we can check TP for capacitance changes here
+            # and stop moving as soon as the fluid is detected
+            self.wait([dev.pipetteDevice._moveToGlobal(pos, 'fast')])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -911,6 +909,13 @@ class PatchPipetteCleanState(PatchPipetteState):
         dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
         self.resetPos = None
         return 'out'          
+
+    def gotoApproachPosition(self, pos):
+        # motion planning is in its own method to make it easier to customize
+        approachPos = [pos[0], pos[1], pos[2] + self.config['approachHeight']]
+        dev = self.dev
+        self.wait([dev.pipetteDevice._moveToGlobal(approachPos, 'fast')])
+        self.resetPos = approachPos
 
     def cleanup(self):
         dev = self.dev
