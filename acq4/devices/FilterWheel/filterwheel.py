@@ -48,6 +48,7 @@ class FilterWheel(Device, OptomechDevice):
         
         self.lock = Mutex(Qt.QMutex.Recursive)
         
+        self._config = config
         self._filters = OrderedDict()
         self._slotNames = OrderedDict()
         self._slotIndicators = OrderedDict()
@@ -66,15 +67,16 @@ class FilterWheel(Device, OptomechDevice):
                 self._filters[k] = None
                 self._slotNames[k] = slot
             elif isinstance(slot, dict):
-                filtname = slot['device']
-                filt = dm.getDevice(filtname)
+                filtname = slot.get('device')
+                filt = None if filtname is None else dm.getDevice(filtname)
                 self._filters[k] = filt
-                self._slotNames[k] = slot.get('name', filt.name())
-                devports = filt.ports()
-                if ports is None:
-                    ports = devports
-                elif set(ports) != set(devports):
-                    raise Exception("FilterSet %r does not have the expected ports (%r vs %r)" % (filt, devports, ports))
+                self._slotNames[k] = slot.get('name', filtname)
+                if filt is not None:
+                    devports = filt.ports()
+                    if ports is None:
+                        ports = devports
+                    elif set(ports) != set(devports):
+                        raise Exception("FilterSet %r does not have the expected ports (%r vs %r)" % (filt, devports, ports))
             else:
                 raise TypeError("Slot definition must be str or dict; got: %r" % slot)
 
@@ -128,8 +130,11 @@ class FilterWheel(Device, OptomechDevice):
 
         The number returned indicates all available positions, regardless of
         the presence or absence of a filter in each position.
+
+        By default this returns the largest configured slot number, but 
+        subclasses may override this method.
         """
-        raise NotImplementedError("Method must be implemented in subclass")
+        return max(map(int, self._config['slots'].keys())) + 1
     
     def setPosition(self, pos):
         """Set the filter wheel position and return a FilterWheelFuture instance
@@ -324,10 +329,12 @@ class FilterWheelTaskGui(TaskGui):
         self.ui.setupUi(self)
         self.dev = dev
         
-        filters = self.dev.listFilters()
-        filterList = self.generatFilterList(filters)
-        for i in range(len(filterList)):
-            item = self.ui.filterCombo.addItem('%s' % filterList[i][1]) 
+        slotNames = self.dev.slotNames()
+        self.filters = {}
+        for i in range(self.dev.getPositionCount()):
+            name = slotNames[i]
+            self.filters[i+1] = name
+            item = self.ui.filterCombo.addItem("%d: %s" % (i+1, name)) 
         
         item = self.ui.sequenceCombo.addItem('off')
         item = self.ui.sequenceCombo.addItem('list')
@@ -349,11 +356,11 @@ class FilterWheelTaskGui(TaskGui):
         if params is None or 'filterWheelPosition' not in params:
             target = state['filterCombo']
         else:
-            target = self.filterTaskList[params['filterWheelPosition']]
+            target = self.filters[params['filterWheelPosition']]
         
         task = {}
         task['recordState'] = True
-        task['filterWheelPosition'] = target #state['filterCombo']
+        task['filterWheelPosition'] = target
         return task    
     
     def saveState(self, saveItems=False):
@@ -365,14 +372,6 @@ class FilterWheelTaskGui(TaskGui):
         self.ui.sequenceListEdit.setVisible(state['sequenceCombo'] != 'off')
         self.sequenceChanged()
         
-    def storeConfiguration(self):
-        state = self.saveState(saveItems=True)
-        self.dev.writeConfigFile(state, 'lastConfig')
-
-    def loadConfiguration(self):
-        state = self.dev.readConfigFile('lastConfig')
-        self.restoreState(state)    
-        
     def listSequence(self):
         if self.ui.sequenceCombo.currentIndex() == 1:
             filt = self.getFilterList()
@@ -381,7 +380,6 @@ class FilterWheelTaskGui(TaskGui):
             return []
         
     def sequenceChanged(self):
-        self.filterTaskList = None
         self.sigSequenceChanged.emit(self.dev.name())
         if self.ui.sequenceCombo.currentIndex() == 1:
             self.ui.sequenceListEdit.show()
@@ -389,23 +387,16 @@ class FilterWheelTaskGui(TaskGui):
             self.ui.sequenceListEdit.hide()
         
     def getFilterList(self):
-        self.filterTaskList = []
-        pos = self.ui.sequenceListEdit.text()
+        pos = str(self.ui.sequenceListEdit.text())
         if pos == '':
-            return self.filterTaskList
-        else:
-            pos = map( int, pos.split(',') )
-            for i in range(len(pos)):
-                self.filterTaskList.append(self.filterList[pos[i]-1])
-            #print 'filterTaskList :', self.filterTaskList
-            return self.filterTaskList
-    
-    def generatFilterList(self, filt):
-        self.filterList = []
-        for i in range(len(filt)):
-            self.filterList.append([(i+1), filt[i].name()])
-        #print 'filterList : ', self.filterList
-        return self.filterList
+            return []
+
+        try:
+            pos = map(int, pos.split(','))
+        except Exception:
+            raise ValueError("Filter list must be a comma-separated list of integer positions (got %r)" % pos)
+
+        return [self.filters[i] for i in pos]
             
 
 class FilterWheelDevGui(Qt.QWidget):
