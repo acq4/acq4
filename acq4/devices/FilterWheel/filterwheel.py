@@ -107,10 +107,9 @@ class FilterWheel(Device, OptomechDevice):
             self.setPosition(config['initialSlot'])
 
     def listFilters(self):
-        """Return a dict of available filters.
+        """Return a dict of available {slot_n: filter} pairs.
         """
-        with self.filterWheelLock:
-            return self._filters.copy()
+        return self._filters.copy()
     
     def slotNames(self):
         """Return a dict of names for each slot in the wheel.
@@ -293,24 +292,24 @@ class FilterWheelFuture(object):
 
 
 class FilterWheelTask(DeviceTask):
+    """Set a filter wheel position before beginning the task.
 
+    Command structure::
+
+        {'filterWheelPosition': N}
+    """
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.dev = dev
         self.cmd = cmd
         self.parentTask = parentTask
-        #print parentTask
         
     def configure(self):
-
-        with self.dev.filterWheelLock:
-            #self.state = self.dev.getLastState()
-            requiredPos = int(self.cmd['filterWheelPosition'][0]) # take the first character of string and convert it to int
-            if self.dev.currentFWPosition != requiredPos:
-                self.dev.setPosition(requiredPos)
+        requiredPos = self.cmd['filterWheelPosition']
+        self.future = self.dev.setPosition(requiredPos)
             
     def start(self):
-        pass
+        self.future.wait()
         
     def stop(self, abort):
         pass
@@ -329,15 +328,13 @@ class FilterWheelTaskGui(TaskGui):
         self.ui.setupUi(self)
         self.dev = dev
         
-        slotNames = self.dev.slotNames()
-        self.filters = {}
-        for i in range(self.dev.getPositionCount()):
-            name = slotNames[i]
-            self.filters[i+1] = name
-            item = self.ui.filterCombo.addItem("%d: %s" % (i+1, name)) 
+        self.filters = self.dev.slotNames()
+        for slotn, name in self.filters.items():
+            name = "%d: %s" % (slotn, name)
+            self.ui.filterCombo.addItem(name, slotn)
         
-        item = self.ui.sequenceCombo.addItem('off')
-        item = self.ui.sequenceCombo.addItem('list')
+        self.ui.sequenceCombo.addItem('off')
+        self.ui.sequenceCombo.addItem('list')
         self.ui.sequenceListEdit.hide()
         
         self.ui.sequenceCombo.currentIndexChanged.connect(self.sequenceChanged)
@@ -351,17 +348,13 @@ class FilterWheelTaskGui(TaskGui):
         ])
         
     def generateTask(self, params=None):
-        state = self.stateGroup.state()
-        
         if params is None or 'filterWheelPosition' not in params:
-            target = state['filterCombo']
+            ind = self.ui.filterCombo.currentIndex()
+            slotn = self.ui.filterCombo.itemData(ind)
         else:
-            target = self.filters[params['filterWheelPosition']]
+            slotn = params['filterWheelPosition']
         
-        task = {}
-        task['recordState'] = True
-        task['filterWheelPosition'] = target
-        return task    
+        return {'filterWheelPosition': slotn}
     
     def saveState(self, saveItems=False):
         state = self.stateGroup.state()
@@ -373,11 +366,19 @@ class FilterWheelTaskGui(TaskGui):
         self.sequenceChanged()
         
     def listSequence(self):
-        if self.ui.sequenceCombo.currentIndex() == 1:
-            filt = self.getFilterList()
-            return OrderedDict([('filterWheelPosition', filt)])
-        else:
-            return []
+        if self.ui.sequenceCombo.currentIndex() == 0:
+            return {}
+
+        pos = str(self.ui.sequenceListEdit.text())
+        if pos == '':
+            return {}
+        
+        try:
+            pos = list(map(int, pos.split(',')))
+        except Exception:
+            raise ValueError("Filter list must be a comma-separated list of integer positions (got %r)" % pos)
+
+        return {'filterWheelPosition': pos}
         
     def sequenceChanged(self):
         self.sigSequenceChanged.emit(self.dev.name())
@@ -385,18 +386,6 @@ class FilterWheelTaskGui(TaskGui):
             self.ui.sequenceListEdit.show()
         else:
             self.ui.sequenceListEdit.hide()
-        
-    def getFilterList(self):
-        pos = str(self.ui.sequenceListEdit.text())
-        if pos == '':
-            return []
-
-        try:
-            pos = map(int, pos.split(','))
-        except Exception:
-            raise ValueError("Filter list must be a comma-separated list of integer positions (got %r)" % pos)
-
-        return [self.filters[i] for i in pos]
             
 
 class FilterWheelDevGui(Qt.QWidget):
