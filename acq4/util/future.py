@@ -5,6 +5,8 @@ from acq4.pyqtgraph import ptime
 
 class Future(Qt.QObject):
     """Used to track the progress of an asynchronous task.
+
+    The simplest subclasses reimplement percentDone() and call _taskDone() when finished.
     """
     sigFinished = Qt.Signal(object)  # self
     sigStateChanged = Qt.Signal(object, object)  # self, state
