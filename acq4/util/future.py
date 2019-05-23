@@ -149,3 +149,54 @@ class Future(Qt.QObject):
             time.sleep(max(0, min(0.1, stop-now)))
             if self._stopRequested:
                 raise self.StopRequested()
+
+    def waitFor(self, futures, timeout=20.0):
+        """Wait for multiple futures to complete while also checking for stop requests on self.
+        """
+        if not isinstance(futures, (list, tuple)):
+            futures = [futures]
+        if len(futures) == 0:
+            return
+        start = time.time()
+        while True:
+            self._checkStop()
+            allDone = True
+            for fut in futures[:]:
+                try:
+                    fut.wait(0.1)
+                    futures.remove(fut)
+                except fut.Timeout:
+                    allDone = False
+                    break
+            if allDone:
+                break
+            if timeout is not None and time.time() - start > timeout:
+                raise futures[0].Timeout("Timed out waiting for %r" % futures)
+
+
+class MultiFuture(Future):
+    """Future tracking progress of multiple sub-futures.
+    """
+    def __init__(self, futures):
+        self.futures = futures
+
+    def stop(self, reason="task stop requested"):
+        for f in self.futures:
+            f.stop(reason=reason)
+        return Future.stop(self, reason)
+
+    def percentDone(self):
+        return min([f.percentDone() for f in self.futures])
+
+    def wasInterrupted(self):
+        return any([f.wasInterrupted() for f in self.futures])
+
+    def isDone(self):
+        return all([f.isDone() for f in self.futures])
+
+    def errorMessage(self):
+        return "; ".join([f.errorMessage() for f in self.futures])
+
+    def currentState(self):
+        return "; ".join([f.currentState() for f in self.futures])
+

@@ -205,9 +205,7 @@ class PatchPipetteApproachState(PatchPipetteState):
         fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.resetTestPulseHistory()
-        while not fut.isDone():
-            self._checkStop()
-            time.sleep(0.1)
+        self.waitFor(fut)
         return self.config['nextState']
 
 
@@ -536,11 +534,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         stepPos = self.advanceSteps[self.stepCount]
         self.stepCount += 1
         fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
-        while True:
-            self._checkStop()
-            fut.wait(timeout=0.2)
-            if fut.isDone():
-                break
+        self.waitFor(fut)
 
     def cleanup(self):
         if self.contAdvanceFuture is not None:
@@ -823,9 +817,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         config = self.config
 
         fut = self.dev.pipetteDevice.retractFromSurface()
-        while True:
-            fut.wait(timeout=0.1)
-            self._checkStop()
+        self.waitFor(fut)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         time.sleep(config['blowoutDuration'])
@@ -895,22 +887,27 @@ class PatchPipetteCleanState(PatchPipetteState):
             if pos is None:
                 raise Exception("Device %s does not have a stored %s position." % (dev.pipetteDevice.name(), stage))
 
-            approachPos = [pos[0], pos[1], pos[2] + config['approachHeight']]
+            self.gotoApproachPosition(pos)
 
-            dev.pipetteDevice._moveToGlobal(approachPos, 'fast').wait()
-            self._checkStop()
-            self.resetPos = approachPos
-            dev.pipetteDevice._moveToGlobal(pos, 'fast').wait()
-            self._checkStop()
+            # todo: if needed, we can check TP for capacitance changes here
+            # and stop moving as soon as the fluid is detected
+            self.waitFor([dev.pipetteDevice._moveToGlobal(pos, 'fast')])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self._checkStop(delay)
 
-        dev._pipetteRecord['cleanCount'] += 1
+        dev.pipetteRecord()['cleanCount'] += 1
         dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
         self.resetPos = None
         return 'out'          
+
+    def gotoApproachPosition(self, pos):
+        # motion planning is in its own method to make it easier to customize
+        approachPos = [pos[0], pos[1], pos[2] + self.config['approachHeight']]
+        dev = self.dev
+        self.waitFor([dev.pipetteDevice._moveToGlobal(approachPos, 'fast')])
+        self.resetPos = approachPos
 
     def cleanup(self):
         dev = self.dev

@@ -317,6 +317,7 @@ class UMP(object):
             print("ump_goto_pos_ext2%r" % args)
             self.call('ump_goto_position_ext2', *args)
 
+
         return next_move
 
     def is_busy(self, dev):
@@ -325,9 +326,8 @@ class UMP(object):
         Note: this should not be used to determine whether a move has completed;
         use MoveRequest.finished or .finished_event as returned from goto_pos().
         """
-        # status = self.call('ump_get_status_ext', c_int(dev))
-        # return bool(self.lib.ump_is_busy_status(c_int(status)))
-        return self.call('ump_get_drive_status_ext', c_int(dev)) != 0        
+        # idle/complete=0; moving>0; failed<0
+        return self.call('ump_get_drive_status_ext', c_int(dev)) > 0        
 
     def stop_all(self):
         """Stop all manipulators.
@@ -410,7 +410,7 @@ class UMP(object):
                     pos = self.get_pos(dev, timeout=-1)
                     dif = np.linalg.norm(np.array(pos) - np.array(move.target_pos))
                     
-                    if dif > 1000 and dev==19 and move.attempts < 10:  # require 100 nm accuracy for stage
+                    if dif > 1000 and dev==19 and move.attempts < 0:  # require 100 nm accuracy for stage
                         move.attempts += 1
                         self._last_busy_time[dev] = now
                         move.speed = move.speed / 2
