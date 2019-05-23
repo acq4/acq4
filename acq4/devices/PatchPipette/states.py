@@ -923,3 +923,38 @@ class PatchPipetteCleanState(PatchPipetteState):
             dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast')
             
         PatchPipetteState.cleanup(self)
+
+
+class PatchPipetteSwapState(PatchPipetteState):
+    """Send manipulator home and wait for user to calibrate a new pipette.
+    """
+
+    stateName = 'swap'
+    _defaultConfig = {
+        'initialPressureSource': 'atmosphere',
+        'initialClampMode': 'VC',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': False,
+        'fallbackState': 'out',
+        'homeSpeed': 'fast',
+    }
+
+    def run(self):
+        config = self.config.copy()
+        dev = self.dev
+
+        self.setState("requesting new pipette")
+        fut = dev.pipetteDevice.goHome(config['homeSpeed'])
+        self.waitFor([fut])
+
+        # todo: notify user
+        fut = self.dev.goHome('fast')
+
+        # wait for calibration
+        while self.dev.calibrated is False:
+            self._checkStop()
+            time.sleep(0.2)
+
+        dev.newPipette()
+        
+        return config['fallbackState']

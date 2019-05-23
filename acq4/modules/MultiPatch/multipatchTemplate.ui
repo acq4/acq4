@@ -58,7 +58,7 @@
       <item row="10" column="0">
        <widget class="QPushButton" name="pushButton">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="text">
          <string>Pip. Offset</string>
@@ -211,7 +211,7 @@
       <item row="10" column="2">
        <widget class="QPushButton" name="pushButton_2">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="text">
          <string>Bridge Balance</string>
@@ -221,10 +221,17 @@
       <item row="10" column="1">
        <widget class="QPushButton" name="pushButton_3">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="text">
          <string>Pip. Capacit.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+       <widget class="QPushButton" name="swapBtn">
+        <property name="text">
+         <string>Swap</string>
         </property>
        </widget>
       </item>
