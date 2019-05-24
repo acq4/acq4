@@ -900,6 +900,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         dev.pipetteRecord()['cleanCount'] += 1
         dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
         self.resetPos = None
+        dev.newPatchAttempt()
         return 'out'          
 
     def gotoApproachPosition(self, pos):
@@ -923,7 +924,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
 
 class PatchPipetteSwapState(PatchPipetteState):
-    """Send manipulator home and wait for user to calibrate a new pipette.
+    """Send manipulator home for user to attach a new pipette.
     """
 
     stateName = 'swap'
@@ -943,14 +944,6 @@ class PatchPipetteSwapState(PatchPipetteState):
         self.setState("requesting new pipette")
         fut = dev.pipetteDevice.goHome(config['homeSpeed'])
         self.waitFor([fut])
-
-        # todo: notify user
-        fut = self.dev.goHome('fast')
-
-        # wait for calibration
-        while self.dev.calibrated is False:
-            self._checkStop()
-            time.sleep(0.2)
 
         dev.newPipette()
         
