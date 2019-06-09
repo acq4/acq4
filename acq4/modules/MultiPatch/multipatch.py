@@ -3,6 +3,7 @@ from __future__ import print_function
 import os, re
 import numpy as np
 import json
+from collections import OrderedDict
 from acq4.util import Qt
 
 from acq4.modules.Module import Module
@@ -65,14 +66,11 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.pipCtrls = []
         for i, pip in enumerate(self.pips):
-            pip.sigTargetChanged.connect(self.pipetteTargetChanged)
             pip.sigMoveStarted.connect(self.pipetteMoveStarted)
             pip.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
-                pip.sigStateChanged.connect(self.pipetteStateChanged)
-                pip.sigPressureChanged.connect(self.pipettePressureChanged)
+                pip.sigNewEvent.connect(self.pipetteEvent)
                 pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
-                pip.sigTestPulseFinished.connect(self.pipetteTestPulseFinished)
             ctrl = PipetteControl(pip, self)
             if i > 0:
                 ctrl.hideHeader()
@@ -116,6 +114,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.sealBtn.clicked.connect(self.sealClicked)
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
+        self.ui.swapBtn.clicked.connect(self.swapClicked)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
@@ -132,10 +131,6 @@ class MultiPatchWindow(Qt.QWidget):
             self.xkdev = None
 
         self.resetHistory()
-
-        for i, pip in enumerate(self.pips):
-            if isinstance(pip, PatchPipette):
-                self.pipetteStateChanged(pip)
 
         if self.microscope:
             d = self.microscope.getSurfaceDepth()
@@ -218,7 +213,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.pipetteDevice.goApproach(speed)
             if isinstance(pip, PatchPipette):
-                pip.autoPipetteOffset()
+                pip.clampDevice.autoPipetteOffset()
 
     def moveToTarget(self):
         speed = self.selectedSpeed(default='slow')
@@ -496,49 +491,29 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('reseal')
         
+    def swapClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('swap')
+        
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
-        event = {"device": str(pip.name()),
-                 "event": "move_start"}
-        self.recordEvent(**event)
-
-    def pipetteTestPulseFinished(self, pipette, result):
-        event = {"device": str(pipette.name()), "event": "test_pulse"}
-        event.update(result.analysis())
-        self.recordEvent(**event)
 
     def pipetteMoveFinished(self, pip):
         self.updateXKeysBacklight()
-        pos = pip.pipetteDevice.globalPosition()
-        event = {"device": str(pip.name()),
-                 "event": "move_stop",
-                 "position": (pos[0], pos[1], pos[2])}
-        self.recordEvent(**event)
 
-    def pipettePressureChanged(self, pipette, source, pressure):
-        event = {"device": str(pipette.name()),
-                 "event": "pressure_changed",
-                 "source": source,
-                 'pressure': pressure}
-        self.recordEvent(**event)
-
-    def pipetteTargetChanged(self, pipette, target):
-        event = {"device": str(pipette.name()),
-                 "event": "target_changed",
-                 "target_position": (target[0], target[1], target[2])}
-        self.recordEvent(**event)
-
-    def pipetteStateChanged(self, pipette):
-        event = {"device": str(pipette.name()),
-                 "event": "state_changed",
-                 "state": str(pipette.getState())}
-        self.recordEvent(**event)
+    def pipetteEvent(self, pip, ev):
+        self.recordEvent(ev)
 
     def surfaceDepthChanged(self, depth):
-        event = {"device": str(self.microscope.name()),
-                 "event": "surface_depth_changed",
-                 "surface_depth": depth}
-        self.recordEvent(**event)
+        event = OrderedDict([
+            ("device", str(self.microscope.name())),
+            ("event_time", pg.ptime.time()),
+            ("event", "surface_depth_changed"),
+            ("surface_depth", depth),
+        ])
+        self.recordEvent(event)
 
     def recordToggled(self, rec):
         if self.storageFile is not None:
@@ -551,10 +526,9 @@ class MultiPatchWindow(Qt.QWidget):
             self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
 
-    def recordEvent(self, **kwds):
-        kwds["event_time"] = pg.ptime.time()
-        self.eventHistory.append(kwds)
-        self.writeRecords([kwds])
+    def recordEvent(self, event):
+        self.eventHistory.append(event)
+        self.writeRecords([event])
 
     def resetHistory(self):
         self.eventHistory = []

@@ -69,8 +69,9 @@ class Pipette(Device, OptomechDevice):
 
     # move start/finish are used for recording coarse movement information;
     # they are not emitted for every transform change.
-    sigMoveStarted = Qt.Signal(object)
-    sigMoveFinished = Qt.Signal(object)
+    sigMoveStarted = Qt.Signal(object, object)  # self, pos
+    sigMoveFinished = Qt.Signal(object, object)  # self, pos
+    sigMoveRequested = Qt.Signal(object, object, object, object)  # self, pos, speed, opts
 
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
@@ -298,6 +299,7 @@ class Pipette(Device, OptomechDevice):
         # move along a path defined in global coordinates. 
         # Format is [(pos, speed, linear), ...]
         # returns the movefuture of the last move.
+        self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path})
         stagePath = []
         for pos, speed, linear in path:
             stagePos = self._solveGlobalStagePosition(pos)
@@ -362,14 +364,16 @@ class Pipette(Device, OptomechDevice):
         """
         return self.mapToGlobal([0, 0, 0])
 
-    def _moveToGlobal(self, pos, speed, linear=False):
+    def _moveToGlobal(self, pos, speed, **kwds):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
         """
+        kwds.setdefault('linear', True)
+        self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
         stage = self.parentDevice()
         try:
-            return stage.moveToGlobal(stagePos, speed, linear=linear)
+            return stage.moveToGlobal(stagePos, speed, **kwds)
         except Exception as exc:
             print("Error moving %s to global position %r:" % (self, pos))
             raise
@@ -440,12 +444,12 @@ class Pipette(Device, OptomechDevice):
         self.moveTimer.start(500)
         if self.moving is False:
             self.moving = True
-            self.sigMoveStarted.emit(self)
+            self.sigMoveStarted.emit(self, self.globalPosition())
 
     def positionChangeFinished(self):
         self.moveTimer.stop()
         self.moving = False
-        self.sigMoveFinished.emit(self)
+        self.sigMoveFinished.emit(self, self.globalPosition())
 
 
 class PipetteCamModInterface(CameraModuleInterface):

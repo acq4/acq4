@@ -26,7 +26,6 @@ class PatchPipetteStateManager(Qt.QObject):
     """
     stateHandlers = OrderedDict([
         ('out', states.PatchPipetteOutState),
-        ('clean', states.PatchPipetteCleanState),
         ('bath', states.PatchPipetteBathState),
         ('approach', states.PatchPipetteApproachState),
         ('cell detect', states.PatchPipetteCellDetectState),
@@ -34,8 +33,12 @@ class PatchPipetteStateManager(Qt.QObject):
         ('cell attached', states.PatchPipetteCellAttachedState),
         ('break in', states.PatchPipetteBreakInState),
         ('whole cell', states.PatchPipetteWholeCellState),
+        ('reseal', states.PatchPipetteResealState),
+        ('blowout', states.PatchPipetteBlowoutState),
         ('broken', states.PatchPipetteBrokenState),
         ('fouled', states.PatchPipetteFouledState),
+        ('clean', states.PatchPipetteCleanState),
+        ('swap', states.PatchPipetteSwapState),
     ])
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
@@ -169,7 +172,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 pass
 
     def jobStateChanged(self, job, state):
-        self.dev.logEvent("stateManagerEvent", info=state)
+        self.dev.emitNewEvent("state_event", {'state': job.stateName, 'info': state})
 
     def jobFinished(self, job):
         try:

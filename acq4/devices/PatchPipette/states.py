@@ -900,6 +900,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         dev.pipetteRecord()['cleanCount'] += 1
         dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
         self.resetPos = None
+        dev.newPatchAttempt()
         return 'out'          
 
     def gotoApproachPosition(self, pos):
@@ -920,3 +921,30 @@ class PatchPipetteCleanState(PatchPipetteState):
             dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast')
             
         PatchPipetteState.cleanup(self)
+
+
+class PatchPipetteSwapState(PatchPipetteState):
+    """Send manipulator home for user to attach a new pipette.
+    """
+
+    stateName = 'swap'
+    _defaultConfig = {
+        'initialPressureSource': 'atmosphere',
+        'initialClampMode': 'VC',
+        'initialClampHolding': 0,
+        'initialTestPulseEnable': False,
+        'fallbackState': 'out',
+        'homeSpeed': 'fast',
+    }
+
+    def run(self):
+        config = self.config.copy()
+        dev = self.dev
+
+        self.setState("requesting new pipette")
+        fut = dev.pipetteDevice.goHome(config['homeSpeed'])
+        self.waitFor([fut])
+
+        dev.newPipette()
+        
+        return config['fallbackState']
