@@ -533,7 +533,7 @@ class TaskRunner(Module):
     def testSingle(self):
         return self.runSingle(store=False)
     
-    def runSingle(self, store=True):
+    def runSingle(self, store=True, storeDirHandle=None):
         """Start a single task run (using default values for all sequence parameters).
 
         Return a TaskFuture instance that can be used to monitor progress and results.
@@ -553,14 +553,15 @@ class TaskRunner(Module):
         ## Set storage dir
         try:
             if store:
-                currentDir = self.manager.getCurrentDir()
+                if storeDirHandle is None:
+                    storeDirHandle = self.manager.getCurrentDir()
                 name = self.currentTask.name()
                 if name is None:
                     name = 'protocol'
                 info = self.taskInfo()
                 info['dirType'] = 'Protocol'
                 ## Create storage directory with all information about the task to be executed
-                dh = currentDir.mkdir(name, autoIncrement=True, info=info)
+                dh = storeDirHandle.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
 
