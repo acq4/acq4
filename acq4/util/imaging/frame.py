@@ -60,3 +60,11 @@ class Frame(object):
         """
         return self.globalTransform().map(obj)
     
+    def saveImage(self, dh, filename):
+        data = self.getImage()
+        info = self.info()
+
+        if filename.endswith('.ma'):
+            dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
+        else:
+            dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)

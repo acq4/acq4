@@ -591,7 +591,7 @@ class TaskRunner(Module):
     def testSequence(self):
         return self.runSequence(store=False)
        
-    def runSequence(self, store=True):
+    def runSequence(self, store=True, storeDirHandle=None):
         """Start a sequence task run.
 
         Return a TaskFuture instance that can be used to monitor progress and results.
@@ -621,13 +621,14 @@ class TaskRunner(Module):
                 
             ## Set storage dir
             if store:
-                currentDir = self.manager.getCurrentDir()
+                if storeDirHandle is None:
+                    storeDirHandle = self.manager.getCurrentDir()
                 name = self.currentTask.name()
                 if name is None:
                     name = 'protocol'
                 info = self.taskInfo(params)
                 info['dirType'] = 'ProtocolSequence'
-                dh = currentDir.mkdir(name, autoIncrement=True, info=info)
+                dh = storeDirHandle.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
                 

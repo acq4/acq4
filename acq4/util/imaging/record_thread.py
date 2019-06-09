@@ -172,22 +172,18 @@ class RecordThread(Thread):
             if stack is False:
                 # Store single frame to new file
                 try:
-                    if HAVE_IMAGEFILE:
-                        fileName = 'image.tif'
-                        fh = dh.writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
-                    else:
-                        fileName = 'image.ma'
-                        fh = dh.writeFile(data, fileName, info, fileType="MetaArray", autoIncrement=True)
-
+                    fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
+                    frame['frame'].saveImage(dh, fileName)
                     self.sigSavedFrame.emit(fh.name())
                 except:
                     self.sigSavedFrame.emit(False)
                     raise
                 continue
 
-            # Store frame to current (or new) stack
-            recFrames.append((data, info))
-            self.lastFrameTime = info['time']
+            else:
+                # Store frame to current (or new) stack
+                recFrames.append((data, info))
+                self.lastFrameTime = info['time']
             
         if len(recFrames) > 0:
             self.writeFrames(recFrames, dh)
