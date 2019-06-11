@@ -57,11 +57,9 @@ class PatchPipetteStateManager(Qt.QObject):
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
     def getState(self):
-        """Return the name of the currently active state.
+        """Return the currently active state.
         """
-        if self.currentJob is None:
-            return None
-        return self.currentJob.stateName
+        return self.currentJob
 
     def listStates(self):
         return list(self.stateHandlers.keys())
@@ -146,7 +144,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
     def activeChanged(self, pip, active):
         if active:
-            self.configureState(self.getState())
+            self.configureState(self.getState().stateName)
         else:
             self.stopJob()
             self.dev.enableTestPulse(False)

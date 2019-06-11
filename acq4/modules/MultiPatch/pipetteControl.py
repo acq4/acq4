@@ -123,7 +123,7 @@ class PipetteControl(Qt.QWidget):
     def patchStateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
         state = pipette.getState()
-        self.ui.stateText.setText(state)
+        self.ui.stateText.setText(state.stateName)
 
     def clampStateChanged(self, state):
         if self.clampMode() != state['mode']:

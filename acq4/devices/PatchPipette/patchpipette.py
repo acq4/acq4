@@ -219,7 +219,7 @@ class PatchPipette(Device):
 
     def _writeStateFile(self):
         state = {
-            'state': self._stateManager.getState(),
+            'state': self._stateManager.getState().stateName,
             'active': self.active,
             'calibrated': self.calibrated,
             'broken': self.broken,
