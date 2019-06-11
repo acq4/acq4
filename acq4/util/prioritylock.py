@@ -1,3 +1,5 @@
+from __future__ import print_function, division
+
 import weakref
 from threading import Lock, Thread, Event
 try:
@@ -56,11 +58,15 @@ class PriorityLock(object):
     def _release_lock(self, fut):
         with fut._acq_lock:
             # print("release request:", fut)
+            if fut.released:
+                return
             fut._released = True
             if fut.acquired:
                 # print("release lock:", fut)
                 fut._acquired = False
                 self.unlock_event.set()
+            else:
+                fut._taskDone(interrupted=True)
     
     def _lock_loop(self):
         while True:
@@ -77,6 +83,7 @@ class PriorityLock(object):
                     # assign lock to this request
                     # print("assign lock:", fut)
                     fut._acquired = True
+                    fut._taskDone()
                     self.unlock_event.clear()
                     break
 
@@ -90,6 +97,7 @@ class PriorityLockRequest(Future):
         self.mutex = weakref.ref(mutex)
         self.name = name
         self._acq_lock = Lock()
+        self._wait_event = Event()
         self._acquired = False
         self._released = False
         
@@ -106,9 +114,12 @@ class PriorityLockRequest(Future):
         """
         return self._released
         
+    def _wait(self, timeout):
+        self._wait_event.wait(timeout=timeout)
+
     def percentDone(self):
         return 100 if (self.acquired or self.released) else 0
-        
+
     def release(self):
         """Release this lock request.
         
@@ -120,6 +131,10 @@ class PriorityLockRequest(Future):
         if mutex is None:
             return
         mutex._release_lock(self)
+
+    def _taskDone(self, *args, **kwds):
+        self._wait_event.set()
+        Future._taskDone(self, *args, **kwds)
 
     def __enter__(self):
         return self

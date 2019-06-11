@@ -1,3 +1,5 @@
+from __future__ import print_function, division
+
 import time
 from acq4.util import Qt
 from acq4.pyqtgraph import ptime
@@ -74,7 +76,7 @@ class Future(Qt.QObject):
         """Called by subclasses when the task is done (regardless of the reason)
         """
         if self._isDone:
-            raise Exception("_isDone has already been called.")
+            raise Exception("_taskDone has already been called.")
         self._isDone = True
         if error is not None:
             # error message may have been set earlier
@@ -122,7 +124,7 @@ class Future(Qt.QObject):
             if updates is True:
                 Qt.QTest.qWait(min(1, int(pollInterval * 1000)))
             else:
-                time.sleep(pollInterval)
+                self._wait(pollInterval)
         
         if self.wasInterrupted():
             err = self.errorMessage()
@@ -130,6 +132,11 @@ class Future(Qt.QObject):
                 raise RuntimeError("Task did not complete.")
             else:
                 raise RuntimeError("Task did not complete: %s" % err)
+
+    def _wait(self, duration):
+        """Default sleep implementation used by wait(); may be overridden to return early.
+        """
+        time.sleep(duration)
 
     def _checkStop(self, delay=0):
         """Raise self.StopRequested if self.stop() has been called.

@@ -1,11 +1,12 @@
 import time
 from acq4.util.prioritylock import PriorityLock
+import acq4
 
 
 def test_prioritylock():
     l = PriorityLock()
     with l.acquire(name="f1") as f1:             # test context manager
-        time.sleep(0.01)
+        f1.wait(timeout=1)
         f2 = l.acquire(name="f2")                # lock when ready
         f3 = l.acquire(100, name="f3")           # higher priority
         f4 = l.acquire(10, name="f4")            # mid priority
@@ -18,16 +19,16 @@ def test_prioritylock():
         
         assert all([f1.acquired, not f2.acquired, not f3.acquired, not f4.acquired, not f5.acquired, not f6.acquired, not f7.acquired])
     
-    time.sleep(0.01)
+    f3.wait()
     assert all([not f1.acquired, not f2.acquired, f3.acquired, not f4.acquired, not f5.acquired, not f6.acquired, not f7.acquired])
     f3.release()
-    time.sleep(0.01)
+    f4.wait()
     assert all([not f1.acquired, not f2.acquired, not f3.acquired, f4.acquired, not f5.acquired, not f6.acquired, not f7.acquired])
     f4.release()
-    time.sleep(0.01)
+    f5.wait()
     assert all([not f1.acquired, not f2.acquired, not f3.acquired, not f4.acquired, f5.acquired, not f6.acquired, not f7.acquired])
     f5.release()
-    time.sleep(0.01)
+    f2.wait()
     assert all([not f1.acquired, f2.acquired, not f3.acquired, not f4.acquired, not f5.acquired, not f6.acquired, not f7.acquired])
     f2.release()
     time.sleep(0.01)
