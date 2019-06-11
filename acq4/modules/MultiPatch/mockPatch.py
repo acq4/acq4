@@ -45,6 +45,10 @@ class MockPatch(object):
         mode = pip.clampDevice.getMode()
         holding = pip.clampDevice.getHolding(mode)
 
+        pipResistance = self.pipResistance
+        if self.widget.foulBtn.isChecked():
+            pipResistance += 3e6
+
         # print("target: %s um   pressure: %s kPa" % (targetDistance*1e6, pressure*1e-3))
         if pressure > 0:
             self.resetState()
@@ -72,9 +76,14 @@ class MockPatch(object):
 
         self.sealResistance = max(self.sealResistance, 100)
 
-        ssr = self.pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/(self.accessResistance + self.inputResistance))
-        # print("ssr: %s  pr: %s  sr: %s  ar: %s  ir: %s" % (ssr, self.pipResistance, self.sealResistance, self.accessResistance, self.inputResistance))
-        pr = self.pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/self.accessResistance)
+        ssr = pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/(self.accessResistance + self.inputResistance))
+        # print("ssr: %s  pr: %s  sr: %s  ar: %s  ir: %s" % (ssr, pipResistance, self.sealResistance, self.accessResistance, self.inputResistance))
+        pr = pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/self.accessResistance)
+
+        if self.widget.breakBtn.isChecked():
+            ssr = 1e6
+            pr = 1e6
+
         i = (holding - self.membranePotential) / ssr
 
         return {'baselinePotential': holding, 'baselineCurrent': i, 'peakResistance': pr, 'steadyStateResistance': ssr}
@@ -91,6 +100,14 @@ class MockPatchUI(Qt.QWidget):
         self.layout.addWidget(self.enableBtn, 0, 0)
         self.enableBtn.setCheckable(True)
         self.enableBtn.clicked.connect(self.enableClicked)
+
+        self.breakBtn = Qt.QPushButton('Break tip')
+        self.layout.addWidget(self.breakBtn, 1, 0)
+        self.breakBtn.setCheckable(True)
+
+        self.foulBtn = Qt.QPushButton('Foul tip')
+        self.layout.addWidget(self.foulBtn, 2, 0)
+        self.foulBtn.setCheckable(True)
 
     def enableClicked(self):
         self.mockpatch.enabled = self.enableBtn.isChecked()
