@@ -6,6 +6,7 @@ from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 from .calibration import *
+import threading
 
 
 class Stage(Device, OptomechDevice):
@@ -392,6 +393,24 @@ class MoveFuture(object):
         self.speed = speed
         self.targetPos = pos
         self.startPos = dev.getPosition()
+        self.lock = Mutex()
+        self.__reachedTarget = False
+
+    @property
+    def _reachedTarget(self):
+        #print("GET REACHEDTARGET:", self.__reachedTarget, "Thread:", threading.current_thread().ident)
+        return self.__reachedTarget
+    
+    @_reachedTarget.setter
+    def _reachedTarget(self, t):
+        #print("SETTING REACHEDTARGET", t, "Thread:", threading.current_thread().ident)
+        self.__reachedTarget = t
+
+    def update(self):
+        p = self.percentDone()
+        if p > 99.9:
+            with self.lock:
+                self._reachedTarget = True
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -400,16 +419,14 @@ class MoveFuture(object):
         the percent complete. Devices that do not provide position updates while 
         moving should reimplement this method.
         """
-        if self.isDone():
-            return 100
         s = np.array(self.startPos)
         t = np.array(self.targetPos)
-        p = np.array(self.dev.getPosition())
-        d1 = ((p - s)**2).sum()**0.5
-        d2 = ((t - s)**2).sum()**0.5
-        if d2 == 0:
-            return 100
-        return 100 * d1 / d2
+        p = np.array(self.dev.getPosition(refresh=True))
+        d1 = ((p - s)**2).sum()**0.5 ## how far we've travelled
+        d2 = ((t - s)**2).sum()**0.5 ## total distance
+
+        percent = 100 * d1/d2
+        return percent
 
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
@@ -419,7 +436,15 @@ class MoveFuture(object):
     def isDone(self):
         """Return True if the move has completed or was interrupted.
         """
-        return self.percentDone() == 100 or self.wasInterrupted()
+        #print "ISDONE entering", self
+        self.update()
+        with self.lock:
+            reachedTarget = self._reachedTarget
+            #print "ISDONE (reachedTarget: %s)"%str(reachedTarget), self
+        res = reachedTarget or self.wasInterrupted()
+        #print "ISDONE returning: ", res , "(reachedTarget: %s)"%str(reachedTarget), self
+        #return reachedTarget or self.wasInterrupted()
+        return res
 
     def errorMessage(self):
         """Return a string description of the reason for a move failure,
@@ -435,6 +460,7 @@ class MoveFuture(object):
 
         If the move did not complete, raise an exception.
         """
+        #print " ENTERING WAIT, Thread:", threading.current_thread().ident
         start = ptime.time()
         while (timeout is None) or (ptime.time() < start + timeout):
             if self.isDone():
@@ -443,12 +469,20 @@ class MoveFuture(object):
                 Qt.QTest.qWait(100)
             else:
                 time.sleep(0.1)
-        if not self.isDone() or self.wasInterrupted():
+        #print "====="
+        #print "PRE isDone:",  self.isDone(), 'wasInterupted:', self.wasInterrupted(), "timeout:", timeout, 'percentDone:', self.percentDone()
+        done = self.isDone()
+        interrupted = self.wasInterrupted()
+        #if not self.isDone() or self.wasInterrupted():
+        if (not done) or (interrupted):
+            #print "POST isDone:", done, 'wasInterupted:', interrupted, "timeout:", timeout, 'percentDone:', self.percentDone()
+            #print "POST isDone:", self.isDone(), 'wasInterupted:', self.wasInterrupted(), "timeout:", timeout, 'percentDone:', self.percentDone()
+            #print "   start:", self.startPos, "target:", self.targetPos, "pos:", self.dev.getPosition()
             err = self.errorMessage()
             if err is None:
-                raise RuntimeError("Move did not complete.")
+                raise RuntimeError("%s's move did not complete." % self.dev.name() )
             else:
-                raise RuntimeError("Move did not complete: %s" % err)
+                raise RuntimeError("%s's move did not complete: %s" % (self.dev.name(), err))
 
 
 class StageInterface(Qt.QWidget):

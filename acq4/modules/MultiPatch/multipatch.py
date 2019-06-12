@@ -193,6 +193,12 @@ class MultiPatchWindow(Qt.QWidget):
             if d is not None:
                 self.surfaceDepthChanged(d)
 
+        ## disable pressure control buttons if we don't have pressure control
+        self.hasPressureControl = self.module.config.get('hasPressureControl', True)
+        if not self.hasPressureControl:
+            self.ui.sealBtn.setEnabled(False)
+            self.ui.breakInBtn.setEnabled(False)
+
     def moveIn(self):
         for pip in self.selectedPipettes():
             pip.startAdvancing(10e-6)

@@ -213,7 +213,7 @@ class Microscope(Device, OptomechDevice):
         pd = self.positionDevice()
         fd = self.focusDevice()
 
-        if len(pos) == 3 and fd is not pd:
+        if len(pos) == 3 and fd is not pd and pd is not None:
             z = pos[2]
             self.setFocusDepth(z)
             pos = pos[:2]
@@ -221,11 +221,14 @@ class Microscope(Device, OptomechDevice):
             pos = list(pos) + [self.getFocusDepth()]
 
         # Determine how to move the xy(z) stage to react the new center position
-        gpos = self.globalPosition()
-        sgpos = pd.globalPosition()
-        sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
-        sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        return pd.moveToGlobal(sgpos2, speed)
+        if pd is not None:
+            gpos = self.globalPosition()
+            sgpos = pd.globalPosition()
+            sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
+            sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
+            return pd.moveToGlobal(sgpos2, speed)
+        else: 
+            return self.setFocusDepth(pos[2])
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
@@ -376,6 +379,7 @@ class ScopeGUI(Qt.QWidget):
             ss.sigValueChanged.connect(self.scaleSpinChanged)
             row += 1
         self.updateSpins()
+        self.setupObjectiveToggleShortcut()
     
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio
@@ -433,6 +437,28 @@ class ScopeGUI(Qt.QWidget):
             ys.setValue(offset.y())
             zs.setValue(offset.z())
             ss.setValue(obj.scale().x())
+
+    def setupObjectiveToggleShortcut(self):
+        keys = self.dev.config.get('shortcut', None)
+        if keys == None:
+            return
+
+        if len(self.objList) > 2:
+            print("WARNING: Cannot set up objective toggle shortcuts for more than 2 objectives. No shortcuts were set up.")
+            return
+            
+        shortcut = QtGui.QShortcut(QtGui.QKeySequence(keys), self, context=QtCore.Qt.ApplicationShortcut)
+        shortcut.activated.connect(self.shortcutPressed)
+
+    def shortcutPressed(self):
+        unchecked = None
+        for r in self.objList:
+            if not self.objWidgets[r][0].isChecked():
+                unchecked = self.objWidgets[r][0]
+                break
+        unchecked.setChecked(True)
+        self.objRadioClicked()
+
 
 
 class ScopeCameraModInterface(CameraModuleInterface):

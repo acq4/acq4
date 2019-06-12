@@ -87,10 +87,14 @@ class ImageFile(FileType):
         """
         fileName = cls.addExtension(fileName)
         ext = os.path.splitext(fileName)[1].lower()[1:]
-        
-        img = Image.fromarray(data.transpose())
-        img.save(os.path.join(dirHandle.name(), fileName))
-        
+        try:
+            img = Image.fromarray(data.transpose())
+            img.save(os.path.join(dirHandle.name(), fileName))
+        except TypeError:
+            import tifffile
+            name = os.path.join(dirHandle.name(), fileName)
+            tifffile.imsave(name, data.transpose(), photometric='rgb')
+
         #if ext in ['tif', 'tiff']:
             #d = data.transpose()
             #tiff = libtiff.TIFFimage(d, description='')
@@ -105,7 +109,13 @@ class ImageFile(FileType):
     @classmethod
     def read(cls, fileHandle):
         """Read a file, return a data object"""
-        img = Image.open(fileHandle.name())
+        try:
+            img = Image.open(fileHandle.name())
+        except IOError:
+            import tifffile
+            img = tifffile.imread(fileHandle.name())
+            img = img.transpose()
+
         arr = array(img)
         if arr.ndim == 0:
             raise Exception("Image has no data. Either 1) this is not a valid image or 2) PIL does not support this image type.")
@@ -134,7 +144,11 @@ class ImageFile(FileType):
             transp[1] = 0
             axisHint = ['x', 'y']
         elif arr.ndim == 3:
-            if len(img.getbands()) > 1:
+            if not hasattr(img, 'getbands'): ## then we're dealing with a tifffile image instead of a PIL image
+                #transp[0] = 1
+                #transp[1] = 0
+                axisHint = ['x', 'y', 'R', 'G', 'B']
+            elif len(img.getbands()) > 1:
                 transp[0] = 1
                 transp[1] = 0
                 axisHint = ['x', 'y']
@@ -150,7 +164,8 @@ class ImageFile(FileType):
             raise Exception("Bad image size: %s" % str(arr.ndim))
         #print arr.shape
         arr = arr.transpose(tuple(transp))
-        axisHint.append(img.getbands())
+        if hasattr(img, 'getbands'):
+            axisHint.append(img.getbands())
         
         arr = Array(arr) ## allow addition of new attributes
         arr.axisHint = arr

@@ -7,6 +7,7 @@ from .imaging_template import Ui_Form
 from .record_thread import RecordThread
 from acq4.util.debug import printExc
 
+PINNED_FRAME_ZVALUE = -10000 #start here
 
 class ImagingCtrl(Qt.QWidget):
     """Control widget used to interact with imaging devices. 
@@ -25,8 +26,8 @@ class ImagingCtrl(Qt.QWidget):
     * Place self.frameDisplay.imageItem() in a ViewBox.
     * Display this widget along with self.frameDisplay.contrastCtrl and .bgCtrl
       to provide the user interface.
-    * Connect to sigAcquireVideoClicked and sigAcquireFrameClicked to handle
-      user requests for acquisition.
+    * Connect to sigStartVideoClicked, sigStopVideoClicked and 
+      sigAcquireFrameClicked to handle user requests for acquisition.
     * Call acquisitionStarted() and acquisitionStopped() to provide feedback
     * Call newFrame(Frame) whenever a new frame is available from the imaging
       device.
@@ -260,11 +261,13 @@ class ImagingCtrl(Qt.QWidget):
         hist = self.frameDisplay.contrastCtrl.ui.histogram
         im = pg.ImageItem(data, levels=hist.getLevels(), lut=hist.getLookupTable(img=data), removable=True)
         im.sigRemoveRequested.connect(self.removePinnedFrame)
-        if len(self.pinnedFrames) == 0:
-            z = -10000
-        else:
-            z = self.pinnedFrames[-1].zValue() + 1
-        im.setZValue(z)
+        #if len(self.pinnedFrames) == 0:
+        #    z = -10000
+        #else:
+        #    z = self.pinnedFrames[-1].zValue() + 1
+        global PINNED_FRAME_ZVALUE
+        PINNED_FRAME_ZVALUE += 1
+        im.setZValue(PINNED_FRAME_ZVALUE)
 
         self.pinnedFrames.append(im)
         view = self.frameDisplay.imageItem().getViewBox()

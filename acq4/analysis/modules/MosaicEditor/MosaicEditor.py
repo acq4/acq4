@@ -119,6 +119,7 @@ class MosaicEditor(AnalysisModule):
         self.registerItemType(items.getItemType('MarkersCanvasItem'))
         self.registerItemType(items.getItemType('CellCanvasItem'))
         self.registerItemType(items.getItemType('AtlasCanvasItem'))
+        self.registerItemType(items.getItemType('CortexMarkerCanvasItem'))
 
     def registerItemType(self, itemclass, menuString=None):
         """Add an item type to the list of addable items. 

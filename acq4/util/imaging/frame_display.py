@@ -128,7 +128,6 @@ class FrameDisplay(Qt.QObject):
             info = self.currentFrame.info()
             prof()
             
-            
             ## divide the background out of the current frame if needed
             data = self.bgCtrl.processImage(data)
             prof()
@@ -154,3 +153,6 @@ class FrameDisplay(Qt.QObject):
     def quit(self):
         self.imageItem = None
         self.hasQuit = True
+
+
+
