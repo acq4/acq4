@@ -242,6 +242,13 @@ class MultiClamp(Device):
     def autoPipetteOffset(self):
         self.mc.autoPipetteOffset()
         
+    def autoBridgeBalance(self):
+        self.mc.autoBridgeBal()
+
+    def autoCapComp(self):
+        self.mc.autoFastComp()
+        self.mc.autoSlowComp()
+
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
         

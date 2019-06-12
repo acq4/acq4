@@ -234,10 +234,40 @@ class MultiClampChannel:
             print("MCChannel.select called.")
         self.mc.call('SelectMultiClamp', **self.axonDesc)
 
+    def autoBridgeBal(self):
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoBridgeBal')
+
     def autoPipetteOffset(self):
         with self.mc.lock:
             self.select()
             self.mc.call('AutoPipetteOffset')
+
+    def autoFastComp(self):
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoFastComp')
+
+    def autoSlowComp(self):
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoSlowComp')
+
+    def autoWholeCellComp(self):
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoWholeCellComp')
+
+    def autoOutputZero(self):
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoOutputZero')
+
+    def autoLeakSub(self):
+        with self.mc.lock:
+            self.select()
+            self.mc.call('AutoLeakSub')
 
 
 class MultiClamp:
@@ -277,6 +307,9 @@ class MultiClamp:
         
         self.telegraph = MultiClampTelegraph(self.chanDesc, self.telegraphMessage)
         MultiClamp.INSTANCE = self
+
+        # Default is 3000, but some calls (esp. the Auto___ calls) can take longer
+        self.call('SetTimeOut', 5000)
 
         atexit.register(self.quit)
     
