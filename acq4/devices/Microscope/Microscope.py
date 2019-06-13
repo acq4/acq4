@@ -8,7 +8,6 @@ from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
 import acq4.pyqtgraph as pg
 import collections
-from acq4.pyqtgraph.Qt import QtGui, QtCore
 
 
 class Microscope(Device, OptomechDevice):
@@ -448,7 +447,7 @@ class ScopeGUI(Qt.QWidget):
             print("WARNING: Cannot set up objective toggle shortcuts for more than 2 objectives. No shortcuts were set up.")
             return
             
-        shortcut = QtGui.QShortcut(QtGui.QKeySequence(keys), self, context=QtCore.Qt.ApplicationShortcut)
+        shortcut = Qt.QShortcut(Qt.QKeySequence(keys), self, context=Qt.Qt.ApplicationShortcut)
         shortcut.activated.connect(self.shortcutPressed)
 
     def shortcutPressed(self):
