@@ -8,6 +8,7 @@ from acq4.util.Mutex import Mutex
 from acq4.modules.Camera import CameraModuleInterface
 import acq4.pyqtgraph as pg
 import collections
+from acq4.pyqtgraph.Qt import QtGui, QtCore
 
 
 class Microscope(Device, OptomechDevice):
