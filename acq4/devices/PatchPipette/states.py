@@ -249,6 +249,9 @@ class PatchPipetteBrokenState(PatchPipetteState):
         'finishPatchRecord': True,
     }
 
+    def initialize(self):
+        PatchPipetteState.initialize(self)
+        self.dev.broken = True
 
 class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
@@ -257,6 +260,10 @@ class PatchPipetteFouledState(PatchPipetteState):
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
     }
+
+    def initialize(self):
+        PatchPipetteState.initialize(self)
+        self.dev.clean = False
 
 
 class PatchPipetteBathState(PatchPipetteState):
@@ -374,6 +381,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         'slowDetectionThreshold': 0.3e6,
         'slowDetectionSteps': 3,
         'breakThreshold': -1e6,
+        'setPipetteClean': False,
     }
 
     def run(self):
@@ -382,6 +390,11 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 
         config = self.config
         dev = self.dev
+
+        # consider pipette fouled when starting, even if we never manage to attempt a seal
+        if config['setPipetteClean'] is not None:
+            dev.clean = config['setPipetteClean']
+
         patchrec = dev.patchRecord()
         patchrec['attemptedCellDetect'] = True
         initialResistance = None
@@ -553,20 +566,23 @@ class PatchPipetteSealState(PatchPipetteState):
     - cut pressure after GOhm and transition to cell attached
     """
     stateName = 'seal'
-    def __init__(self, *args, **kwds):
-        PatchPipetteState.__init__(self, *args, **kwds)
 
     _defaultConfig = {
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
+        'fallbackState': 'fouled',
         'pressureMode': 'user',   # 'auto' or 'user'
         'holdingThreshold': 100e6,
         'holdingPotential': -70e-3,
         'sealThreshold': 1e9,
         'nSlopeSamples': 5,
-        'autoSealTimeout': 380.0,
+        'autoSealTimeout': 30.0,
     }
+
+    def initialize(self):
+        PatchPipetteState.initialize(self)
+        self.dev.clean = False
 
     def run(self):
         self.monitorTestPulse()
@@ -633,7 +649,7 @@ class PatchPipetteSealState(PatchPipetteState):
                 if dt > config['autoSealTimeout']:
                     patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
-                    return None
+                    return
 
                 # update pressure
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
@@ -869,6 +885,8 @@ class PatchPipetteCleanState(PatchPipetteState):
         self.monitorTestPulse()
         # Called in worker thread
         self.resetPos = None
+        self.lastApproachPos = None
+
         config = self.config.copy()
         dev = self.dev
 
@@ -898,17 +916,37 @@ class PatchPipetteCleanState(PatchPipetteState):
                 self._checkStop(delay)
 
         dev.pipetteRecord()['cleanCount'] += 1
-        dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
-        self.resetPos = None
+        dev.clean = True
+        self.resetPosition()
         dev.newPatchAttempt()
         return 'out'          
 
     def gotoApproachPosition(self, pos):
-        # motion planning is in its own method to make it easier to customize
-        approachPos = [pos[0], pos[1], pos[2] + self.config['approachHeight']]
+        """
+        """
         dev = self.dev
-        self.waitFor([dev.pipetteDevice._moveToGlobal(approachPos, 'fast')])
-        self.resetPos = approachPos
+        currentPos = dev.pipetteDevice.globalPosition()
+
+        # first move back in x and up in z, leaving y unchanged
+        approachPos1 = [pos[0], currentPos[1], pos[2] + self.config['approachHeight']]
+        fut = dev.pipetteDevice._moveToGlobal(approachPos1, 'fast')
+        self.waitFor(fut)
+        if self.resetPos is None:
+            self.resetPos = approachPos1
+
+        # now move y over the well
+        approachPos2 = [pos[0], pos[1], pos[2] + self.config['approachHeight']]
+        fut = dev.pipetteDevice._moveToGlobal(approachPos2, 'fast')
+        self.lastApproachPos = approachPos2
+        self.waitFor(fut)
+
+    def resetPosition(self):
+        if self.lastApproachPos is not None:
+            self.dev.pipetteDevice._moveToGlobal(self.lastApproachPos, 'fast').wait()
+            self.lastApproachPos = None
+        if self.resetPos is not None:
+            self.dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
+            self.resetPos = None
 
     def cleanup(self):
         dev = self.dev
@@ -917,34 +955,6 @@ class PatchPipetteCleanState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after clean")
         
-        if self.resetPos is not None:
-            dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast')
+        self.resetPosition()
             
         PatchPipetteState.cleanup(self)
-
-
-class PatchPipetteSwapState(PatchPipetteState):
-    """Send manipulator home for user to attach a new pipette.
-    """
-
-    stateName = 'swap'
-    _defaultConfig = {
-        'initialPressureSource': 'atmosphere',
-        'initialClampMode': 'VC',
-        'initialClampHolding': 0,
-        'initialTestPulseEnable': False,
-        'fallbackState': 'out',
-        'homeSpeed': 'fast',
-    }
-
-    def run(self):
-        config = self.config.copy()
-        dev = self.dev
-
-        self.setState("requesting new pipette")
-        fut = dev.pipetteDevice.goHome(config['homeSpeed'])
-        self.waitFor([fut])
-
-        dev.newPipette()
-        
-        return config['fallbackState']

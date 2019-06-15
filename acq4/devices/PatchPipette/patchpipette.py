@@ -31,6 +31,7 @@ class PatchPipette(Device):
     sigMoveStarted = Qt.Signal(object)  # self
     sigMoveFinished = Qt.Signal(object, object)  # self, position
     sigTargetChanged = Qt.Signal(object, object)  # self, target
+    sigNewPipetteRequested = Qt.Signal(object)  # self
 
     # catch-all signal for event logging
     sigNewEvent = Qt.Signal(object, object)  # self, event
@@ -55,8 +56,9 @@ class PatchPipette(Device):
         # current state variables
         self.active = False
         self.broken = False
-        self.fouled = False
+        self.clean = False
         self.calibrated = False
+        self.waitingForSwap = False
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -90,6 +92,9 @@ class PatchPipette(Device):
         # self.setActive(False)  # Always start pipettes disabled rather than restoring last state?
         # # self.setActive(lastState.get('active', False))
 
+    def isTipClean(self):
+        return self.clean
+
     def scopeDevice(self):
         return self.pipetteDevice.scopeDevice()
 
@@ -108,11 +113,18 @@ class PatchPipette(Device):
         """A new physical pipette has been attached; reset any per-pipette state.
         """
         self.broken = False
-        self.fouled = False
+        self.clean = True
         self.calibrated = False
+        self.waitingForSwap = False
         self._pipetteRecord = None
         self.newPatchAttempt()
         # todo: set calibration to average 
+
+    def requestNewPipette(self):
+        """Call to emit a signal requesting a new pipette.
+        """
+        self.waitingForSwap = True
+        self.sigNewPipetteRequested.emit(self)
 
     def pipetteRecord(self):
         if self._pipetteRecord is None:
@@ -363,13 +375,14 @@ class PatchPipette(Device):
         self.sigTargetChanged.emit(self, pos)
         self.emitNewEvent('target_changed', {'target_position': [pos[0], pos[1], pos[2]]})
 
-    def emitNewEvent(self, eventType, eventData):
+    def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict([
             ('device', self.name()),
             ('event_time', ptime.time()),
             ('event', eventType),
         ])
-        newEv.update(eventData)
+        if eventData is not None:
+            newEv.update(eventData)
         self.sigNewEvent.emit(self, newEv)
 
         self._eventLog.append(newEv)
