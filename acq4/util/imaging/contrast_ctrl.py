@@ -91,14 +91,22 @@ class ContrastCtrl(Qt.QWidget):
             cw = self.ui.spinAutoGainCenterWeight.value()
             (w, h) = data.shape
             center = data[w//2-w//6:w//2+w//6, h//2-h//6:h//2+h//6]
-            minVal = data.min() * (1.0-cw) + center.min() * cw
-            maxVal = data.max() * (1.0-cw) + center.max() * cw
+
+            reduced = data
+            while reduced.size > 2**16:
+                ax = np.argmax(data.shape)
+                sl = [None] * data.ndim
+                sl[ax] = slice(None, None, 2)
+                reduced = reduced[tuple(sl)]
+
+            minVal = reduced.min() * (1.0-cw) + center.min() * cw
+            maxVal = reduced.max() * (1.0-cw) + center.max() * cw
 
             ## If there is inf/nan in the image, strip it out before computing min/max
             if any([np.isnan(minVal), np.isinf(minVal),  np.isnan(minVal), np.isinf(minVal)]):
-                nanMask = np.isnan(data)
-                infMask = np.isinf(data)
-                valid = data[~nanMask * ~infMask]
+                nanMask = np.isnan(reduced)
+                infMask = np.isinf(reduced)
+                valid = reduced[~nanMask * ~infMask]
                 minVal = valid.min() * (1.0-cw) + center.min() * cw
                 maxVal = valid.max() * (1.0-cw) + center.max() * cw
             
