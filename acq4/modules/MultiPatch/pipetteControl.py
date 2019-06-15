@@ -22,9 +22,11 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
             self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
             self.pip.sigPressureChanged.connect(self.pressureChanged)
+            self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
+        self.ui.swapBtn.hide()
         self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, suffix='V', siPrefix=True, step=5e-3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
         self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
 
@@ -51,6 +53,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.atmospherePressureBtn.clicked.connect(self.atmospherePressureClicked)
         self.ui.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
         self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
+        self.ui.swapBtn.clicked.connect(self.swapClicked)
 
         self.stateMenu = Qt.QMenu()
         for state in pipette.listStates():
@@ -273,6 +276,13 @@ class PipetteControl(Qt.QWidget):
             'atmosphere': 'color: #AAA', 
         }.get(source, '')
         self.ui.pressureSpin.setStyleSheet(style)            
+
+    def newPipetteRequested(self):
+        self.ui.swapBtn.show()
+
+    def swapClicked(self):
+        self.ui.swapBtn.hide()
+        self.pip.newPipette()
 
 
 class MousePressCatch(Qt.QObject):

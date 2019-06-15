@@ -38,7 +38,6 @@ class PatchPipetteStateManager(Qt.QObject):
         ('broken', states.PatchPipetteBrokenState),
         ('fouled', states.PatchPipetteFouledState),
         ('clean', states.PatchPipetteCleanState),
-        ('swap', states.PatchPipetteSwapState),
     ])
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState

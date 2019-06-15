@@ -250,8 +250,8 @@ class PatchPipetteBrokenState(PatchPipetteState):
     }
 
     def initialize(self):
-        PatchPipetteState.initialize(self)
         self.dev.broken = True
+        PatchPipetteState.initialize(self)
 
 class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
@@ -262,8 +262,8 @@ class PatchPipetteFouledState(PatchPipetteState):
     }
 
     def initialize(self):
-        PatchPipetteState.initialize(self)
         self.dev.clean = False
+        PatchPipetteState.initialize(self)
 
 
 class PatchPipetteBathState(PatchPipetteState):
@@ -378,7 +378,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         'maxAdvanceDepthBelowSurface': None,
         'advanceSpeed': 2e-6,
         'fastDetectionThreshold': 1e6,
-        'slowDetectionThreshold': 0.3e6,
+        'slowDetectionThreshold': 0.2e6,
         'slowDetectionSteps': 3,
         'breakThreshold': -1e6,
         'setPipetteClean': False,
@@ -581,8 +581,8 @@ class PatchPipetteSealState(PatchPipetteState):
     }
 
     def initialize(self):
-        PatchPipetteState.initialize(self)
         self.dev.clean = False
+        PatchPipetteState.initialize(self)
 
     def run(self):
         self.monitorTestPulse()
@@ -873,7 +873,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
-        'initialTestPulseEnable': True,
+        'initialTestPulseEnable': False,
         'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
         'rinseSequence': [(-35e3, 3.0), (100e3, 10.0)],
         'approachHeight': 5e-3,

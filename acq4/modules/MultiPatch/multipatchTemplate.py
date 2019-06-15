@@ -2,7 +2,8 @@
 
 # Form implementation generated from reading ui file 'multipatchTemplate.ui'
 #
-# Created by: PyQt4 UI code generator 4.11.4
+# Created: Fri Jun 14 23:10:22 2019
+#      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -43,8 +44,8 @@ class Ui_MultiPatch(object):
         self.matrixWidget.setSizePolicy(sizePolicy)
         self.matrixWidget.setObjectName(_fromUtf8("matrixWidget"))
         self.matrixLayout = QtGui.QGridLayout(self.matrixWidget)
-        self.matrixLayout.setMargin(0)
         self.matrixLayout.setSpacing(0)
+        self.matrixLayout.setMargin(0)
         self.matrixLayout.setObjectName(_fromUtf8("matrixLayout"))
         self.gridLayout.addWidget(self.matrixWidget, 0, 2, 4, 1)
         self.selectedGroupBox = QtGui.QGroupBox(MultiPatch)
@@ -116,9 +117,9 @@ class Ui_MultiPatch(object):
         self.pushButton_3.setEnabled(True)
         self.pushButton_3.setObjectName(_fromUtf8("pushButton_3"))
         self.gridLayout_2.addWidget(self.pushButton_3, 10, 1, 1, 1)
-        self.swapBtn = QtGui.QPushButton(self.selectedGroupBox)
-        self.swapBtn.setObjectName(_fromUtf8("swapBtn"))
-        self.gridLayout_2.addWidget(self.swapBtn, 7, 1, 1, 1)
+        self.cleanBtn = QtGui.QPushButton(self.selectedGroupBox)
+        self.cleanBtn.setObjectName(_fromUtf8("cleanBtn"))
+        self.gridLayout_2.addWidget(self.cleanBtn, 7, 2, 1, 1)
         self.gridLayout.addWidget(self.selectedGroupBox, 1, 0, 1, 2)
         self.hideMarkersBtn = QtGui.QPushButton(MultiPatch)
         self.hideMarkersBtn.setCheckable(True)
@@ -157,7 +158,7 @@ class Ui_MultiPatch(object):
         self.approachBtn.setText(_translate("MultiPatch", "Approach", None))
         self.pushButton_2.setText(_translate("MultiPatch", "Bridge Balance", None))
         self.pushButton_3.setText(_translate("MultiPatch", "Pip. Capacit.", None))
-        self.swapBtn.setText(_translate("MultiPatch", "Swap", None))
+        self.cleanBtn.setText(_translate("MultiPatch", "Clean", None))
         self.hideMarkersBtn.setText(_translate("MultiPatch", "Hide Markers", None))
         self.resetBtn.setText(_translate("MultiPatch", "Reset History", None))
 

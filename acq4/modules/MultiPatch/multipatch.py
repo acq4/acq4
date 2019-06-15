@@ -114,7 +114,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.sealBtn.clicked.connect(self.sealClicked)
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
-        self.ui.swapBtn.clicked.connect(self.swapClicked)
+        self.ui.cleanBtn.clicked.connect(self.cleanClicked)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
@@ -491,11 +491,11 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('reseal')
         
-    def swapClicked(self):
+    def cleanClicked(self):
         pips = self.selectedPipettes()
         for pip in pips:
             if isinstance(pip, PatchPipette):
-                pip.setState('swap')
+                pip.setState('clean')
         
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
