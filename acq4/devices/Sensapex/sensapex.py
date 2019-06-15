@@ -24,11 +24,18 @@ class Sensapex(Stage):
         
         address = config.pop('address', None)
         group = config.pop('group', None)
-        all_devs = UMP.get_ump(address=address, group=group).list_devices()
+        ump = UMP.get_ump(address=address, group=group)
+        time.sleep(2)
+        all_devs = ump.list_devices()
         if self.devid not in all_devs:
             raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
 
         Stage.__init__(self, man, config, name)
+
+        # Read position updates on a timer to rate-limit
+        self._updateTimer = Qt.QTimer()
+        self._updateTimer.timeout.connect(self._getPosition)
+        self._lastUpdate = 0
 
         # create handle to this manipulator
         # note: n_axes is used in cases where the device is not capable of answering this on its own 
@@ -116,7 +123,13 @@ class Sensapex(Stage):
 
     def _positionChanged(self, dev, newPos, oldPos):
         # called by driver poller when position has changed
-        self._getPosition()
+        now = ptime.time()
+        # rate limit updates to 10 Hz
+        wait = 100e-3 - (now - self._lastUpdate)
+        if wait > 0:
+            self._updateTimer.start(int(wait * 1000))
+        else:
+            self._getPosition()
 
     def targetPosition(self):
         with self.lock:
