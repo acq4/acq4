@@ -301,7 +301,7 @@ class UMP(object):
 
         args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode]]
 
-        duration = dist / speed
+        duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
             if attempts == 0:
