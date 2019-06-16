@@ -265,7 +265,7 @@ class UMP(object):
         #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False, max_acceleration=0, attempts = 0):
+    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False, max_acceleration=0):
         """Request the specified device to move to an absolute position (in nm).
 
         Parameters
@@ -304,17 +304,14 @@ class UMP(object):
         duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
-            if attempts == 0:
-                last_move = self._last_move.pop(dev, None)
-                if last_move is not None:
-                    self.call('ump_stop_ext', c_int(dev))
-                    last_move._interrupt("started another move before the previous finished")
+            last_move = self._last_move.pop(dev, None)
+            if last_move is not None:
+                self.call('ump_stop_ext', c_int(dev))
+                last_move._interrupt("started another move before the previous finished")
 
-                next_move = MoveRequest(dev, current_pos, pos, original_speed, duration,attempts)
-                self._last_move[dev] = next_move
-            else:
-                 next_move = self._last_move[dev]
-            print("ump_goto_pos_ext2%r" % args)
+            next_move = MoveRequest(dev, current_pos, pos, original_speed, duration)
+            self._last_move[dev] = next_move
+
             self.call('ump_goto_position_ext2', *args)
 
 
@@ -395,39 +392,17 @@ class UMP(object):
 
     def _update_moves(self):
         with self.lock:
-            # strategy for determining whether a move has completed is just to 
-            # see whether the manipulator has been stopped for a minimum interval
-            # (self.move_expire_time)
             now = ptime.time()
             for dev,move in self._last_move.items():
-                # if self.is_busy(dev):
-                #     self._last_busy_time[dev] = now
-                # cmp_time = max(self._last_busy_time.get(dev, 0), move.start_time)
-
-                # if now - cmp_time > self.move_expire_time:  
                 if not self.is_busy(dev):
-                    # Did we reach target? Request a full position update; cache may not be caught up yet.
-                    pos = self.get_pos(dev, timeout=-1)
-                    dif = np.linalg.norm(np.array(pos) - np.array(move.target_pos))
-                    
-                    if dif > 1000 and dev==19 and move.attempts < 0:  # require 100 nm accuracy for stage
-                        move.attempts += 1
-                        self._last_busy_time[dev] = now
-                        move.speed = move.speed / 2
-                        if move.speed < 100:
-                            move_speed = 100
-                        move = self.goto_pos(dev, move.target_pos, move.speed, attempts = move.attempts)
-                        print ("STAGE MOVE LOOP:", str(move.attempts), str(dif))
-                    else:
-                        print (str(dif))
-                        self._last_move.pop(dev)
-                        move._finish(self.get_pos(dev, timeout=10))
+                    self._last_move.pop(dev)
+                    move._finish(self.get_pos(dev, timeout=-1))
 
 
 class MoveRequest(object):
     """Simple class for tracking the status of requested moves.
     """
-    def __init__(self, dev, start_pos, target_pos, speed, duration, attempts):
+    def __init__(self, dev, start_pos, target_pos, speed, duration):
         self.dev = dev
         self.start_time = ptime.time()
         self.estimated_duration = duration
@@ -438,7 +413,6 @@ class MoveRequest(object):
         self.interrupted = False
         self.interrupt_reason = None
         self.last_pos = None
-        self.attempts = attempts
         self.finished_event = threading.Event()
 
     def _interrupt(self, reason):
