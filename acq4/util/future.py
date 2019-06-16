@@ -29,6 +29,7 @@ class Future(Qt.QObject):
         self._isDone = False
         self._wasInterrupted = False
         self._errorMessage = None
+        self._excInfo = None
         self._stopRequested = False
         self._state = 'starting'
 
@@ -72,7 +73,7 @@ class Future(Qt.QObject):
             self._errorMessage = reason
         self._stopRequested = True
 
-    def _taskDone(self, interrupted=False, error=None, state=None):
+    def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None):
         """Called by subclasses when the task is done (regardless of the reason)
         """
         if self._isDone:
@@ -81,6 +82,7 @@ class Future(Qt.QObject):
         if error is not None:
             # error message may have been set earlier
             self._errorMessage = error
+        self._excInfo = excInfo
         self._wasInterrupted = interrupted
         if interrupted:
             self.setState(state or 'interrupted: %s' % error)
@@ -129,6 +131,7 @@ class Future(Qt.QObject):
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
+                # This would be a fantastic place to "raise from self._excInfo[1]" once we move to py3
                 raise RuntimeError("Task did not complete.")
             else:
                 raise RuntimeError("Task did not complete: %s" % err)

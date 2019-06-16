@@ -1,6 +1,6 @@
 from __future__ import print_function
 import threading
-import time
+import sys, time
 import numpy as np
 import scipy.stats
 try:
@@ -152,28 +152,28 @@ class PatchPipetteState(Future):
         This calls the custom run() method for the state subclass and handles the possible
         error / exit / completion states.
         """
+        error = None
+        excInfo = None
         try:
             # run must be reimplemented in subclass and call self._checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
-            error = None
         except self.StopRequested:
             # state was stopped early by calling stop()
             interrupted = True
-            error = None
         except Exception as exc:
             # state aborted due to an error
             interrupted = True
             printExc("Error in %s state %s" % (self.dev.name(), self.stateName))
             error = str(exc)
+            excInfo = sys.exc_info()
         else:
             # state completed successfully
             interrupted = False
-            error = None
         finally:
             disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
-                self._taskDone(interrupted=interrupted, error=error)
+                self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
 
     def __repr__(self):
         return '<%s "%s">' % (type(self).__name__, self.stateName)
