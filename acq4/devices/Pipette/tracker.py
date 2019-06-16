@@ -275,7 +275,7 @@ class PipetteTracker(object):
         # Store with pickle because configfile does not support arrays
         pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None, show=False):
+    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
@@ -283,6 +283,8 @@ class PipetteTracker(object):
         the best template match.
 
         If the strength of the match is less than *threshold*, then raise RuntimeError.
+
+        If movePipette, then take two frames with the pipette moved away for the second frame to allow background subtraction
         """
         # Grab one frame (if it is not already supplied) and crop it to the region around the pipette tip.
         if frame is None:
@@ -297,8 +299,16 @@ class PipetteTracker(object):
             # select a tip length similar to template images
             tipLength = reference['tipLength']
 
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
         img = frame.data()
+        if movePipette:
+            # move pipette and take a background frame
+            if pos is None:
+                pos = self.dev.globalPosition()
+            self.dev._moveToLocal([-tipLength*3, 0, 0], 'fast').wait()
+            bg_frame = self.takeFrame()
+            img = img.astype(int) - bg_frame.data()
+
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
         if img.ndim == 3:
             img = img[0]
         img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
@@ -331,7 +341,7 @@ class PipetteTracker(object):
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr), match[maxInd][1]
 
-    def measureError(self, padding=50e-6, threshold=0.7, frame=None, pos=None):
+    def measureError(self, padding=50e-6, threshold=0.7, frame=None, pos=None, movePipette=False):
         """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
         measured (actual) tip position.
         """
@@ -340,7 +350,7 @@ class PipetteTracker(object):
         else:
             expectedTipPos = pos
 
-        measuredTipPos, corr = self.measureTipPosition(padding, threshold, frame, pos=pos)
+        measuredTipPos, corr = self.measureTipPosition(padding, threshold, frame, pos=pos, movePipette=movePipette)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
     def _getReference(self):
