@@ -8,7 +8,7 @@ from optoanalysis import xml_parse
 from collections import OrderedDict
 import os, time
 import numpy as np
-from PyQt4 import QtCore, QtGui
+from acq4.pyqtgraph.Qt import QtCore, QtGui
 from ModuleInterfaces import PVImagerCamModInterface
 from acq4.pyqtgraph import SRTTransform3D, Point
 import deviceTemplate
