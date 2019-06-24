@@ -1,17 +1,10 @@
 from moduleTemplate import Ui_Form
+import zStackTemplate
 from PyQt4 import QtGui, QtCore
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.imaging.imaging_ctrl import ImagingCtrl
 import acq4.pyqtgraph as pg
-
-class PVImagerModuleGui(QtGui.QWidget):
-    """For controlling the module gui for PrairieViewImager"""
-    def __init__(self):
-
-        self.ui = Ui_Form()
-        self.ui.setupUi(self)
-
-
+from acq4.util import Qt
 
 
 class PVImagerCamModInterface(CameraModuleInterface):
@@ -36,6 +29,9 @@ class PVImagerCamModInterface(CameraModuleInterface):
         self.imagingCtrl.ui.frameRateWidget.hide()
         self.imagingCtrl.ui.acquireVideoBtn.setEnabled(False)
 
+        self.zStackCtrl = ZStackCtrl(interface=self)
+
+
         # ## set up item groups
         # self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
         # self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
@@ -53,8 +49,7 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
-
-
+        self.zStackCtrl.ui.acquireZStackBtn.clicked.connect(self.acquireZStackClicked)
 
 
     def graphicsItems(self):
@@ -95,18 +90,29 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
     def setAcquireBtn(self, b):
         btn = self.imagingCtrl.ui.acquireFrameBtn
+        zBtn = self.zStackCtrl.ui.acquireZStackBtn
         if b:
             btn.setText('Acquire Frame')
             btn.setEnabled(True)
+            zBtn.setText('Acquire Z-Stack')
+            zBtn.setEnabled(True)
         else:
             btn.setText('Acquiring...')
             btn.setEnabled(False)
+            zBtn.setText('Acquiring...')
+            zBtn.setEnabled(False)
 
     def acquireFrameClicked(self):
         self.setAcquireBtn(False)
         frame = self.getDevice().acquireFrames(1, stack=False)
         self.setAcquireBtn(True)
         self.imagingCtrl.newFrame(frame)
+
+    def acquireZStackClicked(self):
+        self.setAcquireBtn(False)
+        zstack = self.getDevice().acquireZStack()
+        self.setAcquireBtn(True)
+        self.zStackCtrl.newFrame(zstack)
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
@@ -116,27 +122,54 @@ class PVImagerCamModInterface(CameraModuleInterface):
 
 
 
-# class ImagerCamModInterface(CameraModuleInterface):
-#     """For plugging in the 2p imager system to the camera module.
-#     """
-#     def __init__(self, imager, mod):
-#         self.imager = imager
+class ZStackCtrl(Qt.QWidget):
 
-#         CameraModuleInterface.__init__(self, imager, mod)
+    def __init__(self, parent=None, interface=None):
+        Qt.QWidget.__init__(self, parent) 
+        self.interface = interface
 
-#         mod.window().addItem(imager.imageItem, z=10)
+        self.ui = zStackTemplate.Ui_Form()
+        self.ui.setupUi(self)
 
-#         self.imager.imagingThread.sigNewFrame.connect(self.newFrame)
+        self.ui.focusSlider.valueChanged.connect(self.focusSliderChanged)
+        self.ui.zStackTree.currentItemChanged.connect(self.selectedZStackChanged)
 
-#     def graphicsItems(self):
-#         gitems = [self.getImageItem()] + list(self.imager.objectiveROImap.values())
-#         return gitems
+        self.zStacks = {}
+        
+    def newFrame(self, stack):
+        treeItem = QtGui.QTreeWidgetItem([stack.info()['name']])
+        self.ui.zStackTree.addTopLevelItem(treeItem)
 
-#     def takeImage(self, closeShutter=True):
-#         self.imager.imagingThread.takeFrame(closeShutter=closeShutter)
+        im = pg.ImageItem(stack.data()[0])
+        self.interface.view.addItem(im)
+        im.setTransform(stack.info()['transform'].as2D())
 
-#     def getImageItem(self):
-#         return self.imager.imageItem
+        self.zStacks[treeItem] ={'data':stack, 'imageItem':im}
 
-#     def newFrame(self, frame):
-#         self.sigNewFrame.emit(self, frame)
+        self.ui.zStackTree.setCurrentItem(treeItem)
+
+
+    def focusSliderChanged(self):
+        i = self.ui.focusSlider.value()
+
+        treeItem = self.ui.zStackTree.currentItem()
+        data = self.zStacks[treeItem]['data'].data()[i]
+        self.zStacks[treeItem]['imageItem'].setImage(data)
+
+    def selectedZStackChanged(self):
+        treeItem = self.ui.zStackTree.currentItem()
+
+        nFrames = self.zStacks[treeItem]['data'].data().shape[0]
+        self.ui.focusSlider.setRange(0, nFrames-1)
+
+
+
+
+
+
+
+
+
+
+
+

@@ -18,6 +18,9 @@ class MockPrairieView():
     def saveImage(self, name, iterationNum):
         pass
 
+    def saveZSeries(self, name, iterationNum):
+        pass
+
     def setSaveDirectory(self, dirPath):
         pass
 

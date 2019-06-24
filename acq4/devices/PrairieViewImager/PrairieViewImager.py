@@ -12,6 +12,7 @@ from acq4.pyqtgraph.Qt import QtCore, QtGui
 from ModuleInterfaces import PVImagerCamModInterface
 from acq4.pyqtgraph import SRTTransform3D, Point
 import deviceTemplate
+from acq4.util.DataManager import getDirHandle
 
 
 class PrairieViewImager(OptomechDevice, Device):
@@ -34,6 +35,7 @@ class PrairieViewImager(OptomechDevice, Device):
         self._saveDirectory = os.path.abspath('C:/Megan/acq4_data') ## where we tell Prairie to save data
         self._imageDirectory = os.path.abspath('Z:/Megan/acq4_data') ## where we retrieve prairie's data from
         self._frameIDcounter = 0
+        self._zSeriesIDcounter = 0
         self.scale = 1e-6
 
     def setup(self):
@@ -50,10 +52,8 @@ class PrairieViewImager(OptomechDevice, Device):
         support acquiring one image at a time (n=1).
         """
 
-        
-
         if n > 1:
-            raise Exception("%s can only acquire one frame at a time." % self.name())
+            raise Exception("%s can only acquire one frame at a time. Please use %s.acquireZStack." % (self.name(), self.name()))
 
         ### Have pv acquire a frame
         imageBaseName = "ACQ4_image"
@@ -85,9 +85,9 @@ class PrairieViewImager(OptomechDevice, Device):
         if xml_attrs['Environment']['XAxis_umPerPixel'] == xml_attrs['Environment']['YAxis_umPerPixel']:
             info['pixelSize'] = xml_attrs['Environment']['XAxis_umPerPixel']*self.scale
 
-        x = xml_attrs['Environment']['XAxis']
-        y = xml_attrs['Environment']['YAxis']
-        z = xml_attrs['Environment']['ZAxis']
+        #x = xml_attrs['Environment']['XAxis']
+        #y = xml_attrs['Environment']['YAxis']
+        #z = xml_attrs['Environment']['ZAxis']
 
         info['frameTransform'] = SRTTransform3D(self.makeFrameTransform(xml_attrs))
         info['deviceTransform'] = SRTTransform3D(self.globalTransform())
@@ -97,6 +97,57 @@ class PrairieViewImager(OptomechDevice, Device):
         frame = Frame(images, info)
         self.sigNewFrame.emit(frame)
         return frame
+
+    def acquireZStack(self):
+
+        zseriesBaseName = 'ZSeries'
+        zseriesID = self._zSeriesIDcounter
+        self._zSeriesIDcounter += 1
+
+        self.pv.saveZSeries(zseriesBaseName, zseriesID)
+
+        seriesName = zseriesBaseName+'-%03d'%zseriesID
+        #seriesName = 'ZSeries-11302018-1022-013'
+        seriesPath = os.path.join(self._imageDirectory, seriesName)
+        xmlPath = os.path.join(seriesPath, seriesName+'.xml')
+
+        while not self.isXmlDone(xmlPath):
+            QtGui.QApplication.processEvents()
+
+        xml_attrs = xml_parse.ParseTSeriesXML(xmlPath, seriesPath)
+
+
+        for f in xml_attrs['ZSeries']['Frames']:
+            for im in f['Images']:
+                p = os.path.join(seriesPath, im)
+                while not self.isTifDone(p):
+                    QtGui.QApplication.processEvents()
+
+        #images = self.loadImages(xml_attrs['SingleImage']['Frames'][0]['Images'], imagePath)
+        #images = xml_parse.load_zseries(xml_attrs, seriesPath)
+        images = getDirHandle(seriesPath).read()
+
+        ## Organize/create metainfo to go along with Frame
+        info = OrderedDict()
+
+        if xml_attrs['Environment']['XAxis_umPerPixel'] == xml_attrs['Environment']['YAxis_umPerPixel']:
+            info['pixelSize'] = xml_attrs['Environment']['XAxis_umPerPixel']*self.scale
+
+        #x = xml_attrs['Environment']['XAxis']
+        #y = xml_attrs['Environment']['YAxis']
+        #z = xml_attrs['Environment']['ZAxis']
+
+        info['frameTransform'] = SRTTransform3D(self.makeFrameTransform(xml_attrs))
+        info['deviceTransform'] = SRTTransform3D(self.globalTransform())
+        info['PrairieMetaInfo'] = xml_attrs
+        info['time'] = time.time()
+        info['name'] = seriesName
+
+        frame = Frame(images, info)
+        self.sigNewFrame.emit(frame)
+        return frame
+
+
 
     def makeFrameTransform(self, info):
         ### Need to make a transform that maps from image coordinates (0,0 in top left) to device coordinates.
@@ -173,19 +224,20 @@ class PrairieViewImager(OptomechDevice, Device):
     def loadImages(self, images, dirPath):
         ## images is a tuple of image file names (as strings) as saved in Prairie's .xml meta info
         ## dirPath is the directory path that contains those images
+        return xml_parse.loadImages(images, dirPath)
         
-        if images[0] is not None:
-            filepath = os.path.join(dirPath, images[0])
-            rChn = np.array(Image.open(filepath)).astype(int)
-            rChn = np.transpose(rChn)
+        # if images[0] is not None:
+        #     filepath = os.path.join(dirPath, images[0])
+        #     rChn = np.array(Image.open(filepath)).astype(int)
+        #     rChn = np.transpose(rChn)
 
-        if images[1] is not None:
-            filepath = os.path.join(dirPath, images[1])
-            gChn = np.array(Image.open(filepath)).astype(int)
-            gChn = np.transpose(gChn)
-        bChn = np.zeros(rChn.shape).astype(int)
+        # if images[1] is not None:
+        #     filepath = os.path.join(dirPath, images[1])
+        #     gChn = np.array(Image.open(filepath)).astype(int)
+        #     gChn = np.transpose(gChn)
+        # bChn = np.zeros(rChn.shape).astype(int)
 
-        return np.stack([rChn, gChn, bChn], axis=-1)
+        # return np.stack([rChn, gChn, bChn], axis=-1)
 
     def moduleInterface(self, mod):
         return PVImagerCamModInterface(self, mod)

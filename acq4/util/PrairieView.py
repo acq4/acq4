@@ -108,10 +108,24 @@ class PrairieView(QtCore.QObject):
         self.call_pl('-SetFileName Singlescan %s %s' % (name, adt))
         self.call_pl('-SetFileIteration Singlescan %i' % iterationNum)
 
+    def setZSeriesName(self, name, iterationNum, addDateTime=False):
+        if addDateTime:
+            adt = 'addDateTime'
+        else:
+            adt = ''
+
+        self.call_pl('-SetFileName ZSeries %s %s' % (name, adt))
+        self.call_pl('-SetFileName ZSeries %i' % iterationNum)
+
     def saveImage(self, name, iterationNum):
 
         self.setImageName(name, iterationNum)
         self.call_pl('-SingleScan')
+
+    def saveZSeries(self, name, iterationNum):
+        self.setZSeriesName(name, iterationNum)
+        self.call_pl('-ZSeries')
+
 
     def setSaveDirectory(self, dirPath):
         self.call_pl('-SetSavePath %s' % dirPath)
