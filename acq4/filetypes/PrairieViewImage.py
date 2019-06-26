@@ -1,4 +1,5 @@
 import acq4.util.DataManager
+import os
 from acq4.util.metaarray import MetaArray
 from .FileType import FileType
 
@@ -26,7 +27,10 @@ class PrairieViewImage(FileType):
         xmls = [f for f in dirHandle.ls() if f.endswith('.xml') and 'MarkPoints' not in f] # Don't want MP XML
         if len(xmls) > 1:
             raise Exception("Found more than one .xml file.")
-        xml_attrs = xml_parse.parse_prairieView_xml(dirHandle.getFile(xmls[0]).name(), dirHandle.name())
+        xml_file = os.path.join(dirHandle.name(), xmls[0])
+        xml_attrs = xml_parse.parse_prairieView_xml(xml_file, dirHandle.name())
+
+        #xml_attrs = xml_parse.parse_prairieView_xml(dirHandle.getFile(xmls[0]).name(), dirHandle.name())
 
         if 'ZSeries' in dirHandle.shortName():
             return xml_parse.load_zseries(xml_attrs, dirHandle)

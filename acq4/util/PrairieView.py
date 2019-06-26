@@ -114,8 +114,8 @@ class PrairieView(QtCore.QObject):
         else:
             adt = ''
 
-        self.call_pl('-SetFileName ZSeries %s %s' % (name, adt))
-        self.call_pl('-SetFileName ZSeries %i' % iterationNum)
+        self.call_pl('-SetFileName Zseries %s %s' % (name, adt))
+        self.call_pl('-SetFileIteration Zseries %i' % iterationNum)
 
     def saveImage(self, name, iterationNum):
 
