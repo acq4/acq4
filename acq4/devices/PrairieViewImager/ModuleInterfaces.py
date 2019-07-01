@@ -165,8 +165,14 @@ class ZStackCtrl(Qt.QWidget):
     def selectedZStackChanged(self):
         treeItem = self.ui.zStackTree.currentItem()
 
-        nFrames = self.zStacks[treeItem]['data'].data().shape[0]
+        stack = self.zStacks[treeItem]['data'].data()
+        nFrames = stack.shape[0]
         self.ui.focusSlider.setRange(0, nFrames-1)
+
+        top = stack[0].infoCopy()[-1]['values']
+        bottom = stack[-1].infoCopy()[-1]['values']
+        self.ui.topLabel.setText(pg.siFormat(top, suffix='m'))
+        self.ui.bottomLabel.setText(pg.siFormat(bottom, suffix='m'))
 
     def saveZStack(self, stack):
         dh = getManager().getCurrentDir()
