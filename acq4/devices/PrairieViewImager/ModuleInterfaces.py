@@ -5,6 +5,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.imaging.imaging_ctrl import ImagingCtrl
 import acq4.pyqtgraph as pg
 from acq4.util import Qt
+from acq4.Manager import getManager
 
 
 class PVImagerCamModInterface(CameraModuleInterface):
@@ -148,6 +149,8 @@ class ZStackCtrl(Qt.QWidget):
 
         self.ui.zStackTree.setCurrentItem(treeItem)
 
+        self.saveZStack(stack)
+
 
     def focusSliderChanged(self):
         i = self.ui.focusSlider.value()
@@ -161,6 +164,16 @@ class ZStackCtrl(Qt.QWidget):
 
         nFrames = self.zStacks[treeItem]['data'].data().shape[0]
         self.ui.focusSlider.setRange(0, nFrames-1)
+
+    def saveZStack(self, stack):
+        dh = getManager().getCurrentDir()
+
+        data = stack.data()
+        info = stack.info()
+
+        dh.writeFile(data, info['name'], info=info, autoIncrement=False, fileType='MetaArray')
+
+
 
 
 

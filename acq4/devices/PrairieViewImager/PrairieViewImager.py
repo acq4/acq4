@@ -178,12 +178,11 @@ class PrairieViewImager(OptomechDevice, Device):
         info['PrairieMetaInfo'] = xml_attrs
         info['time'] = time.time()
         info['name'] = seriesName
+        info['prairiePath'] = seriesPath
 
         frame = Frame(images, info)
         self.sigNewFrame.emit(frame)
         return frame
-
-
 
     def makeFrameTransform(self, info):
         ### Need to make a transform that maps from image coordinates (0,0 in top left) to device coordinates.
