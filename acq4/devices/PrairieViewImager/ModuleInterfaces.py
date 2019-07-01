@@ -136,6 +136,8 @@ class ZStackCtrl(Qt.QWidget):
         self.ui.zStackTree.currentItemChanged.connect(self.selectedZStackChanged)
 
         self.zStacks = {}
+
+        self.setUpFocusShortCuts()
         
     def newFrame(self, stack):
         treeItem = QtGui.QTreeWidgetItem([stack.info()['name']])
@@ -182,7 +184,22 @@ class ZStackCtrl(Qt.QWidget):
 
         dh.writeFile(data, info['name'], info=info, autoIncrement=False, fileType='MetaArray')
 
+    def setUpFocusShortCuts(self):
+        config = self.interface.dev().config
+        leftKey = config.get('upShortcutKey')
+        rightKey = config.get('downShortcutKey')
 
+        if leftKey is not None and rightKey is not None:
+            left_shortcut = Qt.QShortcut(Qt.QKeySequence(leftKey), self, context=Qt.Qt.ApplicationShortcut)
+            right_shortcut = Qt.QShortcut(Qt.QKeySequence(rightKey), self, context=Qt.Qt.ApplicationShortcut)
+            left_shortcut.activated.connect(self.leftShortcutPressed)
+            right_shortcut.activated.connect(self.rightShortcutPressed)
+
+    def leftShortcutPressed(self):
+        self.ui.focusSlider.setValue(self.ui.focusSlider.value()-1)
+
+    def rightShortcutPressed(self):
+        self.ui.focusSlider.setValue(self.ui.focusSlider.value()+1)
 
 
 
