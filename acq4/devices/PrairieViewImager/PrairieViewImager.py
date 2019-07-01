@@ -32,6 +32,7 @@ class PrairieViewImager(OptomechDevice, Device):
             ip = config.get('ipaddress', None)
             self.pv = PrairieView(ip)
         self.config = config
+        self._scopeDev = deviceManager.getDevice(config['scopeDevice'])
 
         #self.pv.setSaveDirectory('C:/Megan/acq4_data')
         #self._saveDirectory = os.path.abspath('C:/Megan/acq4_data') ## where we tell Prairie to save data
@@ -42,6 +43,9 @@ class PrairieViewImager(OptomechDevice, Device):
         self._frameIDcounter = 0
         self._zSeriesIDcounter = 0
         self.scale = 1e-6
+
+    def scopeDevice(self):
+        return self._scopeDev
 
     def setup(self):
         """Tell Prairie where to save images so acq4 can find them. This should be called

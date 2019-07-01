@@ -159,6 +159,9 @@ class ZStackCtrl(Qt.QWidget):
         data = self.zStacks[treeItem]['data'].data()[i]
         self.zStacks[treeItem]['imageItem'].setImage(data)
 
+        z = data.infoCopy()[-1]['values']
+        self.interface.dev().scopeDevice().setFocusDepth(z)
+
     def selectedZStackChanged(self):
         treeItem = self.ui.zStackTree.currentItem()
 
