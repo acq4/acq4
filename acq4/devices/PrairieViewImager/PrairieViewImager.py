@@ -3,7 +3,7 @@ from acq4.devices.Device import Device
 #from acq4.util.PrairieView import PrairieView, MockPrairieView
 from acq4.util.imaging.frame import Frame
 from PIL import Image
-import os
+import os, time, re
 from optoanalysis import xml_parse
 from collections import OrderedDict
 import os, time
@@ -31,6 +31,8 @@ class PrairieViewImager(OptomechDevice, Device):
             from acq4.util.PrairieView import PrairieView
             ip = config.get('ipaddress', None)
             self.pv = PrairieView(ip)
+        self.config = config
+
         #self.pv.setSaveDirectory('C:/Megan/acq4_data')
         #self._saveDirectory = os.path.abspath('C:/Megan/acq4_data') ## where we tell Prairie to save data
         #self._imageDirectory = os.path.abspath('Z:/Megan/acq4_data') ## where we retrieve prairie's data from
@@ -44,7 +46,38 @@ class PrairieViewImager(OptomechDevice, Device):
     def setup(self):
         """Tell Prairie where to save images so acq4 can find them. This should be called
         when initializing modules that need acq4 to retrieve images from Prairie. """
+        ### Without using DirHandle (because we don't have permissions to write .index files):
+        ##      1) add a data to self._saveDirectory (check that we only do this once)
+        ##      2) set save directory in prairie
+        ##      3) see if there are already SingleImage/ZSeries in saveDir
+        ##      4) set IDcounters if there are already files there
+
+        if self.config.get('prairieSaveDirectory') == self._saveDirectory:
+            day = time.strftime("%Y.%m.%d")
+            self._saveDirectory = os.path.join(self._saveDirectory, day)
+            self._imageDirectory = os.path.join(self._imageDirectory, day)
         self.pv.setSaveDirectory(self._saveDirectory)
+
+        files = os.listdir(self._imageDirectory)
+        if len(files) == 0:
+            return
+
+        #check ACQ4_Image
+        regex = re.compile('ACQ4_image' + r'-(\d+)')
+        image_files = [f for f in files if regex.match(f)]
+        if len(image_files) > 0:
+            image_files.sort()
+            self._frameIDcounter = int(regex.match(image_files[-1]).group(1)) + 1
+
+        #check ZSeries
+        regex = re.compile('ZSeries' + r'-(\d+)')
+        z_files = [f for f in files if regex.match(f)]
+        if len(z_files) > 0:
+            z_files.sort()
+            self._zSeriesIDcounter = int(regex.match(z_files[-1]).group(1)) + 1
+
+
+
 
     def deviceTransform(self, subdev=None):
         return SRTTransform3D(OptomechDevice.deviceTransform(self, subdev))

@@ -22,7 +22,8 @@ class MockPrairieView():
         pass
 
     def setSaveDirectory(self, dirPath):
-        pass
+        if not os.path.exists(dirPath):
+            os.mkdir(dirPath)
 
     def markPoints(self, pos, laserPower, duration, spiralSize, revolutions, nPulses, intervals):
         intervals.append('')
