@@ -29,9 +29,7 @@ class PrairieViewImageCanvasItem(ImageCanvasItem):
             data = self.get_zseries_images(xml_attrs, image)
             opts = self.get_zseries_metainfo(xml_attrs)
 
-        ImageCanvasItem.__init__(self, image=data, **opts)
-
-
+        ImageCanvasItem.__init__(self, image=data.asarray(), **opts)
 
     @classmethod
     def checkFile(cls, fh):
