@@ -15,6 +15,8 @@ parser.add_argument('--distance', type=int, default=10, help="Max distance to tr
 parser.add_argument('--iter', type=int, default=10, help="Number of positions to test")
 parser.add_argument('--acceleration', type=int, default=0, help="Max speed acceleration")
 parser.add_argument('--high-res', action='store_true', default=False, dest='high_res', help="Use high-resolution time sampling rather than poller's schedule")
+parser.add_argument('--start-pos', type=str, default=None, dest='start_pos', help="x,y,z starting position (by default, the current position is used)")
+parser.add_argument('--test-pos', type=str, default=None, dest='test_pos', help="x,y,z position to test (by default, random steps from the starting position are used)")
 args = parser.parse_args()
 
 ump = UMP.get_ump(group=args.group)
@@ -93,12 +95,22 @@ def update_plots():
         errplots[i].plot(times, err[i], clear=True, connect='finite')
 
 
-p1 = dev.get_pos()
+if args.start_pos is None:
+    start_pos = dev.get_pos()
+else:
+    start_pos = np.array(list(map(float, args.start_pos.split(','))))
 diffs = []
 errs = []
 positions = []
-moves = (np.random.random(size=(args.iter, 3)) * args.distance*1000).astype(int)
-targets = np.array(p1)[np.newaxis, :] + moves
+if args.test_pos is None:
+    moves = (np.random.random(size=(args.iter, 3)) * args.distance*1000).astype(int)
+    targets = np.array(start_pos)[np.newaxis, :] + moves
+else:
+    # just move back and forth between start and test position
+    test_pos = np.array(list(map(float, args.test_pos.split(','))))
+    targets = np.zeros((args.iter, 3))
+    targets[::2] = start_pos[None, :]
+    targets[1::2] = test_pos[None, :]
 speeds = [args.speed] * args.iter
 
 # targets = np.array([[15431718, 7349832, 17269820], [15432068, 7349816, 17249852]] * 5)
