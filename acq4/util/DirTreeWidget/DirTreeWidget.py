@@ -200,8 +200,9 @@ class DirTreeWidget(Qt.QTreeWidget):
         dirs = dh.name(relativeTo=self.baseDir).split(os.path.sep)
         node = self.baseDir
         while len(dirs) > 0:
-            item = self.items[node]
-            item.setExpanded(True)
+            item = self.items.get(node)
+            if item is not None:
+                item.setExpanded(True)
             node = node[dirs.pop(0)] 
 
     def watch(self, handle):
