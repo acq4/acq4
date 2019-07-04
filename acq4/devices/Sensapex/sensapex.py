@@ -21,6 +21,7 @@ class Sensapex(Stage):
         self.devid = config.get('deviceId')
         self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
         self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
+        self.maxMoveError = config.pop('maxError', 1e-6)
         
         address = config.pop('address', None)
         group = config.pop('group', None)
@@ -184,7 +185,7 @@ class SensapexMoveFuture(MoveFuture):
             # did we reach target?
             pos = self._moveReq.last_pos
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
-            if dif > 1000:  # require 1um accuracy
+            if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
                 # missed
                 self._errorMsg = "%s stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed)
 
