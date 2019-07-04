@@ -78,8 +78,8 @@ def update(update_error=False):
     now = pg.ptime.time() - start
     times.append(now)
     for i in range(3):
-        pos[i].append((p[i] - p1[i]) * 1e-9)
-        tgt[i].append((target[i] - p1[i]) * 1e-9)
+        pos[i].append((p[i] - start_pos[i]) * 1e-9)
+        tgt[i].append((target[i] - start_pos[i]) * 1e-9)
         if update_error:
             err[i].append(pos[i][-1] - tgt[i][-1])
         else:
@@ -146,7 +146,7 @@ for i in range(args.iter):
 
 update_plots()
 
-dev.goto_pos(p1, args.speed)
+dev.goto_pos(start_pos, args.speed)
 print("mean:", np.mean(errs), " max:", np.max(errs))
 
 if sys.flags.interactive == 0:
