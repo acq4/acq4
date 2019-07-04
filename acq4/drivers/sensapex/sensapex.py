@@ -23,7 +23,15 @@ LIBUMP_DEF_TIMEOUT = 20
 LIBUMP_DEF_BCAST_ADDRESS = "169.254.255.255"
 LIBUMP_DEF_GROUP = 0
 LIBUMP_MAX_MESSAGE_SIZE = 1502
-LIBUMP_TIMEOUT = -3
+
+# error codes
+LIBUMP_NO_ERROR     =  0,  # No error
+LIBUMP_OS_ERROR     = -1,  # Operating System level error
+LIBUMP_NOT_OPEN     = -2,  # Communication socket not open
+LIBUMP_TIMEOUT      = -3,  # Timeout occured
+LIBUMP_INVALID_ARG  = -4,  # Illegal command argument
+LIBUMP_INVALID_DEV  = -5,  # Illegal Device Id
+LIBUMP_INVALID_RESP = -6,  # Illegal response received
 
 
 class sockaddr_in(Structure):
@@ -324,7 +332,13 @@ class UMP(object):
         use MoveRequest.finished or .finished_event as returned from goto_pos().
         """
         # idle/complete=0; moving>0; failed<0
-        return self.call('ump_get_drive_status_ext', c_int(dev)) > 0        
+        try:
+            return self.call('ump_get_drive_status_ext', c_int(dev)) > 0
+        except UMPError as err:
+            if err.errno in (LIBUMP_NOT_OPEN, LIBUMP_INVALID_DEV):
+                raise
+            else:
+                return False
 
     def stop_all(self):
         """Stop all manipulators.
