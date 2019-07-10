@@ -40,7 +40,7 @@ class Sensapex(Stage):
 
         # create handle to this manipulator
         # note: n_axes is used in cases where the device is not capable of answering this on its own 
-        self.dev = SensapexDevice(self.devid, callback=self._positionChanged, n_axes=config.get('nAxes'))
+        self.dev = SensapexDevice(self.devid, callback=self._positionChanged, n_axes=config.get('nAxes'), max_acceleration=config.get('maxAcceleration'))
         # force cache update for this device.
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
