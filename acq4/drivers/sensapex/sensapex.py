@@ -147,7 +147,7 @@ class UMP(object):
         # duration that manipulator must be not busy before a move is considered complete.
         self.move_expire_time = 50e-3
 
-        self.max_acceleration = 0
+        self.max_acceleration = {}
         
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
@@ -228,9 +228,9 @@ class UMP(object):
         self._timeout = timeout
         self.call('ump_set_timeout', timeout)
 
-    def set_max_acceleration(self, max_acc):
-        self.max_acceleration = max_acc
-        print ("max acceleration:", self.max_acceleration)
+    def set_max_acceleration(self, dev, max_acc):
+        self.max_acceleration[dev] = max_acc
+        
 
     def open(self, address=None, group=None):
         """Open the UMP device at the given address.
@@ -313,11 +313,16 @@ class UMP(object):
         else:
             speed = [max(1, speed)] * 4  # speed < 1 crashes the uMp
 
-        if max_acceleration==0:
-            max_acceleration = self.max_acceleration
 
-        args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + max_acceleration]
+        if max_acceleration==0 or max_acceleration == None:
+            if self.max_acceleration[dev] != None:
+                max_acceleration = self.max_acceleration[dev]
+            else:
+                max_acceleration = 0
 
+
+        args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + [max_acceleration]]
+        print (args)
         duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
@@ -465,7 +470,10 @@ class SensapexDevice(object):
         self.ump = UMP.get_ump()
 
         # Save max acceleration from config
-        self.ump.set_max_acceleration(max_acceleration)
+        if max_acceleration == None:
+            max_acceleration = 0
+
+        self.ump.set_max_acceleration(devid, max_acceleration)
 
         # some devices will fail when asked how many axes they have; this
         # allows a manual override.
