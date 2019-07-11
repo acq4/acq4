@@ -10,6 +10,10 @@ parser = argparse.ArgumentParser(
     description="Test for sensapex devices; perform a series of random moves while rapidly polling the device position and state.")
 parser.add_argument('device', type=int, help="Device ID to test")
 parser.add_argument('--group', type=int, default=0, help="Device group number")
+parser.add_argument('--x', action='store_true', default=False, dest='x', help="True = Random X axis values. False = keep start position")
+parser.add_argument('--y', action='store_true', default=False, dest='y', help="True = Random Y axis values. False = keep start position")
+parser.add_argument('--z', action='store_true', default=False, dest='z', help="True = Random Z axis values. False = keep start position")
+
 parser.add_argument('--speed', type=int, default=1000, help="Movement speed in um/sec")
 parser.add_argument('--distance', type=int, default=10, help="Max distance to travel in um (relative to current position)")
 parser.add_argument('--iter', type=int, default=10, help="Number of positions to test")
@@ -99,12 +103,37 @@ if args.start_pos is None:
     start_pos = dev.get_pos()
 else:
     start_pos = np.array(list(map(float, args.start_pos.split(','))))
+
+print (start_pos)
 diffs = []
 errs = []
 positions = []
 if args.test_pos is None:
-    moves = (np.random.random(size=(args.iter, 3)) * args.distance*1000).astype(int)
+    xmoves=[]
+    ymoves=[]
+    zmoves=[]
+
+    if  args.x:
+        xmoves = (np.random.random(size=(args.iter, 1)) * args.distance*1000).astype(int)
+    else:
+        xmoves = np.zeros(args.iter)
+
+    if  args.y:
+        ymoves = (np.random.random(size=(args.iter, 1)) * args.distance*1000).astype(int)
+    else:
+        ymoves = np.zeros(args.iter)
+
+    if  args.z:
+        zmoves = (np.random.random(size=(args.iter, 1)) * args.distance*1000).astype(int)
+    else:
+        zmoves = np.zeros(args.iter)
+
+    moves = np.column_stack((xmoves,ymoves,zmoves))
+    
+#    moves = (np.random.random(size=(args.iter, 3)) * args.distance*1000).astype(int)
     targets = np.array(start_pos)[np.newaxis, :] + moves
+    print (moves)
+    print (targets)
 else:
     # just move back and forth between start and test position
     test_pos = np.array(list(map(float, args.test_pos.split(','))))
@@ -121,7 +150,6 @@ speeds = [args.speed] * args.iter
 
 # targets = np.array([[9335078, 10085446, 12197238], [14793665.0, 11658668.0, 17168934.]] * 5)
 # speeds = [1000] * args.iter
-
 
 
 dev.stop()
