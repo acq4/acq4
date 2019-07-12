@@ -3,11 +3,12 @@ from __future__ import print_function
 import time
 import numpy as np
 from acq4.util import Qt
-from ..Stage import Stage, MoveFuture, StageInterface
+from ..Stage import Stage, MoveFuture, StageInterface, CalibrationWindow
 from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
+import acq4.pyqtgraph as pg
 
 
 class Sensapex(Stage):
@@ -32,8 +33,7 @@ class Sensapex(Stage):
             raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
 
         Stage.__init__(self, man, config, name)
-
-        # Read position updates on a timer to rate-limit
+         # Read position updates on a timer to rate-limit
         self._updateTimer = Qt.QTimer()
         self._updateTimer.timeout.connect(self._getPosition)
         self._lastUpdate = 0
@@ -55,6 +55,7 @@ class Sensapex(Stage):
 
         # TODO: set any extra parameters specified in the config        
         Sensapex.devices[self.devid] = self
+       
 
     def axes(self):
         return ('x', 'y', 'z')
@@ -152,6 +153,8 @@ class Sensapex(Stage):
             self._lastMove = SensapexMoveFuture(self, pos, speed)
             return self._lastMove
 
+    def deviceInterface(self, win):
+        return SensapexInterface(self, win)
 
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
@@ -235,4 +238,143 @@ class SensapexMoveFuture(MoveFuture):
 
         #self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
         #self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
+
+class SensapexInterface(Qt.QWidget):
+    def __init__(self, dev, win):
+        Qt.QWidget.__init__(self)
+        self.win = win
+        self.dev = dev
+
+        self.layout = Qt.QGridLayout()
+        self.setLayout(self.layout)
+        self.axCtrls = {}
+        self.posLabels = {}
+
+        self.positionLabelWidget = Qt.QWidget()
+        self.layout.addWidget(self.positionLabelWidget, 0, 0)
+        self.positionLabelLayout = Qt.QGridLayout()
+        self.positionLabelWidget.setLayout(self.positionLabelLayout)
+        self.positionLabelLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.globalLabel = Qt.QLabel('global')
+        self.positionLabelLayout.addWidget(self.globalLabel, 0, 1)
+        self.stageLabel = Qt.QLabel('stage')
+        self.positionLabelLayout.addWidget(self.stageLabel, 0, 2)
+
+        self.btnContainer = Qt.QWidget()
+        self.btnLayout = Qt.QGridLayout()
+        self.btnContainer.setLayout(self.btnLayout)
+        self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
+        self.btnLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.goHomeBtn = Qt.QPushButton('Home')
+        self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
+        self.goHomeBtn.clicked.connect(self.goHomeClicked)
+
+        self.setHomeBtn = Qt.QPushButton('Set Home')
+        self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
+        self.setHomeBtn.clicked.connect(self.setHomeClicked)
+
+        self.calibrateBtn = Qt.QPushButton('Calibrate')
+        self.btnLayout.addWidget(self.calibrateBtn, 0, 2)
+        self.calibrateBtn.clicked.connect(self.calibrateClicked)
+
+        self.stopBtn = Qt.QPushButton('Stop!')
+        self.btnLayout.addWidget(self.stopBtn, 1, 0)
+        self.stopBtn.clicked.connect(self.stopClicked)
+        self.stopBtn.setStyleSheet("QPushButton {background-color:red; color:white}")
+
+        self.calibrateZeroBtn = Qt.QPushButton('Run Zero Calibration')
+        self.btnLayout.addWidget(self.calibrateZeroBtn, 1, 1)
+        self.calibrateZeroBtn.clicked.connect(self.calibrateZeroClicked)
+
+        self.calibrateLoadBtn = Qt.QPushButton('Run Load Calibration')
+        self.btnLayout.addWidget(self.calibrateLoadBtn, 1, 2)
+        self.calibrateLoadBtn.clicked.connect(self.calibrateLoadClicked)
+
+        self.softStartValue = Qt.QLineEdit()
+
+        self.btnLayout.addWidget(self.softStartValue, 2, 1)
+        self.softStartValue.editingFinished.connect(self.softstartChanged)
+        self.getSoftStartValue()
+
+        self.softStartBtn = Qt.QPushButton('Soft Start Enabled')
+        self.softStartBtn.setCheckable(True);
+        self.softStartBtn.setStyleSheet("QPushButton:checked{background-color:lightgreen; color:black}")
+        self.btnLayout.addWidget(self.softStartBtn, 2, 0)
+        self.softStartBtn.clicked.connect(self.softstartClicked)
+        self.getSoftStartState()
+
+       
+
+        self.calibrateWindow = None
+
+        self.dev.sigPositionChanged.connect(self.update)
+        
+        self.update()
+
+    def update(self):
+        
+        globalPos = self.dev.globalPosition()
+        stagePos = self.dev.getPosition()
+ 
+        for i in self.posLabels:
+            text = pg.siFormat(globalPos[i], suffix='m', precision=5)
+            self.posLabels[i][0].setText(text)
+            self.posLabels[i][1].setText(str(stagePos[i]))
+
+   
+
+    def goHomeClicked(self):
+        self.dev.goHome()
+
+    def setHomeClicked(self):
+        self.dev.setHomePosition()
+
+    def calibrateClicked(self):
+        if self.calibrateWindow is None:
+            self.calibrateWindow = CalibrationWindow(self.dev)
+        self.calibrateWindow.show()
+        self.calibrateWindow.raise_()
+
+    def calibrateZeroClicked(self):
+        self.dev.dev.calibrate_zero_position()
+
+    def calibrateLoadClicked(self):
+        self.dev.dev.calibrate_load()
+
+    def stopClicked(self):
+        self.dev.dev.stop()
+
+    def getSoftStartState(self):
+        state = self.dev.dev.get_soft_start_state()
+       
+        if state == 1:
+            self.softStartBtn.setChecked(True)
+            self.softStartBtn.setText("Soft Start Enabled")
+            self.softStartValue.setVisible(True)
+            self.getSoftStartValue()
+            return True
+
+        self.softStartBtn.setChecked(False)
+        self.softStartBtn.setText("Soft Start Disabled")
+        self.softStartValue.setVisible(False)
+        return False
+
+    def softstartClicked(self):
+        checked = self.getSoftStartState()
+        if checked:
+            self.dev.dev.set_soft_start_state(0)
+        else:
+            self.dev.dev.set_soft_start_state(1)
+
+        self.getSoftStartState()
+
+    def softstartChanged(self):
+        value = int(self.softStartValue.text())
+        self.dev.dev.set_soft_start_value(value)
+
+    def getSoftStartValue(self):
+        value = self.dev.dev.get_soft_start_value()
+        self.softStartValue.setText(str(value))
 

@@ -402,6 +402,41 @@ class UMP(object):
         feature_custom_slow_speed = 32
         return self.call('ump_get_ext_feature',c_int(dev), c_int(feature_custom_slow_speed))
 
+    def send_ump_cmd(self, dev, cmd, argList):
+        args = (c_int * len(argList))()
+        args[:] = argList
+
+        return self.call('ump_cmd',c_int(dev),c_int(cmd), len(argList),args)
+
+    def get_ump_param(self, dev, param):
+        value = c_int()
+        self.call('ump_get_param',c_int(dev),c_int(param), *[byref(value)])
+        return value
+        
+    def set_ump_param(self,dev,param, value):
+        return self.call('ump_set_param',c_int(dev),c_int(param), value)
+
+    def calibrate_zero_position(self, dev):
+        return self.send_ump_cmd(dev, 4, [])
+
+    def calibrate_load(self, dev):
+        return self.send_ump_cmd(dev, 5, [0])
+
+    def get_soft_start_state(self, dev):
+        feature_soft_start = 33
+        return self.call('ump_get_ext_feature',c_int(dev),c_int(feature_soft_start))
+    
+    def set_soft_start_state(self, dev, enabled):
+        feature_soft_start = 33
+        return self.call('ump_set_ext_feature',c_int(dev),c_int(feature_soft_start), c_int(enabled))
+
+    def get_soft_start_value(self, dev):
+        return self.get_ump_param(dev,15)
+
+    def set_soft_start_value(self, dev, value):
+        return self.set_ump_param(dev,15, value)
+ 
+
     def recv_all(self):
         """Receive all queued position/status update packets.
         """
@@ -520,6 +555,23 @@ class SensapexDevice(object):
     def set_custom_slow_speed(self, enabled):
         return self.ump.set_custom_slow_speed(self.devid, enabled)
 
+    def calibrate_zero_position(self):
+        self.ump.calibrate_zero_position(self.devid)
+    
+    def calibrate_load(self):
+        self.ump.calibrate_load(self.devid)
+
+    def get_soft_start_state(self):
+        return self.ump.get_soft_start_state(self.devid)
+    
+    def set_soft_start_state(self, enabled):
+        return self.ump.set_soft_start_state(self.devid,enabled)
+
+    def get_soft_start_value(self):
+        return self.ump.get_soft_start_value(self.devid).value
+
+    def set_soft_start_value(self, value):
+        return self.ump.set_soft_start_value(self.devid,value)
 
 class PollThread(threading.Thread):
     """Thread to poll for all manipulator position changes.
