@@ -309,15 +309,36 @@ class SensapexInterface(Qt.QWidget):
 
         self.calibrateWindow = None
 
+        cap = dev.capabilities()
+        for axis, axisName in enumerate(self.dev.axes()):
+            if cap['getPos'][axis]:
+                axLabel = Qt.QLabel(axisName)
+                axLabel.setMaximumWidth(15)
+                globalPosLabel = Qt.QLabel('0')
+                stagePosLabel = Qt.QLabel('0')
+                self.posLabels[axis] = (globalPosLabel, stagePosLabel)
+                widgets = [axLabel, globalPosLabel, stagePosLabel]
+                if cap['limits'][axis]:
+                    minCheck = Qt.QCheckBox('Min:')
+                    minCheck.tag = (axis, 0)
+                    maxCheck = Qt.QCheckBox('Max:')
+                    maxCheck.tag = (axis, 1)
+                    self.limitChecks[axis] = (minCheck, maxCheck)
+                    widgets.extend([minCheck, maxCheck])
+                    for check in (minCheck, maxCheck):
+                        check.clicked.connect(self.limitCheckClicked)
+
+                nextRow = self.positionLabelLayout.rowCount()
+                for i,w in enumerate(widgets):
+                    self.positionLabelLayout.addWidget(w, nextRow, i)
+                self.axCtrls[axis] = widgets
         self.dev.sigPositionChanged.connect(self.update)
         
         self.update()
 
     def update(self):
-        
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
- 
         for i in self.posLabels:
             text = pg.siFormat(globalPos[i], suffix='m', precision=5)
             self.posLabels[i][0].setText(text)
