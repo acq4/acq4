@@ -6,6 +6,7 @@ from acq4.util.DataManager import *
 import os, re, sys, time
 import six
 from acq4.util.debug import *
+from acq4.util import Qt
 from . import FileAnalysisView
 from acq4.LogWindow import LogButton, LogWindow
 from . import FileLogView

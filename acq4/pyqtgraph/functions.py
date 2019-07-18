@@ -15,7 +15,6 @@ from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, QT_LIB
 from . import getConfigOption, setConfigOptions
 from . import debug, reload
-from .reload import getPreviousVersion 
 from .metaarray import MetaArray
 
 
