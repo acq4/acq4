@@ -578,6 +578,8 @@ class PatchPipetteSealState(PatchPipetteState):
         'sealThreshold': 1e9,
         'nSlopeSamples': 5,
         'autoSealTimeout': 30.0,
+        'maxVacuum': -7e3,
+        'pressureChangeRates': [(1e6, -100), (150e6, 0), (None, 200)]
     }
 
     def initialize(self):
@@ -655,14 +657,14 @@ class PatchPipetteSealState(PatchPipetteState):
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 times = np.array([tp.startTime() for tp in recentTestPulses])
                 slope = scipy.stats.linregress(times, res).slope
-                if slope < 1e6: 
-                    pressure -= 200
-                elif slope < 100e6:
-                    pass
-                elif slope > 200e6:
-                    pressure += 200
 
-                pressure = np.clip(pressure, -10e3, 0)
+                # decide how much to adjust pressure based on rate of change in seal resistance
+                for max_slope, change in config['pressureChangeRates']:
+                    if max_slope is None or slope < max_slope:
+                        pressure += change
+                        break
+                pressure = np.clip(pressure, config['maxVacuum'], 0)
+
                 self.setState('Rpip slope: %g MOhm/sec   Pressure: %g Pa' % (slope/1e6, pressure))
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
 
