@@ -1,3 +1,4 @@
+from __future__ import print_function
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.pyqtgraph as pg
 from CanvasItem import CanvasItem
@@ -73,16 +74,37 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         #for i in range(len(layers)):
         #    points.append((0,(i+1)*.01))
         self.addScaleHandle([1,0.5], [0.5, 0.5])
-        self.addScaleRotateHandle([0.5, 1], [0.5, 0], name='pia')
+        self.piaHandle = self.addScaleRotateHandle([0.5, 0], [0.5, 1], name='pia')
+        self.freeHandles = []
         for i in range(len(layers)-1):
-            self.addFreeHandle((0.5, float(i+1)/len(layers)))
+            h = self.addFreeHandle((0.5, float(i+1)/len(layers)))
+            self.freeHandles.append(h)
             #print("addFreeHandle:", (0.5, float(i+1)/len(layers)))
-        self.addScaleRotateHandle([0.5, 0], [0.5, 1], name='wm')
+        self.wmHandle = self.addScaleRotateHandle([0.5, 1], [0.5, 0], name='wm')
 
         #self.handles[0]['item'].movePoint(pg.Point(points[0]))
         #self.handles[-1]['item'].movePoint(pg.Point(points[1]))
         #self.scale(0.001)
         #self.stateChanged(finish=True)
+
+    def checkPointMove(self, handle, pos, modifiers):
+        ### don't allow layer boundary handles to move above or below the adjacent layer boundary lines (ie L4 must be between L3 and L5)
+        ## pos is in scene coordinates
+
+        index = self.indexOfHandle(handle)
+
+        ## if this is one of our scale handles allow it
+        if index in [0,1,len(self.handles)-1]:
+            return True
+
+        top = self.handles[index+1]['item'].pos().y()
+        bottom = self.handles[index-1]['item'].pos().y()
+
+        if bottom < self.mapFromScene(pos).y() < top:
+            return True
+
+        return False
+
 
     def paint(self, p, opt, widget):
         # Note: don't use self.boundingRect here, because subclasses may need to redefine it.
