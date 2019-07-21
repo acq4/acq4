@@ -68,7 +68,9 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         
 
         if layers is None:
-            layers = ['L1', 'L2/3', 'L4', 'L5', 'L6']
+            self.layers = ['L1', 'L2/3', 'L4', 'L5', 'L6']
+        else:
+            self.layers = layers
 
         #points = [(0,0)]
         #for i in range(len(layers)):
@@ -76,8 +78,8 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         self.addScaleHandle([1,0.5], [0.5, 0.5])
         self.piaHandle = self.addScaleRotateHandle([0.5, 0], [0.5, 1], name='pia')
         self.freeHandles = []
-        for i in range(len(layers)-1):
-            h = self.addFreeHandle((0.5, float(i+1)/len(layers)))
+        for i in range(len(self.layers)-1):
+            h = self.addFreeHandle((0.5, float(i+1)/len(self.layers)))
             self.freeHandles.append(h)
             #print("addFreeHandle:", (0.5, float(i+1)/len(layers)))
         self.wmHandle = self.addScaleRotateHandle([0.5, 1], [0.5, 0], name='wm')
@@ -117,17 +119,25 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         p.drawRect(0, 0, 1, 1)
 
 
+        nHues = len(self.layers)*2+2
+
         for i, h in enumerate(self.handles):
             if h['type'] == 'f':
-                p.setPen(pg.mkPen(pg.intColor(i), width=2))
-                #y = h['item'].pos()
+                p.setPen(pg.mkPen(pg.intColor((i-2)*2+1, hues=nHues), width=2))
                 y2 = h['pos'].y()
-                #print('y:', y, '   y2:', y2)
                 p.drawLine(QtCore.QPointF(0,y2), QtCore.QPointF(1,y2))
 
-    #def addSegment(self, pos=(0,0), scaleHandle=False, connectTo=None):
+        positions = []
+        for i, l in enumerate(self.layers):
+            y = (self.handles[2+i]['pos'].y() - self.handles[1+i]['pos'].y())/2. + self.handles[1+i]['pos'].y()
+            positions.append(p.transform().map(QtCore.QPointF(0.5, y)))
+            
+        p.resetTransform()
 
-
+        for i, l in enumerate(self.layers):
+            pos = positions[i]
+            p.setPen(pg.mkPen(pg.intColor((i*2), hues=nHues)))
+            p.drawText(QtCore.QRectF(pos.x()-50, pos.y()-50, 100, 100), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, l)
 
 
 
