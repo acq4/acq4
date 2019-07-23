@@ -672,6 +672,9 @@ class ROI(GraphicsObject):
     def mapSceneToParent(self, pt):
         return self.mapToParent(self.mapFromScene(pt))
 
+    def mapSceneFromParent(self, pt):
+        return self.mapToScene(self.mapFromParent(pt))
+
     def setSelected(self, s):
         QtGui.QGraphicsItem.setSelected(self, s)
         #print "select", self, s
