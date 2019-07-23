@@ -35,6 +35,9 @@ class CortexMarkerCanvasItem(CanvasItem):
         state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.listPoints()[1])))
         state['sliceAngle'] = roi.angle
         state['roiPos'] = tuple(pg.Point(roi.pos()))
+        
+        ## new
+        state['roiState'] = roi.saveState()
 
         return state
 
@@ -42,13 +45,25 @@ class CortexMarkerCanvasItem(CanvasItem):
     def restoreState(self, state):
         CanvasItem.restoreState(self, state)
         roi = self.graphicsItem()
-        roi.setPos(pg.Point(state['roiPos']))
-        roi.handles[0]['item'].setPos(roi.mapFromParent(pg.Point(state['piaPos'])))
-        roi.handles[1]['item'].setPos(roi.mapFromParent(pg.Point(state['wmPos'])))
 
-        ## tell roi to incorporate handle movements
-        roi.movePoint(roi.handles[0]['item'], roi.handles[0]['item'].scenePos(), coords='scene')
-        roi.movePoint(roi.handles[1]['item'], roi.handles[1]['item'].scenePos(), coords='scene')
+        if state.get('roiState') is not None:
+            raise Exception('Need to implement')
+        else: 
+            ## still be able to load old things
+            #roi.setPos(pg.Point(state['roiPos']))
+
+            pia = roi.mapSceneFromParent(pg.Point(state['piaPos']))
+            wm = roi.mapSceneFromParent(pg.Point(state['wmPos']))
+
+            roi.handles[1]['item'].movePoint(pia)
+            roi.handles[-1]['item'].movePoint(wm)
+
+            ## move the scale handle to a reasonable distance
+            halfdist = (wm - pia)/2.
+            midpoint = pia + halfdist
+            pvect = pg.Point(-halfdist.y(), halfdist.x())
+            scalePos = midpoint + pvect
+            roi.handles[0]['item'].movePoint(scalePos)
 
     def showSelectBox(self):
         self.selectBox.hide()
@@ -88,6 +103,7 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         #self.handles[-1]['item'].movePoint(pg.Point(points[1]))
         #self.scale(0.001)
         #self.stateChanged(finish=True)
+
 
     def checkPointMove(self, handle, pos, modifiers):
         ### don't allow layer boundary handles to move above or below the adjacent layer boundary lines (ie L4 must be between L3 and L5)
@@ -140,6 +156,13 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
             p.drawText(QtCore.QRectF(pos.x()-50, pos.y()-50, 100, 100), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, l)
 
 
+    def saveState(self):
+
+        state = pg.graphicsItems.ROI.ROI.saveState(self)
+
+
+    def setState(self, state, update=True):
+        pg.graphicsItems.ROI.ROI.setState(self, state, update)
 
 
 
