@@ -11,33 +11,37 @@ class CortexMarkerCanvasItem(CanvasItem):
     
     def __init__(self, points=None, **kwds):
         vr = kwds.pop('viewRect', None)
+        #print('1: points:', points, ' vr:', vr)
         if points is None:
             if vr is None:
                 points = ((0, 0), (1, 1))
             else:
-                #p1 = vr.center()
-                #p2 = p1 + 0.2 * (vr.topRight()-p1)
-                #points = ((p1.x(), p1.y()), (p2.x(), p2.y()))
-                p = vr.center()
-                d = vr.topRight()-vr.center()
-                points = ((p.x(), p.y()+0.6*d.y()), (p.x(), p.y()-0.6*d.y()))
-                #print('points:', points)
+                p1 = vr.center()
+                p2 = p1 + 0.2 * (vr.topRight()-p1)
+                points = ((p1.x(), p1.y()), (p2.x(), p2.y()))
+                #p = vr.center()
+                #d = vr.topRight()-vr.center()
+                #points = ((p.x(), p.y()+0.6*d.y()), (p.x(), p.y()-0.6*d.y()))
+                #print('2: points:', points)
 
         item = CortexMarkerROI(points, movable=True)
         CanvasItem.__init__(self, item, **kwds)
+
+        self.setROIDefaultPosition(points[0], points[1])
+        #raise Exception('stop')
 
 
 
     def saveState(self, relativeTo=None):
         state = CanvasItem.saveState(self, relativeTo)
         roi = self.graphicsItem()
-        state['piaPos'] = tuple(pg.Point(roi.mapToParent(roi.listPoints()[0])))
-        state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.listPoints()[1])))
-        state['sliceAngle'] = roi.angle
-        state['roiPos'] = tuple(pg.Point(roi.pos()))
+        state['piaPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[1]['item'].pos())))
+        state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[-1]['item'].pos())))
+        #state['sliceAngle'] = roi.angle
+        #state['roiPos'] = tuple(pg.Point(roi.pos()))
         
         ## new
-        state['roiState'] = roi.saveState()
+        #state['roiState'] = roi.saveState()
 
         return state
 
@@ -51,19 +55,51 @@ class CortexMarkerCanvasItem(CanvasItem):
         else: 
             ## still be able to load old things
             #roi.setPos(pg.Point(state['roiPos']))
+            self.setROIDefaultPosition(state['piaPos'], state['wmPos'])
+            # # print('RESTORE STATE:')
+            # # roi.setAngle(0.0)
+            # # roi.setSize((1.0,1.0))
+            # print('   roiState:', roi.getState())
+            # print('   scene:', roi.scene())
+            # pia = roi.mapSceneFromParent(pg.Point(state['piaPos']))
+            # wm = roi.mapSceneFromParent(pg.Point(state['wmPos']))
+            # print('   pia:', state['piaPos'], ' -> ', pia)
+            # print('   wm:', state['wmPos'], ' -> ', wm)
 
-            pia = roi.mapSceneFromParent(pg.Point(state['piaPos']))
-            wm = roi.mapSceneFromParent(pg.Point(state['wmPos']))
 
-            roi.handles[1]['item'].movePoint(pia)
-            roi.handles[-1]['item'].movePoint(wm)
+            # roi.handles[1]['item'].movePoint(pia)
+            # roi.handles[-1]['item'].movePoint(wm)
 
-            ## move the scale handle to a reasonable distance
-            halfdist = (wm - pia)/2.
-            midpoint = pia + halfdist
-            pvect = pg.Point(-halfdist.y(), halfdist.x())
-            scalePos = midpoint + pvect
-            roi.handles[0]['item'].movePoint(scalePos)
+            # ## move the scale handle to a reasonable distance
+            # halfdist = (wm - pia)/2.
+            # midpoint = pia + halfdist
+            # pvect = pg.Point(-halfdist.y(), halfdist.x())
+            # scalePos = midpoint + pvect
+            # print('   scalePos:', scalePos)
+            # roi.handles[0]['item'].movePoint(scalePos)
+
+    def setROIDefaultPosition(self, pia1, wm1):
+        roi = self.graphicsItem()
+        pia = roi.mapSceneFromParent(pg.Point(pia1))
+        wm = roi.mapSceneFromParent(pg.Point(wm1))
+        print('scene:', roi.scene())
+        print('parent:', roi.parent())
+        print('   pia:', pia1, ' -> ', pia)
+        print('   wm:', wm1, ' -> ', wm)
+
+
+        roi.handles[1]['item'].movePoint(pia)
+        roi.handles[-1]['item'].movePoint(wm)
+
+        ## move the scale handle to a reasonable distance
+        halfdist = (wm - pia)/2.
+        midpoint = pia + halfdist
+        pvect = pg.Point(-halfdist.y(), halfdist.x())
+        scalePos = midpoint + pvect
+        print('   scalePos:', scalePos)
+        roi.handles[0]['item'].movePoint(scalePos)
+
+
 
     def showSelectBox(self):
         self.selectBox.hide()
@@ -77,9 +113,17 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
 
         #size = (pg.Point(points[1])-pg.Point(points[0])).length()
         #print('size:', size)
-        size = (1,1)
-        points = [(0,0), (1,1)]
-        pg.graphicsItems.ROI.ROI.__init__(self, points[0], size=size, **kwargs)
+        #size = pg.Point(points[1]) - pg.Point(points[0])
+        #print('3: size:', size)
+        #points = [(0,0), (1,1)]
+
+        #if size.x() == 0:
+        #    size = pg.Point(size.y() * 0.5, size.y())
+        #if size.y() == 0:
+        #    size = pg.Point(size.x(), size.x() * 0.5)
+
+        #print('4: size:', size, ' pos:', points[0])
+        pg.graphicsItems.ROI.ROI.__init__(self, (0,0), size=(1, 1), **kwargs)
         
 
         if layers is None:
@@ -99,8 +143,32 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
             #print("addFreeHandle:", (0.5, float(i+1)/len(layers)))
         self.wmHandle = self.addScaleRotateHandle([0.5, 1], [0.5, 0], name='wm')
 
-        #self.handles[0]['item'].movePoint(pg.Point(points[0]))
-        #self.handles[-1]['item'].movePoint(pg.Point(points[1]))
+
+        # print('INIT ROI: pos:', self.pos(), ' size:', self.size())
+        # print('   points:', points)
+
+
+        # if points is not None:
+        #     print('   roiState:', self.getState())
+        #     print('   scene:', self.scene())
+        #     pia = self.mapSceneFromParent(pg.Point(points[0]))
+        #     wm = self.mapSceneFromParent(pg.Point(points[1]))
+        #     print('   pia:', points[0], ' -> ', pia)
+        #     print('   wm :', points[1], ' -> ', wm)
+
+        #     self.handles[1]['item'].movePoint(pia)
+        #     self.handles[-1]['item'].movePoint(wm)
+
+        #     ## move the scale handle to a reasonable distance
+        #     halfdist = (wm - pia)/2.
+        #     midpoint = pia + halfdist
+        #     pvect = pg.Point(-halfdist.y(), halfdist.x())
+        #     scalePos = midpoint + pvect
+        #     print('   scalePos:', scalePos)
+        #     self.handles[0]['item'].movePoint(scalePos)
+
+        #self.handles[1]['item'].movePoint(self.mapSceneFromParent(pg.Point(points[0])))
+        #self.handles[-1]['item'].movePoint(self.mapSceneFromParent(pg.Point(points[1])))
         #self.scale(0.001)
         #self.stateChanged(finish=True)
 
@@ -215,6 +283,8 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
 #         xBuf = 80*pxw
 #         yBuf = 80*pxh
 #         return r.adjusted(-xBuf, -yBuf, xBuf, yBuf)
+
+
 
 
 
