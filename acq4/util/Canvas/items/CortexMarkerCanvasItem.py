@@ -82,10 +82,10 @@ class CortexMarkerCanvasItem(CanvasItem):
         roi = self.graphicsItem()
         pia = roi.mapSceneFromParent(pg.Point(pia1))
         wm = roi.mapSceneFromParent(pg.Point(wm1))
-        print('scene:', roi.scene())
-        print('parent:', roi.parent())
-        print('   pia:', pia1, ' -> ', pia)
-        print('   wm:', wm1, ' -> ', wm)
+        # print('scene:', roi.scene())
+        # print('parent:', roi.parent())
+        # print('   pia:', pia1, ' -> ', pia)
+        # print('   wm:', wm1, ' -> ', wm)
 
 
         roi.handles[1]['item'].movePoint(pia)
@@ -94,9 +94,9 @@ class CortexMarkerCanvasItem(CanvasItem):
         ## move the scale handle to a reasonable distance
         halfdist = (wm - pia)/2.
         midpoint = pia + halfdist
-        pvect = pg.Point(-halfdist.y(), halfdist.x())
+        pvect = pg.Point(halfdist.y(), -halfdist.x())
         scalePos = midpoint + pvect
-        print('   scalePos:', scalePos)
+        # print('   scalePos:', scalePos)
         roi.handles[0]['item'].movePoint(scalePos)
 
 
