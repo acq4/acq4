@@ -37,11 +37,12 @@ class CortexMarkerCanvasItem(CanvasItem):
         roi = self.graphicsItem()
         state['piaPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[1]['item'].pos())))
         state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[-1]['item'].pos())))
-        #state['sliceAngle'] = roi.angle
-        #state['roiPos'] = tuple(pg.Point(roi.pos()))
+        state['sliceAngle'] = 'Need to implement'
+        state['roiPos'] = tuple(pg.Point(roi.pos()))
         
         ## new
-        #state['roiState'] = roi.saveState()
+        state['roiState'] = roi.saveCortexROIState()
+        #print('saving state:', state)
 
         return state
 
@@ -49,9 +50,11 @@ class CortexMarkerCanvasItem(CanvasItem):
     def restoreState(self, state):
         CanvasItem.restoreState(self, state)
         roi = self.graphicsItem()
+        #print('restoreStateCalled. roiState:', state.get('roiState'))
+
 
         if state.get('roiState') is not None:
-            raise Exception('Need to implement')
+            roi.restoreCortexROIState(state['roiState'])
         else: 
             ## still be able to load old things
             #roi.setPos(pg.Point(state['roiPos']))
@@ -136,10 +139,8 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         #    points.append((0,(i+1)*.01))
         self.addScaleHandle([1,0.5], [0.5, 0.5])
         self.piaHandle = self.addScaleRotateHandle([0.5, 0], [0.5, 1], name='pia')
-        self.freeHandles = []
-        for i in range(len(self.layers)-1):
-            h = self.addFreeHandle((0.5, float(i+1)/len(self.layers)))
-            self.freeHandles.append(h)
+        
+        self.createLayerHandles()
             #print("addFreeHandle:", (0.5, float(i+1)/len(layers)))
         self.wmHandle = self.addScaleRotateHandle([0.5, 1], [0.5, 0], name='wm')
 
@@ -172,6 +173,12 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         #self.scale(0.001)
         #self.stateChanged(finish=True)
 
+    def createLayerHandles(self):
+        self.freeHandles = []
+        for i in range(len(self.layers)-1):
+            h = self.addFreeHandle((0.5, float(i+1)/len(self.layers)), index=i+2)
+            self.freeHandles.append(h)
+
 
     def checkPointMove(self, handle, pos, modifiers):
         ### don't allow layer boundary handles to move above or below the adjacent layer boundary lines (ie L4 must be between L3 and L5)
@@ -180,7 +187,7 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         index = self.indexOfHandle(handle)
 
         ## if this is one of our scale handles allow it
-        if index in [0,1,len(self.handles)-1]:
+        if index in [0,1, len(self.handles)-1]:
             return True
 
         top = self.handles[index+1]['item'].pos().y()
@@ -224,13 +231,35 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
             p.drawText(QtCore.QRectF(pos.x()-50, pos.y()-50, 100, 100), QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter, l)
 
 
-    def saveState(self):
+    def saveCortexROIState(self):
 
         state = pg.graphicsItems.ROI.ROI.saveState(self)
+        state['layers'] = self.layers
+        state['handles'] = []
+
+        ## save layer positions
+        for h in self.handles:
+            p = self.mapToParent(h['item'].pos())
+            state['handles'].append((p.x(), p.y()))
+
+        return state
 
 
-    def setState(self, state, update=True):
+
+
+    def restoreCortexROIState(self, state, update=True):
         pg.graphicsItems.ROI.ROI.setState(self, state, update)
+        self.layers = state['layers']
+
+        if len(self.handles[2:-1]) != len(state['layers']) + 1:
+            for h in self.handles[2:-1]:
+                self.removeHandle(h['item'])
+            self.createLayerHandles()
+
+        for i, p in enumerate(state['handles']):
+            self.handles[i]['item'].movePoint(self.mapSceneFromParent(pg.Point(p)))
+
+
 
 
 
