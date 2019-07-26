@@ -17,7 +17,7 @@ class CortexMarkerCanvasItem(CanvasItem):
                 points = ((0, 0), (1, 1))
             else:
                 p1 = vr.center()
-                p2 = p1 + 0.2 * (vr.topRight()-p1)
+                p2 = p1 + 0.5 * (vr.topRight()-p1)
                 points = ((p1.x(), p1.y()), (p2.x(), p2.y()))
                 #p = vr.center()
                 #d = vr.topRight()-vr.center()
@@ -38,7 +38,7 @@ class CortexMarkerCanvasItem(CanvasItem):
         state['piaPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[1]['item'].pos())))
         state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[-1]['item'].pos())))
         state['sliceAngle'] = roi.getSliceAngle()
-        state['roiPos'] = tuple(pg.Point(roi.pos()))
+        #state['roiPos'] = tuple(pg.Point(roi.pos()))
         
         ## new
         state['roiState'] = roi.saveCortexROIState()
