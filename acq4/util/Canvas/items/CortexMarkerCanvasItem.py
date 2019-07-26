@@ -37,7 +37,7 @@ class CortexMarkerCanvasItem(CanvasItem):
         roi = self.graphicsItem()
         state['piaPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[1]['item'].pos())))
         state['wmPos'] = tuple(pg.Point(roi.mapToParent(roi.handles[-1]['item'].pos())))
-        state['sliceAngle'] = 'Need to implement'
+        state['sliceAngle'] = roi.getSliceAngle()
         state['roiPos'] = tuple(pg.Point(roi.pos()))
         
         ## new
@@ -258,6 +258,15 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
 
         for i, p in enumerate(state['handles']):
             self.handles[i]['item'].movePoint(self.mapSceneFromParent(pg.Point(p)))
+
+    def getSliceAngle(self):
+        h1 = self.handles[1]['item'].pos()
+        h2 = self.handles[-1]['item'].pos()
+
+        vec = pg.Point(self.mapToParent(h2)) - pg.Point(self.mapToParent(h1))
+        length = vec.length()
+        angle = -vec.angle(pg.Point(0,-1)) ## changed to match how Alice measured angle in optoanalysis/new_test_ui.py
+        return angle
 
 
 
