@@ -236,12 +236,15 @@ class CortexMarkerROI(pg.graphicsItems.ROI.ROI):
         state = pg.graphicsItems.ROI.ROI.saveState(self)
         state['layers'] = self.layers
         state['handles'] = []
+        state['layerBounds_percentDepth'] = {}
 
         ## save layer positions
         for h in self.handles:
             p = self.mapToParent(h['item'].pos())
             state['handles'].append((p.x(), p.y()))
 
+        for i, l in enumerate(self.layers):
+            state['layerBounds_percentDepth'][l] = ((self.handles[i+1]['item'].pos()/self.size()).y(), (self.handles[i+2]['item'].pos()/self.size()).y())
         return state
 
 

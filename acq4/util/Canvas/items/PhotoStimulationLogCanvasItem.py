@@ -249,9 +249,7 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         else:
             return markers[0].saveState()['markers']
 
-
-    def getCortexMarkerState(self):
-        """Return a dict with 'piaPos', 'wmPos', 'sliceAngle'."""
+    def getCortexMarker(self):
         items = []
         for item in self.canvasitem().canvas.items:
             if item._typeName == "CortexMarker":
@@ -262,11 +260,29 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         elif len(items) > 1:
             raise Exception("Found %i CortexMarker items. Not sure which to use.")
         else:
-            state = items[0].saveState()
-            return {'sliceAngle':state['sliceAngle'],
-                    'piaPos': state['piaPos'],
-                    'wmPos':state['wmPos']
-                    }
+            return items[0]
+
+    def getCortexMarkerState(self):
+        """Return a dict with 'piaPos', 'wmPos', 'sliceAngle'."""
+        marker = self.getCortexMarker()
+        state = marker.saveState()
+        return {'sliceAngle':state['sliceAngle'],
+                'piaPos': state['piaPos'],
+                'wmPos':state['wmPos'],
+                'layers':state['roiState']['layers'],
+                'layerBoundPositions':state['roiState']['handles'][1:], ## first handle is a scale
+                'layerBounds_percentDepth':state['roiState']['layerBounds_percentDepth']
+                }
+
+    def findTargetLayer(self, percentDepth, layer_dict):
+        layers = [] 
+        for l, v in layer_dict.items():
+            if (percentDepth > v[0]) and (percentDepth < v[1]):
+                layers.append(l)
+
+        if len(layers) != 1:
+            raise Exception("Found %i layers for depth of %i. layers: %s" %(len(layers), percentDepth, str(layers)))
+        return layers[0]
 
 
     def saveNewJson(self):
@@ -277,13 +293,14 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             filename += '.json'
 
         data = OrderedDict()
-        data['version'] = 2
+        data['version'] = 3
         data['Headstages'] = OrderedDict()
         data['StimulationPoints'] = OrderedDict()
         data['CortexMarker'] = self.getCortexMarkerState()
 
 
         cells = self.getCellPositions()
+        cortexROI = self.getCortexMarker().graphicsItem()
 
         for hs in self.headstageChecks.keys():
             if not self.headstageChecks[hs].isChecked():
@@ -296,6 +313,8 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             d['y_pos'] = cells[hs][1][1]
             d['z_pos'] = cells[hs][1][2]
             d['angle'] = data['CortexMarker']['sliceAngle']
+            d['percent_depth'] = (cortexROI.mapFromParent(pg.Point(d['x_pos'], d['y_pos']))/cortexROI.size()).y()
+            d['target_layer'] = self.findTargetLayer(d['percent_depth'], data['CortexMarker']['layerBounds_percentDepth'])
             data['Headstages']['electrode_%i'%hs].update(d)
             
 
@@ -324,12 +343,83 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             d = point.point.saveState()
             d['stimulations'] = point.point.stimulations
             d['images'] = list(set([x[x.keys()[0]]['prairieImage'] for x in d['stimulations']]))
+            d['percent_depth'] = (cortexROI.mapFromParent(pg.Point(d['position'][0], d['position'][1]))/cortexROI.size()).y()
+            d['target_layer'] = self.findTargetLayer(d['percent_depth'], data['CortexMarker']['layerBounds_percentDepth'])
+
+
             data['StimulationPoints'][point.name()] = d
 
 
         with open(filename, 'w') as outfile:
             json.dump(data, outfile, indent=4)
 
-    #def copyJson(self):
-    #    pass
+
+    # def saveNewJson(self):
+    #      #### VERSION 2
+    #     filename = QtGui.QFileDialog.getSaveFileName(None, "Save connections", "", "JSON files (*.json)")
+    #     if filename == '':
+    #         return
+    #     if not filename.endswith('.json'):
+    #         filename += '.json'
+
+    #     data = OrderedDict()
+    #     data['version'] = 2
+    #     data['Headstages'] = OrderedDict()
+    #     data['StimulationPoints'] = OrderedDict()
+    #     data['CortexMarker'] = self.getCortexMarkerState()
+
+
+    #     cells = self.getCellPositions()
+
+    #     for hs in self.headstageChecks.keys():
+    #         if not self.headstageChecks[hs].isChecked():
+    #             continue
+    #         data['Headstages']['electrode_%i'%hs] = OrderedDict()
+    #         ### Need to add position info here
+    #         d = OrderedDict()
+    #         d['cellName'] = cells[hs][0]
+    #         d['x_pos'] = cells[hs][1][0]
+    #         d['y_pos'] = cells[hs][1][1]
+    #         d['z_pos'] = cells[hs][1][2]
+    #         d['angle'] = data['CortexMarker']['sliceAngle']
+    #         data['Headstages']['electrode_%i'%hs].update(d)
+            
+
+    #         data['Headstages']['electrode_%i'%hs]['Connections'] = OrderedDict()
+
+
+    #     for point in self.ptree.topLevelItem(0).param.children():
+    #         for hs in point.children():
+    #             if not self.headstageChecks[int(hs.name()[-1])].isChecked():
+    #                 continue
+    #             cx = hs.value()
+    #             if cx == 0:
+    #                 cnx_str = None
+    #             elif cx == 1:
+    #                 cnx_str = 'inhibitory'
+    #             elif cx == 2:
+    #                 cnx_str = 'excitatory'
+    #             elif cx == 3:
+    #                 cnx_str = 'tbd'
+    #             elif cx == 4:
+    #                 cnx_str = 'no cnx'
+    #             data['Headstages']['electrode_%s'%hs.name()[-1]]['Connections'][point.name()] = cnx_str
+
+
+    #     #data[point.name()] = point.point.stimulations
+    #         d = point.point.saveState()
+    #         d['stimulations'] = point.point.stimulations
+    #         d['images'] = list(set([x[x.keys()[0]]['prairieImage'] for x in d['stimulations']]))
+    #         data['StimulationPoints'][point.name()] = d
+
+
+    #     with open(filename, 'w') as outfile:
+    #         json.dump(data, outfile, indent=4)
+
+    # #def copyJson(self):
+    # #    pass
+
+
+    # #def copyJson(self):
+    # #    pass
 
