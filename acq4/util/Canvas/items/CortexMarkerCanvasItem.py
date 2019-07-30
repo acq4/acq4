@@ -58,7 +58,8 @@ class CortexMarkerCanvasItem(CanvasItem):
         else: 
             ## still be able to load old things
             #roi.setPos(pg.Point(state['roiPos']))
-            self.setROIDefaultPosition(state['piaPos'], state['wmPos'])
+            if state.get('piaPos') is not None:
+                self.setROIDefaultPosition(state['piaPos'], state['wmPos'])
             # # print('RESTORE STATE:')
             # # roi.setAngle(0.0)
             # # roi.setSize((1.0,1.0))
