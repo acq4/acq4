@@ -17,8 +17,11 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
 
     _typeName = "Photostimulation Log"
 
-    def __init__(self, handle, **opts):
+    def __init__(self, handle=None, **opts):
         opts.pop('viewRect', None)
+
+        if handle is None:
+            raise Exception("Cannot load PhotostimulationLog from .mosaic because no filehandle was saved in .mosaic")
 
         self.data = handle.read()
         self.headstageCount = 4
