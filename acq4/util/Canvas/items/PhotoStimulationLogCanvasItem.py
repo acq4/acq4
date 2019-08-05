@@ -5,11 +5,13 @@ from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 import acq4.Manager
 import acq4.pyqtgraph as pg
+import acq4.util.DataManager
 import numpy as np
 #from .MarkersCanvasItem import MarkersCanvasItem
 from .itemtypes import registerItemType
 from collections import OrderedDict
 import json
+import copy
 
 
 class PhotoStimulationLogCanvasItem(CanvasItem):
@@ -19,9 +21,11 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
 
     def __init__(self, handle=None, **opts):
         opts.pop('viewRect', None)
+        self.reloadFromCnx = False
 
         if handle is None:
-            raise Exception("Cannot load PhotostimulationLog from .mosaic because no filehandle was saved in .mosaic")
+            self.reloadFromCnx = True
+            handle = self.alertUserBadMosaic()
 
         self.data = handle.read()
         self.headstageCount = 4
@@ -42,6 +46,7 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
             self.addStimPoint(pt)
         self._ctrl.headstagesCheckChanged() ## trigger params to be hidden until headstages are checked
 
+
     @classmethod
     def checkFile(cls, fh):
         name = fh.shortName()
@@ -49,6 +54,106 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
             return 10
         else:
             return 0
+
+    def userPicksFile(self):
+        """Used for loading old .mosiac files where the filehandle of the photostimLog wasn't saved. Raises a dialog and returns a filehandle picked by the user."""
+        dh = acq4.Manager.getManager().getCurrentDir()
+        #self.dialog = pg.FileDialog(caption='PhotostimLog filename was not specified in .mosaic. Please pick a PhotostimLog to load.', directory=dh.name())
+        #self.dialog.
+        filename = QtGui.QFileDialog.getOpenFileName(caption='PhotoStimulationLog filename was not specified in .mosaic. Please pick a PhotoStimulationLog to load.', directory=dh.name(), filter='Photostim Log File (*.log)')
+        return acq4.util.DataManager.getHandle(filename)
+
+    def alertUserBadMosaic(self):
+        text = 'There is no PhotoStimulationLog filename stored in the .mosaic file. Would you like to select a PhotoStimulationLog.log file and a connections.json file to load?'
+        self.messageBox = QtGui.QMessageBox(QtGui.QMessageBox.Question, '', text, buttons=QtGui.QMessageBox.Ok|QtGui.QMessageBox.Cancel)
+        #self.messageBox.show()
+        res = self.messageBox.exec_()
+        #res = self.messageBox.result()
+
+        if res == QtGui.QMessageBox.Ok:
+            print("result okay")
+            return self.userPicksFile()
+        elif res == QtGui.QMessageBox.Cancel:
+            raise Exception("Can't reload PhotoStimulationLog from .mosaic. No filename saved in .mosaic")
+
+    def attemptConnectionDataRescue(self):
+        """Return a dict with 'points' and 'headstageChecks', with the same info stored in newer .mosaics. Used for reloading data from connections.json files (from befor data was saved in .mosaic)."""
+        self.reloadFromCnx = False ## only try this once
+
+        ## get connection file 
+        dh = acq4.Manager.getManager().getCurrentDir()
+        filename = QtGui.QFileDialog.getOpenFileName(caption='Please select a connection.json file to reload connection data from.', directory=dh.name(), filter='JSON files (*.json)')
+
+        with open(filename,'r') as f:
+            exp_json=json.load(f)
+
+        cnxs = {"tbd": 3, 
+                "no cnx": 4, 
+                "none": 0, 
+                "inhibitory": 1, 
+                "excitatory": 2,
+                None:0
+                }
+        headstageDefaults = {
+                                "expanded": True, 
+                                #"name": "headstage_0", 
+                                "limits": {
+                                    "mark for later": 3, 
+                                    "no cnx": 4, 
+                                    "none": 0, 
+                                    "putative inhibitory": 1, 
+                                    "putative excitatory": 2
+                                }, 
+                                "strictNaming": False, 
+                                "default": 0, 
+                                "enabled": True, 
+                                "title": None, 
+                                "renamable": False, 
+                                #"value": 0, 
+                                "visible": True, 
+                                "readonly": False, 
+                                "values": {
+                                    "mark for later": 3, 
+                                    "no cnx": 4, 
+                                    "none": 0, 
+                                    "putative inhibitory": 1, 
+                                    "putative excitatory": 2
+                                }, 
+                                "removable": False, 
+                                "type": "list"
+                            }
+        ## points[name]['param']['children'][headstage_name]['value'] = int
+        points = {}
+        headstage_checks = {'0':False, '1':False, '2':False, '3':False}
+        for headstage, v in exp_json['Headstages'].items():
+            for point, conn_call in v['Connections'].items():
+                if points.get(point) == None:
+                    #print "1"
+                    points[point]={}
+                if points[point].get('param') == None:
+                    #print "2"
+                    points[point]['param'] = {'children':{}}
+                if points[point]['param']['children'].get(headstage) == None:
+                    #print "3"
+                    points[point]['param']['children'][headstage]=copy.deepcopy(headstageDefaults)
+                points[point]['param']['children'][headstage]['value'] = cnxs[conn_call]
+                #print("C:", point, headstage, points[point]['param']['children'][headstage].get('name', 'None'))
+                points[point]['param']['children'][headstage]['name'] = 'headstage_'+headstage[-1]
+                #print("D:", point, headstage, points[point]['param']['children'][headstage]['name'])
+
+            #print('A:', {k:v['name'] for k, v in points['Point 1']['param']['children'].items()})
+            headstage_checks[headstage[-1]] = True
+
+
+
+
+
+        #raise Exception('stop')
+        #print('B:', {k:v['name'] for k, v in points['Point 1']['param']['children'].items()})
+        return {'points':points, 'headstageChecks':headstage_checks}
+
+
+
 
     def addStimPoint(self, pt):
         pt.graphicsItem.setMovable(False)
@@ -76,8 +181,16 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
         return state
 
     def restoreState(self, state):
-        points = state.pop('points')
-        headstageChecks = state.pop('headstageChecks')
+        if self.reloadFromCnx:
+            reloaded=True
+            #state.update(self.attemptConnectionDataRescue())
+            res = self.attemptConnectionDataRescue()
+            points = res['points']
+            #print('RESTORE STATE 1:', {k:v['name'] for k, v in points['Point 1']['param']['children'].items()})
+            headstageChecks = res['headstageChecks']
+        else:
+            points = state.pop('points')
+            headstageChecks = state.pop('headstageChecks')
         CanvasItem.restoreState(self, state)
 
         #for param in self.params.children():
@@ -85,6 +198,7 @@ class PhotoStimulationLogCanvasItem(CanvasItem):
         #    param.point.graphicsItem.scene().removeItem(param.point.graphicsItem)
 
         for param in self.params.children():
+            #print('restoring param 2:', {k: v['name'] for k, v in points[param.name()]['param']['children'].items()})
             param.restoreState(points[param.name()]['param'])
 
         for k, chk in self._ctrl.headstageChecks.items():
