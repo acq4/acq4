@@ -383,13 +383,19 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
         """Return a dict with 'piaPos', 'wmPos', 'sliceAngle'."""
         marker = self.getCortexMarker()
         state = marker.saveState()
-        return {'sliceAngle':state['sliceAngle'],
+        res = {'sliceAngle':state['sliceAngle'],
                 'piaPos': state['piaPos'],
                 'wmPos':state['wmPos'],
+                'pia_to_wm_distance':(pg.Point(state['piaPos']) - pg.Point(state['wmPos'])).length(),
                 'layers':state['roiState']['layers'],
                 'layerBoundPositions':state['roiState']['handles'][1:], ## first handle is a scale
                 'layerBounds_percentDepth':state['roiState']['layerBounds_percentDepth']
                 }
+        res['layerBounds_meters'] = {}
+        for k, v in res['layerBounds_percentDepth'].items():
+            res['layerBounds_meters'][k] = (v[0]*res['pia_to_wm_distance'], v[1]*res['pia_to_wm_distance'])
+
+        return res
 
     def findTargetLayer(self, percentDepth, layer_dict):
         layers = [] 
@@ -432,6 +438,8 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             d['angle'] = data['CortexMarker']['sliceAngle']
             d['percent_depth'] = (cortexROI.mapFromParent(pg.Point(d['x_pos'], d['y_pos']))/cortexROI.size()).y()
             d['target_layer'] = self.findTargetLayer(d['percent_depth'], data['CortexMarker']['layerBounds_percentDepth'])
+            d['distance_to_pia'] = d['percent_depth']*data['CortexMarker']['pia_to_wm_distance']
+            d['distance_to_wm'] = (1-d['percent_depth'])*data['CortexMarker']['pia_to_wm_distance']
             data['Headstages']['electrode_%i'%hs].update(d)
             
 
@@ -461,6 +469,8 @@ class PhotoStimulationLogItemCtrlWidget(QtGui.QWidget):
             d['stimulations'] = point.point.stimulations
             d['images'] = list(set([x[x.keys()[0]]['prairieImage'] for x in d['stimulations']]))
             d['percent_depth'] = (cortexROI.mapFromParent(pg.Point(d['position'][0], d['position'][1]))/cortexROI.size()).y()
+            d['distance_to_pia'] = d['percent_depth']*data['CortexMarker']['pia_to_wm_distance']
+            d['distance_to_wm'] = (1-d['percent_depth'])*data['CortexMarker']['pia_to_wm_distance']
             d['target_layer'] = self.findTargetLayer(d['percent_depth'], data['CortexMarker']['layerBounds_percentDepth'])
 
 
