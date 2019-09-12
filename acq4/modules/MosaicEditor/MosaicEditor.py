@@ -337,11 +337,9 @@ class MosaicEditor(AnalysisModule):
         nhistbins = 100
         # generate a histogram of the global levels in the image (all images selected)
         hm = np.histogram(np.dstack([x.data for x in self.canvas.selectedItems()]), nhistbins)
-        print hm
         #$meanImage = np.mean(self.selectedItems().asarray(), axis=0)
         n = 0
         self.imageMax = 0.0
-        print 'nsel: ', nsel
         for i in range(nsel):
             try:
                 meanImage = meanImage + np.array(self.canvas.selectedItems()[i].data)
@@ -350,10 +348,10 @@ class MosaicEditor(AnalysisModule):
                     self.imageMax = imagemax
                 n = n + 1
             except:
-                print 'image i = %d failed' % i
-                print 'file name: ', self.canvas.selectedItems()[i].name
-                print 'expected shape of nxm: ', nxm
-                print ' but got data shape: ', self.canvas.selectedItems()[i].data.shape
+                print('image i = %d failed' % i)
+                print('file name: ', self.canvas.selectedItems()[i].name)
+                print('expected shape of nxm: ', nxm)
+                print(' but got data shape: ', self.canvas.selectedItems()[i].data.shape)
 
         meanImage = meanImage/n # np.mean(meanImage[0:n], axis=0)
         filtwidth = np.floor(nxm[0]/10+1)
@@ -361,7 +359,6 @@ class MosaicEditor(AnalysisModule):
         #pg.image(blimg)
         
         m = np.argmax(hm[0]) # returns the index of the max count
-        print 'm = ', m
         # now rescale each individually
         # rescaling is done against the global histogram, to keep the gain constant.
         for i in range(nsel):
@@ -376,7 +373,6 @@ class MosaicEditor(AnalysisModule):
             self.canvas.selectedItems()[i].updateImage(newImage)
          #   self.canvas.selectedItems()[i].levelRgn.setRegion([0, 2.0])
             self.canvas.selectedItems()[i].levelRgn.setRegion([0., self.imageMax])
-        print "MosaicEditor::self imageMax: ", self.imageMax
 
     def normalizeImages(self):
         self.canvas.view.autoRange()
