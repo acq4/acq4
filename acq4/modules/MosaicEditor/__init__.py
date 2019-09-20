@@ -1,1 +1,1 @@
-from MosaicEditor import MosaicEditor, MosaicEditorModule
+from .MosaicEditor import MosaicEditor, MosaicEditorModule

@@ -5,6 +5,7 @@ from acq4.util.flowchart import *
 from collections import OrderedDict
 import numpy as np
 import acq4.pyqtgraph as pg
+from acq4.util import Qt
 #from RegionParameter import RegionParameter
 import os
 import acq4.util.debug as debug

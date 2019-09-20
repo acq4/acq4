@@ -2,7 +2,7 @@
 from __future__ import print_function
 import time, re
 from acq4.util import Qt
-from CanvasItem import CanvasItem
+from .CanvasItem import CanvasItem
 import acq4.Manager
 import acq4.pyqtgraph as pg
 import numpy as np
