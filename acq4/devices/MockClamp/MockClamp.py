@@ -16,8 +16,8 @@ import acq4.pyqtgraph.multiprocess as mp
 Ui_MockClampDevGui = Qt.importTemplate('.devTemplate')
 
 
-ivModes = {'i=0':'ic', 'vc':'vc', 'ic':'ic'}
-modeNames = ['vc', 'i=0', 'ic']
+ivModes = {'I=0':'IC', 'VC':'VC', 'IC':'IC'}
+modeNames = ['VC', 'I=0', 'IC']
 
 
 class MockClamp(DAQGeneric):
@@ -35,11 +35,11 @@ class MockClamp(DAQGeneric):
         }
             
         self.holding = {
-            'vc': config.get('vcHolding', -0.05),
-            'ic': config.get('icHolding', 0.0)
+            'VC': config.get('vcHolding', -0.05),
+            'IC': config.get('icHolding', 0.0)
         }
         
-        self.mode = 'i=0'
+        self.mode = 'I=0'
         
         self.config = config
         
@@ -124,10 +124,10 @@ class MockClamp(DAQGeneric):
         
         startIvMode = ivModes[startMode]
         ivMode = ivModes[mode]
-        if (startIvMode == 'vc' and ivMode == 'ic') or (startIvMode == 'ic' and ivMode == 'vc'):
+        if (startIvMode == 'VC' and ivMode == 'IC') or (startIvMode == 'IC' and ivMode == 'VC'):
             ## switch to I=0 first
             #self.requestModeSwitch('I=0')
-            self.mode = 'i=0'
+            self.mode = 'I=0'
             
         self.setHolding(ivMode, force=True)  ## we're in I=0 mode now, so it's ok to force the holding value.
         
@@ -142,7 +142,7 @@ class MockClamp(DAQGeneric):
     def getChanUnits(self, chan):
         global ivModes
         iv = ivModes[self.getMode()]
-        if iv == 'vc':
+        if iv == 'VC':
             units = ['V', 'A']
         else:
             units = ['A', 'V']
@@ -308,7 +308,7 @@ class MockClampTaskGui(DAQGenericTaskGui):
         ivm = ivModes[self.getMode()]
         w = self.cmdWidget
         
-        if ivm == 'vc':
+        if ivm == 'VC':
             scale = 1e-3
             cmdUnits = 'V'
             inpUnits = 'A'
@@ -349,9 +349,9 @@ class MockClampDevGui(Qt.QWidget):
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
         #self.ui.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
         self.modeRadios = {
-            'vc': self.ui.vcModeRadio,
-            'ic': self.ui.icModeRadio,
-            'i=0': self.ui.i0ModeRadio,
+            'VC': self.ui.vcModeRadio,
+            'IC': self.ui.icModeRadio,
+            'I=0': self.ui.i0ModeRadio,
         }
         self.updateStatus()
             
@@ -367,8 +367,8 @@ class MockClampDevGui(Qt.QWidget):
         mode = self.dev.getMode()
         if mode is None:
             return
-        vcHold = self.dev.getHolding('vc')
-        icHold = self.dev.getHolding('ic')
+        vcHold = self.dev.getHolding('VC')
+        icHold = self.dev.getHolding('IC')
         self.modeRadios[mode].setChecked(True)
         #self.ui.modeCombo.setCurrentIndex(self.ui.modeCombo.findText(mode))
         self.ui.vcHoldingSpin.setValue(vcHold)
@@ -378,8 +378,8 @@ class MockClampDevGui(Qt.QWidget):
         if isinstance(hval, dict):
             self.ui.vcHoldingSpin.blockSignals(True)
             self.ui.icHoldingSpin.blockSignals(True)
-            self.ui.vcHoldingSpin.setValue(hval['vc'])
-            self.ui.icHoldingSpin.setValue(hval['ic'])
+            self.ui.vcHoldingSpin.setValue(hval['VC'])
+            self.ui.icHoldingSpin.setValue(hval['IC'])
             self.ui.vcHoldingSpin.blockSignals(False)
             self.ui.icHoldingSpin.blockSignals(False)
             
@@ -394,10 +394,10 @@ class MockClampDevGui(Qt.QWidget):
             r.blockSignals(False)
         
     def vcHoldingChanged(self):
-        self.dev.setHolding('vc', self.ui.vcHoldingSpin.value())
+        self.dev.setHolding('VC', self.ui.vcHoldingSpin.value())
         
     def icHoldingChanged(self):
-        self.dev.setHolding('ic', self.ui.icHoldingSpin.value())
+        self.dev.setHolding('IC', self.ui.icHoldingSpin.value())
         
     def modeRadioChanged(self, m):
         try:
