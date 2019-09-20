@@ -15,6 +15,7 @@ class PressureControl(Device):
         Device.__init__(self, manager, config, name)
         self.source = None
         self.pressure = None
+        self.sources = config.get('sources', ())
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
@@ -35,7 +36,7 @@ class PressureControl(Device):
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals).
 
-        Note: this does _not_ change the configuration of any values.
+        Note: this does _not_ change the configuration of any valves.
         """
         self.pressure = p
 
