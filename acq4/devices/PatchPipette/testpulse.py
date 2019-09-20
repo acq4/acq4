@@ -51,7 +51,7 @@ class TestPulseThread(Thread):
         self._lastTask = None
 
         self._clampDev = self.dev.clampDevice
-        self._daqName = list(self._clampDev.listChannels().values())[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
+        self._daqName = self._clampDev.getDAQName()
         self._clampName = self._clampDev.name()
         self._manager = getManager()
 

@@ -12,6 +12,7 @@ from collections import OrderedDict
 from acq4.util.debug import printExc
 import subprocess, pickle, os
 import acq4.pyqtgraph.multiprocess as mp
+from acq4.devices.PatchClamp import PatchClamp
 
 Ui_MockClampDevGui = Qt.importTemplate('.devTemplate')
 
@@ -20,11 +21,13 @@ ivModes = {'I=0':'IC', 'VC':'VC', 'IC':'IC'}
 modeNames = ['VC', 'I=0', 'IC']
 
 
-class MockClamp(DAQGeneric):
+class MockClamp(PatchClamp):
     
     sigModeChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
+        
+        PatchClamp.__init__(self, dm, config, name)
 
         # Generate config to use for DAQ 
         self.devLock = Mutex(Mutex.Recursive)
@@ -43,7 +46,8 @@ class MockClamp(DAQGeneric):
         
         self.config = config
         
-        DAQGeneric.__init__(self, dm, daqConfig, name)
+        # create a daq device under the hood
+        self.daqDev = DAQGeneric(dm, daqConfig, name)
         
         try:
             self.setHolding()
@@ -96,13 +100,13 @@ class MockClamp(DAQGeneric):
         if chan == 'command':
             self.setHolding(value=value)
         else:
-            DAQGeneric.setChanHolding(self, chan, value)
+            self.daqDev.setChanHolding(self, chan, value)
 
     def getChanHolding(self, chan):
         if chan == 'command':
             return self.getHolding()
         else:
-            return DAQGeneric.getChanHolding(self, chan)
+            return self.daqDev.getChanHolding(self, chan)
             
     def getHolding(self, mode=None):
         global ivModes
@@ -111,6 +115,11 @@ class MockClamp(DAQGeneric):
                 mode = self.getMode()
             ivMode = ivModes[mode]  ## determine vc/ic
             return self.holding[ivMode]
+
+    def getState(self):
+        return {
+            'mode': self.getMode(),
+        }
         
     def listModes(self):
         global modeNames
@@ -160,8 +169,13 @@ class MockClamp(DAQGeneric):
     def quit(self):
         #self.process.send(None)
         self.process.close()
-        DAQGeneric.quit(self)
-        
+        self.daqDev.quit(self)
+
+    def getDAQName(self):
+        """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
+        return self.config['Command']['device']
+
+
 class MockClampTask(DAQGenericTask):
     def __init__(self, dev, cmd, parentTask):
         ## make a few changes for compatibility with multiclamp        
@@ -179,9 +193,10 @@ class MockClampTask(DAQGenericTask):
         
         
         cmd['daqProtocol']['primary'] = {'record': True, 'lowLevelConf': {'mockFunc': self.read}}
-        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
+        DAQGenericTask.__init__(self, dev.daqDev, cmd['daqProtocol'], parentTask)
         
         self.cmd = cmd
+        self.clampDev = dev
 
         modPath = os.path.abspath(os.path.split(__file__)[0])
         
@@ -191,8 +206,8 @@ class MockClampTask(DAQGenericTask):
         ##if 'holding' in self.cmd:
         ##    self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
         if 'mode' in self.cmd:
-            self.dev.setMode(self.cmd['mode'])
-        self.ampState = {'mode': self.dev.getMode()}
+            self.clampDev.setMode(self.cmd['mode'])
+        self.ampState = {'mode': self.clampDev.getMode()}
         
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
         DAQGenericTask.configure(self)
@@ -204,7 +219,7 @@ class MockClampTask(DAQGenericTask):
 
     def write(self, data, dt):
         ## Called by DAQGeneric to simulate a write-to-DAQ
-        self.job = self.dev.simulator.run({'data': data, 'dt': dt, 'mode': self.cmd['mode']}, _callSync='async')
+        self.job = self.clampDev.simulator.run({'data': data, 'dt': dt, 'mode': self.cmd['mode']}, _callSync='async')
 
     def isDone(self):
         ## check on neuron process
@@ -213,14 +228,12 @@ class MockClampTask(DAQGenericTask):
         
     def stop(self, abort=False):
         DAQGenericTask.stop(self, abort)
-        
-        
-        
 
     
 class MockClampTaskGui(DAQGenericTaskGui):
     def __init__(self, dev, taskRunner):
-        DAQGenericTaskGui.__init__(self, dev, taskRunner, ownUi=False)
+        DAQGenericTaskGui.__init__(self, dev.daqDev, taskRunner, ownUi=False)
+        self.clampDev = dev
         
         self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
@@ -234,7 +247,7 @@ class MockClampTaskGui(DAQGenericTaskGui):
         self.splitter2.setOrientation(Qt.Qt.Vertical)
         self.modeCombo = Qt.QComboBox()
         self.splitter2.addWidget(self.modeCombo)
-        self.modeCombo.addItems(self.dev.listModes())
+        self.modeCombo.addItems(self.clampDev.listModes())
         
         self.splitter3 = Qt.QSplitter()
         self.splitter3.setOrientation(Qt.Qt.Vertical)
@@ -266,7 +279,6 @@ class MockClampTaskGui(DAQGenericTaskGui):
         self.modeCombo.currentIndexChanged.connect(self.modeChanged)
         self.modeChanged()
         
-        
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
         state = {}
@@ -275,7 +287,6 @@ class MockClampTaskGui(DAQGenericTaskGui):
         #state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
         #state['holding'] = self.ctrl.holdingSpin.value()
         return state
-        
         
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
@@ -298,10 +309,8 @@ class MockClampTaskGui(DAQGenericTaskGui):
             'mode': self.getMode(),
             'daqProtocol': daqTask
         }
-        
             
         return task
-        
         
     def modeChanged(self):
         global ivModes
@@ -333,10 +342,9 @@ class MockClampTaskGui(DAQGenericTaskGui):
 
     def getChanHolding(self, chan):
         if chan == 'command':
-            return self.dev.getHolding(self.getMode())
+            return self.clampDev.getHolding(self.getMode())
         else:
             raise Exception("Can't get holding value for channel %s" % chan)
-            
 
         
 class MockClampDevGui(Qt.QWidget):
@@ -408,5 +416,3 @@ class MockClampDevGui(Qt.QWidget):
                     self.dev.setMode(mode)
         except CancelException:
             self.updateStatus()
-        
-        

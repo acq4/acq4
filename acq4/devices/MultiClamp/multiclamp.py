@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.devices.Device import *
 from acq4.Manager import logMsg
 from acq4.util.metaarray import MetaArray, axis
 from acq4.util.Mutex import Mutex
@@ -12,18 +11,18 @@ import sys, traceback
 from .DeviceGui import *
 from .taskGUI import *
 from acq4.util.debug import *
+from acq4.devices.PatchClamp import PatchClamp
 
 
-class MultiClamp(Device):
-    
-    sigStateChanged = Qt.Signal(object)
-    sigHoldingChanged = Qt.Signal(object, object)  # self, mode
+class MultiClamp(PatchClamp):
+
+    # inherited signals: sigStateChanged, sigHoldingChanged
 
     # remote process used to connect to commander from 32-bit python
     proc = None
 
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
+        PatchClamp.__init__(self, dm, config, name)
         self.config = config
         self.index = None
         self.devRackGui = None
