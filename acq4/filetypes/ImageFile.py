@@ -128,7 +128,7 @@ class ImageFile(FileType):
             #arr.shape = (img.height(), img.width(), img.depth() / 8)
             
             
-        transp = range(arr.ndim)    ## switch axis order y,x to x,y
+        transp = list(range(arr.ndim))    ## switch axis order y,x to x,y
         if arr.ndim == 2:
             transp[0] = 1
             transp[1] = 0
