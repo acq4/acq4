@@ -74,4 +74,3 @@ class PatchClamp(Device):
         """Return the name of the DAQ device that performs digitization for this amplifier channel.
         """
         raise NotImplementedError()
-       

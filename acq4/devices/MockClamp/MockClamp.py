@@ -127,6 +127,7 @@ class MockClamp(PatchClamp):
         
     def setMode(self, mode):
         """Set the mode of the AxoPatch (by requesting user intervention). Takes care of switching holding levels in I=0 mode if needed."""
+        mode = mode.upper()
         startMode = self.getMode()
         if startMode == mode:
             return
@@ -169,7 +170,7 @@ class MockClamp(PatchClamp):
     def quit(self):
         #self.process.send(None)
         self.process.close()
-        self.daqDev.quit(self)
+        self.daqDev.quit()
 
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
