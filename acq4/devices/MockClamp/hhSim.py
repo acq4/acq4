@@ -173,7 +173,7 @@ def run(cmd):
     #print "  ", initState
     dt = cmd['dt'] * 1e3  ## convert s -> ms
     data = cmd['data']
-    mode = cmd['mode']
+    mode = cmd['mode'].lower()
     
     result = runSim(initState, cmd=data, mode=mode, dt=dt, dur=dt*len(data))
     

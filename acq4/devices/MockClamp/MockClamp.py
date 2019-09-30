@@ -23,8 +23,6 @@ modeNames = ['VC', 'I=0', 'IC']
 
 class MockClamp(PatchClamp):
     
-    sigModeChanged = Qt.Signal(object)
-
     def __init__(self, dm, config, name):
         
         PatchClamp.__init__(self, dm, config, name)
@@ -144,7 +142,7 @@ class MockClamp(PatchClamp):
         ### TODO:
         ### If mode switches back the wrong direction, we need to reset the holding value and cancel.
         self.mode = ivMode
-        self.sigModeChanged.emit(self.mode)
+        self.sigStateChanged.emit(self.getState())
         
     def getMode(self):
         return self.mode
@@ -176,6 +174,21 @@ class MockClamp(PatchClamp):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
         return self.config['Command']['device']
 
+    def autoPipetteOffset(self):
+        """Automatically set the pipette offset.
+        """
+        pass
+        
+    def autoBridgeBalance(self):
+        """Automatically set the bridge balance.
+        """
+        pass
+
+    def autoCapComp(self):
+        """Automatically configure capacitance compensation.
+        """
+        pass
+
 
 class MockClampTask(DAQGenericTask):
     def __init__(self, dev, cmd, parentTask):
@@ -200,7 +213,6 @@ class MockClampTask(DAQGenericTask):
         self.clampDev = dev
 
         modPath = os.path.abspath(os.path.split(__file__)[0])
-        
 
     def configure(self):
         ### Record initial state or set initial value
@@ -208,7 +220,16 @@ class MockClampTask(DAQGenericTask):
         ##    self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
         if 'mode' in self.cmd:
             self.clampDev.setMode(self.cmd['mode'])
-        self.ampState = {'mode': self.clampDev.getMode()}
+        mode = self.clampDev.getMode()
+        self.ampState = {
+            'mode': mode,
+            'primaryUnits': 'A' if mode == 'VC' else 'V',
+            # copying multiclamp format here, but should eventually pick something more universal 
+            'ClampParams': ({
+                'BridgeBalResist': 0,
+                'BridgeBalEnable': True,
+            } if mode == 'IC' else {}),
+        }
         
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
         DAQGenericTask.configure(self)
@@ -229,6 +250,12 @@ class MockClampTask(DAQGenericTask):
         
     def stop(self, abort=False):
         DAQGenericTask.stop(self, abort)
+
+    def getResult(self):
+        result = DAQGenericTask.getResult(self)
+        result._info[-1]['startTime'] = result._info[-1][self.clampDev.getDAQName()].values()[0]['startTime']
+        result._info[-1]['ClampState'] = self.ampState
+        return result
 
     
 class MockClampTaskGui(DAQGenericTaskGui):
@@ -369,7 +396,7 @@ class MockClampDevGui(Qt.QWidget):
         self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingChanged)
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingChanged)
         self.dev.sigHoldingChanged.connect(self.devHoldingChanged)
-        self.dev.sigModeChanged.connect(self.devModeChanged)
+        self.dev.sigStateChanged.connect(self.devStateChanged)
         
     def updateStatus(self):
         global modeNames
@@ -392,7 +419,8 @@ class MockClampDevGui(Qt.QWidget):
             self.ui.vcHoldingSpin.blockSignals(False)
             self.ui.icHoldingSpin.blockSignals(False)
             
-    def devModeChanged(self, mode):
+    def devStateChanged(self):
+        mode = self.dev.getMode()
         for r in self.modeRadios.values():
             r.blockSignals(True)
         #self.ui.modeCombo.blockSignals(True)
