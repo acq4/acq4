@@ -56,7 +56,9 @@ class MaiTaiDevGui(LaserDevGui):
             self._maitaiui.irPowerBtn.setChecked(True)
             
             
-        
+        self._maitaiui.pumpCurrentSpin.setOpts(suffix='%', siPrefix=True, dec=False, step=0.1)
+        self._maitaiui.greenPowerSpin.setOpts(suffix='W', siPrefix=True, dec=False, step=0.1)
+
         startWL = self.dev.getWavelength()
         self._maitaiui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
         self._maitaiui.wavelengthSpin_2.setValue(startWL)
@@ -65,7 +67,7 @@ class MaiTaiDevGui(LaserDevGui):
         
         
         self._maitaiui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
-        self._maitaiui.powerButtonGroup.clicked.connect(self.powerModeChanged)
+        self._maitaiui.powerButtonGroup.buttonClicked.connect(self.powerModeChanged)
         
         self._maitaiui.turnOnOffBtn.toggled.connect(self.onOffToggled)
         self._maitaiui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
@@ -224,16 +226,16 @@ class MaiTaiDevGui(LaserDevGui):
             self._maitaiui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
             
         if self.pumpMode != 'Green Power':
-            self._maitaiui.greenPowerSpin.setText(siFormat(pumpPower))
+            self._maitaiui.greenPowerSpin.setValue(pumpPower)
         
         
     
     def pumpCurrentChanged(self,pumpCurrent):
         if self.pumpMode != 'Current %':
-            if pumpCurrent is None:
-                self._maitaiui.pumpPowerLabel.setText("?")
-            else:
-                self._maitaiui.pumpPowerLabel.setText(siFormat(pumpCurrent, suffix='%'))
+            #if pumpCurrent is None:
+            #    self._maitaiui.pumpPowerLabel.setText("?")
+            #else:
+            self._maitaiui.pumpPowerLabel.setValue(pumpCurrent)
     
     def relHumidityChanged(self, humidity):
         if humidity is None:
