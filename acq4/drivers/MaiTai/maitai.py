@@ -188,6 +188,28 @@ class MaiTai(SerialDevice):
         """Return a system identification string that contains 4 fields separated by commas."""
         return self['*IDN?']
     
+    def getSlitPosition(self):
+        """Return a system identification string that contains 4 fields separated by commas."""
+        return self['READ:SLIT?']
+    
+    def getSwidPosition(self):
+        """Return a system identification string that contains 4 fields separated by commas."""
+        return self['READ:SWID?']
+    
+    def getPrisPosition(self):
+        """Return a system identification string that contains 4 fields separated by commas."""
+        return self['READ:PRIS?']
+    
+    
+    def setSlitPosition(self,pos):
+        """Return a system identification string that contains 4 fields separated by commas."""
+        self['PLAS:SLIT'] = int(pos)
+           
+    def setPrisPosition(self,pos):
+        """Return a system identification string that contains 4 fields separated by commas."""
+        self['PLAS:PRISM'] = int(pos)
+    
+    
     def checkPulsing(self):
         """Return True if the laser is pulsing."""
         status = int(self['*STB?'])  #Returns the product status byte.
@@ -312,8 +334,8 @@ class MaiTai(SerialDevice):
       
         
 if __name__ == '__main__':
-    maiTai = MaiTai(port=2) 
-    #maiTai.setWavelength(910)
+    maiTai = MaiTai(2,baud=9600) 
+    #maiTai.setWavelength(1040)
     #print 'current wavelength : ', maiTai.getWavelength()
     #maiTai.setWavelength(880)
     #print 'current wavelength : ', maiTai.getWavelength()
@@ -326,28 +348,47 @@ if __name__ == '__main__':
     
     print 'shutter open? : ', maiTai.getShutter()
     
-    print 'check status : ', maiTai.checkStatus()
+    print 'READ:SLIT? : ', maiTai.getSlitPosition()
+    print 'READ:SWID? : ', maiTai.getSwidPosition()
+    print 'READ:PRIS? : ', maiTai.getPrisPosition()
     
-    print 'turning laser on : ', 
-    maiTai.turnLaserOn()
-    print 'done'
-    print 'check status : ', maiTai.checkStatus()
-    print 'opening shutter : ',
-    maiTai.setShutter(True)
-    print 'done'
-    print 'check status : ', maiTai.checkStatus()
-    n=0
-    while n < 10:
-        print 'relative Humidity : ', maiTai.getRelativeHumidity()
-        print 'output power : ', maiTai.getPower()
-        print 'pump power : ', maiTai.getPumpPower()
-        time.sleep(1)
-        n+=1
+    maiTai.setSlitPosition(0)
+    maiTai.setPrisPosition(0)
+     
+    print 'PLAS:SLIT 0'
+    print 'PLAS:PRISM 0'
     
-    print 'closing shutter : ', 
-    maiTai.setShutter(False)
-    print 'done'
-    print 'turning laser off : ', 
-    maiTai.turnLaserOff()
-    print 'done'
+    print 'READ:SLIT? : ', maiTai.getSlitPosition()
+    print 'READ:SWID? : ', maiTai.getSwidPosition()
+    print 'READ:PRIS? : ', maiTai.getPrisPosition()
+    
+    
+    
+    #print 'READ:Mat? : ', maiTai.getTestIdentification()
+    
+    
+    #print 'check status : ', maiTai.checkStatus()
+    
+    #print 'turning laser on : ', 
+    #maiTai.turnLaserOn()
+    #print 'done'
+    #print 'check status : ', maiTai.checkStatus()
+    #print 'opening shutter : ',
+    #maiTai.setShutter(True)
+    #print 'done'
+    #print 'check status : ', maiTai.checkStatus()
+    #n=0
+    #while n < 10:
+    #    print 'relative Humidity : ', maiTai.getRelativeHumidity()
+    #    print 'output power : ', maiTai.getPower()
+    #    print 'pump power : ', maiTai.getPumpPower()
+    #    time.sleep(1)
+    #    n+=1
+    
+    #print 'closing shutter : ', 
+    #maiTai.setShutter(False)
+    #print 'done'
+    #print 'turning laser off : ', 
+    #maiTai.turnLaserOff()
+    #print 'done'
             
