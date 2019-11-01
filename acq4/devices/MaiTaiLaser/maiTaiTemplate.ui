@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>660</width>
-    <height>264</height>
+    <height>328</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,6 +20,62 @@
       <string>Mai Tai Control</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_12">
+      <item row="6" column="0" colspan="4">
+       <widget class="QGroupBox" name="maitaiWavelengthGroup">
+        <property name="title">
+         <string/>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_9" columnstretch="0,0,0">
+         <property name="leftMargin">
+          <number>6</number>
+         </property>
+         <property name="topMargin">
+          <number>6</number>
+         </property>
+         <property name="rightMargin">
+          <number>6</number>
+         </property>
+         <property name="bottomMargin">
+          <number>6</number>
+         </property>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_13">
+           <property name="text">
+            <string>Set Wavelength: </string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="SpinBox" name="wavelengthSpin_2">
+           <property name="suffix">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="2">
+          <widget class="QLabel" name="currentWaveLengthLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_2">
+           <property name="text">
+            <string>Current Wavelength:</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
       <item row="0" column="2">
        <widget class="QPushButton" name="ExternalShutterBtn">
         <property name="text">
@@ -53,7 +109,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="4">
+      <item row="4" column="0" colspan="4">
        <widget class="QGroupBox" name="MaiTaiGroup">
         <property name="title">
          <string/>
@@ -250,56 +306,49 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0" colspan="4">
-       <widget class="QGroupBox" name="maitaiWavelengthGroup">
-        <property name="title">
-         <string/>
-        </property>
-        <layout class="QGridLayout" name="gridLayout_9" columnstretch="0,0,0">
-         <property name="leftMargin">
-          <number>6</number>
-         </property>
-         <property name="topMargin">
-          <number>6</number>
-         </property>
-         <property name="rightMargin">
-          <number>6</number>
-         </property>
-         <property name="bottomMargin">
-          <number>6</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_13">
-           <property name="text">
-            <string>Set Wavelength: </string>
-           </property>
-          </widget>
-         </item>
+      <item row="5" column="0" colspan="4">
+       <widget class="QGroupBox" name="maitaiPowerGroup">
+        <layout class="QGridLayout" name="gridLayout">
          <item row="0" column="2">
-          <widget class="SpinBox" name="wavelengthSpin_2">
-           <property name="suffix">
-            <string/>
+          <widget class="QRadioButton" name="greenPowerBtn">
+           <property name="text">
+            <string>Green Power</string>
            </property>
+           <attribute name="buttonGroup">
+            <string notr="true">powerButtonGroup</string>
+           </attribute>
           </widget>
          </item>
-         <item row="1" column="2">
-          <widget class="QLabel" name="currentWaveLengthLabel">
-           <property name="font">
-            <font>
-             <pointsize>10</pointsize>
-             <weight>75</weight>
-             <bold>true</bold>
-            </font>
-           </property>
+         <item row="0" column="1">
+          <widget class="QRadioButton" name="irPowerBtn">
            <property name="text">
-            <string/>
+            <string>IR power</string>
            </property>
+           <attribute name="buttonGroup">
+            <string notr="true">powerButtonGroup</string>
+           </attribute>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QRadioButton" name="currentBtn">
+           <property name="text">
+            <string>Current %</string>
+           </property>
+           <attribute name="buttonGroup">
+            <string notr="true">powerButtonGroup</string>
+           </attribute>
           </widget>
          </item>
          <item row="1" column="0">
-          <widget class="QLabel" name="label_2">
+          <widget class="QSpinBox" name="pumpCurrentSpin"/>
+         </item>
+         <item row="1" column="2">
+          <widget class="QSpinBox" name="greenPowerSpin"/>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLabel" name="irPowerLabel">
            <property name="text">
-            <string>Current Wavelength:</string>
+            <string>-</string>
            </property>
           </widget>
          </item>
@@ -320,4 +369,7 @@
  </customwidgets>
  <resources/>
  <connections/>
+ <buttongroups>
+  <buttongroup name="powerButtonGroup"/>
+ </buttongroups>
 </ui>

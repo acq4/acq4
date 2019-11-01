@@ -144,6 +144,19 @@ class MaiTai(SerialDevice):
         outputPower = self['READ:POWer?']
         return self.convertToFloat(outputPower)
     
+    def getCurrentPercentage(self):
+        """Reads and returns the pump laser curent in percent """
+        pumpOutputPower = self['READ:PLASer:PCURrent?']
+        return self.convertToFloat(pumpOutputPower)
+    
+    def getLastCommandedCurrentPercentage(self):
+        """ returns the last commanded pump laser current percentage """
+        return self.convertToFloat(self['PLASer:PCURrent?'])
+    
+    def setPumpLaserCurrentPercentage(self, pcurrent):
+        """ set the pump laser current percentage """
+        self['PLASer:PCURrent'] = float(pcurrent)
+    
     def getPumpPower(self):
         """Reads and returns laser output power of the pump laser"""
         pumpOutputPower = self['READ:PLASer:POWer?']
@@ -348,19 +361,23 @@ if __name__ == '__main__':
     
     print 'shutter open? : ', maiTai.getShutter()
     
-    print 'READ:SLIT? : ', maiTai.getSlitPosition()
-    print 'READ:SWID? : ', maiTai.getSwidPosition()
-    print 'READ:PRIS? : ', maiTai.getPrisPosition()
+    print 'pump mode : ', maiTai.getPumpMode()
     
-    maiTai.setSlitPosition(0)
-    maiTai.setPrisPosition(0)
+    print 'current percentage : ', maiTai.getShutter()
+    
+    #print 'READ:SLIT? : ', maiTai.getSlitPosition()
+    #print 'READ:SWID? : ', maiTai.getSwidPosition()
+    #print 'READ:PRIS? : ', maiTai.getPrisPosition()
+    
+    #maiTai.setSlitPosition(0)
+    #maiTai.setPrisPosition(0)
      
-    print 'PLAS:SLIT 0'
-    print 'PLAS:PRISM 0'
+    #print 'PLAS:SLIT 0'
+    #print 'PLAS:PRISM 0'
     
-    print 'READ:SLIT? : ', maiTai.getSlitPosition()
-    print 'READ:SWID? : ', maiTai.getSwidPosition()
-    print 'READ:PRIS? : ', maiTai.getPrisPosition()
+    #print 'READ:SLIT? : ', maiTai.getSlitPosition()
+    #print 'READ:SWID? : ', maiTai.getSwidPosition()
+    #print 'READ:PRIS? : ', maiTai.getPrisPosition()
     
     
     

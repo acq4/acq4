@@ -46,6 +46,17 @@ class MaiTaiDevGui(LaserDevGui):
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
         
+        pumpPowerModes = {0:'Current %', 1:'Green Power',2:'IR Power'}
+        self.pumpMode = self.dev.getPumpMode() # {'PCUR':'Current %', 'PPOW':'Green Power', 'POW':'IR Power'}
+        if self.pumpMode == 'Current %':
+            self._maitaiui.currentBtn.setChecked(True)
+        elif self.pumpMode == 'Green Power':
+            self._maitaiui.greenPowerBtn.setChecked(True)
+        elif self.pumpMode == 'IR Power':
+            self._maitaiui.irPowerBtn.setChecked(True)
+            
+            
+        
         startWL = self.dev.getWavelength()
         self._maitaiui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
         self._maitaiui.wavelengthSpin_2.setValue(startWL)
@@ -54,6 +65,7 @@ class MaiTaiDevGui(LaserDevGui):
         
         
         self._maitaiui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
+        self._maitaiui.powerButtonGroup.clicked.connect(self.powerModeChanged)
         
         self._maitaiui.turnOnOffBtn.toggled.connect(self.onOffToggled)
         self._maitaiui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
@@ -66,6 +78,7 @@ class MaiTaiDevGui(LaserDevGui):
         self.dev.sigOutputPowerChanged.connect(self.outputPowerChanged)
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         self.dev.sigPumpPowerChanged.connect(self.pumpPowerChanged)
+        self.dev.sigPumpCurrentChanged.connect(self.pumpCurrentChanged)
         self.dev.sigRelativeHumidityChanged.connect(self.relHumidityChanged)
         self.dev.sigPulsingStateChanged.connect(self.pulsingStateChanged)
         self.dev.sigWavelengthChanged.connect(self.wavelengthChanged)
@@ -158,6 +171,13 @@ class MaiTaiDevGui(LaserDevGui):
         #if value not in self.dev.config.get('namedWavelengths', {}).keys():
         #    self._maitaiui.wavelengthCombo.setCurrentIndex(0)
     
+    def powerModeChanged(self):
+        newPowerMode = self.powerButtonGroup.checkedId()
+        print(newPowerMode)
+        #self.dev.setPosition((newPos+1))
+        #self.dev.setWavelength(value)
+        #if value not in self.dev.config.get('namedWavelengths', {}).keys():
+        #    self._maitaiui.wavelengthCombo.setCurrentIndex(0)
 
     def samplePowerChanged(self, power):
         if power is None:
@@ -202,6 +222,18 @@ class MaiTaiDevGui(LaserDevGui):
             self._maitaiui.pumpPowerLabel.setText("?")
         else:
             self._maitaiui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
+            
+        if self.pumpMode != 'Green Power':
+            self._maitaiui.greenPowerSpin.setText(siFormat(pumpPower))
+        
+        
+    
+    def pumpCurrentChanged(self,pumpCurrent):
+        if self.pumpMode != 'Current %':
+            if pumpCurrent is None:
+                self._maitaiui.pumpPowerLabel.setText("?")
+            else:
+                self._maitaiui.pumpPowerLabel.setText(siFormat(pumpCurrent, suffix='%'))
     
     def relHumidityChanged(self, humidity):
         if humidity is None:

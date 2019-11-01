@@ -11,6 +11,7 @@ class MaiTaiLaser(Laser):
 
     sigRelativeHumidityChanged = QtCore.Signal(object)
     sigPumpPowerChanged = QtCore.Signal(object)
+    sigPumpCurrentChanged = QtCore.Signal(object)
     sigPulsingStateChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
     sigModeChanged = QtCore.Signal(object)
@@ -40,6 +41,7 @@ class MaiTaiLaser(Laser):
         self.mThread.sigWLChanged.connect(self.wavelengthChanged)
         self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
         self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
+        self.mThread.sigPCurrentChanged.connect(self.pumpCurrentChanged)
         self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
         self.mThread.sigMoChanged.connect(self.modeChanged)
         self.mThread.sigP2OChanged.connect(self.p2OptimizationChanged)
@@ -70,6 +72,10 @@ class MaiTaiLaser(Laser):
         with self.driverLock:
             self.driver.turnLaserOff()
             
+    def getPumpMode(self):
+        with self.maiTaiLock:
+            return self.driver.getPumpMode()
+            
     def powerChanged(self, power):
         with self.maiTaiLock:
             self.maiTaiPower = power
@@ -91,6 +97,11 @@ class MaiTaiLaser(Laser):
         with self.maiTaiLock:
             self.maiTaiPumpPower = pP
             self.sigPumpPowerChanged.emit(pP)
+    
+    def pumpCurrentChanged(self,pC):
+        with self.maiTaiLock:
+            self.maiTaiPumpCurrent = pC
+            self.sigPumpCurrentChanged.emit(pC)
     
     def pulsingStateChanged(self, pulse):
         with self.maiTaiLock:
@@ -207,6 +218,7 @@ class MaiTaiThread(Thread):
     sigWLChanged = QtCore.Signal(object)
     sigRelHumidityChanged = QtCore.Signal(object)
     sigPPowerChanged = QtCore.Signal(object)
+    sigPCurrentChanged = QtCore.Signal(object)
     sigPulsingSChanged = QtCore.Signal(object)
     sigMoChanged = QtCore.Signal(object)
     sigP2OChanged = QtCore.Signal(object)
@@ -256,6 +268,7 @@ class MaiTaiThread(Thread):
                     wl = self.driver.getWavelength()*1e-9
                     hum = self.driver.getRelativeHumidity()
                     pumpPower = self.driver.getPumpPower()
+                    pumpCurrentPerc = self.driver.getCurrentPercentage()
                     isPulsing = self.driver.checkPulsing()
                     mode = self.driver.getPumpMode()
                     p2Optimization = self.driver.getP2Status()
@@ -268,6 +281,7 @@ class MaiTaiThread(Thread):
                 self.sigWLChanged.emit(wl)
                 self.sigRelHumidityChanged.emit(hum)
                 self.sigPPowerChanged.emit(pumpPower)
+                self.sigPCurrentChanged.emit(pumpCurrentPerc)
                 self.sigPulsingSChanged.emit(isPulsing)
                 self.sigMoChanged.emit(mode)
                 self.sigP2OChanged.emit(p2Optimization)
