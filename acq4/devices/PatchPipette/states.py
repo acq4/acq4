@@ -724,7 +724,8 @@ class PatchPipetteBreakInState(PatchPipetteState):
         'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
         'pulsePressures': [-20e3, -25e3, -30e3, -40e3, -50e3, -60e3, -60e3, -65e3, -65e3, -65e3],
         'pulseInterval': 2,
-        'breakInThreshold': 800e6,
+        'resistanceThreshold': 500e6,
+        'capacitanceThreshold': 10e-12,
         'holdingCurrentThreshold': -1e-9,
         'fallbackState': 'fouled',
     }
@@ -785,13 +786,17 @@ class PatchPipetteBreakInState(PatchPipetteState):
                 break
         tp = tps[-1]
 
-        holding = tp.analysis()['baselineCurrent']
+        analysis = tp.analysis()
+        holding = analysis['baselineCurrent']
         if holding < self.config['holdingCurrentThreshold']:
             self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
             return False
 
-        ssr = tp.analysis()['steadyStateResistance']
-        if ssr < self.config['breakInThreshold']:
+        ssr = analysis['steadyStateResistance']
+        cap = analysis['capacitance']
+        if self.config['resistanceThreshold'] is not None and ssr < self.config['resistanceThreshold']:
+            return True
+        if self.config['capacitanceThreshold'] is not None and cap > self.config['capacitanceThreshold']:
             return True
 
     def cleanup(self):
