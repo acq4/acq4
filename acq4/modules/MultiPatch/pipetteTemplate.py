@@ -2,8 +2,7 @@
 
 # Form implementation generated from reading ui file 'pipetteTemplate.ui'
 #
-# Created: Fri Jun 14 22:27:17 2019
-#      by: PyQt4 UI code generator 4.10.4
+# Created by: PyQt4 UI code generator 4.11.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -41,8 +40,8 @@ class Ui_PipetteControl(object):
         self.widget_2.setMaximumSize(QtCore.QSize(65, 16777215))
         self.widget_2.setObjectName(_fromUtf8("widget_2"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.widget_2)
-        self.verticalLayout_2.setSpacing(2)
         self.verticalLayout_2.setMargin(2)
+        self.verticalLayout_2.setSpacing(2)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
         self.modeText = QtGui.QLineEdit(self.widget_2)
         font = QtGui.QFont()
@@ -122,8 +121,8 @@ class Ui_PipetteControl(object):
         self.widget_3.setMaximumSize(QtCore.QSize(65, 16777215))
         self.widget_3.setObjectName(_fromUtf8("widget_3"))
         self.verticalLayout_3 = QtGui.QVBoxLayout(self.widget_3)
-        self.verticalLayout_3.setSpacing(2)
         self.verticalLayout_3.setMargin(2)
+        self.verticalLayout_3.setSpacing(2)
         self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))
         self.holdingSpin = SpinBox(self.widget_3)
         font = QtGui.QFont()
@@ -150,8 +149,8 @@ class Ui_PipetteControl(object):
         self.widget_4.setMaximumSize(QtCore.QSize(65, 16777215))
         self.widget_4.setObjectName(_fromUtf8("widget_4"))
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.widget_4)
-        self.verticalLayout_4.setSpacing(2)
         self.verticalLayout_4.setMargin(2)
+        self.verticalLayout_4.setSpacing(2)
         self.verticalLayout_4.setObjectName(_fromUtf8("verticalLayout_4"))
         self.pressureSpin = SpinBox(self.widget_4)
         font = QtGui.QFont()
@@ -190,8 +189,8 @@ class Ui_PipetteControl(object):
         self.widget.setMaximumSize(QtCore.QSize(65, 16777215))
         self.widget.setObjectName(_fromUtf8("widget"))
         self.verticalLayout = QtGui.QVBoxLayout(self.widget)
-        self.verticalLayout.setSpacing(2)
         self.verticalLayout.setMargin(2)
+        self.verticalLayout.setSpacing(2)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.stateText = QtGui.QLineEdit(self.widget)
         font = QtGui.QFont()
@@ -234,18 +233,6 @@ class Ui_PipetteControl(object):
         spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem3)
         self.gridLayout.addWidget(self.widget, 1, 3, 1, 1)
-        self.plotLayoutWidget = QtGui.QWidget(PipetteControl)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.plotLayoutWidget.sizePolicy().hasHeightForWidth())
-        self.plotLayoutWidget.setSizePolicy(sizePolicy)
-        self.plotLayoutWidget.setObjectName(_fromUtf8("plotLayoutWidget"))
-        self.plotLayout = QtGui.QHBoxLayout(self.plotLayoutWidget)
-        self.plotLayout.setSpacing(0)
-        self.plotLayout.setMargin(0)
-        self.plotLayout.setObjectName(_fromUtf8("plotLayout"))
-        self.gridLayout.addWidget(self.plotLayoutWidget, 1, 7, 1, 1)
         self.swapBtn = QtGui.QPushButton(PipetteControl)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         sizePolicy.setHorizontalStretch(0)
@@ -258,6 +245,18 @@ class Ui_PipetteControl(object):
         self.swapBtn.setFont(font)
         self.swapBtn.setObjectName(_fromUtf8("swapBtn"))
         self.gridLayout.addWidget(self.swapBtn, 1, 2, 1, 1)
+        self.plotLayoutWidget = QtGui.QWidget(PipetteControl)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.plotLayoutWidget.sizePolicy().hasHeightForWidth())
+        self.plotLayoutWidget.setSizePolicy(sizePolicy)
+        self.plotLayoutWidget.setObjectName(_fromUtf8("plotLayoutWidget"))
+        self.plotLayout = QtGui.QHBoxLayout(self.plotLayoutWidget)
+        self.plotLayout.setMargin(0)
+        self.plotLayout.setSpacing(0)
+        self.plotLayout.setObjectName(_fromUtf8("plotLayout"))
+        self.gridLayout.addWidget(self.plotLayoutWidget, 0, 7, 2, 1)
 
         self.retranslateUi(PipetteControl)
         QtCore.QMetaObject.connectSlotsByName(PipetteControl)

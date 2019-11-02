@@ -64,18 +64,12 @@ class PipetteControl(Qt.QWidget):
         self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
         self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
 
-        self.gv = pg.GraphicsLayoutWidget()
-        self.leftPlot = self.gv.addPlot()
-        self.leftPlot.enableAutoRange(True, True)
-        self.rightPlot = self.gv.addPlot()
-        self.rightPlot.setLogMode(y=True, x=False)
-        self.rightPlot.setYRange(6, 10)
-        self.rightPlot.setLabels(left=('Rss', u'Ω'))
-        self.ui.plotLayout.addWidget(self.gv)
-
-        self.tpLabel = Qt.QGraphicsTextItem()
-        self.tpLabel.setParentItem(self.leftPlot.vb)
-        self.tpLabel.setDefaultTextColor(pg.mkColor('w'))
+        self.plots = [
+            PlotWidget(mode='test pulse'), 
+            PlotWidget(mode='ss resistance')
+        ]
+        for plt in self.plots:
+            self.ui.plotLayout.addWidget(plt)
 
         self.patchStateChanged(pipette)
         self.pipActiveChanged()
@@ -112,16 +106,9 @@ class PipetteControl(Qt.QWidget):
     def updatePlots(self):
         """Update the pipette data plots."""
         tp = self.pip.lastTestPulse()
-        data = tp.data
-        pri = data['Channel': 'primary']
-        units = pri._info[-1]['ClampState']['primaryUnits'] 
-        self.leftPlot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
-        self.leftPlot.setLabels(left=('', units))
         tph = self.pip.testPulseHistory()
-        self.rightPlot.plot(tph['time'] - tph['time'][0], tph['steadyStateResistance'], clear=True)
-
-        tpa = tp.analysis()
-        self.tpLabel.setPlainText(pg.siFormat(tpa['steadyStateResistance'], suffix=u'Ω'))
+        for plt in self.plots:
+            plt.newTestPulse(tp, tph)
 
     def patchStateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
@@ -244,8 +231,10 @@ class PipetteControl(Qt.QWidget):
     def hideHeader(self):
         for col in range(self.ui.gridLayout.columnCount()):
             item = self.ui.gridLayout.itemAtPosition(0, col)
-            if item is not None:
+            if item is not None and isinstance(item.widget(), Qt.QLabel):
                 item.widget().hide()
+        for plt in self.plots:
+            plt.hideHeader()
 
     def autoBiasClicked(self):
         self.pip.enableAutoBias(self.ui.autoBiasBtn.isChecked())
@@ -297,3 +286,74 @@ class MousePressCatch(Qt.QObject):
         if event.type() == event.MouseButtonPress:
             self.sigMousePress.emit(self.receiver, event)
         return False
+
+
+class PlotWidget(Qt.QWidget):
+    sigCloseClicked = Qt.Signal(object)  # self
+    sigModeChanged = Qt.Signal(object, object)  # self, mode
+
+    def __init__(self, mode):
+        Qt.QWidget.__init__(self)
+        self.mode = None
+        self.layout = Qt.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        self.setLayout(self.layout)
+
+        self.modeCombo = pg.ComboBox()
+        self.modeCombo.addItems(['test pulse', 'tp analysis', 'ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant'])
+        self.layout.addWidget(self.modeCombo, 0, 0)
+        self.modeCombo.currentIndexChanged.connect(self.modeChanged)
+
+        # self.closeBtn = Qt.QPushButton('X')
+        # self.closeBtn.setMaximumWidth(15)
+        # self.layout.addWidget(self.closeBtn, 0, 1)
+        # self.closeBtn.clicked.connect(self.closeClicked)
+
+        self.plot = pg.PlotWidget()
+        self.layout.addWidget(self.plot, 1, 0, 1, 2)
+
+        self.tpLabel = Qt.QGraphicsTextItem()
+        self.tpLabel.setParentItem(self.plot.plotItem.vb)
+        self.tpLabel.setDefaultTextColor(pg.mkColor('w'))
+
+        self.setMode(mode)
+
+    def hideHeader(self):
+        self.modeCombo.hide()
+        # self.closeBtn.hide()
+
+    def newTestPulse(self, tp, history):
+        if self.mode == 'test pulse':
+            data = tp.data
+            pri = data['Channel': 'primary']
+            units = pri._info[-1]['ClampState']['primaryUnits'] 
+            self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
+            self.plot.setLabels(left=('', units))
+        elif self.mode == 'ss resistance':
+            self.plot.plot(history['time'] - history['time'][0], history['steadyStateResistance'], clear=True)
+            tpa = tp.analysis()
+            self.tpLabel.setPlainText(pg.siFormat(tpa['steadyStateResistance'], suffix=u'Ω'))
+
+    def setMode(self, mode):
+        if self.mode == mode:
+            return
+        self.mode = mode
+        self.modeCombo.setText(mode)
+        if mode == 'test pulse':
+            self.plot.enableAutoRange(True, True)
+        elif mode == 'ss resistance':
+            self.plot.setLogMode(y=True, x=False)
+            self.plot.setYRange(6, 10)
+            self.plot.setLabels(left=('Rss', u'Ω'))
+        elif mode == 'peak resistance':
+            self.plot.setLogMode(y=True, x=False)
+            self.plot.setYRange(6, 10)
+            self.plot.setLabels(left=('Rss', u'Ω'))
+
+    def modeChanged(self):
+        self.sigModeChanged.emit(self, self.modeCombo.currentText())
+
+    def closeClicked(self):
+        self.sigCloseClicked.emit(self)
+
