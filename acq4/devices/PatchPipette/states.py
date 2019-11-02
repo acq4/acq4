@@ -396,6 +396,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         if config['setPipetteClean'] is not None:
             dev.clean = config['setPipetteClean']
 
+
         patchrec = dev.patchRecord()
         patchrec['attemptedCellDetect'] = True
         initialResistance = None
@@ -561,6 +562,8 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 class PatchPipetteSealState(PatchPipetteState):
     """Handles sealing onto cell
 
+    State name: "seal"
+
     - monitor resistance to detect loose seal and GOhm seal
     - set holding potential after loose seal
     - modulate pressure to improve likelihood of forming seal
@@ -570,7 +573,7 @@ class PatchPipetteSealState(PatchPipetteState):
     ----------
     pressureMode : str
         'auto' enables automatic pressure control during sealing; 
-        'user' simply swutches to user control for sealing.
+        'user' simply switches to user control for sealing.
     holdingThreshold : float
         Seal resistance (ohms) above which the holding potential will switch 
         from its initial value to the value specified in the *holdingPotential*
@@ -589,11 +592,18 @@ class PatchPipetteSealState(PatchPipetteState):
         transitioning to *fallbackState*.
     maxVacuum : float
         The largest vacuum pressure (pascals, negative value) to apply during sealing.
+        When this pressure is reached, the pressure is reset to 0 and the ramp starts over after a delay.
     pressureChangeRates : list
         A list of (seal_resistance_threshold, pressure_change) tuples that determine how much to
         change the current seal pressure based on the rate of change in seal resistance.
         For each iteration, select the first tuple in the list where the current rate of
         change in seal resistance is _less_ than the threshold specified in the tuple.
+    delayBeforePressure : float
+        Wait time (seconds) at beginning of seal state before applying negative pressure.
+    delayAfterSeal : float
+        Wait time (seconds) after GOhm seal is acquired, before transitioning to next state.
+    resetDelay : float
+        Wait time (seconds) after maxVacuum is reached, before restarting pressure ramp.
     """
     stateName = 'seal'
 
@@ -610,8 +620,9 @@ class PatchPipetteSealState(PatchPipetteState):
         'autoSealTimeout': 30.0,
         'maxVacuum': -3e3, #changed from -7e3
         'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)], #initially 1e6,150e6,None
-        'extendThreshold': 350e6, #for later changes
-        'sealExtend': 100.0, #for later changes
+        'delayBeforePressure': 10.0,
+        'delayAfterSeal': 5.0, 
+        'resetDelay': 5.0,
     }
 
     def initialize(self):
@@ -640,9 +651,9 @@ class PatchPipetteSealState(PatchPipetteState):
         mode = config['pressureMode']
         self.setState('beginning seal (mode: %r)' % mode)
         if mode == 'user':
-            dev.pressureDevice.setPressure(source='user')
+            dev.pressureDevice.setPressure(source='user', pressure=0)
         elif mode == 'auto':
-            dev.pressureDevice.setPressure(source='atmosphere')
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         else:
             raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
         patchrec['attemptedSeal'] = True
@@ -668,11 +679,11 @@ class PatchPipetteSealState(PatchPipetteState):
                 holdingSet = True
 
             if ssr > config['sealThreshold']:
-                time.sleep(5.0) # Added on 10/07/19 for additional 5 sec negative pressure application  
-                dev.pressureDevice.setPressure(source='atmosphere')
+                self.sleep(config['delayAfterSeal'])
+                dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                 self.setState('gigaohm seal detected')
 
-                dev.clampDevice.autoCapComp() # Added on 10/07/19 for automatic pipette capacitance compensation
+                dev.clampDevice.autoCapComp()
 
                 self._taskDone()
                 patchrec['sealSuccessful'] = True
@@ -680,16 +691,15 @@ class PatchPipetteSealState(PatchPipetteState):
             
             if mode == 'auto':
                 dt = ptime.time() - startTime
-                if dt < 10:
-                    # start with 5 (or 10) seconds at atmospheric pressure
+                if dt < config['delayBeforePressure']:
+                    # delay at atmospheric pressure before starting suction
                     continue
 
                 if dt > config['autoSealTimeout']:
                     patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
                     return
-                #dev.pressureDevice.setPressure(source='regulator', pressure=0) #ensure that we are not under positive pressure when we begin negative 'pressure'
-                time.sleep(0.1)
+
                 # update pressure
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 times = np.array([tp.startTime() for tp in recentTestPulses])
@@ -703,13 +713,12 @@ class PatchPipetteSealState(PatchPipetteState):
                         break
                 
                 # here, if the maxVacuum has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
-                    if pressure == config['maxVacuum']:  
-                        dev.pressureDevice.setPressure(source='atmosphere')
-                        time.sleep(5)
-                        pressure = 0
-                        #dtPressure = 0
-                        dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                        continue
+                if pressure >= config['maxVacuum']:
+                    dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+                    self.sleep(config['resetDelay'])
+                    pressure = 0
+                    dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+                    continue
 
                 self.setState('Rpip slope: %g MOhm/sec   Pressure: %g Pa' % (slope/1e6, pressure))
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -770,9 +779,9 @@ class PatchPipetteBreakInState(PatchPipetteState):
         'initialTestPulseEnable': True,
         'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
         'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
-        'pulsePressures': [-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3], #[-20e3, -25e3, -30e3, -40e3, -50e3, -60e3, -60e3, -65e3, -65e3, -65e3] original
+        'pulsePressures': [-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3],
         'pulseInterval': 2,
-        'breakInThreshold': 750e6, #changed from 800
+        'breakInThreshold': 750e6,
         'holdingCurrentThreshold': -1e-9,
         'fallbackState': 'fouled',
     }
@@ -884,7 +893,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         self.waitFor(fut)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
-        time.sleep(config['blowoutDuration'])
+        self.sleep(config['blowoutDuration'])
         self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
         # wait until we have a test pulse that ran after blowout was finished.
