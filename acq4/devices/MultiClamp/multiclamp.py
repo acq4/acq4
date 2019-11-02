@@ -12,6 +12,7 @@ from .DeviceGui import *
 from .taskGUI import *
 from acq4.util.debug import *
 from acq4.devices.PatchClamp import PatchClamp
+from ..Device import DeviceTask
 
 
 class MultiClamp(PatchClamp):
