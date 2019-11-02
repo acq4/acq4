@@ -343,14 +343,17 @@ class PlotWidget(Qt.QWidget):
             self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
             self.plot.setLabels(left=('', units))
 
-            # if self.mode == 'tp analysis':
+            if self.mode == 'tp analysis':
+                t,y = tp.getFitData()
+                self.plot.plot(t, y, pen='b')
 
-        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential']:
+        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant']:
             key,units = {
                 'ss resistance': ('steadyStateResistance', u'Ω'),
                 'peak resistance': ('peakResistance', u'Ω'),
                 'holding current': ('baselineCurrent', 'A'),
                 'holding potential': ('baselinePotential', 'V'),
+                'time constant': ('fitExpTau', 's'),
             }[self.mode]
             self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
             tpa = tp.analysis()
@@ -384,6 +387,10 @@ class PlotWidget(Qt.QWidget):
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Vhold', u'V'))
+        elif mode == 'time constant':
+            self.plot.setLogMode(y=False, x=False)
+            self.plot.enableAutoRange(True, True)
+            self.plot.setLabels(left=('Tau', u's'))
 
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()

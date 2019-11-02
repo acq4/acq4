@@ -299,6 +299,10 @@ class PatchPipette(Device):
             ('baselineCurrent', 'float'),
             ('peakResistance', 'float'),
             ('steadyStateResistance', 'float'),
+            ('fitExpAmp', 'float'),
+            ('fitExpTau', 'float'),
+            ('fitExpXOffset', 'float'),
+            ('fitExpYOffset', 'float'),
         ])
             
         self._testPulseHistorySize = 0
