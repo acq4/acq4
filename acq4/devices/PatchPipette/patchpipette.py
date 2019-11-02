@@ -303,6 +303,7 @@ class PatchPipette(Device):
             ('fitExpTau', 'float'),
             ('fitExpXOffset', 'float'),
             ('fitExpYOffset', 'float'),
+            ('capacitance', 'float'),
         ])
             
         self._testPulseHistorySize = 0

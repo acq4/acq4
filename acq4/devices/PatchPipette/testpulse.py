@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 import time, threading, functools
 import numpy as np
 import scipy.optimize
@@ -325,6 +325,25 @@ class TestPulse(object):
             analysis['fitExpTau'] = tau
             analysis['fitExpYOffset'] = yoffset
             analysis['fitExpXOffset'] = xoffset
+
+            if params['clampMode'] == 'VC':
+                # VC capacitance calculation adapted from Santos-Sacchi 1993
+                # (not very accurate, probably because Q is calculated incorrectly)
+                Q = (pulse.asarray() - yoffset).sum() * (t[-1]-t[0]) / len(pulse)
+                Rin = analysis['steadyStateResistance']
+                Vc = params['amplitude']
+                Rs_denom = (Q * Rin + tau * Vc)
+                if Rs_denom != 0.0:
+                    Rs = (Rin * tau * Vc) / Rs_denom
+                    Rm = Rin - Rs
+                    Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+                else:
+                    Rs = 0
+                    Rm = 0
+                    Cm = 0
+                analysis['capacitance'] = Cm
+            else:
+                analysis['capacitance'] = tau / analysis['steadyStateResistance']
 
             self._analysis = analysis
             return analysis

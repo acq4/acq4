@@ -313,7 +313,7 @@ class PlotWidget(Qt.QWidget):
         self.setLayout(self.layout)
 
         self.modeCombo = pg.ComboBox()
-        self.modeCombo.addItems(['test pulse', 'tp analysis', 'ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant'])
+        self.modeCombo.addItems(['test pulse', 'tp analysis', 'ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance'])
         self.layout.addWidget(self.modeCombo, 0, 0)
         self.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
 
@@ -347,13 +347,14 @@ class PlotWidget(Qt.QWidget):
                 t,y = tp.getFitData()
                 self.plot.plot(t, y, pen='b')
 
-        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant']:
+        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
             key,units = {
                 'ss resistance': ('steadyStateResistance', u'Ω'),
                 'peak resistance': ('peakResistance', u'Ω'),
                 'holding current': ('baselineCurrent', 'A'),
                 'holding potential': ('baselinePotential', 'V'),
                 'time constant': ('fitExpTau', 's'),
+                'capacitance': ('capacitance', 'F'),
             }[self.mode]
             self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
             tpa = tp.analysis()
@@ -391,6 +392,10 @@ class PlotWidget(Qt.QWidget):
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Tau', u's'))
+        elif mode == 'capacitance':
+            self.plot.setLogMode(y=False, x=False)
+            self.plot.enableAutoRange(True, True)
+            self.plot.setLabels(left=('Capacitance', u'F'))
 
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()
