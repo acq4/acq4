@@ -496,6 +496,7 @@ class PipetteTracker(object):
         try:
             with pg.ProgressDialog("Acquiring error map...", 0, len(order)) as dlg:
                 for i in range(len(order)+1):
+                    print("Iteration %d/%d" % (i, len(order)))
                     if i > 0:
                         lastPos = pos
                     if i < len(order):
@@ -520,8 +521,12 @@ class PipetteTracker(object):
                     if i > 0:
                         ind = inds[order[i-1]]
 
-                        print("Frame: %d %s" % (i-1, lastPos))
-                        err[tuple(ind)] = self.measureError(padding=padding, threshold=threshold, frame=frame, pos=lastPos)
+                        print("Frame: %d/%d %s" % (i-1, len(order), lastPos))
+                        try:
+                            err[tuple(ind)] = self.measureError(padding=padding, threshold=threshold, frame=frame, pos=lastPos)
+                        except RuntimeError:
+                            print("Could not detect pipette here.")
+                            err[tuple(ind)] = (np.nan, np.nan, np.nan)
                         print("    error: %s" % err[tuple(ind)])
                         dlg += 1
 
@@ -535,8 +540,15 @@ class PipetteTracker(object):
                             mark3.setPos(p3.x(), p3.y())
 
                     # wait for previous moves to complete
-                    mfut.wait(updates=True)
-                    ffut.wait(updates=True)
+                    try:
+                        mfut.wait(updates=True)
+                    except:
+                        pg.debug.printExc("Manipulator missed intermediate target:")
+
+                    try:
+                        ffut.wait(updates=True)
+                    except:
+                        pg.debug.printExc("Stage missed target:")
 
                     # step back to actual target position
                     try:
@@ -545,6 +557,8 @@ class PipetteTracker(object):
                         misses += 1
                         pg.debug.printExc("Manipulator missed target:")
 
+                    time.sleep(0.2)
+                    
                     frame = self.takeFrame()
                     reportedPos = self.dev.globalPosition()
 

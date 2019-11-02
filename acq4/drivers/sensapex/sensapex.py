@@ -23,7 +23,15 @@ LIBUMP_DEF_TIMEOUT = 20
 LIBUMP_DEF_BCAST_ADDRESS = "169.254.255.255"
 LIBUMP_DEF_GROUP = 0
 LIBUMP_MAX_MESSAGE_SIZE = 1502
-LIBUMP_TIMEOUT = -3
+
+# error codes
+LIBUMP_NO_ERROR     =  0,  # No error
+LIBUMP_OS_ERROR     = -1,  # Operating System level error
+LIBUMP_NOT_OPEN     = -2,  # Communication socket not open
+LIBUMP_TIMEOUT      = -3,  # Timeout occured
+LIBUMP_INVALID_ARG  = -4,  # Illegal command argument
+LIBUMP_INVALID_DEV  = -5,  # Illegal Device Id
+LIBUMP_INVALID_RESP = -6,  # Illegal response received
 
 
 class sockaddr_in(Structure):
@@ -139,6 +147,8 @@ class UMP(object):
         # duration that manipulator must be not busy before a move is considered complete.
         self.move_expire_time = 50e-3
 
+        self.max_acceleration = {}
+        
         self.lib = UMP_LIB
         self.lib.ump_errorstr.restype = c_char_p
 
@@ -218,6 +228,10 @@ class UMP(object):
         self._timeout = timeout
         self.call('ump_set_timeout', timeout)
 
+    def set_max_acceleration(self, dev, max_acc):
+        self.max_acceleration[dev] = max_acc
+        
+
     def open(self, address=None, group=None):
         """Open the UMP device at the given address.
         
@@ -280,6 +294,8 @@ class UMP(object):
             If True, then all axes begin moving at the same time
         linear : bool
             If True, then axis speeds are scaled to produce more linear movement
+        max_acceleration : int
+            Maximum acceleration in um/s^2
 
         Returns
         -------
@@ -299,8 +315,16 @@ class UMP(object):
         else:
             speed = [max(1, speed)] * 4  # speed < 1 crashes the uMp
 
-        args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode]]
 
+        if max_acceleration==0 or max_acceleration == None:
+            if self.max_acceleration[dev] != None:
+                max_acceleration = self.max_acceleration[dev]
+            else:
+                max_acceleration = 0
+
+
+        args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + [max_acceleration]]
+        print (args)
         duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
@@ -324,7 +348,13 @@ class UMP(object):
         use MoveRequest.finished or .finished_event as returned from goto_pos().
         """
         # idle/complete=0; moving>0; failed<0
-        return self.call('ump_get_drive_status_ext', c_int(dev)) > 0        
+        try:
+            return self.call('ump_get_drive_status_ext', c_int(dev)) > 0
+        except UMPError as err:
+            if err.errno in (LIBUMP_NOT_OPEN, LIBUMP_INVALID_DEV):
+                raise
+            else:
+                return False
 
     def stop_all(self):
         """Stop all manipulators.
@@ -373,6 +403,41 @@ class UMP(object):
     def get_custom_slow_speed(self,dev):
         feature_custom_slow_speed = 32
         return self.call('ump_get_ext_feature',c_int(dev), c_int(feature_custom_slow_speed))
+
+    def send_ump_cmd(self, dev, cmd, argList):
+        args = (c_int * len(argList))()
+        args[:] = argList
+
+        return self.call('ump_cmd',c_int(dev),c_int(cmd), len(argList),args)
+
+    def get_ump_param(self, dev, param):
+        value = c_int()
+        self.call('ump_get_param',c_int(dev),c_int(param), *[byref(value)])
+        return value
+        
+    def set_ump_param(self,dev,param, value):
+        return self.call('ump_set_param',c_int(dev),c_int(param), value)
+
+    def calibrate_zero_position(self, dev):
+        return self.send_ump_cmd(dev, 4, [])
+
+    def calibrate_load(self, dev):
+        return self.send_ump_cmd(dev, 5, [0])
+
+    def get_soft_start_state(self, dev):
+        feature_soft_start = 33
+        return self.call('ump_get_ext_feature',c_int(dev),c_int(feature_soft_start))
+    
+    def set_soft_start_state(self, dev, enabled):
+        feature_soft_start = 33
+        return self.call('ump_set_ext_feature',c_int(dev),c_int(feature_soft_start), c_int(enabled))
+
+    def get_soft_start_value(self, dev):
+        return self.get_ump_param(dev,15)
+
+    def set_soft_start_value(self, dev, value):
+        return self.set_ump_param(dev,15, value)
+ 
 
     def recv_all(self):
         """Receive all queued position/status update packets.
@@ -437,9 +502,15 @@ class SensapexDevice(object):
         pos[0] += 10000  # add 10 um to x axis 
         dev.goto_pos(pos, speed=10)
     """
-    def __init__(self, devid, callback=None, n_axes=None):
+    def __init__(self, devid, callback=None, n_axes=None, max_acceleration = 0):
         self.devid = int(devid)
         self.ump = UMP.get_ump()
+
+        # Save max acceleration from config
+        if max_acceleration == None:
+            max_acceleration = 0
+
+        self.ump.set_max_acceleration(devid, max_acceleration)
 
         # some devices will fail when asked how many axes they have; this
         # allows a manual override.
@@ -486,6 +557,23 @@ class SensapexDevice(object):
     def set_custom_slow_speed(self, enabled):
         return self.ump.set_custom_slow_speed(self.devid, enabled)
 
+    def calibrate_zero_position(self):
+        self.ump.calibrate_zero_position(self.devid)
+    
+    def calibrate_load(self):
+        self.ump.calibrate_load(self.devid)
+
+    def get_soft_start_state(self):
+        return self.ump.get_soft_start_state(self.devid)
+    
+    def set_soft_start_state(self, enabled):
+        return self.ump.set_soft_start_state(self.devid,enabled)
+
+    def get_soft_start_value(self):
+        return self.ump.get_soft_start_value(self.devid).value
+
+    def set_soft_start_value(self, value):
+        return self.ump.set_soft_start_value(self.devid,value)
 
 class PollThread(threading.Thread):
     """Thread to poll for all manipulator position changes.

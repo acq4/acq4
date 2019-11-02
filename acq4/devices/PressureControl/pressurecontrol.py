@@ -1,4 +1,5 @@
 from __future__ import print_function
+import time
 from acq4.util import Qt
 from ..Device import Device
 
@@ -15,6 +16,7 @@ class PressureControl(Device):
         Device.__init__(self, manager, config, name)
         self.source = None
         self.pressure = None
+        self.regulatorSettlingTime = config.get('regulatorSettlingTime', 0.3)
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
@@ -28,6 +30,8 @@ class PressureControl(Device):
         if pressure is not None:
             self._setPressure(pressure)
         if source == 'regulator':
+            if pressure is not None:
+                time.sleep(self.regulatorSettlingTime) # let pressure settle before switching valves
             self._setSource(source)
 
         self.sigPressureChanged.emit(self, self.source, self.pressure)
