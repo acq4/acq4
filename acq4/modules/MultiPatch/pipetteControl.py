@@ -11,6 +11,7 @@ class PipetteControl(Qt.QWidget):
 
     sigSelectChanged = Qt.Signal(object, object)
     sigLockChanged = Qt.Signal(object, object)
+    sigPlotModesChanged = Qt.Signal(object)  # mode list
 
     def __init__(self, pipette, mainWin, parent=None):
         Qt.QWidget.__init__(self, parent)
@@ -70,6 +71,7 @@ class PipetteControl(Qt.QWidget):
         ]
         for plt in self.plots:
             self.ui.plotLayout.addWidget(plt)
+            plt.sigModeChanged.connect(self.plotModeChanged)
 
         self.patchStateChanged(pipette)
         self.pipActiveChanged()
@@ -102,6 +104,16 @@ class PipetteControl(Qt.QWidget):
 
     def setLocked(self, lock):
         self.ui.lockBtn.setChecked(lock)
+
+    def plotModeChanged(self, plot, mode):
+        self.sigPlotModesChanged.emit([plt.mode for plt in self.plots])
+
+    def setPlotModes(self, modes):
+        for mode,plt in zip(modes, self.plots):
+            plt.setMode(mode)
+
+    def getPlotModes(self):
+        return [plt.mode for plt in self.plots]
 
     def updatePlots(self):
         """Update the pipette data plots."""
@@ -303,7 +315,7 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo = pg.ComboBox()
         self.modeCombo.addItems(['test pulse', 'tp analysis', 'ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant'])
         self.layout.addWidget(self.modeCombo, 0, 0)
-        self.modeCombo.currentIndexChanged.connect(self.modeChanged)
+        self.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
 
         # self.closeBtn = Qt.QPushButton('X')
         # self.closeBtn.setMaximumWidth(15)
@@ -324,35 +336,59 @@ class PlotWidget(Qt.QWidget):
         # self.closeBtn.hide()
 
     def newTestPulse(self, tp, history):
-        if self.mode == 'test pulse':
+        if self.mode in ['test pulse', 'tp analysis']:
             data = tp.data
             pri = data['Channel': 'primary']
             units = pri._info[-1]['ClampState']['primaryUnits'] 
             self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
             self.plot.setLabels(left=('', units))
-        elif self.mode == 'ss resistance':
-            self.plot.plot(history['time'] - history['time'][0], history['steadyStateResistance'], clear=True)
+
+            # if self.mode == 'tp analysis':
+
+        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential']:
+            key,units = {
+                'ss resistance': ('steadyStateResistance', u'Ω'),
+                'peak resistance': ('peakResistance', u'Ω'),
+                'holding current': ('baselineCurrent', 'A'),
+                'holding potential': ('baselinePotential', 'V'),
+            }[self.mode]
+            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
             tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa['steadyStateResistance'], suffix=u'Ω'))
+            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=units))
+
+        elif self.mode in ['ss resistance', 'peak resistance']:
+            key = {'ss resistance': 'steadyStateResistance', 'peak resistance': 'peakResistance'}[self.mode]
+            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
+            tpa = tp.analysis()
+            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=u'Ω'))
 
     def setMode(self, mode):
         if self.mode == mode:
             return
         self.mode = mode
-        self.modeCombo.setText(mode)
-        if mode == 'test pulse':
+        with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
+            self.modeCombo.setText(mode)
+        if mode in ['test pulse', 'tp analysis']:
+            self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
-        elif mode == 'ss resistance':
+        elif mode in ['ss resistance', 'peak resistance']:
             self.plot.setLogMode(y=True, x=False)
+            self.plot.enableAutoRange(True, False)
             self.plot.setYRange(6, 10)
             self.plot.setLabels(left=('Rss', u'Ω'))
-        elif mode == 'peak resistance':
-            self.plot.setLogMode(y=True, x=False)
-            self.plot.setYRange(6, 10)
-            self.plot.setLabels(left=('Rss', u'Ω'))
+        elif mode == 'holding current':
+            self.plot.setLogMode(y=False, x=False)
+            self.plot.enableAutoRange(True, True)
+            self.plot.setLabels(left=('Ihold', u'A'))
+        elif mode == 'holding potential':
+            self.plot.setLogMode(y=False, x=False)
+            self.plot.enableAutoRange(True, True)
+            self.plot.setLabels(left=('Vhold', u'V'))
 
-    def modeChanged(self):
-        self.sigModeChanged.emit(self, self.modeCombo.currentText())
+    def modeComboChanged(self):
+        mode = self.modeCombo.currentText()
+        self.setMode(mode)
+        self.sigModeChanged.emit(self, mode)
 
     def closeClicked(self):
         self.sigCloseClicked.emit(self)
