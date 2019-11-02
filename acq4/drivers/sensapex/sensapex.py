@@ -4,7 +4,7 @@ import numpy as np
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure)
-from acq4.util import ptime
+from timeit import default_timer
 
 path = os.path.abspath(os.path.dirname(__file__))
 if sys.platform == 'win32':
@@ -20,7 +20,7 @@ if sys.platform == 'win32' and platform.architecture()[0] == '64bit':
 LIBUMP_MAX_MANIPULATORS = 254
 LIBUMP_MAX_LOG_LINE_LENGTH = 256
 LIBUMP_DEF_TIMEOUT = 20
-LIBUMP_DEF_BCAST_ADDRESS = "169.254.255.255"
+LIBUMP_DEF_BCAST_ADDRESS = b"169.254.255.255"
 LIBUMP_DEF_GROUP = 0
 LIBUMP_MAX_MESSAGE_SIZE = 1502
 
@@ -57,7 +57,7 @@ class ump_positions(Structure):
 
             
 UMP_LIB.ump_get_version.restype = c_char_p
-UMP_VERSION = UMP_LIB.ump_get_version()
+UMP_VERSION = UMP_LIB.ump_get_version().decode('ascii')
 
 if UMP_VERSION >= "v0.600":
     class ump_state(Structure):
@@ -155,7 +155,7 @@ class UMP(object):
         min_version = (0, 812)
         min_version_str = 'v'+'.'.join(map(str, min_version))
         version_str = self.sdk_version()
-        version = tuple(map(int, version_str.lstrip('v').split('.')))
+        version = tuple(map(int, version_str.lstrip(b'v').split(b'.')))
 
         assert version >= min_version, "SDK version %s or later required (your version is %s)" % (min_version_str, version_str)
 
@@ -190,7 +190,7 @@ class UMP(object):
         """
         devarray = (c_int*max_id)()
         r = self.call('ump_get_device_list', byref(devarray) )
-        devs = [devarray[i] for i in xrange(r)]
+        devs = [devarray[i] for i in range(r)]
         
         return devs
 
@@ -455,7 +455,7 @@ class UMP(object):
 
     def _update_moves(self):
         with self.lock:
-            now = ptime.time()
+            now = default_timer()
             for dev,move in self._last_move.items():
                 if not self.is_busy(dev):
                     self._last_move.pop(dev)
@@ -467,7 +467,7 @@ class MoveRequest(object):
     """
     def __init__(self, dev, start_pos, target_pos, speed, duration):
         self.dev = dev
-        self.start_time = ptime.time()
+        self.start_time = default_timer()
         self.estimated_duration = duration
         self.start_pos = start_pos
         self.target_pos = target_pos
@@ -587,16 +587,16 @@ class PollThread(threading.Thread):
         self.callbacks = {}
         self.interval = interval
         self.lock = threading.RLock()
-        self._stop = False
+        self.__stop = False
         threading.Thread.__init__(self)
         self.daemon = True
 
     def start(self):
-        self._stop = False
+        self.__stop = False
         threading.Thread.start(self)
 
     def stop(self):
-        self._stop = True
+        self.__stop = True
 
     def add_callback(self, dev_id, callback):
         with self.lock:
@@ -612,7 +612,7 @@ class PollThread(threading.Thread):
 
         while True:
             try:
-                if self._stop:
+                if self.__stop:
                     break
 
                 # read all updates waiting in queue

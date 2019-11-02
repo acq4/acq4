@@ -1,7 +1,6 @@
 from __future__ import print_function
 import os, sys, time, argparse
 from sensapex import SensapexDevice, UMP, UMPError
-import user
 
 
 parser = argparse.ArgumentParser(
