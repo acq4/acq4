@@ -84,6 +84,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.sigActiveChanged.connect(self.pipetteActiveChanged)
             ctrl.sigSelectChanged.connect(self.pipetteSelectChanged)
             ctrl.sigLockChanged.connect(self.pipetteLockChanged)
+            ctrl.sigPlotModesChanged.connect(self.setPlotModes)
 
             self.pipCtrls.append(ctrl)
 
@@ -143,6 +144,7 @@ class MultiPatchWindow(Qt.QWidget):
         geom = self.geometry()
         config = {
             'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
+            'plotModes': self.pipCtrls[0].getPlotModes(),
         }
         configfile = os.path.join('modules', self.module.name + '.cfg')
         man = getManager()
@@ -155,6 +157,8 @@ class MultiPatchWindow(Qt.QWidget):
         if 'geometry' in config:
             geom = Qt.QRect(*config['geometry'])
             self.setGeometry(geom)
+        if 'plotModes' in config:
+            self.setPlotModes(config['plotModes'])
 
     def profileComboChanged(self):
         default = self.module.config['patchProfiles'].get('default')
@@ -173,6 +177,11 @@ class MultiPatchWindow(Qt.QWidget):
 
         for pip in self.pips:
             pip.stateManager().setStateConfig(profile)
+
+    def setPlotModes(self, modes):
+        for ctrl in self.pipCtrls:
+            ctrl.setPlotModes(modes)
+        self.saveConfig()
 
     # def moveIn(self):
     #     for pip in self.selectedPipettes():
