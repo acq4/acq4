@@ -12,6 +12,7 @@ class MaiTaiLaser(Laser):
     sigRelativeHumidityChanged = QtCore.Signal(object)
     sigPumpPowerChanged = QtCore.Signal(object)
     sigPumpCurrentChanged = QtCore.Signal(object)
+    sigProgrammedPChanged = QtCore.Signal(object)
     sigPulsingStateChanged = QtCore.Signal(object)
     sigWavelengthChanged = QtCore.Signal(object)
     sigModeChanged = QtCore.Signal(object)
@@ -42,6 +43,7 @@ class MaiTaiLaser(Laser):
         self.mThread.sigRelHumidityChanged.connect(self.humidityChanged)
         self.mThread.sigPPowerChanged.connect(self.pumpPowerChanged)
         self.mThread.sigPCurrentChanged.connect(self.pumpCurrentChanged)
+        self.mThread.sigProgrammedPowerChanged.connect(self.programmedPowerChanged)
         self.mThread.sigPulsingSChanged.connect(self.pulsingStateChanged)
         self.mThread.sigMoChanged.connect(self.modeChanged)
         self.mThread.sigP2OChanged.connect(self.p2OptimizationChanged)
@@ -103,6 +105,11 @@ class MaiTaiLaser(Laser):
             self.maiTaiPumpCurrent = pC
             self.sigPumpCurrentChanged.emit(pC)
     
+    def programmedPowerChanged(self,pP):
+        with self.maiTaiLock:
+            self.maiTaiProgrammedPower = pP
+            self.sigProgrammedPChanged.emit(pP)
+        
     def pulsingStateChanged(self, pulse):
         with self.maiTaiLock:
             self.maiTaiPulsing = pulse
@@ -147,6 +154,22 @@ class MaiTaiLaser(Laser):
     def setWavelength(self, wl):
         with self.driverLock:
             self.driver.setWavelength(wl*1e9)
+    
+    def setPumpMode(self, pM):
+        with self.driverLock:
+            #print('setPumpCurrent',pc)
+            self.driver.setPumpMode(pM)
+    
+    def setPumpCurrent(self, pc):
+        with self.driverLock:
+            #print('setPumpCurrent',pc)
+            self.driver.setPumpLaserCurrentPercentage(pc)
+    
+    def setGreenPower(self, gp):
+        with self.driverLock:
+            #print('setPumpLaserPower',gp)
+            self.driver.setPumpLaserPower(gp)
+    
             
     def getWavelengthRange(self):
         with self.driverLock:
@@ -219,6 +242,7 @@ class MaiTaiThread(Thread):
     sigRelHumidityChanged = QtCore.Signal(object)
     sigPPowerChanged = QtCore.Signal(object)
     sigPCurrentChanged = QtCore.Signal(object)
+    sigProgrammedPowerChanged = QtCore.Signal(object)
     sigPulsingSChanged = QtCore.Signal(object)
     sigMoChanged = QtCore.Signal(object)
     sigP2OChanged = QtCore.Signal(object)
@@ -269,6 +293,7 @@ class MaiTaiThread(Thread):
                     hum = self.driver.getRelativeHumidity()
                     pumpPower = self.driver.getPumpPower()
                     pumpCurrentPerc = self.driver.getCurrentPercentage()
+                    programmedPower = self.driver.getCommandedPower()
                     isPulsing = self.driver.checkPulsing()
                     mode = self.driver.getPumpMode()
                     p2Optimization = self.driver.getP2Status()
@@ -282,6 +307,7 @@ class MaiTaiThread(Thread):
                 self.sigRelHumidityChanged.emit(hum)
                 self.sigPPowerChanged.emit(pumpPower)
                 self.sigPCurrentChanged.emit(pumpCurrentPerc)
+                self.sigProgrammedPowerChanged.emit(programmedPower)
                 self.sigPulsingSChanged.emit(isPulsing)
                 self.sigMoChanged.emit(mode)
                 self.sigP2OChanged.emit(p2Optimization)

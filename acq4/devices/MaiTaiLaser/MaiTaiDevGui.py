@@ -46,19 +46,14 @@ class MaiTaiDevGui(LaserDevGui):
         #self.ui.MaiTaiGroup.hide()
         #self.ui.turnOnOffBtn.hide()
         
-        pumpPowerModes = {0:'Current %', 1:'Green Power',2:'IR Power'}
-        self.pumpMode = self.dev.getPumpMode() # {'PCUR':'Current %', 'PPOW':'Green Power', 'POW':'IR Power'}
-        if self.pumpMode == 'Current %':
-            self._maitaiui.currentBtn.setChecked(True)
-        elif self.pumpMode == 'Green Power':
-            self._maitaiui.greenPowerBtn.setChecked(True)
-        elif self.pumpMode == 'IR Power':
-            self._maitaiui.irPowerBtn.setChecked(True)
-            
-            
-        self._maitaiui.pumpCurrentSpin.setOpts(suffix='%', siPrefix=True, dec=False, step=0.1)
+        self._maitaiui.pumpCurrentSpin.setOpts(suffix='%', siPrefix=False, dec=False, step=0.1)
         self._maitaiui.greenPowerSpin.setOpts(suffix='W', siPrefix=True, dec=False, step=0.1)
-
+        
+        self.pumpPowerModes = {-2:'Current %', -3:'IR Power',-4:'Green Power'}
+        pumpMode = self.dev.getPumpMode() # {'PCUR':'Current %', 'PPOW':'Green Power', 'POW':'IR Power'}
+        self.setPumpMode(pumpMode)
+        
+        
         startWL = self.dev.getWavelength()
         self._maitaiui.wavelengthSpin_2.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
         self._maitaiui.wavelengthSpin_2.setValue(startWL)
@@ -68,6 +63,9 @@ class MaiTaiDevGui(LaserDevGui):
         
         self._maitaiui.wavelengthSpin_2.valueChanged.connect(self.wavelengthSpinChanged)
         self._maitaiui.powerButtonGroup.buttonClicked.connect(self.powerModeChanged)
+        self._maitaiui.pumpCurrentSpin.valueChanged.connect(self.pumpCurrentSpinChanged)
+        self._maitaiui.greenPowerSpin.valueChanged.connect(self.greenPowerSpinChanged)
+        
         
         self._maitaiui.turnOnOffBtn.toggled.connect(self.onOffToggled)
         self._maitaiui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
@@ -81,6 +79,7 @@ class MaiTaiDevGui(LaserDevGui):
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         self.dev.sigPumpPowerChanged.connect(self.pumpPowerChanged)
         self.dev.sigPumpCurrentChanged.connect(self.pumpCurrentChanged)
+        self.dev.sigProgrammedPChanged.connect(self.programmedPowerChanged)
         self.dev.sigRelativeHumidityChanged.connect(self.relHumidityChanged)
         self.dev.sigPulsingStateChanged.connect(self.pulsingStateChanged)
         self.dev.sigWavelengthChanged.connect(self.wavelengthChanged)
@@ -139,6 +138,23 @@ class MaiTaiDevGui(LaserDevGui):
             self._maitaiui.ExternalShutterLabel.setText('External Shutter Closed')
             self._maitaiui.ExternalShutterLabel.setStyleSheet("QLabel {color: None}")
     
+    def setPumpMode(self, newPumpMode):
+        if newPumpMode == 'Current %':
+            self._maitaiui.currentBtn.setChecked(True)
+            self._maitaiui.pumpCurrentSpin.setEnabled(True)
+            self._maitaiui.greenPowerSpin.setEnabled(False)
+            self.currentPumpMode = 'Current %'
+        elif newPumpMode == 'Green Power':
+            self._maitaiui.greenPowerBtn.setChecked(True)
+            self._maitaiui.pumpCurrentSpin.setEnabled(False)
+            self._maitaiui.greenPowerSpin.setEnabled(True)
+            self.currentPumpMode = 'Green Power'
+        elif newPumpMode == 'IR Power':
+            self._maitaiui.irPowerBtn.setChecked(True)
+            self._maitaiui.pumpCurrentSpin.setEnabled(False)
+            self._maitaiui.greenPowerSpin.setEnabled(False)
+            self.currentPumpMode = 'IR Power'
+    
     def externalSwitchToggled(self,b):
         if b:
             self.dev.externalSwitchON()
@@ -173,9 +189,20 @@ class MaiTaiDevGui(LaserDevGui):
         #if value not in self.dev.config.get('namedWavelengths', {}).keys():
         #    self._maitaiui.wavelengthCombo.setCurrentIndex(0)
     
+    def pumpCurrentSpinChanged(self, value):
+        if self.currentPumpMode == 'Current %':
+            print('currenSpinChanged',value)
+            self.dev.setPumpCurrent(value)
+    
+    def greenPowerSpinChanged(self, value):
+        if self.currentPumpMode == 'Green Power':
+            print('powerSpinChanged',value)
+            self.dev.setGreenPower(value)
+    
     def powerModeChanged(self):
-        newPowerMode = self.powerButtonGroup.checkedId()
-        print(newPowerMode)
+        newPowerMode = self._maitaiui.powerButtonGroup.checkedId()
+        self.dev.setPumpMode(self.pumpPowerModes[newPowerMode])
+        self.setPumpMode(self.pumpPowerModes[newPowerMode])
         #self.dev.setPosition((newPos+1))
         #self.dev.setWavelength(value)
         #if value not in self.dev.config.get('namedWavelengths', {}).keys():
@@ -225,17 +252,22 @@ class MaiTaiDevGui(LaserDevGui):
         else:
             self._maitaiui.pumpPowerLabel.setText(siFormat(pumpPower, suffix='W'))
             
-        if self.pumpMode != 'Green Power':
+        if self.currentPumpMode != 'Green Power':
             self._maitaiui.greenPowerSpin.setValue(pumpPower)
         
-        
-    
     def pumpCurrentChanged(self,pumpCurrent):
-        if self.pumpMode != 'Current %':
+        if self.currentPumpMode != 'Current %':
             #if pumpCurrent is None:
             #    self._maitaiui.pumpPowerLabel.setText("?")
             #else:
-            self._maitaiui.pumpPowerLabel.setValue(pumpCurrent)
+            self._maitaiui.pumpCurrentSpin.setValue(pumpCurrent)
+    
+    def programmedPowerChanged(self,programmedPower):
+        if programmedPower is None:
+            self._maitaiui.irPowerLabel.setText("?")
+        else:
+            self._maitaiui.irPowerLabel.setText(siFormat(programmedPower, suffix='W'))
+    
     
     def relHumidityChanged(self, humidity):
         if humidity is None:

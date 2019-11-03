@@ -144,6 +144,11 @@ class MaiTai(SerialDevice):
         outputPower = self['READ:POWer?']
         return self.convertToFloat(outputPower)
     
+    def getCommandedPower(self):
+        """Reads and returns the programmed Mai Tai output power"""
+        programmedOutputPower = self['POWer?']
+        return self.convertToFloat(programmedOutputPower)
+    
     def getCurrentPercentage(self):
         """Reads and returns the pump laser curent in percent """
         pumpOutputPower = self['READ:PLASer:PCURrent?']
@@ -195,7 +200,7 @@ class MaiTai(SerialDevice):
             if mode == self.modeNames[k] :
                 self['MODE'] = k
         newMode = self.getPumpMode()
-        print 'changedMode : ', oldMode, newMode
+        print 'changed Mode from ', oldMode,' to ', newMode
         
     def getSystemIdentification(self):
         """Return a system identification string that contains 4 fields separated by commas."""
@@ -363,7 +368,10 @@ if __name__ == '__main__':
     
     print 'pump mode : ', maiTai.getPumpMode()
     
-    print 'current percentage : ', maiTai.getShutter()
+    print 'current percentage : ', maiTai.getCurrentPercentage()
+    print 'get last set current percentage :', maiTai.getLastCommandedCurrentPercentage()
+    
+    print 'commanded output power :', maiTai.getCommandedPower()
     
     #print 'READ:SLIT? : ', maiTai.getSlitPosition()
     #print 'READ:SWID? : ', maiTai.getSwidPosition()
