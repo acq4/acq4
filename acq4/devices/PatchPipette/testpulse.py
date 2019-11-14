@@ -284,7 +284,10 @@ class TestPulse(object):
             ssStart = ssStop - 2e-3
             steady  = pri['Time': ssStart:ssStop]
 
-            peakValue = peak.max()
+            if params['amplitude'] > 0:
+                peakValue = peak.max()
+            else:
+                peakValue = peak.min()
             steadyValue = np.median(steady)
             baseValue = np.median(base)
 
@@ -294,6 +297,7 @@ class TestPulse(object):
                 analysis['peakResistance'] = params['amplitude'] / (peakValue - baseValue)
                 analysis['steadyStateResistance'] = np.abs(params['amplitude'] / (steadyValue - baseValue))
                 tauGuess = 3e-3
+                yOffsetBounds = [-10e-9, 10e-9]
             else:
                 bridge = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalResist']
                 bridgeOn = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalEnable']
@@ -304,6 +308,7 @@ class TestPulse(object):
                 analysis['peakResistance'] = bridge + (peakValue - baseValue) / params['amplitude']
                 analysis['steadyStateResistance'] = np.abs(bridge + (steadyValue - baseValue) / params['amplitude'])
                 tauGuess = 15e-3
+                yOffsetBounds = [-150e-3, 100e-3]
 
             analysis['peakResistance'] = np.clip(analysis['peakResistance'], 0, 20e9)
             analysis['steadyStateResistance'] = np.clip(analysis['steadyStateResistance'], 0, 20e9)
@@ -318,9 +323,19 @@ class TestPulse(object):
                 tauGuess,  # tau
                 steadyValue,  # yoffset
             )
+            bounds = (
+                np.array([yOffsetBounds[0], 50e-6, yOffsetBounds[0]]),
+                np.array([yOffsetBounds[1], tauGuess*100, yOffsetBounds[1]])
+            )
             xoffset = params['preDuration']
-            fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess)
-            amp, tau, yoffset = fit[0]
+            try:
+                fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, maxfev=1000)  # uses leastsq
+                # fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, bounds=bounds, max_nfev=1000)  # uses least_squares
+                amp, tau, yoffset = fit[0]
+            except RuntimeError:
+                amp, tau, yoffset = np.nan
+                raise
+
             analysis['fitExpAmp'] = amp
             analysis['fitExpTau'] = tau
             analysis['fitExpYOffset'] = yoffset
