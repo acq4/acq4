@@ -173,7 +173,7 @@ class RecordThread(Thread):
                 # Store single frame to new file
                 try:
                     fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
-                    frame['frame'].saveImage(dh, fileName)
+                    fh = frame['frame'].saveImage(dh, fileName)
                     self.sigSavedFrame.emit(fh.name())
                 except:
                     self.sigSavedFrame.emit(False)
