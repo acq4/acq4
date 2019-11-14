@@ -294,6 +294,8 @@ class UMP(object):
             If True, then all axes begin moving at the same time
         linear : bool
             If True, then axis speeds are scaled to produce more linear movement
+        max_acceleration : int
+            Maximum acceleration in um/s^2
 
         Returns
         -------

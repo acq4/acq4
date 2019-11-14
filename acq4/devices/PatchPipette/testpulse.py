@@ -1,6 +1,7 @@
-from __future__ import print_function
-import time, threading
+from __future__ import print_function, division
+import time, threading, functools
 import numpy as np
+import scipy.optimize
 from acq4.pyqtgraph import ptime
 from ...Manager import getManager
 from acq4.util import Qt
@@ -51,7 +52,7 @@ class TestPulseThread(Thread):
         self._lastTask = None
 
         self._clampDev = self.dev.clampDevice
-        self._daqName = list(self._clampDev.listChannels().values())[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
+        self._daqName = self._clampDev.getDAQName()
         self._clampName = self._clampDev.name()
         self._manager = getManager()
 
@@ -276,8 +277,13 @@ class TestPulse(object):
             pri = self.data['Channel': 'primary']
 
             base = pri['Time': 0:params['preDuration']]
-            peak = pri['Time': params['preDuration']:params['preDuration']+2e-3]
-            steady  = pri['Time': params['preDuration']:params['preDuration']+params['pulseDuration']-2e-3]
+            peakStart = params['preDuration']
+            peakStop = peakStart + 2e-3
+            peak = pri['Time': peakStart:peakStop]
+            ssStop = params['preDuration'] + params['pulseDuration']
+            ssStart = ssStop - 2e-3
+            steady  = pri['Time': ssStart:ssStop]
+
             peakValue = peak.max()
             steadyValue = np.median(steady)
             baseValue = np.median(base)
@@ -287,9 +293,7 @@ class TestPulse(object):
                 analysis['baselineCurrent'] = baseValue
                 analysis['peakResistance'] = params['amplitude'] / (peakValue - baseValue)
                 analysis['steadyStateResistance'] = np.abs(params['amplitude'] / (steadyValue - baseValue))
-                if analysis['steadyStateResistance'] <= 0:
-                    print("=====> ", analysis['steadyStateResistance'], params['amplitude'], steadyValue, baseValue)
-
+                tauGuess = 3e-3
             else:
                 bridge = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalResist']
                 bridgeOn = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalEnable']
@@ -299,9 +303,63 @@ class TestPulse(object):
                 analysis['baselinePotential'] = baseValue
                 analysis['peakResistance'] = bridge + (peakValue - baseValue) / params['amplitude']
                 analysis['steadyStateResistance'] = np.abs(bridge + (steadyValue - baseValue) / params['amplitude'])
+                tauGuess = 15e-3
 
             analysis['peakResistance'] = np.clip(analysis['peakResistance'], 0, 20e9)
             analysis['steadyStateResistance'] = np.clip(analysis['steadyStateResistance'], 0, 20e9)
 
+            # do curve fitting
+            pulseStart = params['preDuration'] + 150e-6
+            pulseStop = params['preDuration'] + params['pulseDuration']
+            pulse = pri['Time': pulseStart:pulseStop]
+            t = pulse.xvals('Time')
+            guess = (
+                peakValue - steadyValue,  # amp
+                tauGuess,  # tau
+                steadyValue,  # yoffset
+            )
+            xoffset = params['preDuration']
+            fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess)
+            amp, tau, yoffset = fit[0]
+            analysis['fitExpAmp'] = amp
+            analysis['fitExpTau'] = tau
+            analysis['fitExpYOffset'] = yoffset
+            analysis['fitExpXOffset'] = xoffset
+
+            if params['clampMode'] == 'VC':
+                # VC capacitance calculation adapted from Santos-Sacchi 1993
+                # (not very accurate, probably because Q is calculated incorrectly)
+                Q = (pulse.asarray() - yoffset).sum() * (t[-1]-t[0]) / len(pulse)
+                Rin = analysis['steadyStateResistance']
+                Vc = params['amplitude']
+                Rs_denom = (Q * Rin + tau * Vc)
+                if Rs_denom != 0.0:
+                    Rs = (Rin * tau * Vc) / Rs_denom
+                    Rm = Rin - Rs
+                    Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+                else:
+                    Rs = 0
+                    Rm = 0
+                    Cm = 0
+                analysis['capacitance'] = Cm
+            else:
+                analysis['capacitance'] = tau / analysis['steadyStateResistance']
+
             self._analysis = analysis
             return analysis
+
+    def getFitData(self):
+        params = self.taskParams
+        analysis = self.analysis()
+        pri = self.data['Channel': 'primary']
+        pulseStart = params['preDuration'] + 150e-6
+        pulseStop = params['preDuration'] + params['pulseDuration']
+        pulse = pri['Time': pulseStart:pulseStop]
+        t = pulse.xvals('Time')
+        y = exp(t - analysis['fitExpXOffset'], analysis['fitExpAmp'], analysis['fitExpTau'], analysis['fitExpYOffset'])
+        return t,y
+
+
+
+def exp(t, amp, tau, yoffset):
+    return yoffset + amp * np.exp(-t / tau)

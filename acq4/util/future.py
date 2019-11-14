@@ -162,6 +162,14 @@ class Future(Qt.QObject):
             if self._stopRequested:
                 raise self.StopRequested()
 
+    def sleep(self, duration, interval=0.2):
+        """Sleep for the specified duration (in seconds) while checking for stop requests.
+        """
+        start = time.time()
+        while time.time() < start + duration:
+            self._checkStop()
+            time.sleep(interval)
+
     def waitFor(self, futures, timeout=20.0):
         """Wait for multiple futures to complete while also checking for stop requests on self.
         """

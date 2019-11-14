@@ -540,8 +540,15 @@ class PipetteTracker(object):
                             mark3.setPos(p3.x(), p3.y())
 
                     # wait for previous moves to complete
-                    mfut.wait(updates=True)
-                    ffut.wait(updates=True)
+                    try:
+                        mfut.wait(updates=True)
+                    except:
+                        pg.debug.printExc("Manipulator missed intermediate target:")
+
+                    try:
+                        ffut.wait(updates=True)
+                    except:
+                        pg.debug.printExc("Stage missed target:")
 
                     # step back to actual target position
                     try:
@@ -550,6 +557,8 @@ class PipetteTracker(object):
                         misses += 1
                         pg.debug.printExc("Manipulator missed target:")
 
+                    time.sleep(0.2)
+                    
                     frame = self.takeFrame()
                     reportedPos = self.dev.globalPosition()
 
