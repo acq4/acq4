@@ -78,8 +78,6 @@ class Scientifica(Stage):
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get('monitorObjective', False)
         if self.monitorObj is True:
-            if self.dev._version < 3:
-                raise TypeError("Scientifica motion card version %s does not support reading objective position." % self.dev._version)
             self.objectiveState = None
             self._checkObjective()
 
