@@ -1,75 +1,44 @@
 from __future__ import print_function
+import numpy as np
 from ..PatchPipette import PatchPipette
 from acq4.util.mies import MIES
-import numpy as np
+from .patch_clamp import MIESPatchClamp
+from .pressure_control import MIESPressureControl
+from .testpulse import MIESTestPulseThread
 
 
 class MIESPatchPipette(PatchPipette):
     """A single patch pipette channel that uses a running MIES instance to handle
     electrophysiology and pressure control.
     """
+    defaultTestPulseThreadClass = MIESTestPulseThread
+
     def __init__(self, deviceManager, config, name):
         self.mies = MIES.getBridge(True)
-        self.mies.sigDataReady.connect(self.updateTPData)
         self._headstage = config.pop('headstage')
-        self.TPData = {"time": [],
-                       "Rss": [],
-                       "Rpeak": []}
+
+        # create pressure and clamp devices
+        clampName = name + "_clamp"
+        clamp = MIESPatchClamp(
+            deviceManager, 
+            config={'headstage': self._headstage},
+            name=clampName)
+
+        
+        pressureName = name + "_pressure"
+        pressure = MIESPressureControl(
+            deviceManager, 
+            config={'headstage': self._headstage},
+            name=pressureName)
+
+        config.update({
+            'clampDevice': clampName,
+            'pressureDevice': pressureName,
+        })
         PatchPipette.__init__(self, deviceManager, config, name)
 
-    def updateTPData(self, TPArray):
-        """Got the signal from MIES that data is available, update"""
-        TPDict = self.parseTPData(TPArray)
-        if TPDict:
-            for key, timeseries in self.TPData.items():
-                timeseries.append(TPDict[key])
-            self.sigDataChanged.emit()
-
-    def parseTPData(self, TPArray):
-        """Take the incoming array and make a dictionary of it"""
-        try:
-            lastTime = self.TPData["time"][-1]
-        except IndexError:
-            lastTime = 0
-        if TPArray[0, self._headstage] > lastTime:
-            TPData = {
-                "time": TPArray[0, self._headstage],
-                "Rss": TPArray[1, self._headstage],
-                "Rpeak": TPArray[2, self._headstage]
-                }
-        else:
-            TPData = {}
-        return TPData
-
-    def getTPRange(self):
-        return self.mies.getTPRange()
-
-    def getPatchStatus(self):
-        """Return a dict describing the status of the patched cell.
-
-        Includes keys:
-        * state ('bath', 'sealing', 'on-cell', 'whole-cell', etc..)
-        * resting potential
-        * resting current
-        * input resistance
-        * access resistance
-        * capacitance
-        * clamp mode ('ic' or 'vc')
-        * timestamp of last measurement
-
-        """
-        # maybe 'state' should be available via a different method?
-
-    def getPressure(self):
-        pass
-
-    def setPressure(self):
-        # accepts waveforms as well?
-        pass
-
-    def goApproach(self, speed):
-        super(MIESPatchPipette, self).goApproach(speed)
-        self.setState("approach")
+    # def getTPRange(self):
+    #     return self.mies.getTPRange()
 
     def setState(self, state):
         if state == 'seal':
@@ -83,13 +52,10 @@ class MIESPatchPipette(PatchPipette):
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)
+        PatchPipette.setActive(self, active)
 
     def setSelected(self):
         self.mies.selectHeadstage(self._headstage)
-
-    def autoPipetteOffset(self):
-        self.mies.selectHeadstage(self._headstage)
-        self.mies.autoPipetteOffset()
 
     def quit(self):
         self.mies.quit()
