@@ -61,10 +61,14 @@ class Frame(object):
         return self.globalTransform().map(obj)
     
     def saveImage(self, dh, filename):
+        """Save this frame data to *filename* inside DirHandle *dh*.
+
+        The file name must endwith ".ma" (for MetaArray) or any supported image file extension.
+        """
         data = self.getImage()
         info = self.info()
 
         if filename.endswith('.ma'):
-            dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
+            return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
         else:
-            dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)
+            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)
