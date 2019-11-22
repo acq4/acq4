@@ -97,7 +97,7 @@ class PatchPipetteStateManager(Qt.QObject):
             return ret
         else:
             sys.excepthook(*ret)
-            raise RuntimeError("Error requesting state change; original exception appears above.")
+            raise RuntimeError("Error requesting state change to %r; original exception appears above." % state)
 
     def _stateChangeRequested(self, state, returnQueue):
         try:
