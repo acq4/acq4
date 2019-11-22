@@ -10,9 +10,10 @@ class MIESTestPulseThread(Qt.QObject):
     """
     sigTestPulseFinished = Qt.Signal(object, object)  # device, result
     started = Qt.Signal()
-    stopped = Qt.Signal()
+    finished = Qt.Signal()
 
     def __init__(self, dev, params):
+        Qt.QObject.__init__(self)
         self.dev = dev
         self._headstage = dev._headstage
         dev.mies.sigDataReady.connect(self.newTestPulse)

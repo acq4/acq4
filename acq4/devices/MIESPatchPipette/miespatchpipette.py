@@ -5,6 +5,7 @@ from acq4.util.mies import MIES
 from .patch_clamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
 from .testpulse import MIESTestPulseThread
+from .states import MIESPatchPipetteStateManager
 
 
 class MIESPatchPipette(PatchPipette):
@@ -12,6 +13,7 @@ class MIESPatchPipette(PatchPipette):
     electrophysiology and pressure control.
     """
     defaultTestPulseThreadClass = MIESTestPulseThread
+    defaultStateManagerClass = MIESPatchPipetteStateManager
 
     def __init__(self, deviceManager, config, name):
         self.mies = MIES.getBridge(True)
@@ -37,18 +39,20 @@ class MIESPatchPipette(PatchPipette):
         })
         PatchPipette.__init__(self, deviceManager, config, name)
 
+
+
     # def getTPRange(self):
     #     return self.mies.getTPRange()
 
-    def setState(self, state):
-        if state == 'seal':
-            self.mies.selectHeadstage(self._headstage)
-            self.mies.setSeal(self._headstage)
-        elif state == 'bath':
-            self.mies.selectHeadstage(self._headstage)
-            self.mies.setApproach(self._headstage)
-        self.state = state
-        self.sigStateChanged.emit(self)
+    # def setState(self, state):
+    #     if state == 'seal':
+    #         self.mies.selectHeadstage(self._headstage)
+    #         self.mies.setSeal(self._headstage)
+    #     elif state == 'bath':
+    #         self.mies.selectHeadstage(self._headstage)
+    #         self.mies.setApproach(self._headstage)
+    #     self.state = state
+    #     self.sigStateChanged.emit(self)
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)
