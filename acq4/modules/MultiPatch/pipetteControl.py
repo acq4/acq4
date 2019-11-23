@@ -62,8 +62,6 @@ class PipetteControl(Qt.QWidget):
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
         self._pc2 = MousePressCatch(self.ui.modeText, self.modeTextClicked)
-        self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
-        self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
 
         self.plots = [
             PlotWidget(mode='test pulse'), 
@@ -75,8 +73,12 @@ class PipetteControl(Qt.QWidget):
 
         self.patchStateChanged(pipette)
         self.pipActiveChanged()
-        self.clampStateChanged(self.pip.clampDevice.getState())
-        self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+        
+        if self.pip.clampDevice is not None:
+            self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
+            self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
+            self.clampStateChanged(self.pip.clampDevice.getState())
+            self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
 
     def active(self):
         return self.ui.activeBtn.isChecked()

@@ -273,6 +273,9 @@ class PatchPipette(Device):
 
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
+        if self.clampDevice is None:
+            self._testPulseThread = None
+            return
         self._testPulseThread = self.defaultTestPulseThreadClass(self, params)
         self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
         self._testPulseThread.started.connect(self.testPulseEnabledChanged)
