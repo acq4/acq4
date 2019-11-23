@@ -79,6 +79,8 @@ class PatchPipetteState(Future):
     def initializePressure(self):
         """Set initial pressure based on the config keys 'initialPressureSource' and 'initialPressure'
         """
+        if self.dev.pressureDevice is None:
+            return
         pressure = self.config.get('initialPressure', None)
         source = self.config.get('initialPressureSource', None)
         self.dev.pressureDevice.setPressure(source=source, pressure=pressure)
@@ -88,6 +90,8 @@ class PatchPipetteState(Future):
         'initialClampMode', 'initialClampHolding', and 'initialTestPulseEnable'.
         """
         cdev = self.dev.clampDevice
+        if cdev is None:
+            return
         mode = self.config.get('initialClampMode')
         holding = self.config.get('initialClampHolding')
         tp = self.config.get('initialTestPulseEnable')
