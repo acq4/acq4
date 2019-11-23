@@ -301,8 +301,8 @@ class ScientificaMoveFuture(MoveFuture):
             elif status == -1:
                 self._errorMsg = "Move was interrupted before completion."
                 return
-            elif status == 0 and ptime.time() < startTime + 0.1:
-                # allow 100ms to stop
+            elif status == 0 and ptime.time() < startTime + 0.15:
+                # allow 150ms to stop
                 continue
             elif status == 0:
                 # not actually stopped! This should not happen.
