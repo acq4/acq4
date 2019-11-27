@@ -2,6 +2,8 @@ from __future__ import print_function
 import time
 import pickle
 import numpy as np
+import scipy.ndimage
+
 from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
@@ -503,7 +505,7 @@ class PipetteTracker(object):
     def showErrorAnalysis(self):
         if not hasattr(self, 'errorMap'):
             filename = self.dev.configFileName('error_map.np')
-            self.errorMap = np.load(open(filename, 'rb'))[np.newaxis][0]
+            self.errorMap = np.load(open(filename, 'rb'), allow_pickle=True)[np.newaxis][0]
 
         err = self.errorMap
         imx = pg.image(err['err'][..., 0].transpose(2, 0, 1), title='X error', axes={'t':0, 'x':1, 'y':2})
