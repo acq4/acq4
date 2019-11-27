@@ -16,7 +16,7 @@ class PipetteTracker(object):
     based on camera feedback.
 
     The current implementation uses normalized cross-correlation to do template matching against
-    a stack of reference images collected with `takeReferenceFrames()`. 
+    a stack of reference images collected with `takeReferenceFrames()`.
 
     """
     detectorClass = TemplateMatchPipetteDetector
@@ -46,7 +46,7 @@ class PipetteTracker(object):
         return frame
 
     def getNextFrame(self, imager=None):
-        """Return the next frame available from the imager. 
+        """Return the next frame available from the imager.
 
         Note: the frame may have been exposed before this method was called.
         """
@@ -83,7 +83,7 @@ class PipetteTracker(object):
         By default, images will include the tip of the pipette to a length of 100 pixels.
 
         Return a tuple (minImgPos, maxImgPos, tipRelPos), where the first two
-        items are (x,y) coordinate pairs giving the corners of the image region to 
+        items are (x,y) coordinate pairs giving the corners of the image region to
         be extracted, and tipRelPos is the subpixel location of the pipette tip
         within this region.
         """
@@ -129,9 +129,9 @@ class PipetteTracker(object):
         tipImgPx = tipImgPos.astype('int')
 
         # clip bounding coordinates
-        minRelPos = [np.clip(minRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
+        minRelPos = [np.clip(minRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]),
                      np.clip(minRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
-        maxRelPos = [np.clip(maxRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
+        maxRelPos = [np.clip(maxRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]),
                      np.clip(maxRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
 
         # absolute image coordinates of bounding rect
@@ -168,7 +168,7 @@ class PipetteTracker(object):
     def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=4, tipLength=None):
         """Collect a series of images of the pipette tip at various focal depths.
 
-        The collected images are used as reference templates for determining the most likely location 
+        The collected images are used as reference templates for determining the most likely location
         and focal depth of the tip after the calibration is no longer valid.
 
         The focus first is moved in +z by half of *zRange*, then stepped downward by *zStep* until the
@@ -474,7 +474,7 @@ class PipetteTracker(object):
                         pg.debug.printExc("Manipulator missed target:")
 
                     time.sleep(0.2)
-                    
+
                     frame = self.takeFrame()
                     reportedPos = self.dev.globalPosition()
 
