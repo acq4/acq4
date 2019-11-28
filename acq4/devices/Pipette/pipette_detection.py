@@ -18,7 +18,7 @@ class PipetteDetector(object):
             self._filtered_ref = [self.filterImage(f) for f in self.reference['frames']]
         return self._filtered_ref
 
-    def findPipette(self, frame, minImgPos, maxImgPos, bg_frame=None):
+    def findPipette(self, frame, minImgPos=None, maxImgPos=None, bg_frame=None):
         """Detect the pipette tip in *frame* and return the physical location.
 
         The *frame* is an instance of util.imaging.Frame that carries a transform mapping
@@ -40,9 +40,16 @@ class PipetteDetector(object):
         if bg_frame is not None:
             img = img.astype(int) - bg_frame.data()
 
-        # crop out a small region around the pipette tip
         if img.ndim == 3:
             img = img[0]
+
+        if minImgPos is None:
+            minImgPos = [0, 0]
+
+        if maxImgPos is None:
+            maxImgPos = img.shape
+
+        # crop out a small region around the pipette tip
         img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
 
         # filter the image
