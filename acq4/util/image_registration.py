@@ -11,13 +11,16 @@ def imageTemplateMatch(img, template, unsharp=3):
     pos : tuple
         The offset with best registration
     val : float
-        Measure of template match performance at *pos*; may be used to compare multiple results
+        Measure of template match performance at *pos* in the range [-1.0, 1.0]
+        (from worst to best); may be used to compare multiple results.
     cc : array
         The image showing template match values across all tested offsets
     """
     import skimage.feature
     if img.shape[0] < template.shape[0] or img.shape[1] < template.shape[1]:
         raise ValueError("Image must be larger than template.  %s %s" % (img.shape, template.shape))
+
+    # https://scikit-image.org/docs/stable/api/skimage.feature.html#match-template
     cc = skimage.feature.match_template(img, template)
     # high-pass filter; we're looking for a fairly sharp peak.
     if unsharp is not False:
