@@ -317,7 +317,7 @@ class PipetteTracker(object):
 
         # apply machine vision algorithm
         detector = self.detectorClass(reference)
-        tipPos, performance = detector.findPipette(frame, minImgPos, maxImgPos, pos, bg_frame)
+        tipPos, performance = detector.findPipette(frame, minImgPos, maxImgPos, bg_frame)
 
         if performance < threshold:
             raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (performance, threshold))
