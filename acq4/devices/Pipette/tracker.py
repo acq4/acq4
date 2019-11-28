@@ -264,8 +264,13 @@ class PipetteTracker(object):
         key = imager.getDeviceStateKey()
         self.reference[key] = {
             'frames': frames - bg_frames,
+            'frames_without_background': frames,
+            'background': bg_frames,
             'zStep': zStep,
+            'zRange': zRange,
+            'average': average,
             'centerInd': maxInd,
+            'center': center,
             'centerPos': tipRelPos,
             'pixelSize': frame.info()['pixelSize'],
             'tipLength': tipLength,
