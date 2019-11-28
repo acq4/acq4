@@ -9,7 +9,7 @@ class PipetteDetector(object):
     def __init__(self, reference):
         self.reference = reference
         self._filtered_ref = None
-        
+
     @property
     def filtered_ref(self):
         """The reference image data passed through the preprocessing filter.
@@ -41,7 +41,7 @@ class PipetteDetector(object):
         # if a background frame was provided, subtract it out
         if bg_frame is not None:
             img = img.astype(int) - bg_frame.data()
-        
+
         # crop out a small region around the pipette tip
         if img.ndim == 3:
             img = img[0]
@@ -60,7 +60,7 @@ class PipetteDetector(object):
 
         # map pixel offsets back to physical coordinates
         tipImgPos = (
-            minImgPos[0] + (xyOffset[0] + reference['centerPos'][0]) / pxr, 
+            minImgPos[0] + (xyOffset[0] + reference['centerPos'][0]) / pxr,
             minImgPos[1] + (xyOffset[1] + reference['centerPos'][1]) / pxr
         )
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
