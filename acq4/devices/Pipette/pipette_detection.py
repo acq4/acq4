@@ -120,9 +120,5 @@ class TemplateMatchPipetteDetector(PipetteDetector):
         return xyOffset, zErr, match[maxInd][1]
 
     def filterImage(self, img):
-        # Sobel should reduce background artifacts, but it also seems to increase the noise in the signal
-        # itself--two images with slightly different focus can have a very bad match.
-        # import skimage.feature
-        # return skimage.filter.sobel(img)
-        img = scipy.ndimage.morphological_gradient(img, size=(3, 3))
+        img = scipy.ndimage.gaussian_filter(img, (3, 3))
         return img
