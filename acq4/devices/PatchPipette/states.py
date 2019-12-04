@@ -583,7 +583,11 @@ class PatchPipetteSealState(PatchPipetteState):
         becomes greater than *holdingThreshold*.
     sealThreshold : float
         Seal resistance (ohms) above which the pipette is considered sealed and
-        transitions to the next state.
+        transitions to the 'cell attached' state.
+    breakInThreshold : float
+        Capacitance (Farads) above which the pipette is considered to be whole-cell and 
+        transitions to the 'break in' state (in case of partial break-in, we don't want to transition
+        directly to 'whole cell' state).
     nSlopeSamples : int
         Number of consecutive test pulse measurements over which the rate of change
         in seal resistance is measured (for automatic pressure control).
@@ -616,6 +620,7 @@ class PatchPipetteSealState(PatchPipetteState):
         'holdingThreshold': 100e6,
         'holdingPotential': -70e-3,
         'sealThreshold': 1e9,
+        'breakInThreshold': 10e-12,
         'nSlopeSamples': 5,
         'autoSealTimeout': 30.0,
         'maxVacuum': -3e3, #changed from -7e3
@@ -645,6 +650,7 @@ class PatchPipetteSealState(PatchPipetteState):
         initialResistance = initialTP.analysis()['steadyStateResistance']
         patchrec = dev.patchRecord()
         patchrec['resistanceBeforeSeal'] = initialResistance
+        patchrec['capacitanceBeforeSeal'] = initialTP.analysis()['capacitance']
         startTime = ptime.time()
         pressure = 0
 
@@ -668,9 +674,16 @@ class PatchPipetteSealState(PatchPipetteState):
             if len(tps) == 0:
                 continue
             tp = tps[-1]
+
             ssr = tp.analysis()['steadyStateResistance']
+            cap = tp.analysis()['capacitance']
+            if cap > config['breakInThreshold']:
+                patchrec['spontaneousBreakin'] = True
+                return 'break in'
 
             patchrec['resistanceBeforeBreakin'] = ssr
+            patchrec['capacitanceBeforeBreakin'] = cap
+
             patchrec['maxSealResistance'] = max(patchrec['maxSealResistance'], ssr)
 
             if not holdingSet and ssr > config['holdingThreshold']:
@@ -729,6 +742,24 @@ class PatchPipetteSealState(PatchPipetteState):
 
 
 class PatchPipetteCellAttachedState(PatchPipetteState):
+    """Pipette in cell-attached configuration
+
+    State name: "cell attached"
+
+    - automatically transition to 'break in' after a delay
+    - monitor for spontaneous break-in or loss of attached cell
+
+    Parameters
+    ----------
+    autoBreakInDelay : float
+        Delay time (seconds) before transitioning to 'break in' state
+    breakInThreshold : float
+        Capacitance (Farads) above which the pipette is considered to be whole-cell and immediately
+        transitions to the 'break in' state (in case of partial break-in, we don't want to transition
+        directly to 'whole cell' state).
+    holdingCurrentThreshold : float
+        Holding current (Amps) below which the cell is considered to be lost and the state fails.
+    """
     stateName = 'cell attached'
     _defaultConfig = {
         'initialPressureSource': 'atmosphere',
@@ -736,7 +767,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
         'autoBreakInDelay': None,
-        'breakInThreshold': 650e6,
+        'breakInThreshold': 10e-12,
         'holdingCurrentThreshold': -1e-9,
     }
 
@@ -762,15 +793,42 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
                 self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
                 return
             
-            ssr = tp.analysis()['steadyStateResistance']
-            if ssr < config['breakInThreshold']:
+            cap = tp.analysis()['capacitance']
+            if cap > config['breakInThreshold']:
                 patchrec['spontaneousBreakin'] = True
-                return 'whole cell'
+                return 'break in'
 
-            patchrec['resistanceBeforeBreakin'] = ssr
+            patchrec['resistanceBeforeBreakin'] = tp.analysis()['steadyStateResistance']
+            patchrec['capacitanceBeforeBreakin'] = cap
 
 
 class PatchPipetteBreakInState(PatchPipetteState):
+    """State using pressure pulses to rupture membrane for whole cell recording.
+
+    State name: "break in"
+
+    - applies a sequence of pressure pulses of increasing strength
+    - monitors for break-in
+
+    Parameters
+    ----------
+    nPulses : list of int
+        Number of pressure pulses to apply on each break-in attempt
+    pulseDurations : list of float
+        Duration (seconds) of pulses to apply on each break in attempt
+    pulsePressures : list of float
+        Pressure (Pascals) of pulses to apply on each break in attempt
+    pulseInterval : float
+        Delay (seconds) between break in attempts
+    capacitanceThreshold : float
+        Capacitance (Farads) above which to transition to the 'whole cell' state
+        (note that resistance threshold must also be met)
+    resistanceThreshold : float
+        Resistance (Ohms) below which to transition to the 'whole cell' state if 
+        capacitance threshold is met, or fail otherwise.
+    holdingCurrentThreshold : float
+        Holding current (Amps) below which the cell is considered to be lost and the state fails.
+    """
     stateName = 'break in'
     _defaultConfig = {
         'initialPressureSource': 'atmosphere',
@@ -781,7 +839,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
         'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
         'pulsePressures': [-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3],
         'pulseInterval': 2,
-        'resistanceThreshold': 750e6,
+        'resistanceThreshold': 650e6,
         'capacitanceThreshold': 10e-12,
         'holdingCurrentThreshold': -1e-9,
         'fallbackState': 'fouled',
@@ -849,12 +907,17 @@ class PatchPipetteBreakInState(PatchPipetteState):
             self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
             return False
 
+        # If ssr and cap cross threshold => successful break in
+        # If only ssr crosses threshold => lost cell
+        # If only cap crosses threshold => partial break in, keep trying
         ssr = analysis['steadyStateResistance']
         cap = analysis['capacitance']
         if self.config['resistanceThreshold'] is not None and ssr < self.config['resistanceThreshold']:
-            return True
-        if self.config['capacitanceThreshold'] is not None and cap > self.config['capacitanceThreshold']:
-            return True
+            if cap > self.config['capacitanceThreshold']:
+                return True
+            else:
+                self._taskDone(interrupted=True, error="Resistance dropped below threshold but no cell detected.")
+                return False
 
     def cleanup(self):
         dev = self.dev

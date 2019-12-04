@@ -333,8 +333,7 @@ class TestPulse(object):
                 # fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, bounds=bounds, max_nfev=1000)  # uses least_squares
                 amp, tau, yoffset = fit[0]
             except RuntimeError:
-                amp, tau, yoffset = np.nan
-                raise
+                amp = tau = yoffset = np.nan
 
             analysis['fitExpAmp'] = amp
             analysis['fitExpTau'] = tau
