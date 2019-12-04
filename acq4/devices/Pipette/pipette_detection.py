@@ -9,7 +9,7 @@ class PipetteDetector(object):
     def __init__(self, reference):
         self.reference = reference
         self._filtered_ref = None
-        
+
     @property
     def filtered_ref(self):
         """The reference image data passed through the preprocessing filter.
@@ -18,7 +18,7 @@ class PipetteDetector(object):
             self._filtered_ref = [self.filterImage(f) for f in self.reference['frames']]
         return self._filtered_ref
 
-    def findPipette(self, frame, minImgPos, maxImgPos, expectedPos, bg_frame=None):
+    def findPipette(self, frame, minImgPos=None, maxImgPos=None, bg_frame=None):
         """Detect the pipette tip in *frame* and return the physical location.
 
         The *frame* is an instance of util.imaging.Frame that carries a transform mapping
@@ -26,8 +26,6 @@ class PipetteDetector(object):
 
         *minImgPos* and *maxImgPos* provide a suggested image cropping region that may
         be used to reduce the search area.
-
-        *expectedPos* is the _expected_ position of the pipette tip.
 
         An optional *bg_frame* may be provided that shows the same field of view with no pipette.
 
@@ -41,10 +39,17 @@ class PipetteDetector(object):
         # if a background frame was provided, subtract it out
         if bg_frame is not None:
             img = img.astype(int) - bg_frame.data()
-        
-        # crop out a small region around the pipette tip
+
         if img.ndim == 3:
             img = img[0]
+
+        if minImgPos is None:
+            minImgPos = [0, 0]
+
+        if maxImgPos is None:
+            maxImgPos = img.shape
+
+        # crop out a small region around the pipette tip
         img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
 
         # filter the image
@@ -60,7 +65,7 @@ class PipetteDetector(object):
 
         # map pixel offsets back to physical coordinates
         tipImgPos = (
-            minImgPos[0] + (xyOffset[0] + reference['centerPos'][0]) / pxr, 
+            minImgPos[0] + (xyOffset[0] + reference['centerPos'][0]) / pxr,
             minImgPos[1] + (xyOffset[1] + reference['centerPos'][1]) / pxr
         )
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
@@ -115,9 +120,5 @@ class TemplateMatchPipetteDetector(PipetteDetector):
         return xyOffset, zErr, match[maxInd][1]
 
     def filterImage(self, img):
-        # Sobel should reduce background artifacts, but it also seems to increase the noise in the signal
-        # itself--two images with slightly different focus can have a very bad match.
-        # import skimage.feature
-        # return skimage.filter.sobel(img)
-        img = scipy.ndimage.morphological_gradient(img, size=(3, 3))
+        img = scipy.ndimage.gaussian_filter(img, (3, 3))
         return img
