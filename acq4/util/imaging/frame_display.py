@@ -124,10 +124,12 @@ class FrameDisplay(Qt.QObject):
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
             
-            data = self.currentFrame.getImage()
             info = self.currentFrame.info()
+            data = self.currentFrame.getImage()
+            # if we got a stack of frames, just display the first one. (not sure what else we could do here..)
+            if data.ndim == 3:
+                data = data[0]
             prof()
-            
             
             ## divide the background out of the current frame if needed
             data = self.bgCtrl.processImage(data)

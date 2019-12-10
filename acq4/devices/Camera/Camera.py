@@ -294,8 +294,11 @@ class Camera(DAQGeneric, OptomechDevice):
         info['objective'] = ss.get('objective', None)
         info['lightSource'] = ss.get('lightSourceState', None)
         info['deviceTransform'] = pg.SRTTransform3D(ss['transform'])
+        info['time'] = ptime.time()
 
-        return Frame(frames, info)
+        f = Frame(frames, info)
+        self.newFrame(f)  # allow others access to this frame (for example, camera module can update)
+        return f
 
     def _acquireFrames(self, n):
         # todo: default implementation can use acquisition thread instead..
