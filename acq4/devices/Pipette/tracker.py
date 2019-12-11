@@ -282,7 +282,7 @@ class PipetteTracker(object):
         # Store with pickle because configfile does not support arrays
         pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
+    def measureTipPosition(self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
