@@ -606,8 +606,11 @@ class PatchPipetteSealState(PatchPipetteState):
         Wait time (seconds) at beginning of seal state before applying negative pressure.
     delayAfterSeal : float
         Wait time (seconds) after GOhm seal is acquired, before transitioning to next state.
+    afterSealPressure : float
+        Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial formamtion.
     resetDelay : float
         Wait time (seconds) after maxVacuum is reached, before restarting pressure ramp.
+
     """
     stateName = 'seal'
 
@@ -626,7 +629,8 @@ class PatchPipetteSealState(PatchPipetteState):
         'maxVacuum': -3e3, #changed from -7e3
         'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)], #initially 1e6,150e6,None
         'delayBeforePressure': 10.0,
-        'delayAfterSeal': 5.0, 
+        'delayAfterSeal': 5.0,
+        'afterSealPressure': -1000,
         'resetDelay': 5.0,
     }
 
@@ -677,9 +681,9 @@ class PatchPipetteSealState(PatchPipetteState):
 
             ssr = tp.analysis()['steadyStateResistance']
             cap = tp.analysis()['capacitance']
-            if cap > config['breakInThreshold']:
-                patchrec['spontaneousBreakin'] = True
-                return 'break in'
+            # if cap > config['breakInThreshold']:
+            #     patchrec['spontaneousBreakin'] = True
+            #     return 'break in'
 
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
@@ -691,8 +695,16 @@ class PatchPipetteSealState(PatchPipetteState):
                 dev.clampDevice.setHolding(mode=None, value=config['holdingPotential'])
                 holdingSet = True
 
+            # seal detected? 
             if ssr > config['sealThreshold']:
-                self.sleep(config['delayAfterSeal'])
+                # delay for a short period, possibly applying pressure to allow seal to stabilize
+                if config['delayAfterSeal'] > 0:
+                    if config['afterSealPressure'] == 0:
+                        dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+                    else:
+                        dev.pressureDevice.setPressure(source='regulator', pressure=config['afterSealPressure'])
+                    self.sleep(config['delayAfterSeal'])
+
                 dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                 self.setState('gigaohm seal detected')
 
@@ -726,7 +738,7 @@ class PatchPipetteSealState(PatchPipetteState):
                         break
                 
                 # here, if the maxVacuum has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
-                if pressure >= config['maxVacuum']:
+                if pressure <= config['maxVacuum']:
                     dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                     self.sleep(config['resetDelay'])
                     pressure = 0
@@ -794,9 +806,9 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
                 return
             
             cap = tp.analysis()['capacitance']
-            if cap > config['breakInThreshold']:
-                patchrec['spontaneousBreakin'] = True
-                return 'break in'
+            # if cap > config['breakInThreshold']:
+            #     patchrec['spontaneousBreakin'] = True
+            #     return 'break in'
 
             patchrec['resistanceBeforeBreakin'] = tp.analysis()['steadyStateResistance']
             patchrec['capacitanceBeforeBreakin'] = cap
@@ -913,11 +925,12 @@ class PatchPipetteBreakInState(PatchPipetteState):
         ssr = analysis['steadyStateResistance']
         cap = analysis['capacitance']
         if self.config['resistanceThreshold'] is not None and ssr < self.config['resistanceThreshold']:
-            if cap > self.config['capacitanceThreshold']:
-                return True
-            else:
-                self._taskDone(interrupted=True, error="Resistance dropped below threshold but no cell detected.")
-                return False
+            return True
+            # if cap > self.config['capacitanceThreshold']:
+            #     return True
+            # else:
+            #     self._taskDone(interrupted=True, error="Resistance dropped below threshold but no cell detected.")
+            #     return False
 
     def cleanup(self):
         dev = self.dev
