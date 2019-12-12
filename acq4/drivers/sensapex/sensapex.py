@@ -331,7 +331,7 @@ class UMP(object):
 
 
         args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + [max_acceleration]]
-        print (args)
+        # print (args)
         duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
