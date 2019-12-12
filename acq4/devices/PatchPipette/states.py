@@ -574,6 +574,8 @@ class PatchPipetteSealState(PatchPipetteState):
     pressureMode : str
         'auto' enables automatic pressure control during sealing; 
         'user' simply switches to user control for sealing.
+    startingPressure : float
+        Initial pressure (Pascals) to apply when beginning sealing in 'auto' mode.
     holdingThreshold : float
         Seal resistance (ohms) above which the holding potential will switch 
         from its initial value to the value specified in the *holdingPotential*
@@ -620,6 +622,7 @@ class PatchPipetteSealState(PatchPipetteState):
         'initialTestPulseEnable': True,
         'fallbackState': 'fouled',
         'pressureMode': 'user',   # 'auto' or 'user'
+        'startingPressure': -1000,
         'holdingThreshold': 100e6,
         'holdingPotential': -70e-3,
         'sealThreshold': 1e9,
@@ -628,7 +631,7 @@ class PatchPipetteSealState(PatchPipetteState):
         'autoSealTimeout': 30.0,
         'maxVacuum': -3e3, #changed from -7e3
         'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)], #initially 1e6,150e6,None
-        'delayBeforePressure': 10.0,
+        'delayBeforePressure': 0.0,
         'delayAfterSeal': 5.0,
         'afterSealPressure': -1000,
         'resetDelay': 5.0,
@@ -656,7 +659,7 @@ class PatchPipetteSealState(PatchPipetteState):
         patchrec['resistanceBeforeSeal'] = initialResistance
         patchrec['capacitanceBeforeSeal'] = initialTP.analysis()['capacitance']
         startTime = ptime.time()
-        pressure = 0
+        pressure = config['startingPressure']
 
         mode = config['pressureMode']
         self.setState('beginning seal (mode: %r)' % mode)
