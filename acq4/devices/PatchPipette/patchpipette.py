@@ -218,16 +218,6 @@ class PatchPipette(Device):
     def setSelected(self):
         pass
 
-    def approach(self, initialMoveSpeed='fast'):
-        """Prepare pipette to enter tissue and patch a cell.
-
-        - Move pipette to diagonal approach position
-        - Auto-correct pipette offset
-        - May increase pressure
-        - Automatically hide tip/target markers when the tip is near the target
-        """
-        return self._stateManager.startApproach(initialMoveSpeed)
-
     def seal(self):
         """Attempt to seal onto a cell.
 

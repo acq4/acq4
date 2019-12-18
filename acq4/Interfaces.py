@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import six
-
 import weakref
+import six
 from acq4.util.Mutex import *
 
 
@@ -42,28 +41,27 @@ class InterfaceMixin(object):
     
 
 class InterfaceDirectory(Qt.QObject):
-    """Class for managing a phonebook of interfaces.
-    Any object in the program may advertise its services via this directory"""
+    """Class for managing a directory of interfaces, through which objects may advertise their services.
+    """
     sigInterfaceListChanged = Qt.Signal(object)
     
     def __init__(self):
         Qt.QObject.__init__(self)
         self.lock = Mutex(Mutex.Recursive)
-        #self.objList = weakref.WeakValueDictionary() # maps objName:object
         self.nameList = {}                           # maps objName:typeName:None
         self.typeList = {}                           # maps typeName:objName:object
         
     def declareInterface(self, name, types, obj):
         """Declare a new interface. Types may be either a single string type or 
-        a list of types. Returns False if the name is already in use."""
-        with self.lock:
-            #self.objList[name] = obj
+        a list of types.
         
+        Raises NameError if the name is already in use."""
+        with self.lock:
             if isinstance(types, six.string_types):
                 types = [types]
             for t in types:
                 if t in self.typeList and name in self.typeList[t] and obj is not self.typeList[t][name]:
-                    return False
+                    raise NameError("Interface type %r name %r is already used." % (t, name))
                 
             if name not in self.nameList:
                 self.nameList[name] = {}
@@ -81,9 +79,6 @@ class InterfaceDirectory(Qt.QObject):
         """Remove an interface. A list of types (or a single type) may be specified. 
         Otherwise, all types are removed for the name provided."""
         with self.lock:
-            #if name not in self.objList:
-                #raise Exception("Interface %s does not exist." % name)
-            
             if types is None:
                 types = self.nameList[name]
                 
@@ -93,7 +88,6 @@ class InterfaceDirectory(Qt.QObject):
                 
             if len(self.nameList[name]) == 0:
                 del self.nameList[name]
-                #del self.objList[name]
                 
             self.sigInterfaceListChanged.emit(types)
         
@@ -134,6 +128,8 @@ class InterfaceDirectory(Qt.QObject):
             return ints
             
     def getInterface(self, type, name):
+        """Return the object that was previously declared with *name* and interface *type*.
+        """
         with self.lock:
             return self.typeList[type][name]
 

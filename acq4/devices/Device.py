@@ -9,6 +9,10 @@ from acq4.Interfaces import InterfaceMixin
 
 class Device(Qt.QObject, InterfaceMixin):
     """Abstract class defining the standard interface for Device subclasses."""
+
+    # used to ensure devices are shut down in the correct order
+    _deviceCreationOrder = []
+
     def __init__(self, deviceManager, config, name):
         Qt.QObject.__init__(self)
 
@@ -21,6 +25,7 @@ class Device(Qt.QObject, InterfaceMixin):
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
+        Device._deviceCreationOrder.append(weakref.ref(self))
         self._name = name
             
     def name(self):

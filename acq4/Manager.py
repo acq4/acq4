@@ -19,7 +19,7 @@ import six
 import time, atexit, weakref
 from acq4.util import Qt
 import acq4.util.reload as reload
-
+from .devices.Device import Device
 from .util import DataManager, ptime, configfile
 from .Interfaces import *
 from .util.Mutex import Mutex
@@ -68,8 +68,9 @@ class Manager(Qt.QObject):
     
     def __init__(self, configFile=None, argv=None):
         self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
-        self.devices = OrderedDict()  # all currently loaded devices
+        # self.devices = OrderedDict()  # all currently loaded devices
         self.modules = OrderedDict()  # all currently running modules
+        self.devices = OrderedDict()  # all devices loaded via Manager
         self.definedModules = OrderedDict()  # all custom-defined module configurations
         self.config = OrderedDict()
         self.currentDir = None
@@ -438,25 +439,22 @@ class Manager(Qt.QObject):
         """
         devclass = devices.getDeviceClass(devClassName)
         dev = devclass(self, conf, name)
-        with self.lock:
-            self.devices[name] = dev
+        self.devices[name] = dev  # just to prevent device being collected
         return dev
     
     def getDevice(self, name):
         """Return a device instance given its name.
         """
-        with self.lock:
-            name = str(name)
-            if name not in self.devices:
-                #print self.devices
-                raise Exception("No device named %s. Options are %s" % (name, str(list(self.devices.keys()))))
-            return self.devices[name]
+        name = str(name)
+        try:
+            return self.getInterface('device', name)
+        except KeyError:
+            raise Exception("No device named %s. Options are %s" % (name, ','.join(self.listDevices())))
 
     def listDevices(self):
-        """Return a list of available devices.
+        """Return a list of the names of available devices.
         """
-        with self.lock:
-            return list(self.devices.keys())
+        return self.listInterfaces('device')
 
     def reserveDevices(self, devices, timeout=10.0):
         """Return a DeviceLocker that can be used to reserve multiple devices simultaneously::
@@ -766,6 +764,8 @@ class Manager(Qt.QObject):
             return self.interfaceDir.listInterfaces(*args, **kargs)
         
     def getInterface(self, *args, **kargs):
+        """Return the object that was previously declared with *name* and interface *type*.
+        """
         with self.lock:
             return self.interfaceDir.getInterface(*args, **kargs)
     
@@ -793,16 +793,13 @@ class Manager(Qt.QObject):
         
     def quit(self):
         """Nicely request that all devices and modules shut down"""
-        #app = Qt.QApplication.instance()
-        #def q():
-            #print "all windows closed"
-        #Qt.QObject.connect(app, Qt.SIGNAL('lastWindowClosed()'), q)
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
             self.alreadyQuit = True
             lm = len(self.modules)
-            ld = len(self.devices)
+            ld = len(self.listDevices())
             with pg.ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
+
                 print("Requesting all modules shut down..")
                 logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
@@ -810,31 +807,25 @@ class Manager(Qt.QObject):
                     print("    %s" % m)
                     
                     self.unloadModule(m)
-                    #print "Unloaded mod %s, modules left:" % m
-                    #try:
-                        #self.modules[m].quit()
-                    #except:
-                        #printExc("Error while requesting module '%s' quit." % m)
-                    #if m in self.modules:
-                        #del self.modules[m]
-                    dlg.setValue(lm-len(self.modules))
-                #pdb.set_trace()
+                    dlg.setValue(lm - len(self.modules))
                     
                 print("Requesting all devices shut down..")
-                for d in list(self.devices.keys())[::-1]:  # shut down in reverse order
+                devs = Device._deviceCreationOrder[::-1]
+                for d in devs:  # shut down in reverse order
+                    d = d()
+                    if d is None:
+                        # device was already deleted
+                        continue
                     print("    %s" % d)
                     try:
-                        self.devices[d].quit()
+                        d.quit()
                     except:
-                        printExc("Error while requesting device '%s' quit." % d)
-                    #print "  done."
-                    dlg.setValue(lm+ld-len(self.devices))
-                    
+                        printExc("Error while requesting device '%s' quit." % d.name)
+                    dlg.setValue(lm + ld - len(devs))
                     
                 print("Closing windows..")
                 Qt.QApplication.instance().closeAllWindows()
                 Qt.QApplication.instance().processEvents()
-            #print "  done."
             print("\n    ciao.")
         Qt.QApplication.quit()
 
