@@ -215,13 +215,20 @@ class PipetteTracker(object):
                 for j in range(2):
                     # Set initial focus above start point to reduce hysteresis in focus mechanism
                     scope = self.dev.scopeDevice()
-                    scope.setFocusDepth(zStart + 10e-6)
+                    scope.setFocusDepth(zStart + 10e-6).wait()
 
                     # Acquire multiple frames at different depths
                     for i in range(nFrames):
                         #pos[2] = zStart - zStep * i
                         # self.dev._moveToGlobal(pos, 'slow').wait()
-                        scope.setFocusDepth(zStart - zStep * i).wait()
+                        focus = zStart - zStep * i
+                        scope.setFocusDepth(focus, 'slow').wait()
+                        # verify this worked!
+                        time.sleep(0.3) # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
+                        focusError = abs(scope.getFocusDepth() - focus)
+                        if focusError > zStep * 0.2:
+                            raise Exception("Requested focus missed (%0.2f um error)" % (focusError * 1e6))
+
                         frame = imager.acquireFrames(average)
                         img = frame.data()[:, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]].astype(float).mean(axis=0)
                         if j == 0:
@@ -273,7 +280,7 @@ class PipetteTracker(object):
         # Store with pickle because configfile does not support arrays
         pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
+    def measureTipPosition(self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
@@ -334,7 +341,7 @@ class PipetteTracker(object):
         try:
             return self.reference[key]
         except KeyError:
-            raise Exception("No reference frames found for this pipette / objective combination.")
+            raise Exception("No reference frames found for this pipette / objective / filter combination: %s" % repr(key))
 
     def autoCalibrate(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.

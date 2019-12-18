@@ -26,6 +26,7 @@ class MockPatch(object):
         self.maxSealResistance = 2e9
         self.pipResistance = 5e6
         self.accessResistance = 1e12
+        self.capacitance = 2e-12
         self.membranePotential = -70e-3
         self.inputResistance = 150e6
         self.lastUpdate = ptime.time()
@@ -57,7 +58,7 @@ class MockPatch(object):
 
         else:
             if targetDistance > self.radius:
-                self.sealResistance = 0
+                self.resetState()
             else:
                 # seal speed can double if we add pressure
                 if self.sealResistance > 0:
@@ -72,6 +73,7 @@ class MockPatch(object):
             if pressure < -27e3:
                 # break in
                 self.accessResistance = 5e6
+                self.capacitance = 30e-12
 
         self.sealResistance = max(self.sealResistance, 100)
 
@@ -79,13 +81,15 @@ class MockPatch(object):
         # print("ssr: %s  pr: %s  sr: %s  ar: %s  ir: %s" % (ssr, pipResistance, self.sealResistance, self.accessResistance, self.inputResistance))
         pr = pipResistance + 1.0 / (1.0/self.sealResistance + 1.0/self.accessResistance)
 
+        cap = self.capacitance
         if self.widget.breakBtn.isChecked():
             ssr = 1e6
             pr = 1e6
+            cap = 30e-12
 
         i = (holding - self.membranePotential) / ssr
 
-        return {'baselinePotential': holding, 'baselineCurrent': i, 'peakResistance': pr, 'steadyStateResistance': ssr}
+        return {'baselinePotential': holding, 'baselineCurrent': i, 'peakResistance': pr, 'steadyStateResistance': ssr, 'capacitance': cap}
 
 
 class MockPatchUI(Qt.QWidget):
