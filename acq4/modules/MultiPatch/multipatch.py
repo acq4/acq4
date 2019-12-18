@@ -504,7 +504,7 @@ class MultiPatchWindow(Qt.QWidget):
         pips = self.selectedPipettes()
         for pip in pips:
             if isinstance(pip, PatchPipette):
-                pip.setState('clean')
+                pip.setState('pipette clean')
         
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()

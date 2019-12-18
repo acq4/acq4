@@ -771,7 +771,7 @@ class SequencerThread(Thread):
                     dev.start()
 
             iter += 1
-            if maxIter == 0 or iter >= maxIter:
+            if maxIter != 0 and iter >= maxIter:
                 break
 
             self.sleep(until=start+interval)
@@ -782,7 +782,7 @@ class SequencerThread(Thread):
         else:
             itermsg = 'iter=%d/%s' % (iter+1, maxIter)
 
-        if depthIndex is None:
+        if depthIndex is None or depths[depthIndex] is None:
             depthmsg = ''
         else:
             depthstr = pg.siFormat(depths[depthIndex], suffix='m')

@@ -147,6 +147,11 @@ class UMP(object):
         # duration that manipulator must be not busy before a move is considered complete.
         self.move_expire_time = 50e-3
 
+        # if we miss by more than 0.5 um, try again
+        self.retry_threshold = 500
+        # retry up to 3 times, then fail
+        self.max_move_retry = 3
+
         self.max_acceleration = {}
         
         self.lib = UMP_LIB
@@ -230,7 +235,6 @@ class UMP(object):
 
     def set_max_acceleration(self, dev, max_acc):
         self.max_acceleration[dev] = max_acc
-        
 
     def open(self, address=None, group=None):
         """Open the UMP device at the given address.
@@ -279,7 +283,7 @@ class UMP(object):
         #    return [-x.value for x in xyzwe[:n_axes]]
         return [x.value for x in xyzwe[:n_axes]]
 
-    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False, max_acceleration=0):
+    def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False, max_acceleration=0, _request=None):
         """Request the specified device to move to an absolute position (in nm).
 
         Parameters
@@ -302,6 +306,8 @@ class UMP(object):
         move_id : int
             Unique ID that can be used to retrieve the status of this move at a later time.
         """
+        kwargs = {'dev': dev, 'pos': pos, 'speed': speed, 'simultaneous': simultaneous, 'linear': linear, 'max_acceleration': max_acceleration}
+
         pos_arg = list(pos) + [0] * (4-len(pos))
         mode = int(bool(simultaneous))  # all axes move simultaneously
 
@@ -315,16 +321,14 @@ class UMP(object):
         else:
             speed = [max(1, speed)] * 4  # speed < 1 crashes the uMp
 
-
         if max_acceleration==0 or max_acceleration == None:
             if self.max_acceleration[dev] != None:
                 max_acceleration = self.max_acceleration[dev]
             else:
                 max_acceleration = 0
 
-
         args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + [max_acceleration]]
-        print (args)
+        # print (args)
         duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
@@ -333,7 +337,12 @@ class UMP(object):
                 self.call('ump_stop_ext', c_int(dev))
                 last_move._interrupt("started another move before the previous finished")
 
-            next_move = MoveRequest(dev, current_pos, pos, original_speed, duration)
+            if _request is None:
+                next_move = MoveRequest(dev, current_pos, pos, original_speed, duration, kwargs)
+            else:
+                # We are retrying a previous move; re-use the old request object.
+                next_move = _request
+
             self._last_move[dev] = next_move
 
             self.call('ump_goto_position_ext2', *args)
@@ -460,25 +469,35 @@ class UMP(object):
             now = default_timer()
             for dev,move in self._last_move.items():
                 if not self.is_busy(dev):
-                    self._last_move.pop(dev)
-                    move._finish(self.get_pos(dev, timeout=-1))
+                    move_req = self._last_move.pop(dev)
+
+                    pos = self.get_pos(dev, timeout=-1)
+                    err = np.linalg.norm(np.array(pos) - np.array(move_req.target_pos))
+                    if err < self.retry_threshold or move_req.retry_count >= self.max_move_retry:
+                        move._finish(pos)
+                    else:
+                        # retry move if we missed the target
+                        move_req.retry_count += 1
+                        self.goto_pos(_request=move_req, **move_req.kwargs)
 
 
 class MoveRequest(object):
     """Simple class for tracking the status of requested moves.
     """
-    def __init__(self, dev, start_pos, target_pos, speed, duration):
+    def __init__(self, dev, start_pos, target_pos, speed, duration, kwargs):
         self.dev = dev
         self.start_time = default_timer()
         self.estimated_duration = duration
         self.start_pos = start_pos
         self.target_pos = target_pos
         self.speed = speed
+        self.kwargs = kwargs
         self.finished = False
         self.interrupted = False
         self.interrupt_reason = None
         self.last_pos = None
         self.finished_event = threading.Event()
+        self.retry_count = 0
 
     def _interrupt(self, reason):
         self.interrupt_reason = reason

@@ -1,12 +1,12 @@
 from __future__ import print_function
 import time
 import pickle
-import time
 import numpy as np
-import scipy.optimize, scipy.ndimage
 from acq4.util import Qt
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
+from .pipette_detection import TemplateMatchPipetteDetector
+from acq4.util.image_registration import imageTemplateMatch
 
 
 class PipetteTracker(object):
@@ -17,6 +17,8 @@ class PipetteTracker(object):
     a stack of reference images collected with `takeReferenceFrames()`. 
 
     """
+    detectorClass = TemplateMatchPipetteDetector
+
     def __init__(self, pipette):
         self.dev = pipette
         fileName = self.dev.configFileName('ref_frames.pk')
@@ -173,8 +175,6 @@ class PipetteTracker(object):
         This method assumes that the tip is in focus near the center of the camera frame, and that its
         position is well-calibrated. Ideally, the illumination is flat and the area surrounding the tip
         is free of any artifacts.
-
-        Images are filtered using `self.filterImage` before they are stored.
         """
         imager = self._getImager(imager)
 
@@ -192,7 +192,6 @@ class PipetteTracker(object):
 
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength*0.15, tipLength=tipLength)
         center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-        center = self.filterImage(center)
 
         # Decide how many frames to collect and at what z depths
         nFrames = (int(zRange / zStep) // 2) * 2
@@ -216,19 +215,25 @@ class PipetteTracker(object):
                 for j in range(2):
                     # Set initial focus above start point to reduce hysteresis in focus mechanism
                     scope = self.dev.scopeDevice()
-                    scope.setFocusDepth(zStart + 10e-6)
+                    scope.setFocusDepth(zStart + 10e-6).wait()
 
                     # Acquire multiple frames at different depths
                     for i in range(nFrames):
                         #pos[2] = zStart - zStep * i
                         # self.dev._moveToGlobal(pos, 'slow').wait()
-                        scope.setFocusDepth(zStart - zStep * i).wait()
+                        focus = zStart - zStep * i
+                        scope.setFocusDepth(focus, 'slow').wait()
+                        # verify this worked!
+                        time.sleep(0.3) # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
+                        focusError = abs(scope.getFocusDepth() - focus)
+                        if focusError > zStep * 0.2:
+                            raise Exception("Requested focus missed (%0.2f um error)" % (focusError * 1e6))
+
                         frame = imager.acquireFrames(average)
                         img = frame.data()[:, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]].astype(float).mean(axis=0)
-                        img = self.filterImage(img)
                         if j == 0:
                             frames.append(img)
-                            corr.append(self._matchTemplateSingle(img, center)[1])
+                            corr.append(imageTemplateMatch(img, center)[1])
                         else:
                             bg_frames.append(img)
                         dlg += 1
@@ -275,12 +280,11 @@ class PipetteTracker(object):
         # Store with pickle because configfile does not support arrays
         pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.7, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
+    def measureTipPosition(self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
-        Return `((x, y, z), corr)`, where *corr* is the normalized cross-correlation value of
-        the best template match.
+        Return `((x, y, z), corr)`, where *corr* is a measure of the performance of the result (can be used to detect bad results).
 
         If the strength of the match is less than *threshold*, then raise RuntimeError.
 
@@ -299,47 +303,26 @@ class PipetteTracker(object):
             # select a tip length similar to template images
             tipLength = reference['tipLength']
 
-        img = frame.data()
         if movePipette:
             # move pipette and take a background frame
             if pos is None:
                 pos = self.dev.globalPosition()
             self.dev._moveToLocal([-tipLength*3, 0, 0], 'fast').wait()
             bg_frame = self.takeFrame()
-            img = img.astype(int) - bg_frame.data()
+        else:
+            bg_frame = None
 
+        # generate suggested crop and pipette position
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
-        if img.ndim == 3:
-            img = img[0]
-        img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
-        img = self.filterImage(img)
 
-        # resample acquired image to match template pixel size
-        pxr = frame.info()['pixelSize'][0] / reference['pixelSize'][0]
-        if pxr != 1.0:
-            img = scipy.ndimage.zoom(img, pxr)
+        # apply machine vision algorithm
+        detector = self.detectorClass(reference)
+        tipPos, performance = detector.findPipette(frame, minImgPos, maxImgPos, pos, bg_frame)
 
-        # run template match against all template frames, find the frame with the strongest match
-        match = [self.matchTemplate(img, t) for t in reference['frames']]
+        if performance < threshold:
+            raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (performance, threshold))
 
-        if show:
-            pg.plot([m[0][0] for m in match], title='x match vs z')
-            pg.plot([m[0][1] for m in match], title='y match vs z')
-            pg.plot([m[1] for m in match], title='match correlation vs z')
-
-        maxInd = np.argmax([m[1] for m in match])
-        if match[maxInd][1] < threshold:
-            raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (match[maxInd][1], threshold))
-
-        # measure z error
-        zErr = (maxInd - reference['centerInd']) * reference['zStep']
-
-        # measure xy position
-        offset = match[maxInd][0]
-        tipImgPos = (minImgPos[0] + (offset[0] + reference['centerPos'][0]) / pxr, 
-                     minImgPos[1] + (offset[1] + reference['centerPos'][1]) / pxr)
-        tipPos = frame.mapFromFrameToGlobal(pg.Vector(tipImgPos))
-        return (tipPos.x(), tipPos.y(), tipPos.z() + zErr), match[maxInd][1]
+        return tipPos, performance
 
     def measureError(self, padding=50e-6, threshold=0.7, frame=None, pos=None, movePipette=False):
         """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
@@ -358,7 +341,7 @@ class PipetteTracker(object):
         try:
             return self.reference[key]
         except KeyError:
-            raise Exception("No reference frames found for this pipette / objective combination.")
+            raise Exception("No reference frames found for this pipette / objective / filter combination: %s" % repr(key))
 
     def autoCalibrate(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
@@ -384,68 +367,6 @@ class PipetteTracker(object):
         tr.translate(pg.Vector(localError))
         self.dev.setDeviceTransform(tr)
         return localError, corr
-
-    def filterImage(self, img):
-        """Return a filtered version of an image to be used in template matching.
-
-        Currently, no filtering is applied.
-        """
-        # Sobel should reduce background artifacts, but it also seems to increase the noise in the signal
-        # itself--two images with slightly different focus can have a very bad match.
-        # import skimage.feature
-        # return skimage.filter.sobel(img)
-        img = scipy.ndimage.morphological_gradient(img, size=(3, 3))
-        return img
-
-    def matchTemplate(self, img, template, dsVals=(4, 2, 1)):
-        """Match a template to image data.
-
-        Return the (x, y) pixel offset of the template and a value indicating the strength of the match.
-
-        For efficiency, the input images are downsampled and matched at low resolution before
-        iteratively re-matching at higher resolutions. The *dsVals* argument lists the downsampling values
-        that will be used, in order. Each value in this list must be an integer multiple of
-        the value that follows it.
-        """
-        # Recursively match at increasing image resolution
-
-        imgDs = [pg.downsample(pg.downsample(img, n, axis=0), n, axis=1) for n in dsVals]
-        tmpDs = [pg.downsample(pg.downsample(template, n, axis=0), n, axis=1) for n in dsVals]
-        offset = np.array([0, 0])
-        for i, ds in enumerate(dsVals):
-            pos, val = self._matchTemplateSingle(imgDs[i], tmpDs[i])
-            pos = np.array(pos)
-            if i == len(dsVals) - 1:
-                offset += pos
-                # [pg.image(imgDs[j], title=str(j)) for j in range(len(dsVals))]
-                return offset, val
-            else:
-                scale = ds // dsVals[i+1]
-                assert scale == ds / dsVals[i+1], "dsVals must satisfy constraint: dsVals[i] == dsVals[i+1] * int(x)"
-                offset *= scale
-                offset += np.clip(((pos-1) * scale), 0, imgDs[i+1].shape)
-                end = offset + np.array(tmpDs[i+1].shape) + 3
-                end = np.clip(end, 0, imgDs[i+1].shape)
-                imgDs[i+1] = imgDs[i+1][offset[0]:end[0], offset[1]:end[1]]
-
-    def _matchTemplateSingle(self, img, template, show=False, unsharp=3):
-        import skimage.feature
-        if img.shape[0] < template.shape[0] or img.shape[1] < template.shape[1]:
-            raise ValueError("Image must be larger than template.  %s %s" % (img.shape, template.shape))
-        cc = skimage.feature.match_template(img, template)
-        # high-pass filter; we're looking for a fairly sharp peak.
-        if unsharp is not False:
-            cc_filt = cc - scipy.ndimage.gaussian_filter(cc, (unsharp, unsharp))
-        else:
-            cc_filt = cc
-
-        if show:
-            pg.image(cc)
-
-        ind = np.argmax(cc_filt)
-        pos = np.unravel_index(ind, cc.shape)
-        val = cc[pos[0], pos[1]]
-        return pos, val
 
     def mapErrors(self, nSteps=(5, 5, 7), stepSize=(50e-6, 50e-6, 50e-6),  padding=60e-6,
                   threshold=0.4, speed='slow', show=False, intermediateDist=60e-6, moveStageXY=True):
@@ -727,3 +648,5 @@ class DriftMonitor(Qt.QWidget):
     def closeEvent(self, event):
         self.timer.stop()
         return Qt.QWidget.closeEvent(self, event)
+
+

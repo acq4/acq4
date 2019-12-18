@@ -80,8 +80,6 @@ class Scientifica(Stage):
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get('monitorObjective', False)
         if self.monitorObj is True:
-            if self.dev._version < 3:
-                raise TypeError("Scientifica motion card version %s does not support reading objective position." % self.dev._version)
             self.objectiveState = None
             self._checkObjective()
 
@@ -294,17 +292,23 @@ class ScientificaMoveFuture(MoveFuture):
 
     def _stopped(self):
         # Called when the manipulator is stopped, possibly interrupting this move.
-        status = self._getStatus()
-        if status == 1:
-            # finished; ignore stop
-            return
-        elif status == -1:
-            self._errorMsg = "Move was interrupted before completion."
-        elif status == 0:
-            # not actually stopped! This should not happen.
-            raise RuntimeError("Interrupted move but manipulator is still running!")
-        else:
-            raise Exception("Unknown status: %s" % status)
+        startTime = ptime.time()
+        while True:
+            status = self._getStatus()
+            if status == 1:
+                # finished; ignore stop
+                return
+            elif status == -1:
+                self._errorMsg = "Move was interrupted before completion."
+                return
+            elif status == 0 and ptime.time() < startTime + 0.15:
+                # allow 150ms to stop
+                continue
+            elif status == 0:
+                # not actually stopped! This should not happen.
+                raise RuntimeError("Interrupted move but manipulator is still running!")
+            else:
+                raise Exception("Unknown status: %s" % status)
 
     def errorMessage(self):
         return self._errorMsg

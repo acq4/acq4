@@ -24,10 +24,11 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
             self.pip.sigPressureChanged.connect(self.pressureChanged)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
+            self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
+            self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
-        self.ui.swapBtn.hide()
         self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, suffix='V', siPrefix=True, step=5e-3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
         self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
 
@@ -54,7 +55,9 @@ class PipetteControl(Qt.QWidget):
         self.ui.atmospherePressureBtn.clicked.connect(self.atmospherePressureClicked)
         self.ui.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
         self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
-        self.ui.swapBtn.clicked.connect(self.swapClicked)
+        self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
+        self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
+        self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
         self.stateMenu = Qt.QMenu()
         for state in pipette.listStates():
@@ -62,8 +65,6 @@ class PipetteControl(Qt.QWidget):
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
         self._pc2 = MousePressCatch(self.ui.modeText, self.modeTextClicked)
-        self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
-        self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
 
         self.plots = [
             PlotWidget(mode='test pulse'), 
@@ -75,8 +76,12 @@ class PipetteControl(Qt.QWidget):
 
         self.patchStateChanged(pipette)
         self.pipActiveChanged()
-        self.clampStateChanged(self.pip.clampDevice.getState())
-        self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+        
+        if self.pip.clampDevice is not None:
+            self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
+            self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
+            self.clampStateChanged(self.pip.clampDevice.getState())
+            self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
 
     def active(self):
         return self.ui.activeBtn.isChecked()
@@ -279,11 +284,27 @@ class PipetteControl(Qt.QWidget):
         self.ui.pressureSpin.setStyleSheet(style)            
 
     def newPipetteRequested(self):
-        self.ui.swapBtn.show()
+        self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
 
-    def swapClicked(self):
-        self.ui.swapBtn.hide()
+    def newPipetteClicked(self):
+        self.ui.newPipetteBtn.setStyleSheet("")
         self.pip.newPipette()
+
+    def tipCleanChanged(self, pip, clean):
+        with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):
+            self.ui.fouledCheck.setChecked(not clean)
+        self.ui.fouledCheck.setStyleSheet("" if clean else "QCheckBox {border: 2px solid #F00;}")
+
+    def fouledCheckChanged(self, checked):
+        self.pip.setTipClean(not self.ui.fouledCheck.isChecked())
+
+    def tipBrokenChanged(self, pip, broken):
+        with pg.SignalBlock(self.ui.brokenCheck.stateChanged, self.brokenCheckChanged):
+            self.ui.brokenCheck.setChecked(broken)
+        self.ui.brokenCheck.setStyleSheet("" if not broken else "QCheckBox {border: 2px solid #F00;}")
+
+    def brokenCheckChanged(self, checked):
+        self.pip.setTipBroken(self.ui.brokenCheck.isChecked())
 
 
 class MousePressCatch(Qt.QObject):
@@ -375,27 +396,35 @@ class PlotWidget(Qt.QWidget):
         if mode in ['test pulse', 'tp analysis']:
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
+            self.tpLabel.setVisible(False)
         elif mode in ['ss resistance', 'peak resistance']:
             self.plot.setLogMode(y=True, x=False)
             self.plot.enableAutoRange(True, False)
             self.plot.setYRange(6, 10)
             self.plot.setLabels(left=('Rss', u'Ω'))
+            self.tpLabel.setVisible(True)
         elif mode == 'holding current':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Ihold', u'A'))
+            self.tpLabel.setVisible(True)
         elif mode == 'holding potential':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Vhold', u'V'))
+            self.tpLabel.setVisible(True)
         elif mode == 'time constant':
-            self.plot.setLogMode(y=False, x=False)
-            self.plot.enableAutoRange(True, True)
+            self.plot.setLogMode(y=True, x=False)
+            self.plot.enableAutoRange(False, True)
+            self.plot.setYRange(-5, -2)
             self.plot.setLabels(left=('Tau', u's'))
+            self.tpLabel.setVisible(True)
         elif mode == 'capacitance':
             self.plot.setLogMode(y=False, x=False)
-            self.plot.enableAutoRange(True, True)
+            self.plot.enableAutoRange(False, True)
+            self.plot.setYRange(0, 100e-12)
             self.plot.setLabels(left=('Capacitance', u'F'))
+            self.tpLabel.setVisible(True)
 
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()

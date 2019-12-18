@@ -163,8 +163,9 @@ class CalibrationWindow(Qt.QWidget):
         def changeAxis(p1, p2):
             # Which single axis has changed between 2 points?
             diff = np.abs(p2-p1)
+            dist = np.linalg.norm(diff)
             axis = np.argmax(diff)
-            if diff[axis] > 10e3 and diff[(axis+1)%3] < 1e3 and diff[(axis+2)%3] < 1e3:
+            if diff[axis] > dist*0.99:
                 return axis
             else:
                 return None
@@ -185,6 +186,7 @@ class CalibrationWindow(Qt.QWidget):
                     item = self.pointTree.topLevelItem(i)
                     item.setText(2, "")
                 self.transform = None
+                raise Exception("Could not find colinear points along all 3 axes")
                 return
                 
         axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0,1,2)]
