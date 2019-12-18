@@ -29,7 +29,6 @@ class PipetteControl(Qt.QWidget):
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
-        self.ui.swapBtn.hide()
         self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, suffix='V', siPrefix=True, step=5e-3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
         self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
 
@@ -57,7 +56,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
         self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
         self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
-        self.ui.cleanCheck.stateChanged.connect(self.cleanCheckChanged)
+        self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
         self.stateMenu = Qt.QMenu()
@@ -283,24 +282,24 @@ class PipetteControl(Qt.QWidget):
         self.ui.pressureSpin.setStyleSheet(style)            
 
     def newPipetteRequested(self):
-        self.ui.newPipetteBtn.setStyleSheet("{border: 2px solid #F00;}")
+        self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
 
     def newPipetteClicked(self):
         self.ui.newPipetteBtn.setStyleSheet("")
         self.pip.newPipette()
 
     def tipCleanChanged(self, pip, clean):
-        with pg.SignalBlock(self.ui.cleanCheck.stateChanged, self.cleanCheckChanged):
-            self.ui.cleanCheck.setChecked(clean)
-        self.ui.cleanCheck.setStyleSheet("" if clean else "{border: 2px solid #F00;}")
+        with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):
+            self.ui.fouledCheck.setChecked(not clean)
+        self.ui.fouledCheck.setStyleSheet("" if clean else "QCheckBox {border: 2px solid #F00;}")
 
-    def cleanCheckChanged(self, checked):
-        self.pip.setTipClean(self.ui.cleanCheck.isChecked())
+    def fouledCheckChanged(self, checked):
+        self.pip.setTipClean(not self.ui.fouledCheck.isChecked())
 
     def tipBrokenChanged(self, pip, broken):
         with pg.SignalBlock(self.ui.brokenCheck.stateChanged, self.brokenCheckChanged):
             self.ui.brokenCheck.setChecked(broken)
-        self.ui.brokenCheck.setStyleSheet("" if not broken else "{border: 2px solid #F00;}")
+        self.ui.brokenCheck.setStyleSheet("" if not broken else "QCheckBox {border: 2px solid #F00;}")
 
     def brokenCheckChanged(self, checked):
         self.pip.setTipBroken(self.ui.brokenCheck.isChecked())

@@ -397,9 +397,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         dev = self.dev
         dev.clampDevice.autoPipetteOffset()
 
-        # consider pipette fouled when starting, even if we never manage to attempt a seal
-        dev.setTipClean(False)
-
         patchrec = dev.patchRecord()
         patchrec['attemptedCellDetect'] = True
         initialResistance = None
@@ -672,6 +669,9 @@ class PatchPipetteSealState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         else:
             raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
+
+        dev.setTipClean(False)
+
         patchrec['attemptedSeal'] = True
         holdingSet = False
 

@@ -141,6 +141,7 @@ class PatchPipette(Device):
         self._pipetteRecord = None
         self.emitNewEvent('new_pipette', {})
         self.newPatchAttempt()
+        self.setState('out')
         # todo: set calibration to average 
 
     def requestNewPipette(self):

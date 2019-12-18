@@ -235,7 +235,6 @@ class UMP(object):
 
     def set_max_acceleration(self, dev, max_acc):
         self.max_acceleration[dev] = max_acc
-        
 
     def open(self, address=None, group=None):
         """Open the UMP device at the given address.
@@ -322,13 +321,11 @@ class UMP(object):
         else:
             speed = [max(1, speed)] * 4  # speed < 1 crashes the uMp
 
-
         if max_acceleration==0 or max_acceleration == None:
             if self.max_acceleration[dev] != None:
                 max_acceleration = self.max_acceleration[dev]
             else:
                 max_acceleration = 0
-
 
         args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + [max_acceleration]]
         # print (args)
