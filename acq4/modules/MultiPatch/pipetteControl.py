@@ -24,6 +24,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
             self.pip.sigPressureChanged.connect(self.pressureChanged)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
+            self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
+            self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
 
         self.ui = Ui_PipetteControl()
         self.ui.setupUi(self)
@@ -54,7 +56,9 @@ class PipetteControl(Qt.QWidget):
         self.ui.atmospherePressureBtn.clicked.connect(self.atmospherePressureClicked)
         self.ui.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
         self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
-        self.ui.swapBtn.clicked.connect(self.swapClicked)
+        self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
+        self.ui.cleanCheck.stateChanged.connect(self.cleanCheckChanged)
+        self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
         self.stateMenu = Qt.QMenu()
         for state in pipette.listStates():
@@ -279,11 +283,27 @@ class PipetteControl(Qt.QWidget):
         self.ui.pressureSpin.setStyleSheet(style)            
 
     def newPipetteRequested(self):
-        self.ui.swapBtn.show()
+        self.ui.newPipetteBtn.setStyleSheet("{border: 2px solid #F00;}")
 
-    def swapClicked(self):
-        self.ui.swapBtn.hide()
+    def newPipetteClicked(self):
+        self.ui.newPipetteBtn.setStyleSheet("")
         self.pip.newPipette()
+
+    def tipCleanChanged(self, pip, clean):
+        with pg.SignalBlock(self.ui.cleanCheck.stateChanged, self.cleanCheckChanged):
+            self.ui.cleanCheck.setChecked(clean)
+        self.ui.cleanCheck.setStyleSheet("" if clean else "{border: 2px solid #F00;}")
+
+    def cleanCheckChanged(self, checked):
+        self.pip.setTipClean(self.ui.cleanCheck.isChecked())
+
+    def tipBrokenChanged(self, pip, broken):
+        with pg.SignalBlock(self.ui.brokenCheck.stateChanged, self.brokenCheckChanged):
+            self.ui.brokenCheck.setChecked(broken)
+        self.ui.brokenCheck.setStyleSheet("" if not broken else "{border: 2px solid #F00;}")
+
+    def brokenCheckChanged(self, checked):
+        self.pip.setTipBroken(self.ui.brokenCheck.isChecked())
 
 
 class MousePressCatch(Qt.QObject):

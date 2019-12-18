@@ -175,6 +175,12 @@ class PatchPipetteState(Future):
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
 
+    def _checkStop(self, delay=0):
+        # extend checkStop to also see if the pipette was deactivated.
+        if self.dev.active is False:
+            raise self.StopRequested()
+        Future._checkStop(self)
+
     def __repr__(self):
         return '<%s "%s">' % (type(self).__name__, self.stateName)
 
@@ -188,7 +194,6 @@ class PatchPipetteOutState(PatchPipetteState):
         'initialClampHolding': 0,
         'initialTestPulseEnable': False,
         'finishPatchRecord': True,
-        'newPipette': True,
     }
 
 
@@ -250,8 +255,9 @@ class PatchPipetteBrokenState(PatchPipetteState):
     }
 
     def initialize(self):
-        self.dev.broken = True
+        self.dev.setTipBroken(True)
         PatchPipetteState.initialize(self)
+
 
 class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
@@ -262,7 +268,7 @@ class PatchPipetteFouledState(PatchPipetteState):
     }
 
     def initialize(self):
-        self.dev.clean = False
+        self.dev.setTipClean(False)
         PatchPipetteState.initialize(self)
 
 
@@ -381,7 +387,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         'slowDetectionThreshold': 0.2e6,
         'slowDetectionSteps': 3,
         'breakThreshold': -1e6,
-        'setPipetteClean': False,
     }
 
     def run(self):
@@ -390,12 +395,10 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 
         config = self.config
         dev = self.dev
-        dev.clampDevice.autoPipetteOffset() ### Added on 10/07/19 for automatic pipette offset
+        dev.clampDevice.autoPipetteOffset()
 
         # consider pipette fouled when starting, even if we never manage to attempt a seal
-        if config['setPipetteClean'] is not None:
-            dev.clean = config['setPipetteClean']
-
+        dev.setTipClean(False)
 
         patchrec = dev.patchRecord()
         patchrec['attemptedCellDetect'] = True
@@ -1022,11 +1025,14 @@ class PatchPipetteCleanState(PatchPipetteState):
         'finishPatchRecord': True,
     }
 
-    def run(self):
-        self.monitorTestPulse()
-        # Called in worker thread
+    def __init__(self, *args, **kwds):
         self.resetPos = None
         self.lastApproachPos = None
+
+        PatchPipetteState.__init__(self, *args, **kwds)
+
+    def run(self):
+        self.monitorTestPulse()
 
         config = self.config.copy()
         dev = self.dev

@@ -32,6 +32,8 @@ class PatchPipette(Device):
     sigMoveFinished = Qt.Signal(object, object)  # self, position
     sigTargetChanged = Qt.Signal(object, object)  # self, target
     sigNewPipetteRequested = Qt.Signal(object)  # self
+    sigTipCleanChanged = Qt.Signal(object, object)  # self, clean
+    sigTipBrokenChanged = Qt.Signal(object, object)  # self, broken
 
     # catch-all signal for event logging
     sigNewEvent = Qt.Signal(object, object)  # self, event
@@ -95,6 +97,26 @@ class PatchPipette(Device):
     def isTipClean(self):
         return self.clean
 
+    def setTipClean(self, clean):
+        if clean == self.clean:
+            return
+        self.clean = clean
+        self.sigTipCleanChanged.emit(self, clean)
+        self.emitNewEvent('tip_clean_changed', {'clean': clean})
+
+    def isTipBroken(self):
+        return self.broken
+
+    def setTipBroken(self, broken):
+        if broken == self.broken:
+            return
+        self.broken = broken
+        self.sigTipBrokenChanged.emit(self, broken)
+        self.emitNewEvent('tip_broken_changed', {'broken': broken})
+        # states should take care of this, but we want to make sure pressure stops quickly.
+        if broken and self.pressureDevice is not None:
+            self.pressureDevice.setPressure(pressure=0)
+
     def scopeDevice(self):
         return self.pipetteDevice.scopeDevice()
 
@@ -112,11 +134,12 @@ class PatchPipette(Device):
     def newPipette(self):
         """A new physical pipette has been attached; reset any per-pipette state.
         """
-        self.broken = False
-        self.clean = True
+        self.setTipBroken(False)
+        self.setTipClean(True)
         self.calibrated = False
         self.waitingForSwap = False
         self._pipetteRecord = None
+        self.emitNewEvent('new_pipette', {})
         self.newPatchAttempt()
         # todo: set calibration to average 
 
@@ -139,6 +162,7 @@ class PatchPipette(Device):
         """
         self.finishPatchRecord()
         self.resetTestPulseHistory()
+        self.emitNewEvent('new_patch_attempt', {})
 
     def _resetPatchRecord(self):
         self.finishPatchRecord()
