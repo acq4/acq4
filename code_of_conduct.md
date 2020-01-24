@@ -1,7 +1,7 @@
 Acq4 Code of Conduct
 ====================
 
-Adapted from the [SciPy code of conduct]<https://github.com/scipy/scipy/blob/master/doc/source/dev/conduct/code_of_conduct.rst>.
+Adapted from the [SciPy code of conduct](https://github.com/scipy/scipy/blob/master/doc/source/dev/conduct/code_of_conduct.rst).
 
 
 
