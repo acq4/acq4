@@ -390,25 +390,26 @@ class OptomechDevice(InterfaceMixin):
         """
         See deviceTransform; this method returns the inverse.
         """
-        with self.__lock:
-            if self.__inverseTransform == 0:
-                tr = Qt.QMatrix4x4(self.__transform)
-                if tr is None:
-                    self.__inverseTransform = None
-                else:
-                    inv, invertible = tr.inverted()
-                    if not invertible:
-                        raise Exception("Transform is not invertible.")
-                    self.__inverseTransform = inv
-            tr = Qt.QMatrix4x4(self.__inverseTransform)
-            if subdev == 0:  ## indicates we should skip any subdevices
-                return tr
-            ## if a subdevice is specified, multiply by the subdevice's transform before returning
-            dev = self.getSubdevice(subdev)
-            if dev is None:
-                return tr
+        invtr = self.__inverseTransform
+        if invtr == 0:
+            tr = Qt.QMatrix4x4(self.__transform)
+            if tr is None:
+                invtr = None
             else:
-                return dev.inverseDeviceTransform() * tr 
+                inv, invertible = tr.inverted()
+                if not invertible:
+                    raise Exception("Transform is not invertible.")
+                invtr = inv
+            self.__inverseTransform = invtr
+        tr = Qt.QMatrix4x4(invtr)
+        if subdev == 0:  ## indicates we should skip any subdevices
+            return tr
+        ## if a subdevice is specified, multiply by the subdevice's transform before returning
+        dev = self.getSubdevice(subdev)
+        if dev is None:
+            return tr
+        else:
+            return dev.inverseDeviceTransform() * tr 
     
     def setDeviceTransform(self, tr):
         with self.__lock:
@@ -426,29 +427,29 @@ class OptomechDevice(InterfaceMixin):
         If *subdev* is given, it must be a dictionary of {deviceName: subdevice} or
         {deviceName: subdeviceName} pairs specifying the state to compute.
         """
-        with self.__lock:
-            if subdev is None: ## return cached transform
-                if self.__globalTransform == 0:
-                    self.__globalTransform = self.__computeGlobalTransform()
-                return Qt.QMatrix4x4(self.__globalTransform)
-            else:
-                return self.__computeGlobalTransform(subdev)
+        gt = self.__globalTransform
+        if subdev is None: ## return cached transform
+            if gt == 0:
+                gt = self.__computeGlobalTransform()
+                self.__globalTransform = gt
+            return Qt.QMatrix4x4(gt)
+        else:
+            return self.__computeGlobalTransform(subdev)
                 
     def __computeGlobalTransform(self, subdev=None, inverse=False):
         ## subdev must be a dict
-        with self.__lock:
-            parent = self.parentDevice()
-            if parent is None:
-                parentTr = pg.SRTTransform3D()
-            else:
-                parentTr = parent.globalTransform(subdev)
-            if parentTr is None:
-                return None
-            deviceTr = self.deviceTransform(subdev)
-            if deviceTr is None:
-                return None
+        parent = self.parentDevice()
+        if parent is None:
+            parentTr = pg.SRTTransform3D()
+        else:
+            parentTr = parent.globalTransform(subdev)
+        if parentTr is None:
+            return None
+        deviceTr = self.deviceTransform(subdev)
+        if deviceTr is None:
+            return None
 
-            transform = parentTr * deviceTr
+        transform = parentTr * deviceTr
                 
         if inverse:
             inv, invertible = transform.inverted()
@@ -462,21 +463,22 @@ class OptomechDevice(InterfaceMixin):
         """
         See globalTransform; this method returns the inverse.
         """
-        with self.__lock:
-            #dev = self.getSubdevice(subdev)
-            if subdev is None: ## return cached transform
-                if self.__inverseGlobalTransform == 0:
-                    tr = self.globalTransform()
-                    if tr is None:
-                        self.__inverseGlobalTransform = None
-                    else:
-                        inv, invertible = tr.inverted()
-                        if not invertible:
-                            raise Exception("Transform is not invertible.")
-                        self.__inverseGlobalTransform = inv
-                return Qt.QMatrix4x4(self.__inverseGlobalTransform)
-            else:
-                return self.__computeGlobalTransform(subdev, inverse=True)
+        #dev = self.getSubdevice(subdev)
+        if subdev is None: ## return cached transform
+            igt = self.__inverseGlobalTransform
+            if igt == 0:
+                tr = self.globalTransform()
+                if tr is None:
+                    igt = None
+                else:
+                    inv, invertible = tr.inverted()
+                    if not invertible:
+                        raise Exception("Transform is not invertible.")
+                    igt = inv
+                self.__inverseGlobalTransform = igt
+            return Qt.QMatrix4x4(igt)
+        else:
+            return self.__computeGlobalTransform(subdev, inverse=True)
 
     def listOptics(self, port='default'):
         """Return a list of Optics this device adds to the optical
@@ -584,9 +586,10 @@ class OptomechDevice(InterfaceMixin):
                 self.__inverseTransform = 0
             self.__globalTransform = 0
             self.__inverseGlobalTransform = 0
-            # child global transforms must also be invalidated before any change signals are emitted
-            for ch in self.__children:
-                ch.invalidateCachedTransforms(invalidateLocal=False)
+
+        # child global transforms must also be invalidated before any change signals are emitted
+        for ch in self.__children:
+            ch.invalidateCachedTransforms(invalidateLocal=False)
             
     def addSubdevice(self, subdev):
         subdev.setParentDevice(self)
