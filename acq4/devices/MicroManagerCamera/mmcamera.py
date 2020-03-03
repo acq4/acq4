@@ -39,7 +39,7 @@ class MicroManagerCamera(Camera):
     def __init__(self, manager, config, name):
         self.camName = str(name)  # we will use this name as the handle to the MM camera
         mmpath = config.get('path')
-        self.mmc = micromanager.getMMCorePy(mmpath)
+        self.mmc = micromanager.getMMCorePy(path = mmpath)
 
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes

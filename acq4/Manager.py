@@ -32,6 +32,11 @@ from .util.HelpfulException import HelpfulException
 from . import __version__
 from . import devices, modules
 
+
+from .util.micromanager import unloadMMCore
+
+
+
 ### All other modules can use this function to get the manager instance
 def getManager():
     if Manager.single is None:
@@ -837,7 +842,14 @@ class Manager(Qt.QObject):
                         printExc("Error while requesting device '%s' quit." % d)
                     #print "  done."
                     dlg.setValue(lm+ld-len(self.devices))
-                    
+
+                print(globals().keys())
+                try:
+                    unloadMMCore()
+                except:
+                    print("failed to unloadMMCore")
+                print("Goodbye")
+
                     
                 print("Closing windows..")
                 Qt.QApplication.instance().closeAllWindows()
