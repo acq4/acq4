@@ -1,0 +1,33 @@
+# This file may be used to create an environment using:
+# $ conda create --name <env> --file <this file>
+# platform: win-64
+@EXPLICIT
+https://repo.anaconda.com/pkgs/main/win-64/blas-1.0-mkl.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/ca-certificates-2019.11.27-0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/icc_rt-2019.0.0-h0cc432a_1.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/intel-openmp-2019.4-245.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/vs2008_runtime-9.00.30729.1-hfaea7d5_1.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/mkl-2019.4-245.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/vc-9-h7299396_1.tar.bz2
+https://repo.anaconda.com/pkgs/free/win-64/jpeg-8d-vc9_2.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/sqlite-3.30.1-h0c8e037_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/zlib-1.2.11-h3cc03e0_3.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/libpng-1.6.37-h7a46e7a_0.tar.bz2
+https://repo.anaconda.com/pkgs/free/win-64/libtiff-4.0.6-vc9_2.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/python-2.7.17-h930f6bb_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/certifi-2019.11.28-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/free/win-64/pyparsing-2.0.3-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/pyserial-3.4-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/free/win-64/qt-4.8.7-vc9_6.tar.bz2
+https://repo.anaconda.com/pkgs/free/win-64/sip-4.18-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/six-1.13.0-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/wincertstore-0.2-py27hf04cefb_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/mkl-service-2.3.0-py27h0b88c2a_0.tar.bz2
+https://repo.anaconda.com/pkgs/free/win-64/pyqt-4.11.4-py27_7.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/setuptools-44.0.0-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/wheel-0.33.6-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/pip-19.3.1-py27_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/mkl_fft-1.0.15-py27h44c1dab_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/numpy-1.16.5-py27h5fc8d92_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/numpy-base-1.16.5-py27hb1d0314_0.tar.bz2
+https://repo.anaconda.com/pkgs/main/win-64/scipy-1.2.1-py27h4c3ab11_0.tar.bz2
