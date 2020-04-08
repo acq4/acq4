@@ -42,24 +42,40 @@ Post at the [mailing list / forum](https://groups.google.com/forum/?fromgroups#!
 Installation
 ------------
 
-
 The easiest way to get all of the requirements is by installing the Anaconda
 python distribution plus a few extra packages. 
 
-1. Download and install [Anaconda](https://www.anaconda.com/download/) for python 2.7 (64-bit recommended)
+1. Download and install [Anaconda](https://www.anaconda.com/download/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) for python 2.7 (64-bit recommended)
 
-2. Install the correct versions of a few packages:
+2. Create a conda environment for acq4 (windows users must do this from the anaconda prompt):
 
 ```bash
-       $ conda install pyserial pyqt=4 pyparsing=2.0.3
+       $ conda config --set restore_free_channel true
+       $ conda create --name=acq4 python=2.7 pyqt=4 numpy scipy pyserial pyparsing=2.0.3 pillow h5py
+       $ conda activate acq4
 ```
 
-3. Clone the ACQ4 source repository::
+3. Clone the ACQ4 source repository (this requires [git](https://git-scm.com/downloads) to be installed):
 
 ```bash
        $ git clone https://github.com/acq4/acq4.git
 ```
 
-4. Run `python -m acq4` from the source directory, or install with `python setup.py install` and run using `acq4`.
+4. Install acq4 into your new conda environment:
 
+```bash
+       $ cd acq4
+       $ python setup.py develop
+```
 
+Starting ACQ4
+-------------
+
+Activate your acq4 conda environment, then start acq4:
+
+```bash
+       $ conda activate acq4
+       $ python -m acq4
+```
+
+This should load the main manager window, from which you can interact with some devices and load modules. 
