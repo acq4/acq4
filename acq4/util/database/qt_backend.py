@@ -99,7 +99,7 @@ class SqliteDatabase:
                     #print "==execute with bound data=="
                     #print cmd
                     #print q.boundValues()
-                    #for k, v in q.boundValues().iteritems():
+                    #for k, v in iteritems(q.boundValues()):
                         #print str(k), v.typeName()
                     self._exe(q)
                     p.mark("executed with data")

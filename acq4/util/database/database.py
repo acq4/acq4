@@ -12,6 +12,9 @@ import six
 from six.moves import range
 import sqlite3
 
+from acq4.util.python_version_compat import buffer
+
+
 class SqliteDatabase:
     """Encapsulates an SQLITE database to add more features.
     Arbitrary SQL may be executed by calling the db object directly, eg: db('select * from table')
