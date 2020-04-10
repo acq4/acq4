@@ -139,7 +139,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 self.configureState(oldJob.stateName, _allowReset=False)
             except Exception:
                 printExc("Error occurred while trying to reset state from a previous error:")
-            raise exc[0], exc[1], exc[2]
+            raise exc[0](exc[1]).with_traceback(exc[2])
 
     def activeChanged(self, pip, active):
         if active:
