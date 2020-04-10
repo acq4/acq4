@@ -1,12 +1,9 @@
 from __future__ import print_function
-import six
-from six.moves import range
 
-from .database import *
-from acq4.util import DataManager
-from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 import acq4.util.debug as debug
-from acq4.Manager import logExc, logMsg
+from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
+from acq4.util import DataManager
+from .database import *
 
 
 class AnalysisDatabase(SqliteDatabase):
