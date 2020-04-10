@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 debug.py - Functions to aid in debugging 
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
+from __future__ import print_function
 
 from acq4.pyqtgraph.debug import *
 import acq4.pyqtgraph.debug as pgdebug

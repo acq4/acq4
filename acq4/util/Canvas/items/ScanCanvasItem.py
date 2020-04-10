@@ -32,7 +32,7 @@ class ScanCanvasItem(CanvasItem):
         if 'name' not in opts:
             opts['name'] = dirHandle.shortName()
             
-        ## Get the specific list of subdirs to use from which to pull spot information
+        ## Get the specific list of subdirectory to use from which to pull spot information
         if 'subDirs' in opts:
             dirs = opts['subDirs']
         else:

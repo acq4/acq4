@@ -1,8 +1,11 @@
 """Wrapper around Qt libraries to make it easier to swap out backends in the future
 """
 from __future__ import print_function
-import os, sys, importlib, inspect
 
+import importlib
+import inspect
+import os
+import sys
 
 # try importing Qt libraries in order of preference
 qtLibs = ['PyQt5', 'PyQt4', 'PySide', 'PySide2', None]

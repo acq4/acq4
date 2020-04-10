@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 Manager.py -  Defines main Manager class for ACQ4
 Copyright 2010  Luke Campagnola
@@ -11,26 +10,23 @@ The class is responsible for:
     - Invoking/managing modules
     - Creating and executing acquisition tasks. 
 """
+from __future__ import print_function
 
-
-import os, sys, gc
-
-import six
-import time, atexit, weakref
-from acq4.util import Qt
-import acq4.util.reload as reload
-from .devices.Device import Device
-from .util import DataManager, ptime, configfile
-from .Interfaces import *
-from .util.Mutex import Mutex
-from .util.debug import *
-from .util import debug
-import getopt, glob
+import atexit
+import getopt
 from collections import OrderedDict
+
 import acq4.pyqtgraph as pg
-from .util.HelpfulException import HelpfulException
+import acq4.util.reload as reload
 from . import __version__
 from . import devices, modules
+from .Interfaces import *
+from .devices.Device import Device, DeviceTask
+from .util import DataManager, ptime, configfile
+from .util import debug
+from .util.HelpfulException import HelpfulException
+from .util.debug import *
+
 
 ### All other modules can use this function to get the manager instance
 def getManager():

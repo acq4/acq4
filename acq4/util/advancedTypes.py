@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 advancedTypes.py - Basic data structures not included with python 
 Copyright 2010  Luke Campagnola
@@ -10,8 +9,8 @@ Includes:
   - BiDict, ReverseDict - Bi-directional dictionaries
   - ThreadsafeDict, ThreadsafeList - Self-mutexed data structures
 """
-
-import threading, sys, copy, collections
+from __future__ import print_function
+import copy, collections
 from acq4.util.debug import *
 
 from collections import OrderedDict
