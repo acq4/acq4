@@ -14,7 +14,8 @@ import acq4.util.advancedTypes as advancedTypes
 import acq4.util.debug as debug
 import acq4.util.functions as functions
 
-
+# :MC: BROKEN in python3; buffer has no analogous function, so maybe we can use a string? nope, then we don't know to
+# de-pickle the contents.
 from acq4.util.pythonVersionCompat import buffer
 
 
