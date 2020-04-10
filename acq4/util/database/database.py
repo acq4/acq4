@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import numpy as np
-import pickle, re, os
-import acq4.Manager
+
 import collections
-import acq4.util.functions as functions
-import acq4.util.advancedTypes as advancedTypes
-import acq4.util.debug as debug
-from acq4.util import Qt
+import os
+import pickle
+import sqlite3
+
+import numpy as np
 import six
 from six.moves import range
-import sqlite3
+
+import acq4.util.advancedTypes as advancedTypes
+import acq4.util.debug as debug
+import acq4.util.functions as functions
+
 
 class SqliteDatabase:
     """Encapsulates an SQLITE database to add more features.
