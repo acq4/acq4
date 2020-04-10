@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import acq4.util.DataManager as DataManager
-import acq4.util.SequenceRunner as SequenceRunner
-from collections import OrderedDict
-import functools
-from acq4.util.metaarray import *
+
+import os
+import re
+
 import numpy as np
+
+from acq4.util.metaarray import MetaArray
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),
@@ -270,7 +271,7 @@ def getClampMode(data_handle, dir_handle=None):
     elif isClampFile(data_handle):
         data = data_handle.read(readAllData=False)
     else:
-        raise Exception('%s not a clamp file.' % data)
+        raise Exception('%s not a clamp file.' % data_handle)
     # if isClampFile(data_handle):
     #     data = data_handle.read(readAllData=False)
     # else:
@@ -773,8 +774,6 @@ class GetClamps():
                     pulsedur = eval(pulse[1])
                 except:
                     raise Exception('WaveGeneratorWidget not found')
-                    pulsestart = 0.
-                    pulsedur = np.max(self.time_base)
         elif 'daqState' in vc_command:
             # print 'daqstate'
             vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
