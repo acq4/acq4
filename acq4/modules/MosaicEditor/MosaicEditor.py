@@ -8,16 +8,16 @@ from collections import OrderedDict
 import numpy as np
 import scipy
 import scipy.stats
+from six import iteritems
 
-import acq4.util.debug as debug
 import acq4.pyqtgraph as pg
+from acq4.pyqtgraph.python2_3 import basestring
 from acq4.modules.Module import Module
 from acq4.analysis.AnalysisModule import AnalysisModule
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
 from acq4.util.Canvas import items
-import acq4
 from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.MosaicEditorTemplate')
@@ -71,7 +71,7 @@ class MosaicEditorWindow(Qt.QWidget):
         self.mod = mod
 
         elems = self.mod.listElements()
-        for name, el in elems.iteritems():
+        for name, el in iteritems(elems):
             w = self.mod.getElement(name, create=True)
             d = pg.dockarea.Dock(name=name, size=el.size())
             if w is not None:

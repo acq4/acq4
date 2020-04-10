@@ -2,9 +2,9 @@
 from __future__ import print_function
 
 import weakref
-import six
-from acq4.util.Mutex import *
 
+from acq4.util.Mutex import *
+from acq4.pyqtgraph.python2_3 import basestring
 
 class InterfaceMixin(object):
     """Mixin class used to allow objects to declare which APIs they implement.

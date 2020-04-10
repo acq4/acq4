@@ -1,6 +1,9 @@
 from __future__ import print_function
 import sys
 from collections import OrderedDict
+
+import six
+
 try:
     import queue
 except ImportError:
@@ -139,7 +142,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 self.configureState(oldJob.stateName, _allowReset=False)
             except Exception:
                 printExc("Error occurred while trying to reset state from a previous error:")
-            raise exc[0], exc[1], exc[2]
+            six.reraise(*exc)
 
     def activeChanged(self, pip, active):
         if active:
