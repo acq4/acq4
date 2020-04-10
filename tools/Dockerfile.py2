@@ -1,0 +1,14 @@
+FROM python:2
+
+RUN apt-get update
+RUN apt-get install -y python-qt4 python-qt4-gl python-qt4-sql python-serial python-scipy python-pyparsing python-h5py python-pil python-opengl python-sip
+
+RUN apt-get install -y python-setuptools python-pip
+
+ENV PATH /bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+RUN mkdir /code
+WORKDIR /code
+
+#### Usage
+# docker build -f tools/Dockerfile.py2 -t acq4:py2 .
+# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code -v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py2 python -m acq4
