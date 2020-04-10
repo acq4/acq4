@@ -116,13 +116,14 @@ class ReverseDict(dict):
 class BiDict(dict):
     """extends dict so that reverse lookups are possible by adding each reverse combination to the dict.
     This only works if all values and keys are unique."""
+
     def __init__(self, data=None):
         if data is None:
             data = {}
         dict.__init__(self)
         for k in data:
             self[data[k]] = k
-        
+
     def __setitem__(self, item, value):
         dict.__setitem__(self, item, value)
         dict.__setitem__(self, value, item)
@@ -261,17 +262,20 @@ class Locker:
     def __init__(self, lock):
         self.lock = lock
         self.lock.acquire()
+
     def __del__(self):
         try:
             self.lock.release()
         except:
             pass
 
+
 class CaselessDict(OrderedDict):
     """Case-insensitive dict. Values can be set and retrieved using keys of any case.
     Note that when iterating, the original case is returned for each key."""
+
     def __init__(self, *args):
-        OrderedDict.__init__(self, {}) ## requirement for the empty {} here seems to be a python bug?
+        OrderedDict.__init__(self, {})  ## requirement for the empty {} here seems to be a python bug?
         self.keyMap = OrderedDict([(k.lower(), k) for k in OrderedDict.keys(self)])
         if len(args) == 0:
             return
@@ -291,30 +295,30 @@ class CaselessDict(OrderedDict):
         else:
             OrderedDict.__setitem__(self, key, val)
             self.keyMap[kl] = key
-            
+
     def __getitem__(self, key):
         kl = key.lower()
         if kl not in self.keyMap:
             raise KeyError(key)
         return OrderedDict.__getitem__(self, self.keyMap[kl])
-        
+
     def __contains__(self, key):
         return key.lower() in self.keyMap
-    
+
     def update(self, d):
         for k, v in d.items():
             self[k] = v
-            
+
     def copy(self):
         return CaselessDict(OrderedDict.copy(self))
-        
+
     def __delitem__(self, key):
         kl = key.lower()
         if kl not in self.keyMap:
             raise KeyError(key)
         OrderedDict.__delitem__(self, self.keyMap[kl])
         del self.keyMap[kl]
-            
+
     def __deepcopy__(self, memo):
         raise Exception("deepcopy not implemented")
 
@@ -330,15 +334,18 @@ class ProtectedDict(dict):
     The object can be treated like a normal dict, but will never modify the original dict it points to.
     Any values accessed from the dict will also be read-only.
     """
+
     def __init__(self, data):
         self._data_ = data
-    
+
     ## List of methods to directly wrap from _data_
-    wrapMethods = ['_cmp_', '__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'has_key', 'iterkeys', 'keys', ]
-    
+    wrapMethods = ['_cmp_', '__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__',
+                   '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'has_key', 'iterkeys',
+                   'keys', ]
+
     ## List of methods which wrap from _data_ but return protected results
     protectMethods = ['__getitem__', '__iter__', 'get', 'items', 'values']
-    
+
     ## List of methods to disable
     disableMethods = ['__delitem__', '__setitem__', 'clear', 'pop', 'popitem', 'setdefault', 'update']
     
@@ -352,8 +359,7 @@ class ProtectedDict(dict):
     
     def error(self, *args, **kargs):
         raise Exception("Can not modify read-only list.")
-    
-    
+
     ## Directly (and explicitly) wrap some methods from _data_
     ## Many of these methods can not be intercepted using __getattribute__, so they
     ## must be implemented explicitly
@@ -368,27 +374,25 @@ class ProtectedDict(dict):
     for methodName in disableMethods:
         locals()[methodName] = error
 
-    
     ## Add a few extra methods.
     def copy(self):
         raise Exception("It is not safe to copy protected dicts! (instead try deepcopy, but be careful.)")
-    
+
     def itervalues(self):
         for v in self._data_.values():
             yield protect(v)
-        
+
     def iteritems(self):
         for k, v in self._data_.items():
             yield (k, protect(v))
-        
+
     def deepcopy(self):
         return copy.deepcopy(self._data_)
-    
+
     def __deepcopy__(self, memo):
         return copy.deepcopy(self._data_, memo)
 
 
-            
 class ProtectedList(collections.Sequence):
     """
     A class allowing read-only 'view' of a list or dict. 
@@ -399,16 +403,18 @@ class ProtectedList(collections.Sequence):
           However, doing this causes tuple(obj) to return unprotected results (importantly, this means
           unpacking into function arguments will also fail)
     """
+
     def __init__(self, data):
         self._data_ = data
-        #self.__mro__ = (ProtectedList, object)
-        
+        # self.__mro__ = (ProtectedList, object)
+
     ## List of methods to directly wrap from _data_
-    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'index']
-    
+    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__', '__ne__',
+                   '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'index']
+
     ## List of methods which wrap from _data_ but return protected results
     protectMethods = ['__getitem__', '__getslice__', '__mul__', '__reversed__', '__rmul__']
-    
+
     ## List of methods to disable
     disableMethods = ['__delitem__', '__delslice__', '__iadd__', '__imul__', '__setitem__', '__setslice__', 'append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort']
     
@@ -422,8 +428,7 @@ class ProtectedList(collections.Sequence):
     
     def error(self, *args, **kargs):
         raise Exception("Can not modify read-only list.")
-    
-    
+
     ## Directly (and explicitly) wrap some methods from _data_
     ## Many of these methods can not be intercepted using __getattribute__, so they
     ## must be implemented explicitly
@@ -438,13 +443,11 @@ class ProtectedList(collections.Sequence):
     for methodName in disableMethods:
         locals()[methodName] = error
 
-    
     ## Add a few extra methods.
     def __iter__(self):
         for item in self._data_:
             yield protect(item)
-    
-    
+
     def __add__(self, op):
         if isinstance(op, ProtectedList):
             return protect(self._data_.__add__(op._data_))
@@ -452,7 +455,7 @@ class ProtectedList(collections.Sequence):
             return protect(self._data_.__add__(op))
         else:
             raise TypeError("Argument must be a list.")
-    
+
     def __radd__(self, op):
         if isinstance(op, ProtectedList):
             return protect(op._data_.__add__(self._data_))
@@ -460,13 +463,13 @@ class ProtectedList(collections.Sequence):
             return protect(op.__add__(self._data_))
         else:
             raise TypeError("Argument must be a list.")
-        
+
     def deepcopy(self):
         return copy.deepcopy(self._data_)
-    
+
     def __deepcopy__(self, memo):
         return copy.deepcopy(self._data_, memo)
-    
+
     def poop(self):
         raise Exception("This is a list. It does not poop.")
 
@@ -480,12 +483,15 @@ class ProtectedTuple(collections.Sequence):
           However, doing this causes tuple(obj) to return unprotected results (importantly, this means
           unpacking into function arguments will also fail)
     """
+
     def __init__(self, data):
         self._data_ = data
-    
+
     ## List of methods to directly wrap from _data_
-    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__getnewargs__', '__gt__', '__hash__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'index']
-    
+    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__getnewargs__', '__gt__', '__hash__', '__le__',
+                   '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count',
+                   'index']
+
     ## List of methods which wrap from _data_ but return protected results
     protectMethods = ['__getitem__', '__getslice__', '__iter__', '__add__', '__mul__', '__reversed__', '__rmul__']
     
@@ -508,14 +514,12 @@ class ProtectedTuple(collections.Sequence):
     for methodName in protectMethods:
         locals()[methodName] = protectMethod(methodName)
 
-    
     ## Add a few extra methods.
     def deepcopy(self):
         return copy.deepcopy(self._data_)
-    
+
     def __deepcopy__(self, memo):
         return copy.deepcopy(self._data_, memo)
-    
 
 
 def protect(obj):
@@ -527,14 +531,14 @@ def protect(obj):
         return ProtectedTuple(obj)
     else:
         return obj
-    
-    
+
+
 if __name__ == '__main__':
-    d = {'x': 1, 'y': [1,2], 'z': ({'a': 2, 'b': [3,4], 'c': (5,6)}, 1, 2)}
+    d = {'x': 1, 'y': [1, 2], 'z': ({'a': 2, 'b': [3, 4], 'c': (5, 6)}, 1, 2)}
     dp = protect(d)
-    
+
     l = [1, 'x', ['a', 'b'], ('c', 'd'), {'x': 1, 'y': 2}]
     lp = protect(l)
-    
+
     t = (1, 'x', ['a', 'b'], ('c', 'd'), {'x': 1, 'y': 2})
     tp = protect(t)

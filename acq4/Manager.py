@@ -1382,6 +1382,3 @@ class QtDocumentation(Qt.QObject):
     def processFinished(self):
         print("Doc viewer exited:", self.process.exitCode())
         print(str(self.process.readAllStandardError()))
-    
-    
-    

@@ -24,7 +24,7 @@ def loadScanSequence(fh, host):
             del params[('Scanner', 'targets')]
     
             
-        ## Determine the set of subdirs for each scan present in the sequence
+        ## Determine the set of subdirectory for each scan present in the sequence
         ## (most sequences will have only one scan)
         scans = {}
         for dhName in fh.subDirs():
