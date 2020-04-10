@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import acq4.util.DataManager as DataManager
-import acq4.util.SequenceRunner as SequenceRunner
-from collections import OrderedDict
-import functools
-from acq4.util.metaarray import *
+
+import os
+import re
+
 import numpy as np
+
+from acq4.util.metaarray import MetaArray
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),
@@ -24,7 +25,6 @@ deviceNames = {
 # current and voltage clamp modes that are know to us
 ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
 vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
-
 
 """Function library for formalizing the raw data structures used in analysis.
 This provides a layer of abstraction between the raw data and the analysis routines.
@@ -47,17 +47,20 @@ Notes:
     
 """
 
+
 def knownClampNames():
     return deviceNames['Clamp']
+
 
 def isSequence(dh):
     """Return true if dh is a directory handle for a protocol sequence."""
     return dirType(dh) == 'ProtocolSequence'
-    #if 'sequenceParams' in dh.info():
-        #return True
-    #else:
-        #return False
-    
+    # if 'sequenceParams' in dh.info():
+    # return True
+    # else:
+    # return False
+
+
 def dirType(dh, allowRecurse=True):
     """
     Return a string representing the type of data stored in a directory.
@@ -74,22 +77,23 @@ def dirType(dh, allowRecurse=True):
             type = 'Patch'
         elif 'protocol' in info:
             if 'sequenceParams' in info:
-                type = 'ProtocolSequence'  
+                type = 'ProtocolSequence'
             else:
                 type = 'Protocol'  ## an individual protocol run, NOT a single run from within a sequence
-        
+
         else:
             try:
                 assert allowRecurse
                 parent = dh.parent()
                 if dirType(parent, allowRecurse=False) == 'ProtocolSequence':
                     type = 'Protocol'
-                #else:
-                    #raise Exception()
+                # else:
+                # raise Exception()
             except:
                 pass
-                #raise Exception("Can't determine type for dir %s" % dh.name())
+                # raise Exception("Can't determine type for dir %s" % dh.name())
     return type
+
 
 def listSequenceParams(dh):
     """Given a directory handle for a protocol sequence, return the dict of sequence parameters"""
@@ -98,8 +102,9 @@ def listSequenceParams(dh):
     except KeyError:
         raise Exception("Directory '%s' does not appear to be a protocol sequence." % dh.name())
 
+
 ## what's this for?
-#def listWaveGenerator(dh):
+# def listWaveGenerator(dh):
 #    try:
 #        return dh.info()['waveGeneratorWidget']
 #    except KeyError:
@@ -120,51 +125,52 @@ def buildSequenceArray(*args, **kargs):
         
     Example: Return an array of all primary-channel clamp recordings across a sequence 
         buildSequenceArray(seqDir, lambda protoDir: getClampFile(protoDir).read()['primary'])"""
-        
-    for i,m in buildSequenceArrayIter(*args, **kargs):
+
+    for i, m in buildSequenceArrayIter(*args, **kargs):
         if m is None:
             return i
-        
+
+
 def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
     """Iterator for buildSequenceArray that yields progress updates."""
-        
+
     if func is None:
         func = lambda dh: dh
         join = False
-        
+
     params = listSequenceParams(dh)
-    #inds = OrderedDict([(k, range(len(v))) for k,v in params.iteritems()])
-    #def runFunc(dh, func, params):
-        #name = '_'.join(['%03d'%n for n in params.values()])
-        #fh = dh[name]
-        #return func(fh)
-    #data = SequenceRunner.runSequence(functools.partial(runFunc, dh, func), inds, inds.keys())
+    # inds = OrderedDict([(k, range(len(v))) for k,v in iteritems(params)])
+    # def runFunc(dh, func, params):
+    # name = '_'.join(['%03d'%n for n in params.values()])
+    # fh = dh[name]
+    # return func(fh)
+    # data = SequenceRunner.runSequence(functools.partial(runFunc, dh, func), inds, inds.keys())
     subDirs = dh.subDirs()
     if len(subDirs) == 0:
         yield None, None
-    
+
     ## set up meta-info for sequence axes
     seqShape = tuple([len(p) for p in params.values()])
     info = [[] for i in range(len(seqShape))]
     i = 0
-    for k,v in params.items():
+    for k, v in params.items():
         info[i] = {'name': k, 'values': np.array(v)}
         i += 1
-    
+
     ## get a data sample
     first = func(dh[subDirs[0]])
-    
+
     ## build empty MetaArray
     if join:
         shape = seqShape + first.shape
         if isinstance(first, MetaArray):
             info = info + first._info
         else:
-            info = info + [{} for i in range(first.ndim+1)]
+            info = info + [{} for i in range(first.ndim + 1)]
         data = MetaArray(np.empty(shape, first.dtype), info=info)
         if fill is not None:
             data[:] = fill
-        
+
     else:
         shape = seqShape
         info = info + []
@@ -182,13 +188,13 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
             ind = []
             for k in params:
                 ind.append(dhInfo[k])
-            sl = [slice(0,m) for m in minShape]
+            sl = [slice(0, m) for m in minShape]
             ind += sl
             data[tuple(ind)] = d[sl]
             i += 1
             yield i, len(subDirs)
         sl = [slice(None)] * len(seqShape)
-        sl += [slice(0,m) for m in minShape]
+        sl += [slice(0, m) for m in minShape]
         data = data[sl]
     else:
         for name in subDirs:
@@ -204,6 +210,7 @@ def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
 
     yield data, None
 
+
 def getParent(child, parentType):
     """Return the (grand)parent of child that matches parentType"""
     if dirType(child) == parentType:
@@ -213,23 +220,25 @@ def getParent(child, parentType):
         return None
     return getParent(parent, parentType)
 
+
 def getClampFile(protoDH):
     """
     Given a protocol directory handle, return the clamp file handle within.
     If there are multiple clamps, only the first one encountered in deviceNames is returned.
     Return None if no clamps are found.
     """
-    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+    if protoDH.name()[-8:] == 'DS_Store':  ## OS X filesystem puts .DS_Store files in all directories
         return None
     files = protoDH.ls()
     for n in deviceNames['Clamp']:
         if n in files:
             return protoDH[n]
-        if n+'.ma' in files:
-            return protoDH[n+'.ma']
-    #print 'getClampFile: did not find protocol for clamp: ', files
-    #print 'valid devices: ', deviceNames['Clamp']
+        if n + '.ma' in files:
+            return protoDH[n + '.ma']
+    # print 'getClampFile: did not find protocol for clamp: ', files
+    # print 'valid devices: ', deviceNames['Clamp']
     return None
+
 
 def isClampFile(fh):
     if fh.shortName() not in deviceNames['Clamp'] and fh.shortName()[:-3] not in deviceNames['Clamp']:
@@ -237,10 +246,11 @@ def isClampFile(fh):
     else:
         return True
 
-def getClampCommand(data, generateEmpty=True):    
+
+def getClampCommand(data, generateEmpty=True):
     """Returns the command data from a clamp MetaArray.
     If there was no command specified, the function will return all zeros if generateEmpty=True (default)."""
-    
+
     if data.hasColumn('Channel', 'Command'):
         return data['Channel': 'Command']
     elif data.hasColumn('Channel', 'command'):
@@ -253,8 +263,10 @@ def getClampCommand(data, generateEmpty=True):
                 units = 'V'
             else:
                 units = 'A'
-            return MetaArray(np.zeros(tVals.shape), info=[{'name': 'Time', 'values': tVals, 'units': 's'}, {'units': units}])
+            return MetaArray(np.zeros(tVals.shape),
+                                                 info=[{'name': 'Time', 'values': tVals, 'units': 's'}, {'units': units}])
     return None
+
 
 def getClampPrimary(data):
     """Return primary channel from """
@@ -263,6 +275,7 @@ def getClampPrimary(data):
     else:
         return data['Channel': 'scaled']
 
+
 def getClampMode(data_handle, dir_handle=None):
     """Given a clamp file handle or MetaArray, return the recording mode."""
     if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
@@ -270,7 +283,7 @@ def getClampMode(data_handle, dir_handle=None):
     elif isClampFile(data_handle):
         data = data_handle.read(readAllData=False)
     else:
-        raise Exception('%s not a clamp file.' % data)
+        raise Exception('%s not a clamp file.' % data_handle)
     # if isClampFile(data_handle):
     #     data = data_handle.read(readAllData=False)
     # else:
@@ -281,7 +294,7 @@ def getClampMode(data_handle, dir_handle=None):
     else:
 
         try:
-            mode = info['mode'] # if the mode is in the info (sometimes), return that
+            mode = info['mode']  # if the mode is in the info (sometimes), return that
             return mode
         except KeyError:
             raise KeyError('PatchEPhys, getClampMode: Cannot determine clamp mode for this data')
@@ -295,13 +308,14 @@ def getClampMode(data_handle, dir_handle=None):
             # else:
             #     return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
 
+
 def getClampHoldingLevel(data_handle):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
     TODO: This function should add in the amplifier's internal holding value, if available?
     """
     if not isClampFile(data_handle):
         raise Exception('%s not a clamp file.' % data_handle.shortName())
-    
+
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
     p1 = data_handle.parent()
@@ -310,7 +324,7 @@ def getClampHoldingLevel(data_handle):
         sinfo = p2.info()
     else:
         sinfo = p1.info()
-    
+
     ## There are a few places we could find the holding value, depending on how old the data is
     if 'ClampState' in info and 'holding' in info['ClampState']:
         return info['ClampState']['holding']
@@ -322,10 +336,11 @@ def getClampHoldingLevel(data_handle):
                 name = data_handle.shortName()[:-3]
             else:
                 name = data_handle.shortName()
-            holding = float(sinfo['devices'][name]['holdingSpin']) ## in volts
+            holding = float(sinfo['devices'][name]['holdingSpin'])  ## in volts
             return holding
         except KeyError:
             return None
+
 
 def getClampState(data_handle):
     """
@@ -339,6 +354,7 @@ def getClampState(data_handle):
         return info['ClampState']
     else:
         return None
+
 
 def getWCCompSettings(data_handle):
     """
@@ -362,7 +378,8 @@ def getWCCompSettings(data_handle):
         return d
     else:
         return {'WCCompValid': False, 'WCEnable': 0, 'WCResistance': 0., 'WholeCellCap': 0.,
-                'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000. }
+                'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000.}
+
 
 def getBridgeBalanceCompensation(data_handle):
     """Return the bridge balance compensation setting for current clamp data, if bridge balance compensation was enabled.
@@ -374,13 +391,14 @@ def getBridgeBalanceCompensation(data_handle):
     elif isClampFile(data_handle):
         data = data_handle.read(readAllData=False)
     else:
-        raise Exception('%s not a clamp file.' % data)
-
+        raise Exception('%s not a clamp file.' % data_handle)
 
     mode = getClampMode(data)
     global ic_modes
     if mode not in ic_modes:
-        raise Exception("Data is in %s mode, not a current clamp mode, and therefore bridge balance compensation is not applicable." %str(mode))
+        raise Exception(
+            "Data is in %s mode, not a current clamp mode, and therefore bridge balance compensation is not applicable." % str(
+                mode))
 
     info = data.infoCopy()[-1]
     bridgeEnabled = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalEnable', None)
@@ -403,9 +421,10 @@ def getSampleRate(data_handle):
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
     if 'DAQ' in info.keys():
-        return(info['DAQ']['primary']['rate'])
+        return (info['DAQ']['primary']['rate'])
     else:
-        return(info['rate'])
+        return (info['rate'])
+
 
 def getDevices(protoDH):
     """
@@ -414,7 +433,7 @@ def getDevices(protoDH):
     and for accessing the data (from the file handles)
     pbm 5/2014
     """
-    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+    if protoDH.name()[-8:] == 'DS_Store':  ## OS X filesystem puts .DS_Store files in all directories
         return None
     files = protoDH.ls()
     devList = {}
@@ -423,8 +442,8 @@ def getDevices(protoDH):
         for n in names:
             if n in files:
                 devList[n] = protoDH[n]
-            elif n+'.ma' in files:
-                devList[n] = protoDH[n+'.ma']
+            elif n + '.ma' in files:
+                devList[n] = protoDH[n + '.ma']
             else:
                 pass
     if len(devList) == 0:
@@ -438,17 +457,17 @@ def getClampDeviceNames(protoDH):
     :param protoDH: handle to current protocol
     :return clampDeviceNames: The names of the clamp devices used in this protocol, or None if no devices 
     """
-    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+    if protoDH.name()[-8:] == 'DS_Store':  ## OS X filesystem puts .DS_Store files in all directories
         return None
     files = protoDH.ls()
     clampDeviceNames = []
     for knownDevName in deviceNames['Clamp']:  # go through known devices
         if knownDevName in files:
             clampDeviceNames.append(knownDevName)
-        elif knownDevName+'.ma' in files:
+        elif knownDevName + '.ma' in files:
             clampDeviceNames.append(knownDevName)
         else:
-                pass
+            pass
     if len(clampDeviceNames) == 0:
         return None
     return clampDeviceNames
@@ -459,7 +478,7 @@ def getNamedDeviceFile(protoDH, deviceName):
     If there are multiple devices, only the first is returned.
     Return None if no matching devices are found.
     """
-    if protoDH.name()[-8:] == 'DS_Store': ## OS X filesystem puts .DS_Store files in all directories
+    if protoDH.name()[-8:] == 'DS_Store':  ## OS X filesystem puts .DS_Store files in all directories
         return None
     if deviceName in deviceNames.keys():
         names = deviceNames[deviceName]
@@ -469,9 +488,10 @@ def getNamedDeviceFile(protoDH, deviceName):
     for n in names:
         if n in files:
             return protoDH[n]
-        if n+'.ma' in files:
-            return protoDH[n+'.ma']
+        if n + '.ma' in files:
+            return protoDH[n + '.ma']
     return None
+
 
 def getParentInfo(dh, parentType):
     dh = getParent(dh, parentType)
@@ -479,45 +499,53 @@ def getParentInfo(dh, parentType):
         return None
     else:
         return dh.info()
-    
+
+
 def getDayInfo(dh):
     return getParentInfo(dh, 'Day')
-    
+
+
 def getSliceInfo(dh):
     return getParentInfo(dh, 'Slice')
 
+
 def getCellInfo(dh):
     return getParentInfo(dh, 'Cell')
+
 
 def getACSF(dh):
     dayInfo = getDayInfo(dh)
     if dayInfo is not None:
         return dayInfo.get('solution', '')
     return None
-    
+
+
 def getInternalSoln(dh):
     dayInfo = getDayInfo(dh)
     if dayInfo is not None:
         return dayInfo.get('internal', '')
     return None
 
+
 def getTemp(dh):
     if dh.isFile():
         dh = dh.parent()
-    temp = dh.info().get(('Temperature','BathTemp'), None)
+    temp = dh.info().get(('Temperature', 'BathTemp'), None)
     if temp is None:
         dayinfo = getDayInfo(dh)
         if dayinfo is not None:
             temp = getDayInfo(dh).get('temperature', '')
     return temp
 
+
 def getCellType(dh):
     cellInfo = getCellInfo(dh)
     if cellInfo is not None:
         return cellInfo.get('type', '')
     else:
-        return('Unknown')
-        
+        return ('Unknown')
+
+
 def file_cell_protocol(filename):
     """
     file_cell_protocol breaks the current filename down and returns a
@@ -529,6 +557,7 @@ def file_cell_protocol(filename):
     (p2, sliceid) = os.path.split(p1)
     (parentdir, date) = os.path.split(p2)
     return date, sliceid, cell, proto, parentdir
+
 
 def cell_summary(dh, summary=None):
     """
@@ -585,6 +614,7 @@ class GetClamps():
     from early versions of Acq4 including returning the stimulus waveforms.
     This class will usually be called from the LoadFileRequested routine in an analysis module.
     """
+
     def __init__(self):
         pass
 
@@ -596,7 +626,7 @@ class GetClamps():
         pars is a structure that provides some control parameters usually set by the GUI
         Returns a short dictionary of some values; others are accessed through the class.
         Returns None if no data is found.
-        """   
+        """
         pars = self.getParsDefaults(pars)
         clampInfo = {}
         if dh is None:
@@ -627,7 +657,7 @@ class GetClamps():
                 sequence_values = [x for x in self.clampValues]
         else:
             sequence_values = []
-#            nclamp = 0
+        #            nclamp = 0
 
         # if sequence has repeats, build pattern
         if reps in self.sequence:
@@ -636,12 +666,12 @@ class GetClamps():
             # noinspection PyUnusedLocal
             sequence_values = [x for y in range(self.nrepc) for x in sequence_values]
 
-        # select subset of data by overriding the directory sequence...
+            # select subset of data by overriding the directory sequence...
             dirs = []
-###
-### This is possibly broken -
-### 
-###
+            ###
+            ### This is possibly broken -
+            ###
+            ###
             ld = pars['sequence1']['index']
             rd = pars['sequence2']['index']
             if ld[0] == -1 and rd[0] == -1:
@@ -655,7 +685,7 @@ class GetClamps():
                 for i in ld:
                     for j in rd:
                         dirs.append('%03d_%03d' % (i, j))
-### --- end of possibly broken section
+        ### --- end of possibly broken section
 
         for i, directory_name in enumerate(dirs):  # dirs has the names of the runs withing the protocol
             data_dir_handle = dh[directory_name]  # get the directory within the protocol
@@ -671,7 +701,7 @@ class GetClamps():
                                 % directory_name)
             data_file = data_file_handle.read()
 
-            self.data_mode  = getClampMode(data_file, dir_handle=dh)
+            self.data_mode = getClampMode(data_file, dir_handle=dh)
             if self.data_mode is None:
                 self.data_mode = ic_modes[0]  # set a default mode
             if self.data_mode in ['vc']:  # should be "AND something"  - this is temp fix for Xuying's old data
@@ -730,7 +760,8 @@ class GetClamps():
         self.RSeriesUncomp = 0.
         if self.amplifierSettings['WCCompValid']:
             if self.amplifierSettings['WCEnabled'] and self.amplifierSettings['CompEnabled']:
-                self.RSeriesUncomp= self.amplifierSettings['WCResistance'] * (1.0 - self.amplifierSettings['CompCorrection'] / 100.)
+                self.RSeriesUncomp = self.amplifierSettings['WCResistance'] * (
+                            1.0 - self.amplifierSettings['CompCorrection'] / 100.)
             else:
                 self.RSeriesUncomp = 0.
 
@@ -749,7 +780,7 @@ class GetClamps():
             data.infoCopy(-1)]
         traces = traces[:len(self.values)]
         self.traces = MetaArray(traces, info=info)
-#        sfreq = self.dataModel.getSampleRate(data_file_handle)
+        #        sfreq = self.dataModel.getSampleRate(data_file_handle)
         self.sample_interval = 1. / getSampleRate(data_file_handle)
         vc_command = data_dir_handle.parent().info()['devices'][self.clampDevices[0]]
         self.tstart = 0.01
@@ -773,8 +804,6 @@ class GetClamps():
                     pulsedur = eval(pulse[1])
                 except:
                     raise Exception('WaveGeneratorWidget not found')
-                    pulsestart = 0.
-                    pulsedur = np.max(self.time_base)
         elif 'daqState' in vc_command:
             # print 'daqstate'
             vc_state = vc_command['daqState']['channels']['command']['waveGeneratorWidget']
@@ -805,12 +834,12 @@ class GetClamps():
             self.tend = np.sum(cmdtimes)  # cmd.xvals('Time')[cmdtimes[1]] + self.tstart
             self.tdur = self.tend - self.tstart
         clampInfo['PulseWindow'] = [self.tstart, self.tend, self.tdur]
-#        print 'start/end/dur: ', self.tstart, self.tend, self.tdur
+        #        print 'start/end/dur: ', self.tstart, self.tend, self.tdur
         # build the list of command values that are used for the fitting
         clampInfo['cmdList'] = []
         for i in range(len(self.values)):
             clampInfo['cmdList'].append('%8.3f %s' %
-                           (self.command_scale_factor * self.values[i], self.command_units))
+                                        (self.command_scale_factor * self.values[i], self.command_units))
 
         if self.data_mode in vc_modes:
             self.spikecount = np.zeros(len(np.array(self.values)))
@@ -823,28 +852,26 @@ class GetClamps():
         elements are present, and substitute logical values for those that are missing
         :returns: updated pars dictionary
         """
-        
+
         if pars is None:
             pars = {}
         # neededKeys = ['limits', 'cmin', 'cmax', 'KeepT', 'sequence1', 'sequence2']
         # hmm. could do this as a dictionary of value: default pairs and a loop
         k = pars.keys()
         if 'limits' not in k:
-            pars['limits'] = False 
+            pars['limits'] = False
         if 'cmin' not in k:
-            pars['cmin'] = -np.inf 
+            pars['cmin'] = -np.inf
             pars['cmax'] = np.inf
         if 'KeepT' not in k:
-            pars['KeepT'] = False 
-        # sequence selections:
+            pars['KeepT'] = False
+            # sequence selections:
         # pars[''sequence'] is a dictionary
         # The dictionary has  'index' (currentIndex()) and 'count' from the GUI
         if 'sequence1' not in k:
             pars['sequence1'] = {'index': 0}  # index of '0' is "All"
-            pars['sequence1']['count'] = 0 
+            pars['sequence1']['count'] = 0
         if 'sequence2' not in k:
-            pars['sequence2'] = {'index': 0} 
+            pars['sequence2'] = {'index': 0}
             pars['sequence2']['count'] = 0
         return pars
-        
-
