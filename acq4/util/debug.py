@@ -1,29 +1,29 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 debug.py - Functions to aid in debugging 
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
+from __future__ import print_function
 
 from acq4.pyqtgraph.debug import *
 import acq4.pyqtgraph.debug as pgdebug
 
-
 LOG_UI = None
+
 
 def __reload__(old):
     # preserve old log window
     global LOG_UI
-    LOG_UI = old['LOG']
+    LOG_UI = old['LOG_UI']
 
 
 def installExceptionHandler():
     ## install global exception handler for others to hook into.
-    import acq4.pyqtgraph.exceptionHandling as exceptionHandling   
+    import acq4.pyqtgraph.exceptionHandling as exceptionHandling
     exceptionHandling.setTracebackClearing(True)
-    exceptionHandling.register(exceptionCallback)        
-    
+    exceptionHandling.register(exceptionCallback)
+
 
 def createLogWindow(manager):
     from .LogWindow import LogWindow
@@ -43,8 +43,8 @@ def printExc(msg='', indent=4, prefix='|', msgType='error'):
             acq4.Manager.logExc(msg=msg, msgType=msgType)
     except Exception:
         pgdebug.printExc("[failed to log this error to manager]")
-        
-    
+
+
 def logMsg(msg, **kwargs):
     """msg: the text of the log message
        msgTypes: user, status, error, warning (status is default)
@@ -67,10 +67,10 @@ def logMsg(msg, **kwargs):
             sys.excepthook(*sys.exc_info())
     else:
         print("Can't log message; no log created yet.")
-        #print args
+        # print args
         print(kwargs)
-        
-    
+
+
 def logExc(msg, *args, **kwargs):
     """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
     global LOG_UI
@@ -89,9 +89,11 @@ def logExc(msg, *args, **kwargs):
 
 
 blockLogging = False
+
+
 def exceptionCallback(*args):
     ## Called whenever there is an unhandled exception.
-    
+
     ## unhandled exceptions generate an error message by default, but this
     ## can be overridden by raising HelpfulException(msgType='...')
     global blockLogging
@@ -104,5 +106,3 @@ def exceptionCallback(*args):
             original_excepthook(*sys.exc_info())
         finally:
             blockLogging = False
-
-
