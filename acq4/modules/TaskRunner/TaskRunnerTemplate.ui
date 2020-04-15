@@ -532,7 +532,7 @@ in loop mode.</string>
   <customwidget>
    <class>ParamList</class>
    <extends>QTreeWidget</extends>
-   <header>ParamList</header>
+   <header>.ParamList</header>
   </customwidget>
  </customwidgets>
  <resources/>
