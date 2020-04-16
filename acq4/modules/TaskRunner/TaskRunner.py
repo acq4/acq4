@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
+import six
 from six.moves import reduce
 import time, gc
 import sys, os
@@ -864,7 +865,7 @@ class Task:
                 
             if 'winState' in conf:
                 self.conf['windowState'] = conf['winState']
-            self.conf['windowState'] = Qt.QByteArray.fromPercentEncoding(self.conf['windowState'])
+            self.conf['windowState'] = Qt.QByteArray.fromPercentEncoding(six.b(self.conf['windowState']))
             
             self.devices = conf['devices']
             self.enabled = list(self.devices.keys())

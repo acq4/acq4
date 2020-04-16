@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
+import six
+
 from acq4.modules.Module import *
 from acq4.util import Qt
 import sys, os
@@ -66,7 +69,7 @@ class Manager(Module):
             self.win.setGeometry(geom)
         # restore dock configuration
         if 'window' in state:
-            ws = Qt.QByteArray.fromPercentEncoding(state['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(six.b(state['window']))
             self.win.restoreState(ws)
 
         self.win.show()
