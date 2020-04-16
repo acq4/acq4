@@ -266,8 +266,7 @@ class MockCamera(Camera):
             frames.append({'data': data, 'time': now + (i / fps), 'id': self.frameId})
         prof()
         return frames
-            
-                
+
     def quit(self):
         pass
         

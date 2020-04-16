@@ -92,7 +92,7 @@ class InterfaceCombo(Qt.QComboBox):
         pass
         
     def widgetGroupInterface(self):
-        return (self.currentIndexChanged, self.currentText, self.setCurrentText)
+        return self.currentIndexChanged, self.currentText, self.setCurrentText
 
 
 class InterfaceParameter(ptypes.ListParameter):
