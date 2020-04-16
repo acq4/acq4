@@ -10,5 +10,5 @@ RUN mkdir /code
 WORKDIR /code
 
 #### Usage
-# docker build -f tools/Dockerfile.py2 -t acq4:py2 .
-# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code -v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py2 python -m acq4
+# docker build -f tools/Dockerfile.py2qt4 -t acq4:py2qt4 .
+# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code -v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py2qt4 python -m acq4
