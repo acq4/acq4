@@ -4,6 +4,8 @@ from __future__ import print_function
 import time, types, os.path, re, sys, weakref
 from collections import OrderedDict
 import numpy as np
+import six
+
 from acq4.util import Qt
 from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
@@ -118,7 +120,7 @@ class CameraWindow(Qt.QMainWindow):
             geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         if 'window' in uiState:
-            ws = Qt.QByteArray.fromPercentEncoding(uiState['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(six.b(uiState['window']))
             self.restoreState(ws)
         if 'docks' in uiState:
             self.cw.restoreState(uiState['docks'], missing='ignore')

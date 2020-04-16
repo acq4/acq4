@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
+
+import six
+
 from acq4.util import Qt
 from acq4.pyqtgraph import WidgetGroup
 from acq4.pyqtgraph import PlotWidget
@@ -79,7 +82,7 @@ class PatchWindow(Qt.QMainWindow):
             geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         if 'window' in uiState:
-            ws = Qt.QByteArray.fromPercentEncoding(uiState['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(six.b(uiState['window']))
             self.restoreState(ws)
             
         self.ui.splitter_2.setSizes([self.width()/4, self.width()*3./4.])

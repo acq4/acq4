@@ -7,7 +7,7 @@ from acq4.util.debug import *
 from acq4.Interfaces import InterfaceMixin
 
 
-class Device(Qt.QObject, InterfaceMixin):
+class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
     """Abstract class defining the standard interface for Device subclasses."""
 
     # used to ensure devices are shut down in the correct order

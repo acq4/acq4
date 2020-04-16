@@ -257,13 +257,13 @@
   <customwidget>
    <class>FileInfoView</class>
    <extends>QWidget</extends>
-   <header>FileInfoView</header>
+   <header>.FileInfoView</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>FileDataView</class>
    <extends>QWidget</extends>
-   <header>FileDataView</header>
+   <header>.FileDataView</header>
    <container>1</container>
   </customwidget>
   <customwidget>

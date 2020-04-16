@@ -3,11 +3,12 @@
 from __future__ import print_function
 
 import importlib
-import inspect
 import os
 import sys
 
 # try importing Qt libraries in order of preference
+from ..pyqtgraph.Qt import loadUiType
+
 qtLibs = ['PyQt5', 'PyQt4', 'PySide', 'PySide2', None]
 for mod in qtLibs:
     if mod is None:
@@ -68,36 +69,20 @@ def importTemplate(templateName):
         # for PyQt5, this is equivalent to
         from .MyTemplate_pyqt5 import Ui_MainWindow
     """
-    modName = templateName
-    if pg.Qt.QT_LIB == 'PyQt5':
-        modName = modName + '_pyqt5'
-
     frame = sys._getframe().f_back
     pkg = frame.f_globals['__package__']
 
-    try:    
-        if modName[0] != '.':
-            pkg = None
-        # try importing pre-compiled template file first
-        mod = importlib.import_module(modName, package=pkg)
-        for k,v in mod.__dict__.items():
-            if k[:3] == 'Ui_' and inspect.isclass(v):
-                return v        
-        raise Exception("Could not find Ui_* class in module %s" % modName)
-    except Exception:
-        # otherwise, try dynamic read from .ui file
+    # Find location of calling module
+    modParts = pkg.split('.')
+    mod = sys.modules[modParts.pop(0)]
+    root = os.path.dirname(mod.__file__)
 
-        # Find location of calling module 
-        modParts = pkg.split('.')
-        mod = sys.modules[modParts.pop(0)]
-        root = os.path.dirname(mod.__file__)
-
-        # construct full path to ui file
-        ndots = len(templateName) - len(templateName.lstrip('.'))
-        if ndots > 1:
-            modParts = modParts[:-ndots]
-        pathParts = modParts + templateName.lstrip('.').split('.')
-        uipath = os.path.join(root, *pathParts) + '.ui'
-        if not os.path.isfile(uipath):
-            raise ValueError("ui file not found: %r" % uipath)
-        return loadUiType(uipath, package=pkg)[0]
+    # construct full path to ui file
+    ndots = len(templateName) - len(templateName.lstrip('.'))
+    if ndots > 1:
+        modParts = modParts[:-ndots]
+    pathParts = modParts + templateName.lstrip('.').split('.')
+    uipath = os.path.join(root, *pathParts) + '.ui'
+    if not os.path.isfile(uipath):
+        raise ValueError("ui file not found: %r" % uipath)
+    return loadUiType(uipath, package=pkg)[0]
