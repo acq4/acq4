@@ -1,27 +1,26 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
+from __future__ import print_function, with_statement
+
+import time
+
+import numpy as np
+
+import acq4.pyqtgraph as pg
+import acq4.util.ptime as ptime
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
-
-
+from acq4.pyqtgraph import Vector, SRTTransform3D, MetaArray
+from acq4.pyqtgraph.debug import Profiler
+from acq4.pyqtgraph.metaarray import axis
+from acq4.util import Qt
+from acq4.util import imaging
+from acq4.util.debug import printExc
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-#from acq4.devices.Device import *
-from acq4.devices.Microscope import Microscope
-from acq4.util import Qt
-import time
-from numpy import *
-from acq4.util.metaarray import *
-from .taskGUI import *
-from .deviceGUI import *
-import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
-from acq4.util import imaging
-from acq4.pyqtgraph import Vector, SRTTransform3D
-
 from .CameraInterface import CameraInterface
+from .deviceGUI import CameraDeviceGui
+from .taskGUI import CameraTaskGui
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -53,9 +52,9 @@ class Camera(DAQGeneric, OptomechDevice):
 
     sigCameraStopped = Qt.Signal()
     sigCameraStarted = Qt.Signal()
-    sigShowMessage = Qt.Signal(object)  # (string message)
-    sigNewFrame = Qt.Signal(object)  # (frame data)
-    sigParamsChanged = Qt.Signal(object)
+    sigShowMessage = Qt.Signal(np.object)  # (string message)
+    sigNewFrame = Qt.Signal(np.object)  # (frame data)
+    sigParamsChanged = Qt.Signal(np.object)
 
     def __init__(self, dm, config, name):
         OptomechDevice.__init__(self, dm, config, name)
@@ -398,7 +397,7 @@ class Camera(DAQGeneric, OptomechDevice):
         o = Vector(self.scopeState['transform'].map(Vector(0,0,0)))
         p = Vector(self.scopeState['transform'].map(Vector(1, 1)) - o)
         self.scopeState['centerPosition'] = o
-        self.scopeState['pixelSize'] = abs(p)
+        self.scopeState['pixelSize'] = np.abs(p)
         self.scopeState['id'] += 1  ## hint to acquisition thread that state has changed
 
     def globalCenterPosition(self, mode='sensor'):
@@ -667,7 +666,7 @@ class CameraTaskResult:
             if self._arr is None:
                 #data = self._frames
                 if len(self._frames) > 0:
-                    self._arr = concatenate([f.data()[newaxis,...] for f in self._frames])
+                    self._arr = np.concatenate([f.data()[np.newaxis, ...] for f in self._frames])
         return self._arr
     
     def asMetaArray(self):
@@ -696,9 +695,8 @@ class CameraTaskResult:
             with self.lock:
                 if len(self._frames) > 0:  ## extract frame times as reported by camera. This is a first approximation.
                     try:
-                        times = array([f.info()['time'] for f in self._frames])
+                        times = np.array([f.info()['time'] for f in self._frames])
                     except:
-                        print(f)
                         raise
                     times -= times[0]
                 else:
@@ -713,19 +711,19 @@ class CameraTaskResult:
             if expose is not None: 
             
                 ## Extract times from trace
-                ex = expose.view(ndarray).astype(int32)
+                ex = expose.view(np.ndarray).astype(np.int32)
                 exd = ex[1:] - ex[:-1]
                 
                 timeVals = expose.xvals('Time')
-                inds = argwhere(exd > 0.5)[:, 0] + 1
+                inds = np.argwhere(exd > 0.5)[:, 0] + 1
                 onTimes = timeVals[inds]
                 
                 ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
                 if self._task.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
-                    onTimes = array([timeVals[0]] + list(onTimes))
+                    onTimes = np.array([timeVals[0]] + list(onTimes))
                 
                 #print "onTimes:", onTimes
-                inds = argwhere(exd < 0.5)[:, 0] + 1
+                inds = np.argwhere(exd < 0.5)[:, 0] + 1
                 offTimes = timeVals[inds]
                 
                 ## Determine average frame transfer time
@@ -770,8 +768,8 @@ class CameraTaskResult:
         
 class AcquireThread(Thread):
     
-    sigNewFrame = Qt.Signal(object)
-    sigShowMessage = Qt.Signal(object)
+    sigNewFrame = Qt.Signal(np.object)
+    sigShowMessage = Qt.Signal(np.object)
     
     def __init__(self, dev):
         Thread.__init__(self)

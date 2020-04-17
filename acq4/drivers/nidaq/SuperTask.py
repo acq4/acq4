@@ -2,7 +2,7 @@
 from __future__ import print_function
 import six
 import time
-from numpy import *
+import numpy as np
 import acq4.util.ptime as ptime  ## platform-independent precision timing
 from collections import OrderedDict
 from .base import NIDAQError
@@ -74,7 +74,7 @@ class SuperTask:
                 raise TypeError("mode argument not accepted for channel type '%s'" % typ)
 
             # Is the requested mode in the allowed list?
-            lower = list(map(str.lower, allowed))
+            lower = list(map(np.np.str.lower, allowed))
             try:
                 ind = lower.index(mode.lower())
             except ValueError:
@@ -117,8 +117,8 @@ class SuperTask:
         ## For now, all ao waveforms must be between -10 and 10
         
         typ = self.channelInfo[chan]['task'][1]
-        if typ in 'ao' and (any(data > 10.0) or any(data < -10.0)):
-            self.channelInfo[chan]['data'] = clip(data, -10.0, 10.0)
+        if typ in 'ao' and (np.any(data > 10.0) or np.any(data < -10.0)):
+            self.channelInfo[chan]['data'] = np.clip(data, -10.0, 10.0)
             self.channelInfo[chan]['clipped'] = True
         else:
             self.channelInfo[chan]['data'] = data
@@ -138,9 +138,9 @@ class SuperTask:
             for c in self.taskInfo[key]['chans']:
                 if 'data' not in self.channelInfo[c]:
                     raise Exception("No data specified for DAQ channel %s" % c)
-                waves.append(atleast_2d(self.channelInfo[c]['data']))
+                waves.append(np.atleast_2d(self.channelInfo[c]['data']))
             try:
-                self.taskInfo[key]['cache'] = concatenate(waves)
+                self.taskInfo[key]['cache'] = np.concatenate(waves)
             except:
                 print("Input shapes for %s:" % ','.join(list(self.channelInfo.keys())))
                 for w in waves:
@@ -156,7 +156,7 @@ class SuperTask:
                 try:
                     self.tasks[k].write(d)
                 except:
-                    print("Error while writing data to task '%s':" % str(k))
+                    print("Error while writing data to task '%s':" % np.np.str(k))
                     raise
                 self.taskInfo[k]['dataWritten'] = True
         
@@ -210,7 +210,7 @@ class SuperTask:
                     pass
             else:
                 if rate > maxrate:
-                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
+                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (np.np.int(rate), np.np.int(maxrate)))
 
             if k[1] != clkSource:
                 #print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)

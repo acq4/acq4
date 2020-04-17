@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 CParser.py - C parsing library 
 Copyright 2010  Luke Campagnola
@@ -8,11 +7,13 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 Used for extracting data such as macro definitions, variables, typedefs, and function
 signatures from C files (preferrably header files).
 """
+from __future__ import print_function
 
-import sys, re, os
+import os
+import re
+import sys
 
 import six
-
 
 __all__ = ['winDefs', 'CParser']
 
@@ -347,9 +348,9 @@ class CParser():
         """Remove all comments from file. (operates in memory; does not alter the original files)"""
         self.assertPyparsing()
         text = self.files[file]
-        cplusplusLineComment = Literal("//") + restOfLine
+        cplusplusLineComment = pyparsing.Literal("//") + pyparsing.restOfLine
         # match quoted strings first to prevent matching comments inside quotes
-        self.files[file] = (quotedString | cStyleComment.suppress() | cplusplusLineComment.suppress()).transformString(text)
+        self.files[file] = (pyparsing.quotedString | pyparsing.cStyleComment.suppress() | cplusplusLineComment.suppress()).transformString(text)
         
     
     def preprocess(self, file):
@@ -364,13 +365,13 @@ class CParser():
         text = self.files[file]
         
         ## First join together lines split by \\n
-        text = Literal('\\\n').suppress().transformString(text)
+        text = pyparsing.Literal('\\\n').suppress().transformString(text)
         
         #self.ppDirective = Combine("#" + Word(alphas).leaveWhitespace()) + restOfLine
         
         # define the structure of a macro definition
-        name = Word(alphas+'_', alphanums+'_')('name')
-        self.ppDefine = name.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(name) + rparen).setWhitespaceChars(' \t')('args') + SkipTo(LineEnd())('value')
+        name = pyparsing.Word(pyparsing.alphas + '_', pyparsing.alphanums + '_')('name')
+        self.ppDefine = name.setWhitespaceChars(' \t')("macro") + pyparsing.Optional(lparen + pyparsing.delimitedList(name) + rparen).setWhitespaceChars(' \t')('args') + pyparsing.SkipTo(pyparsing.LineEnd())('value')
         self.ppDefine.setParseAction(self.processMacroDefn)
         
         #self.updateMacroDefns()
@@ -412,8 +413,8 @@ class CParser():
                     def pa(t):
                         return ['0', '1'][t['name'] in self.defs['macros'] or t['name'] in self.defs['fnmacros']]
                     rest = (
-                        Keyword('defined') + 
-                        (name | lparen + name + rparen)
+                            pyparsing.Keyword('defined') +
+                            (name | lparen + name + rparen)
                     ).setParseAction(pa).transformString(rest)
                 elif d in ['define', 'undef']:    
                     macroName, rest = re.match(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)(.*)$', rest).groups()
@@ -521,10 +522,10 @@ class CParser():
     def evalPreprocessorExpr(self, expr):
         ## make a few alterations so the expression can be eval'd
         macroDiffs = (
-            Literal('!').setParseAction(lambda: ' not ') | 
-            Literal('&&').setParseAction(lambda: ' and ') | 
-            Literal('||').setParseAction(lambda: ' or ') | 
-            Word(alphas+'_',alphanums+'_').setParseAction(lambda: '0'))
+                pyparsing.Literal('!').setParseAction(lambda: ' not ') |
+                pyparsing.Literal('&&').setParseAction(lambda: ' and ') |
+                pyparsing.Literal('||').setParseAction(lambda: ' or ') |
+                pyparsing.Word(pyparsing.alphas + '_', pyparsing.alphanums + '_').setParseAction(lambda: '0'))
         expr2 = macroDiffs.transformString(expr)
             
         try:
@@ -671,7 +672,7 @@ class CParser():
         defn = self.defs['fnmacros'][name]
         ## defn looks like ('%s + %s / %s', (0, 0, 1))
         
-        argList = stringStart + lparen + Group(delimitedList(expression))('args') + rparen
+        argList = pyparsing.stringStart + lparen + pyparsing.Group(pyparsing.delimitedList(expression))('args') + rparen
         res = [x for x in argList.scanString(text, 1)]
         if len(res) == 0:
             raise Exception(0, "Function macro '%s' not followed by (...)" % name)
@@ -744,13 +745,13 @@ class CParser():
         self.assertPyparsing()
         
         
-        self.structType = Forward()
-        self.enumType = Forward()
+        self.structType = pyparsing.Forward()
+        self.enumType = pyparsing.Forward()
         self.typeSpec = (typeQualifier + (
-            fundType | 
-            Optional(kwl(sizeModifiers + signModifiers)) + ident | 
-            self.structType | 
-            self.enumType
+                fundType |
+                pyparsing.Optional(kwl(sizeModifiers + signModifiers)) + ident |
+                self.structType |
+                self.enumType
         ) + typeQualifier + msModifier).setParseAction(recombine)
         #self.argList = Forward()
         
@@ -761,8 +762,8 @@ class CParser():
         #   allow us to turn a nest of type modifiers into a correctly
         #   ordered list of modifiers.
         
-        self.declarator = Forward()
-        self.abstractDeclarator = Forward()
+        self.declarator = pyparsing.Forward()
+        self.abstractDeclarator = pyparsing.Forward()
         
         ## abstract declarators look like:
         #     <empty string>
@@ -771,15 +772,15 @@ class CParser():
         #     (*)(int, int)
         #     *( )(int, int)[10]
         #     ...etc...
-        self.abstractDeclarator << Group(
-            typeQualifier + Group(ZeroOrMore('*'))('ptrs') + typeQualifier +
-            ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) + 
-            Optional(lparen + Optional(delimitedList(Group(
-                self.typeSpec('type') + 
-                self.abstractDeclarator('decl') + 
-                Optional(Literal('=').suppress() + expression, default=None)('val')
-            )), default=None) + rparen)('args') + 
-            Group(ZeroOrMore(lbrack + Optional(expression, default='-1') + rbrack))('arrays')
+        self.abstractDeclarator << pyparsing.Group(
+            typeQualifier + pyparsing.Group(pyparsing.ZeroOrMore('*'))('ptrs') + typeQualifier +
+            ((pyparsing.Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) +
+            pyparsing.Optional(lparen + pyparsing.Optional(pyparsing.delimitedList(pyparsing.Group(
+                self.typeSpec('type') +
+                self.abstractDeclarator('decl') +
+                pyparsing.Optional(pyparsing.Literal('=').suppress() + expression, default=None)('val')
+            )), default=None) + rparen)('args') +
+            pyparsing.Group(pyparsing.ZeroOrMore(lbrack + pyparsing.Optional(expression, default='-1') + rbrack))('arrays')
         )
         
         ## Argument list may consist of declarators or abstract declarators
@@ -796,45 +797,45 @@ class CParser():
         #     (*fnName)(int, int)
         #     * fnName(int arg1=0)[10]
         #     ...etc...
-        self.declarator << Group(
-            typeQualifier + callConv + Group(ZeroOrMore('*'))('ptrs') + typeQualifier +
-            ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) + 
-            Optional(lparen + Optional(delimitedList(Group(
-                self.typeSpec('type') + 
-                (self.declarator | self.abstractDeclarator)('decl') + 
-                Optional(Literal('=').suppress() + expression, default=None)('val')
-            )), default=None) + rparen)('args') + 
-            Group(ZeroOrMore(lbrack + Optional(expression, default='-1') + rbrack))('arrays')
+        self.declarator << pyparsing.Group(
+            typeQualifier + callConv + pyparsing.Group(pyparsing.ZeroOrMore('*'))('ptrs') + typeQualifier +
+            ((pyparsing.Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) +
+            pyparsing.Optional(lparen + pyparsing.Optional(pyparsing.delimitedList(pyparsing.Group(
+                self.typeSpec('type') +
+                (self.declarator | self.abstractDeclarator)('decl') +
+                pyparsing.Optional(pyparsing.Literal('=').suppress() + expression, default=None)('val')
+            )), default=None) + rparen)('args') +
+            pyparsing.Group(pyparsing.ZeroOrMore(lbrack + pyparsing.Optional(expression, default='-1') + rbrack))('arrays')
         )
-        self.declaratorList = Group(delimitedList(self.declarator))
+        self.declaratorList = pyparsing.Group(pyparsing.delimitedList(self.declarator))
 
         ## typedef
-        self.typeDecl = Keyword('typedef') + self.typeSpec('type') + self.declaratorList('declList') + semi
+        self.typeDecl = pyparsing.Keyword('typedef') + self.typeSpec('type') + self.declaratorList('declList') + semi
         self.typeDecl.setParseAction(self.processTypedef)
 
         ## variable declaration
-        self.variableDecl = Group(self.typeSpec('type') + Optional(self.declaratorList('declList')) + Optional(Literal('=').suppress() + (expression('value') | (lbrace + Group(delimitedList(expression))('arrayValues') + rbrace)))) + semi
+        self.variableDecl = pyparsing.Group(self.typeSpec('type') + pyparsing.Optional(self.declaratorList('declList')) + pyparsing.Optional(pyparsing.Literal('=').suppress() + (expression('value') | (lbrace + pyparsing.Group(pyparsing.delimitedList(expression))('arrayValues') + rbrace)))) + semi
         
         self.variableDecl.setParseAction(self.processVariable)
         
         ## function definition
         #self.paramDecl = Group(self.typeSpec + (self.declarator | self.abstractDeclarator)) + Optional(Literal('=').suppress() + expression('value'))
-        self.typelessFunctionDecl = self.declarator('decl') + nestedExpr('{', '}').suppress()
-        self.functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
+        self.typelessFunctionDecl = self.declarator('decl') + pyparsing.nestedExpr('{', '}').suppress()
+        self.functionDecl = self.typeSpec('type') + self.declarator('decl') + pyparsing.nestedExpr('{', '}').suppress()
         self.functionDecl.setParseAction(self.processFunction)
         
         
         ## Struct definition
-        self.structDecl = Forward()
-        structKW = (Keyword('struct') | Keyword('union'))
+        self.structDecl = pyparsing.Forward()
+        structKW = (pyparsing.Keyword('struct') | pyparsing.Keyword('union'))
         #self.structType << structKW('structType') + ((Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.structDecl | self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace) | ident('name'))
         self.structMember = (
-            Group(self.variableDecl.copy().setParseAction(lambda: None)) |
-            (self.typeSpec + self.declarator + nestedExpr('{', '}')).suppress() |
-            (self.declarator + nestedExpr('{', '}')).suppress()
+                pyparsing.Group(self.variableDecl.copy().setParseAction(lambda: None)) |
+                (self.typeSpec + self.declarator + pyparsing.nestedExpr('{', '}')).suppress() |
+                (self.declarator + pyparsing.nestedExpr('{', '}')).suppress()
         )
-        self.declList = lbrace + Group(OneOrMore(self.structMember))('members') + rbrace
-        self.structType << (Keyword('struct') | Keyword('union'))('structType') + ((Optional(ident)('name') + self.declList) | ident('name'))
+        self.declList = lbrace + pyparsing.Group(pyparsing.OneOrMore(self.structMember))('members') + rbrace
+        self.structType << (pyparsing.Keyword('struct') | pyparsing.Keyword('union'))('structType') + ((pyparsing.Optional(ident)('name') + self.declList) | ident('name'))
         
         self.structType.setParseAction(self.processStruct)
         #self.updateStructDefn()
@@ -842,9 +843,9 @@ class CParser():
         self.structDecl = self.structType + semi
 
         ## enum definition
-        enumVarDecl = Group(ident('name')  + Optional(Literal('=').suppress() + (integer('value') | ident('valueName'))))
-        
-        self.enumType << Keyword('enum') + (Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace | ident('name'))
+        enumVarDecl = pyparsing.Group(ident('name') + pyparsing.Optional(pyparsing.Literal('=').suppress() + (integer('value') | ident('valueName'))))
+
+        self.enumType << pyparsing.Keyword('enum') + (pyparsing.Optional(ident)('name') + lbrace + pyparsing.Group(pyparsing.delimitedList(enumVarDecl))('members') + rbrace | ident('name'))
         self.enumType.setParseAction(self.processEnum)
         
         self.enumDecl = self.enumType + semi
@@ -989,7 +990,7 @@ class CParser():
             strTyp = t.structType  # struct or union
             
             ## check for extra packing rules
-            packing = self.packingAt(lineno(l, s))
+            packing = self.packingAt(pyparsing.lineno(l, s))
             
             if self.verbose:
                 print(strTyp.upper(), t.name, t)
@@ -1096,7 +1097,7 @@ class CParser():
         """Just eval with a little extra robustness."""
         expr = expr.strip()
         cast = (lparen + self.typeSpec + self.abstractDeclarator + rparen).suppress()
-        expr = (quotedString | number | cast).transformString(expr)
+        expr = (pyparsing.quotedString | number | cast).transformString(expr)
         if expr == '':
             return None
         return eval(expr, *args)
@@ -1194,8 +1195,8 @@ class CParser():
         
 hasPyParsing = False
 try: 
-    from pyparsing import *
-    ParserElement.enablePackrat()
+    import pyparsing
+    pyparsing.ParserElement.enablePackrat()
     hasPyParsing = True
 except:
     pass  ## no need to do anything yet as we might not be using any parsing functions..
@@ -1212,44 +1213,44 @@ keywords = ['struct', 'enum', 'union', '__stdcall', '__cdecl'] + qualifiers + ba
 
 if hasPyParsing:
     ## Some basic definitions
-    expression = Forward()
+    expression = pyparsing.Forward()
     pexpr = '(' + expression + ')'
 
     def kwl(strs):
         """Generate a match-first list of keywords given a list of strings."""
         #return MatchFirst(map(Keyword,strs))
-        return Regex(r'\b(%s)\b' % '|'.join(strs))
+        return pyparsing.Regex(r'\b(%s)\b' % '|'.join(strs))
 
     keyword = kwl(keywords)
-    wordchars = alphanums+'_$'
-    ident = (WordStart(wordchars) + ~keyword + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
+    wordchars = pyparsing.alphanums + '_$'
+    ident = (pyparsing.WordStart(wordchars) + ~keyword + pyparsing.Word(pyparsing.alphas + "_", pyparsing.alphanums + "_$") + pyparsing.WordEnd(wordchars)).setParseAction(lambda t: t[0])
     #integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
-    semi   = Literal(";").ignore(quotedString).suppress()
-    lbrace = Literal("{").ignore(quotedString).suppress()
-    rbrace = Literal("}").ignore(quotedString).suppress()
-    lbrack = Literal("[").ignore(quotedString).suppress()
-    rbrack = Literal("]").ignore(quotedString).suppress()
-    lparen = Literal("(").ignore(quotedString).suppress()
-    rparen = Literal(")").ignore(quotedString).suppress()
-    hexint = Regex('-?0x[%s]+[UL]*'%hexnums).setParseAction(lambda t: t[0].rstrip('UL'))
-    decint = Regex(r'-?\d+[UL]*').setParseAction(lambda t: t[0].rstrip('UL'))
+    semi   = pyparsing.Literal(";").ignore(pyparsing.quotedString).suppress()
+    lbrace = pyparsing.Literal("{").ignore(pyparsing.quotedString).suppress()
+    rbrace = pyparsing.Literal("}").ignore(pyparsing.quotedString).suppress()
+    lbrack = pyparsing.Literal("[").ignore(pyparsing.quotedString).suppress()
+    rbrack = pyparsing.Literal("]").ignore(pyparsing.quotedString).suppress()
+    lparen = pyparsing.Literal("(").ignore(pyparsing.quotedString).suppress()
+    rparen = pyparsing.Literal(")").ignore(pyparsing.quotedString).suppress()
+    hexint = pyparsing.Regex('-?0x[%s]+[UL]*' % pyparsing.hexnums).setParseAction(lambda t: t[0].rstrip('UL'))
+    decint = pyparsing.Regex(r'-?\d+[UL]*').setParseAction(lambda t: t[0].rstrip('UL'))
     integer = (hexint | decint)
-    floating = Regex(r'-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?')
+    floating = pyparsing.Regex(r'-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?')
     number = (hexint | floating | decint)
     bitfieldspec = ":" + integer
-    biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
-    uniRightOperator = oneOf("++ --")
-    uniLeftOperator = oneOf("++ -- - + * sizeof new")
-    name = (WordStart(wordchars) + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars))
+    biOperator = pyparsing.oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
+    uniRightOperator = pyparsing.oneOf("++ --")
+    uniLeftOperator = pyparsing.oneOf("++ -- - + * sizeof new")
+    name = (pyparsing.WordStart(wordchars) + pyparsing.Word(pyparsing.alphas + "_", pyparsing.alphanums + "_$") + pyparsing.WordEnd(wordchars))
     #number = Word(hexnums + ".-+xUL").setParseAction(lambda t: t[0].rstrip('UL'))
     #stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
-    callConv = Optional(Keyword('__cdecl')|Keyword('__stdcall'))('callConv')
+    callConv = pyparsing.Optional(pyparsing.Keyword('__cdecl') | pyparsing.Keyword('__stdcall'))('callConv')
     
     ## Removes '__name' from all type specs.. may cause trouble.
-    underscore2Ident = (WordStart(wordchars) + ~keyword + '__' + Word(alphanums,alphanums+"_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
-    typeQualifier = ZeroOrMore((underscore2Ident + Optional(nestedExpr())) | kwl(qualifiers)).suppress()
+    underscore2Ident = (pyparsing.WordStart(wordchars) + ~keyword + '__' + pyparsing.Word(pyparsing.alphanums, pyparsing.alphanums + "_$") + pyparsing.WordEnd(wordchars)).setParseAction(lambda t: t[0])
+    typeQualifier = pyparsing.ZeroOrMore((underscore2Ident + pyparsing.Optional(pyparsing.nestedExpr())) | kwl(qualifiers)).suppress()
     
-    msModifier = ZeroOrMore(kwl(msModifiers) + Optional(nestedExpr())).suppress()
+    msModifier = pyparsing.ZeroOrMore(kwl(msModifiers) + pyparsing.Optional(pyparsing.nestedExpr())).suppress()
     pointerOperator = (
         '*' + typeQualifier |
         '&' + typeQualifier |
@@ -1258,35 +1259,35 @@ if hasPyParsing:
 
 
     ## language elements
-    fundType = OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
+    fundType = pyparsing.OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
 
 
 
     ## Is there a better way to process expressions with cast operators??
     castAtom = (
-        ZeroOrMore(uniLeftOperator) + Optional('('+ident+')').suppress() + 
-        ((
-            ident + '(' + Optional(delimitedList(expression)) + ')' | 
-            ident + OneOrMore('[' + expression + ']') | 
-            ident | number | quotedString
+            pyparsing.ZeroOrMore(uniLeftOperator) + pyparsing.Optional('(' + ident + ')').suppress() +
+            ((
+                     ident + '(' + pyparsing.Optional(pyparsing.delimitedList(expression)) + ')' |
+                     ident + pyparsing.OneOrMore('[' + expression + ']') |
+                     ident | number | pyparsing.quotedString
         )  |
-        ('(' + expression + ')')) + 
-        ZeroOrMore(uniRightOperator)
+        ('(' + expression + ')')) +
+            pyparsing.ZeroOrMore(uniRightOperator)
     )
     uncastAtom = (
-        ZeroOrMore(uniLeftOperator) + 
-        ((
-            ident + '(' + Optional(delimitedList(expression)) + ')' | 
-            ident + OneOrMore('[' + expression + ']') | 
-            ident | number | quotedString
+            pyparsing.ZeroOrMore(uniLeftOperator) +
+            ((
+                     ident + '(' + pyparsing.Optional(pyparsing.delimitedList(expression)) + ')' |
+                     ident + pyparsing.OneOrMore('[' + expression + ']') |
+                     ident | number | pyparsing.quotedString
         )  |
-        ('(' + expression + ')')) + 
-        ZeroOrMore(uniRightOperator)
+        ('(' + expression + ')')) +
+            pyparsing.ZeroOrMore(uniRightOperator)
     )
     atom = castAtom | uncastAtom
 
-    expression << Group(
-        atom + ZeroOrMore(biOperator + atom)
+    expression << pyparsing.Group(
+        atom + pyparsing.ZeroOrMore(biOperator + atom)
     )
     arrayOp = lbrack + expression + rbrack
 
@@ -1307,7 +1308,7 @@ if hasPyParsing:
     def printParseResults(pr, depth=0, name=''):
         """For debugging; pretty-prints parse result objects."""
         start = name + " "*(20-len(name)) + ':'+ '..'*depth    
-        if isinstance(pr, ParseResults):
+        if isinstance(pr, pyparsing.ParseResults):
             print(start)
             for i in pr:
                 name = ''

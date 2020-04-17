@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.util.DataManager import *
-from acq4.util.debug import *
+
 import os
 
+from acq4.util import Qt
+from acq4.util.debug import printExc
 
 
 class DirTreeWidget(Qt.QTreeWidget):

@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
-from acq4.util import Qt
+
+import threading
+import time
+
+from acq4.util import Qt, ptime
 import numpy as np
-from acq4.devices.Device import *
-from acq4.devices.OptomechDevice import *
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph as pg
 from .calibration import CalibrationWindow
+from ..Device import Device
+from ..OptomechDevice import OptomechDevice
 
 
 class Stage(Device, OptomechDevice):

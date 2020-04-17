@@ -15,9 +15,7 @@ import sys, types, re
 import numpy as np
 from acq4.util import Qt
 from collections import OrderedDict
-import acq4.util.functions as fn
 from . import waveforms
-from acq4.util.debug import *
 
 from .StimParamSet import StimParamSet
 from .SeqParamSet import SequenceParamSet
@@ -317,8 +315,8 @@ class StimGenerator(Qt.QWidget):
         """return a list of every point in the parameter space"""
         l = self.listSequences()
         shape = tuple(l.values())
-        ar = ones(shape)
-        return argwhere(ar)
+        ar = np.ones(shape)
+        return np.argwhere(ar)
         
     def setError(self, msg=None):
         if msg is None or msg == '':
@@ -408,7 +406,7 @@ class StimGenerator(Qt.QWidget):
                     raise err
                 
             
-        if isinstance(ret, ndarray):
+        if isinstance(ret, np.ndarray):
             #ret *= self.scale
             ret += self.offset
             #print "===eval===", ret.min(), ret.max(), self.scale

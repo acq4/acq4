@@ -3,9 +3,9 @@ from __future__ import print_function
 
 import six
 
-from acq4.util import Qt
-from acq4.util.debug import *
 import acq4.util.DataManager as DataManager
+from acq4.util import Qt
+from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.DirTreeTemplate')
 

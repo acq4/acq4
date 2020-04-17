@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.modules.TaskRunner.analysisModules import AnalysisModule
-from acq4.Manager import getManager
-from acq4.util import Qt
-from numpy import *
+
+import weakref
+
+import numpy as np
 from scipy.ndimage.filters import gaussian_filter
-from acq4.util.metaarray import MetaArray
-from acq4.util.debug import *
+
+from acq4.Manager import getManager
+from acq4.modules.TaskRunner.analysisModules import AnalysisModule
+from acq4.util import Qt
+from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.UncagingTemplate')
 
@@ -44,8 +47,14 @@ class UncagingModule(AnalysisModule):
             self.tasks[k].close()
         self.tasks.clear()
         self.currentTask = None
-        
-        
+
+    def quit(self):
+        # Qt.QObject.disconnect(getManager(), Qt.SIGNAL('modulesChanged'), self.fillModuleList)
+        # getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        AnalysisModule.quit(self)
+        for p in self.tasks.values():
+            p.close()
+
     #def fillModuleList(self):
         #mods = self.man.listModules()
         #self.ui.cameraModCombo.clear()
@@ -91,7 +100,7 @@ class UncagingModule(AnalysisModule):
         if row == -1:
             return
         item = self.ui.taskList.takeItem(row)
-        name = str(item.text())
+        name = np.str(item.text())
         self.tasks[name].close()
         del self.tasks[name]
         if self.currentTask is not None and self.currentTask.name == name:
@@ -102,7 +111,7 @@ class UncagingModule(AnalysisModule):
         if row == -1:
             return None
         item = self.ui.taskList.item(row)
-        name = str(item.text())
+        name = np.str(item.text())
         return self.tasks[name]
         
     
@@ -117,7 +126,7 @@ class UncagingModule(AnalysisModule):
             self.stateGroup.setState(sp.getState())
             
     def itemClicked(self, item):
-        task = self.tasks[str(item.text())]
+        task = self.tasks[np.str(item.text())]
         if item.checkState() == Qt.Qt.Checked:
             task.show()
         else:
@@ -128,13 +137,6 @@ class UncagingModule(AnalysisModule):
         if sp is not None:
             sp.recalculate(allFrames=True)
 
-    def quit(self):
-        #Qt.QObject.disconnect(getManager(), Qt.SIGNAL('modulesChanged'), self.fillModuleList)
-        #getManager().sigModulesChanged.disconnect(self.fillModuleList)
-        AnalysisModule.quit(self)
-        for p in self.tasks.values():
-            p.close()
-            
     def cameraModule(self):
         return self.ui.cameraModCombo.getSelectedObj()
         #return str(self.ui.cameraModCombo.currentText())
@@ -148,10 +150,10 @@ class UncagingModule(AnalysisModule):
             return None
 
     def clampDevice(self):
-        return str(self.ui.clampDevCombo.currentText())
+        return np.str(self.ui.clampDevCombo.currentText())
         
     def scannerDevice(self):
-        return str(self.ui.scannerDevCombo.currentText())
+        return np.str(self.ui.scannerDevCombo.currentText())
         
         
 class Task:
@@ -312,20 +314,20 @@ class Task:
         bstop = self.state['clampBaseStopSpin'] * 1e-3
         tstart = self.state['clampTestStartSpin'] * 1e-3
         tstop = self.state['clampTestStopSpin'] * 1e-3
-        base = data['Time': bstart:bstop].view(ndarray)
-        test = data['Time': tstart:tstop].view(ndarray)
+        base = data['Time': bstart:bstop].view(np.ndarray)
+        test = data['Time': tstart:tstop].view(np.ndarray)
         if len(test) == 0:
             raise Exception("Uncaging analysis: No clamp data to evaluate. Check start/stop values?")
         time = data.xvals('Time')
         dt = time[1] - time[0]
-        med = median(base)
+        med = np.median(base)
         std = base.std()
         test = test - med
         testBlur = gaussian_filter(test, (1e-3 / dt))
         g = 0.0
         tol = self.state['pspToleranceSpin']
-        r = clip(testBlur.max() / (tol*std), 0.0, 1.0)
-        b = clip(-testBlur.min() / (tol*std), 0.0, 1.0)
+        r = np.clip(testBlur.max() / (tol * std), 0.0, 1.0)
+        b = np.clip(-testBlur.min() / (tol * std), 0.0, 1.0)
         
         ## measure latency 
         
@@ -339,16 +341,16 @@ class Task:
                 
         ## Only check first 10ms after stim
         testLen = 10e-3
-        sec = abs(testBlur[:int(testLen/dt)])
-        secMax = max(abs(testBlur.max()), abs(testBlur.min()))
+        sec = np.abs(testBlur[:np.int(testLen / dt)])
+        secMax = np.max(np.abs(testBlur.max()), np.abs(testBlur.min()))
         if sec.max() < secMax:
             g = 0
         else:
             sec = sec * (sec < (secMax * 0.5))
-            halfTime = argwhere(sec==sec.max())[0,0] * dt
+            halfTime = np.argwhere(sec == sec.max())[0, 0] * dt
             g = (testLen-halfTime) / testLen
-            g = clip(g, 0.0, 1.0)
-        g = g * max(r, b)
+            g = np.clip(g, 0.0, 1.0)
+        g = g * np.max(r, b)
         return (r, g, b)
         
         

@@ -2,29 +2,30 @@
 from __future__ import print_function
 from __future__ import with_statement
 
+import time
+
+import numpy as np
+import scipy.optimize
 import six
 
-from acq4.util import Qt
-from acq4.pyqtgraph import WidgetGroup
-from acq4.pyqtgraph import PlotWidget
-from acq4.util.metaarray import *
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-import traceback, sys, time
-from numpy import *
-import scipy.optimize
-from acq4.util.debug import *
-from acq4.pyqtgraph import siFormat
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
+from acq4.pyqtgraph import PlotWidget
+from acq4.pyqtgraph import WidgetGroup, MetaArray
+from acq4.pyqtgraph import siFormat
+from acq4.pyqtgraph.debug import Profiler
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
+from acq4.util.Thread import Thread
+from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 
 
 class PatchWindow(Qt.QMainWindow):
     
-    sigWindowClosed = Qt.Signal(object)
+    sigWindowClosed = Qt.Signal(np.object)
     
     def __init__(self, dm, config):
         clampName = config['clampDev']
@@ -76,7 +77,7 @@ class PatchWindow(Qt.QMainWindow):
         #self.statusBar().addPermanentWidget(self.logBtn)
         self.setStatusBar(StatusBar())
 
-        self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
+        self.stateFile = np.os.path.join('modules', self.clampName + '_ui.cfg')
         uiState = Manager.getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = Qt.QRect(*uiState['geometry'])
@@ -162,7 +163,7 @@ class PatchWindow(Qt.QMainWindow):
     def quit(self):
         #print "Stopping patch thread.."
         geom = self.geometry()
-        uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        uiState = {'window': np.str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
@@ -352,7 +353,7 @@ class PatchWindow(Qt.QMainWindow):
         ## Create the blank MetaArray
         data = MetaArray(
             (len(info[0]['values']), len(info[1]['cols'])), 
-            dtype=float,
+            dtype=np.float,
             info=info
         )
         
@@ -399,7 +400,7 @@ class PatchWindow(Qt.QMainWindow):
         
 class PatchThread(Thread):
     
-    sigNewFrame = Qt.Signal(object)
+    sigNewFrame = Qt.Signal(np.object)
     
     def __init__(self, ui):
         self.ui = ui
@@ -471,7 +472,7 @@ class PatchThread(Thread):
         
         
         ## Regenerate command signal if parameters have changed
-        numPts = int(float(params['recordTime']) * params['rate'])
+        numPts = np.int(np.float(params['recordTime']) * params['rate'])
         mode = params['mode']
         if params[mode+'HoldingEnabled']:
             holding = params[mode+'Holding']
@@ -481,10 +482,10 @@ class PatchThread(Thread):
             amplitude = params[mode+'Pulse']
         else:
             amplitude = 0.
-        cmdData = empty(numPts)
+        cmdData = np.empty(numPts)
         cmdData[:] = holding
-        start = int(params['delayTime'] * params['rate'])
-        stop = start + int(params['pulseTime'] * params['rate'])
+        start = np.int(params['delayTime'] * params['rate'])
+        stop = start + np.int(params['pulseTime'] * params['rate'])
         cmdData[start:stop] = holding + amplitude
         #cmdData[-1] = holding
         
@@ -515,7 +516,7 @@ class PatchThread(Thread):
                     task.execute()
                     exc = True
                 except:
-                    err = sys.exc_info()[1].args
+                    err = np.sys.exc_info()[1].args
                     #print err
                     if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
                         time.sleep(1.0)
@@ -536,7 +537,7 @@ class PatchThread(Thread):
             result = results[0]
             avg = result[clampName]
         else:
-            avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
+            avg = np.concatenate([res[clampName].view(np.ndarray)[np.newaxis, ...] for res in results], axis=0).mean(axis=0)
             avg = MetaArray(avg, info=results[0][clampName].infoCopy())
             result = results[0]
             result[clampName] = avg
@@ -569,7 +570,7 @@ class PatchThread(Thread):
         #  v[1] is amplitude of exp
         #  v[2] is tau
         def expFn(v, t):
-            return (v[0]-v[1]) + v[1] * exp(-t / v[2])
+            return (v[0]-v[1]) + v[1] * np.exp(-t / v[2])
         # predictions
         ar = 10e6
         ir = 200e6
@@ -602,7 +603,7 @@ class PatchThread(Thread):
         baseMean = base['primary'].mean()
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(tVals1, pulse['primary'].view(np.ndarray) - baseMean),
+            args=(tVals1, pulse['primary'].view(np.np.ndarray) - baseMean),
             maxfev=200, full_output=1)
         
         ## fit again using shorter data
@@ -614,7 +615,7 @@ class PatchThread(Thread):
             tVals2 = shortPulse.xvals('Time')-params['delayTime']
             fit1 = scipy.optimize.leastsq(
                 lambda v, t, y: y - expFn(v, t), pred1, 
-                args=(tVals2, shortPulse['primary'].view(np.ndarray) - baseMean),
+                args=(tVals2, shortPulse['primary'].view(np.np.ndarray) - baseMean),
                 maxfev=200, full_output=1)
         
         
@@ -625,7 +626,7 @@ class PatchThread(Thread):
             
         
         #err = max(abs(fit1[2]['fvec']).sum(), abs(fit2[2]['fvec']).sum())
-        err = abs(fit1[2]['fvec']).sum()
+        err = np.abs(fit1[2]['fvec']).sum()
         
         
         # Average fit1 with fit2 (needs massaging since fits have different starting points)
@@ -642,7 +643,7 @@ class PatchThread(Thread):
         (fitOffset, fitAmp, fitTau) = fit1
         #print fit1
         
-        fitTrace = empty(len(data))
+        fitTrace = np.empty(len(data))
         
         ## Handle analysis differently depenting on clamp mode
         if params['mode'] == 'vc':
@@ -657,7 +658,7 @@ class PatchThread(Thread):
 
             iBaseMean = iBase.mean()
             iPulseEndMean = iPulseEnd.asarray().mean()
-            iStep = sign * max(1e-15, sign * (iPulseEndMean - iBaseMean))
+            iStep = sign * np.max(1e-15, sign * (iPulseEndMean - iBaseMean))
             iRes = vStep / iStep
             
             ## From Santos-Sacchi 1993
@@ -669,9 +670,9 @@ class PatchThread(Thread):
             #self.iCap1 = iCap
             ## Instead, we will use the fit to guess how much charge transfer there would have been 
             ## if the charging curve had gone all the way back to the beginning of the pulse
-            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.linspace(0, iCapEnd-pTimes[0], iCap.shape[0]))
+            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.np.linspace(0, iCapEnd - pTimes[0], iCap.shape[0]))
             #self.iCap2 = iCap
-            Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
+            Q = np.sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
             
             
             Rin = iRes
@@ -697,9 +698,9 @@ class PatchThread(Thread):
             iStep = iPulse.mean() - iBase.mean()
             
             if iStep >= 0:
-                vStep = max(1e-5, -fitAmp)
+                vStep = np.max(1e-5, -fitAmp)
             else:
-                vStep = min(-1e-5, -fitAmp)
+                vStep = np.min(-1e-5, -fitAmp)
             #sign = [-1, 1][iStep >= 0]
             #vStep = sign * max(1e-5, sign * (vPulseEnd.mean() - vBase.mean()))
             #vStep = sign * max(1e-5, sign * fitAmp)

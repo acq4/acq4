@@ -22,26 +22,24 @@
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
 from __future__ import print_function
-import time
+
 import copy
-import pprint
-from acq4.util import Qt
-import numpy as np
+import time
 from collections import OrderedDict
 
-from acq4.modules.Module import Module
+import numpy as np
+
+import acq4.Manager
 import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.dockarea
-import acq4.Manager
-import acq4.util.InterfaceCombo as InterfaceCombo
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program import ScanProgram
-from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.modules.Module import Module
 from acq4.pyqtgraph import parametertree as PT
-from acq4.util import metaarray as MA
-from acq4.util.Mutex import Mutex
+from acq4.util import Qt
 from acq4.util import imaging
+from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 

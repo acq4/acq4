@@ -8,6 +8,7 @@ from __future__ import print_function
 
 from acq4.pyqtgraph.debug import *
 import acq4.pyqtgraph.debug as pgdebug
+from acq4.pyqtgraph.exceptionHandling import original_excepthook
 
 LOG_UI = None
 

@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.modules.Module import *
-from acq4.util.DataManager import *
-import os, re, sys, time
+
+import os
+import time
+
 import six
-from acq4.util.debug import *
-from acq4.util import Qt
-from . import FileAnalysisView
-from acq4.LogWindow import LogButton, LogWindow
-from . import FileLogView
+
+from acq4.Manager import logMsg
+from acq4.modules.Module import Module
 from acq4.pyqtgraph import FileDialog
-from acq4.Manager import logMsg, logExc
-from acq4.util.StatusBar import StatusBar
 from acq4.util import Qt
+from acq4.util.DataManager import getDataManager, getHandle, DirHandle
+from acq4.util.StatusBar import StatusBar
+from acq4.util.debug import printExc
+from . import FileAnalysisView
+from . import FileLogView
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 

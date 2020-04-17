@@ -34,7 +34,7 @@ from .pyqtgraph.util.mutex import Mutex
 from .util import DataManager, ptime, configfile, Qt
 from .util.HelpfulException import HelpfulException
 
-from .util.debug import logMsg, createLogWindow
+from .util.debug import logMsg, createLogWindow, logExc # logExc needed by debug
 
 
 ### All other modules can use this function to get the manager instance

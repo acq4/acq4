@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
+
 from acq4.devices.Device import TaskGui
-from acq4.util.debug import *
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-import sys
+from acq4.util import Qt
+from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 

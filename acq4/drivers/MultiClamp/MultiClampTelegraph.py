@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 import sys
+
+from acq4.util.clibrary import winDefs, CParser, CLibrary
+
 sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 import ctypes
-import struct, os, threading, time, weakref
-from acq4.util.clibrary import *
-
+import os, threading, time
 
 DEBUG = False
 if DEBUG:
@@ -28,7 +30,7 @@ teleDefs = CParser(
 ##  Windows Messaging API 
 #   provides RegisterWindowMessageA, PostMessageA, PeekMessageA, GetMessageA
 #   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
-wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
+wmlib = CLibrary(ctypes.windll.User32, teleDefs, prefix='MCTG_')
 
 ## Naturally we can't use the same set of definitions for the 700A and 700B.
 ax700ADefs = CParser(
@@ -184,14 +186,14 @@ class MultiClampTelegraph:
             print("MultiClampTelegraph.wndProc called.")
 
         if msg == wmlib.WM_COPYDATA:
-            data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
+            data = ctypes.cast(lParam, ctypes.POINTER(wmlib.COPYDATASTRUCT)).contents
             if data.dwData == self.msgIds['REQUEST']:
                 if self.debug:
                     print("    COPYDATASTRUCT.dwData (ULONG_PTR, a memory address):", data.dwData) ### ULONG_PTR should be a 64-bit number on 64-bit machines, and a 32-bit number on 32-bit machines
                     print("    COPYDATASTRUCT.cbData (DWORD, the size (in bytes) of data pointed to by lpData):", data.cbData)
                     print("    COPYDATASTRUCT.lpData (PVOID, a pointer to the data to be passed): ", data.lpData)
 
-                data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
+                data  = ctypes.cast(data.lpData, ctypes.POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
                 #### Make sure packet is for the correct device!
                 devID = self.mkDevId({'com': data.uComPortID, 'dev': data.uAxoBusID, 'chan': data.uChannelID, 'model': data.uHardwareType, 'sn': data.szSerialNumber})
                 if not devID in self.devIndex:
@@ -264,7 +266,7 @@ class MultiClampTelegraph:
     def getWindowsError(self):
         if self.debug:
             print("MultiClampTelegraph.getWindowsError called.")
-        return windll.kernel32.GetLastError()
+        return ctypes.windll.kernel32.GetLastError()
 
 
     def registerMessages(self):

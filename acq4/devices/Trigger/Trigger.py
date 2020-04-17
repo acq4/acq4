@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.Device import *
+
+from acq4.devices.Device import Device
+
+
 class Trigger(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)

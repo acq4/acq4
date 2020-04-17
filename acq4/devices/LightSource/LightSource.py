@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.Device import *
+
+from acq4.devices.Device import Device
 from acq4.util import Qt
 import acq4.util.Mutex as Mutex
 from collections import OrderedDict

@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.devices.Camera import Camera, CameraTask
-from acq4.util import Qt
-import six
-from six.moves import range
-import time, sys, traceback
-import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
-import acq4.util.functions as fn
+
+from collections import OrderedDict
+
 import numpy as np
 import scipy
-from collections import OrderedDict
+import six
+from six.moves import range
+
 import acq4.pyqtgraph as pg
+import acq4.util.functions as fn
+import acq4.util.ptime as ptime
+from acq4.devices.Camera import Camera, CameraTask
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 
 
 class MockCamera(Camera):

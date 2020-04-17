@@ -1,12 +1,13 @@
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.modules.Module import *
-import sys, re, os, time, traceback
-import acq4.util.debug as debug
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.console as console
+
+import os
+
 import numpy as np
 
+import acq4.pyqtgraph as pg
+import acq4.pyqtgraph.console as console
+from acq4.modules.Module import Module
+from acq4.util import Qt
 
 EDITOR = "pykate {fileName}:{lineNum}"
 

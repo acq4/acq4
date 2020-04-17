@@ -3,8 +3,12 @@ from __future__ import print_function
 
 import weakref
 
-from acq4.util.Mutex import *
+import six
+
 from acq4.pyqtgraph.python2_3 import basestring
+from acq4.pyqtgraph.util.mutex import Mutex
+from acq4.util import Qt
+
 
 class InterfaceMixin(object):
     """Mixin class used to allow objects to declare which APIs they implement.

@@ -1,5 +1,6 @@
 from __future__ import print_function
-from acq4.devices.Device import *
+
+from acq4.devices.Device import Device, DeviceTask, TaskGui
 from acq4.util import Qt
 
 class Screen(Device):

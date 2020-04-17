@@ -1,20 +1,19 @@
 from __future__ import print_function
-import sys, os
+
+import os
+import sys
+
+from acq4.util.clibrary import CParser, CLibrary
+
 if __name__ == '__main__':
     d = os.path.dirname(__file__)
     sys.path.append(os.path.join(d, '../../util'))
     
 import acq4.util.ptime as ptime
-from ctypes import *
-from acq4.util.clibrary import *
-from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
-from acq4.pyqtgraph import graphicsWindows as gw
-from acq4.util import Qt
+import ctypes
+from numpy import empty, uint16, ascontiguousarray
 from acq4.util.Mutex import Mutex
 from collections import OrderedDict
-import atexit
-import traceback
-import time
 import six
 modDir = os.path.dirname(__file__)
 sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
@@ -28,9 +27,9 @@ print(headerDir)
 p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
 
 if sys.platform == 'darwin':
-    dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
+    dll = ctypes.cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
-    dll = windll.QCamDriver
+    dll = ctypes.windll.QCamDriver
 lib = CLibrary(dll, p, prefix = 'QCam_')        ##makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
                                                 ##also interprets all the typedefs for you....very handy
                                                 ##anything from the header needs to be accessed through lib.yourFunctionOrParameter
@@ -44,7 +43,7 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        ##makes it so that functions in 
 #    #os.path.join(modDir, "pvcam.h")
 #]
 #HEADERS = CParser(headerFiles, cache=os.path.join(modDir, 'pvcam_headers.cache'), copyFrom=winDefs())
-#LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
+#LIB = CLibrary(ctypes.windll.Pvcam32, HEADERS, prefix='pl_')
 #
 
 ###functions that are called from CameraDevice:
@@ -120,7 +119,7 @@ class QCamDriverClass:
     #    self.call(lib.ReleaseDriver)
         
     def listCameras(self):
-        number = c_ulong(10)
+        number = ctypes.c_ulong(10)
         L = lib.CamListItem * 10
         l = L()
         self.call(lib.ListCameras, l, number)
@@ -317,7 +316,7 @@ class QCameraClass:
         ## ALSO! It looks like some versions of the QImaging driver have a bug, so we need to allocate 2 adjacent 
         ## structures; the second one is a junk buffer for the driver to barf in.
         s = (lib.QCam_Settings*2)()
-        s[0].size = sizeof(s[0])
+        s[0].size = ctypes.sizeof(s[0])
         #print "==========\ndata before:"
         #for i in range(2):
             #print list(s[i]._private_data)
@@ -361,15 +360,15 @@ class QCameraClass:
             x = self.translateToCamera(x)
             if x not in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp', 'qprm64Exposure']:
                 try:
-                    if self.call(lib.GetParam, byref(s), getattr(lib, x))() == 0:
+                    if self.call(lib.GetParam, ctypes.byref(s), getattr(lib, x))() == 0:
                         try: ###first try to get a SparseTable
-                            table = (c_ulong *32)()
-                            r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
+                            table = (ctypes.c_ulong *32)()
+                            r = self.call(lib.GetParamSparseTable, ctypes.byref(s), getattr(lib,x), table, ctypes.c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
                         except QCamFunctionError as err: ###if sparse table doesn't work try getting a RangeTable
                             if err.value == 1:  
-                                min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
-                                max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
+                                min = self.call(lib.GetParamMin, ctypes.byref(s), getattr(lib,x))[2]
+                                max = self.call(lib.GetParamMax, ctypes.byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise 
                 except QCamFunctionError as err:
@@ -378,15 +377,15 @@ class QCameraClass:
         #for x in lib('enums', 'QCam_ParamS32'):
             elif x not in ['qprm64Exposure']:
                 try:
-                    if self.call(lib.GetParamS32, byref(s), getattr(lib, x))() == 0:
+                    if self.call(lib.GetParamS32, ctypes.byref(s), getattr(lib, x))() == 0:
                         try:
-                            table = (c_long *32)()
-                            r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
+                            table = (ctypes.c_long *32)()
+                            r = self.call(lib.GetParamSparseTableS32, ctypes.byref(s), getattr(lib,x), table, ctypes.c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
                         except QCamFunctionError as err:
                             if err.value == 1:
-                                min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
-                                max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
+                                min = self.call(lib.GetParamS32Min, ctypes.byref(s), getattr(lib,x))[2]
+                                max = self.call(lib.GetParamS32Max, ctypes.byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise
                 except QCamFunctionError as err:
@@ -395,15 +394,15 @@ class QCameraClass:
         #for x in lib('enums', 'QCam_Param64'):
             elif x not in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp']:
                 try:
-                    if self.call(lib.GetParam64, byref(s), getattr(lib, x))() == 0:
+                    if self.call(lib.GetParam64, ctypes.byref(s), getattr(lib, x))() == 0:
                         try:
-                            table = (c_ulonglong *32)()
-                            r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
+                            table = (ctypes.c_ulonglong *32)()
+                            r = self.call(lib.GetParamSparseTable64, ctypes.byref(s), getattr(lib,x), table, ctypes.c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
                         except QCamFunctionError as err:
                             if err.value == 1:  ## qerrNotSupported
-                                min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
-                                max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
+                                min = self.call(lib.GetParam64Min, ctypes.byref(s), getattr(lib,x))[2]
+                                max = self.call(lib.GetParam64Max, ctypes.byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
                             else: raise
                 except QCamFunctionError as err:
@@ -532,11 +531,11 @@ class QCameraClass:
             param2 = self.translateToCamera(param)
                 
             if param2 in lib('enums', 'QCam_Param'):
-                value = self.call(lib.GetParam, byref(s), getattr(lib, param2))[2]
+                value = self.call(lib.GetParam, ctypes.byref(s), getattr(lib, param2))[2]
             elif param2 in lib('enums', 'QCam_ParamS32'):
-                value = self.call(lib.GetParamS32, byref(s), getattr(lib, param2))[2]
+                value = self.call(lib.GetParamS32, ctypes.byref(s), getattr(lib, param2))[2]
             elif param2 in lib('enums', 'QCam_Param64'):
-                value = self.call(lib.GetParam64, byref(s), getattr(lib, param2))[2]
+                value = self.call(lib.GetParam64, ctypes.byref(s), getattr(lib, param2))[2]
             elif param2 in self.cameraInfo:
                 value = self.cameraInfo[param2]
             else:
@@ -681,10 +680,10 @@ class QCameraClass:
                 #h = self.getParam('qprmRoiHeight')
                 #oldBinning = self.getParam('binning')[0]
                 
-                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiX'), c_ulong(int(x/value)))
-                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiY'), c_ulong(int(y/value)))
-                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiWidth'), c_ulong(int(w/value)))
-                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiHeight'), c_ulong(int(h/value)))
+                self.call(lib.SetParam, ctypes.byref(s), getattr(lib, 'qprmRoiX'), ctypes.c_ulong(int(x/value)))
+                self.call(lib.SetParam, ctypes.byref(s), getattr(lib, 'qprmRoiY'), ctypes.c_ulong(int(y/value)))
+                self.call(lib.SetParam, ctypes.byref(s), getattr(lib, 'qprmRoiWidth'), ctypes.c_ulong(int(w/value)))
+                self.call(lib.SetParam, ctypes.byref(s), getattr(lib, 'qprmRoiHeight'), ctypes.c_ulong(int(h/value)))
                 
             rgnParams = ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']
             if param in rgnParams:
@@ -694,11 +693,11 @@ class QCameraClass:
                 value = value/binn
                 
             if param in lib('enums', 'QCam_Param'):
-                self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(int(value)))
+                self.call(lib.SetParam, ctypes.byref(s), getattr(lib, param), ctypes.c_ulong(int(value)))
             elif param in lib('enums', 'QCam_ParamS32'):
-                self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(int(value)))
+                self.call(lib.SetParamS32, ctypes.byref(s), getattr(lib, param), ctypes.c_long(int(value)))
             elif param in lib('enums', 'QCam_Param64'):
-                self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(int(value)))
+                self.call(lib.SetParam64, ctypes.byref(s), getattr(lib, param), ctypes.c_ulonglong(int(value)))
         #self.queueSettingsDict = {}
         #for x in params:
             #self.queueSettingsDict[x] = value
@@ -715,21 +714,21 @@ class QCameraClass:
             #print "Mutex locked from qcam.setParams()"
             if self.stopSignal == True:
                 #self.mutex.unlock()
-                self.call(lib.SendSettingsToCam, self.handle, byref(s))
+                self.call(lib.SendSettingsToCam, self.handle, ctypes.byref(s))
 
                 restart = False
             elif self.stopSignal == False: ##### Can't figure out how to get QueueSettings to work....so we'll just stop and start the camera.
                 #try:
                     #print "QCam about to Queue settings. params:", params
-                    #s.size = sizeof(s)
+                    #s.size = ctypes.sizeof(s)
                     ##self.mutex.unlock()
                     #var = c_void_p(0)
-                    #self.call(lib.QueueSettings, self.handle, byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
+                    #self.call(lib.QueueSettings, self.handle, ctypes.byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
                     #restart = False
                     #print "QCamSettings are queued. Look for message from callback..."
                 #except QCamFunctionError:
                 #self.stop()
-                self.call(lib.SendSettingsToCam, self.handle, byref(s))
+                self.call(lib.SendSettingsToCam, self.handle, ctypes.byref(s))
                 #self.start()
                 restart = True
                     
@@ -783,8 +782,8 @@ class QCameraClass:
     def grabFrame(self):
         s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2]
         #s = lib.GetInfo(handle, lib.qinfImageSize)[2]
-        (f, a) = mkFrame()
-        self.call(lib.GrabFrame, self.handle, byref(f))
+        (f, a) = self.mkFrame()
+        self.call(lib.GrabFrame, self.handle, ctypes.byref(f))
         #w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
         #frame.shape = (s/w, w)
         return a

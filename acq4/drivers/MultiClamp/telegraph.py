@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 import sys
+
+from acq4.util.clibrary import winDefs, CParser, CLibrary
+
 sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
-from ctypes import *
 import ctypes
-import struct, os
-from acq4.util.clibrary import *
+import os
 import time
-import weakref
 
 ## Load windows definitions
 windowsDefs = winDefs(verbose=True)
@@ -25,7 +26,7 @@ teleDefs = CParser(
 ##  Windows Messaging API 
 #   provides RegisterWindowMessageA, PostMessageA, PeekMessageA, GetMessageA
 #   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
-wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
+wmlib = CLibrary(ctypes.windll.User32, teleDefs, prefix='MCTG_')
 
 
 
@@ -34,10 +35,10 @@ def wndProc(hWnd, msg, wParam, lParam):
     print("Window event:", msg)
     if msg == wmlib.WM_COPYDATA:
         print("  copydatastruct", lParam)
-        data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
+        data = ctypes.cast(lParam, ctypes.POINTER(wmlib.COPYDATASTRUCT)).contents
         if data.dwData == msgIds['REQUEST']:
             print("  got update from MCC")
-            data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
+            data  = ctypes.cast(data.lpData, ctypes.POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
             for f in data._fields_:
                 print("    ", f[0], getattr(data, f[0]))
             global d
@@ -48,7 +49,7 @@ def wndProc(hWnd, msg, wParam, lParam):
 
 
 def getError():
-    return windll.kernel32.GetLastError()
+    return ctypes.windll.kernel32.GetLastError()
 
 #wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, windll.kernel32.GetModuleHandleA(c_int(0)), 0, 0, 0, "", "AxTelegraphWin")
 wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")

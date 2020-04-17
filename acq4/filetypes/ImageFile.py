@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import os
+
 from PIL import Image
 
 ## Install support for 16-bit images in PIL
-
 if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.7':
     Image._MODE_CONV["I;16"] = ('%su2' % Image._ENDIAN, None)
     Image._fromarray_typemap[((1, 1), "<u2")] = ("I", "I;16")
@@ -57,7 +58,7 @@ if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.6':
         if strides is not None:
             obj = obj.tostring()
 
-        return frombuffer(mode, size, obj, "raw", mode, 0, 1)
+        return Image.frombuffer(mode, size, obj, "raw", mode, 0, 1)
         
     Image.fromarray=fromarray
 
@@ -65,7 +66,7 @@ if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.6':
 
 from numpy import array, ndarray
 from acq4.util.metaarray import MetaArray as MA
-from .FileType import *
+from .FileType import FileType
 
 #import libtiff
 #from acq4.util import Qt
