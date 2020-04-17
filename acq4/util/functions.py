@@ -27,7 +27,6 @@ from scipy import stats, signal
 from scipy.signal import deconvolve
 from six.moves import range
 
-from acq4.analysis.scripts.pspFitTest import processExtraVars
 from acq4.pyqtgraph import MetaArray
 from acq4.pyqtgraph.python2_3 import cmp
 from acq4.util import Qt
@@ -175,6 +174,7 @@ def pspFunc(v, x, risePower=2.0):
     """
     
     if len(v) > 4:
+        from acq4.analysis.scripts.pspFitTest import processExtraVars
         v = processExtraVars(v)
     
     ## determine scaling factor needed to achieve correct amplitude
