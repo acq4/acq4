@@ -8,7 +8,7 @@ import scipy
 
 import acq4.pyqtgraph as pg
 import acq4.util.functions as functions
-import acq4.util.metaarray as metaarray
+import acq4.pyqtgraph.metaarray as metaarray
 from acq4.analysis.tools.Fitting import Fitting
 from acq4.pyqtgraph.flowchart import Node
 from acq4.pyqtgraph.flowchart.library.common import CtrlNode

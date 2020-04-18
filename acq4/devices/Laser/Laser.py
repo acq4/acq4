@@ -14,7 +14,7 @@ from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
 from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph as pg
-import acq4.util.metaarray as metaarray
+import acq4.pyqtgraph.metaarray as metaarray
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 import acq4.util.ptime as ptime
 

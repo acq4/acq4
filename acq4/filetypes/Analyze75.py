@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from acq4.util.metaarray import MetaArray
+from acq4.pyqtgraph.metaarray import MetaArray
 from .FileType import FileType
 
 

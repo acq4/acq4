@@ -65,7 +65,7 @@ if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.6':
 #import png ## better png support than PIL
 
 from numpy import array, ndarray
-from acq4.util.metaarray import MetaArray as MA
+from acq4.pyqtgraph.metaarray import MetaArray as MA
 from .FileType import FileType
 
 #import libtiff

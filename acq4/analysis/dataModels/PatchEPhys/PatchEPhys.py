@@ -6,7 +6,7 @@ import re
 
 import numpy as np
 
-from acq4.util.metaarray import MetaArray
+from acq4.pyqtgraph.metaarray import MetaArray
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),

@@ -3,7 +3,7 @@ from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import acq4.pyqtgraph as pg
-from acq4.util.metaarray import MetaArray
+from acq4.pyqtgraph.metaarray import MetaArray
 import numpy as np
 import scipy
 import acq4.util.functions as fn

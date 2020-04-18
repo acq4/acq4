@@ -13,7 +13,7 @@ from six.moves import reduce
 
 import acq4.pyqtgraph as pg
 import acq4.util.DirTreeWidget as DirTreeWidget
-import acq4.util.configfile as configfile
+import acq4.pyqtgraph.configfile as configfile
 import acq4.util.ptime as ptime
 from acq4.Manager import getManager
 from acq4.util import Qt

@@ -21,7 +21,7 @@ from .StimParamSet import StimParamSet
 from .SeqParamSet import SequenceParamSet
 import six
 
-import acq4.util.units as units
+import acq4.pyqtgraph.units as units
 
 Ui_Form = Qt.importTemplate('.GeneratorTemplate')
 

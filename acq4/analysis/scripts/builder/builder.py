@@ -9,7 +9,7 @@ labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 from acq4.util import Qt
 import acq4.pyqtgraph as pg
 import numpy as np
-import acq4.util.metaarray as metaarray
+import acq4.pyqtgraph.metaarray as metaarray
 import acq4.util.debug as debug
 import user
 
