@@ -9,12 +9,11 @@ class ParamList(Qt.QTreeWidget):
         self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
         self.setAnimated(False)
 
-
     checkStateMap = {
         True: Qt.Qt.Checked,
         False: Qt.Qt.Unchecked
     }
-    
+
     def updateList(self, dev, params):
         """Update the list of sequence parameters for dev."""
         # Catalog the parameters that already exist for this device:
@@ -60,7 +59,7 @@ class ParamList(Qt.QTreeWidget):
                     p.removeChild(item)
                     for c in childs:
                         p.addChild(c)
-    
+
     def saveState(self):
         state = []
         for i in self.topLevelItems():
@@ -71,7 +70,7 @@ class ParamList(Qt.QTreeWidget):
                 childs.append(dd)
             state.append(d + (childs,))
         return state
-    
+
     def loadState(self, state):
         """Order all parameters to match order in list. Does not create or destroy any parameters."""
         items = self.topLevelItems()
@@ -100,7 +99,7 @@ class ParamList(Qt.QTreeWidget):
             self.addTopLevelItem(i[0])
             for i2 in i[1]:
                 i[0].addChild(i2)
-    
+
     def dropEvent(self, ev):
         Qt.QTreeWidget.dropEvent(self, ev)
         
@@ -110,19 +109,19 @@ class ParamList(Qt.QTreeWidget):
             for j in range(i.childCount()):
                 i.child(j).setFlags(i.flags() & (~Qt.Qt.ItemIsDropEnabled))
             i.setExpanded(True)
-                
+
     def itemData(self, item):
         dev = str(item.text(0))
         param = str(item.text(1))
         enab = (item.checkState(0)==Qt.Qt.Checked)
         return(dev, param, enab)
-        
+
     def topLevelItems(self):
         items = []
         for i in range(self.topLevelItemCount()):
             items.append(self.topLevelItem(i))
         return items
-        
+
     def findItem(self, dev, param):
         items = self.findItems(dev, Qt.Qt.MatchExactly | Qt.Qt.MatchRecursive, 0)
         for i in items:
@@ -131,7 +130,7 @@ class ParamList(Qt.QTreeWidget):
             if p == param:
                 return i
         return None
-        
+
     def takeItem(self, item):
         p = item.parent()
         if p is None:
@@ -158,11 +157,9 @@ class ParamList(Qt.QTreeWidget):
                         childs.append((dev2, param2))
                 params.append((dev, param, i.params, childs))
         return params
-        
+
     def removeDevice(self, dev):
         """Remove all parameters for a specific device"""
         items = self.findItems(dev, Qt.Qt.MatchExactly | Qt.Qt.MatchRecursive, 0)
         for i in items:
             self.takeItem(i)
-        
-        

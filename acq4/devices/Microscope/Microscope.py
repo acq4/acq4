@@ -52,13 +52,12 @@ class Microscope(Device, OptomechDevice):
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
         
-        for k1,objs in config['objectives'].items():  ## Set default values for each objective
+        for k1, objs in config['objectives'].items():  ## Set default values for each objective
             self.objectives[k1] = collections.OrderedDict()
-            for k2,o in objs.items():
+            for k2, o in objs.items():
                 obj = Objective(o, self, (k1, k2))
                 self.objectives[k1][k2] = obj
                 #obj.sigTransformChanged.connect(self.objectiveTransformChanged)
-                
 
         ## Keep track of the objective currently in use for each position
         ## Format is: { switchPosition1: objective1,  ... }
@@ -67,8 +66,7 @@ class Microscope(Device, OptomechDevice):
         )
         for obj in self.selectedObjectives.values():
             self.addSubdevice(obj)
-        
-        
+
         ## if there is a light source, configure it here
         if 'lightSource' in config:
             self.lightSource = dm.getDevice(config['lightSource'])
