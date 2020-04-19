@@ -1,4 +1,4 @@
-from FilterWheel.filterwheel import FilterWheel, FilterWheelFuture
+from .FilterWheel.filterwheel import FilterWheel, FilterWheelFuture
 
 
 class MockFilterWheel(FilterWheel):
