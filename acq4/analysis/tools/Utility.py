@@ -41,7 +41,6 @@ import numpy.ma as ma
 #import numpy.linalg.lstsq
 import scipy.fftpack as spFFT
 import scipy.signal as spSignal
-from sets import Set
 
 from random import sample
 

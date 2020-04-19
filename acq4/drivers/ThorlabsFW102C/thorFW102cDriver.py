@@ -166,27 +166,24 @@ class FilterWheelDriver(SerialDevice):
 
         
 if __name__ == '__main__':
-    print "Testing ThorLabs FW102C motorized filter wheel ..."
+    print("Testing ThorLabs FW102C motorized filter wheel ...")
     fw = FilterWheelDriver(3)
-    print 'pos a :', fw.getPos()
-    print 'pos. count:', fw.getPosCount()
-    print 'move to pos 2'
+    print('pos a :', fw.getPos())
+    print('pos. count:', fw.getPosCount())
+    print('move to pos 2')
     fw.setPos(2)
-    print 'pos b :', fw.getPos()
-    print 'move to pos 3'
+    print('pos b :', fw.getPos())
+    print('move to pos 3')
     fw.setPos(3)
-    print 'pos c :', fw.getPos()
-    print 'speed :', fw.getSpeed()
-    print 'fast is new speed '
+    print('pos c :', fw.getPos())
+    print('speed :', fw.getSpeed())
+    print('fast is new speed ')
     fw.setSpeed(1)
-    print 'move to pos 2'
+    print('move to pos 2')
     fw.setPos(2)
-    print 'pos d :', fw.getPos()
-    print 'move to pos 3'
+    print('pos d :', fw.getPos())
+    print('move to pos 3')
     fw.setPos(3)
-    print 'pos e :', fw.getPos()
-    print 'slow is new speed '
+    print('pos e :', fw.getPos())
+    print('slow is new speed ')
     fw.setSpeed(0)
-    
-    
-

@@ -1,5 +1,5 @@
 from __future__ import print_function
-import pyqtgraph as pg
+import acq4.pyqtgraph as pg
 import numpy as np
 
 view = pg.GraphicsView()
