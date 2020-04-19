@@ -24,9 +24,9 @@ dlen = len(data)
 xVals = np.linspace(0, dur, dlen)
 
 data += np.random.normal(size=dlen) + 20.
-data[dlen*0.102:dlen*0.3] += 20
-data[dlen*0.3:dlen*0.5] += 30
-data[dlen*0.4]+= 1000
+data[round(dlen*0.102):round(dlen*0.3)] += 20
+data[round(dlen*0.3):round(dlen*0.5)] += 30
+data[round(dlen*0.4)]+= 1000
 data += np.sin(xVals*40677*2.0*np.pi)*4.
 #data = sin(linspace(0, dur, sr*dur)* linspace(0, sr*2, sr*dur))
 
