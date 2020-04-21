@@ -57,18 +57,17 @@ class Camera(DAQGeneric, OptomechDevice):
     sigParamsChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
-        OptomechDevice.__init__(self, dm, config, name)
-
-        self.lock = Mutex(Mutex.Recursive)
-        
-        # Generate config to use for DAQ 
+        # Generate config to use for DAQ
         daqConfig = {}
         if 'exposeChannel' in config:
             daqConfig['exposure'] = config['exposeChannel']
         if 'triggerInChannel' in config:
             daqConfig['trigger'] = config['triggerInChannel']
         DAQGeneric.__init__(self, dm, daqConfig, name)
-        
+        OptomechDevice.__init__(self, dm, config, name)
+
+        self.lock = Mutex(Mutex.Recursive)
+
         self.camConfig = config
         self.stateStack = []
                 
