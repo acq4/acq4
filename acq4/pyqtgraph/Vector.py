@@ -18,6 +18,9 @@ class Vector(QtGui.QVector3D):
                 return
             elif isinstance(args[0], QtCore.QPoint) or isinstance(args[0], QtCore.QPointF):
                 QtGui.QVector3D.__init__(self, float(args[0].x()), float(args[0].y()), 0)
+            elif isinstance(args[0], QtGui.QVector3D):
+                QtGui.QVector3D.__init__(self, args[0].x(), args[0].y(), args[0].z())
+                return
             elif hasattr(args[0], '__getitem__'):
                 vals = list(args[0])
                 if len(vals) == 2:
