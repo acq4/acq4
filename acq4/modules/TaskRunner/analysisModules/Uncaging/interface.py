@@ -100,7 +100,7 @@ class UncagingModule(AnalysisModule):
         if row == -1:
             return
         item = self.ui.taskList.takeItem(row)
-        name = np.str(item.text())
+        name = str(item.text())
         self.tasks[name].close()
         del self.tasks[name]
         if self.currentTask is not None and self.currentTask.name == name:
@@ -111,7 +111,7 @@ class UncagingModule(AnalysisModule):
         if row == -1:
             return None
         item = self.ui.taskList.item(row)
-        name = np.str(item.text())
+        name = str(item.text())
         return self.tasks[name]
         
     
@@ -126,7 +126,7 @@ class UncagingModule(AnalysisModule):
             self.stateGroup.setState(sp.getState())
             
     def itemClicked(self, item):
-        task = self.tasks[np.str(item.text())]
+        task = self.tasks[str(item.text())]
         if item.checkState() == Qt.Qt.Checked:
             task.show()
         else:
@@ -150,10 +150,10 @@ class UncagingModule(AnalysisModule):
             return None
 
     def clampDevice(self):
-        return np.str(self.ui.clampDevCombo.currentText())
+        return str(self.ui.clampDevCombo.currentText())
         
     def scannerDevice(self):
-        return np.str(self.ui.scannerDevCombo.currentText())
+        return str(self.ui.scannerDevCombo.currentText())
         
         
 class Task:

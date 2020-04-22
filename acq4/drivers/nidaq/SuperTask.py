@@ -74,7 +74,7 @@ class SuperTask:
                 raise TypeError("mode argument not accepted for channel type '%s'" % typ)
 
             # Is the requested mode in the allowed list?
-            lower = list(map(np.np.str.lower, allowed))
+            lower = list(map(str.lower, allowed))
             try:
                 ind = lower.index(mode.lower())
             except ValueError:
@@ -156,7 +156,7 @@ class SuperTask:
                 try:
                     self.tasks[k].write(d)
                 except:
-                    print("Error while writing data to task '%s':" % np.np.str(k))
+                    print("Error while writing data to task '%s':" % str(k))
                     raise
                 self.taskInfo[k]['dataWritten'] = True
         
@@ -210,7 +210,7 @@ class SuperTask:
                     pass
             else:
                 if rate > maxrate:
-                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (np.np.int(rate), np.np.int(maxrate)))
+                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (np.int(rate), np.int(maxrate)))
 
             if k[1] != clkSource:
                 #print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)

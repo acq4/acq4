@@ -2,6 +2,8 @@
 from __future__ import print_function
 from __future__ import with_statement
 
+import os
+import sys
 import time
 
 import numpy as np
@@ -25,7 +27,7 @@ Ui_Form = Qt.importTemplate('.PatchTemplate')
 
 class PatchWindow(Qt.QMainWindow):
     
-    sigWindowClosed = Qt.Signal(np.object)
+    sigWindowClosed = Qt.Signal(object)
     
     def __init__(self, dm, config):
         clampName = config['clampDev']
@@ -77,7 +79,7 @@ class PatchWindow(Qt.QMainWindow):
         #self.statusBar().addPermanentWidget(self.logBtn)
         self.setStatusBar(StatusBar())
 
-        self.stateFile = np.os.path.join('modules', self.clampName + '_ui.cfg')
+        self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
         uiState = Manager.getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = Qt.QRect(*uiState['geometry'])
@@ -400,7 +402,7 @@ class PatchWindow(Qt.QMainWindow):
         
 class PatchThread(Thread):
     
-    sigNewFrame = Qt.Signal(np.object)
+    sigNewFrame = Qt.Signal(object)
     
     def __init__(self, ui):
         self.ui = ui
@@ -516,7 +518,7 @@ class PatchThread(Thread):
                     task.execute()
                     exc = True
                 except:
-                    err = np.sys.exc_info()[1].args
+                    err = sys.exc_info()[1].args
                     #print err
                     if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
                         time.sleep(1.0)
@@ -603,7 +605,7 @@ class PatchThread(Thread):
         baseMean = base['primary'].mean()
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(tVals1, pulse['primary'].view(np.np.ndarray) - baseMean),
+            args=(tVals1, pulse['primary'].view(np.ndarray) - baseMean),
             maxfev=200, full_output=1)
         
         ## fit again using shorter data
@@ -615,7 +617,7 @@ class PatchThread(Thread):
             tVals2 = shortPulse.xvals('Time')-params['delayTime']
             fit1 = scipy.optimize.leastsq(
                 lambda v, t, y: y - expFn(v, t), pred1, 
-                args=(tVals2, shortPulse['primary'].view(np.np.ndarray) - baseMean),
+                args=(tVals2, shortPulse['primary'].view(np.ndarray) - baseMean),
                 maxfev=200, full_output=1)
         
         
@@ -670,7 +672,7 @@ class PatchThread(Thread):
             #self.iCap1 = iCap
             ## Instead, we will use the fit to guess how much charge transfer there would have been 
             ## if the charging curve had gone all the way back to the beginning of the pulse
-            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.np.linspace(0, iCapEnd - pTimes[0], iCap.shape[0]))
+            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.linspace(0, iCapEnd - pTimes[0], iCap.shape[0]))
             #self.iCap2 = iCap
             Q = np.sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
             

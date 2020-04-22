@@ -52,9 +52,9 @@ class Camera(DAQGeneric, OptomechDevice):
 
     sigCameraStopped = Qt.Signal()
     sigCameraStarted = Qt.Signal()
-    sigShowMessage = Qt.Signal(np.object)  # (string message)
-    sigNewFrame = Qt.Signal(np.object)  # (frame data)
-    sigParamsChanged = Qt.Signal(np.object)
+    sigShowMessage = Qt.Signal(object)  # (string message)
+    sigNewFrame = Qt.Signal(object)  # (frame data)
+    sigParamsChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
         OptomechDevice.__init__(self, dm, config, name)
@@ -768,8 +768,8 @@ class CameraTaskResult:
         
 class AcquireThread(Thread):
     
-    sigNewFrame = Qt.Signal(np.object)
-    sigShowMessage = Qt.Signal(np.object)
+    sigNewFrame = Qt.Signal(object)
+    sigShowMessage = Qt.Signal(object)
     
     def __init__(self, dev):
         Thread.__init__(self)
