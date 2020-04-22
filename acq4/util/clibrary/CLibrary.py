@@ -10,7 +10,9 @@ function calling based on C header definitions.
 """
 
 
-import ctypes
+from ctypes import c_wchar_p, pointer, WINFUNCTYPE, c_ubyte, c_long, c_longlong, c_short, c_char, c_int, c_void_p, \
+    Union, c_ulonglong, c_wchar, cast, c_ushort, c_float, c_double, c_uint, POINTER, c_char_p, c_longdouble, Structure, \
+    c_ulong, CFUNCTYPE
 import sys, os, platform
 
 import six
@@ -82,34 +84,34 @@ class CLibrary:
     Null = object()
     
     cTypes = {
-        'char': ctypes.c_char,
-        'wchar': ctypes.c_wchar,
-        'unsigned char': ctypes.c_ubyte,
-        'short': ctypes.c_short,
-        'short int': ctypes.c_short,
-        'unsigned short': ctypes.c_ushort,
-        'unsigned short int': ctypes.c_ushort,
-        'int': ctypes.c_int,
-        'unsigned': ctypes.c_uint,
-        'unsigned int': ctypes.c_uint,
-        'long': ctypes.c_long,
-        'long int': ctypes.c_long,
-        'unsigned long': ctypes.c_ulong,
-        'unsigned long int': ctypes.c_ulong,
-        '__int64': ctypes.c_longlong,
-        'long long': ctypes.c_longlong,
-        'long long int': ctypes.c_longlong,
-        'unsigned __int64': ctypes.c_ulonglong,
-        'unsigned long long': ctypes.c_ulonglong,
-        'unsigned long long int': ctypes.c_ulonglong,
-        'float': ctypes.c_float,
-        'double': ctypes.c_double,
-        'long double': ctypes.c_longdouble
+        'char': c_char,
+        'wchar': c_wchar,
+        'unsigned char': c_ubyte,
+        'short': c_short,
+        'short int': c_short,
+        'unsigned short': c_ushort,
+        'unsigned short int': c_ushort,
+        'int': c_int,
+        'unsigned': c_uint,
+        'unsigned int': c_uint,
+        'long': c_long,
+        'long int': c_long,
+        'unsigned long': c_ulong,
+        'unsigned long int': c_ulong,
+        '__int64': c_longlong,
+        'long long': c_longlong,
+        'long long int': c_longlong,
+        'unsigned __int64': c_ulonglong,
+        'unsigned long long': c_ulonglong,
+        'unsigned long long int': c_ulonglong,
+        'float': c_float,
+        'double': c_double,
+        'long double': c_longdouble
     }
     cPtrTypes = {
-        'char': ctypes.c_char_p,
-        'wchar': ctypes.c_wchar_p,
-        'void': ctypes.c_void_p
+        'char': c_char_p,
+        'wchar': c_wchar_p,
+        'void': c_void_p
     }
         
         
@@ -245,7 +247,7 @@ class CLibrary:
             elif typ[0][:6] == 'union ':
                 cls = self._cstruct('unions', self._defs_['types'][typ[0]][1])
             elif typ[0][:5] == 'enum ':
-                cls = ctypes.c_int
+                cls = c_int
                 
             ## void
             elif typ[0] == 'void':
@@ -263,11 +265,11 @@ class CLibrary:
                 if isinstance(m, six.string_types):  ## pointer or reference
                     if m[0] == '*' or m[0] == '&':
                         for i in m:
-                            cls = ctypes.POINTER(cls)
+                            cls = POINTER(cls)
                 elif type(m) is list:          ## array
                     for i in m:
                         if i == -1:            ## -1 indicates an 'incomplete type' like "int variable[]"
-                            cls = ctypes.POINTER(cls) ## which we should interpret like "int *variable"
+                            cls = POINTER(cls) ## which we should interpret like "int *variable"
                         else:
                             cls = cls * i
                 elif type(m) is tuple:   ## Probably a function pointer
@@ -290,9 +292,9 @@ class CLibrary:
                         raise Exception("Not sure how to handle type (function without single pointer): %s" % str(typ))
                             
                     if conv == '__stdcall':
-                        mkfn = ctypes.WINFUNCTYPE
+                        mkfn = WINFUNCTYPE
                     else:
-                        mkfn = ctypes.CFUNCTYPE
+                        mkfn = CFUNCTYPE
                     #print "Create function pointer (%s)" % conv
                     
                     args = [self._ctype(arg[1]) for arg in m]
@@ -324,11 +326,11 @@ class CLibrary:
             ## create ctypes class
             defs = defn['members'][:]
             if strType == 'structs':
-                class s(ctypes.Structure):
+                class s(Structure):
                     def __repr__(self):
                         return "<ctypes struct '%s'>" % strName
             elif strType == 'unions':
-                class s(ctypes.Union):
+                class s(Union):
                     def __repr__(self):
                         return "<ctypes union '%s'>" % strName
             
@@ -436,11 +438,11 @@ class CFunction:
                         #argList[i] = c_char_p()     ##  On second thought: let's just require the user to explicitly ask for a NULL pointer.
                     else:
                         if argType == ['void', '**'] or argType == ['void', '*', '*']:
-                            cls = ctypes.c_void_p
+                            cls = c_void_p
                         else:
                             assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
                             cls = self.lib._ctype(sig, pointers=False)
-                        argList[i] = ctypes.pointer(cls(0))
+                        argList[i] = pointer(cls(0))
                         guessedArgs.append(i)
                 except:
                     if sys.exc_info()[0] is not AssertionError:
@@ -539,7 +541,7 @@ class CallResult:
         return [self[n] for n in self.guessed]
             
     def cast(self):
-        return ctypes.cast(self(), self.restype)
+        return cast(self(), self.restype)
     
     
 

@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import six
-import sys, time, os
+
+import os
+import sys
+import time
+
 import numpy as np
+import six
+
 import acq4.util.clibrary as clibrary
-import ctypes
+
 modDir = os.path.dirname(__file__)
 headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
 cacheFile = os.path.join(modDir, 'NIDAQmx_headers_%s.cache' % sys.platform)   

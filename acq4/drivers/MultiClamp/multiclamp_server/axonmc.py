@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import ctypes
+from ctypes import byref, windll, c_double, c_uint, c_char_p, c_int, create_string_buffer
 import os
 import re
 import sys
@@ -41,11 +41,11 @@ class _MULTICLAMP:
     def __init__(self):
         if _MULTICLAMP.MC_CREATED:
             raise Exception("Will not create another object instance--use the pre-existing MULTICLAMP object.")
-        self.mc = ctypes.windll.AxMultiClampMsg
+        self.mc = windll.AxMultiClampMsg
         _MULTICLAMP.MC_CREATED = True
         
-        errCode = ctypes.c_int(0)
-        self.handle = self._call('MCCMSG_CreateObject', ctypes.byref(errCode))
+        errCode = c_int(0)
+        self.handle = self._call('MCCMSG_CreateObject', byref(errCode))
         if self.handle == 0:
             raise Exception("Error %d creating MC object", errCode.value)
         self.findDevices()
@@ -79,33 +79,33 @@ class _MULTICLAMP:
                     raise Exception("Too many arguments to function %s" % f)
                 unref = True
                 if fsig[2][1][0] == 'double':
-                    ref = ctypes.c_double(0)
-                    arg = ctypes.byref(ref)
+                    ref = c_double(0)
+                    arg = byref(ref)
                 elif fsig[2][1][0] == 'BOOL':
-                    ref = ctypes.c_int(0)
-                    arg = ctypes.byref(ref)
+                    ref = c_int(0)
+                    arg = byref(ref)
                     unbool = True
                 elif fsig[2][1][0] == 'UINT':
-                    ref = ctypes.c_uint(0)
-                    arg = ctypes.byref(ref)
+                    ref = c_uint(0)
+                    arg = byref(ref)
                     unmap = True
             else:
                 if arg is None:
                     raise Exception("Missing argument %s for function %s" % (fsig[2][1][2], f))
                 if fsig[2][1][0] == 'double':
-                    arg = ctypes.c_double(arg)
+                    arg = c_double(arg)
                 elif fsig[2][1][0] == 'BOOL':
                     if arg:
                         print("Interpreting parameter as c_int(1)")
-                        arg = ctypes.c_int(1)
+                        arg = c_int(1)
                     else:
                         print("Interpreting parameter as c_int(0)")
-                        arg = ctypes.c_int(0)
+                        arg = c_int(0)
                 elif fsig[2][1][0] == 'UINT':
-                    arg = ctypes.c_uint(self.nameToInt(arg, f))
+                    arg = c_uint(self.nameToInt(arg, f))
         
-        errCode = ctypes.c_int(0)
-        args = (self.handle, arg, ctypes.byref(errCode))
+        errCode = c_int(0)
+        args = (self.handle, arg, byref(errCode))
         
         #if len(args) != len(fsig[2]):
             #raise Exception("Function %s takes %d args, %d given" % (f, len(fsig[2])-2, len(args)-2))
@@ -137,9 +137,9 @@ class _MULTICLAMP:
             raise
         
     def error(self, errCode):
-        buf = ctypes.create_string_buffer(b'\0' * 256)
+        buf = create_string_buffer(b'\0' * 256)
         try:
-            self._call('MCCMSG_BuildErrorText', self.handle, errCode, buf, ctypes.c_int(256))
+            self._call('MCCMSG_BuildErrorText', self.handle, errCode, buf, c_int(256))
             return str(buf.value)
         except:
             raise
@@ -147,17 +147,17 @@ class _MULTICLAMP:
 
 
     def findMultiClamp(self):
-        serial = ctypes.create_string_buffer(b'\0' * 16)
-        model = ctypes.c_uint(0)
-        port = ctypes.c_uint(0)
-        devID = ctypes.c_uint(0)
-        chanID = ctypes.c_uint(0)
-        erNum = ctypes.c_uint(0)
+        serial = create_string_buffer(b'\0' * 16)
+        model = c_uint(0)
+        port = c_uint(0)
+        devID = c_uint(0)
+        chanID = c_uint(0)
+        erNum = c_uint(0)
         if len(self.devices) == 0:
             fn = 'MCCMSG_FindFirstMultiClamp'
         else:
             fn = 'MCCMSG_FindNextMultiClamp'
-        ret = self._call(fn, self.handle, ctypes.byref(model), serial, 16, ctypes.byref(port), ctypes.byref(devID), ctypes.byref(chanID), ctypes.byref(erNum))
+        ret = self._call(fn, self.handle, byref(model), serial, 16, byref(port), byref(devID), byref(chanID), byref(erNum))
         if ret == 0:
             return None
             raise Exception(ret, self.error(erNum))
@@ -176,8 +176,8 @@ class _MULTICLAMP:
         if devID >= len(self.devices):
             raise Exception("Device %d does not exist" % devID)
         d = self.devices[devID]
-        erNum = ctypes.c_uint(0)
-        ret = self._call('MCCMSG_SelectMultiClamp', self.handle, ctypes.c_uint(d['model']), ctypes.c_char_p(d['serial']), ctypes.c_uint(d['port']), ctypes.c_uint(d['device']), ctypes.c_uint(d['channel']), ctypes.byref(erNum))
+        erNum = c_uint(0)
+        ret = self._call('MCCMSG_SelectMultiClamp', self.handle, c_uint(d['model']), c_char_p(d['serial']), c_uint(d['port']), c_uint(d['device']), c_uint(d['channel']), byref(erNum))
         if ret == 0:
             raise Exception(erNum.value, self.error(erNum))
         
