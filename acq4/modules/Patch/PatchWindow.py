@@ -355,7 +355,7 @@ class PatchWindow(Qt.QMainWindow):
         ## Create the blank MetaArray
         data = MetaArray(
             (len(info[0]['values']), len(info[1]['cols'])), 
-            dtype=np.float,
+            dtype=float,
             info=info
         )
         
@@ -474,7 +474,7 @@ class PatchThread(Thread):
         
         
         ## Regenerate command signal if parameters have changed
-        numPts = np.int(np.float(params['recordTime']) * params['rate'])
+        numPts = int(float(params['recordTime']) * params['rate'])
         mode = params['mode']
         if params[mode+'HoldingEnabled']:
             holding = params[mode+'Holding']
@@ -486,8 +486,8 @@ class PatchThread(Thread):
             amplitude = 0.
         cmdData = np.empty(numPts)
         cmdData[:] = holding
-        start = np.int(params['delayTime'] * params['rate'])
-        stop = start + np.int(params['pulseTime'] * params['rate'])
+        start = int(params['delayTime'] * params['rate'])
+        stop = start + int(params['pulseTime'] * params['rate'])
         cmdData[start:stop] = holding + amplitude
         #cmdData[-1] = holding
         

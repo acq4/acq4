@@ -210,7 +210,7 @@ class SuperTask:
                     pass
             else:
                 if rate > maxrate:
-                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (np.int(rate), np.int(maxrate)))
+                    raise ValueError("Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate)))
 
             if k[1] != clkSource:
                 #print "%s CfgSampClkTiming(%s, %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), clk, rate, nPts)

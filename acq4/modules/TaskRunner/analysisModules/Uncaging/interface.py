@@ -341,7 +341,7 @@ class Task:
                 
         ## Only check first 10ms after stim
         testLen = 10e-3
-        sec = np.abs(testBlur[:np.int(testLen / dt)])
+        sec = np.abs(testBlur[:int(testLen / dt)])
         secMax = np.max(np.abs(testBlur.max()), np.abs(testBlur.min()))
         if sec.max() < secMax:
             g = 0
