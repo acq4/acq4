@@ -10,7 +10,8 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(d, '../../util'))
     
 import acq4.util.ptime as ptime
-from ctypes import byref, windll, sizeof, c_long, c_ulong, cdll, c_ulonglong
+import ctypes
+from ctypes import byref, sizeof, c_long, c_ulong, c_ulonglong
 from numpy import empty, uint16, ascontiguousarray
 from acq4.util.Mutex import Mutex
 from collections import OrderedDict
@@ -27,9 +28,9 @@ print(headerDir)
 p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
 
 if sys.platform == 'darwin':
-    dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
+    dll = ctypes.cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
-    dll = windll.QCamDriver
+    dll = ctypes.windll.QCamDriver
 lib = CLibrary(dll, p, prefix = 'QCam_')        ##makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
                                                 ##also interprets all the typedefs for you....very handy
                                                 ##anything from the header needs to be accessed through lib.yourFunctionOrParameter
