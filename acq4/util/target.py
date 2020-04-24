@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
