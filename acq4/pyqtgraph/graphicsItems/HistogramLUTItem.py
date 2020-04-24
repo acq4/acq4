@@ -3,6 +3,7 @@ GraphicsWidget displaying an image histogram along with gradient editor. Can be 
 """
 
 
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .. import functions as fn
 from .GraphicsWidget import GraphicsWidget
@@ -18,6 +19,7 @@ import numpy as np
 from .. import debug as debug
 
 import weakref
+from six.moves import range
 
 __all__ = ['HistogramLUTItem']
 

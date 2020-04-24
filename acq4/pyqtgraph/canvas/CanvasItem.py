@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 import numpy as np
 from ..Qt import QtGui, QtCore, QtSvg, QT_LIB
 from ..graphicsItems.ROI import ROI

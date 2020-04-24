@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .PlotWidget import PlotWidget
 from .DataFilterWidget import DataFilterParameter
@@ -8,6 +9,7 @@ from .. import getConfigOption
 from ..graphicsItems.TextItem import TextItem
 import numpy as np
 from ..pgcollections import OrderedDict
+from six.moves import range
 
 __all__ = ['ScatterPlotWidget']
 

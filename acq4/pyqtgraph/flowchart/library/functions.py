@@ -1,6 +1,10 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import numpy as np
 from ...metaarray import MetaArray
-from ...python2_3 import basestring, xrange
+from ...python2_3 import xrange
+import six
+from six.moves import range
 
 
 def downsample(data, n, axis=0, xvals='subsample'):

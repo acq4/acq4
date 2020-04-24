@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import weakref
 import numpy as np
 from ..Qt import QtGui, QtCore
@@ -9,6 +10,7 @@ from ..widgets.SpinBox import SpinBox
 from ..pgcollections import OrderedDict
 from ..colormap import ColorMap
 from ..python2_3 import cmp
+from six.moves import range
 
 
 __all__ = ['TickSliderItem', 'GradientEditorItem']

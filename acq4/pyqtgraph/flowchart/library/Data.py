@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import print_function
 from ..Node import Node
 from ...Qt import QtGui, QtCore
 import numpy as np
@@ -9,6 +11,7 @@ from ...widgets.TreeWidget import TreeWidget
 from ...graphicsItems.LinearRegionItem import LinearRegionItem
 
 from . import functions
+from six.moves import range
 
 class ColumnSelectNode(Node):
     """Select named columns from a record array or MetaArray."""

@@ -20,7 +20,9 @@
 #     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 #     OTHER DEALINGS IN THE SOFTWARE.
 
+from __future__ import absolute_import
 import sys
+from six.moves import zip
 if sys.version[0] > '2':
     from collections import OrderedDict
 else:
@@ -74,9 +76,9 @@ else:
             if not self:
                 raise KeyError('dictionary is empty')
             if last:
-                key = reversed(self).next()
+                key = next(reversed(self))
             else:
-                key = iter(self).next()
+                key = next(iter(self))
             value = self.pop(key)
             return key, value
 

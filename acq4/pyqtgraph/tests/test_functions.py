@@ -1,8 +1,11 @@
+from __future__ import absolute_import
 import pyqtgraph as pg
 import numpy as np
 import sys
 from numpy.testing import assert_array_almost_equal, assert_almost_equal
 import pytest
+from six.moves import map
+from six.moves import range
 
 np.random.seed(12345)
 

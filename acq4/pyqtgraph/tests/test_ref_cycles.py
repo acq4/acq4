@@ -2,11 +2,14 @@
 Test for unwanted reference cycles
 
 """
+from __future__ import absolute_import
 import pyqtgraph as pg
 import numpy as np
 import gc, weakref
 import six
 import pytest
+from six.moves import map
+from six.moves import range
 app = pg.mkQApp()
 
 skipreason = ('unclear why test is failing on python 3. skipping until someone '

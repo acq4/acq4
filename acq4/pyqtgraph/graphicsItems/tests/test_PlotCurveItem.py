@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.tests import assertImageApproved

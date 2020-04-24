@@ -6,6 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 
+from __future__ import absolute_import
 import sys
 import time as systime
 START_TIME = None

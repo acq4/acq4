@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from .GLViewWidget import GLViewWidget
 
 ## dynamic imports cause too many problems.

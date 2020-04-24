@@ -2,6 +2,7 @@ from ..Qt import QtGui
 from .. import functions as fn
 from .PlotDataItem import PlotDataItem
 from .PlotCurveItem import PlotCurveItem
+from six.moves import zip
 
 class FillBetweenItem(QtGui.QGraphicsPathItem):
     """

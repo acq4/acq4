@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from .. GLGraphicsItem import GLGraphicsItem

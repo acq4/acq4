@@ -1,16 +1,18 @@
 """
 Helper functions that smooth out the differences between python 2 and 3.
 """
+from __future__ import absolute_import
 import sys
+import six
 
 def asUnicode(x):
     if sys.version_info[0] == 2:
-        if isinstance(x, unicode):
+        if isinstance(x, six.text_type):
             return x
         elif isinstance(x, str):
             return x.decode('UTF-8')
         else:
-            return unicode(x)
+            return six.text_type(x)
     else:
         return str(x)
         

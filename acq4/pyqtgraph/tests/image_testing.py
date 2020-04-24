@@ -44,6 +44,11 @@ Procedure for unit-testing with images:
 # pyqtgraph should be tested against. When adding or changing test images,
 # create and push a new tag and update this variable. To test locally, begin
 # by creating the tag in your ~/.pyqtgraph/test-data repository.
+from __future__ import absolute_import
+from __future__ import print_function
+
+from six.moves import map, http_client, urllib
+
 testDataTag = 'test-data-7'
 
 
@@ -55,13 +60,7 @@ import base64
 import subprocess as sp
 import numpy as np
 
-if sys.version[0] >= '3':
-    import http.client as httplib
-    import urllib.parse as urllib
-else:
-    import httplib
-    import urllib
-from ..Qt import QtGui, QtCore, QtTest, QT_LIB
+from ..Qt import QtGui, QtCore, QT_LIB
 from .. import functions as fn
 from .. import GraphicsLayoutWidget
 from .. import ImageItem, TextItem
@@ -307,9 +306,9 @@ def saveFailedTest(data, expect, filename):
 
     png = makePng(img)
     
-    conn = httplib.HTTPConnection(host)
-    req = urllib.urlencode({'name': filename,
-                            'data': base64.b64encode(png)})
+    conn = http_client.HTTPConnection(host)
+    req = urllib.parse.urlencode({'name': filename,
+                                  'data': base64.b64encode(png)})
     conn.request('POST', '/upload.py', req)
     response = conn.getresponse().read()
     conn.close()

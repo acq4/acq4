@@ -2,6 +2,7 @@
 #import sip
 #sip.setapi('QString', 1)
 
+from __future__ import absolute_import
 import pyqtgraph as pg
 pg.mkQApp()
 

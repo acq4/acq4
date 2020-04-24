@@ -1,9 +1,13 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from ..Qt import QtCore, QtGui, QtOpenGL, QT_LIB
 from OpenGL.GL import *
 import OpenGL.GL.framebufferobjects as glfbo
 import numpy as np
 from .. import Vector
 from .. import functions as fn
+from six.moves import map
+from six.moves import range
 
 ##Vector = QtGui.QVector3D
 

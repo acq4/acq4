@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from weakref import *
+from six.moves import map
+from six.moves import range
 
 __all__ = ['TreeWidget', 'TreeWidgetItem']
 

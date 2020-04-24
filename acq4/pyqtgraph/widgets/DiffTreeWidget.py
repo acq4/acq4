@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from ..pgcollections import OrderedDict
 from .DataTreeWidget import DataTreeWidget
 from .. import functions as fn
 import types, traceback
 import numpy as np
+from six.moves import range
 
 __all__ = ['DiffTreeWidget']
 

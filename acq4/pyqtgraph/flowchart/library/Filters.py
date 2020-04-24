@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 import numpy as np
 from ...Qt import QtCore, QtGui
 from ..Node import Node
@@ -9,6 +10,7 @@ from ...python2_3 import xrange
 from ... import PolyLineROI
 from ... import Point
 from ... import metaarray as metaarray
+from six.moves import range
 
 
 class Downsample(CtrlNode):

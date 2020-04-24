@@ -1,6 +1,7 @@
 from ..Qt import QtGui, QtCore
 from .UIGraphicsItem import *
 from .. import functions as fn
+from six.moves import range
 
 __all__ = ['GradientLegend']
 

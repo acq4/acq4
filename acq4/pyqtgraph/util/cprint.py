@@ -3,11 +3,13 @@ Cross-platform color text printing
 
 Based on colorama (see pyqtgraph/util/colorama/README.txt)
 """
+from __future__ import absolute_import
 import sys, re
 
 from .colorama.winterm import WinTerm, WinColor, WinStyle
 from .colorama.win32 import windll
-from ..python2_3 import basestring
+
+import six
 
 _WIN = sys.platform.startswith('win')
 if windll is not None:
@@ -62,7 +64,7 @@ def cprint(stream, *args, **kwds):
         cprint('stderr', 1, 'This is in red.', -1)
 
     """
-    if isinstance(stream, basestring):
+    if isinstance(stream, six.string_types):
         stream = kwds.get('stream', 'stdout')
         err = stream == 'stderr'
         stream = getattr(sys, stream)
@@ -73,7 +75,7 @@ def cprint(stream, *args, **kwds):
         if _WIN:
             # convert to win32 calls
             for arg in args:
-                if isinstance(arg, basestring):
+                if isinstance(arg, six.string_types):
                     stream.write(arg)
                 else:
                     kwds = WIN[arg]
@@ -81,14 +83,14 @@ def cprint(stream, *args, **kwds):
         else:
             # convert to ANSI
             for arg in args:
-                if isinstance(arg, basestring):
+                if isinstance(arg, six.string_types):
                     stream.write(arg)
                 else:
                     stream.write(ANSI[arg])
     else:
         # ignore colors
         for arg in args:
-            if isinstance(arg, basestring):
+            if isinstance(arg, six.string_types):
                 stream.write(arg)
 
 def cout(*args):

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 import numpy as np
 from ..Point import Point

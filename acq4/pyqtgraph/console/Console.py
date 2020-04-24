@@ -1,10 +1,12 @@
+from __future__ import absolute_import
 import sys, re, os, time, traceback, subprocess
 import pickle
 
 from ..Qt import QtCore, QtGui, QT_LIB
-from ..python2_3 import basestring
+
 from .. import exceptionHandling as exceptionHandling
 from .. import getConfigOption
+import six
 if QT_LIB == 'PySide':
     from . import template_pyside as template
 elif QT_LIB == 'PySide2':
@@ -406,7 +408,7 @@ class ConsoleWidget(QtGui.QWidget):
         if filterStr != '':
             if isinstance(exc, Exception):
                 msg = exc.message
-            elif isinstance(exc, basestring):
+            elif isinstance(exc, six.string_types):
                 msg = exc
             else:
                 msg = repr(exc)

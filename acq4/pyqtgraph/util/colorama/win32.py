@@ -1,6 +1,7 @@
 # Copyright Jonathan Hartley 2013. BSD 3-Clause license, see LICENSE file.
 
 # from winbase.h
+from __future__ import absolute_import
 STDOUT = -11
 STDERR = -12
 

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from ..python2_3 import asUnicode
 import numpy as np
@@ -7,6 +8,8 @@ import weakref
 from .. import functions as fn
 from .. import getConfigOption
 from .GraphicsWidget import GraphicsWidget
+from six.moves import map
+from six.moves import range
 
 __all__ = ['AxisItem']
 class AxisItem(GraphicsWidget):

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import print_function
 from math import log
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
 import decimal
@@ -6,9 +8,11 @@ import weakref
 import re
 
 from ..Qt import QtGui, QtCore
-from ..python2_3 import asUnicode, basestring
+from ..python2_3 import asUnicode
 from ..SignalProxy import SignalProxy
 from .. import functions as fn
+import six
+from six.moves import range
 
 
 __all__ = ['SpinBox']
@@ -190,7 +194,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 pass   ## don't set value until bounds have been set
             elif k == 'format':
                 self.opts[k] = asUnicode(v)
-            elif k == 'regex' and isinstance(v, basestring):
+            elif k == 'regex' and isinstance(v, six.string_types):
                 self.opts[k] = re.compile(v)
             elif k in self.opts:
                 self.opts[k] = v

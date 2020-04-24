@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import print_function
 import numpy as np
 from ..Qt import QtGui, QtCore
-from ..python2_3 import asUnicode, basestring
+from ..python2_3 import asUnicode
 from .. import metaarray
+import six
+from six.moves import map
+from six.moves import range
 
 
 __all__ = ['TableWidget']
@@ -169,7 +174,7 @@ class TableWidget(QtGui.QTableWidget):
         Added in version 0.9.9.
         
         """
-        if format is not None and not isinstance(format, basestring) and not callable(format):
+        if format is not None and not isinstance(format, six.string_types) and not callable(format):
             raise ValueError("Format argument must string, callable, or None. (got %s)" % format)
         
         self._formats[column] = format
@@ -418,7 +423,7 @@ class TableWidgetItem(QtGui.QTableWidgetItem):
         
         Added in version 0.9.9.
         """
-        if fmt is not None and not isinstance(fmt, basestring) and not callable(fmt):
+        if fmt is not None and not isinstance(fmt, six.string_types) and not callable(fmt):
             raise ValueError("Format argument must string, callable, or None. (got %s)" % fmt)
         self._format = fmt
         self._updateText()

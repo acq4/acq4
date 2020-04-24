@@ -1,8 +1,10 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .UIGraphicsItem import *
 import numpy as np
 from ..Point import Point
 from .. import functions as fn
+from six.moves import range
 
 __all__ = ['GridItem']
 class GridItem(UIGraphicsItem):

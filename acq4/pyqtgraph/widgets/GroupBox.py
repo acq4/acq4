@@ -1,5 +1,6 @@
 from ..Qt import QtGui, QtCore
 from .PathButton import PathButton
+import six
 
 class GroupBox(QtGui.QGroupBox):
     """Subclass of QGroupBox that implements collapse handle.
@@ -38,7 +39,7 @@ class GroupBox(QtGui.QGroupBox):
         
         self.collapseBtn.clicked.connect(self.toggleCollapsed)
 
-        if len(args) > 0 and isinstance(args[0], basestring):
+        if len(args) > 0 and isinstance(args[0], six.string_types):
             self.setTitle(args[0])
         
     def toggleCollapsed(self):

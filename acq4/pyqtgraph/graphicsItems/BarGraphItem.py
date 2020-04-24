@@ -1,8 +1,10 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .GraphicsObject import GraphicsObject
 from .. import getConfigOption
 from .. import functions as fn
 import numpy as np
+from six.moves import range
 
 
 __all__ = ['BarGraphItem']

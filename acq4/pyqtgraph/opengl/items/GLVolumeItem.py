@@ -1,8 +1,10 @@
+from __future__ import absolute_import
 from OpenGL.GL import *
 from .. GLGraphicsItem import GLGraphicsItem
 from ...Qt import QtGui
 import numpy as np
 from ... import debug
+from six.moves import range
 
 __all__ = ['GLVolumeItem']
 

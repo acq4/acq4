@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore, QT_LIB
 if QT_LIB in ['PyQt4', 'PyQt5']:
     import sip

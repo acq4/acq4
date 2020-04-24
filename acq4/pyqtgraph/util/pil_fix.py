@@ -5,6 +5,7 @@ This works by patching objects in the PIL namespace; no files are
 modified.
 """
 
+from __future__ import absolute_import
 from PIL import Image
 
 if Image.VERSION == '1.1.7':

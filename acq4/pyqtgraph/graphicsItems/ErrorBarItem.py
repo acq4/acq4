@@ -2,6 +2,7 @@ from ..Qt import QtGui, QtCore
 from .GraphicsObject import GraphicsObject
 from .. import getConfigOption
 from .. import functions as fn
+from six.moves import range
 
 __all__ = ['ErrorBarItem']
 

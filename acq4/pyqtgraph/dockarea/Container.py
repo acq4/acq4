@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from ..Qt import QtCore, QtGui
 import weakref
+from six.moves import range
 
 class Container(object):
     #sigStretchChanged = QtCore.Signal()  ## can't do this here; not a QObject.

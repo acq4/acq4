@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from itertools import starmap, repeat
 import numpy as np
 import weakref
@@ -9,7 +10,10 @@ from .GraphicsObject import GraphicsObject
 from .. import getConfigOption
 from ..pgcollections import OrderedDict
 from .. import debug
-from ..python2_3 import basestring
+
+import six
+from six.moves import map
+from six.moves import range
 
 __all__ = ['ScatterPlotItem', 'SpotItem']
 
@@ -54,7 +58,7 @@ def drawSymbol(painter, symbol, size, pen, brush):
     painter.scale(size, size)
     painter.setPen(pen)
     painter.setBrush(brush)
-    if isinstance(symbol, basestring):
+    if isinstance(symbol, six.string_types):
         symbol = Symbols[symbol]
     if np.isscalar(symbol):
         symbol = list(Symbols.values())[symbol % len(Symbols)]

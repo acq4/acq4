@@ -1,4 +1,5 @@
 #import PySide
+from __future__ import absolute_import
 import pyqtgraph as pg
 import pytest
 

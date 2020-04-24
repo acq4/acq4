@@ -1,6 +1,8 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from ..python2_3 import asUnicode
 import os, weakref, re
+from six.moves import range
 
 class ParameterItem(QtGui.QTreeWidgetItem):
     """

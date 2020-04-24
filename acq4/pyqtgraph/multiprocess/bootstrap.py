@@ -1,4 +1,6 @@
 """For starting up remote processes"""
+from __future__ import absolute_import
+from __future__ import print_function
 import sys, pickle, os
 
 if __name__ == '__main__':

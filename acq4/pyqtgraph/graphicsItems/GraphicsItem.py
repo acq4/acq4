@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from functools import reduce
 from ..Qt import QtGui, QtCore, isQObjectAlive
 from ..GraphicsScene import GraphicsScene
@@ -6,6 +7,7 @@ from .. import functions as fn
 import weakref
 import operator
 from ..util.lru_cache import LRUCache
+from six.moves import map
 
 
 class GraphicsItem(object):

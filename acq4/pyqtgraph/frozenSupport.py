@@ -1,4 +1,5 @@
 ## Definitions helpful in frozen environments (eg py2exe)
+from __future__ import absolute_import
 import os, sys, zipfile
 
 def listdir(path):

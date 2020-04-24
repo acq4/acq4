@@ -1,9 +1,11 @@
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .. import parametertree as ptree
 import numpy as np
 from ..pgcollections import OrderedDict
 from .. import functions as fn
-from ..python2_3 import basestring
+
+import six
 
 __all__ = ['DataFilterWidget']
 
@@ -196,7 +198,7 @@ class EnumFilterItem(ptree.types.SimpleParameter):
             if isinstance(valopts, bool):
                 enabled = valopts
                 vname = str(val)
-            elif isinstance(valopts, basestring):
+            elif isinstance(valopts, six.string_types):
                 enabled = True
                 vname = valopts
             elif isinstance(valopts, tuple):

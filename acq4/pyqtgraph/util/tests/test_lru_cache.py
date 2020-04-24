@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from pyqtgraph.util.lru_cache import LRUCache
 
 def testLRU():

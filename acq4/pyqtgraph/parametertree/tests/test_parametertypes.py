@@ -1,4 +1,5 @@
 # ~*~ coding: utf8 ~*~
+from __future__ import absolute_import
 import sys
 import pytest
 from pyqtgraph.Qt import QtGui, QtCore
@@ -7,6 +8,9 @@ import pyqtgraph as pg
 from pyqtgraph.python2_3 import asUnicode
 from pyqtgraph.functions import eq
 import numpy as np
+import six
+from six.moves import map
+from six.moves import zip
 
 app = pg.mkQApp()
 
@@ -59,12 +63,12 @@ def test_types():
 
     # int
     types = ['int0', 'int', 'float', 'bigfloat', 'npfloat', 'npint', 'bool']
-    inttyps = int if sys.version[0] >= '3' else (int, long) 
+    inttyps = six.integer_types
     check_param_types(param.child('int'), inttyps, int, 0, all_objs, types)
     
     # str  (should be able to make a string out of any type)
     types = all_objs.keys()
-    strtyp = str if sys.version[0] >= '3' else unicode
+    strtyp = six.text_type
     check_param_types(param.child('str'), strtyp, asUnicode, '', all_objs, types)
     
     # bool  (should be able to make a boolean out of any type?)

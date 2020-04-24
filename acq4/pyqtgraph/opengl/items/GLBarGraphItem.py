@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from .GLMeshItem import GLMeshItem
 from ..MeshData import MeshData
 import numpy as np

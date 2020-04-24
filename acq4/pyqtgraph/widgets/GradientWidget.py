@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .GraphicsView import GraphicsView
 from ..graphicsItems.GradientEditorItem import GradientEditorItem

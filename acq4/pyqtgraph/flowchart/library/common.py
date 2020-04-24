@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from ...Qt import QtCore, QtGui
 from ...widgets.SpinBox import SpinBox
 #from ...SignalProxy import SignalProxy
@@ -7,6 +8,7 @@ from ...WidgetGroup import WidgetGroup
 from ..Node import Node
 import numpy as np
 from ...widgets.ColorButton import ColorButton
+from six.moves import range
 try:
     import metaarray
     HAVE_METAARRAY = True

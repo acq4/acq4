@@ -6,6 +6,7 @@ import pyqtgraph as pg
 import csv
 import os
 import tempfile
+from six.moves import map
 
 app = pg.mkQApp()
 
