@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from acq4.Manager import getManager, logExc, logMsg
 import numpy as np
 from scipy import stats

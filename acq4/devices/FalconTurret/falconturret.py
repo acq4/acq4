@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import logging, threading, time
 from acq4.util import Qt
 import falconoptics

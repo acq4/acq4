@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, with_statement, print_function
 
-from __future__ import absolute_import
 import time
 from collections import OrderedDict
 
