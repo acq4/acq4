@@ -18,8 +18,8 @@ from acq4.pyqtgraph.metaarray import MetaArray
 
 Ui_Form = Qt.importTemplate('.builderTemplate')
 
-
-Qt.QApplication.setGraphicsSystem('raster')
+if callable(getattr(Qt.QApplication, "setGraphicsSystem", None)):
+    Qt.QApplication.setGraphicsSystem('raster')
 app = Qt.QApplication([])
 
 win = Qt.QMainWindow()

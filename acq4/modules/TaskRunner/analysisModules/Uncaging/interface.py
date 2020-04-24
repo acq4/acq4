@@ -7,7 +7,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 
 from acq4.Manager import getManager
-from acq4.modules.TaskRunner.analysisModules import AnalysisModule
+from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
 from acq4.util import Qt
 from acq4.util.debug import printExc
 

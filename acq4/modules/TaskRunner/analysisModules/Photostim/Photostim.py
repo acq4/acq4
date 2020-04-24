@@ -8,7 +8,7 @@ import scipy.ndimage
 
 import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
-from acq4.modules.TaskRunner.analysisModules import AnalysisModule
+from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
 from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.PhotostimTemplate')
