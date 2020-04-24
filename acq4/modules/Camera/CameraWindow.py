@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 
 import time, types, os.path, re, sys, weakref
 from collections import OrderedDict

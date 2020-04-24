@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import re, os, sys
 
 version = sys.argv[1]

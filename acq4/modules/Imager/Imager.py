@@ -21,7 +21,7 @@
 # UNC Chapel Hill
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 
 import copy
 import time

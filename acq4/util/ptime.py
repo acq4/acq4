@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 """
 ptime.py -  Precision time function made os-independent (should have been taken care of by python)
 Copyright 2010  Luke Campagnola

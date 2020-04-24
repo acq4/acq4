@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 from acq4.util import Qt
 import os
 from acq4.analysis.AnalysisModule import AnalysisModule

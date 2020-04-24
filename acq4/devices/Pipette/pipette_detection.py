@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import scipy.optimize, scipy.ndimage
 import numpy as np
 from acq4.util.image_registration import iterativeImageTemplateMatch

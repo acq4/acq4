@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import serial
 sp = serial.Serial(3, baudrate=1200, bytesize=serial.SEVENBITS)
 print("Opened", sp.portstr)

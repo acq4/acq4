@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 """
 Utilities for standardizing behavior and user interface of imaging devices.
 """

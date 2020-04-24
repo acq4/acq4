@@ -1,5 +1,5 @@
 
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import os, sys, time, argparse
 import numpy as np
 import acq4.pyqtgraph as pg

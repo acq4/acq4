@@ -1,7 +1,7 @@
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 from __future__ import division
 import serial, struct, time, collections, re
 import numpy as np

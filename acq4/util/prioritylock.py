@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import, division
+from __future__ import print_function, division
 
 import weakref
 from threading import Lock, Thread, Event

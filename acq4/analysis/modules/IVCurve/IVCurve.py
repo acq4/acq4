@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 from six.moves import range
 """
 IVCurve: Analysis module that analyzes current-voltage and firing

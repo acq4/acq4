@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import sys, os, time, logging
 
 #logging.basicConfig(level=logging.DEBUG)

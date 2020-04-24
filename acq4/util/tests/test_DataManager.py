@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import tempfile, shutil, atexit, os
 import acq4.util.DataManager as dm
 from acq4.util.DirTreeWidget import DirTreeWidget

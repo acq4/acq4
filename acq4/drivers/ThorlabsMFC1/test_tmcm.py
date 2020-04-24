@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import os, sys, time
 from six.moves import range
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))

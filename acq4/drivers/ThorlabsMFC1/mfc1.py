@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 """
 Thorlabs MFC1 : microscope focus controller based on Trinamic TMCM-140-42-SE
 and PDx-140-42-SE.

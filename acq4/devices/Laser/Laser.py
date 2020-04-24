@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 from acq4.util import Qt
 #import configfile
 from acq4.Manager import getManager, logExc, logMsg

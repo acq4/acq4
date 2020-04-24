@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import os, sys
 from six.moves import zip
 path = os.path.dirname(os.path.abspath(__file__))

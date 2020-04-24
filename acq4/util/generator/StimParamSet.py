@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import six
 
 from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter

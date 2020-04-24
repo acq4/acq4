@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.graphicsItems import ROI
 from acq4.pyqtgraph.Point import Point

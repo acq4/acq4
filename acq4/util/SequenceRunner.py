@@ -4,7 +4,7 @@ SequenceRunner.py -  Used for running multi-dimensional for-loops
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 
 import numpy as np
 from acq4.pyqtgraph import MetaArray

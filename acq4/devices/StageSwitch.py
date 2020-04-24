@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.devices.Device import Device

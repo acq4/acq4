@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function
 __author__ = 'pbmanis'
 """
 dataSummary: This script reads all of the data files in a given directory, and prints out top level information
