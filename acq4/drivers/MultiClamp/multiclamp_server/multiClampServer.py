@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 import socket, threading, sys, re, types
 from . import axonmc
+from six.moves import map
 
 
 

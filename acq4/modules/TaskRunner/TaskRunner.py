@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
+from __future__ import absolute_import
 import gc
 import os
 import sys
@@ -25,6 +26,9 @@ from acq4.util.debug import printExc, Profiler, logMsg, Mutex
 from acq4.util.future import Future
 from . import analysisModules
 from ..Module import Module
+from six.moves import map
+from six.moves import range
+from functools import reduce
 
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import weakref
 from ..Qt import QtCore, QtGui
 from ..python2_3 import sortList, cmp
@@ -6,6 +7,7 @@ from .. import functions as fn
 from .. import ptime as ptime
 from .mouseEvents import *
 from .. import debug as debug
+from six.moves import map
 
 
 if hasattr(QtCore, 'PYQT_VERSION'):

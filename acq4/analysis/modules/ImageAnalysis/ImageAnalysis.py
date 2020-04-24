@@ -6,6 +6,7 @@ from collections import OrderedDict
 import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.metaarray import MetaArray
 import numpy as np
+from six.moves import range
 
 class ImageAnalysis(AnalysisModule):
     def __init__(self, host):

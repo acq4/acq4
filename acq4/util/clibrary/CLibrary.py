@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import
+from six.moves import map
+from six.moves import range
 """
 CLibrary.py -  Provides CLibrary class
 Copyright 2010  Luke Campagnola

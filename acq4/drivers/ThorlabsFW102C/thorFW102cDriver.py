@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import serial, struct, time, collections, threading, re, pdb
 try:
     from ..SerialDevice import SerialDevice, TimeoutError, DataError

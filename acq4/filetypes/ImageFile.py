@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import
 import os
 
 from PIL import Image
+from six.moves import range
 
 ## Install support for 16-bit images in PIL
 if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.7':

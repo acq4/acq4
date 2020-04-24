@@ -8,6 +8,7 @@ import six
 import acq4.Manager as Manager
 from acq4.util import Qt
 from acq4.util.DictView import DictView
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.FileInfoViewTemplate')
 

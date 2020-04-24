@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from ..Qt import QtCore, QtGui, QT_LIB
 from .. import exporters as exporters
 from .. import functions as fn

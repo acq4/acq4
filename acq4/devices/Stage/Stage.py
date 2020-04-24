@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
+from __future__ import absolute_import
 import threading
 import time
 
@@ -11,6 +12,7 @@ import acq4.pyqtgraph as pg
 from .calibration import CalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
+from six.moves import range
 
 
 class Stage(Device, OptomechDevice):

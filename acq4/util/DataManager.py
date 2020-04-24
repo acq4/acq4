@@ -6,6 +6,7 @@ import weakref
 from acq4.pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
 from acq4.pyqtgraph.python2_3 import cmp
 from acq4.util.debug import printExc
+from six.moves import map
 
 """
 DataManager.py - DataManager, FileHandle, and DirHandle classes 

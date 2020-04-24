@@ -4,6 +4,7 @@ from acq4.pyqtgraph.graphicsItems import ROI
 from acq4.pyqtgraph.Point import Point
 from acq4.util import Qt
 import math
+from six.moves import range
 
 
 class CortexROI(ROI.PolyLineROI):

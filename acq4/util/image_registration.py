@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import numpy as np
 import scipy.ndimage
 import acq4.pyqtgraph as pg

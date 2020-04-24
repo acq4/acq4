@@ -21,6 +21,7 @@ from acq4.util.Thread import Thread
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
 from .taskGUI import CameraTaskGui
+from six.moves import range
 
 
 class Camera(DAQGeneric, OptomechDevice):

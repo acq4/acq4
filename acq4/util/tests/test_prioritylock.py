@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import time
 from acq4.util.prioritylock import PriorityLock
 import acq4

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import numpy as np
 from acq4.util import Qt
 from acq4.pyqtgraph import ptime

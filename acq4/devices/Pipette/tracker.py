@@ -7,6 +7,7 @@ import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
 from .pipette_detection import TemplateMatchPipetteDetector
 from acq4.util.image_registration import imageTemplateMatch
+from six.moves import range
 
 
 class PipetteTracker(object):

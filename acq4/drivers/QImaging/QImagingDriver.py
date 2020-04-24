@@ -4,6 +4,8 @@ import os
 import sys
 
 from acq4.util.clibrary import CParser, CLibrary
+from six.moves import range
+from six.moves import zip
 
 if __name__ == '__main__':
     d = os.path.dirname(__file__)

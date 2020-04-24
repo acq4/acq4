@@ -17,6 +17,7 @@ from acq4.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name c
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.devTemplate')
 

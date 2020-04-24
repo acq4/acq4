@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.DAQGeneric import DAQGeneric
 

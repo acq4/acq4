@@ -5,6 +5,7 @@ from acq4.devices.Device import TaskGui
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.debug import printExc
+from six.moves import map
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 

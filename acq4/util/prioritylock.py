@@ -2,10 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import weakref
 from threading import Lock, Thread, Event
-try:
-    import queue
-except ImportError:
-    import Queue as queue
+from six.moves import queue
 from .future import Future
 
 
@@ -52,7 +49,7 @@ class PriorityLock(object):
         """
         fut = PriorityLockRequest(self, name=name)
         # print("request lock:", fut)
-        self.lock_queue.put((-priority, self.req_count.next(), fut))
+        self.lock_queue.put((-priority, next(self.req_count), fut))
         return fut
     
     def _release_lock(self, fut):

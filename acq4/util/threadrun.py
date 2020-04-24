@@ -1,10 +1,10 @@
-try:
-    import queue
-except ImportError:
-    import Queue as queue
-import sys, traceback
-from .future import Future
+from __future__ import absolute_import
+
+import sys
+import traceback
+
 from . import Qt
+from .future import Future
 
 
 def runInThread(thread, func, *args, **kwds):

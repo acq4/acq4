@@ -1,13 +1,10 @@
 from __future__ import print_function, absolute_import
+
 import sys
 from collections import OrderedDict
 
-import six
+from six.moves import queue
 
-try:
-    import queue
-except ImportError:
-    import Queue as queue
 from acq4.util import Qt
 from acq4.pyqtgraph import disconnect
 from acq4.util.debug import printExc

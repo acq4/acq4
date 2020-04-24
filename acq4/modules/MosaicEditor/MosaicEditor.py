@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import glob
 import json
@@ -11,7 +13,7 @@ import scipy.stats
 from six import iteritems
 
 import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.python2_3 import basestring
+
 from acq4.modules.Module import Module
 from acq4.analysis.AnalysisModule import AnalysisModule
 import acq4.util.DataManager as DataManager
@@ -19,6 +21,8 @@ import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
 from acq4.util.Canvas import items
 from acq4.util import Qt
+import six
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.MosaicEditorTemplate')
 
@@ -80,7 +84,7 @@ class MosaicEditorWindow(Qt.QWidget):
             if pos is None:
                 pos = ()
             #print d, pos
-            if isinstance(pos, basestring):
+            if isinstance(pos, six.string_types):
                 pos = (pos,)
             self.dockarea.addDock(d, *pos)
         self.elements = elems

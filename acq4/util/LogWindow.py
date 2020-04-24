@@ -2,6 +2,8 @@ from __future__ import print_function, absolute_import
 import time
 import traceback
 import sys, os
+from six.moves import map
+from six.moves import range
 
 if __name__ == "__main__":
     #import os.path as osp

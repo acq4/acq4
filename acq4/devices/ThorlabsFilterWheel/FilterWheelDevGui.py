@@ -1,9 +1,11 @@
+from __future__ import absolute_import
 from acq4.Manager import getManager, logExc, logMsg
 import numpy as np
 from scipy import stats
 from acq4.pyqtgraph.functions import siFormat
 from acq4.util import Qt
 import time
+from six.moves import range
 
 Ui_FilterWheelWidget = Qt.importTemplate('.FilterWheelTemplate')
 

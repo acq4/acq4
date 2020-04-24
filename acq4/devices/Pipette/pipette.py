@@ -17,6 +17,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.target import Target
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
+from six.moves import range
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 

@@ -9,6 +9,7 @@ import numpy as np
 import six
 
 import acq4.util.clibrary as clibrary
+from six.moves import range
 
 modDir = os.path.dirname(__file__)
 headerFiles = [os.path.join(modDir, "NIDAQmx.h")]

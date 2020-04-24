@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import
+from six.moves import range
 if __name__ == '__main__':
     import sys
     sys.path.append('..')

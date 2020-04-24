@@ -2,6 +2,7 @@
 from __future__ import print_function, absolute_import
 from acq4.util import Qt
 from collections import OrderedDict
+from six.moves import range
 
 class ParamList(Qt.QTreeWidget):
     def __init__(self, *args):

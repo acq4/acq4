@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from .Qt import QtCore, QtGui
 from . import functions as fn
 from .Vector import Vector

@@ -7,6 +7,7 @@ from acq4.util import Qt
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
+from six.moves import map
 
 
 class LineScanComponent(ScanProgramComponent):

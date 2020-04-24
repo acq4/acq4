@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from ..Point import Point
 from ..Qt import QtCore, QtGui
 import weakref

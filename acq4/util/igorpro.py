@@ -12,6 +12,7 @@ import zmq
 
 
 import os
+from six.moves import range
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
 from acq4.pyqtgraph.util.mutex import Mutex

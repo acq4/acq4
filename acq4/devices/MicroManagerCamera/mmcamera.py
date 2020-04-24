@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, with_statement, print_function
 
+from __future__ import absolute_import
 import time
 from collections import OrderedDict
 
@@ -12,6 +13,7 @@ from acq4.devices.Camera import Camera
 from acq4.pyqtgraph.debug import Profiler
 from acq4.util import micromanager
 from acq4.util.Mutex import Mutex
+from six.moves import range
 
 # Micromanager does not standardize trigger modes across cameras,
 # so we use this dict to translate the modes of various cameras back

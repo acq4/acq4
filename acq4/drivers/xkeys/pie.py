@@ -5,6 +5,8 @@ from __future__ import print_function, absolute_import
 
 import os, sys, struct, ctypes, time, threading
 import numpy as np
+from six.moves import range
+from six.moves import zip
 os.environ['PATH'] += ";C:\\Program Files (x86)\\PI Engineering\\P.I. Engineering SDK\\DLLs"
 
 # Delay loading PIEHid--this is only supported in 32-bit, and it helps multiprocessing to have this module

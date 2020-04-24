@@ -14,6 +14,7 @@ from acq4.util.HelpfulException import HelpfulException
 import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
 from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .scan_program import ScanProgram, ScanProgramPreview
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 

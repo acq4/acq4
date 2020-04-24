@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import print_function
 from .Qt import QtCore, QtGui
 from .Vector import Vector
 from .Transform3D import Transform3D
 from .Vector import Vector
 import numpy as np
+from six.moves import range
 
 class SRTTransform3D(Transform3D):
     """4x4 Transform matrix that can always be represented as a combination of 3 matrices: scale * rotate * translate

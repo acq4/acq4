@@ -5,6 +5,7 @@ from acq4.util import Qt
 from acq4.devices.Device import Device
 from acq4.util.Mutex import Mutex
 import acq4.pyqtgraph.multiprocess as mp
+from six.moves import range
 
 def __reload__(old):
     # avoid enumerating devices more than once because this seems to generate lots of (potentially dangerous)

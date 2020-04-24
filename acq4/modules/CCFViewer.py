@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from acq4.modules.Module import Module
 from acq4.util import Qt
 

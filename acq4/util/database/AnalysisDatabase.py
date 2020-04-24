@@ -13,6 +13,7 @@ from acq4.pyqtgraph.pgcollections import CaselessDict
 from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 from acq4.util import DataManager, functions
 from acq4.util.database.database import SqliteDatabase, parseColumnDefs, TableData
+from six.moves import map
 
 
 class AnalysisDatabase(SqliteDatabase):

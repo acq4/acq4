@@ -15,6 +15,7 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.debug import printExc
 from . import FileAnalysisView
 from . import FileLogView
+from six.moves import range
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 
