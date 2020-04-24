@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 """
 For combining photostimulation maps across cells and displaying against 3D atlas.
 

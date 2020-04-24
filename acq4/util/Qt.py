@@ -1,6 +1,6 @@
 """Wrapper around Qt libraries to make it easier to swap out backends in the future
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import importlib
 import os

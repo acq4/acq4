@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import os, re, zipfile
 from acq4.analysis.modules.EventDetector.EventDetector import EventDetector
 from acq4.pyqtgraph.metaarray import MetaArray

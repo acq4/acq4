@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import os, sys, ctypes, atexit, time, threading, platform
 import numpy as np
 from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 

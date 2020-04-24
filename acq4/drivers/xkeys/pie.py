@@ -1,7 +1,7 @@
 # import os, sys
 # sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 # import acq4.util.clibrary as clib
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import os, sys, struct, ctypes, time, threading
 import numpy as np

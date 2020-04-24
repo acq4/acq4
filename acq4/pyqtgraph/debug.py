@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import sys, traceback, time, gc, re, types, weakref, inspect, os, cProfile, threading
 from . import ptime

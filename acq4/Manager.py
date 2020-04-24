@@ -10,7 +10,7 @@ The class is responsible for:
     - Invoking/managing modules
     - Creating and executing acquisition tasks. 
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import atexit
 import gc

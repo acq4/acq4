@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import acq4.Manager
 import numpy as np
 import acq4.analysis.tools.functions as afn

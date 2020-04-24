@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 DESCRIPTION = """\
 ACQ4 is a python-based platform for experimental neurophysiology. 
 

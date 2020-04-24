@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 """
 FileType.py -  Base class for all file types
 Copyright 2010  Luke Campagnola

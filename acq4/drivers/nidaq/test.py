@@ -1,7 +1,7 @@
 #!/cygdrive/c/Python25/python.exe
 # -*- coding: utf-8 -*-
 ## Workaround for symlinks not working in windows
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 print("Starting up..")
 
 import sys, time, os

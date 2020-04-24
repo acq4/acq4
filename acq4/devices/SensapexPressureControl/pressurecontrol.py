@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from acq4.util import Qt
 from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
 from ..PressureControl import PressureControl

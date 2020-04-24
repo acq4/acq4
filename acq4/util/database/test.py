@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import os, sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(path, '..', '..', '..'))

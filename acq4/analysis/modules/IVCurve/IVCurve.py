@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 """
 IVCurve: Analysis module that analyzes current-voltage and firing
 relationships from current clamp data.

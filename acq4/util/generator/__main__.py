@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import os, sys
 
 from acq4.util.generator.StimGenerator import StimGenerator

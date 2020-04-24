@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 __author__ = 'pbmanis'
 
 from collections import OrderedDict

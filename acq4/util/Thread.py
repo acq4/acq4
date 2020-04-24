@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import threading
 from acq4.util import Qt
 from .debug import enableFaulthandler

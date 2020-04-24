@@ -7,7 +7,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 Used for extracting data such as macro definitions, variables, typedefs, and function
 signatures from C files (preferrably header files).
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import os
 import re

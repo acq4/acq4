@@ -8,7 +8,7 @@ Includes:
     - CaselessDict - Case-insensitive dict
     - ProtectedDict/List/Tuple - Deeply read-only versions of these builtins
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import collections
 import copy

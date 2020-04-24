@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import acq4.util.functions as functions
 from acq4.pyqtgraph.flowchart.library.common import CtrlNode

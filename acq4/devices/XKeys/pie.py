@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import platform
 from acq4.util import Qt
 from acq4.devices.Device import Device

@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from __future__ import division
 import numpy as np
 from acq4.devices.Scanner.scan_program.spiral import SpiralScan

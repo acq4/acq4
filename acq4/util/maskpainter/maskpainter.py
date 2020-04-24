@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.util import Qt

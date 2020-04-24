@@ -12,7 +12,7 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 
 
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import math
 import re

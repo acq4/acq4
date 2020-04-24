@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 from acq4.pyqtgraph.flowchart.library.common import CtrlNode, PlottingCtrlNode
 from acq4.pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine

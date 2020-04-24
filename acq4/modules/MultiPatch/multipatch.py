@@ -1,5 +1,5 @@
 # coding: utf8
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import os, re
 import numpy as np
 import json

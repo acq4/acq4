@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from .CanvasItem import CanvasItem
 from acq4.util import Qt
 import acq4.pyqtgraph as pg

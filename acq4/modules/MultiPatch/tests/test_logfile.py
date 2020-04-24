@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import numpy as np
 from acq4.modules.MultiPatch.logfile import MultiPatchLog, IrregularTimeSeries
 

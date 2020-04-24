@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from acq4.util.FileLoader import FileLoader
 from acq4.util import Qt
 

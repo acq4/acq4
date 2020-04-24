@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 from acq4.devices.Laser import Laser, LaserTask
 from acq4.drivers.Coherent import Coherent

@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from acq4.pyqtgraph.canvas import Canvas as OrigCanvas
 from . import items
 

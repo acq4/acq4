@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 from ctypes import byref, windll, c_double, c_uint, c_char_p, c_int, create_string_buffer
 import os

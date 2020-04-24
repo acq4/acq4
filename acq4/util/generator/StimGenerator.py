@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 """
 StimGenerator.py -  Stimulus waveform generator + Qt widget
 Copyright 2010  Luke Campagnola

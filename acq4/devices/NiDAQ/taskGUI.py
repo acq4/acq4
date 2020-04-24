@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 from acq4.devices.Device import TaskGui
 from acq4.pyqtgraph.WidgetGroup import WidgetGroup
