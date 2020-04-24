@@ -15,7 +15,6 @@ The module also provides a callback mechanism allowing others to respond
 to exceptions.
 """
 
-from __future__ import absolute_import
 from __future__ import print_function
 import sys, time
 #from lib.Manager import logMsg

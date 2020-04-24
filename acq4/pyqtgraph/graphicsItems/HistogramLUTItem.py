@@ -3,7 +3,6 @@ GraphicsWidget displaying an image histogram along with gradient editor. Can be 
 """
 
 
-from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .. import functions as fn
 from .GraphicsWidget import GraphicsWidget

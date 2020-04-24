@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..Qt import QtCore, QtGui
 from ..python2_3 import asUnicode
 from .Parameter import Parameter, registerParameterType

@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..Qt import QtGui, QtCore, QT_LIB
 import weakref
 from .GraphicsObject import GraphicsObject

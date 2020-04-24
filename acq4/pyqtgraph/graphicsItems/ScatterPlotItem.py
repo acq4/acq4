@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from itertools import starmap, repeat
 import numpy as np
 import weakref

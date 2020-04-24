@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .GraphicsObject import *
 from .GraphicsWidgetAnchor import *

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
 from __future__ import print_function
 from six.moves import range
 if __name__ == '__main__':

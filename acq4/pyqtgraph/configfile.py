@@ -9,7 +9,6 @@ file format. Data structures may be nested and contain any data type as long
 as it can be converted to/from a string using repr and eval.
 """
 
-from __future__ import absolute_import
 from __future__ import print_function
 import re, os, sys, datetime
 import numpy

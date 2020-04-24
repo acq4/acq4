@@ -3,7 +3,6 @@ Cross-platform color text printing
 
 Based on colorama (see pyqtgraph/util/colorama/README.txt)
 """
-from __future__ import absolute_import
 import sys, re
 
 from .colorama.winterm import WinTerm, WinColor, WinStyle

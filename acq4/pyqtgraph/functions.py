@@ -6,7 +6,6 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from __future__ import division
-from __future__ import absolute_import
 from __future__ import print_function
 import warnings
 import numpy as np

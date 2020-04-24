@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .. import parametertree as ptree
 import numpy as np

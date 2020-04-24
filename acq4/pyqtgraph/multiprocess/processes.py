@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from __future__ import print_function
 import subprocess, atexit, os, sys, time, random, socket, signal, inspect
 import multiprocessing.connection

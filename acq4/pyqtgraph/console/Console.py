@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import sys, re, os, time, traceback, subprocess
 import pickle
 

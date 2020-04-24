@@ -1,5 +1,4 @@
 # ~*~ coding: utf8 ~*~
-from __future__ import absolute_import
 import sys
 import pytest
 from pyqtgraph.Qt import QtGui, QtCore

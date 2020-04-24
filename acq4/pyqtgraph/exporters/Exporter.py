@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..widgets.FileDialog import FileDialog
 from ..Qt import QtGui, QtCore, QtSvg
 from ..python2_3 import asUnicode

@@ -3,7 +3,6 @@ Allows easy loading of pixmaps used in UI elements.
 Provides support for frozen environments as well.
 """
 
-from __future__ import absolute_import
 import os, sys, pickle
 from ..functions import makeQImage
 from ..Qt import QtGui

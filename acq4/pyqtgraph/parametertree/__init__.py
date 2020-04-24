@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from .Parameter import Parameter, registerParameterType
 from .ParameterTree import ParameterTree
 from .ParameterItem import ParameterItem

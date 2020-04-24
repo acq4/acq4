@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import time
 from ..Qt import QtCore, QtGui, QtTest, QT_LIB
 

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import
 import pytest
 import pyqtgraph as pg
 from pyqtgraph.ordereddict import OrderedDict

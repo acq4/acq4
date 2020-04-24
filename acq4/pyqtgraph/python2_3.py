@@ -1,7 +1,6 @@
 """
 Helper functions that smooth out the differences between python 2 and 3.
 """
-from __future__ import absolute_import
 import sys
 import six
 

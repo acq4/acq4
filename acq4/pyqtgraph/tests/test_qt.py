@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import pyqtgraph as pg
 import gc, os
 import pytest

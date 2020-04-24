@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 if __name__ == '__main__':
     import os, sys
     path = os.path.abspath(os.path.dirname(__file__))

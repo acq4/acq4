@@ -5,7 +5,6 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from __future__ import absolute_import
 from ..Qt import QtCore, QtGui, QT_LIB
 
 try:

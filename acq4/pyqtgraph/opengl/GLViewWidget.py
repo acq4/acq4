@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from __future__ import print_function
 from ..Qt import QtCore, QtGui, QtOpenGL, QT_LIB
 from OpenGL.GL import *

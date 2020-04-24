@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..Qt import QtGui, QtCore
 from .UIGraphicsItem import *
 import numpy as np

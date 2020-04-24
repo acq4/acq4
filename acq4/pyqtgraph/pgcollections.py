@@ -10,7 +10,6 @@ Includes:
   - ThreadsafeDict, ThreadsafeList - Self-mutexed data structures
 """
 
-from __future__ import absolute_import
 import threading, sys, copy, collections
 #from debug import *
 

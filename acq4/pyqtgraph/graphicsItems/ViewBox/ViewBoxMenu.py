@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ...Qt import QtCore, QtGui, QT_LIB
 from ...python2_3 import asUnicode
 from ...WidgetGroup import WidgetGroup

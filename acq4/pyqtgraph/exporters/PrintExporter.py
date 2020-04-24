@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from .Exporter import Exporter
 from ..parametertree import Parameter
 from ..Qt import QtGui, QtCore, QtSvg

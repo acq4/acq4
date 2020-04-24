@@ -8,7 +8,6 @@ This class addresses the problem of having to save and restore the state
 of a large group of widgets. 
 """
 
-from __future__ import absolute_import
 from __future__ import print_function
 from .Qt import QtCore, QtGui, QT_LIB
 import weakref, inspect

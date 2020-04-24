@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import weakref
 from ..Qt import QtCore, QtGui
 from ..python2_3 import sortList, cmp

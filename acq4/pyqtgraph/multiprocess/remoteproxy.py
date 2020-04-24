@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from __future__ import print_function
 import os, time, sys, traceback, weakref
 import numpy as np

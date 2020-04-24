@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph as pg
 import numpy as np

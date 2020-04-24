@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from .. import functions as fn
 from .GraphicsObject import GraphicsObject
 from .ScatterPlotItem import ScatterPlotItem

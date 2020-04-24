@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import os, sys, time, multiprocessing, re
 from .processes import ForkedProcess
 from .remoteproxy import ClosedError

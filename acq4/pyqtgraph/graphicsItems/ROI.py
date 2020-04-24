@@ -12,7 +12,6 @@ The ROI class is meant to serve as the base for more specific types; see several
 of how to build an ROI at the bottom of the file.
 """
 
-from __future__ import absolute_import
 from __future__ import print_function
 from ..Qt import QtCore, QtGui
 import numpy as np

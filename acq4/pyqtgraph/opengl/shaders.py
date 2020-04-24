@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from six.moves import map
 try:
     from OpenGL import NullFunctionError

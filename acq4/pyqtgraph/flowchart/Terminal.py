@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
 from ..Qt import QtCore, QtGui
 import weakref
 from ..graphicsItems.GraphicsObject import GraphicsObject

@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from OpenGL.GL import *
 from .. GLGraphicsItem import GLGraphicsItem
 from .. MeshData import MeshData

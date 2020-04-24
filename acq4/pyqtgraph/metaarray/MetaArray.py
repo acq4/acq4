@@ -10,7 +10,6 @@ new methods for slicing and indexing the array based on this meta data.
 More info at http://www.scipy.org/Cookbook/MetaArray
 """
 
-from __future__ import absolute_import
 from __future__ import print_function
 import types, copy, threading, os, re
 import pickle

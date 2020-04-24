@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import weakref
 import numpy as np
 from ..Qt import QtGui, QtCore

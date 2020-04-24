@@ -9,7 +9,6 @@ This module exists to smooth out some of the differences between PySide and PyQt
 
 """
 
-from __future__ import absolute_import
 from __future__ import print_function
 import os, sys, re, time
 

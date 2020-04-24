@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from OpenGL.GL import *
 from OpenGL import GL
 from ..Qt import QtGui, QtCore

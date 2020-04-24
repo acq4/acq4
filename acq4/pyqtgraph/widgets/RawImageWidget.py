@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from ..Qt import QtCore, QtGui
 try:
     from ..Qt import QtOpenGL
