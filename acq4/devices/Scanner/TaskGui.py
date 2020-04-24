@@ -310,7 +310,7 @@ class ScannerTaskGui(TaskGui):
     def listSequence(self):
         #items = self.activeItems()
         targets = self.getTargetList()
-        if targets > 0:
+        if len(targets) > 0:
             return {'targets': targets}
         else:
             return {}
