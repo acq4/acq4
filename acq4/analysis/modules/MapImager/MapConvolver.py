@@ -1,11 +1,11 @@
 from __future__ import print_function
-from acq4.util import Qt
-#import acq4.Manager
-import acq4.pyqtgraph as pg
+
 import numpy as np
-import acq4.util.functions as fn
 import scipy
+
+import acq4.pyqtgraph as pg
 from acq4.analysis.tools import functions as afn
+from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.MapConvolverTemplate')
 

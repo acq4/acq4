@@ -27,7 +27,7 @@ for folder, subs, filenames in os.walk(walk_dir):
         except:
             # import ipdb; ipdb.set_trace()
             fail_count += 1
-            print(filename, "failed to import {}".format(file_path))
+            print(filename, "failed to import {} : {}".format(file_path, sys.exc_info()[1]))
             sys.excepthook(*sys.exc_info())
         else:
             file_count += 1

@@ -110,7 +110,7 @@
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header location="global">pyqtgraph</header>
+   <header location="global">acq4.pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>
