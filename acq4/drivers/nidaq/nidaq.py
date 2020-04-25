@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import six
-import sys, re, types, ctypes, os, time
+
 import ctypes
-from numpy import *
+import os
+import sys
+
 import numpy as np
-import acq4.util.ptime as ptime  ## platform-independent precision timing
-import acq4.util.debug as debug
+import six
+
 import acq4.util.clibrary as clibrary
-from . import SuperTask
 from .base import NIDAQError
 
 dtypes = {  ## for converting numpy dtypes to nidaq type strings
@@ -27,7 +27,7 @@ dtypes = {  ## for converting numpy dtypes to nidaq type strings
 }
 for d in list(dtypes.keys()):
     dtypes[dtypes[d]] = d
-    dtypes[dtype(d)] = dtypes[d]
+    dtypes[np.dtype(d)] = dtypes[d]
 
 
 
@@ -289,26 +289,26 @@ class Task:
         tt = self.taskType()
         if dtype is None:
             if tt in [LIB.Val_AI, LIB.Val_AO]:
-                dtype = float64
+                dtype = np.float64
             elif tt in [LIB.Val_DI, LIB.Val_DO]:
-                dtype = uint32  ## uint8 / 16 might be sufficient, but don't seem to work anyway.
+                dtype = np.uint32  ## uint8 / 16 might be sufficient, but don't seem to work anyway.
             else:
                 raise Exception("No default dtype for %s tasks." % chTypes[tt])
 
-        buf = empty(shape, dtype=dtype)
+        buf = np.empty(shape, dtype=dtype)
         #samplesRead = ctypes.c_long()
         
         ## Determine the correct function name to call based on the dtype requested
         fName = 'Read'
         if tt == LIB.Val_AI:
-            if dtype == float64:
+            if dtype == np.float64:
                 fName += 'Analog'
-            elif dtype in [int16, uint16, int32, uint32]:
+            elif dtype in [np.int16, np.uint16, np.int32, np.uint32]:
                 fName += 'Binary'
             else:
                 raise Exception('dtype %s not allowed for AI channels (must be float64, int16, uint16, int32, or uint32)' % str(dtype))
         elif tt == LIB.Val_DI:
-            if dtype in [uint8, uint16, uint32]:
+            if dtype in [np.uint8, np.uint16, np.uint32]:
                 fName += 'Digital'
             else:
                 raise Exception('dtype %s not allowed for DI channels (must be uint8, uint16, or uint32)' % str(dtype))
@@ -337,14 +337,14 @@ class Task:
         fName = 'Write'
         tt = self.taskType()
         if tt == LIB.Val_AO:
-            if data.dtype == float64:
+            if data.dtype == np.float64:
                 fName += 'Analog'
-            elif data.dtype in [int16, uint16]:
+            elif data.dtype in [np.int16, np.uint16]:
                 fName += 'Binary'
             else:
                 raise Exception('dtype %s not allowed for AO channels (must be float64, int16, or uint16)' % str(data.dtype))
         elif tt == LIB.Val_DO:
-            if data.dtype in [uint8, uint16, uint32]:
+            if data.dtype in [np.uint8, np.uint16, np.uint32]:
                 fName += 'Digital'
             else:
                 raise Exception('dtype %s not allowed for DO channels (must be uint8, uint16, or uint32)' % str(data.dtype))

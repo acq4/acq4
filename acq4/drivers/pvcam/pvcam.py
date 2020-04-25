@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import atexit
+import numpy
+import os
+import platform
+import re
+import sys
+import time
+from collections import OrderedDict
+from ctypes import windll, create_string_buffer, byref, c_int, c_ulong, c_byte, c_ubyte, c_short, c_ushort, c_uint, \
+    c_double, c_char_p, c_void_p
+
 import six
 
-from ctypes import *
-import sys, numpy, time, re, os, platform
-from acq4.util.clibrary import *
-from collections import OrderedDict
-from acq4.util.debug import backtrace
-import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
-import atexit
+from acq4.util.clibrary import CParser, winDefs, CLibrary
 
 __all__ = ['PVCam']
-
 
 ### Load header files, open DLL
 modDir = os.path.dirname(__file__)
@@ -98,7 +102,7 @@ externalParams = [
 
 
 
-
+PVCam = None
 def init():
     ## System-specific code
     global PVCam

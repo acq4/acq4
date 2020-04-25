@@ -15,7 +15,7 @@ import acq4.Manager as Manager
 from acq4.util.debug import Profiler
 from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
-from acq4.util.metaarray import MetaArray
+from acq4.pyqtgraph.metaarray import MetaArray
 from acq4.pyqtgraph import ptime
 
 SequencerTemplate = Qt.importTemplate('.sequencerTemplate')

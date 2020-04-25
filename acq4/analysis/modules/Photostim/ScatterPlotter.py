@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from six.moves import range
 
-from __future__ import print_function
 from acq4.util import Qt
 import acq4.pyqtgraph as pg
-#import acq4.pyqtgraph.TreeWidget as TreeWidget
 import acq4.util.flowchart.EventDetection as FCEventDetection
-import acq4.util.debug as debug
+
 
 class ScatterPlotter(Qt.QSplitter):
     ### Draws scatter plots, allows the user to pick which data is used for x and y axes.

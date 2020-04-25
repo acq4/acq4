@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
+from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.HelpfulException import HelpfulException
-from acq4.Manager import logMsg, logExc, getManager
 
 Ui_Form = Qt.importTemplate('.template')
 

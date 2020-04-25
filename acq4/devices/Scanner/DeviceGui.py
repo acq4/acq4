@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import time, os, sys, gc
-from acq4.util import Qt
-import acq4.Manager
-from acq4.util.imageAnalysis import *
-from acq4.util.debug import *
+
+import gc
+import time
+
 import numpy as np
+from scipy.optimize import leastsq
+
+import acq4.Manager
 import acq4.pyqtgraph as pg
+from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
+from acq4.util.functions import blur
+from acq4.util.imageAnalysis import fitGaussian2D
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 
@@ -187,14 +192,14 @@ class ScannerDeviceGui(Qt.QWidget):
             cx = frames.shape[1] / 3
             cy = frames.shape[2] / 3
             centerSlice = blur(frames[:, cx:cx*2, cy:cy*2], (0, 5, 5)).max(axis=1).max(axis=1)
-            maxIndex = argmax(centerSlice)
+            maxIndex = np.argmax(centerSlice)
             maxFrame = frames[maxIndex]
             dlg.setValue(5)
 
             ## Determine spot intensity and width
             mfBlur = blur(maxFrame, blurRadius)
-            amp = mfBlur.max() - median(mfBlur)  ## guess intensity of spot
-            (x, y) = argwhere(mfBlur == mfBlur.max())[0]   ## guess location of spot
+            amp = mfBlur.max() - np.median(mfBlur)  ## guess intensity of spot
+            (x, y) = np.argwhere(mfBlur == mfBlur.max())[0]   ## guess location of spot
             fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
             # convert sigma to full width at 1/e
             fit[3] = abs(2 * (2 ** 0.5) * fit[3]) ## sometimes the fit for width comes out negative. *shrug*
@@ -231,7 +236,7 @@ class ScannerDeviceGui(Qt.QWidget):
                 #else:
                     #print "Keeping spot:", ss
                     
-                (x, y) = argwhere(fBlur == mx)[0]   # guess location of spot
+                (x, y) = np.argwhere(fBlur == mx)[0]   # guess location of spot
                 if x < margin or x > frame.shape[0] - margin:
                     #print "   ..skipping; too close to edge", x, y
                     continue
@@ -249,14 +254,14 @@ class ScannerDeviceGui(Qt.QWidget):
                 spotLocations.append([localPos.x(), localPos.y()])
                 globalSpotLocations.append([globalPos.x(), globalPos.y()])
                 spotCommands.append(positions[i])
-                spotFrames.append(frame[newaxis])
+                spotFrames.append(frame[np.newaxis])
         
         ## sanity check on spot frame
         if len(spotFrames) == 0:
             self.ui.view.setImage(frames)
             raise HelpfulException('Calibration never detected laser spot!  Looking for spots that are %f pixels wide.'% fit[3], reasons=['shutter is disabled', 'mirrors are disabled', 'objective is not clean', 'spot is not visible or not bright enough when shutter is open'])
 
-        spotFrameMax = concatenate(spotFrames).max(axis=0)
+        spotFrameMax = np.concatenate(spotFrames).max(axis=0)
         self.ui.view.setImage(spotFrameMax, transform=frameTransform)
         
         self.clearSpots()
@@ -268,7 +273,7 @@ class ScannerDeviceGui(Qt.QWidget):
             raise HelpfulException('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames), reasons=['spot is too dim for camera sensitivity', 'objective is not clean', 'mirrors are scanning too quickly', 'mirror scanning region is not within the camera\'s view'])
         
         ## Fit all data to a map function
-        mapParams = self.generateMap(array(spotLocations), array(spotCommands))
+        mapParams = self.generateMap(np.array(spotLocations), np.array(spotCommands))
         #print 
         #print "Map parameters:", mapParams
         
@@ -324,7 +329,7 @@ class ScannerDeviceGui(Qt.QWidget):
 
     def spotSize(self, frame):
         """Return the normalized integral of all values in the frame that are between max and max/e"""
-        med = median(frame)
+        med = np.median(frame)
         fr1 = frame - med   ## subtract median value so baseline is at 0
         mask = fr1 > (fr1.max() / np.e)  ## find all values > max/e
         ss = (fr1 * mask).sum() / mask.sum()  ## integrate values within mask, divide by mask area

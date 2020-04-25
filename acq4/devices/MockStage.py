@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.OptomechDevice import *
+
 import time
+
 import numpy as np
-from acq4.Manager import getManager
+
 from acq4.devices.Stage import Stage, MoveFuture
-from acq4.util.Thread import Thread
-import acq4.pyqtgraph as pg
-from acq4.util import Qt
 from acq4.pyqtgraph import ptime
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 
 
 class MockStage(Stage):

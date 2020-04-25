@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
 from acq4.util import Qt
 from acq4.pyqtgraph import FeedbackButton
-import acq4.util.configfile as configfile
+import acq4.pyqtgraph.configfile as configfile
 from acq4.util.DataManager import DirHandle
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.Mutex import Mutex

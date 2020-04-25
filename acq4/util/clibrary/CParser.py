@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 CParser.py - C parsing library 
 Copyright 2010  Luke Campagnola
@@ -8,11 +7,13 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 Used for extracting data such as macro definitions, variables, typedefs, and function
 signatures from C files (preferrably header files).
 """
+from __future__ import print_function
 
-import sys, re, os
+import os
+import re
+import sys
 
 import six
-
 
 __all__ = ['winDefs', 'CParser']
 
@@ -250,7 +251,7 @@ class CParser():
             import pickle
             try:
                 cache = pickle.load(open(cacheFile, 'r'))
-            except ValueError:
+            except (ValueError, TypeError):
                 cache = pickle.load(open(cacheFile, 'rb'))
             
             ## make sure __init__ options match (unless we can't parse the headers anyway)
@@ -369,8 +370,9 @@ class CParser():
         #self.ppDirective = Combine("#" + Word(alphas).leaveWhitespace()) + restOfLine
         
         # define the structure of a macro definition
-        name = Word(alphas+'_', alphanums+'_')('name')
-        self.ppDefine = name.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(name) + rparen).setWhitespaceChars(' \t')('args') + SkipTo(LineEnd())('value')
+        name = Word(alphas + '_', alphanums + '_')('name')
+        self.ppDefine = name.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(name) + rparen).setWhitespaceChars(' \t')('args') + SkipTo(
+            LineEnd())('value')
         self.ppDefine.setParseAction(self.processMacroDefn)
         
         #self.updateMacroDefns()
@@ -412,8 +414,8 @@ class CParser():
                     def pa(t):
                         return ['0', '1'][t['name'] in self.defs['macros'] or t['name'] in self.defs['fnmacros']]
                     rest = (
-                        Keyword('defined') + 
-                        (name | lparen + name + rparen)
+                            Keyword('defined') +
+                            (name | lparen + name + rparen)
                     ).setParseAction(pa).transformString(rest)
                 elif d in ['define', 'undef']:    
                     macroName, rest = re.match(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)(.*)$', rest).groups()
@@ -521,10 +523,10 @@ class CParser():
     def evalPreprocessorExpr(self, expr):
         ## make a few alterations so the expression can be eval'd
         macroDiffs = (
-            Literal('!').setParseAction(lambda: ' not ') | 
-            Literal('&&').setParseAction(lambda: ' and ') | 
-            Literal('||').setParseAction(lambda: ' or ') | 
-            Word(alphas+'_',alphanums+'_').setParseAction(lambda: '0'))
+                Literal('!').setParseAction(lambda: ' not ') |
+                Literal('&&').setParseAction(lambda: ' and ') |
+                Literal('||').setParseAction(lambda: ' or ') |
+                Word(alphas + '_', alphanums + '_').setParseAction(lambda: '0'))
         expr2 = macroDiffs.transformString(expr)
             
         try:
@@ -747,10 +749,10 @@ class CParser():
         self.structType = Forward()
         self.enumType = Forward()
         self.typeSpec = (typeQualifier + (
-            fundType | 
-            Optional(kwl(sizeModifiers + signModifiers)) + ident | 
-            self.structType | 
-            self.enumType
+                fundType |
+                Optional(kwl(sizeModifiers + signModifiers)) + ident |
+                self.structType |
+                self.enumType
         ) + typeQualifier + msModifier).setParseAction(recombine)
         #self.argList = Forward()
         
@@ -773,12 +775,12 @@ class CParser():
         #     ...etc...
         self.abstractDeclarator << Group(
             typeQualifier + Group(ZeroOrMore('*'))('ptrs') + typeQualifier +
-            ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) + 
+            ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) +
             Optional(lparen + Optional(delimitedList(Group(
-                self.typeSpec('type') + 
-                self.abstractDeclarator('decl') + 
+                self.typeSpec('type') +
+                self.abstractDeclarator('decl') +
                 Optional(Literal('=').suppress() + expression, default=None)('val')
-            )), default=None) + rparen)('args') + 
+            )), default=None) + rparen)('args') +
             Group(ZeroOrMore(lbrack + Optional(expression, default='-1') + rbrack))('arrays')
         )
         
@@ -798,12 +800,12 @@ class CParser():
         #     ...etc...
         self.declarator << Group(
             typeQualifier + callConv + Group(ZeroOrMore('*'))('ptrs') + typeQualifier +
-            ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) + 
+            ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) +
             Optional(lparen + Optional(delimitedList(Group(
-                self.typeSpec('type') + 
-                (self.declarator | self.abstractDeclarator)('decl') + 
+                self.typeSpec('type') +
+                (self.declarator | self.abstractDeclarator)('decl') +
                 Optional(Literal('=').suppress() + expression, default=None)('val')
-            )), default=None) + rparen)('args') + 
+            )), default=None) + rparen)('args') +
             Group(ZeroOrMore(lbrack + Optional(expression, default='-1') + rbrack))('arrays')
         )
         self.declaratorList = Group(delimitedList(self.declarator))
@@ -813,7 +815,8 @@ class CParser():
         self.typeDecl.setParseAction(self.processTypedef)
 
         ## variable declaration
-        self.variableDecl = Group(self.typeSpec('type') + Optional(self.declaratorList('declList')) + Optional(Literal('=').suppress() + (expression('value') | (lbrace + Group(delimitedList(expression))('arrayValues') + rbrace)))) + semi
+        self.variableDecl = Group(self.typeSpec('type') + Optional(self.declaratorList('declList')) + Optional(
+            Literal('=').suppress() + (expression('value') | (lbrace + Group(delimitedList(expression))('arrayValues') + rbrace)))) + semi
         
         self.variableDecl.setParseAction(self.processVariable)
         
@@ -829,9 +832,9 @@ class CParser():
         structKW = (Keyword('struct') | Keyword('union'))
         #self.structType << structKW('structType') + ((Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.structDecl | self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace) | ident('name'))
         self.structMember = (
-            Group(self.variableDecl.copy().setParseAction(lambda: None)) |
-            (self.typeSpec + self.declarator + nestedExpr('{', '}')).suppress() |
-            (self.declarator + nestedExpr('{', '}')).suppress()
+                Group(self.variableDecl.copy().setParseAction(lambda: None)) |
+                (self.typeSpec + self.declarator + nestedExpr('{', '}')).suppress() |
+                (self.declarator + nestedExpr('{', '}')).suppress()
         )
         self.declList = lbrace + Group(OneOrMore(self.structMember))('members') + rbrace
         self.structType << (Keyword('struct') | Keyword('union'))('structType') + ((Optional(ident)('name') + self.declList) | ident('name'))
@@ -842,9 +845,10 @@ class CParser():
         self.structDecl = self.structType + semi
 
         ## enum definition
-        enumVarDecl = Group(ident('name')  + Optional(Literal('=').suppress() + (integer('value') | ident('valueName'))))
-        
-        self.enumType << Keyword('enum') + (Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace | ident('name'))
+        enumVarDecl = Group(ident('name') + Optional(Literal('=').suppress() + (integer('value') | ident('valueName'))))
+
+        self.enumType << Keyword('enum') + (
+                    Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace | ident('name'))
         self.enumType.setParseAction(self.processEnum)
         
         self.enumDecl = self.enumType + semi
@@ -1194,7 +1198,9 @@ class CParser():
         
 hasPyParsing = False
 try: 
-    from pyparsing import *
+    from pyparsing import stringStart, Group, Word, ParserElement, nestedExpr, WordEnd, SkipTo, WordStart, OneOrMore, \
+        oneOf, quotedString, Regex, Literal, delimitedList, cStyleComment, restOfLine, alphanums, Optional, LineEnd, \
+        Keyword, ZeroOrMore, lineno, hexnums, alphas, Forward, ParseResults
     ParserElement.enablePackrat()
     hasPyParsing = True
 except:
@@ -1221,8 +1227,8 @@ if hasPyParsing:
         return Regex(r'\b(%s)\b' % '|'.join(strs))
 
     keyword = kwl(keywords)
-    wordchars = alphanums+'_$'
-    ident = (WordStart(wordchars) + ~keyword + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
+    wordchars = alphanums + '_$'
+    ident = (WordStart(wordchars) + ~keyword + Word(alphas + "_", alphanums + "_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
     #integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
     semi   = Literal(";").ignore(quotedString).suppress()
     lbrace = Literal("{").ignore(quotedString).suppress()
@@ -1231,7 +1237,7 @@ if hasPyParsing:
     rbrack = Literal("]").ignore(quotedString).suppress()
     lparen = Literal("(").ignore(quotedString).suppress()
     rparen = Literal(")").ignore(quotedString).suppress()
-    hexint = Regex('-?0x[%s]+[UL]*'%hexnums).setParseAction(lambda t: t[0].rstrip('UL'))
+    hexint = Regex('-?0x[%s]+[UL]*' % hexnums).setParseAction(lambda t: t[0].rstrip('UL'))
     decint = Regex(r'-?\d+[UL]*').setParseAction(lambda t: t[0].rstrip('UL'))
     integer = (hexint | decint)
     floating = Regex(r'-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?')
@@ -1240,13 +1246,13 @@ if hasPyParsing:
     biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
     uniRightOperator = oneOf("++ --")
     uniLeftOperator = oneOf("++ -- - + * sizeof new")
-    name = (WordStart(wordchars) + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars))
+    name = (WordStart(wordchars) + Word(alphas + "_", alphanums + "_$") + WordEnd(wordchars))
     #number = Word(hexnums + ".-+xUL").setParseAction(lambda t: t[0].rstrip('UL'))
     #stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
-    callConv = Optional(Keyword('__cdecl')|Keyword('__stdcall'))('callConv')
+    callConv = Optional(Keyword('__cdecl') | Keyword('__stdcall'))('callConv')
     
     ## Removes '__name' from all type specs.. may cause trouble.
-    underscore2Ident = (WordStart(wordchars) + ~keyword + '__' + Word(alphanums,alphanums+"_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
+    underscore2Ident = (WordStart(wordchars) + ~keyword + '__' + Word(alphanums, alphanums + "_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
     typeQualifier = ZeroOrMore((underscore2Ident + Optional(nestedExpr())) | kwl(qualifiers)).suppress()
     
     msModifier = ZeroOrMore(kwl(msModifiers) + Optional(nestedExpr())).suppress()
@@ -1264,24 +1270,24 @@ if hasPyParsing:
 
     ## Is there a better way to process expressions with cast operators??
     castAtom = (
-        ZeroOrMore(uniLeftOperator) + Optional('('+ident+')').suppress() + 
-        ((
-            ident + '(' + Optional(delimitedList(expression)) + ')' | 
-            ident + OneOrMore('[' + expression + ']') | 
-            ident | number | quotedString
+            ZeroOrMore(uniLeftOperator) + Optional('(' + ident + ')').suppress() +
+            ((
+                     ident + '(' + Optional(delimitedList(expression)) + ')' |
+                     ident + OneOrMore('[' + expression + ']') |
+                     ident | number | quotedString
         )  |
-        ('(' + expression + ')')) + 
-        ZeroOrMore(uniRightOperator)
+        ('(' + expression + ')')) +
+            ZeroOrMore(uniRightOperator)
     )
     uncastAtom = (
-        ZeroOrMore(uniLeftOperator) + 
-        ((
-            ident + '(' + Optional(delimitedList(expression)) + ')' | 
-            ident + OneOrMore('[' + expression + ']') | 
-            ident | number | quotedString
+            ZeroOrMore(uniLeftOperator) +
+            ((
+                     ident + '(' + Optional(delimitedList(expression)) + ')' |
+                     ident + OneOrMore('[' + expression + ']') |
+                     ident | number | quotedString
         )  |
-        ('(' + expression + ')')) + 
-        ZeroOrMore(uniRightOperator)
+        ('(' + expression + ')')) +
+            ZeroOrMore(uniRightOperator)
     )
     atom = castAtom | uncastAtom
 

@@ -1,6 +1,8 @@
 from __future__ import print_function
-import pyqtgraph as pg
+
 import numpy as np
+
+import acq4.pyqtgraph as pg
 
 view = pg.GraphicsView()
 l = pg.GraphicsLayout(border=(100,100,100))

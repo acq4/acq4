@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from acq4.devices.Device import *
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.DAQGeneric import DAQGeneric
 

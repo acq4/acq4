@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 SequenceRunner.py -  Used for running multi-dimensional for-loops
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
+from __future__ import print_function
 
-from acq4.util.metaarray import *
 import numpy as np
+from acq4.pyqtgraph import MetaArray
+
 
 def runSequence(func, params, order, dtype=None, passArgs=False, linkedParams=None):
     """Convenience function that iterates a function over a given parameter space, inserting the function's return value into an array (see SequenceRunner for documentation)"""
@@ -201,7 +202,6 @@ if __name__ == '__main__':
     #!/usr/bin/python -i
     # -*- coding: utf-8 -*-
     #from SequenceRunner import *
-    from numpy import *
 
     print("========== runSequence test: simplest way to invoke sequence ============")
     def fn(x, y):

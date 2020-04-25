@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import os, pickle 
+
+import time
+
 import numpy as np
-import acq4.pyqtgraph as pg
-from acq4.devices.Device import *
-from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.Manager import logMsg, logExc
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
+from six.moves import range
+
 import acq4.util.ptime as ptime
+from acq4.Manager import logMsg
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
-from ..Stage import Stage
+from acq4.util.Mutex import Mutex
 from .DeviceGui import ScannerDeviceGui
 from .TaskGui import ScannerTaskGui
-from .scan_program import ScanProgram 
-from six.moves import range
+from ..Device import Device, DeviceTask
+from acq4.pyqtgraph.debug import Profiler
+
 
 class Scanner(Device, OptomechDevice):
     

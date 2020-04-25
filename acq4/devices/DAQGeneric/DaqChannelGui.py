@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from acq4.util import Qt
-from acq4.util.SequenceRunner import *
-import numpy
 import weakref
-from acq4.pyqtgraph import siFormat, SpinBox, WidgetGroup
+
+import numpy
+
+from acq4.pyqtgraph import SpinBox, WidgetGroup
+from acq4.util import Qt
+from acq4.util.SequenceRunner import runSequence
 
 AOChannelTemplate = Qt.importTemplate('.AOChannelTemplate')
 DOChannelTemplate = Qt.importTemplate('.DOChannelTemplate')

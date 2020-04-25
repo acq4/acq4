@@ -16,12 +16,11 @@ def collect(frame):
 cam.sigNewFrame.connect(collect)
     
 def measure():
+    global frames, run
     if len(frames) == 0:
         Qt.QTimer.singleShot(100, measure)
         return
-    global run
     if run:
-        global frames
         frame = frames[-1]
         frames = []
         img = frame.data()
@@ -35,7 +34,6 @@ def measure():
         print("WIDTH:", fit[0][3] * frame.info()['pixelSize'][0] * 1e6, "um")
         print(" fit:", fit)
     else:
-        global frames
         frames = []
     Qt.QTimer.singleShot(2000, measure)
 

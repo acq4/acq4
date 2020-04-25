@@ -24,17 +24,18 @@ from collections import OrderedDict
 import six
 
 import acq4.pyqtgraph as pg
-import acq4.util.reload as reload
+import acq4.pyqtgraph.reload as reload
 from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
 from .pyqtgraph.debug import printExc, Profiler
+from .pyqtgraph import configfile
 from .pyqtgraph.util.mutex import Mutex
-from .util import DataManager, ptime, configfile, Qt
+from .util import DataManager, ptime, Qt
 from .util.HelpfulException import HelpfulException
 
-from .util.debug import logMsg, createLogWindow
+from .util.debug import logMsg, createLogWindow, logExc # logExc needed by debug
 
 
 ### All other modules can use this function to get the manager instance

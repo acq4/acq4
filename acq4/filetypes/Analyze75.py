@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from .FileType import *
-import numpy as np
-from acq4.util.metaarray import MetaArray
-from functools import reduce
+from acq4.pyqtgraph.metaarray import MetaArray
+from .FileType import FileType
 
 
 class Analyze75(FileType):
@@ -112,10 +110,10 @@ def readA75(hdrFile):
 
 def parseA75(headerFH, imgFile):
     hdr = headerFH.read(348)
-    if len(header) != 348:
-        raise Exception("Header is wrong size! (expected 348, got %d" % len(header))
+    if len(hdr) != 348:
+        raise Exception("Header is wrong size! (expected 348, got %d" % len(hdr))
 
-    order = getByteOrder(header[:4])
+    order = getByteOrder(hdr[:4])
 
     ## break header into substructs
     hdr_key = struct.unpack(order+'i10s18sihcc', hdr[:40])
@@ -232,7 +230,7 @@ def parseNii(headerFH, imgFile):
             headerFH.seek(int(m.vox_offset))
             data = headerFH.read(size)
         elif m.magic == 'nii\0':               ## data is in a separate .img file
-            imgFile = os.path.splitext(hdrFile)[0] + '.img'
+            imgFile = os.path.splitext(imgFile)[0] + '.img'
             fh = open(imgFile, 'rb')
             fh.seek(m.vox_offset)
             data = fh.read(size)
@@ -249,7 +247,7 @@ def parseNii(headerFH, imgFile):
             m.vox_offset = max(352, m.vox_offset)
             fh = headerFH
         elif m.magic == 'nii\0':               ## data is in a separate .img file
-            imgFile = os.path.splitext(hdrFile)[0] + '.img'
+            imgFile = os.path.splitext(imgFile)[0] + '.img'
             fh = open(imgFile, 'rb')
             headerFH.close()
         data = np.memmap(fh, offset=m.vox_offset, dtype=dtype, shape=shape, mode='r')

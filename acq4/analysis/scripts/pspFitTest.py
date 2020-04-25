@@ -1,15 +1,20 @@
 from __future__ import print_function
-import scipy.optimize as opt
-import scipy.weave
+
+import os
+import sys
+import time
+
 import numpy as np
-import os, sys, user, time
+import scipy.optimize as opt
 from six.moves import range
+
+from acq4.util.functions import logSpace, downsample as fnDownsample
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'util'))
 sys.path.append(path)
 
 import acq4.pyqtgraph as pg
-import acq4.util.functions as fn
+
 from acq4.util import Qt
 
 ## TODO:
@@ -22,7 +27,7 @@ def main():
     
     ## generate table of PSP shapes
     nReps = 20
-    amps = fn.logSpace(2e-12, 300e-12, 20)
+    amps = logSpace(2e-12, 300e-12, 20)
     psp = np.empty((len(amps), nReps, 4))  ## last axis is [amp, xoff, rise, fall]
     psp[:,:,0] = amps[:,np.newaxis]
     psp[...,1] = 1e-3
@@ -398,7 +403,7 @@ def mkData(v, power=1, noise=5e-12, length=5e-3, rate=400e3, downsample=40):
     data += signal
     
     ## downsample
-    data = fn.downsample(data, downsample)
+    data = fnDownsample(data, downsample)
     
     return x[::downsample], data
     

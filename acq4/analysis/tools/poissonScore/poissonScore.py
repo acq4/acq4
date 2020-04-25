@@ -99,14 +99,9 @@ Notes on probability computation:
 ## Code for playing with poisson distributions
 
 import numpy as np
-import scipy
 import scipy.stats as stats
-import scipy.misc
-import scipy.interpolate
 import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.console
 from six.moves import range
-import user
 import acq4.pyqtgraph.multiprocess as mp
 import os
 
@@ -436,10 +431,10 @@ class PoissonScore:
             plt.plot(cls.normalizationTable[0,i], cls.normalizationTable[1,i], pen=(i, 14), symbolPen=(i,14), symbol='o')
     
     @classmethod
-    def poissonScoreBlame(ev, rate):
+    def poissonScoreBlame(cls, ev, rate):
         nVals = np.array([(ev<=t).sum()-1 for t in ev]) 
-        pp1 = 1.0 /   (1.0 - cls.poissonProb(nVals, ev, rate, clip=True))
-        pp2 = 1.0 /   (1.0 - cls.poissonProb(nVals-1, ev, rate, clip=True))
+        pp1 = 1.0 /   (1.0 - poissonProb(nVals, ev, rate, clip=True))
+        pp2 = 1.0 /   (1.0 - poissonProb(nVals-1, ev, rate, clip=True))
         diff = pp1 / pp2
         blame = np.array([diff[np.argwhere(ev >= ev[i])].max() for i in range(len(ev))])
         return blame

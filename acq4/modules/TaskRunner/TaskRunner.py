@@ -1,25 +1,30 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
+import gc
+import os
+import sys
+import time
+from collections import OrderedDict
+
+import numpy as np
 import six
 from six.moves import reduce
 
-from collections import OrderedDict
-
 import acq4.pyqtgraph as pg
 import acq4.util.DirTreeWidget as DirTreeWidget
-import acq4.util.configfile as configfile
+import acq4.pyqtgraph.configfile as configfile
 import acq4.util.ptime as ptime
 from acq4.Manager import getManager
-from acq4.modules.Module import *
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
-from acq4.util.SequenceRunner import *
+from acq4.util.SequenceRunner import runSequence
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
-from acq4.util.debug import *
+from acq4.util.debug import printExc, Profiler, logMsg, Mutex
 from acq4.util.future import Future
 from . import analysisModules
+from ..Module import Module
 
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 

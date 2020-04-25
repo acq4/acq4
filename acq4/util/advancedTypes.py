@@ -9,9 +9,10 @@ Includes:
     - ProtectedDict/List/Tuple - Deeply read-only versions of these builtins
 """
 from __future__ import print_function
-import copy, collections
-from acq4.util.debug import *
-from acq4.pyqtgraph.pgcollections import CaselessDict
+
+import collections
+import copy
+
 
 ## Template methods
 def wrapMethod(methodName):

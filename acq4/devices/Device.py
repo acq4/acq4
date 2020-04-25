@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import time, traceback, sys, weakref
+
+import os
+import traceback
+import weakref
+
+from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
-from acq4.Interfaces import InterfaceMixin
+from acq4.util.debug import printExc
 
 
 class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
@@ -353,8 +357,3 @@ class TaskGui(Qt.QWidget):
 
     def quit(self):
         self.disable()
-
-
-
-
-

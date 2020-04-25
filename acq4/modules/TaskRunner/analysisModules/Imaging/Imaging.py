@@ -7,7 +7,7 @@ from acq4.util import Qt
 import numpy as np
 import acq4.pyqtgraph as pg
 import acq4.util.functions as fn
-import acq4.util.metaarray as metaarray
+import acq4.pyqtgraph.metaarray as metaarray
 from acq4.devices.Microscope import Microscope
 from acq4.util.HelpfulException import HelpfulException
 from acq4.devices.Scanner.scan_program.rect import RectScan

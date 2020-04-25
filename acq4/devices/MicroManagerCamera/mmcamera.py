@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import division, with_statement
-import re
+from __future__ import division, with_statement, print_function
+
+import time
 from collections import OrderedDict
-from acq4.devices.Camera import Camera, CameraTask
-from acq4.util import Qt
+
+import numpy as np
 import six
-import time, sys, traceback
-from numpy import *
-from acq4.util.metaarray import *
+
 import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
+from acq4.devices.Camera import Camera
+from acq4.pyqtgraph.debug import Profiler
 from acq4.util import micromanager
+from acq4.util.Mutex import Mutex
 
 # Micromanager does not standardize trigger modes across cameras,
 # so we use this dict to translate the modes of various cameras back

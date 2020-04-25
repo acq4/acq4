@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
+
+import time
+
+import numpy as np
+
 from acq4.Manager import logMsg
-from acq4.util.metaarray import MetaArray, axis
-from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import multiprocess
-from acq4.util import Qt
-from numpy import *
-import sys, traceback
-from .DeviceGui import *
-from .taskGUI import *
-from acq4.util.debug import *
 from acq4.devices.PatchClamp import PatchClamp
+from acq4.pyqtgraph import multiprocess
+from acq4.util.Mutex import Mutex
+from acq4.pyqtgraph.metaarray import MetaArray, axis
+from .DeviceGui import MCDeviceGui
+from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
+from ...util.debug import printExc
 
 
 class MultiClamp(PatchClamp):
@@ -464,15 +466,15 @@ class MultiClampTask(DeviceTask):
         daqState['command']['holding'] = self.holdingVal
             
         #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
-        timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
-        chanList = [atleast_2d(result[x]['data']) for x in result]
+        timeVals = np.linspace(0, float(nPts-1) / float(rate), nPts)
+        chanList = [np.atleast_2d(result[x]['data']) for x in result]
         # for l in chanList:
         # print l.shape
         cols = [(result[x]['name'], result[x]['units']) for x in result]
         # print cols
         #print [a.shape for a in chanList]
         try:
-            arr = concatenate(chanList)
+            arr = np.concatenate(chanList)
         except:
             for a in chanList:
                 print(a.shape)

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 from acq4.devices.Device import Device
 from acq4.util import Qt
 
@@ -14,18 +15,18 @@ class PatchClamp(Device):
     sigHoldingChanged(self, clamp_mode)
         Emitted when the holding value for any clamp mode has changed
     """
-    
+
     sigStateChanged = Qt.Signal(object)  # state
     sigHoldingChanged = Qt.Signal(object, object)  # self, mode
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
-    
+
     def getState(self):
         """Return a dictionary of active state parameters
         """
         raise NotImplementedError()
-        
+
     def getParam(self, param):
         """Return the value of a single state parameter
         """
@@ -42,7 +43,7 @@ class PatchClamp(Device):
         If no clamp mode is given, then return the holding value for the currently active clamp mode.
         """
         raise NotImplementedError()
-            
+
     def setHolding(self, mode=None, value=None):
         """Set the holding value for a specific clamp mode.
         """
@@ -52,7 +53,7 @@ class PatchClamp(Device):
         """Automatically set the pipette offset.
         """
         raise NotImplementedError()
-        
+
     def autoBridgeBalance(self):
         """Automatically set the bridge balance.
         """

@@ -9,8 +9,9 @@ Proxy to both CHeader and ctypes, allowing automatic type conversion and
 function calling based on C header definitions.
 """
 
-
-from ctypes import *
+import ctypes
+from ctypes import c_wchar_p, pointer, c_ubyte, c_long, c_longlong, c_short, c_char, c_int, c_void_p, Union, \
+    c_ulonglong, c_wchar, cast, c_ushort, c_float, c_double, c_uint, POINTER, c_char_p, c_longdouble, Structure, c_ulong
 import sys, os, platform
 
 import six
@@ -290,9 +291,9 @@ class CLibrary:
                         raise Exception("Not sure how to handle type (function without single pointer): %s" % str(typ))
                             
                     if conv == '__stdcall':
-                        mkfn = WINFUNCTYPE
+                        mkfn = ctypes.WINFUNCTYPE
                     else:
-                        mkfn = CFUNCTYPE
+                        mkfn = ctypes.CFUNCTYPE
                     #print "Create function pointer (%s)" % conv
                     
                     args = [self._ctype(arg[1]) for arg in m]

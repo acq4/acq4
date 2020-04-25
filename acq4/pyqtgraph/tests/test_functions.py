@@ -313,7 +313,7 @@ def test_eq():
     
     zeros = [0, 0.0, np.float(0), np.int(0)]
     if sys.version[0] < '3':
-        zeros.append(long(0))
+        zeros.append(np.long(0))
     for i,x in enumerate(zeros):
         for y in zeros[i:]:
             assert eq(x, y)

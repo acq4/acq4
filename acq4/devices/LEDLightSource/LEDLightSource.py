@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTaskGui
-from ..LightSource import *
+
+from acq4.devices.LightSource import LightSource
 
 
 class LEDLightSource(LightSource):

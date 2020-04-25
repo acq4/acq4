@@ -19,11 +19,11 @@ for mod in qtLibs:
     except ImportError:
         pass
 
-
-# If we are using PyQt4, ACQ4 requires API version 2 for QString and QVariant. 
+# If we are using PyQt4, ACQ4 requires API version 2 for QString and QVariant.
 # Check for those here..
 if 'PyQt4' in sys.modules:
     import sip
+
     for api in ['QString', 'QVariant']:
         try:
             v = sip.getapi(api)
@@ -35,9 +35,7 @@ if 'PyQt4' in sys.modules:
             sip.setapi(api, 2)
             print("SIP API", api)
 
-
 from .. import pyqtgraph as pg
-
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions
@@ -45,7 +43,7 @@ globals().update(pg.Qt.__dict__)
 globals().update(pg.Qt.QtGui.__dict__)
 globals().update(pg.Qt.QtCore.__dict__)
 globals().update(pg.Qt.QtTest.__dict__)
-#globals().update(importlib.import_module(pg.Qt.QT_LIB + '.QtSql').__dict__)
+# globals().update(importlib.import_module(pg.Qt.QT_LIB + '.QtSql').__dict__)
 
 # signal disconnect with exception handling
 # allows (calling disconnect even if no connection currently exists)
