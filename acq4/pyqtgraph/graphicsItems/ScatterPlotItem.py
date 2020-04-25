@@ -9,10 +9,7 @@ from .GraphicsObject import GraphicsObject
 from .. import getConfigOption
 from ..pgcollections import OrderedDict
 from .. import debug
-
-import six
-from six.moves import map
-from six.moves import range
+from ..python2_3 import basestring
 
 __all__ = ['ScatterPlotItem', 'SpotItem']
 
@@ -57,7 +54,7 @@ def drawSymbol(painter, symbol, size, pen, brush):
     painter.scale(size, size)
     painter.setPen(pen)
     painter.setBrush(brush)
-    if isinstance(symbol, six.string_types):
+    if isinstance(symbol, basestring):
         symbol = Symbols[symbol]
     if np.isscalar(symbol):
         symbol = list(Symbols.values())[symbol % len(Symbols)]

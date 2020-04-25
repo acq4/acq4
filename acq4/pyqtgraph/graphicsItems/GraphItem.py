@@ -4,7 +4,6 @@ from .ScatterPlotItem import ScatterPlotItem
 from ..Qt import QtGui, QtCore
 import numpy as np
 from .. import getConfigOption
-from six.moves import range
 
 __all__ = ['GraphItem']
 

@@ -10,14 +10,11 @@ new methods for slicing and indexing the array based on this meta data.
 More info at http://www.scipy.org/Cookbook/MetaArray
 """
 
-from __future__ import print_function
 import types, copy, threading, os, re
 import pickle
 from functools import reduce
 import numpy as np
-
-import six
-from six.moves import range
+from ..python2_3 import basestring
 #import traceback
 
 ## By default, the library will use HDF5 when writing files.
@@ -124,7 +121,7 @@ class MetaArray(object):
     defaultCompression = None
     
     ## Types allowed as axis or column names
-    nameTypes = [six.string_types, tuple]
+    nameTypes = [basestring, tuple]
     @staticmethod
     def isNameType(var):
         return any([isinstance(var, t) for t in MetaArray.nameTypes])
@@ -455,7 +452,7 @@ class MetaArray(object):
         if type(axis) == int:
             ind = [slice(None)]*axis
             ind.append(order)
-        elif isinstance(axis, six.string_types):
+        elif isinstance(axis, basestring):
             ind = (slice(axis, order),)
         return self[tuple(ind)]
   
@@ -519,7 +516,7 @@ class MetaArray(object):
         return tuple(nInd)
       
     def _interpretAxis(self, axis):
-        if isinstance(axis, six.string_types) or isinstance(axis, tuple):
+        if isinstance(axis, basestring) or isinstance(axis, tuple):
             return self._getAxis(axis)
         else:
             return axis
@@ -1001,7 +998,7 @@ class MetaArray(object):
         ## Pull list of values from attributes and child objects
         for k in root.attrs:
             val = root.attrs[k]
-            if isinstance(val, six.string_types):  ## strings need to be re-evaluated to their original types
+            if isinstance(val, basestring):  ## strings need to be re-evaluated to their original types
                 try:
                     val = eval(val)
                 except:

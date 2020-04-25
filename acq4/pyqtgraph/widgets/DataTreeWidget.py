@@ -5,7 +5,6 @@ from .TableWidget import TableWidget
 from ..python2_3 import asUnicode
 import types, traceback
 import numpy as np
-from six.moves import map
 
 try:
     import metaarray

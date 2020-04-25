@@ -8,7 +8,6 @@ from .. import debug as debug
 from .GraphicsObject import GraphicsObject
 from ..Point import Point
 from .. import getConfigOption
-from six.moves import range
 
 
 __all__ = ['ImageItem']

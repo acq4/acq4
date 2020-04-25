@@ -1,5 +1,4 @@
 from ..Qt import QtGui, QtCore, QT_LIB
-from six.moves import range
 if QT_LIB in ['PyQt4', 'PyQt5']:
     import sip
 from .. import multiprocess as mp

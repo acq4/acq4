@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from ..Qt import QtGui, QtCore
 from . import VerticalLabel
-from six.moves import range
 
 __all__ = ['CheckTable']
 

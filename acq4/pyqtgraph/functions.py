@@ -6,20 +6,16 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from __future__ import division
-from __future__ import print_function
 import warnings
 import numpy as np
 import decimal, re
 import ctypes
 import sys, struct
-from .python2_3 import asUnicode
+from .python2_3 import asUnicode, basestring
 from .Qt import QtGui, QtCore, QT_LIB
 from . import getConfigOption, setConfigOptions
 from . import debug, reload
 from .metaarray import MetaArray
-import six
-from six.moves import map
-from six.moves import range
 
 
 Colors = {
@@ -205,7 +201,7 @@ def mkColor(*args):
     """
     err = 'Not sure how to make a color from "%s"' % str(args)
     if len(args) == 1:
-        if isinstance(args[0], six.string_types):
+        if isinstance(args[0], basestring):
             c = args[0]
             if c[0] == '#':
                 c = c[1:]

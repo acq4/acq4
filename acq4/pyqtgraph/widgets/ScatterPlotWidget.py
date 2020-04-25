@@ -8,7 +8,6 @@ from .. import getConfigOption
 from ..graphicsItems.TextItem import TextItem
 import numpy as np
 from ..pgcollections import OrderedDict
-from six.moves import range
 
 __all__ = ['ScatterPlotWidget']
 

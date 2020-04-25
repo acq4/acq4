@@ -16,7 +16,6 @@ import os, sys
 import numpy as np
 
 from ..Qt import QtCore, QtGui, QT_LIB
-from six.moves import range
 if QT_LIB == 'PySide':
     from .ImageViewTemplate_pyside import *
 elif QT_LIB == 'PySide2':

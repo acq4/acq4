@@ -1,7 +1,6 @@
 import pyqtgraph as pg
 import numpy as np
 from pyqtgraph.pgcollections import OrderedDict
-from six.moves import range
 
 app = pg.mkQApp()
 

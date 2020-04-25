@@ -21,7 +21,6 @@
 #     OTHER DEALINGS IN THE SOFTWARE.
 
 import sys
-from six.moves import zip
 if sys.version[0] > '2':
     from collections import OrderedDict
 else:
@@ -75,9 +74,9 @@ else:
             if not self:
                 raise KeyError('dictionary is empty')
             if last:
-                key = next(reversed(self))
+                key = reversed(self).next()
             else:
-                key = next(iter(self))
+                key = iter(self).next()
             value = self.pop(key)
             return key, value
 

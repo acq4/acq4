@@ -1,4 +1,3 @@
-from __future__ import print_function
 import numpy as np
 from PyQt4 import QtGui
 import os, pickle, sys

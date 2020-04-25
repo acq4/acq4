@@ -1,9 +1,7 @@
 import os, sys, time, multiprocessing, re
 from .processes import ForkedProcess
 from .remoteproxy import ClosedError
-from ..python2_3 import xrange
-import six
-from six.moves import range
+from ..python2_3 import basestring, xrange
 
 
 class CanceledError(Exception):
@@ -65,7 +63,7 @@ class Parallelize(object):
         self.showProgress = False
         if progressDialog is not None:
             self.showProgress = True
-            if isinstance(progressDialog, six.string_types):
+            if isinstance(progressDialog, basestring):
                 progressDialog = {'labelText': progressDialog}
             from ..widgets.ProgressDialog import ProgressDialog
             self.progressDlg = ProgressDialog(**progressDialog)

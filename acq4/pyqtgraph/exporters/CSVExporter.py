@@ -2,7 +2,6 @@ from ..Qt import QtGui, QtCore
 from .Exporter import Exporter
 from ..parametertree import Parameter
 from .. import PlotItem
-from six.moves import range
 
 __all__ = ['CSVExporter']
     

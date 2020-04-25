@@ -9,7 +9,6 @@ from ..widgets.SpinBox import SpinBox
 from ..pgcollections import OrderedDict
 from ..colormap import ColorMap
 from ..python2_3 import cmp
-from six.moves import range
 
 
 __all__ = ['TickSliderItem', 'GradientEditorItem']

@@ -18,7 +18,6 @@ import numpy as np
 from .. import debug as debug
 
 import weakref
-from six.moves import range
 
 __all__ = ['HistogramLUTItem']
 

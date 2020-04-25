@@ -1,9 +1,8 @@
 from ..widgets.FileDialog import FileDialog
 from ..Qt import QtGui, QtCore, QtSvg
-from ..python2_3 import asUnicode
+from ..python2_3 import asUnicode, basestring
 from ..GraphicsScene import GraphicsScene
 import os, re
-import six
 LastExportDirectory = None
 
 
@@ -49,7 +48,7 @@ class Exporter(object):
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         if filter is not None:
-            if isinstance(filter, six.string_types):
+            if isinstance(filter, basestring):
                 self.fileDialog.setNameFilter(filter)
             elif isinstance(filter, list):
                 self.fileDialog.setNameFilters(filter)

@@ -5,7 +5,6 @@ from .DataTreeWidget import DataTreeWidget
 from .. import functions as fn
 import types, traceback
 import numpy as np
-from six.moves import range
 
 __all__ = ['DiffTreeWidget']
 

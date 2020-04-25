@@ -3,7 +3,6 @@ from .UIGraphicsItem import *
 import numpy as np
 from ..Point import Point
 from .. import functions as fn
-from six.moves import range
 
 __all__ = ['GridItem']
 class GridItem(UIGraphicsItem):

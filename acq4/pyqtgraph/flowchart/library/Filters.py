@@ -9,7 +9,6 @@ from ...python2_3 import xrange
 from ... import PolyLineROI
 from ... import Point
 from ... import metaarray as metaarray
-from six.moves import range
 
 
 class Downsample(CtrlNode):

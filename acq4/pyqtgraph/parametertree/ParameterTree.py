@@ -2,7 +2,6 @@ from ..Qt import QtCore, QtGui
 from ..widgets.TreeWidget import TreeWidget
 import os, weakref, re
 from .ParameterItem import ParameterItem
-from six.moves import range
 #import functions as fn
         
             

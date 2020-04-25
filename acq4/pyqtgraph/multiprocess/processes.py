@@ -1,8 +1,7 @@
-from __future__ import print_function
 import subprocess, atexit, os, sys, time, random, socket, signal, inspect
 import multiprocessing.connection
 try:
-    import six.moves.cPickle as pickle
+    import cPickle as pickle
 except ImportError:
     import pickle
 

@@ -1,7 +1,7 @@
 """
 SVG export test
 """
-from __future__ import division, print_function
+from __future__ import division, print_function, absolute_import
 import pyqtgraph as pg
 import tempfile
 import os

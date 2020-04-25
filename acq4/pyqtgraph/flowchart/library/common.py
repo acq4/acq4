@@ -7,7 +7,6 @@ from ...WidgetGroup import WidgetGroup
 from ..Node import Node
 import numpy as np
 from ...widgets.ColorButton import ColorButton
-from six.moves import range
 try:
     import metaarray
     HAVE_METAARRAY = True

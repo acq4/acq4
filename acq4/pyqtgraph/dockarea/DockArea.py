@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 import weakref
 from ..Qt import QtCore, QtGui
 from .Container import *
 from .DockDrop import *
 from .Dock import Dock
 from .. import debug as debug
-
-import six
-from six.moves import range
+from ..python2_3 import basestring
 
 
 class DockArea(Container, QtGui.QWidget, DockDrop):
@@ -65,7 +62,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
                 container = self.topContainer
                 neighbor = None
         else:
-            if isinstance(relativeTo, six.string_types):
+            if isinstance(relativeTo, basestring):
                 relativeTo = self.docks[relativeTo]
             container = self.getContainer(relativeTo)
             if container is None:

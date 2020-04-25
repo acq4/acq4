@@ -24,7 +24,6 @@ Does NOT:
 from __future__ import print_function
 import inspect, os, sys, gc, traceback, types
 from .debug import printExc
-from six.moves import range
 try:
     from importlib import reload as orig_reload
 except ImportError:

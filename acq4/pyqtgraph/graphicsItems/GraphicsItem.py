@@ -6,7 +6,6 @@ from .. import functions as fn
 import weakref
 import operator
 from ..util.lru_cache import LRUCache
-from six.moves import map
 
 
 class GraphicsItem(object):

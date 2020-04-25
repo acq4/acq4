@@ -1,12 +1,11 @@
 """
 SVG export test
 """
-from __future__ import division, print_function
+from __future__ import division, print_function, absolute_import
 import pyqtgraph as pg
 import csv
 import os
 import tempfile
-from six.moves import map
 
 app = pg.mkQApp()
 

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 from .Qt import QtCore
 from .ptime import time
 from . import ThreadsafeTimer

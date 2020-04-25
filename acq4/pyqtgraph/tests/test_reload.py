@@ -1,4 +1,3 @@
-from __future__ import print_function
 import tempfile, os, sys, shutil
 import pyqtgraph as pg
 import pyqtgraph.reload
@@ -73,7 +72,7 @@ def test_reload():
         v2 = (reload_test_mod.C, reload_test_mod.C.sig, reload_test_mod.C.fn, reload_test_mod.C.fn.__func__, c.sig, c.fn, c.fn.__func__)
 
     if not py3:
-        assert c.fn.__self__.__class__ is v2[0]
+        assert c.fn.im_class is v2[0]
     oldcfn = pg.reload.getPreviousVersion(c.fn)
     if oldcfn is None:
         # Function did not reload; are we using pytest's assertion rewriting?
@@ -82,7 +81,7 @@ def test_reload():
     if py3:
         assert oldcfn.__func__ is v1[2]
     else:
-        assert oldcfn.__self__.__class__ is v1[0]
+        assert oldcfn.im_class is v1[0]
         assert oldcfn.__func__ is v1[2].__func__
     assert oldcfn.__self__ is c
 
@@ -108,8 +107,8 @@ def test_reload():
     else:
         assert cfn1.__func__ is v2[2].__func__
         assert cfn2.__func__ is v1[2].__func__
-        assert cfn1.__self__.__class__ is v2[0]
-        assert cfn2.__self__.__class__ is v1[0]
+        assert cfn1.im_class is v2[0]
+        assert cfn2.im_class is v1[0]
     assert cfn1.__self__ is c
     assert cfn2.__self__ is c
 

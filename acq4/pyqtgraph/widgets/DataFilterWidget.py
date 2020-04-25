@@ -3,8 +3,7 @@ from .. import parametertree as ptree
 import numpy as np
 from ..pgcollections import OrderedDict
 from .. import functions as fn
-
-import six
+from ..python2_3 import basestring
 
 __all__ = ['DataFilterWidget']
 
@@ -197,7 +196,7 @@ class EnumFilterItem(ptree.types.SimpleParameter):
             if isinstance(valopts, bool):
                 enabled = valopts
                 vname = str(val)
-            elif isinstance(valopts, six.string_types):
+            elif isinstance(valopts, basestring):
                 enabled = True
                 vname = valopts
             elif isinstance(valopts, tuple):

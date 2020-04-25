@@ -5,7 +5,6 @@ from .GraphicsWidget import GraphicsWidget
 from .ViewBox import ViewBox
 from .PlotItem import PlotItem
 from .LabelItem import LabelItem
-from six.moves import range
 
 __all__ = ['GraphicsLayout']
 class GraphicsLayout(GraphicsWidget):

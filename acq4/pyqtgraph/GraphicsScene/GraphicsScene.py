@@ -6,7 +6,6 @@ from .. import functions as fn
 from .. import ptime as ptime
 from .mouseEvents import *
 from .. import debug as debug
-from six.moves import map
 
 
 if hasattr(QtCore, 'PYQT_VERSION'):

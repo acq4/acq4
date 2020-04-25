@@ -9,16 +9,14 @@ file format. Data structures may be nested and contain any data type as long
 as it can be converted to/from a string using repr and eval.
 """
 
-from __future__ import print_function
 import re, os, sys, datetime
 import numpy
 from .pgcollections import OrderedDict
 from . import units
-from .python2_3 import asUnicode
+from .python2_3 import asUnicode, basestring
 from .Qt import QtCore
 from .Point import Point
 from .colormap import ColorMap
-import six
 GLOBAL_PATH = None # so not thread safe.
 
 
@@ -101,7 +99,7 @@ def genString(data, indent=''):
 def parseString(lines, start=0):
     
     data = OrderedDict()
-    if isinstance(lines, six.string_types):
+    if isinstance(lines, basestring):
         lines = lines.split('\n')
         lines = [l for l in lines if re.search(r'\S', l) and not re.match(r'\s*#', l)]  ## remove empty lines
         

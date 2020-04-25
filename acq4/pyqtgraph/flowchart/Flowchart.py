@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 from ..Qt import QtCore, QtGui, QT_LIB
 from .Node import *
 from ..pgcollections import OrderedDict

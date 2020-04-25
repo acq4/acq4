@@ -2,8 +2,7 @@ from OpenGL.GL import *
 from OpenGL import GL
 from ..Qt import QtGui, QtCore
 from .. import Transform3D
-
-import six
+from ..python2_3 import basestring
 
 
 GLOptions = {
@@ -92,7 +91,7 @@ class GLGraphicsItem(QtCore.QObject):
             
         
         """
-        if isinstance(opts, six.string_types):
+        if isinstance(opts, basestring):
             opts = GLOptions[opts]
         self.__glOpts = opts.copy()
         self.update()
@@ -246,7 +245,7 @@ class GLGraphicsItem(QtCore.QObject):
         for k,v in self.__glOpts.items():
             if v is None:
                 continue
-            if isinstance(k, six.string_types):
+            if isinstance(k, basestring):
                 func = getattr(GL, k)
                 func(*v)
             else:

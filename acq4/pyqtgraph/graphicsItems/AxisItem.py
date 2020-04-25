@@ -7,8 +7,6 @@ import weakref
 from .. import functions as fn
 from .. import getConfigOption
 from .GraphicsWidget import GraphicsWidget
-from six.moves import map
-from six.moves import range
 
 __all__ = ['AxisItem']
 class AxisItem(GraphicsWidget):

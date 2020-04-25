@@ -1,13 +1,9 @@
-from __future__ import print_function
 import os, time, sys, traceback, weakref
 import numpy as np
 import threading
-from six.moves import map
-import six
-from six.moves import range
 try:
-    import six.moves.builtins as builtins
-    import six.moves.cPickle as pickle
+    import __builtin__ as builtins
+    import cPickle as pickle
 except ImportError:
     import builtins
     import pickle
@@ -74,7 +70,7 @@ class RemoteEventHandler(object):
             'noProxyTypes': [ type(None), str, int, float, tuple, list, dict, LocalObjectProxy, ObjectProxy ],
         }
         if int(sys.version[0]) < 3:
-            self.proxyOptions['noProxyTypes'].append(six.text_type)
+            self.proxyOptions['noProxyTypes'].append(unicode)
         else:
             self.proxyOptions['noProxyTypes'].append(bytes)
         

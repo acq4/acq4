@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 import sys
 import weakref
 import numpy as np
@@ -17,9 +16,7 @@ from .. GraphicsWidget import GraphicsWidget
 from .. ButtonItem import ButtonItem
 from .. InfiniteLine import InfiniteLine
 from ...WidgetGroup import WidgetGroup
-
-import six
-from six.moves import range
+from ...python2_3 import basestring
 
 if QT_LIB == 'PyQt4':
     from .plotConfigTemplate_pyqt import *
@@ -269,7 +266,7 @@ class PlotItem(GraphicsWidget):
                 labels[label] = kargs[label]
                 del kargs[label]
         for k in labels:
-            if isinstance(labels[k], six.string_types):
+            if isinstance(labels[k], basestring):
                 labels[k] = (labels[k],)
             self.setLabel(k, *labels[k])
                 
@@ -1047,7 +1044,7 @@ class PlotItem(GraphicsWidget):
             if k == 'title':
                 self.setTitle(v)
             else:
-                if isinstance(v, six.string_types):
+                if isinstance(v, basestring):
                     v = (v,)
                 self.setLabel(k, *v)
         

@@ -3,7 +3,6 @@ from .GLMeshItem import GLMeshItem
 from .. MeshData import MeshData
 from ...Qt import QtGui
 import numpy as np
-from six.moves import range
 
 
 

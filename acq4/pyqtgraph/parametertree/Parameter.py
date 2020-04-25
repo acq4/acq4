@@ -1,10 +1,8 @@
-from __future__ import print_function
 from ..Qt import QtGui, QtCore
 import os, weakref, re
 from ..pgcollections import OrderedDict
-from ..python2_3 import asUnicode
+from ..python2_3 import asUnicode, basestring
 from .ParameterItem import ParameterItem
-import six
 
 PARAM_TYPES = {}
 PARAM_NAMES = {}
@@ -178,7 +176,7 @@ class Parameter(QtCore.QObject):
         self.blockTreeChangeEmit = 0
         #self.monitoringChildren = False  ## prevent calling monitorChildren more than once
         
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, basestring):
             raise Exception("Parameter must have a string name specified in opts.")
         self.setName(name)
         
@@ -650,7 +648,7 @@ class Parameter(QtCore.QObject):
         
             param[('child', 'grandchild')] = value
         """
-        if isinstance(names, six.string_types):
+        if isinstance(names, basestring):
             names = (names,)
         return self.param(*names).setValue(value)
 
