@@ -8,7 +8,7 @@
     <y>0</y>
     <width>400</width>
     <height>300</height>
-   </rect>
+   </rect>pyqtgr
   </property>
   <property name="windowTitle">
    <string>Form</string>
@@ -38,13 +38,13 @@
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>acq4.pyqtgraph</header>
+   <header>pyqtgraph</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>ImageView</class>
    <extends>QWidget</extends>
-   <header>acq4.pyqtgraph</header>
+   <header>pyqtgraph</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
