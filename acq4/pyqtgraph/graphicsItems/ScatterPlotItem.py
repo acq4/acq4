@@ -10,6 +10,10 @@ from .. import getConfigOption
 from ..pgcollections import OrderedDict
 from .. import debug
 from ..python2_3 import basestring
+try:
+    import itertools.imap as imap
+except ImportError:
+    imap = map
 
 __all__ = ['ScatterPlotItem', 'SpotItem']
 

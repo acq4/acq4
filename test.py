@@ -9,7 +9,7 @@ file_count = 0
 fail_count = 0
 
 for folder, subs, filenames in os.walk(walk_dir):
-    import_path = folder.replace("/", ".")
+    import_path = folder.replace(os.path.sep, ".")
     if folder == "acq4" or "pyqtgraph" in folder:
         continue
     for filename in filenames:
