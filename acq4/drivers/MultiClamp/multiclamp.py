@@ -411,7 +411,7 @@ class MultiClamp:
             serial = ctypes.create_string_buffer(b'\0' * 16)
             ret = self.call(fn, pszSerialNum=serial, uBufSize=16)
         except:
-            if sys.exc_info()[1][0] == 6000:  ## We have reached the end of the device list
+            if sys.exc_info()[1].args[0] == 6000:  ## We have reached the end of the device list
                 return None
             raise
         

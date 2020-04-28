@@ -1,7 +1,7 @@
 FROM python:2
 
 RUN apt-get update
-RUN apt-get install -y python-pyqt5 python-pyqt5.qtopengl python-pyqt5.qtsql python-serial python-scipy python-pyparsing python-h5py python-pil python-opengl python-sip
+RUN apt-get install -y python-pyqt5 python-pyqt5.qtopengl python-pyqt5.qtsql python-serial python-scipy python-pyparsing python-h5py python-pil python-opengl python-sip python-matplotlib
 
 RUN apt-get install -y python-setuptools python-pip python-ipython python-ipdb
 

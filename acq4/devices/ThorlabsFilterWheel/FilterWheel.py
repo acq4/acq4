@@ -15,7 +15,7 @@ from acq4.util.Thread import Thread
 from six.moves import map
 from six.moves import range
 
-Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
+Ui_Form = Qt.importTemplate('.FilterWheelTemplate')
 
 
 class FilterWheel(Device, OptomechDevice):

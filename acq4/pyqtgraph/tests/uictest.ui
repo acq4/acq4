@@ -8,7 +8,7 @@
     <y>0</y>
     <width>400</width>
     <height>300</height>
-   </rect>
+   </rect>pyqtgr
   </property>
   <property name="windowTitle">
    <string>Form</string>

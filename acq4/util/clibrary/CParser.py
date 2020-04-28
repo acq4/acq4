@@ -632,7 +632,7 @@ class CParser():
                     start = end + m.end(N)
                     parts.append(exp)
                 except:
-                    if sys.exc_info()[1][0] != 0:
+                    if sys.exc_info()[1].args[0] != 0:
                         print("Function macro expansion failed:", name, line[m.end(N):])
                         raise
         parts.append(line[start:])
@@ -660,7 +660,7 @@ class CParser():
                         #start = end + m.end(N)
                         #parts.append(exp)
                     #except:
-                        #if sys.exc_info()[1][0] != 0:
+                        #if sys.exc_info()[1].args[0] != 0:
                             #print "Function macro expansion failed:", name, line[m.end(N):]
                             #raise
                         

@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from .. import AnalysisModule
-from acq4.Manager import getManager
+
 from acq4.util import Qt
+from acq4.analysis.AnalysisModule import AnalysisModule
+
 
 class PatchAnalysisModule(AnalysisModule):
     """
@@ -52,6 +53,3 @@ class PatchAnalysisModule(AnalysisModule):
         
         self.rmLabel.setText(u"Membrane Resistance: %0.2f MΩ" % (Rm/1e6))
         self.raLabel.setText(u"Access Resistance: %0.2f MΩ" % (Ra/1e6))
-
-
-        
