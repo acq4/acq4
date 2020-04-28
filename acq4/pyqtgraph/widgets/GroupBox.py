@@ -1,3 +1,4 @@
+from ..python2_3 import basestring
 from ..Qt import QtGui, QtCore
 from .PathButton import PathButton
 
