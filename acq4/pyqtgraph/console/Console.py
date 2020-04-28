@@ -297,8 +297,8 @@ class ConsoleWidget(QtGui.QWidget):
         if editor is None:
             return
         tb = self.currentFrame()
-        lineNum = tb.tb_lineno
-        fileName = tb.tb_frame.f_code.co_filename
+        lineNum = tb.f_lineno
+        fileName = tb.f_code.co_filename
         subprocess.Popen(self.editor.format(fileName=fileName, lineNum=lineNum), shell=True)
         
     def updateSysTrace(self):
