@@ -17,6 +17,7 @@ from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
 from acq4.pyqtgraph.metaarray import MetaArray
 from acq4.pyqtgraph import ptime
+from six.moves import range
 
 SequencerTemplate = Qt.importTemplate('.sequencerTemplate')
 

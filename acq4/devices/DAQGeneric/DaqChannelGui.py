@@ -8,6 +8,7 @@ import numpy
 from acq4.pyqtgraph import SpinBox, WidgetGroup
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
+from six.moves import range
 
 AOChannelTemplate = Qt.importTemplate('.AOChannelTemplate')
 DOChannelTemplate = Qt.importTemplate('.DOChannelTemplate')

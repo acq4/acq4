@@ -4,6 +4,8 @@ import os, sys, time, argparse
 import numpy as np
 import acq4.pyqtgraph as pg
 from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
+from six.moves import map
+from six.moves import range
 
 
 parser = argparse.ArgumentParser(

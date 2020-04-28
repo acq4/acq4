@@ -11,6 +11,7 @@ import acq4.pyqtgraph as pg
 from .calibration import CalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
+from six.moves import range
 
 
 class Stage(Device, OptomechDevice):

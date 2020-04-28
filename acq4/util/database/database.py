@@ -17,6 +17,7 @@ import acq4.util.functions as functions
 # :MC: BROKEN in python3; buffer has no analogous function, so maybe we can use a string? nope, then we don't know to
 # de-pickle the contents.
 from acq4.util.pythonVersionCompat import buffer
+from six.moves import map
 
 
 class SqliteDatabase:

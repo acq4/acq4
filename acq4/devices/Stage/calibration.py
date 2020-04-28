@@ -5,6 +5,8 @@ import acq4.pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
 from acq4.util.target import Target
+from six.moves import range
+from six.moves import zip
 
 
 class CalibrationWindow(Qt.QWidget):

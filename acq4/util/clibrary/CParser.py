@@ -14,6 +14,7 @@ import re
 import sys
 
 import six
+from six.moves import range
 
 __all__ = ['winDefs', 'CParser']
 

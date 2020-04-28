@@ -1,8 +1,11 @@
 # coding: utf8
+from __future__ import print_function
 import re
 import acq4.pyqtgraph as pg
 from acq4.util import Qt
 from acq4.devices.PatchPipette import PatchPipette
+from six.moves import range
+from six.moves import zip
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 

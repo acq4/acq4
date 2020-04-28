@@ -5,7 +5,7 @@ import weakref
 
 import six
 
-from acq4.pyqtgraph.python2_3 import basestring
+
 from acq4.pyqtgraph.util.mutex import Mutex
 from acq4.util import Qt
 
@@ -123,7 +123,7 @@ class InterfaceDirectory(Qt.QObject):
             if types is None:
                 types = self.typeList.keys()
             
-            elif isinstance(types, basestring):
+            elif isinstance(types, six.string_types):
                 return list(self.typeList.get(types, {}).keys())
                 
             ints = {}

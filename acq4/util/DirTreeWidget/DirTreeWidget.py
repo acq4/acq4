@@ -5,6 +5,7 @@ import os
 
 from acq4.util import Qt
 from acq4.util.debug import printExc
+from six.moves import range
 
 
 class DirTreeWidget(Qt.QTreeWidget):

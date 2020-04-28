@@ -3,10 +3,7 @@ import threading
 import sys, time
 import numpy as np
 import scipy.stats
-try:
-    import queue
-except ImportError:
-    import Queue as queue
+from six.moves import range, queue
 from acq4.pyqtgraph import ptime, disconnect
 from acq4.util.future import Future
 from collections import deque

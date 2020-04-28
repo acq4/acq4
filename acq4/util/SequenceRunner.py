@@ -8,6 +8,7 @@ from __future__ import print_function
 
 import numpy as np
 from acq4.pyqtgraph import MetaArray
+from six.moves import range
 
 
 def runSequence(func, params, order, dtype=None, passArgs=False, linkedParams=None):

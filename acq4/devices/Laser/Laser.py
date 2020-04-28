@@ -17,6 +17,7 @@ import acq4.pyqtgraph as pg
 import acq4.pyqtgraph.metaarray as metaarray
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 import acq4.util.ptime as ptime
+from six.moves import range
 
 
 class Laser(DAQGeneric, OptomechDevice):

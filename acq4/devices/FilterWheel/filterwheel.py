@@ -10,6 +10,8 @@ from acq4.util import Qt
 from acq4.util import ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from six.moves import map
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
 

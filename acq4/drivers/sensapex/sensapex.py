@@ -5,6 +5,9 @@ from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort,
                     c_byte, c_ubyte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure)
 from timeit import default_timer
+from six.moves import map
+from six.moves import range
+from six.moves import zip
 
 path = os.path.abspath(os.path.dirname(__file__))
 if sys.platform == 'win32':

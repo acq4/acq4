@@ -6,6 +6,7 @@ import numpy as np
 import acq4.util.ptime as ptime  ## platform-independent precision timing
 from collections import OrderedDict
 from .base import NIDAQError
+from six.moves import map
 
 
 class SuperTask:

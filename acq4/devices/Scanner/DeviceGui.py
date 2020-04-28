@@ -13,6 +13,7 @@ from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.functions import blur
 from acq4.util.imageAnalysis import fitGaussian2D
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 

@@ -1,4 +1,5 @@
 from ..SerialDevice import SerialDevice
+from six.moves import range
 
 
 def packBits(bitvals):

@@ -12,6 +12,7 @@ import acq4.util.FileLoader as FileLoader
 import acq4.util.DatabaseGui as DatabaseGui
 import acq4.pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
+from six.moves import map
 
 
 class EventDetector(AnalysisModule):

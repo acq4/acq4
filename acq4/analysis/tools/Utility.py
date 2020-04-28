@@ -1,4 +1,8 @@
 from __future__ import print_function
+from six.moves import filter
+from six.moves import map
+from six.moves import range
+from six.moves import zip
 """
 Utils.py - general utility routines
 - power spectrum

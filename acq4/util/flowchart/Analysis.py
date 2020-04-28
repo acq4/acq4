@@ -13,6 +13,8 @@ from acq4.analysis.tools.Fitting import Fitting
 from acq4.pyqtgraph.flowchart import Node
 from acq4.pyqtgraph.flowchart.library.common import CtrlNode
 from acq4.util import Qt
+from six.moves import map
+from six.moves import range
 
 
 class EventFitter(CtrlNode):

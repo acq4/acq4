@@ -12,6 +12,7 @@ from acq4.devices.PatchPipette import PatchPipette
 import acq4.pyqtgraph as pg
 from .pipetteControl import PipetteControl
 from .mockPatch import MockPatch
+from six.moves import zip
 
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')

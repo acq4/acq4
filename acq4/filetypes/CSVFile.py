@@ -4,6 +4,7 @@ from __future__ import print_function
 from acq4.pyqtgraph.metaarray import MetaArray as MA
 from numpy import ndarray, loadtxt
 from .FileType import FileType
+from six.moves import range
 
 #class MetaArray(FileType):
     #@staticmethod

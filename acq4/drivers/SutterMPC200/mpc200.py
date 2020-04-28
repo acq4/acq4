@@ -1,6 +1,7 @@
 from __future__ import print_function
 import serial, struct, time, collections
 import numpy as np
+from six.moves import range
 
 try:
     # this is nicer because it provides deadlock debugging information

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
 
 """
 Main ACQ4 invocation script

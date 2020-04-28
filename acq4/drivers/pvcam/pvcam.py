@@ -16,6 +16,9 @@ import six
 
 from acq4.util.Mutex import Mutex
 from acq4.util.clibrary import CParser, winDefs, CLibrary
+from six.moves import filter
+from six.moves import range
+from six.moves import zip
 
 __all__ = ['PVCam']
 

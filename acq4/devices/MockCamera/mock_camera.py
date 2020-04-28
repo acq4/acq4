@@ -15,6 +15,7 @@ import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera, CameraTask
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
+from six.moves import zip
 
 
 class MockCamera(Camera):

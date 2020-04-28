@@ -36,6 +36,7 @@ from .util import DataManager, ptime, Qt
 from .util.HelpfulException import HelpfulException
 
 from .util.debug import logMsg, createLogWindow, logExc # logExc needed by debug
+from six.moves import map
 
 
 ### All other modules can use this function to get the manager instance

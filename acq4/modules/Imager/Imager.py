@@ -42,6 +42,7 @@ from acq4.util import imaging
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.imagerTemplate') 
 
