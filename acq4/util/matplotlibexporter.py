@@ -12,7 +12,7 @@ import pyqtgraph as pg
 try:
     import matplotlib as MP
     from matplotlib.ticker import FormatStrFormatter
-    import matplotlib.pyplot as pylab
+    import matplotlib.pyplot as PL
     import matplotlib.gridspec as gridspec
     import matplotlib.gridspec as GS
     HAVE_MPL = True
@@ -23,15 +23,15 @@ if HAVE_MPL:
     MP.use('TKAgg')
     # Do not modify the following code
     # sets up matplotlib with sans-serif plotting...
-    pylab.rcParams['text.usetex'] = True
-    pylab.rcParams['interactive'] = False
-    pylab.rcParams['font.family'] = 'sans-serif'
-    pylab.rcParams['font.sans-serif'] = 'Arial'
-    pylab.rcParams['mathtext.default'] = 'sf'
-    pylab.rcParams['figure.facecolor'] = 'white'
+    PL.rcParams['text.usetex'] = True
+    PL.rcParams['interactive'] = False
+    PL.rcParams['font.family'] = 'sans-serif'
+    PL.rcParams['font.sans-serif'] = 'Arial'
+    PL.rcParams['mathtext.default'] = 'sf'
+    PL.rcParams['figure.facecolor'] = 'white'
     # next setting allows pdf font to be readable in Adobe Illustrator
-    pylab.rcParams['pdf.fonttype'] = 42
-    pylab.rcParams['text.dvipnghack'] = True
+    PL.rcParams['pdf.fonttype'] = 42
+    PL.rcParams['text.dvipnghack'] = True
     # to here (matplotlib stuff - touchy!)
 
 stdFont = 'Arial'
@@ -72,8 +72,8 @@ def matplotlibExport(gridlayout=None, title=None):
     if gridlayout is None or gridlayout.__class__ != Qt.QGridLayout().__class__:
         raise Exception("Method matplotlibExport requires a QGridLayout")
 
-    fig = pylab.figure()
-    pylab.rcParams['text.usetex'] = False
+    fig = PL.figure()
+    PL.rcParams['text.usetex'] = False
     # escape filename information so it can be rendered by removing
     # common characters that trip up latex...:
     escs = re.compile('[\\\/_]')
@@ -82,19 +82,19 @@ def matplotlibExport(gridlayout=None, title=None):
         tiname = '%r' % title
         tiname = re.sub(escs, cleanRepl, tiname)[1:-1]
         fig.suptitle(r''+tiname)
-    pylab.autoscale(enable=True, axis='both', tight=None)
+    PL.autoscale(enable=True, axis='both', tight=None)
     # build the plot based on the grid layout
     gs = gridspec.GridSpec(gridlayout.rowCount(), gridlayout.columnCount())  # build matplotlib gridspec
     for i in range(gridlayout.count()):
         w = gridlayout.itemAt(i).widget()  # retrieve the plot widget...
         (x, y, c, r) = gridlayout.getItemPosition(i)  # and gridspecs paramters
-        mplax = pylab.subplot(gs[x:(c+x), y:(r+y)])  # map to mpl subplot geometry
+        mplax = PL.subplot(gs[x:(c+x), y:(r+y)])  # map to mpl subplot geometry
         export_panel(w, mplax)  # now fill the plot
     gs.update(wspace=0.25, hspace=0.5)  # adjust spacing
-#    pylab.draw()
+#    PL.draw()
 # hook to save figure - not used here
-#       pylab.savefig(os.path.join(self.commonPrefix, self.protocolfile))
-    pylab.show()
+#       PL.savefig(os.path.join(self.commonPrefix, self.protocolfile))
+    PL.show()
 
 def export_panel(pgitem, ax):
     """

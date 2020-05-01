@@ -442,11 +442,11 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     # # this does not work with pyside...
     #     import matplotlib
     #     matplotlib.use('Qt4Agg')
-    #     import pylab
+    #     import matplotlib.pyplot as PL
     #     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
     #     from matplotlib.figure import Figure
     #     
-    #     #MP.rcParams['interactive'] = False
+    #     #PL.rcParams['interactive'] = False
         
     st=numpy.array([])
     spk = []
@@ -464,12 +464,12 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
             xt = xt[it0:it1]
             v = v[it0:it1]
     # if debug:
-    #     f = pylab.figure(1)
+    #     f = PL.figure(1)
     #     print "xt: ", xt
     #     print "v: ", v
-    #     pylab.plot(numpy.array(xt), v, 'k-')
-    #     pylab.draw()
-    #     pylab.show()
+    #     PL.plot(numpy.array(xt), v, 'k-')
+    #     PL.draw()
+    #     PL.show()
 
     dv = numpy.diff(v, axis=0) # compute slope
     try:
@@ -481,7 +481,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     spk = []
     spv = numpy.where(v > thresh)[0].tolist() # find points above threshold
     sps = numpy.where(dv > 0.0)[0].tolist() # find points where slope is positive
-    sp = list(Set.intersection(Set(spv),Set(sps))) # intersection defines putative spikes
+    sp = list(set.intersection(set(spv),set(sps))) # intersection defines putative spikes
     sp.sort() # make sure all detected events are in order (sets is unordered)
     sp = tuple(sp) # convert to tuple
     if sp is ():
@@ -948,8 +948,8 @@ def makeRGB(ncol = 16, minc = 32, maxc = 216):
 # If this file is called direcl.y, then provide tests of some of the routines.
 if __name__ == "__main__":
     from optparse import OptionParser
-    import matplotlib.pylab as MP
-    MP.rcParams['interactive'] = False
+    import matplotlib.pyplot as PL
+    PL.rcParams['interactive'] = False
     
     parser=OptionParser() # command line options
     parser.add_option("-d", action="store_true", dest="dictionary", default=False)
@@ -979,13 +979,13 @@ if __name__ == "__main__":
         alpha = 1.0 * (ta/tau1) * numpy.exp(1 - ta/tau1)
         sig = spSignal.fftconvolve(events, alpha, mode='full')
         sig = sig[0:len(t)]+numpy.random.normal(0, 0.25, len(t))
-        f = MP.figure()
-        MP.plot(t, sig, 'r-')
-        MP.plot(t, events, 'k-')
+        f = PL.figure()
+        PL.plot(t, sig, 'r-')
+        PL.plot(t, events, 'k-')
         # now call the finding routine, using the exact template (!)
         (t_start, d_start) = clementsBekkers(sig, alpha, threshold=0.5, minpeakdist=15) 
-        MP.plot(t_start, d_start, 'bs')
-        MP.show()
+        PL.plot(t_start, d_start, 'bs')
+        PL.show()
 
     if options.findspikes: # test the findspikes routine
         dt = 0.1
@@ -1000,17 +1000,17 @@ if __name__ == "__main__":
         sp = findspikes(t, v, 0.0, dt = dt, mode = 'schmitt', interpolate = False)
         print('findSpikes')
         print('sp: ', sp)
-        f = MP.figure(1)
-        MP.plot(t, v, 'ro-')
+        f = PL.figure(1)
+        PL.plot(t, v, 'ro-')
         si = (numpy.floor(sp/dt))
         print('si: ', si)
         spk = []
         for k in si:
             spk.append(numpy.argmax(v[k-1:k+1])+k)
-        MP.plot(sp, v[spk], 'bs')
-        MP.ylim((0, 25))
-        MP.draw()
-        MP.show()
+        PL.plot(sp, v[spk], 'bs')
+        PL.ylim((0, 25))
+        PL.draw()
+        PL.show()
         
         exit()
         print("getSpikes")

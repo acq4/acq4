@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from six.moves import map
-from six.moves import zip
 """
 pbm_ImageAnalysis is an analysis module for ACQ4.
 This module provides:
@@ -25,6 +22,11 @@ This module provides:
         DC009809 (Auditory Cortex: Synaptic organization and plasticity)
     Has potential dependency on openCV for some functions.
 """
+from __future__ import print_function
+
+import matplotlib.pyplot as PL
+from six.moves import map
+from six.moves import zip
 
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
@@ -56,9 +58,6 @@ try:
 except:
     openCVInstalled = False
     
-
-import pylab as PL
-#from mpl_toolkits.axes_grid1 import AxesGrid
 
 #
 # We use matplotlib/pylab for *some* figure generation.
@@ -378,7 +377,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if len(dlh) % 2 == 1:
             self.MPRnrows += 2
         if self.firstPlot is False:
-            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison", 
+            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison",
                     nrows=self.MPRnrows, ncols=self.MPRncolumns, sharex=True, sharey=False)
             self.MPLFig.suptitle('Dataset: %s' % (head) , fontsize=10)
 
