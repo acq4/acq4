@@ -2,6 +2,7 @@ FROM continuumio/miniconda
 
 RUN apt-get update
 RUN apt-get install -y libglx-mesa0 libgl1-mesa-dev
+RUN conda update -n base -c defaults conda
 
 # All the legit dependencies
 #RUN apt-get install -y\
@@ -23,10 +24,10 @@ RUN apt-get install -y libglx-mesa0 libgl1-mesa-dev
 # python3-pyside2.qtsql\
 
 COPY requirements/ /tmp
-RUN conda create -c conda-forge -n acq4 --file /tmp/pyside2.in
+RUN conda env create --file /tmp/pyside2.yml
 
 # Development extras
-RUN conda install -c conda-forge ipython ipdb
+RUN conda install -n acq4 -c conda-forge ipython ipdb
 
 # Docker setup
 # ENV PATH /bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
