@@ -401,7 +401,7 @@ class ScopeGUI(Qt.QWidget):
         index = spin.index
         (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
-        if isinstance(obj, Qt.QVariant):
+        if callable(getattr(obj, "toPyObject", None)):
             obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
@@ -415,7 +415,7 @@ class ScopeGUI(Qt.QWidget):
         index = spin.index
         (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
-        if isinstance(obj, Qt.QVariant):
+        if callable(getattr(obj, "toPyObject", None)):
             obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
@@ -427,7 +427,7 @@ class ScopeGUI(Qt.QWidget):
         for k, w in self.objWidgets.items():
             (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
-            if isinstance(obj, Qt.QVariant):
+            if callable(getattr(obj, "toPyObject", None)):
                 obj = obj.toPyObject()
             offset = obj.offset()
             xs.setValue(offset.x())
