@@ -6,9 +6,9 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 from __future__ import print_function
 
-from acq4.pyqtgraph.debug import *
-import acq4.pyqtgraph.debug as pgdebug
-from acq4.pyqtgraph.exceptionHandling import original_excepthook
+from pyqtgraph.debug import *
+import pyqtgraph.debug as pgdebug
+from pyqtgraph.exceptionHandling import original_excepthook
 
 LOG_UI = None
 
@@ -21,7 +21,7 @@ def __reload__(old):
 
 def installExceptionHandler():
     ## install global exception handler for others to hook into.
-    import acq4.pyqtgraph.exceptionHandling as exceptionHandling
+    import pyqtgraph.exceptionHandling as exceptionHandling
     exceptionHandling.setTracebackClearing(True)
     exceptionHandling.register(exceptionCallback)
 

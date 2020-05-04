@@ -136,7 +136,7 @@ the entire frame.</string>
   <customwidget>
    <class>HistogramLUTWidget</class>
    <extends>QGraphicsView</extends>
-   <header>acq4.pyqtgraph</header>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -7,7 +7,7 @@ import time
 from acq4.util import Qt, ptime
 import numpy as np
 from acq4.util.Mutex import Mutex
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from .calibration import CalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice

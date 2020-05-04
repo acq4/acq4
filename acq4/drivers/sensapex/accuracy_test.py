@@ -2,7 +2,7 @@
 from __future__ import print_function
 import os, sys, time, argparse
 import numpy as np
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
 from six.moves import map
 from six.moves import range

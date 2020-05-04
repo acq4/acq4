@@ -1,6 +1,6 @@
 import numpy as np
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.graphicsItems.TargetItem import TargetItem
+import pyqtgraph as pg
+from pyqtgraph.graphicsItems.TargetItem import TargetItem
 
 
 class Target(TargetItem):

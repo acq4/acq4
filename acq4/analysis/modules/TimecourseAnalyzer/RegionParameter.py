@@ -1,6 +1,6 @@
 from __future__ import print_function
-from acq4.pyqtgraph.parametertree import Parameter, ParameterItem, parameterTypes
-import acq4.pyqtgraph as pg
+from pyqtgraph.parametertree import Parameter, ParameterItem, parameterTypes
+import pyqtgraph as pg
 
 
 class RegionParameter(parameterTypes.GroupParameter):

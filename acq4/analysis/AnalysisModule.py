@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import six
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.Canvas as Canvas
 import acq4.util.FileLoader as FileLoader
 from acq4.util import Qt

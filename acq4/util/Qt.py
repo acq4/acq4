@@ -7,7 +7,7 @@ import os
 import sys
 
 # try importing Qt libraries in order of preference
-from ..pyqtgraph.Qt import loadUiType
+from pyqtgraph.Qt import loadUiType
 
 qtLibs = ['PyQt5', 'PyQt4', 'PySide', 'PySide2', None]
 for mod in qtLibs:
@@ -35,7 +35,7 @@ if 'PyQt4' in sys.modules:
             sip.setapi(api, 2)
             print("SIP API", api)
 
-from .. import pyqtgraph as pg
+import pyqtgraph as pg
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions

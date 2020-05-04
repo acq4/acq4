@@ -5,14 +5,14 @@ import time
 
 import numpy as np
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.ptime as ptime
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.pyqtgraph import Vector, SRTTransform3D, MetaArray
-from acq4.pyqtgraph.debug import Profiler
-from acq4.pyqtgraph.metaarray import axis
+from pyqtgraph import Vector, SRTTransform3D, MetaArray
+from pyqtgraph.debug import Profiler
+from pyqtgraph.metaarray import axis
 from acq4.util import Qt
 from acq4.util import imaging
 from acq4.util.debug import printExc

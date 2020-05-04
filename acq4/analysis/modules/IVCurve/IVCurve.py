@@ -23,7 +23,7 @@ import numpy as np
 import scipy
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...

@@ -7,7 +7,7 @@ import serial
 import time
 
 from acq4.devices.Device import Device
-from acq4.pyqtgraph.SignalProxy import SignalProxy
+from pyqtgraph.SignalProxy import SignalProxy
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread

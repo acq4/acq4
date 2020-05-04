@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from acq4.pyqtgraph.flowchart.Node import Node
+from pyqtgraph.flowchart.Node import Node
 from acq4.util import Qt
 from acq4.util.DirTreeWidget import DirTreeWidget
 

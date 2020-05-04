@@ -4,7 +4,7 @@ import sys, time
 import numpy as np
 import scipy.stats
 from six.moves import range, queue
-from acq4.pyqtgraph import ptime, disconnect
+from pyqtgraph import ptime, disconnect
 from acq4.util.future import Future
 from collections import deque
 from acq4.util.debug import printExc

@@ -9,14 +9,14 @@ import six
 from acq4.util import Qt
 from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.dockarea as dockarea
+import pyqtgraph as pg
+import pyqtgraph.dockarea as dockarea
 import acq4.Manager as Manager
 from acq4.util.debug import Profiler
 from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph.metaarray import MetaArray
-from acq4.pyqtgraph import ptime
+from pyqtgraph.metaarray import MetaArray
+from pyqtgraph import ptime
 from six.moves import range
 
 SequencerTemplate = Qt.importTemplate('.sequencerTemplate')

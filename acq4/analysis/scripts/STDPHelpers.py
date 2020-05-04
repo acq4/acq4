@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import numpy as np
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from six.moves import range
 
 view = pg.GraphicsView()

@@ -3,8 +3,8 @@ from __future__ import print_function
 
 import collections
 import numpy as np
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree
+from pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.parametertree import Parameter, ParameterTree
 from acq4.util import Qt
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.util import Qt
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 
 class AnalysisModule(Qt.QWidget):
     def __init__(self, taskRunner):

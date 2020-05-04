@@ -5,10 +5,10 @@ from collections import OrderedDict
 
 import numpy as np
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.debug as debug
 from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.pyqtgraph.flowchart import Flowchart
+from pyqtgraph.flowchart import Flowchart
 from acq4.util import Qt
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from acq4.util.HelpfulException import HelpfulException

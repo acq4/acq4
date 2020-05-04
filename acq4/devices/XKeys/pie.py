@@ -4,7 +4,7 @@ import platform
 from acq4.util import Qt
 from acq4.devices.Device import Device
 from acq4.util.Mutex import Mutex
-import acq4.pyqtgraph.multiprocess as mp
+import pyqtgraph.multiprocess as mp
 from six.moves import range
 
 def __reload__(old):

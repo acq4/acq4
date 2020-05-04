@@ -5,7 +5,7 @@ import numpy
 import sip
 
 from acq4.devices.Device import TaskGui
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.debug import printExc

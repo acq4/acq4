@@ -13,7 +13,7 @@ from acq4.util.functions import logSpace, downsample as fnDownsample
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'util'))
 sys.path.append(path)
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 from acq4.util import Qt
 

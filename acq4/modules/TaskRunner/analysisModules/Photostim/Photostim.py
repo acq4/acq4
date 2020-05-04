@@ -6,7 +6,7 @@ import weakref
 import numpy as np
 import scipy.ndimage
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
 from acq4.util import Qt

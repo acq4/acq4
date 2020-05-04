@@ -8,7 +8,7 @@ import six
 
 from acq4.Manager import logMsg
 from acq4.modules.Module import Module
-from acq4.pyqtgraph import FileDialog
+from pyqtgraph import FileDialog
 from acq4.util import Qt
 from acq4.util.DataManager import getDataManager, getHandle, DirHandle
 from acq4.util.StatusBar import StatusBar

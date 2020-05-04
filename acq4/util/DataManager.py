@@ -3,8 +3,8 @@ from __future__ import print_function
 
 import weakref
 
-from acq4.pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
-from acq4.pyqtgraph.python2_3 import cmp
+from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
+from pyqtgraph.python2_3 import cmp
 from acq4.util.debug import printExc
 from six.moves import map
 
@@ -27,7 +27,7 @@ if __name__ == '__main__':
 import re, shutil
 import time
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import SignalProxy, BusyCursor, OrderedDict
+from pyqtgraph import SignalProxy, BusyCursor, OrderedDict
 from acq4.util import Qt
 if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal

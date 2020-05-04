@@ -2,10 +2,10 @@
 from __future__ import print_function
 from acq4.util import Qt
 from collections import OrderedDict
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 from six.moves import range
-#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 
 class Map:
     ### A map is a group of (possibly overlapping) scans and associated meta-data. 

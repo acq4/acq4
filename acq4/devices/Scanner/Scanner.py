@@ -15,7 +15,7 @@ from acq4.util.Mutex import Mutex
 from .DeviceGui import ScannerDeviceGui
 from .TaskGui import ScannerTaskGui
 from ..Device import Device, DeviceTask
-from acq4.pyqtgraph.debug import Profiler
+from pyqtgraph.debug import Profiler
 
 
 class Scanner(Device, OptomechDevice):

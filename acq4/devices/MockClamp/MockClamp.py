@@ -4,11 +4,11 @@ from __future__ import print_function, with_statement
 
 import os
 
-import acq4.pyqtgraph.multiprocess as mp
+import pyqtgraph.multiprocess as mp
 from acq4.devices.AxoPatch200 import CancelException
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc

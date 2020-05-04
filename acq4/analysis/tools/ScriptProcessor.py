@@ -23,11 +23,11 @@ import numpy as np
 import re
 import gc
 from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.pyqtgraph.metaarray import MetaArray
+from pyqtgraph.metaarray import MetaArray
 from acq4.util import DataManager
-from acq4.pyqtgraph import configfile
+from pyqtgraph import configfile
 from acq4.util import Qt
-from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
+from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 class ScriptProcessor(AnalysisModule):
     

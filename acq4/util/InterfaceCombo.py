@@ -5,8 +5,8 @@ import six
 
 from acq4.util import Qt
 from acq4.Manager import getManager
-import acq4.pyqtgraph.parametertree as parametertree
-import acq4.pyqtgraph.parametertree.parameterTypes as ptypes
+import pyqtgraph.parametertree as parametertree
+import pyqtgraph.parametertree.parameterTypes as ptypes
 
 ### TODO: inherit from util/ComboBox instead.
 

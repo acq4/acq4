@@ -6,7 +6,7 @@ from collections import OrderedDict
 from six.moves import queue
 
 from acq4.util import Qt
-from acq4.pyqtgraph import disconnect
+from pyqtgraph import disconnect
 from acq4.util.debug import printExc
 from . import states
 

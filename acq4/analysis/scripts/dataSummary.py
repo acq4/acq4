@@ -34,7 +34,7 @@ import numpy as np
 import textwrap
 from collections import OrderedDict
 
-from acq4.pyqtgraph.metaarray import MetaArray
+from pyqtgraph.metaarray import MetaArray
 from acq4.analysis.dataModels import PatchEPhys
 from acq4.util import DataManager
 

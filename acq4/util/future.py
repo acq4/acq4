@@ -2,7 +2,7 @@ from __future__ import print_function, division
 
 import time
 from acq4.util import Qt
-from acq4.pyqtgraph import ptime
+from pyqtgraph import ptime
 
 
 class Future(Qt.QObject):

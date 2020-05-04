@@ -10,8 +10,8 @@ import numpy as np
 
 import acq4.util.debug as debug
 from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.pyqtgraph import mkPen
-from acq4.pyqtgraph.flowchart import Flowchart
+from pyqtgraph import mkPen
+from pyqtgraph.flowchart import Flowchart
 
 
 class IVCurve(AnalysisModule):

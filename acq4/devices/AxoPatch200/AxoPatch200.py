@@ -6,7 +6,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util import Qt
 import time
 import numpy as np
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
 from acq4.util.debug import printExc
 

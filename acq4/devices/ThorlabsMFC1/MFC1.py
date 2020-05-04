@@ -5,7 +5,7 @@ from ..Stage import Stage, StageInterface, MoveFuture
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug
+from pyqtgraph import debug
 import time
 
 class ChangeNotifier(Qt.QObject):

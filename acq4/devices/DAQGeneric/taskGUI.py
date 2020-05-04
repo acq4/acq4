@@ -5,8 +5,8 @@ import weakref
 
 from acq4.devices.DAQGeneric.DaqChannelGui import OutputChannelGui, InputChannelGui
 from acq4.devices.Device import TaskGui
-from acq4.pyqtgraph import PlotWidget
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph import PlotWidget
+from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.debug import printExc
 

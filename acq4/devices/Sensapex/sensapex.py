@@ -7,8 +7,8 @@ from ..Stage import Stage, MoveFuture, StageInterface, CalibrationWindow
 from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
-import acq4.pyqtgraph as pg
+from pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
+import pyqtgraph as pg
 
 
 class Sensapex(Stage):

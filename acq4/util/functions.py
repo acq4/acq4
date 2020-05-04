@@ -27,8 +27,8 @@ from scipy import stats, signal
 from scipy.signal import deconvolve
 from six.moves import range
 
-from acq4.pyqtgraph import MetaArray
-from acq4.pyqtgraph.python2_3 import cmp
+from pyqtgraph import MetaArray
+from pyqtgraph.python2_3 import cmp
 from acq4.util import Qt
 
 try:

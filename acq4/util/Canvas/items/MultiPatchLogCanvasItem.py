@@ -4,7 +4,7 @@ import time, re
 from acq4.util import Qt
 from .CanvasItem import CanvasItem
 import acq4.Manager
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 from .MarkersCanvasItem import MarkersCanvasItem
 from .itemtypes import registerItemType

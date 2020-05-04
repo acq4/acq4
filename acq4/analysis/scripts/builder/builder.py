@@ -11,9 +11,9 @@ dataFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus.ma"
 labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
-from acq4.pyqtgraph.metaarray import MetaArray
+from pyqtgraph.metaarray import MetaArray
 
 
 Ui_Form = Qt.importTemplate('.builderTemplate')

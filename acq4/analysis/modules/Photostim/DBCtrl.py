@@ -5,7 +5,7 @@ from collections import OrderedDict
 from .Map import Map
 import acq4.util.DatabaseGui as DatabaseGui
 from acq4.Manager import logMsg, logExc
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import os
 
 Ui_Form = Qt.importTemplate('.MapCtrlTemplate')

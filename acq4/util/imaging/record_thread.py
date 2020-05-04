@@ -9,7 +9,7 @@ from acq4.util import Qt
 from acq4.util import debug
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph.metaarray import MetaArray
+from pyqtgraph.metaarray import MetaArray
 
 try:
     import acq4.filetypes.ImageFile

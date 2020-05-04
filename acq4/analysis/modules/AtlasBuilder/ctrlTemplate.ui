@@ -109,7 +109,7 @@
   <customwidget>
    <class>ColorButton</class>
    <extends>QPushButton</extends>
-   <header>acq4.pyqtgraph.widgets.ColorButton</header>
+   <header>pyqtgraph.widgets.ColorButton</header>
   </customwidget>
  </customwidgets>
  <resources/>

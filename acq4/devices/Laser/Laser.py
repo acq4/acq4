@@ -11,10 +11,10 @@ import os
 import time
 import numpy as np
 from scipy import stats
-from acq4.pyqtgraph.functions import siFormat
+from pyqtgraph.functions import siFormat
 from acq4.util.HelpfulException import HelpfulException
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.metaarray as metaarray
+import pyqtgraph as pg
+import pyqtgraph.metaarray as metaarray
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 import acq4.util.ptime as ptime
 from six.moves import range

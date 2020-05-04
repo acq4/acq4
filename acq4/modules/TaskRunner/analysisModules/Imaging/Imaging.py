@@ -4,13 +4,13 @@ from __future__ import print_function
 
 import numpy as np
 
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.metaarray as metaarray
+import pyqtgraph as pg
+import pyqtgraph.metaarray as metaarray
 from acq4.Manager import getManager
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
-from acq4.pyqtgraph.parametertree import ParameterTree, Parameter
+from pyqtgraph.parametertree import ParameterTree, Parameter
 from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.imagingTemplate')

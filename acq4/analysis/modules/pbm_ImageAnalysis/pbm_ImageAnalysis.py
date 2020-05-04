@@ -34,11 +34,11 @@ import shutil
 import csv
 import os.path
 import pickle
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.debug as debug
+import pyqtgraph as pg
+import pyqtgraph.debug as debug
 import acq4.util.DatabaseGui as DatabaseGui
 import PIL as Image
-from acq4.pyqtgraph.metaarray import MetaArray
+from pyqtgraph.metaarray import MetaArray
 import numpy as np
 import scipy
 from acq4.analysis.tools import Utility

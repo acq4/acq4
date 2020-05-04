@@ -5,7 +5,7 @@ from ..Device import Device
 from acq4.util import Qt
 from ...Manager import getManager
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import ptime
+from pyqtgraph import ptime
 from .devgui import PatchPipetteDeviceGui
 from .testpulse import TestPulseThread
 from .statemanager import PatchPipetteStateManager

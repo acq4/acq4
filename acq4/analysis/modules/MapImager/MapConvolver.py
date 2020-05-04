@@ -3,7 +3,7 @@ from __future__ import print_function
 import numpy as np
 import scipy
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.analysis.tools import functions as afn
 from acq4.util import Qt
 

@@ -51,7 +51,7 @@ app = Qt.pg.mkQApp()
 
 ## Disable garbage collector to improve stability.
 ## (see pyqtgraph.util.garbage_collector for more information)
-from acq4.pyqtgraph.util.garbage_collector import GarbageCollector
+from pyqtgraph.util.garbage_collector import GarbageCollector
 
 gc = GarbageCollector(interval=1.0, debug=False)
 
@@ -87,7 +87,7 @@ timer.timeout.connect(donothing)
 timer.start(1000)
 
 ## Start Qt event loop unless running in interactive mode.
-from . import pyqtgraph as pg
+import pyqtgraph as pg
 
 interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 if interactive:

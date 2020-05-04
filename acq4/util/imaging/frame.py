@@ -1,5 +1,5 @@
 from __future__ import print_function
-from acq4.pyqtgraph import Vector, SRTTransform3D
+from pyqtgraph import Vector, SRTTransform3D
 
 
 class Frame(object):

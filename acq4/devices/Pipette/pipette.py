@@ -8,7 +8,7 @@ from acq4.util import Qt
 import numpy as np
 import weakref
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice

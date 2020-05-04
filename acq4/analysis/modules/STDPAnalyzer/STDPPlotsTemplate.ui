@@ -74,7 +74,7 @@
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>acq4/pyqtgraph/widgets/PlotWidget</header>
+   <header>pyqtgraph/widgets/PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

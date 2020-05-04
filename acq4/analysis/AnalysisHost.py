@@ -5,7 +5,7 @@ import six
 
 from acq4.util import Qt
 from . import modules
-import acq4.pyqtgraph.dockarea as dockarea
+import pyqtgraph.dockarea as dockarea
 import acq4.Manager
 #from acq4.LogWindow import LogButton
 from acq4.util.StatusBar import StatusBar
