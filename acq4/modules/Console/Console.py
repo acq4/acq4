@@ -4,8 +4,8 @@ import os
 
 import numpy as np
 
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.console as console
+import pyqtgraph as pg
+import pyqtgraph.console as console
 from acq4.modules.Module import Module
 from acq4.util import Qt
 

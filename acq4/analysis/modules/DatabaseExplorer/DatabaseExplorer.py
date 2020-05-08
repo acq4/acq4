@@ -6,7 +6,7 @@ import os
 from collections import OrderedDict
 import acq4.util.debug as debug
 import acq4.util.ColorMapper as ColorMapper
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 
 class DatabaseExplorer(AnalysisModule):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from acq4.pyqtgraph.flowchart import Flowchart
+from pyqtgraph.flowchart import Flowchart
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 import os
@@ -10,7 +10,7 @@ from collections import OrderedDict
 import acq4.util.debug as debug
 import acq4.util.FileLoader as FileLoader
 import acq4.util.DatabaseGui as DatabaseGui
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
 from six.moves import map
 

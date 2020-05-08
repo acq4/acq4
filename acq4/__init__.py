@@ -37,7 +37,7 @@ CONFIGPATH.extend([
 from .util import Qt
 
 # Import pyqtgraph, get QApplication instance
-from . import pyqtgraph as pg
+import pyqtgraph as pg
 
 pg.setConfigOptions(useWeave=False)
 app = pg.mkQApp()

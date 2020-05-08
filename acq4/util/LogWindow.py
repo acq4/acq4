@@ -11,13 +11,13 @@ if __name__ == "__main__":
     sys.path = [os.path.join(d,'lib','util')] + sys.path + [d]
 
 from acq4.util import Qt
-from acq4.pyqtgraph import FeedbackButton
-import acq4.pyqtgraph.configfile as configfile
+from pyqtgraph import FeedbackButton
+import pyqtgraph.configfile as configfile
 from acq4.util.DataManager import DirHandle
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.Mutex import Mutex
 import numpy as np
-from acq4.pyqtgraph import FileDialog
+from pyqtgraph import FileDialog
 from acq4.util.debug import printExc
 import six
 import weakref
@@ -973,7 +973,7 @@ if __name__ == "__main__":
     #import os.path as osp
     #d = osp.dirname(osp.dirname(osp.abspath(__file__)))
     #sys.path = [osp.join(d, 'util')] + sys.path + [d]
-    #from acq4.util import acq4.pyqtgraph
+    #import pyqtgraph
     app = Qt.QApplication([])
     log = LogWindow(None)
     log.show()

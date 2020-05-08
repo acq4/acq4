@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import time, threading, functools
 import numpy as np
 import scipy.optimize, scipy.ndimage
-from acq4.pyqtgraph import ptime
+from pyqtgraph import ptime
 from ...Manager import getManager
 from acq4.util import Qt
 from acq4.util.Thread import Thread

@@ -11,7 +11,7 @@ import scipy
 import scipy.stats
 from six import iteritems
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 from acq4.modules.Module import Module
 from acq4.analysis.AnalysisModule import AnalysisModule

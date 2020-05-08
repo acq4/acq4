@@ -2,7 +2,7 @@
 from __future__ import print_function
 
 import acq4.util.functions as functions
-from acq4.pyqtgraph.flowchart.library.common import CtrlNode
+from pyqtgraph.flowchart.library.common import CtrlNode
 
 
 class ExpDeconvolve(CtrlNode):

@@ -4,7 +4,7 @@ from __future__ import print_function
 from six.moves import range
 
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.flowchart.EventDetection as FCEventDetection
 
 

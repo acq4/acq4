@@ -4,7 +4,7 @@ from acq4.util import Qt
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import TaskGui
 import numpy as np
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 

@@ -3,8 +3,8 @@ from __future__ import print_function
 import weakref
 from acq4.util import Qt
 from .CanvasItem import CanvasItem
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.graphicsItems.TargetItem
+import pyqtgraph as pg
+import pyqtgraph.graphicsItems.TargetItem
 from .itemtypes import registerItemType
 
 

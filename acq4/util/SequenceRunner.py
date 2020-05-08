@@ -7,7 +7,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 from __future__ import print_function
 
 import numpy as np
-from acq4.pyqtgraph import MetaArray
+from pyqtgraph import MetaArray
 from six.moves import range
 
 

@@ -6,13 +6,13 @@ import numpy as np
 from . import optimize ## for determining random scan patterns
 import os, sys
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.devices.Device import TaskGui
 from acq4.Manager import getManager, logMsg, logExc
 from acq4.util.debug import Profiler
 from acq4.util.HelpfulException import HelpfulException
-import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .scan_program import ScanProgram, ScanProgramPreview
 from six.moves import range
 

@@ -1,9 +1,9 @@
 from __future__ import print_function
 from acq4.util import Qt
-from acq4.pyqtgraph import PlotWidget
+from pyqtgraph import PlotWidget
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
-from acq4.pyqtgraph.functions import siFormat
+from pyqtgraph.functions import siFormat
 from acq4.util.HelpfulException import HelpfulException
 from six.moves import range
 

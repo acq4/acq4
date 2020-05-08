@@ -6,7 +6,7 @@ from acq4.util import Qt
 from ..Stage import Stage, MoveFuture, StageInterface
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug, ptime, SpinBox
+from pyqtgraph import debug, ptime, SpinBox
 from acq4.util.micromanager import getMMCorePy
 
 

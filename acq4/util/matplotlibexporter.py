@@ -7,7 +7,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 import re
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 try:
     import matplotlib as MP

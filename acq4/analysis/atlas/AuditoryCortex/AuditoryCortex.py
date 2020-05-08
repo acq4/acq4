@@ -7,7 +7,7 @@ from acq4.util import Qt
 import acq4.util.DataManager as DataManager
 from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
 import numpy as np
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import scipy
 from acq4.util.debug import Profiler
 from six.moves import range

@@ -7,7 +7,7 @@ from six.moves import range
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(md, '..'))
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.SequenceRunner as SequenceRunner
 from acq4.util import Qt
 if not hasattr(Qt.QtCore, 'Signal'):

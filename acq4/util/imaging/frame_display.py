@@ -1,6 +1,6 @@
 from __future__ import print_function
 from acq4.util import Qt
-from acq4 import pyqtgraph as pg
+import pyqtgraph as pg
 from .contrast_ctrl import ContrastCtrl
 from .bg_subtract_ctrl import BgSubtractCtrl
 from acq4.util.debug import printExc

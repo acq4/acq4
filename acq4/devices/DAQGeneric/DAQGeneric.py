@@ -8,12 +8,12 @@ import six
 
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
-from acq4.pyqtgraph import siFormat
-from acq4.pyqtgraph.debug import Profiler
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from acq4.pyqtgraph.metaarray import MetaArray, axis
+from pyqtgraph.metaarray import MetaArray, axis
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 

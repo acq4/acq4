@@ -3,7 +3,7 @@ from acq4.util import Qt
 from .Device import Device
 from acq4.util.Mutex import Mutex
 from acq4.Interfaces import InterfaceMixin
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import collections
 import numpy as np
 import six
@@ -437,8 +437,7 @@ class OptomechDevice(InterfaceMixin):
         deviceTr = self.deviceTransform(subdev)
         if deviceTr is None:
             return None
-
-        transform = parentTr * deviceTr
+        transform = (parentTr * 1) * deviceTr
                 
         if inverse:
             inv, invertible = transform.inverted()

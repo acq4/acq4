@@ -9,7 +9,7 @@ import scipy
 import six
 from six.moves import range
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.functions as fn
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera, CameraTask

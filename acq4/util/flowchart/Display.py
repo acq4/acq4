@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.flowchart.library.common import CtrlNode
+import pyqtgraph as pg
+from pyqtgraph.flowchart.library.common import CtrlNode
 
 
 class EventListPlotter(CtrlNode):

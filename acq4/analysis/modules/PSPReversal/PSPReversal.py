@@ -25,9 +25,9 @@ import numpy.ma as ma
 import scipy
 
 from acq4.analysis.AnalysisModule import AnalysisModule
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import configfile
-from acq4.pyqtgraph.metaarray import MetaArray
+import pyqtgraph as pg
+from pyqtgraph import configfile
+from pyqtgraph.metaarray import MetaArray
 
 standard_font = 'Arial'
 

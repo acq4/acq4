@@ -2,7 +2,7 @@
 from __future__ import print_function
 from .CanvasItem import CanvasItem
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.Manager
 from .itemtypes import registerItemType
 

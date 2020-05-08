@@ -3,10 +3,10 @@ from __future__ import print_function
 import os
 from importlib import import_module
 
-from acq4.pyqtgraph import reload
+from pyqtgraph import reload
 ## Extend pyqtgraph.flowchart by adding several specialized nodes
-from acq4.pyqtgraph.flowchart import *
-from acq4.pyqtgraph.flowchart.library import isNodeClass
+from pyqtgraph.flowchart import *
+from pyqtgraph.flowchart.library import isNodeClass
 from acq4.util.debug import printExc
 
 

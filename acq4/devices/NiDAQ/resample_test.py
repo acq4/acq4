@@ -6,13 +6,13 @@ import time
 
 import numpy as np
 
-from ...pyqtgraph import PlotWindow
+from pyqtgraph import PlotWindow
 from six.moves import zip
 
 sys.path.append('../../util')
 sys.path.append('../..')
 from .nidaq import NiDAQ
-from acq4.pyqtgraph.functions import mkPen, mkColor
+from pyqtgraph.functions import mkPen, mkColor
 
 pw = PlotWindow()
 

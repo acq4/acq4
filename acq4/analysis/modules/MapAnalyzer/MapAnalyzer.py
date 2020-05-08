@@ -60,8 +60,8 @@ import os
 from collections import OrderedDict
 import acq4.util.DatabaseGui as DatabaseGui
 from acq4.util.ColorMapper import ColorMapper
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.parametertree as ptree
+import pyqtgraph as pg
+import pyqtgraph.parametertree as ptree
 import numpy as np
 import acq4.analysis.modules.Photostim.Scan as Scan
 from acq4.analysis.modules.Photostim.Map import Map

@@ -6,10 +6,10 @@ import weakref
 import numpy as np
 from collections import OrderedDict
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.util import Qt
-import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType, ParameterSystem, SystemSolver
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType, ParameterSystem, SystemSolver
 from .component import ScanProgramComponent
 from six.moves import map
 from six.moves import range
@@ -30,7 +30,7 @@ class RectScanComponent(ScanProgramComponent):
 
     def ctrlParameter(self):
         """
-        The Parameter set (see acq4.pyqtgraph.parametertree) that allows the 
+        The Parameter set (see pyqtgraph.parametertree) that allows the 
         user to configure this component.
         """
         return self.ctrl.parameters()

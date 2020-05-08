@@ -1,8 +1,8 @@
 from __future__ import print_function
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.widgets.SpinBox import SpinBox
-from acq4.pyqtgraph.widgets.ColorButton import ColorButton
+import pyqtgraph as pg
+from pyqtgraph.widgets.SpinBox import SpinBox
+from pyqtgraph.widgets.ColorButton import ColorButton
 
 Ui_Form = Qt.importTemplate('.ContourPlotterTemplate')
 

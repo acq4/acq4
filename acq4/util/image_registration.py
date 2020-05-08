@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.ndimage
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 
 def imageTemplateMatch(img, template, unsharp=3):

@@ -8,12 +8,12 @@ import numpy as np
 from six.moves import range
 
 import acq4.analysis.modules.EventDetector as EventDetector
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.ColorMapper as ColorMapper
 import acq4.util.debug as debug
 from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.pyqtgraph import multiprocess
-from acq4.pyqtgraph.flowchart import Flowchart
+from pyqtgraph import multiprocess
+from pyqtgraph.flowchart import Flowchart
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from .DBCtrl import DBCtrl

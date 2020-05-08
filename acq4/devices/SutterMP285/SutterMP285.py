@@ -9,7 +9,7 @@ from copy import deepcopy
 import numpy as np
 import six
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.debug as debug
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice

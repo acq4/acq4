@@ -3,7 +3,7 @@ from acq4.util import Qt
 import math
 from acq4.util.HelpfulException import HelpfulException
 import numpy as np
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.analysis.tools.functions as fn
 import scipy
 

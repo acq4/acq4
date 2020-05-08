@@ -17,11 +17,11 @@ from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 
 from collections import OrderedDict
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.util.FileLoader import FileLoader
-import acq4.util.flowchart as fc  # was acq4.pyqtgraph.flowchart - but it does not have the same filters ??????????
+import acq4.util.flowchart as fc  # was pyqtgraph.flowchart - but it does not have the same filters ??????????
 
 import os
 import glob

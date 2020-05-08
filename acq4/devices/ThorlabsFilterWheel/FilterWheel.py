@@ -2,7 +2,7 @@
 import time
 from collections import OrderedDict
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.debug as debug
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.FilterWheel.filterwheel import FilterWheelDevGui

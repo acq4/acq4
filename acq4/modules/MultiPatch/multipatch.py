@@ -9,7 +9,7 @@ from acq4.util import Qt
 from acq4.modules.Module import Module
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from .pipetteControl import PipetteControl
 from .mockPatch import MockPatch
 from six.moves import zip

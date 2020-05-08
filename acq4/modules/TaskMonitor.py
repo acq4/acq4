@@ -1,7 +1,7 @@
 from __future__ import print_function
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.pyqtgraph import DataTreeWidget
+from pyqtgraph import DataTreeWidget
 
 class TaskMonitor(Module):
     """Simple module that displays information about tasks submitted to the manager

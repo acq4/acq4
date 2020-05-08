@@ -3,7 +3,7 @@ import time
 import pickle
 import numpy as np
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.Manager import getManager
 from .pipette_detection import TemplateMatchPipetteDetector
 from acq4.util.image_registration import imageTemplateMatch

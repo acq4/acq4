@@ -30,13 +30,13 @@ from collections import OrderedDict
 import numpy as np
 
 import acq4.Manager
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.dockarea
+import pyqtgraph as pg
+import pyqtgraph.dockarea
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program import ScanProgram
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.modules.Module import Module
-from acq4.pyqtgraph import parametertree as PT
+from pyqtgraph import parametertree as PT
 from acq4.util import Qt
 from acq4.util import imaging
 from acq4.util.Mutex import Mutex

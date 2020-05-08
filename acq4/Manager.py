@@ -23,15 +23,15 @@ from collections import OrderedDict
 
 import six
 
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.reload as reload
+import pyqtgraph as pg
+import pyqtgraph.reload as reload
 from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
-from .pyqtgraph.debug import printExc, Profiler
-from .pyqtgraph import configfile
-from .pyqtgraph.util.mutex import Mutex
+from pyqtgraph.debug import printExc, Profiler
+from pyqtgraph import configfile
+from pyqtgraph.util.mutex import Mutex
 from .util import DataManager, ptime, Qt
 from .util.HelpfulException import HelpfulException
 
@@ -336,7 +336,7 @@ class Manager(Qt.QObject):
                             "'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
 
                     print("=== Setting default HDF5 compression: %s ===" % comp)
-                    import acq4.pyqtgraph.metaarray as ma
+                    import pyqtgraph.metaarray as ma
                     ma.MetaArray.defaultCompression = comp
 
                 ## load stylesheet

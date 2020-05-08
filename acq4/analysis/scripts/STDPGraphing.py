@@ -1,5 +1,5 @@
 from __future__ import print_function
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 from six.moves import range
 

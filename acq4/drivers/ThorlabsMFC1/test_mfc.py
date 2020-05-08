@@ -4,7 +4,7 @@ path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')
 sys.path.append(path)
 
 from acq4.drivers.ThorlabsMFC1 import MFC1
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 
 if len(sys.argv) < 2:

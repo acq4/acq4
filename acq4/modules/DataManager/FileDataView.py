@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.util import Qt
 from acq4.util.DictView import DictView
 from six.moves import map

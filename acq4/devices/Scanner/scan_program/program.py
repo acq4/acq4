@@ -5,10 +5,10 @@ from collections import OrderedDict
 import importlib
 import six
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.util.HelpfulException import HelpfulException
-import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from acq4.util import Qt
 
 

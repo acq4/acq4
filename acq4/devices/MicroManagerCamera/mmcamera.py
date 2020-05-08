@@ -9,7 +9,7 @@ import six
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
-from acq4.pyqtgraph.debug import Profiler
+from pyqtgraph.debug import Profiler
 from acq4.util import micromanager
 from acq4.util.Mutex import Mutex
 from six.moves import range

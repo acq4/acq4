@@ -101,9 +101,9 @@ Notes on probability computation:
 
 import numpy as np
 import scipy.stats as stats
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from six.moves import range
-import acq4.pyqtgraph.multiprocess as mp
+import pyqtgraph.multiprocess as mp
 import os
 
 def poissonProcess(rate, tmax=None, n=None):

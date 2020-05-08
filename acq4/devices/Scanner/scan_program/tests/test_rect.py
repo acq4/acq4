@@ -3,8 +3,8 @@ from __future__ import division
 import numpy as np
 
 from acq4.devices.Scanner.scan_program.rect import RectScan, RectScanParameter
-from acq4.pyqtgraph.parametertree import ParameterTree
-import acq4.pyqtgraph as pg
+from pyqtgraph.parametertree import ParameterTree
+import pyqtgraph as pg
 from six.moves import map
 from six.moves import range
 

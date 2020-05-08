@@ -12,10 +12,10 @@ import six
 
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
-from acq4.pyqtgraph import PlotWidget
-from acq4.pyqtgraph import WidgetGroup, MetaArray
-from acq4.pyqtgraph import siFormat
-from acq4.pyqtgraph.debug import Profiler
+from pyqtgraph import PlotWidget
+from pyqtgraph import WidgetGroup, MetaArray
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar

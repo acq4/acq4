@@ -6,13 +6,13 @@ from __future__ import print_function
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.metaarray import MetaArray
+import pyqtgraph as pg
+from pyqtgraph.metaarray import MetaArray
 import numpy as np
 from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.util.FileLoader import FileLoader
-import acq4.pyqtgraph.flowchart as fc
-import acq4.pyqtgraph.debug as debug
+import pyqtgraph.flowchart as fc
+import pyqtgraph.debug as debug
 import os
 
 class TraceAnalyzer(AnalysisModule):

@@ -1,11 +1,11 @@
 from __future__ import print_function
 
 import acq4.Manager as Manager
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.dockarea as dockarea
+import pyqtgraph as pg
+import pyqtgraph.dockarea as dockarea
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.pyqtgraph import SignalProxy, Point
+from pyqtgraph import SignalProxy, Point
 from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.imaging import ImagingCtrl
