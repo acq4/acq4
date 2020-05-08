@@ -39,4 +39,4 @@ RUN conda init bash
 
 #### Usage (from ..)
 # docker build -f tools/Dockerfile.py3pyside2 -t acq4:py3pyside2 .
-# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code-v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py3pyside2 conda run -n acq4 python -m acq4
+# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code -v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py3pyside2 conda run -n acq4 python -m acq4
