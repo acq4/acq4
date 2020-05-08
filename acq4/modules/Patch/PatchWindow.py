@@ -661,7 +661,7 @@ class PatchThread(Thread):
 
             iBaseMean = iBase.mean()
             iPulseEndMean = iPulseEnd.asarray().mean()
-            iStep = sign * np.max(1e-15, sign * (iPulseEndMean - iBaseMean))
+            iStep = sign * max(1e-15, sign * (iPulseEndMean - iBaseMean))
             iRes = vStep / iStep
             
             ## From Santos-Sacchi 1993
