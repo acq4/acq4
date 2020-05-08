@@ -732,7 +732,7 @@ class LogWidget(Qt.QWidget):
             #spaceCount = 0
             #while l[spaceCount] == ' ':
                 #spaceCount += 1
-            #if prefix is not '':
+            #if prefix != '':
                 #spaceCount -= 1
             #lines.append("&nbsp;"*(spaceCount*4) + prefix + l)
             #prefix = ''

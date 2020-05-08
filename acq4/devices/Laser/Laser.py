@@ -767,13 +767,13 @@ class LaserTask(DAQGenericTask):
             self.cmd['daqProtocol']['shutter'] = self.cmd['shutter']
             self.cmd['daqProtocol']['shutter']['command'][-1] = 0
         elif 'shutterMode' in self.cmd:
-            if self.cmd['shutterMode'] is 'auto':
+            if self.cmd['shutterMode'] == 'auto':
                 if 'shutter' in calcCmds:
                     self.cmd['daqProtocol']['shutter'] = {'command': calcCmds['shutter']}
-            elif self.cmd['shutterMode'] is 'closed':
+            elif self.cmd['shutterMode'] == 'closed':
                 #self.cmd['daqProtocol']['shutter']['command'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
                 self.cmd['daqProtocol']['shutter'] = {'preset': 0}
-            elif self.cmd['shutterMode'] is 'open':
+            elif self.cmd['shutterMode'] == 'open':
                 self.cmd['daqProtocol']['shutter'] = {'preset': 1}
                 # self.cmd['daqProtocol']['shutter'] = {'command': np.ones(len(calcCmds['shutter']), dtype=np.byte)}
                 

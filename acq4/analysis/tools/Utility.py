@@ -310,27 +310,27 @@ def long_Eval(line):
     for c in line:
         if c is '{':
             continue
-        if (c is ',' or c is '}') and colonFound and not inpunct and not inquote: # separator is ','
+        if (c == ',' or c == '}') and colonFound and not inpunct and not inquote: # separator is ','
             r = eval('{%s}' % sp)
             u[list(r.keys())[0]] = r[list(r.keys())[0]]
             colonFound = False
             sp = ''
             continue
         sp = sp + c
-        if c is ':':
+        if c == ':':
             colonFound = True
             continue
-        if c is '(' or c is '[' :
+        if c == '(' or c == '[' :
             inpunct += 1
             continue
-        if c is ')' or c is ']':
+        if c == ')' or c == ']':
             inpunct -= 1
             continue
-        if c is "'" and inquote:
+        if c == "'" and inquote:
             inquote = False
             continue
-        if c is "'" and not inquote:
-            inquote is True
+        if c == "'" and not inquote:
+            inquote = True
     return u
 
 
@@ -490,7 +490,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     mingap = int(0.0005/dt) # 0.5 msec between spikes (a little unphysiological...)
     # normal operating mode is fixed voltage threshold
     # for this we need to just get the FIRST positive crossing,
-    if mode is 'schmitt':
+    if mode == 'schmitt':
         sthra = list(numpy.where(numpy.diff(sp) > mingap))
         sthr = [sp[x] for x in sthra[0]] # bump indices by 1
         #print 'findspikes: sthr: ', len(sthr), sthr
@@ -508,7 +508,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
                 s0 = x[1]
             st = numpy.append(st, x[1])
 
-    elif mode is 'peak':
+    elif mode == 'peak':
         pkwidth = 1.0e-3 # in same units as dt  - usually msec
         kpkw = int(pkwidth/dt)
         z = (numpy.array(numpy.where(numpy.diff(spv) > 1)[0])+1).tolist()
@@ -848,7 +848,7 @@ def seqparse(sequence):
     sequence.replace(' ', '') # remove all spaces - nice to read, not needed to calculate
     sequence = str(sequence) #make sure we have a nice string
     (seq2, sep, remain) = sequence.partition('&') # find  and returnnested sequences
-    while seq2 is not '':
+    while seq2 != '':
         try:
             (oneseq, onetarget) = recparse(seq2)
             seq.append(oneseq)
@@ -878,7 +878,7 @@ def recparse(cmdstr):
     seed=0
     skip = 1.0
     (target, sep, rest) = cmdstr.partition(':') # get the target
-    if rest is '':
+    if rest == '':
         rest = target # no : found, so no target designated.
         target=''
     (sfn, sep, rest1) = rest.partition(';')
@@ -889,7 +889,7 @@ def recparse(cmdstr):
     skip = float(sskip)
     ln = ln + 0.01*skip
 #    print "mo: %s" % (mo)
-    if mo is '': # linear spacing; skip is size of step
+    if mo == '': # linear spacing; skip is size of step
         recs=eval('arange(%f,%f,%f)' % (fn, ln, skip))
 
     if mo.find('l') >= 0: # log spacing; skip is length of result
@@ -899,20 +899,20 @@ def recparse(cmdstr):
         recs = eval('%f*[1]' % (fn))
 
     if mo.find('n') >= 0: # use the number of steps, not the step size
-        if skip is 1.0:
+        if skip == 1.0:
             sk = (ln - fn)
         else:
             sk = eval('(%f-%f)/(%f-1.0)' % (ln, fn, skip))
         recs=eval('arange(%f,%f,%f)' % (fn, ln, sk))
 
     if mo.find('r') >= 0: # randomize the result
-        if recs is []:
+        if recs == []:
             recs=eval('arange(%f,%f,%f)' % (fn, ln, skip))
         recs = sample(recs, len(recs))
 
     if mo.find('a') >= 0: # alternation - also test for a value after that
         (arg, sep, value) = mo.partition('a') # is there anything after the letter?
-        if value is '':
+        if value == '':
             value = 0.0
         else:
             value = float(value)

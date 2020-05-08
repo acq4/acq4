@@ -462,7 +462,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.rs = None
         img = None
         self.clearImageTypes()
-        if self.dataStruct is 'flat':
+        if self.dataStruct == 'flat':
             #print 'getting Flat data structure!'
             if dh.isFile():
                 fhandle = dh

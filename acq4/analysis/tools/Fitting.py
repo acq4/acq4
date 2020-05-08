@@ -884,7 +884,7 @@ if __name__ == "__main__":
         print( "FIT(%d)   : %s" % (j, outstr) )
         print( "init(%d) : %s" % (j, initstr) )
         print( "Error:   : %f" % (Fits.fitSum2Err))
-        if func is 'exp1':
+        if func == 'exp1':
             PL.figure()
             PL.plot(numpy.array(x), yd, 'ro-')
             PL.hold(True)
