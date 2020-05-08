@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import numpy
 import sip
+from pyqtgraph import mkPen
 
 from acq4.devices.Device import TaskGui
 from pyqtgraph.WidgetGroup import WidgetGroup
@@ -200,7 +201,7 @@ class MultiClampTaskGui(TaskGui):
         if data is None:
             return
         plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals)
-        plot.setPen(Qt.QPen(color))
+        plot.setPen(mkPen(color))
         
         return plot
         

@@ -129,7 +129,7 @@ class ScannerTaskGui(TaskGui):
         self.dev.sigGlobalSubdeviceChanged.connect(self.opticStateChanged)
         
         self.testTarget = TargetPoint(name="Test", ptSize=100e-6)
-        self.testTarget.setPen(Qt.QPen(Qt.QColor(255, 200, 200)))
+        self.testTarget.setPen(pg.mkPen(255, 200, 200))
         self.spotMarker = TargetPoint(name="Last", ptSize=100e-6, movable=False)
         self.spotMarker.setPen(pg.mkPen(color=(255,255,255), width = 2))
 
@@ -463,7 +463,7 @@ class ScannerTaskGui(TaskGui):
                 p = pts[j]
                 point = Qt.QPointF(p[0], p[1])
                 if occArea.contains(point):
-                    i.setTargetPen(j, Qt.QPen(Qt.QColor(0,0,0,160)))
+                    i.setTargetPen(j, pg.mkPen(0, 0, 0, 160))
                 else:
                     locations.append(p)
                     i.setTargetPen(j, None)

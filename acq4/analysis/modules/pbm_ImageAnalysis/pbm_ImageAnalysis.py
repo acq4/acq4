@@ -1574,7 +1574,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         roi.ID = self.nROI  # give each ROI a unique identification number
         rgb = self.RGB[self.nROI]
         self.nROI = self.nROI + 1
-        roi.setPen(Qt.QPen(Qt.QColor(rgb[0], rgb[1], rgb[2])))
+        roi.setPen(pg.mkPen(rgb[0], rgb[1], rgb[2]))
         roi.color = rgb
         self.AllRois.append(roi)
         self.imageView.addItem(roi)
