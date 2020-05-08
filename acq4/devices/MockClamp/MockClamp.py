@@ -43,7 +43,7 @@ class MockClamp(PatchClamp):
         self.config = config
 
         # create a daq device under the hood
-        self.daqDev = DAQGeneric(dm, daqConfig, name)
+        self.daqDev = DAQGeneric(dm, daqConfig, '{}Daq'.format(name))
 
         try:
             self.setHolding()
