@@ -360,7 +360,7 @@ class ScannerDeviceGui(Qt.QWidget):
         yCommand = np.empty((nPts,), dtype=float)
         start = 0
         for i in range(sweeps):
-            stop = start + (nPts / sweeps)
+            stop = int(start + (nPts / sweeps))
             yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0
