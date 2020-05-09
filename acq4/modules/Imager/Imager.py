@@ -333,16 +333,14 @@ class Imager(Module):
         # config may specify a single detector device (dev, channel) or a list of devices 
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get('detectors', [config.get('detector')])
-        
+
         det = self.manager.getDevice(self.detectors[0][0])
-        filt = det.getFilterDevice()
-        if filt is not None:
-            self.filterDevice =  self.manager.getDevice(filt)
-        else:
-            self.filterDevice = None
-            
-        if self.filterDevice is not None:
-            self.filterDevice.sigFilterChanged.connect(self.filterUpdate)
+        self.filterDevice = None
+        if callable(getattr(det, 'getFilterDevice', None)):
+            filt = det.getFilterDevice()
+            if filt is not None:
+                self.filterDevice = self.manager.getDevice(filt)
+                self.filterDevice.sigFilterChanged.connect(self.filterUpdate)
         
         self.laserMonitor = Qt.QTimer()
         self.laserMonitor.timeout.connect(self.updateLaserInfo)

@@ -13,7 +13,7 @@ class PMT(DAQGeneric, OptomechDevice):
 
     def getFilterDevice(self):
         # return parent filter device or None
-        if 'Filter' in self.omConf['parentDevice'] :
+        if 'Filter' in self.omConf.get('parentDevice', {}):
             return self.omConf['parentDevice']
         else:
             return None
