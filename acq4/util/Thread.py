@@ -1,7 +1,10 @@
 from __future__ import print_function
+
 import threading
+
 from acq4.util import Qt
 from .debug import enableFaulthandler
+
 
 class Thread(Qt.QThread):
     """Wrapper around QThread that implements debugging tools:
@@ -24,8 +27,7 @@ class Thread(Qt.QThread):
         self.run = self.__run_wrapper
 
     def __run_wrapper(self):
-        id = int(Qt.QThread.currentThreadId())
-        Qt.QThread._names[id] = self._threadname
+        Qt.QThread._names[threading.current_thread().ident] = self._threadname
 
         # for every new thread, re-enable faulthandler to ensure the new
         # thread is properly handled

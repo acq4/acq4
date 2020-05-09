@@ -140,7 +140,7 @@ class ScannerDeviceGui(Qt.QWidget):
         s = Qt.QGraphicsEllipseItem(0, 0, 1, 1)
         s.scale(size, size)
         s.setPos(pos[0]-s2, pos[1]-s2)
-        s.setPen(Qt.QPen(Qt.QColor(100, 255, 100, 70)))
+        s.setPen(pg.mkPen(100, 255, 100, 70))
         self.ui.view.addItem(s)
         s.setZValue(100)
         self.spots.append(s)
@@ -360,7 +360,7 @@ class ScannerDeviceGui(Qt.QWidget):
         yCommand = np.empty((nPts,), dtype=float)
         start = 0
         for i in range(sweeps):
-            stop = start + (nPts / sweeps)
+            stop = int(start + (nPts / sweeps))
             yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0

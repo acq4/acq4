@@ -25,7 +25,7 @@ def measure():
         frames = []
         img = frame.data()
         w,h = img.shape
-        img = img[2*w/5:3*w/5, 2*h/5:3*h/5]
+        img = img[int(2*w/5):int(3*w/5), int(2*h/5):int(3*h/5)]
         w,h = img.shape
         
         fit = imageAnalysis.fitGaussian2D(img, [100, w/2., h/2., w/4., 0])

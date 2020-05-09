@@ -173,7 +173,7 @@ class LaserDevGui(Qt.QWidget):
         powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
         channels = powerDev.listChannels()
         text = str(self.ui.channelCombo.currentText())
-        if text is not '':
+        if text != '':
             sTime = channels[text].get('settlingTime', None)
             mTime = channels[text].get('measurementTime', None)
         else:

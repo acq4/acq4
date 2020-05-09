@@ -12,7 +12,7 @@ import six
 
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
-from pyqtgraph import PlotWidget
+from pyqtgraph import PlotWidget, mkPen
 from pyqtgraph import WidgetGroup, MetaArray
 from pyqtgraph import siFormat
 from pyqtgraph.debug import Profiler
@@ -131,10 +131,10 @@ class PatchWindow(Qt.QMainWindow):
         self.stateGroup.setState(self.params)
         
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
-        self.patchCurve = self.ui.patchPlot.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
-        self.patchFitCurve = self.ui.patchPlot.plot(pen=Qt.QPen(Qt.QColor(0, 100, 200)))
+        self.patchCurve = self.ui.patchPlot.plot(pen=mkPen(200, 200, 200))
+        self.patchFitCurve = self.ui.patchPlot.plot(pen=mkPen(0, 100, 200))
         self.ui.commandPlot.setLabel('left', text='Command', units='V')
-        self.commandCurve = self.ui.commandPlot.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
+        self.commandCurve = self.ui.commandPlot.plot(pen=mkPen(200, 200, 200))
         
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.recordBtn.clicked.connect(self.recordClicked)
@@ -155,7 +155,7 @@ class PatchWindow(Qt.QMainWindow):
             w = getattr(self.ui, n+'Check')
             w.clicked.connect(self.showPlots)
             p = self.plots[n]
-            self.analysisCurves[n] = p.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
+            self.analysisCurves[n] = p.plot(pen=mkPen(200, 200, 200))
             for suf in ['', 'Std']:
                 self.analysisData[n+suf] = []
         self.showPlots()
@@ -661,7 +661,7 @@ class PatchThread(Thread):
 
             iBaseMean = iBase.mean()
             iPulseEndMean = iPulseEnd.asarray().mean()
-            iStep = sign * np.max(1e-15, sign * (iPulseEndMean - iBaseMean))
+            iStep = sign * max(1e-15, sign * (iPulseEndMean - iBaseMean))
             iRes = vStep / iStep
             
             ## From Santos-Sacchi 1993

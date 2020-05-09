@@ -1,6 +1,6 @@
 from __future__ import print_function
 from acq4.util import Qt
-from pyqtgraph import PlotWidget
+from pyqtgraph import PlotWidget, mkPen
 from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
 from pyqtgraph.functions import siFormat
@@ -200,11 +200,11 @@ class LaserTaskGui(DAQGenericTaskGui):
                       
     def plotRawCurves(self, data, color=Qt.QColor(100, 100, 100)):
         if 'shutter' in data:
-            self.shutterPlot.plot(y=data['shutter'], x=self.powerWidget.timeVals, pen=Qt.QPen(color))
+            self.shutterPlot.plot(y=data['shutter'], x=self.powerWidget.timeVals, pen=mkPen(color))
         if 'qSwitch' in data:
-            self.qSwitchPlot.plot(y=data['qSwitch'], x=self.powerWidget.timeVals, pen=Qt.QPen(color))
+            self.qSwitchPlot.plot(y=data['qSwitch'], x=self.powerWidget.timeVals, pen=mkPen(color))
         if 'pCell' in data:
-            self.pCellPlot.plot(y=data['pCell'], x=self.powerWidget.timeVals, pen=Qt.QPen(color))
+            self.pCellPlot.plot(y=data['pCell'], x=self.powerWidget.timeVals, pen=mkPen(color))
       
     def clearRawPlots(self):
         for p in ['shutterPlot', 'qSwitchPlot', 'pCellPlot']:

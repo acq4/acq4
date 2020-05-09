@@ -5,7 +5,7 @@ import weakref
 
 import numpy
 
-from pyqtgraph import SpinBox, WidgetGroup
+from pyqtgraph import SpinBox, WidgetGroup, mkPen
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
 from six.moves import range
@@ -260,7 +260,7 @@ class OutputChannelGui(DaqChannelGui):
             self.currentPlot.setZValue(100)
         
     def plotCurve(self, data, color=Qt.QColor(100, 100, 100), replot=True):
-        plot = self.plot.plot(y=data, x=self.timeVals, pen=Qt.QPen(color))
+        plot = self.plot.plot(y=data, x=self.timeVals, pen=mkPen(color))
         return plot
 
     def getSingleWave(self, params=None):
@@ -341,9 +341,9 @@ class InputChannelGui(DaqChannelGui):
                 self.clearPlots()
                 self.clearBeforeNextPlot = False
 
-            plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=Qt.QPen(Qt.QColor(200, 200, 200)), params=params)
+            plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=mkPen(200, 200, 200), params=params)
             #plot = PlotCurve('cell')
-            #plot.setPen(Qt.QPen(Qt.QColor(200, 200, 200)))
+            #plot.setPen(pg.mkPen(200, 200, 200))
             #plot.setData(result.xvals('Time'), result)
             #plot.attach(self.plot)
             #self.plots.append(plot)

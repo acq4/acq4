@@ -43,7 +43,7 @@ class MockClamp(PatchClamp):
         self.config = config
 
         # create a daq device under the hood
-        self.daqDev = DAQGeneric(dm, daqConfig, name)
+        self.daqDev = DAQGeneric(dm, daqConfig, '{}Daq'.format(name))
 
         try:
             self.setHolding()
@@ -250,7 +250,7 @@ class MockClampTask(DAQGenericTask):
 
     def getResult(self):
         result = DAQGenericTask.getResult(self)
-        result._info[-1]['startTime'] = result._info[-1][self.clampDev.getDAQName()].values()[0]['startTime']
+        result._info[-1]['startTime'] = next(iter(result._info[-1][self.clampDev.getDAQName()].values()))['startTime']
         result._info[-1]['ClampState'] = self.ampState
         return result
 

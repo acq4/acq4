@@ -161,7 +161,7 @@ class NiDAQ(Device):
         """Resample data by taking mean of ds samples at a time"""
         newLen = int(data.shape[0] / ds) * ds
         data = data[:newLen]
-        data.shape = (data.shape[0]/ds, ds)
+        data.shape = (int(data.shape[0]/ds), ds)
         if binary:
             data = data.mean(axis=1).round().astype(numpy.byte)
         else:

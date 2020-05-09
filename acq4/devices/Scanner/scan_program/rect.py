@@ -415,7 +415,7 @@ class RectScan(SystemSolver):
         using linear interpolation.
         """
         offset = self.imageOffset + offset * self.sampleRate / self.downsample
-        intOffset = np.floor(offset)
+        intOffset = int(np.floor(offset))
         fracOffset = offset - intOffset
 
         shape = self.imageShape

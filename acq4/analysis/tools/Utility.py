@@ -310,27 +310,27 @@ def long_Eval(line):
     for c in line:
         if c is '{':
             continue
-        if (c is ',' or c is '}') and colonFound and not inpunct and not inquote: # separator is ','
+        if (c == ',' or c == '}') and colonFound and not inpunct and not inquote: # separator is ','
             r = eval('{%s}' % sp)
             u[list(r.keys())[0]] = r[list(r.keys())[0]]
             colonFound = False
             sp = ''
             continue
         sp = sp + c
-        if c is ':':
+        if c == ':':
             colonFound = True
             continue
-        if c is '(' or c is '[' :
+        if c == '(' or c == '[' :
             inpunct += 1
             continue
-        if c is ')' or c is ']':
+        if c == ')' or c == ']':
             inpunct -= 1
             continue
-        if c is "'" and inquote:
+        if c == "'" and inquote:
             inquote = False
             continue
-        if c is "'" and not inquote:
-            inquote is True
+        if c == "'" and not inquote:
+            inquote = True
     return u
 
 
@@ -442,11 +442,11 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     # # this does not work with pyside...
     #     import matplotlib
     #     matplotlib.use('Qt4Agg')
-    #     import pylab
+    #     import matplotlib.pyplot as PL
     #     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
     #     from matplotlib.figure import Figure
     #     
-    #     #MP.rcParams['interactive'] = False
+    #     #PL.rcParams['interactive'] = False
         
     st=numpy.array([])
     spk = []
@@ -464,12 +464,12 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
             xt = xt[it0:it1]
             v = v[it0:it1]
     # if debug:
-    #     f = pylab.figure(1)
+    #     f = PL.figure(1)
     #     print "xt: ", xt
     #     print "v: ", v
-    #     pylab.plot(numpy.array(xt), v, 'k-')
-    #     pylab.draw()
-    #     pylab.show()
+    #     PL.plot(numpy.array(xt), v, 'k-')
+    #     PL.draw()
+    #     PL.show()
 
     dv = numpy.diff(v, axis=0) # compute slope
     try:
@@ -481,7 +481,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     spk = []
     spv = numpy.where(v > thresh)[0].tolist() # find points above threshold
     sps = numpy.where(dv > 0.0)[0].tolist() # find points where slope is positive
-    sp = list(Set.intersection(Set(spv),Set(sps))) # intersection defines putative spikes
+    sp = list(set.intersection(set(spv),set(sps))) # intersection defines putative spikes
     sp.sort() # make sure all detected events are in order (sets is unordered)
     sp = tuple(sp) # convert to tuple
     if sp is ():
@@ -490,7 +490,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
     mingap = int(0.0005/dt) # 0.5 msec between spikes (a little unphysiological...)
     # normal operating mode is fixed voltage threshold
     # for this we need to just get the FIRST positive crossing,
-    if mode is 'schmitt':
+    if mode == 'schmitt':
         sthra = list(numpy.where(numpy.diff(sp) > mingap))
         sthr = [sp[x] for x in sthra[0]] # bump indices by 1
         #print 'findspikes: sthr: ', len(sthr), sthr
@@ -508,7 +508,7 @@ def findspikes(xin, vin, thresh, t0=None, t1= None, dt=1.0, mode=None, interpola
                 s0 = x[1]
             st = numpy.append(st, x[1])
 
-    elif mode is 'peak':
+    elif mode == 'peak':
         pkwidth = 1.0e-3 # in same units as dt  - usually msec
         kpkw = int(pkwidth/dt)
         z = (numpy.array(numpy.where(numpy.diff(spv) > 1)[0])+1).tolist()
@@ -848,7 +848,7 @@ def seqparse(sequence):
     sequence.replace(' ', '') # remove all spaces - nice to read, not needed to calculate
     sequence = str(sequence) #make sure we have a nice string
     (seq2, sep, remain) = sequence.partition('&') # find  and returnnested sequences
-    while seq2 is not '':
+    while seq2 != '':
         try:
             (oneseq, onetarget) = recparse(seq2)
             seq.append(oneseq)
@@ -878,7 +878,7 @@ def recparse(cmdstr):
     seed=0
     skip = 1.0
     (target, sep, rest) = cmdstr.partition(':') # get the target
-    if rest is '':
+    if rest == '':
         rest = target # no : found, so no target designated.
         target=''
     (sfn, sep, rest1) = rest.partition(';')
@@ -889,7 +889,7 @@ def recparse(cmdstr):
     skip = float(sskip)
     ln = ln + 0.01*skip
 #    print "mo: %s" % (mo)
-    if mo is '': # linear spacing; skip is size of step
+    if mo == '': # linear spacing; skip is size of step
         recs=eval('arange(%f,%f,%f)' % (fn, ln, skip))
 
     if mo.find('l') >= 0: # log spacing; skip is length of result
@@ -899,20 +899,20 @@ def recparse(cmdstr):
         recs = eval('%f*[1]' % (fn))
 
     if mo.find('n') >= 0: # use the number of steps, not the step size
-        if skip is 1.0:
+        if skip == 1.0:
             sk = (ln - fn)
         else:
             sk = eval('(%f-%f)/(%f-1.0)' % (ln, fn, skip))
         recs=eval('arange(%f,%f,%f)' % (fn, ln, sk))
 
     if mo.find('r') >= 0: # randomize the result
-        if recs is []:
+        if recs == []:
             recs=eval('arange(%f,%f,%f)' % (fn, ln, skip))
         recs = sample(recs, len(recs))
 
     if mo.find('a') >= 0: # alternation - also test for a value after that
         (arg, sep, value) = mo.partition('a') # is there anything after the letter?
-        if value is '':
+        if value == '':
             value = 0.0
         else:
             value = float(value)
@@ -948,8 +948,8 @@ def makeRGB(ncol = 16, minc = 32, maxc = 216):
 # If this file is called direcl.y, then provide tests of some of the routines.
 if __name__ == "__main__":
     from optparse import OptionParser
-    import matplotlib.pylab as MP
-    MP.rcParams['interactive'] = False
+    import matplotlib.pyplot as PL
+    PL.rcParams['interactive'] = False
     
     parser=OptionParser() # command line options
     parser.add_option("-d", action="store_true", dest="dictionary", default=False)
@@ -979,13 +979,13 @@ if __name__ == "__main__":
         alpha = 1.0 * (ta/tau1) * numpy.exp(1 - ta/tau1)
         sig = spSignal.fftconvolve(events, alpha, mode='full')
         sig = sig[0:len(t)]+numpy.random.normal(0, 0.25, len(t))
-        f = MP.figure()
-        MP.plot(t, sig, 'r-')
-        MP.plot(t, events, 'k-')
+        f = PL.figure()
+        PL.plot(t, sig, 'r-')
+        PL.plot(t, events, 'k-')
         # now call the finding routine, using the exact template (!)
         (t_start, d_start) = clementsBekkers(sig, alpha, threshold=0.5, minpeakdist=15) 
-        MP.plot(t_start, d_start, 'bs')
-        MP.show()
+        PL.plot(t_start, d_start, 'bs')
+        PL.show()
 
     if options.findspikes: # test the findspikes routine
         dt = 0.1
@@ -1000,17 +1000,17 @@ if __name__ == "__main__":
         sp = findspikes(t, v, 0.0, dt = dt, mode = 'schmitt', interpolate = False)
         print('findSpikes')
         print('sp: ', sp)
-        f = MP.figure(1)
-        MP.plot(t, v, 'ro-')
+        f = PL.figure(1)
+        PL.plot(t, v, 'ro-')
         si = (numpy.floor(sp/dt))
         print('si: ', si)
         spk = []
         for k in si:
             spk.append(numpy.argmax(v[k-1:k+1])+k)
-        MP.plot(sp, v[spk], 'bs')
-        MP.ylim((0, 25))
-        MP.draw()
-        MP.show()
+        PL.plot(sp, v[spk], 'bs')
+        PL.ylim((0, 25))
+        PL.draw()
+        PL.show()
         
         exit()
         print("getSpikes")

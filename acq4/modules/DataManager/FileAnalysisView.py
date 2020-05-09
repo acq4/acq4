@@ -117,7 +117,7 @@ class FileAnalysisView(Qt.QWidget):
     def createDb(self, fileName):
         #fn = str(Qt.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, Qt.QFileDialog.DontConfirmOverwrite))
         fileName = str(fileName)
-        if fileName is '':
+        if fileName == '':
             return
             
         self.dbFile = fileName
