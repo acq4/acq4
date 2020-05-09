@@ -23,8 +23,8 @@ RUN conda update -n base -c defaults conda
 # python3-pyside2.qtopengl\
 # python3-pyside2.qtsql\
 
-COPY requirements/ /tmp
-RUN conda env create --file /tmp/pyside2.yml
+COPY tools/requirements/ /tmp
+RUN conda env create -n acq4 --file /tmp/pyside2.yml
 
 # Development extras
 RUN conda install -n acq4 -c conda-forge ipython ipdb
