@@ -645,7 +645,7 @@ class Laser(DAQGeneric, OptomechDevice):
         ### create a waveform that flashes the QSwitch(or other way of turning on) the number specified by reps
         waveform = np.zeros(nPts, dtype=np.byte)
         for i in range(reps):
-            waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
+            waveform[int((i+1)/10.*rate):int(((i+1)/10.+sTime+mTime)*rate)] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
         
         cmd = {
             'protocol': {'duration': dur},

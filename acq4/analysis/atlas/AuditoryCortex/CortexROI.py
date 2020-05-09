@@ -31,11 +31,11 @@ class CortexROI(ROI.PolyLineROI):
             
             ## set positions of 4 corners
             self.handles[0]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[0])))
-            self.handles[1]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[n/2-1])))
-            self.handles[2]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[n/2])))
+            self.handles[1]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[int(n/2)-1])))
+            self.handles[2]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[int(n/2)])))
             self.handles[3]['item'].setPos(self.mapFromParent(Qt.QPointF(*handles[-1])))
             
-            for i in range(1, n/2-1):
+            for i in range(1, int(n/2-1)):
                 #self.segmentClicked(self.segments[i-1], pos=self.mapFromParent(Qt.QPointF(*handles[i])))
                 self.segmentClicked(self.segments[i], pos=self.mapFromParent(Qt.QPointF(*handles[i])))
             for i, h in enumerate(self.handles):
@@ -86,7 +86,7 @@ class CortexROI(ROI.PolyLineROI):
         n = len(self.handles)
         quads = []
         positions = self.getHandlePositions()
-        for i in range(n/2-1):
+        for i in range(int(n/2-1)):
             quad=[]
             quad.append(positions[i]) 
             quad.append(positions[i+1])
