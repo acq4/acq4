@@ -29,6 +29,12 @@ LIBUMP_TIMEOUT      = -3,  # Timeout occured
 LIBUMP_INVALID_ARG  = -4,  # Illegal command argument
 LIBUMP_INVALID_DEV  = -5,  # Illegal Device Id
 LIBUMP_INVALID_RESP = -6,  # Illegal response received
+UMP_LIB_PATH = None
+
+
+def setLibraryPath(path):
+    global UMP_LIB_PATH
+    UMP_LIB_PATH = path
 
 
 class sockaddr_in(Structure):
@@ -72,8 +78,10 @@ class UMP(object):
     @classmethod
     def get_lib(cls):
         if cls._lib is None:
-
-            path = os.path.abspath(os.path.dirname(__file__))
+            if UMP_LIB_PATH is None:
+                path = os.path.abspath(os.path.dirname(__file__))
+            else:
+                path = UMP_LIB_PATH
             if sys.platform == 'win32':
                 os.environ['PATH'] += ";" + path
                 cls._lib = ctypes.windll.ump
