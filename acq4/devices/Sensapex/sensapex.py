@@ -27,8 +27,8 @@ class Sensapex(Stage):
         
         address = config.pop('address', None)
         group = config.pop('group', None)
-        if man.config.get("libraries", {}).get("sensapex", {}).get("driverPath", None) is not None:
-            setLibraryPath(man.config["libraries"]["sensapex"]["driverPath"])
+        if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
+            setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
         time.sleep(2)
         all_devs = ump.list_devices()
