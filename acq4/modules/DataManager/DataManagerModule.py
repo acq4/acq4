@@ -154,6 +154,9 @@ class DataManager(Module):
 
     def baseDirTextChanged(self):
         path = str(self.ui.baseDirText.text())
+        if path.strip() == '':
+            self.baseDirChanged()
+            return
         if not os.path.isdir(path):
             raise ValueError("Path %s does not exist" % path)
         self.setBaseDir(path)
