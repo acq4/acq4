@@ -78,14 +78,27 @@ class UMP(object):
     @classmethod
     def get_lib(cls):
         if cls._lib is None:
-            if UMP_LIB_PATH is None:
-                path = os.path.abspath(os.path.dirname(__file__))
-            else:
-                path = UMP_LIB_PATH
+            path = os.path.abspath(os.path.dirname(__file__))
             if sys.platform == 'win32':
+                try:
+                    cls._lib = ctypes.windll.ump
+                except OSError:
+                    try:
+                        cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
+                    except OSError:
+                        if UMP_LIB_PATH is not None:
+                            cls._lib = ctypes.windll.LoadLibrary(os.path.join(UMP_LIB_PATH, 'ump'))
+                        else:
+                            raise
                 cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
             else:
-                cls._lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
+                try:
+                    cls._lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
+                except OSError:
+                    if UMP_LIB_PATH is None:
+                        raise
+                    else:
+                        cls._lib = ctypes.windll.LoadLibrary(os.path.join(UMP_LIB_PATH, 'libump.so.1.0.0'))
 
             cls._lib.ump_get_version.restype = c_char_p
         return cls._lib
