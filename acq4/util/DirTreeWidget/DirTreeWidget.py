@@ -47,7 +47,7 @@ class DirTreeWidget(Qt.QTreeWidget):
         self.rebuildTree()
 
     def flushSignals(self):
-        for h in self.items.keys():
+        for h in list(self.items.keys()):
             h.flushSignals()
 
     def quit(self):
