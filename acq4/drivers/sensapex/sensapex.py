@@ -83,8 +83,7 @@ class UMP(object):
             else:
                 path = UMP_LIB_PATH
             if sys.platform == 'win32':
-                os.environ['PATH'] += ";" + path
-                cls._lib = ctypes.windll.ump
+                cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
             else:
                 cls._lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
 
