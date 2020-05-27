@@ -285,6 +285,7 @@ class UMP(object):
         if self.h is not None:
             raise TypeError("UMP is already open.")
         addr = ctypes.create_string_buffer(address)
+        self.lib.ump_open.restype = c_longlong
         ptr = self.lib.ump_open(addr, c_uint(self._timeout), c_int(group))
         if ptr <= 0:
             raise RuntimeError("Error connecting to UMP:", self.lib.ump_errorstr(ptr))
