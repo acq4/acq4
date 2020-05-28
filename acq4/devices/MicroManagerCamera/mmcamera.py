@@ -258,28 +258,27 @@ class MicroManagerCamera(Camera):
             p('start')
         
         needRestart = False
-        return (newVals, needRestart)
+        return newVals, needRestart
 
     def setParam(self, param, value, autoCorrect=True, autoRestart=True):
         return self.setParams({param: value}, autoCorrect=autoCorrect, autoRestart=autoRestart)
 
     def _setParam(self, param, value, autoCorrect=True):
-        if param == 'region':
-            value = (value[0], value[1], value[2], value[3])
-            self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*value)
-            return
-
         if param.startswith('region'):
-            rgn = list(self.mmc.getROI(self.camName))
-            if param[-1] == 'X':
-                rgn[0] = value
-            elif param[-1] == 'Y':
-                rgn[1] = value
-            elif param[-1] == 'W':
-                rgn[2] = value
-            elif param[-1] == 'H':
-                rgn[3] = value
+            if param == 'region':
+                rgn = (value[0], value[1], value[2], value[3])
+            else:
+                rgn = list(self.mmc.getROI(self.camName))
+                if param[-1] == 'X':
+                    rgn[0] = value
+                elif param[-1] == 'Y':
+                    rgn[1] = value
+                elif param[-1] == 'W':
+                    rgn[2] = value
+                elif param[-1] == 'H':
+                    rgn[3] = value
+            rgn[2] /= self.getParam('binningX')
+            rgn[3] /= self.getParam('binningY')
             self.mmc.setCameraDevice(self.camName)
             self.mmc.setROI(*rgn)
             return
