@@ -266,7 +266,7 @@ class MicroManagerCamera(Camera):
     def _setParam(self, param, value, autoCorrect=True):
         if param.startswith('region'):
             if param == 'region':
-                rgn = (value[0], value[1], value[2], value[3])
+                rgn = [value[0], value[1], value[2], value[3]]
             else:
                 rgn = list(self.mmc.getROI(self.camName))
                 if param[-1] == 'X':
