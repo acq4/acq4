@@ -68,7 +68,14 @@ def winDefs(verbose=False, architecture=None):
     return p
 
 
-class CParser():
+def set_default(obj):
+    """Used by json to serialize"""
+    if isinstance(obj, set):
+        return list(obj)
+    raise TypeError
+
+
+class CParser:
     """Class for parsing C code to extract variable, struct, enum, and function declarations as well as preprocessor macros. This is not a complete C parser; instead, it is meant to simplify the process
     of extracting definitions from header files in the absence of a complete build system. Many files 
     will require some amount of manual intervention to parse properly (see 'replace' and extra arguments 
@@ -312,7 +319,7 @@ class CParser():
         #for k in self.dataList:
             #cache[k] = getattr(self, k)
 
-        json.dump(cache, open(cacheFile, 'w'))
+        json.dump(cache, open(cacheFile, 'w'), default=set_default)
 
     def loadFile(self, file, replace=None):
         """Read a file, make replacements if requested. Called by __init__, should
