@@ -9,6 +9,7 @@ signatures from C files (preferrably header files).
 """
 from __future__ import print_function
 
+import json
 import os
 import re
 import sys
@@ -249,12 +250,16 @@ class CParser():
         
         try:
             ## read cache file
-            import pickle
+
             try:
-                cache = pickle.load(open(cacheFile, 'r'))
-            except (ValueError, TypeError):
-                cache = pickle.load(open(cacheFile, 'rb'))
-            
+                cache = json.load(open(cacheFile))
+            except ValueError:
+                import pickle
+                try:
+                    cache = pickle.load(open(cacheFile, 'r'))
+                except (ValueError, TypeError):
+                    cache = pickle.load(open(cacheFile, 'rb'))
+
             ## make sure __init__ options match (unless we can't parse the headers anyway)
             if checkValidity:
                 if cache['opts'] != self.initOpts:
@@ -306,8 +311,8 @@ class CParser():
         cache['version'] = self.cacheVersion
         #for k in self.dataList:
             #cache[k] = getattr(self, k)
-        import pickle
-        pickle.dump(cache, open(cacheFile, 'wb'))
+
+        json.dump(cache, open(cacheFile, 'w'))
 
     def loadFile(self, file, replace=None):
         """Read a file, make replacements if requested. Called by __init__, should
