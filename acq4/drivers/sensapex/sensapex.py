@@ -504,7 +504,7 @@ class UMP(object):
     def _update_moves(self):
         with self.lock:
             now = default_timer()
-            for dev,move in self._last_move.items():
+            for dev,move in list(self._last_move.items()):
                 if not self.is_busy(dev):
                     move_req = self._last_move.pop(dev)
 
