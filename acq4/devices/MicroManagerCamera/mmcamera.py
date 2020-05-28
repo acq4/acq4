@@ -187,7 +187,7 @@ class MicroManagerCamera(Camera):
             bin = '1' if self._binningMode == 'x' else '1x1'
             self.mmc.setProperty(self.camName, 'Binning', bin)
             self.mmc.clearROI()
-            rgn = self.mmc.getROI(self.camName)
+            rgn = self.getROI()
             self._sensorSize = rgn[2:]
 
             params.update({
@@ -205,6 +205,15 @@ class MicroManagerCamera(Camera):
                 params['binningY'] = [[1], False, True, []]
 
             self._allParams = params
+
+    def getROI(self):
+        cam_region = self.mmc.getROI(self.camName)
+        return [
+            cam_region[0],
+            cam_region[1],
+            cam_region[2] * self.getParam("binningX"),
+            cam_region[3] * self.getParam("binningY"),
+        ]
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
@@ -230,7 +239,7 @@ class MicroManagerCamera(Camera):
         regionKeys = ['regionX', 'regionY', 'regionW', 'regionH']
         nRegionKeys = len([k for k in regionKeys if k in params])
         if nRegionKeys > 1:
-            rgn = list(self.mmc.getROI(self.camName))
+            rgn = list(self.getROI())
             for k in regionKeys:
                 if k not in params:
                     continue
@@ -268,7 +277,7 @@ class MicroManagerCamera(Camera):
             if param == 'region':
                 rgn = [value[0], value[1], value[2], value[3]]
             else:
-                rgn = list(self.mmc.getROI(self.camName))
+                rgn = list(self.getROI())
                 if param[-1] == 'X':
                     rgn[0] = value
                 elif param[-1] == 'Y':
@@ -355,7 +364,7 @@ class MicroManagerCamera(Camera):
         if param == 'sensorSize':
             return self._sensorSize
         elif param.startswith('region'):
-            rgn = self.mmc.getROI(self.camName)
+            rgn = self.getROI()
             if param == 'region':
                 return rgn
             i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)
