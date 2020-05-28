@@ -277,8 +277,8 @@ class MicroManagerCamera(Camera):
                     rgn[2] = value
                 elif param[-1] == 'H':
                     rgn[3] = value
-            rgn[2] /= self.getParam('binningX')
-            rgn[3] /= self.getParam('binningY')
+            rgn[2] = int(rgn[2] / self.getParam('binningX'))
+            rgn[3] = int(rgn[3] / self.getParam('binningY'))
             self.mmc.setCameraDevice(self.camName)
             self.mmc.setROI(*rgn)
             return
