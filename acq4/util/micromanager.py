@@ -8,6 +8,7 @@ _mmc = None
 
 # default location to search for micromanager
 microManagerPath = 'C:\\Program Files\\Micro-Manager-1.4'
+microManagerPath = 'C:\\Program Files\\Micro-Manager-2.0gamma'
 
 
 def getMMCorePy(path=None):
@@ -16,22 +17,28 @@ def getMMCorePy(path=None):
     global _mmc
     if _mmc is None:
         try:
-            global MMCorePy
-            import MMCorePy
+            import pymmcore
+            _mmc = pymmcore.CMMCore()
+            _mmc.setDeviceAdapterSearchPaths([microManagerPath])
         except ImportError:
-            if sys.platform != 'win32':
-                raise
-            # MM does not install itself to standard path. User should take care of this,
-            # but we can make a guess..
-            if path is None:
-                path = microManagerPath
-            sys.path.append(path)
-            os.environ['PATH'] = os.environ['PATH'] + ';' + path
-            try:
-                import MMCorePy
-            finally:
-                sys.path.pop()
 
-        _mmc = MMCorePy.CMMCore()
+            try:
+                global MMCorePy
+                import MMCorePy
+            except ImportError:
+                if sys.platform != 'win32':
+                    raise
+                # MM does not install itself to standard path. User should take care of this,
+                # but we can make a guess..
+                if path is None:
+                    path = microManagerPath
+                sys.path.append(path)
+                os.environ['PATH'] = os.environ['PATH'] + ';' + path
+                try:
+                    import MMCorePy
+                finally:
+                    sys.path.pop()
+
+            _mmc = MMCorePy.CMMCore()
 
     return _mmc

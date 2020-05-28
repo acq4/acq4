@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 import time
+
 import numpy as np
-from acq4.util import Qt
-from ..Stage import Stage, MoveFuture, StageInterface, CalibrationWindow
-from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-from pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
 import pyqtgraph as pg
+from pyqtgraph import ptime, Transform3D, solve3DTransform
+
+from acq4.drivers.sensapex import SensapexDevice, UMP, setLibraryPath
+from acq4.util import Qt
+from ..Stage import Stage, MoveFuture, CalibrationWindow
 
 
 class Sensapex(Stage):
@@ -26,6 +27,8 @@ class Sensapex(Stage):
         
         address = config.pop('address', None)
         group = config.pop('group', None)
+        if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
+            setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
         time.sleep(2)
         all_devs = ump.list_devices()

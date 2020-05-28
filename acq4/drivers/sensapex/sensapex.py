@@ -1,20 +1,14 @@
 from __future__ import print_function
 import os, sys, ctypes, atexit, time, threading, platform
 import numpy as np
-from ctypes import (c_int, c_uint, c_long, c_ulong, c_short, c_ushort, 
-                    c_byte, c_ubyte, c_void_p, c_char, c_char_p, c_longlong,
+from ctypes import (c_int, c_uint, c_ulong, c_short, c_ushort,
+                    c_byte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure)
 from timeit import default_timer
 from six.moves import map
 from six.moves import range
 from six.moves import zip
 
-path = os.path.abspath(os.path.dirname(__file__))
-if sys.platform == 'win32':
-    os.environ['PATH'] += ";" + path
-    UMP_LIB = ctypes.windll.ump
-else:
-    UMP_LIB = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
 
 SOCKET = c_int
 if sys.platform == 'win32' and platform.architecture()[0] == '64bit':
@@ -35,6 +29,12 @@ LIBUMP_TIMEOUT      = -3,  # Timeout occured
 LIBUMP_INVALID_ARG  = -4,  # Illegal command argument
 LIBUMP_INVALID_DEV  = -5,  # Illegal Device Id
 LIBUMP_INVALID_RESP = -6,  # Illegal response received
+UMP_LIB_PATH = None
+
+
+def setLibraryPath(path):
+    global UMP_LIB_PATH
+    UMP_LIB_PATH = path
 
 
 class sockaddr_in(Structure):
@@ -58,65 +58,6 @@ class ump_positions(Structure):
         ("updated", c_ulong),
     ]
 
-            
-UMP_LIB.ump_get_version.restype = c_char_p
-UMP_VERSION = UMP_LIB.ump_get_version().decode('ascii')
-
-if UMP_VERSION >= "v0.600":
-    class ump_state(Structure):
-        _fields_ = [
-            ("last_received_time", c_ulong),
-            ("socket", SOCKET),
-            ("own_id", c_int),
-            ("message_id", c_int),
-            ("last_device_sent", c_int),
-            ("last_device_received", c_int),
-            ("retransmit_count", c_int),
-            ("refresh_time_limit", c_int),
-            ("last_error", c_int),
-            ("last_os_errno", c_int),
-            ("timeout", c_int),
-            ("udp_port", c_int),
-            ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
-            ("drive_status", c_int * LIBUMP_MAX_MANIPULATORS),
-            ("drive_status_id", c_ushort * LIBUMP_MAX_MANIPULATORS),
-            ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
-            ("cu_address", sockaddr_in),
-            ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
-            ("laddr", sockaddr_in),
-            ("raddr", sockaddr_in),
-            ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
-            ("verbose", c_int),
-            ("log_func_ptr", log_func_ptr),
-            ("log_print_arg", c_void_p),
-        ]
-else:
-    class ump_state(Structure):
-        _fields_ = [
-            ("last_received_time", c_ulong),
-            ("socket", SOCKET),
-            ("own_id", c_int),
-            ("message_id", c_int),
-            ("last_device_sent", c_int),
-            ("last_device_received", c_int),
-            ("retransmit_count", c_int),
-            ("refresh_time_limit", c_int),
-            ("last_error", c_int),
-            ("last_os_errno", c_int),
-            ("timeout", c_int),
-            ("udp_port", c_int),
-            ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
-            ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
-            ("cu_address", sockaddr_in),
-            ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
-            ("laddr", sockaddr_in),
-            ("raddr", sockaddr_in),
-            ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
-            ("verbose", c_int),
-            ("log_func_ptr", log_func_ptr),
-            ("log_print_arg", c_void_p),
-        ]
-
 
 class UMPError(Exception):
     def __init__(self, msg, errno, oserrno):
@@ -130,8 +71,100 @@ class UMP(object):
     
     All calls except get_ump are thread-safe.
     """
+    _ump_state = None
     _single = None
-    
+    _lib = None
+
+    @classmethod
+    def get_lib(cls):
+        if cls._lib is None:
+            path = os.path.abspath(os.path.dirname(__file__))
+            if sys.platform == 'win32':
+                try:
+                    cls._lib = ctypes.windll.ump
+                except OSError:
+                    try:
+                        cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
+                    except OSError:
+                        if UMP_LIB_PATH is not None:
+                            cls._lib = ctypes.windll.LoadLibrary(os.path.join(UMP_LIB_PATH, 'ump'))
+                        else:
+                            raise
+                cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
+            else:
+                try:
+                    cls._lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
+                except OSError:
+                    if UMP_LIB_PATH is None:
+                        raise
+                    else:
+                        cls._lib = ctypes.windll.LoadLibrary(os.path.join(UMP_LIB_PATH, 'libump.so.1.0.0'))
+
+            cls._lib.ump_get_version.restype = c_char_p
+        return cls._lib
+
+    @classmethod
+    def get_ump_state_class(cls):
+        if cls._ump_state is None:
+            version = cls.get_lib().ump_get_version().decode('ascii')
+
+            if version >= "v0.600":
+                class ump_state(Structure):
+                    _fields_ = [
+                        ("last_received_time", c_ulong),
+                        ("socket", SOCKET),
+                        ("own_id", c_int),
+                        ("message_id", c_int),
+                        ("last_device_sent", c_int),
+                        ("last_device_received", c_int),
+                        ("retransmit_count", c_int),
+                        ("refresh_time_limit", c_int),
+                        ("last_error", c_int),
+                        ("last_os_errno", c_int),
+                        ("timeout", c_int),
+                        ("udp_port", c_int),
+                        ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
+                        ("drive_status", c_int * LIBUMP_MAX_MANIPULATORS),
+                        ("drive_status_id", c_ushort * LIBUMP_MAX_MANIPULATORS),
+                        ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
+                        ("cu_address", sockaddr_in),
+                        ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
+                        ("laddr", sockaddr_in),
+                        ("raddr", sockaddr_in),
+                        ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
+                        ("verbose", c_int),
+                        ("log_func_ptr", log_func_ptr),
+                        ("log_print_arg", c_void_p),
+                    ]
+            else:
+                class ump_state(Structure):
+                    _fields_ = [
+                        ("last_received_time", c_ulong),
+                        ("socket", SOCKET),
+                        ("own_id", c_int),
+                        ("message_id", c_int),
+                        ("last_device_sent", c_int),
+                        ("last_device_received", c_int),
+                        ("retransmit_count", c_int),
+                        ("refresh_time_limit", c_int),
+                        ("last_error", c_int),
+                        ("last_os_errno", c_int),
+                        ("timeout", c_int),
+                        ("udp_port", c_int),
+                        ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
+                        ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
+                        ("cu_address", sockaddr_in),
+                        ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
+                        ("laddr", sockaddr_in),
+                        ("raddr", sockaddr_in),
+                        ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
+                        ("verbose", c_int),
+                        ("log_func_ptr", log_func_ptr),
+                        ("log_print_arg", c_void_p),
+                    ]
+            cls._ump_state = ump_state
+        return cls._ump_state
+
     @classmethod
     def get_ump(cls, address=None, group=None, start_poller=True):
         """Return a singleton UMP instance.
@@ -157,7 +190,7 @@ class UMP(object):
 
         self.max_acceleration = {}
         
-        self.lib = UMP_LIB
+        self.lib = self.get_lib()
         self.lib.ump_errorstr.restype = c_char_p
 
         min_version = (0, 812)
@@ -252,10 +285,11 @@ class UMP(object):
         if self.h is not None:
             raise TypeError("UMP is already open.")
         addr = ctypes.create_string_buffer(address)
+        self.lib.ump_open.restype = c_longlong
         ptr = self.lib.ump_open(addr, c_uint(self._timeout), c_int(group))
         if ptr <= 0:
             raise RuntimeError("Error connecting to UMP:", self.lib.ump_errorstr(ptr))
-        self.h = pointer(ump_state.from_address(ptr))
+        self.h = pointer(self.get_ump_state_class().from_address(ptr))
         atexit.register(self.close)
         
     def close(self):
@@ -470,7 +504,7 @@ class UMP(object):
     def _update_moves(self):
         with self.lock:
             now = default_timer()
-            for dev,move in self._last_move.items():
+            for dev,move in list(self._last_move.items()):
                 if not self.is_busy(dev):
                     move_req = self._last_move.pop(dev)
 
