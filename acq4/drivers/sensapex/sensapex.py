@@ -66,6 +66,12 @@ class UMPError(Exception):
         self.oserrno = oserrno
 
 
+_timer_offset = time.time() - default_timer()
+def timer():
+    global _timer_offset
+    return _timer_offset + default_timer()
+
+
 class UMP(object):
     """Wrapper for the Sensapex uMp API.
     
@@ -503,7 +509,6 @@ class UMP(object):
 
     def _update_moves(self):
         with self.lock:
-            now = default_timer()
             for dev,move in list(self._last_move.items()):
                 if not self.is_busy(dev):
                     move_req = self._last_move.pop(dev)
@@ -523,7 +528,7 @@ class MoveRequest(object):
     """
     def __init__(self, dev, start_pos, target_pos, speed, duration, kwargs):
         self.dev = dev
-        self.start_time = default_timer()
+        self.start_time = timer()
         self.estimated_duration = duration
         self.start_pos = start_pos
         self.target_pos = target_pos
