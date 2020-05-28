@@ -9,6 +9,7 @@ signatures from C files (preferrably header files).
 """
 from __future__ import print_function
 
+import json
 import os
 import re
 import sys
@@ -67,7 +68,14 @@ def winDefs(verbose=False, architecture=None):
     return p
 
 
-class CParser():
+def set_default(obj):
+    """Used by json to serialize"""
+    if isinstance(obj, set):
+        return list(obj)
+    raise TypeError
+
+
+class CParser:
     """Class for parsing C code to extract variable, struct, enum, and function declarations as well as preprocessor macros. This is not a complete C parser; instead, it is meant to simplify the process
     of extracting definitions from header files in the absence of a complete build system. Many files 
     will require some amount of manual intervention to parse properly (see 'replace' and extra arguments 
@@ -249,12 +257,16 @@ class CParser():
         
         try:
             ## read cache file
-            import pickle
+
             try:
-                cache = pickle.load(open(cacheFile, 'r'))
-            except (ValueError, TypeError):
-                cache = pickle.load(open(cacheFile, 'rb'))
-            
+                cache = json.load(open(cacheFile))
+            except ValueError:
+                import pickle
+                try:
+                    cache = pickle.load(open(cacheFile, 'r'))
+                except (ValueError, TypeError):
+                    cache = pickle.load(open(cacheFile, 'rb'))
+
             ## make sure __init__ options match (unless we can't parse the headers anyway)
             if checkValidity:
                 if cache['opts'] != self.initOpts:
@@ -306,8 +318,8 @@ class CParser():
         cache['version'] = self.cacheVersion
         #for k in self.dataList:
             #cache[k] = getattr(self, k)
-        import pickle
-        pickle.dump(cache, open(cacheFile, 'wb'))
+
+        json.dump(cache, open(cacheFile, 'w'), default=set_default)
 
     def loadFile(self, file, replace=None):
         """Read a file, make replacements if requested. Called by __init__, should
