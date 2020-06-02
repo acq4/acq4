@@ -28,7 +28,6 @@ from scipy.signal import deconvolve
 from six.moves import range
 
 from pyqtgraph import MetaArray
-from pyqtgraph.python2_3 import cmp
 from acq4.util import Qt
 
 try:
@@ -406,21 +405,6 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     fit[1] *= yScale
     return tuple(fit[:4]) + (min(*fit[4:]), max(*fit[4:]))
 
-
-
-
-STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
-def strncmp(a, b):
-    """Compare strings based on the numerical values they represent (for sorting). Each string may have multiple numbers."""
-    global STRNCMP_REGEX
-    am = STRNCMP_REGEX.findall(a)
-    bm = STRNCMP_REGEX.findall(b)
-    if len(am) > 0 and len(bm) > 0:
-        for i in range(0, len(am)):
-            c = cmp(float(am[i][0]), float(bm[i][0]))
-            if c != 0:
-                return c
-    return cmp(a, b)
 
 def downsample(data, n, axis=0, xvals='subsample'):
     """Downsample by averaging points together across axis.
@@ -1570,7 +1554,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
             hits.append((onTimes[i], offTimes[i]))
     
     ## sort hits  ## NOTE: this can be sped up since we already know how to interleave the events..
-    hits.sort(lambda a,b: cmp(a[0], b[0]))
+    hits.sort(key=lambda a: a[0])
     
     nEvents = len(hits)
     if xvals is None:

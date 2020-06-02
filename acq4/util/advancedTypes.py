@@ -34,7 +34,7 @@ class ProtectedDict(dict):
         self._data_ = data
 
     ## List of methods to directly wrap from _data_
-    wrapMethods = ['_cmp_', '__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__',
+    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__',
                    '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'has_key', 'iterkeys',
                    'keys', ]
 
