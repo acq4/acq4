@@ -4,7 +4,6 @@ from __future__ import print_function
 import weakref
 
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
-from pyqtgraph.python2_3 import cmp
 from acq4.util.debug import printExc
 from six.moves import map
 
@@ -506,7 +505,7 @@ class DirHandle(FileHandle):
                             msg['subdir'] = ''
                         msg['subdir'] = os.path.join(dh.shortName(), msg['subdir'])
                     log  = log + subLog
-                log.sort(lambda a,b: cmp(a['__timestamp__'], b['__timestamp__']))
+                log.sort(key=lambda a: a['__timestamp__'])
             
             return log
         
