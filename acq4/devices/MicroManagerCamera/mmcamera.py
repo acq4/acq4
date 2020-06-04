@@ -208,12 +208,34 @@ class MicroManagerCamera(Camera):
 
     def getROI(self):
         cam_region = self.mmc.getROI(self.camName)
+        if self._needsBinningROIAdjustment():
+            xAdjustment = self.getParam("binningX")
+            yAdjustment = self.getParam("binningY")
+        else:
+            xAdjustment = 1
+            yAdjustment = 1
         return [
             cam_region[0],
             cam_region[1],
-            cam_region[2] * self.getParam("binningX"),
-            cam_region[3] * self.getParam("binningY"),
+            cam_region[2] * xAdjustment,
+            cam_region[3] * yAdjustment,
         ]
+
+    def setROI(self, rgn):
+        if self._needsBinningROIAdjustment():
+            rgn[2] = int(rgn[2] / self.getParam('binningX'))
+            rgn[3] = int(rgn[3] / self.getParam('binningY'))
+        self.mmc.setROI(*rgn)
+
+    def _needsBinningROIAdjustment(self):
+        # Which of these tell us anything useful?
+        print("micromanager.USES_MMCOREPY: {}".format(micromanager.USES_MMCOREPY))
+        print("micromanager.USES_PYMMCORE: {}".format(micromanager.USES_PYMMCORE))
+        print("micromanager.microManagerPath: {}".format(micromanager.microManagerPath))
+        print("self.mmc.getVersionInfo(): {}".format(self.mmc.getVersionInfo()))
+        print("self.mmc.getAPIVersionInfo(): {}".format(self.mmc.getAPIVersionInfo()))
+
+        return True
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
@@ -286,10 +308,8 @@ class MicroManagerCamera(Camera):
                     rgn[2] = value
                 elif param[-1] == 'H':
                     rgn[3] = value
-            rgn[2] = int(rgn[2] / self.getParam('binningX'))
-            rgn[3] = int(rgn[3] / self.getParam('binningY'))
             self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*rgn)
+            self.setROI(rgn)
             return
 
         # translate requested parameter into a list of sub-parameters to set
