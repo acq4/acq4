@@ -7,29 +7,23 @@ from acq4.util.Mutex import Mutex
 _mmc = None
 
 # default location to search for micromanager
-microManagerPath = 'C:\\Program Files\\Micro-Manager-1.4'
+# microManagerPath = 'C:\\Program Files\\Micro-Manager-1.4'
 microManagerPath = 'C:\\Program Files\\Micro-Manager-2.0gamma'
-
-
-USES_PYMMCORE = False
-USES_MMCOREPY = False
 
 
 def getMMCorePy(path=None):
     """Return a singleton MMCorePy instance that is shared by all devices for accessing micromanager.
     """
-    global _mmc, USES_MMCOREPY, USES_PYMMCORE
+    global _mmc
     if _mmc is None:
         try:
             import pymmcore
-            USES_PYMMCORE = True
             _mmc = pymmcore.CMMCore()
             _mmc.setDeviceAdapterSearchPaths([microManagerPath])
         except ImportError:
 
             try:
                 import MMCorePy
-                USES_MMCOREPY = True
             except ImportError:
                 if sys.platform != 'win32':
                     raise
@@ -41,7 +35,6 @@ def getMMCorePy(path=None):
                 os.environ['PATH'] = os.environ['PATH'] + ';' + path
                 try:
                     import MMCorePy
-                    USES_MMCOREPY = True
                 finally:
                     sys.path.pop()
 

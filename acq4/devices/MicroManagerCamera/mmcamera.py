@@ -3,6 +3,7 @@ from __future__ import division, with_statement, print_function
 
 import time
 from collections import OrderedDict
+from functools import cached_property
 
 import numpy as np
 import six
@@ -208,7 +209,7 @@ class MicroManagerCamera(Camera):
 
     def getROI(self):
         cam_region = self.mmc.getROI(self.camName)
-        if self._needsBinningROIAdjustment():
+        if self._useBinnedPixelsForROI:
             xAdjustment = self.getParam("binningX")
             yAdjustment = self.getParam("binningY")
         else:
@@ -222,20 +223,19 @@ class MicroManagerCamera(Camera):
         ]
 
     def setROI(self, rgn):
-        if self._needsBinningROIAdjustment():
+        if self._useBinnedPixelsForROI:
             rgn[2] = int(rgn[2] / self.getParam('binningX'))
             rgn[3] = int(rgn[3] / self.getParam('binningY'))
         self.mmc.setROI(*rgn)
 
-    def _needsBinningROIAdjustment(self):
-        # Which of these tell us anything useful?
-        print("micromanager.USES_MMCOREPY: {}".format(micromanager.USES_MMCOREPY))
-        print("micromanager.USES_PYMMCORE: {}".format(micromanager.USES_PYMMCORE))
-        print("micromanager.microManagerPath: {}".format(micromanager.microManagerPath))
-        print("self.mmc.getVersionInfo(): {}".format(self.mmc.getVersionInfo()))
-        print("self.mmc.getAPIVersionInfo(): {}".format(self.mmc.getAPIVersionInfo()))
-
-        return True
+    @cached_property
+    def _useBinnedPixelsForROI(self):
+        # Adjusting ROI to be in binned-pixel units is necessary in all versions of
+        # MMCore 7.0.2 and above.
+        version = self.mmc.getVersionInfo()  # e.g. "MMCore version 7.0.2"
+        ver_num = version.split(" ")[-1].split(".")
+        ver_tup = tuple([int(d) for d in ver_num])
+        return ver_tup >= (7, 0, 2)
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
