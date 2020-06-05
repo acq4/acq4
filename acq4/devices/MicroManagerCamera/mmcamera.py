@@ -6,13 +6,13 @@ from collections import OrderedDict
 
 import numpy as np
 import six
+from pyqtgraph.debug import Profiler
+from six.moves import range
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
-from pyqtgraph.debug import Profiler
 from acq4.util import micromanager
 from acq4.util.Mutex import Mutex
-from six.moves import range
 
 try:
     from functools import lru_cache
@@ -41,6 +41,7 @@ class MicroManagerCamera(Camera):
     * mmAdapterName
     * mmDeviceName
     """
+
     def __init__(self, manager, config, name):
         self.camName = str(name)  # we will use this name as the handle to the MM camera
         mmpath = config.get('path')
@@ -55,7 +56,7 @@ class MicroManagerCamera(Camera):
         self.acqBuffer = None
         self.frameId = 0
         self.lastFrameTime = None
-    
+
     def setupCamera(self):
         # sanity check for MM adapter and device name
         adapterName = self._config['mmAdapterName']
@@ -65,17 +66,18 @@ class MicroManagerCamera(Camera):
         deviceName = self._config['mmDeviceName']
         allDevices = self.mmc.getAvailableDevices(adapterName)
         if deviceName not in allDevices:
-            raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (deviceName, adapterName, allDevices))
+            raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (
+                deviceName, adapterName, allDevices))
 
         self.mmc.loadDevice(self.camName, adapterName, deviceName)
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
-        
+
     def startCamera(self):
         with self.camLock:
             self.mmc.startContinuousSequenceAcquisition(0)
-            
+
     def stopCamera(self):
         with self.camLock:
             self.mmc.stopSequenceAcquisition()
@@ -104,7 +106,7 @@ class MicroManagerCamera(Camera):
 
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
-        
+
         with self.camLock:
             nFrames = self.mmc.getRemainingImageCount()
             if nFrames == 0:
@@ -113,22 +115,22 @@ class MicroManagerCamera(Camera):
         now = ptime.time()
         if self.lastFrameTime is None:
             self.lastFrameTime = now
-        
+
         dt = (now - self.lastFrameTime) / nFrames
         frames = []
         with self.camLock:
             for i in range(nFrames):
                 frame = {}
-                frame['time'] = self.lastFrameTime + (dt * (i+1))
+                frame['time'] = self.lastFrameTime + (dt * (i + 1))
                 frame['id'] = self.frameId
                 frame['data'] = self.mmc.popNextImage().T
                 frames.append(frame)
                 self.frameId += 1
-                
+
         self.lastFrame = frame
         self.lastFrameTime = now
         return frames
-        
+
     def quit(self):
         self.mmc.stopSequenceAcquisition()
         self.mmc.unloadDevice(self.camName)
@@ -155,7 +157,7 @@ class MicroManagerCamera(Camera):
                 else:
                     vals = list(vals)
                 readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
-                
+
                 # translate standard properties to the names / formats that we expect
                 if prop == 'Exposure':
                     prop = 'exposure'
@@ -175,7 +177,7 @@ class MicroManagerCamera(Camera):
                 elif prop in triggerModes:
                     self._triggerProp = prop
                     modes = triggerModes[prop]
-                    self._triggerModes = (modes, {v:k for k,v in modes.items()})
+                    self._triggerModes = (modes, {v: k for k, v in modes.items()})
                     prop = 'triggerMode'
                     vals = [modes[v] for v in vals]
 
@@ -196,8 +198,8 @@ class MicroManagerCamera(Camera):
             self._sensorSize = rgn[2:]
 
             params.update({
-                'regionX': [(0, rgn[2]-1, 1), True, True, []],
-                'regionY': [(0, rgn[3]-1, 1), True, True, []],
+                'regionX': [(0, rgn[2] - 1, 1), True, True, []],
+                'regionY': [(0, rgn[3] - 1, 1), True, True, []],
                 'regionW': [(1, rgn[2], 1), True, True, []],
                 'regionH': [(1, rgn[3], 1), True, True, []],
             })
@@ -261,7 +263,7 @@ class MicroManagerCamera(Camera):
             self.stop()
             p('stop')
         else:
-            restart = False        
+            restart = False
 
         # Join region params into one request (_setParam can be very slow)
         regionKeys = ['regionX', 'regionY', 'regionW', 'regionH']
@@ -271,13 +273,13 @@ class MicroManagerCamera(Camera):
             for k in regionKeys:
                 if k not in params:
                     continue
-                i = {'X':0, 'Y':1, 'W':2, 'H':3}[k[-1]]
+                i = {'X': 0, 'Y': 1, 'W': 2, 'H': 3}[k[-1]]
                 rgn[i] = params[k]
                 del params[k]
             params['region'] = rgn
 
         newVals = {}
-        for k,v in params.items():
+        for k, v in params.items():
             self._setParam(k, v, autoCorrect=autoCorrect)
             p('setParam %r' % k)
             if k == 'binning':
@@ -293,7 +295,7 @@ class MicroManagerCamera(Camera):
         if restart:
             self.start()
             p('start')
-        
+
         needRestart = False
         return newVals, needRestart
 
@@ -398,7 +400,7 @@ class MicroManagerCamera(Camera):
         elif param.startswith('binning') and self._binningMode is None:
             # camera does not support binning; fake it here
             if param == 'binning':
-                return (1,1)
+                return 1, 1
             elif param in ('binningX', 'binningY'):
                 return 1
         elif param == 'triggerMode' and self._triggerProp is None:
@@ -446,4 +448,3 @@ class MicroManagerCamera(Camera):
             val = self._triggerModes[0][val]
 
         return val
-
