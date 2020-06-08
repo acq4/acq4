@@ -69,6 +69,7 @@ def getMMCorePy(path=path, mm_config_file = micromanager_settings['config_file']
     if _mmc.getSystemState().size()<=12:  # hack to see if a real configuration is already loaded...
 
         if mm_config_file is not None:
+            print("mm_config_file "+mm_config_file)
             try:
                 _mmc.loadSystemConfiguration(mm_config_file)
                 _mmc.getVersionInfo()
@@ -85,12 +86,9 @@ def getMMCorePy(path=path, mm_config_file = micromanager_settings['config_file']
 
 def unloadMMCore():
     print("attempting to unload Micro Manager Devices ... ")
-    print(globals().keys())
+
     if "_mmc" in globals().keys():
         global _mmc
-        if _mmc is None:
-            print("global _mmc is None ")
-            return None
         print("Unloading All Micro Manager Devices")
         mmc = getMMCorePy()
         return mmc.unloadAllDevices()
