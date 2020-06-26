@@ -208,7 +208,7 @@ class MicroManagerCamera(Camera):
             self._allParams = params
 
     def getROI(self):
-        cam_region = self.mmc.getROI(self.camName)
+        camRegion = self.mmc.getROI(self.camName)
         if self._useBinnedPixelsForROI:
             xAdjustment = self.getParam("binningX")
             yAdjustment = self.getParam("binningY")
@@ -216,10 +216,10 @@ class MicroManagerCamera(Camera):
             xAdjustment = 1
             yAdjustment = 1
         return [
-            cam_region[0] * xAdjustment,
-            cam_region[1] * yAdjustment,
-            cam_region[2] * xAdjustment,
-            cam_region[3] * yAdjustment,
+            camRegion[0] * xAdjustment,
+            camRegion[1] * yAdjustment,
+            camRegion[2] * xAdjustment,
+            camRegion[3] * yAdjustment,
         ]
 
     def setROI(self, rgn):
