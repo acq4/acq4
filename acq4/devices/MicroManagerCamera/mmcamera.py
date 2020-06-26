@@ -3,6 +3,7 @@ from __future__ import division, with_statement, print_function
 
 import time
 from collections import OrderedDict
+from functools import cached_property
 
 import numpy as np
 import six
@@ -187,7 +188,7 @@ class MicroManagerCamera(Camera):
             bin = '1' if self._binningMode == 'x' else '1x1'
             self.mmc.setProperty(self.camName, 'Binning', bin)
             self.mmc.clearROI()
-            rgn = self.mmc.getROI(self.camName)
+            rgn = self.getROI()
             self._sensorSize = rgn[2:]
 
             params.update({
@@ -205,6 +206,38 @@ class MicroManagerCamera(Camera):
                 params['binningY'] = [[1], False, True, []]
 
             self._allParams = params
+
+    def getROI(self):
+        camRegion = self.mmc.getROI(self.camName)
+        if self._useBinnedPixelsForROI:
+            xAdjustment = self.getParam("binningX")
+            yAdjustment = self.getParam("binningY")
+        else:
+            xAdjustment = 1
+            yAdjustment = 1
+        return [
+            camRegion[0] * xAdjustment,
+            camRegion[1] * yAdjustment,
+            camRegion[2] * xAdjustment,
+            camRegion[3] * yAdjustment,
+        ]
+
+    def setROI(self, rgn):
+        if self._useBinnedPixelsForROI:
+            rgn[0] = int(rgn[0] / self.getParam('binningX'))
+            rgn[1] = int(rgn[1] / self.getParam('binningY'))
+            rgn[2] = int(rgn[2] / self.getParam('binningX'))
+            rgn[3] = int(rgn[3] / self.getParam('binningY'))
+        self.mmc.setROI(*rgn)
+
+    @cached_property
+    def _useBinnedPixelsForROI(self):
+        # Adjusting ROI to be in binned-pixel units is necessary in all versions of
+        # MMCore 7.0.2 and above.
+        version = self.mmc.getVersionInfo()  # e.g. "MMCore version 7.0.2"
+        ver_num = version.split(" ")[-1].split(".")
+        ver_tup = tuple([int(d) for d in ver_num])
+        return ver_tup >= (7, 0, 2)
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
@@ -230,7 +263,7 @@ class MicroManagerCamera(Camera):
         regionKeys = ['regionX', 'regionY', 'regionW', 'regionH']
         nRegionKeys = len([k for k in regionKeys if k in params])
         if nRegionKeys > 1:
-            rgn = list(self.mmc.getROI(self.camName))
+            rgn = list(self.getROI())
             for k in regionKeys:
                 if k not in params:
                     continue
@@ -258,30 +291,27 @@ class MicroManagerCamera(Camera):
             p('start')
         
         needRestart = False
-        return (newVals, needRestart)
+        return newVals, needRestart
 
     def setParam(self, param, value, autoCorrect=True, autoRestart=True):
         return self.setParams({param: value}, autoCorrect=autoCorrect, autoRestart=autoRestart)
 
     def _setParam(self, param, value, autoCorrect=True):
-        if param == 'region':
-            value = (value[0], value[1], value[2], value[3])
-            self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*value)
-            return
-
         if param.startswith('region'):
-            rgn = list(self.mmc.getROI(self.camName))
-            if param[-1] == 'X':
-                rgn[0] = value
-            elif param[-1] == 'Y':
-                rgn[1] = value
-            elif param[-1] == 'W':
-                rgn[2] = value
-            elif param[-1] == 'H':
-                rgn[3] = value
+            if param == 'region':
+                rgn = [value[0], value[1], value[2], value[3]]
+            else:
+                rgn = list(self.getROI())
+                if param[-1] == 'X':
+                    rgn[0] = value
+                elif param[-1] == 'Y':
+                    rgn[1] = value
+                elif param[-1] == 'W':
+                    rgn[2] = value
+                elif param[-1] == 'H':
+                    rgn[3] = value
             self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*rgn)
+            self.setROI(rgn)
             return
 
         # translate requested parameter into a list of sub-parameters to set
@@ -356,7 +386,7 @@ class MicroManagerCamera(Camera):
         if param == 'sensorSize':
             return self._sensorSize
         elif param.startswith('region'):
-            rgn = self.mmc.getROI(self.camName)
+            rgn = self.getROI()
             if param == 'region':
                 return rgn
             i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)

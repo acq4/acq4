@@ -7,7 +7,7 @@ from acq4.util.Mutex import Mutex
 _mmc = None
 
 # default location to search for micromanager
-microManagerPath = 'C:\\Program Files\\Micro-Manager-1.4'
+# microManagerPath = 'C:\\Program Files\\Micro-Manager-1.4'
 microManagerPath = 'C:\\Program Files\\Micro-Manager-2.0gamma'
 
 
@@ -23,7 +23,6 @@ def getMMCorePy(path=None):
         except ImportError:
 
             try:
-                global MMCorePy
                 import MMCorePy
             except ImportError:
                 if sys.platform != 'win32':
