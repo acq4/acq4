@@ -14,27 +14,27 @@ SOCKET = c_int
 if sys.platform == 'win32' and platform.architecture()[0] == '64bit':
     SOCKET = c_longlong
 
-LIBUMP_MAX_MANIPULATORS = 254
-LIBUMP_MAX_LOG_LINE_LENGTH = 256
-LIBUMP_DEF_TIMEOUT = 20
-LIBUMP_DEF_BCAST_ADDRESS = b"169.254.255.255"
-LIBUMP_DEF_GROUP = 0
-LIBUMP_MAX_MESSAGE_SIZE = 1502
+LIBUM_MAX_MANIPULATORS = 254
+LIBUM_MAX_LOG_LINE_LENGTH = 256
+LIBUM_DEF_TIMEOUT = 20
+LIBUM_DEF_BCAST_ADDRESS = b"169.254.255.255"
+LIBUM_DEF_GROUP = 0
+LIBUM_MAX_MESSAGE_SIZE = 1502
 
 # error codes
-LIBUMP_NO_ERROR     =  0,  # No error
-LIBUMP_OS_ERROR     = -1,  # Operating System level error
-LIBUMP_NOT_OPEN     = -2,  # Communication socket not open
-LIBUMP_TIMEOUT      = -3,  # Timeout occured
-LIBUMP_INVALID_ARG  = -4,  # Illegal command argument
-LIBUMP_INVALID_DEV  = -5,  # Illegal Device Id
-LIBUMP_INVALID_RESP = -6,  # Illegal response received
-UMP_LIB_PATH = None
+LIBUM_NO_ERROR     =  0,  # No error
+LIBUM_OS_ERROR     = -1,  # Operating System level error
+LIBUM_NOT_OPEN     = -2,  # Communication socket not open
+LIBUM_TIMEOUT      = -3,  # Timeout occured
+LIBUM_INVALID_ARG  = -4,  # Illegal command argument
+LIBUM_INVALID_DEV  = -5,  # Illegal Device Id
+LIBUM_INVALID_RESP = -6,  # Illegal response received
+UM_LIB_PATH = None
 
 
 def setLibraryPath(path):
-    global UMP_LIB_PATH
-    UMP_LIB_PATH = path
+    global UM_LIB_PATH
+    UM_LIB_PATH = path
 
 
 class sockaddr_in(Structure):
@@ -49,7 +49,7 @@ class sockaddr_in(Structure):
 log_func_ptr = ctypes.CFUNCTYPE(c_void_p, c_int, c_void_p, POINTER(c_char), POINTER(c_char))
 
 
-class ump_positions(Structure):
+class um_positions(Structure):
     _fields_ = [
         ("x", c_int),
         ("y", c_int),
@@ -59,7 +59,65 @@ class ump_positions(Structure):
     ]
 
 
-class UMPError(Exception):
+# used in v0.600 and later
+class um_state_v0_600(Structure):
+    _fields_ = [
+        ("last_received_time", c_ulong),
+        ("socket", SOCKET),
+        ("own_id", c_int),
+        ("message_id", c_int),
+        ("last_device_sent", c_int),
+        ("last_device_received", c_int),
+        ("retransmit_count", c_int),
+        ("refresh_time_limit", c_int),
+        ("last_error", c_int),
+        ("last_os_errno", c_int),
+        ("timeout", c_int),
+        ("udp_port", c_int),
+        ("last_status", c_int * LIBUM_MAX_MANIPULATORS),
+        ("drive_status", c_int * LIBUM_MAX_MANIPULATORS),
+        ("drive_status_id", c_ushort * LIBUM_MAX_MANIPULATORS),
+        ("addresses", sockaddr_in * LIBUM_MAX_MANIPULATORS),
+        ("cu_address", sockaddr_in),
+        ("last_positions", um_positions * LIBUM_MAX_MANIPULATORS),
+        ("laddr", sockaddr_in),
+        ("raddr", sockaddr_in),
+        ("errorstr_buffer", c_char * LIBUM_MAX_LOG_LINE_LENGTH),
+        ("verbose", c_int),
+        ("log_func_ptr", log_func_ptr),
+        ("log_print_arg", c_void_p),
+    ]
+
+
+# used before v0.600
+class um_state_pre_v0_600(Structure):
+    _fields_ = [
+        ("last_received_time", c_ulong),
+        ("socket", SOCKET),
+        ("own_id", c_int),
+        ("message_id", c_int),
+        ("last_device_sent", c_int),
+        ("last_device_received", c_int),
+        ("retransmit_count", c_int),
+        ("refresh_time_limit", c_int),
+        ("last_error", c_int),
+        ("last_os_errno", c_int),
+        ("timeout", c_int),
+        ("udp_port", c_int),
+        ("last_status", c_int * LIBUM_MAX_MANIPULATORS),
+        ("addresses", sockaddr_in * LIBUM_MAX_MANIPULATORS),
+        ("cu_address", sockaddr_in),
+        ("last_positions", um_positions * LIBUM_MAX_MANIPULATORS),
+        ("laddr", sockaddr_in),
+        ("raddr", sockaddr_in),
+        ("errorstr_buffer", c_char * LIBUM_MAX_LOG_LINE_LENGTH),
+        ("verbose", c_int),
+        ("log_func_ptr", log_func_ptr),
+        ("log_print_arg", c_void_p),
+    ]
+
+
+class UMError(Exception):
     def __init__(self, msg, errno, oserrno):
         Exception.__init__(self, msg)
         self.errno = errno
@@ -77,105 +135,51 @@ class UMP(object):
     
     All calls except get_ump are thread-safe.
     """
-    _ump_state = None
+    _um_state = None
     _single = None
     _lib = None
 
     @classmethod
     def get_lib(cls):
         if cls._lib is None:
-            path = os.path.abspath(os.path.dirname(__file__))
-            if sys.platform == 'win32':
-                try:
-                    cls._lib = ctypes.windll.ump
-                except OSError:
-                    try:
-                        cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
-                    except OSError:
-                        if UMP_LIB_PATH is not None:
-                            cls._lib = ctypes.windll.LoadLibrary(os.path.join(UMP_LIB_PATH, 'ump'))
-                        else:
-                            raise
-                cls._lib = ctypes.windll.LoadLibrary(os.path.join(path, 'ump'))
-            else:
-                try:
-                    cls._lib = ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
-                except OSError:
-                    if UMP_LIB_PATH is None:
-                        raise
-                    else:
-                        cls._lib = ctypes.windll.LoadLibrary(os.path.join(UMP_LIB_PATH, 'libump.so.1.0.0'))
-
-            cls._lib.ump_get_version.restype = c_char_p
+            cls._lib = cls.load_lib()
+            cls._lib.um_get_version.restype = c_char_p
         return cls._lib
 
     @classmethod
-    def get_ump_state_class(cls):
-        if cls._ump_state is None:
-            version = cls.get_lib().ump_get_version().decode('ascii')
+    def load_lib(cls):
+        path = os.path.abspath(os.path.dirname(__file__))
+        if sys.platform == 'win32':
+            if UM_LIB_PATH is not None:
+                return ctypes.windll.LoadLibrary(os.path.join(UM_LIB_PATH, 'umsdk'))
 
+            try:
+                return ctypes.windll.umsdk
+            except OSError:
+                pass
+
+            return ctypes.windll.LoadLibrary(os.path.join(path, 'umsdk'))
+        else:
+            if UM_LIB_PATH is not None:
+                return ctypes.windll.LoadLibrary(os.path.join(UM_LIB_PATH, 'libump.so.1.0.0'))
+
+            return ctypes.cdll.LoadLibrary(os.path.join(path, 'libump.so.1.0.0'))
+
+    @classmethod
+    def get_um_state_class(cls):
+        if cls._um_state is None:
+            version = cls.get_lib().um_get_version().decode('ascii')
             if version >= "v0.600":
-                class ump_state(Structure):
-                    _fields_ = [
-                        ("last_received_time", c_ulong),
-                        ("socket", SOCKET),
-                        ("own_id", c_int),
-                        ("message_id", c_int),
-                        ("last_device_sent", c_int),
-                        ("last_device_received", c_int),
-                        ("retransmit_count", c_int),
-                        ("refresh_time_limit", c_int),
-                        ("last_error", c_int),
-                        ("last_os_errno", c_int),
-                        ("timeout", c_int),
-                        ("udp_port", c_int),
-                        ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
-                        ("drive_status", c_int * LIBUMP_MAX_MANIPULATORS),
-                        ("drive_status_id", c_ushort * LIBUMP_MAX_MANIPULATORS),
-                        ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
-                        ("cu_address", sockaddr_in),
-                        ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
-                        ("laddr", sockaddr_in),
-                        ("raddr", sockaddr_in),
-                        ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
-                        ("verbose", c_int),
-                        ("log_func_ptr", log_func_ptr),
-                        ("log_print_arg", c_void_p),
-                    ]
+                cls._um_state = um_state_v0_600
             else:
-                class ump_state(Structure):
-                    _fields_ = [
-                        ("last_received_time", c_ulong),
-                        ("socket", SOCKET),
-                        ("own_id", c_int),
-                        ("message_id", c_int),
-                        ("last_device_sent", c_int),
-                        ("last_device_received", c_int),
-                        ("retransmit_count", c_int),
-                        ("refresh_time_limit", c_int),
-                        ("last_error", c_int),
-                        ("last_os_errno", c_int),
-                        ("timeout", c_int),
-                        ("udp_port", c_int),
-                        ("last_status", c_int * LIBUMP_MAX_MANIPULATORS),
-                        ("addresses", sockaddr_in * LIBUMP_MAX_MANIPULATORS),
-                        ("cu_address", sockaddr_in),
-                        ("last_positions", ump_positions * LIBUMP_MAX_MANIPULATORS),
-                        ("laddr", sockaddr_in),
-                        ("raddr", sockaddr_in),
-                        ("errorstr_buffer", c_char * LIBUMP_MAX_LOG_LINE_LENGTH),
-                        ("verbose", c_int),
-                        ("log_func_ptr", log_func_ptr),
-                        ("log_print_arg", c_void_p),
-                    ]
-            cls._ump_state = ump_state
-        return cls._ump_state
+                cls._um_state = um_state_pre_v0_600
+        return cls._um_state
 
     @classmethod
     def get_ump(cls, address=None, group=None, start_poller=True):
-        """Return a singleton UMP instance.
+        """Return a singleton UM instance.
         """
-        # question: can we have multiple UMP instances with different address/group ?
+        # question: can we have multiple UM instances with different address/group ?
         if cls._single is None:
             cls._single = UMP(address=address, group=group, start_poller=start_poller)
         return cls._single
@@ -183,7 +187,7 @@ class UMP(object):
     def __init__(self, address=None, group=None, start_poller=True):
         self.lock = threading.RLock()
         if self._single is not None:
-            raise Exception("Won't create another UMP object. Use get_ump() instead.")
+            raise Exception("Won't create another UM object. Use get_ump() instead.")
         self._timeout = 200
 
         # duration that manipulator must be not busy before a move is considered complete.
@@ -197,10 +201,10 @@ class UMP(object):
         self.max_acceleration = {}
         
         self.lib = self.get_lib()
-        self.lib.ump_errorstr.restype = c_char_p
+        self.lib.um_errorstr.restype = c_char_p
 
-        min_version = (0, 812)
-        min_version_str = 'v'+'.'.join(map(str, min_version))
+        min_version = (0, 915)
+        min_version_str = 'v%d.%d' % min_version
         version_str = self.sdk_version()
         version = tuple(map(int, version_str.lstrip(b'v').split(b'.')))
 
@@ -216,10 +220,10 @@ class UMP(object):
 
         # view cached position and state data as a numpy array
         # self._positions = np.frombuffer(self.h.contents.last_positions, 
-        #     dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUMP_MAX_MANIPULATORS)
-        #self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUMP_MAX_MANIPULATORS)
+        #     dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUM_MAX_MANIPULATORS)
+        #self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUM_MAX_MANIPULATORS)
 
-        self._ump_has_axis_count = hasattr(self.lib, 'ump_get_axis_count_ext')
+        self._um_has_axis_count = hasattr(self.lib, 'um_get_axis_count_ext')
         self._axis_counts = {}
 
         self.poller = PollThread(self)
@@ -227,26 +231,26 @@ class UMP(object):
             self.poller.start()
 
     def sdk_version(self):
-        """Return version of UMP SDK.
+        """Return version of UM SDK.
         """
-        self.lib.ump_get_version.restype = ctypes.c_char_p
-        return self.lib.ump_get_version()
+        self.lib.um_get_version.restype = ctypes.c_char_p
+        return self.lib.um_get_version()
         
     def list_devices(self, max_id=20):
         """Return a list of all connected device IDs.
         """
         devarray = (c_int*max_id)()
-        r = self.call('ump_get_device_list', byref(devarray) )
+        r = self.call('um_get_device_list', byref(devarray) )
         devs = [devarray[i] for i in range(r)]
         
         return devs
 
     def axis_count(self, dev):
-        if not self._ump_has_axis_count:
+        if not self._um_has_axis_count:
             return 4
         c = self._axis_counts.get(dev, None)
         if c is None:
-            c = self.call('ump_get_axis_count_ext', dev)
+            c = self.call('um_get_axis_count_ext', dev)
             self._axis_counts[dev] = c
         return c
 
@@ -254,58 +258,58 @@ class UMP(object):
         # print "%s%r" % (fn, args)
         with self.lock:
             if self.h is None:
-                raise TypeError("UMP is not open.")
+                raise TypeError("UM is not open.")
             # print("Call:", fn, self.h, args)
             rval = getattr(self.lib, fn)(self.h, *args)
             #if 'get_pos' not in fn:
                 #print "sensapex:", rval, fn, args
             if rval < 0:
-                err = self.lib.ump_last_error(self.h)
-                errstr = self.lib.ump_errorstr(err)
+                err = self.lib.um_last_error(self.h)
+                errstr = self.lib.um_errorstr(err)
                 # print "   -!", errstr
                 if err == -1:
-                    oserr = self.lib.ump_last_os_errno(self.h)
-                    raise UMPError("UMP OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
+                    oserr = self.lib.um_last_os_errno(self.h)
+                    raise UMError("UM OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
-                    raise UMPError("UMP Error %d: %s  From %s%r" % (err, errstr, fn, args), err, None)
+                    raise UMError("UM Error %d: %s  From %s%r" % (err, errstr, fn, args), err, None)
             # print "   ->", rval
             return rval
 
     def set_timeout(self, timeout):
         self._timeout = timeout
-        self.call('ump_set_timeout', timeout)
+        self.call('um_set_timeout', timeout)
 
     def set_max_acceleration(self, dev, max_acc):
         self.max_acceleration[dev] = max_acc
 
     def open(self, address=None, group=None):
-        """Open the UMP device at the given address.
+        """Open the UM device at the given address.
         
         The default address "169.254.255.255" should suffice in most situations.
         """
         if address is None:
-            address = LIBUMP_DEF_BCAST_ADDRESS
+            address = LIBUM_DEF_BCAST_ADDRESS
         if group is None:
-            group = LIBUMP_DEF_GROUP
+            group = LIBUM_DEF_GROUP
 
         if self.h is not None:
-            raise TypeError("UMP is already open.")
+            raise TypeError("UM is already open.")
         addr = ctypes.create_string_buffer(address)
-        self.lib.ump_open.restype = c_longlong
-        ptr = self.lib.ump_open(addr, c_uint(self._timeout), c_int(group))
+        self.lib.um_open.restype = c_longlong
+        ptr = self.lib.um_open(addr, c_uint(self._timeout), c_int(group))
         if ptr <= 0:
-            raise RuntimeError("Error connecting to UMP:", self.lib.ump_errorstr(ptr))
-        self.h = pointer(self.get_ump_state_class().from_address(ptr))
+            raise RuntimeError("Error connecting to UM:", self.lib.um_errorstr(ptr))
+        self.h = pointer(self.get_um_state_class().from_address(ptr))
         atexit.register(self.close)
         
     def close(self):
-        """Close the UMP device.
+        """Close the UM device.
         """
         if self.poller.is_alive():
             self.poller.stop()
             self.poller.join()
         with self.lock:
-            self.lib.ump_close(self.h)
+            self.lib.um_close(self.h)
             self.h = None
 
     def get_pos(self, dev, timeout=0):
@@ -319,7 +323,7 @@ class UMP(object):
         xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
         timeout = c_int(timeout)
        
-        r = self.call('ump_get_positions_ext', c_int(dev), timeout, *[byref(x) for x in xyzwe]) 
+        r = self.call('um_get_positions', c_int(dev), timeout, *[byref(x) for x in xyzwe]) 
 
         n_axes = self.axis_count(dev)
         #if dev == 9:
@@ -377,7 +381,7 @@ class UMP(object):
         with self.lock:
             last_move = self._last_move.pop(dev, None)
             if last_move is not None:
-                self.call('ump_stop_ext', c_int(dev))
+                self.call('um_stop', c_int(dev))
                 last_move._interrupt("started another move before the previous finished")
 
             if _request is None:
@@ -388,7 +392,7 @@ class UMP(object):
 
             self._last_move[dev] = next_move
 
-            self.call('ump_goto_position_ext2', *args)
+            self.call('um_goto_position_ext', *args)
 
 
         return next_move
@@ -401,9 +405,9 @@ class UMP(object):
         """
         # idle/complete=0; moving>0; failed<0
         try:
-            return self.call('ump_get_drive_status_ext', c_int(dev)) > 0
-        except UMPError as err:
-            if err.errno in (LIBUMP_NOT_OPEN, LIBUMP_INVALID_DEV):
+            return self.call('um_get_drive_status', c_int(dev)) > 0
+        except UMError as err:
+            if err.errno in (LIBUM_NOT_OPEN, LIBUM_INVALID_DEV):
                 raise
             else:
                 return False
@@ -412,7 +416,7 @@ class UMP(object):
         """Stop all manipulators.
         """
         with self.lock:
-            self.call('ump_stop_all')
+            self.call('um_stop_all')
             for dev in self._last_move:
                 move = self._last_move.pop(dev, None)
                 move._interrupt('stop all requested before move finished')
@@ -421,7 +425,7 @@ class UMP(object):
         """Stop the specified manipulator.
         """
         with self.lock:
-            self.call('ump_stop_ext', c_int(dev))
+            self.call('um_stop_ext', c_int(dev))
             move = self._last_move.pop(dev, None)
             if move is not None:
                 move._interrupt('stop requested before move finished')
@@ -429,12 +433,12 @@ class UMP(object):
     def select(self, dev):
         """Select a device on the TCU.
         """
-        self.call('ump_cu_select_manipulator', dev)
+        self.call('um_cu_select_manipulator', dev)
 
     def set_active(self, dev, active):
         """Set whether TCU remote control can move a manipulator.
         """
-        self.call('ump_cu_set_active', dev, int(active))
+        self.call('um_cu_set_active', dev, int(active))
 
     def set_pressure(self, dev, channel, value):
         return self.call('umv_set_pressure', dev, int(channel), int (value))
@@ -450,62 +454,51 @@ class UMP(object):
 
     def set_custom_slow_speed(self, dev, enabled):
         feature_custom_slow_speed = 32
-        return self.call('ump_set_ext_feature', c_int(dev), c_int(feature_custom_slow_speed), c_int(enabled))
+        return self.call('um_set_ext_feature', c_int(dev), c_int(feature_custom_slow_speed), c_int(enabled))
     
     def get_custom_slow_speed(self,dev):
         feature_custom_slow_speed = 32
-        return self.call('ump_get_ext_feature',c_int(dev), c_int(feature_custom_slow_speed))
+        return self.call('um_get_ext_feature', c_int(dev), c_int(feature_custom_slow_speed))
 
-    def send_ump_cmd(self, dev, cmd, argList):
+    def send_um_cmd(self, dev, cmd, argList):
         args = (c_int * len(argList))()
         args[:] = argList
+        return self.call('um_cmd', c_int(dev), c_int(cmd), len(argList), args)
 
-        return self.call('ump_cmd',c_int(dev),c_int(cmd), len(argList),args)
-
-    def get_ump_param(self, dev, param):
+    def get_um_param(self, dev, param):
         value = c_int()
-        self.call('ump_get_param',c_int(dev),c_int(param), *[byref(value)])
+        self.call('um_get_param',c_int(dev),c_int(param), *[byref(value)])
         return value
         
-    def set_ump_param(self,dev,param, value):
-        return self.call('ump_set_param',c_int(dev),c_int(param), value)
+    def set_um_param(self,dev,param, value):
+        return self.call('um_set_param',c_int(dev),c_int(param), value)
 
     def calibrate_zero_position(self, dev):
-        return self.send_ump_cmd(dev, 4, [])
+        return self.send_um_cmd(dev, 4, [])
 
     def calibrate_load(self, dev):
-        return self.send_ump_cmd(dev, 5, [0])
+        return self.send_um_cmd(dev, 5, [0])
 
     def get_soft_start_state(self, dev):
         feature_soft_start = 33
-        return self.call('ump_get_ext_feature',c_int(dev),c_int(feature_soft_start))
+        return self.call('um_get_ext_feature',c_int(dev),c_int(feature_soft_start))
     
     def set_soft_start_state(self, dev, enabled):
         feature_soft_start = 33
-        return self.call('ump_set_ext_feature',c_int(dev),c_int(feature_soft_start), c_int(enabled))
+        return self.call('um_set_ext_feature',c_int(dev),c_int(feature_soft_start), c_int(enabled))
 
     def get_soft_start_value(self, dev):
-        return self.get_ump_param(dev,15)
+        return self.get_um_param(dev,15)
 
     def set_soft_start_value(self, dev, value):
-        return self.set_ump_param(dev,15, value)
+        return self.set_um_param(dev,15, value)
  
 
     def recv_all(self):
-        """Receive all queued position/status update packets.
+        """Receive all queued position/status update packets and update any pending moves.
         """
-        with self.lock:
-            old_timeout = self._timeout
-            self.set_timeout(0)
-            try:
-                while True:
-                    count = self.call('ump_receive', c_int(1))
-                    if count == 0:
-                        break
-            finally:
-                self.set_timeout(old_timeout)
-
-            self._update_moves()
+        self.call('um_receive', 0)
+        self._update_moves()
 
     def _update_moves(self):
         with self.lock:
@@ -554,7 +547,7 @@ class MoveRequest(object):
 
 
 class SensapexDevice(object):
-    """UMP wrapper for accessing a single sensapex manipulator.
+    """UM wrapper for accessing a single sensapex manipulator.
 
     Example:
     

@@ -1,6 +1,6 @@
 from __future__ import print_function
 import os, sys, time, argparse
-from sensapex import SensapexDevice, UMP, UMPError
+from sensapex import SensapexDevice, UMP, UMError
 
 
 parser = argparse.ArgumentParser(
@@ -8,11 +8,11 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--group', type=int, default=0, help="Device group number")
 args = parser.parse_args()
 
-ump = UMP.get_ump(group=args.group)
-devids = ump.list_devices()
+um = UMP.get_ump(group=args.group)
+devids = um.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 
-print("SDK version:", ump.sdk_version())
+print("SDK version:", um.sdk_version())
 print("Found device IDs:", devids)
 
 def print_pos(timeout=None):
