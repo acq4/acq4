@@ -3,7 +3,7 @@ import os, sys, ctypes, atexit, time, threading, platform
 import numpy as np
 from ctypes import (c_int, c_uint, c_ulong, c_short, c_ushort,
                     c_byte, c_void_p, c_char, c_char_p, c_longlong,
-                    byref, POINTER, pointer, Structure)
+                    byref, POINTER, pointer, Structure, c_float)
 from timeit import default_timer
 from six.moves import map
 from six.moves import range
@@ -444,7 +444,9 @@ class UMP(object):
         return self.call('umc_set_pressure_setting', dev, int(channel), float(value))
 
     def get_pressure(self, dev, channel):
-        return self.call('umc_get_pressure_setting', dev, int(channel))
+        p = c_float()
+        self.call('umc_get_pressure_setting', dev, int(channel), byref(p))
+        return p.value
 
     def set_valve(self, dev, channel, value):
         return self.call('umv_set_valve', dev, int(channel), int (value))
