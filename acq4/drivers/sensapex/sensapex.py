@@ -441,7 +441,7 @@ class UMP(object):
         self.call('um_cu_set_active', dev, int(active))
 
     def set_pressure(self, dev, channel, value):
-        return self.call('umc_set_pressure_setting', dev, int(channel), float(value))
+        return self.call('umc_set_pressure_setting', dev, int(channel), c_float(value))
 
     def get_pressure(self, dev, channel):
         p = c_float()
