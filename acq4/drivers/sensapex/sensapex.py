@@ -441,10 +441,10 @@ class UMP(object):
         self.call('um_cu_set_active', dev, int(active))
 
     def set_pressure(self, dev, channel, value):
-        return self.call('umv_set_pressure', dev, int(channel), int (value))
+        return self.call('umc_set_pressure_setting', dev, int(channel), float(value))
 
     def get_pressure(self, dev, channel):
-        return self.call('umv_get_pressure', dev, int(channel))
+        return self.call('umc_get_pressure_setting', dev, int(channel))
 
     def set_valve(self, dev, channel, value):
         return self.call('umv_set_valve', dev, int(channel), int (value))
@@ -597,9 +597,15 @@ class SensapexDevice(object):
             self.callback(self, new_pos, old_pos)
 
     def set_pressure(self, channel, value):
-        return self.ump.set_pressure(self.devid, int(channel), int (value))
+        """
+        @param value: pressure in kPa
+        """
+        return self.ump.set_pressure(self.devid, int(channel), float(value))
 
     def get_pressure(self, channel):
+        """
+        @return: pressure in kPa
+        """
         return self.ump.get_pressure(self.devid, int(channel))
 
     def set_valve(self, channel, value):

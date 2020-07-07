@@ -33,14 +33,14 @@ class SensapexPressureControl(PressureControl):
             if match:
                 self.source = source
                 break
-        self.pressure = self.dev.get_pressure(self.pressureChannel)
+        self.pressure = self.dev.get_pressure(self.pressureChannel) * 1000
 
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals) to the pipette.
 
         Note: this does _not_ change the configuration of any values.
         """
-        self.dev.set_pressure(self.pressureChannel, p)
+        self.dev.set_pressure(self.pressureChannel, p / 1000.)
         self.pressure = p
 
     def _setSource(self, source):
