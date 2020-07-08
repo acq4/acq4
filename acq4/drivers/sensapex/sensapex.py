@@ -600,13 +600,19 @@ class SensapexDevice(object):
 
     def set_pressure(self, channel, value):
         """
-        @param value: pressure in kPa
+        Parameters
+        ----------
+        value : float
+            pressure in kPa
         """
         return self.ump.set_pressure(self.devid, int(channel), float(value))
 
     def get_pressure(self, channel):
         """
-        @return: pressure in kPa
+        Returns
+        -------
+        float
+            pressure in kPa
         """
         return self.ump.get_pressure(self.devid, int(channel))
 
