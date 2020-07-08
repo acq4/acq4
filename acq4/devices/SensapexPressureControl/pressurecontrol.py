@@ -1,6 +1,6 @@
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
+
+from acq4.drivers.sensapex import SensapexDevice, UMP
 from ..PressureControl import PressureControl
 
 
@@ -21,8 +21,6 @@ class SensapexPressureControl(PressureControl):
         PressureControl.__init__(self, manager, config, name)
 
         self.pressureChannel = config.pop('pressureChannel')
-        self.pressureScale = config.pop('pressureScale') * 1e6
-        self.voltageOffset = config.pop('voltageOffset') * 1e6
         self.sources = config.pop('sources')
 
         # try to infer current source from channel state
@@ -35,14 +33,14 @@ class SensapexPressureControl(PressureControl):
             if match:
                 self.source = source
                 break
-        self.pressure = (self.dev.get_pressure(self.pressureChannel) - self.voltageOffset) / self.pressureScale
+        self.pressure = self.dev.get_pressure(self.pressureChannel) * 1000
 
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals) to the pipette.
 
         Note: this does _not_ change the configuration of any values.
         """
-        self.dev.set_pressure(self.pressureChannel, p * self.pressureScale + self.voltageOffset)
+        self.dev.set_pressure(self.pressureChannel, p / 1000.)
         self.pressure = p
 
     def _setSource(self, source):

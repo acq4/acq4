@@ -3,7 +3,7 @@ import os, sys, ctypes, atexit, time, threading, platform
 import numpy as np
 from ctypes import (c_int, c_uint, c_ulong, c_short, c_ushort,
                     c_byte, c_void_p, c_char, c_char_p, c_longlong,
-                    byref, POINTER, pointer, Structure)
+                    byref, POINTER, pointer, Structure, c_float)
 from timeit import default_timer
 from six.moves import map
 from six.moves import range
@@ -441,10 +441,12 @@ class UMP(object):
         self.call('um_cu_set_active', dev, int(active))
 
     def set_pressure(self, dev, channel, value):
-        return self.call('umv_set_pressure', dev, int(channel), int (value))
+        return self.call('umc_set_pressure_setting', dev, int(channel), c_float(value))
 
     def get_pressure(self, dev, channel):
-        return self.call('umv_get_pressure', dev, int(channel))
+        p = c_float()
+        self.call('umc_get_pressure_setting', dev, int(channel), byref(p))
+        return p.value
 
     def set_valve(self, dev, channel, value):
         return self.call('umv_set_valve', dev, int(channel), int (value))
@@ -597,9 +599,21 @@ class SensapexDevice(object):
             self.callback(self, new_pos, old_pos)
 
     def set_pressure(self, channel, value):
-        return self.ump.set_pressure(self.devid, int(channel), int (value))
+        """
+        Parameters
+        ----------
+        value : float
+            pressure in kPa
+        """
+        return self.ump.set_pressure(self.devid, int(channel), float(value))
 
     def get_pressure(self, channel):
+        """
+        Returns
+        -------
+        float
+            pressure in kPa
+        """
         return self.ump.get_pressure(self.devid, int(channel))
 
     def set_valve(self, channel, value):
