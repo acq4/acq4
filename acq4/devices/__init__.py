@@ -1,8 +1,9 @@
 from __future__ import print_function
+
 from collections import OrderedDict
 from importlib import import_module
+
 from . import Device
-from ..util.debug import printExc
 
 
 def getDeviceClass(name):
@@ -23,7 +24,8 @@ def getDeviceClass(name):
             print("Warning: error importing device class %s: %s" % (name, str(exc)))
 
     try:
-        return devClasses[name]
+        clsName = name.split(".")[-1]
+        return devClasses[clsName]
     except KeyError:
         raise KeyError('No registered device class named "%s"' % name)
 
@@ -40,5 +42,5 @@ def getDeviceClasses():
         if cls is Device.Device:
             continue
         devClasses[cls.__name__] = cls
-    
+
     return devClasses
