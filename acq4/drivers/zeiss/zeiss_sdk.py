@@ -52,7 +52,7 @@ class ZeissMtbSdk:
 
     @classmethod
     def getSingleton(cls):
-        if cls._instance == None:
+        if cls._instance is None:
             cls._instance = ZeissMtbSdk()
         return cls._instance
 
@@ -82,7 +82,7 @@ class ZeissMtbSdk:
 
     def mainLoop(self):
         self.mainLoopRunning = 1
-        while (self.mainLoopRunning == 1):
+        while self.mainLoopRunning == 1:
             time.sleep(0.1)
 
     def onMTBServerLoggerEvent(self, logMessage):
@@ -136,62 +136,61 @@ class ZeissMtbSdk:
         return self.m_components
 
     def getReflector(self):
-        if self.m_reflector == None:
+        if self.m_reflector is None:
             # self.m_devices[self.m_selected_device_index]
             self.m_reflector = ZeissMtbReflector(self.m_MTBRoot, self.m_ID)
 
         return self.m_reflector
 
     def getTLLamp(self):
-        if self._tl_lamp == None:
+        if self._tl_lamp is None:
             self._tl_lamp = ZeissMtbLamp(self.m_MTBRoot, self.m_ID, "MTBTLHalogenLamp")
 
         return self._tl_lamp
 
     def getRLLamp(self):
-        if self._rl_lamp == None:
+        if self._rl_lamp is None:
             self._rl_lamp = ZeissMtbLamp(self.m_MTBRoot, self.m_ID, "MTBIDontKnowLamp")
 
         return self._rl_lamp
 
     def getObjective(self):
-        if self.m_objective == None:
+        if self.m_objective is None:
             # self.m_devices[self.m_selected_device_index]
             self.m_objective = ZeissMtbObjective(self.m_MTBRoot, self.m_ID)
 
         return self.m_objective
 
     def getFocus(self):
-        if self.m_focus == None:
+        if self.m_focus is None:
             self.m_focus = self.m_MTBRoot.GetComponent("MTBFocus")
         return self.m_focus
 
     def getShutter(self):
-        if self.m_shutter == None:
+        if self.m_shutter is None:
             self.m_shutter = ZeissMtbShutter(self.m_MTBRoot, self.m_ID)
         return self.m_shutter
 
 
 class ZeissMtbCommon:
-    def __init__(self, ZeissClass):
+    def __init__(self, zeissClass):
         # To extend makepy COM class's internal variables,
         # variables need to be defined into __dict__ in order
         # to be able to use then with self.attr
-        self.m_zeissclass = ZeissClass
+        self.m_zeissclass = zeissClass
         try:
-            self.m_name = ZeissClass.Name
+            self.m_name = zeissClass.Name
         except:
             self.m_name = "Noname"
 
     def getName(self):
-        if self.m_name == "":
-            self.m_name = self.m_zeissclass.Name
         return self.m_name
 
 
 class ZeissMtbComponent(ZeissMtbCommon):
     def __init__(self, component):
-        self.m_component = MTB.Api.IMTBComponent()
+        # self.m_component = MTB.Api.IMTBComponent()
+        self.m_component = component
         ZeissMtbCommon.__init__(self, self.m_component)
         # MTB.Api.IMTBComponent.__init__(self, component)
 
@@ -210,12 +209,12 @@ class ZeissMtbChanger(ZeissMtbCommon):
 
     def registerEvents(self, changeEventFunc=defaultOnPositionChanged,
                        positionSettledFunc=defaultOnPositionSettled):
-        if self.m_changer == None:
+        if self.m_changer is None:
             return
 
         # Register to Changer events
 
-        if self.m_changerEvents == None:
+        if self.m_changerEvents is None:
             self.m_changerEvents = MTB.Api.MTBChangerEventSink()
         else:
             self.disconnect()
@@ -272,12 +271,12 @@ class ZeissMtbContinual(ZeissMtbCommon):
     def registerEvents(self, changeEventFunc=defaultOnPositionChanged,
                        positionSettledFunc=defaultOnPositionSettled,
                        hwLimitReachedFunc=defaultOnHWLimitReached):
-        if self.m_continual == None:
+        if self.m_continual is None:
             return
 
         # Register to Changer events
 
-        if self.m_continualEvents == None:
+        if self.m_continualEvents is None:
             self.m_continualEvents = MTB.Api.MTBContinualEventSink()
         else:
             self.disconnect()
@@ -393,10 +392,10 @@ class ZeissMtbShutter(ZeissMtbChanger):
         self.m_shutterSwitch.setPosition(state)
 
     def onShutterPositionChanged(self, position):
-        print("%1 shutter position changed to %2", self.m_shutterName, position)
+        print("%1 shutter position changed to %2", "self.m_shutterName", position)
 
     def onShutterPositionSettled(self, position):
-        print("%1 shutter position settled to %2", self.m_shutterName, position)
+        print("%1 shutter position settled to %2", "self.m_shutterName", position)
 
     def getState(self):
         # ReflectedLight = 1,
@@ -407,26 +406,26 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return self.m_shutterSwitch.State
 
 
-class ZeissMtbLamp(ZeissMtbCommon):
+class ZeissMtbLamp(ZeissMtbComponent):
     # MTBRLShutter
     # MTBTLShutter 
     def __init__(self, root, mtbId, lampName):
         self.m_MTBRoot = root
         self.m_ID = mtbId
         self._lamp = root.GetComponent(lampName)
-        ZeissMtbCommon.__init__(self, root, mtbId, lampName)
+        ZeissMtbComponent.__init__(self, self._lamp)
 
         # self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
     #     self._lampEvents = None
     #     self._registerLampEvents()
     #
     # def _registerLampEvents(self):
-    #     if self._lamp == None:
+    #     if self._lamp is None:
     #         return
     #
     #     # Register to Changer events
     #
-    #     if self._lampEvents == None:
+    #     if self._lampEvents is None:
     #         self._lampEvents = MTB.Api.MTBLampEventSink()
     #     else:
     #         self.disconnect()
