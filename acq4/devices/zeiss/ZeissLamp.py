@@ -22,7 +22,7 @@ class ZeissLamp(LightSource):
     sigActiveChanged = Qt.Signal(object, object)
 
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
+        LightSource.__init__(self, dm, config, name)
         self._zeiss = ZeissMtbSdk.getSingleton()
         if config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
             self._lamp = self._zeiss.getTLLamp()
