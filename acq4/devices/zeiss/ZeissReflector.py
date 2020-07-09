@@ -102,7 +102,7 @@ class ZeissReflector(Device):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.m_reflector = self.zeiss.getReflector()
         self.currentIndex = -1

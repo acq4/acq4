@@ -7,6 +7,7 @@ from __future__ import print_function
 import time
 
 from acq4.devices.Device import Device
+from acq4.devices.LightSource import LightSource
 from acq4.drivers.zeiss import ZeissMtbSdk
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
@@ -14,38 +15,24 @@ from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 
 
-class ZeissIllumination(Device):
-    sigRLChanged = Qt.Signal(object, object)
-    sigTLChanged = Qt.Signal(object, object)
+class ZeissLamp(LightSource):
+    TRANSMISSIVE = "Transmissive"
+    REFLECTIVE = "Reflective"
+
+    sigActiveChanged = Qt.Signal(object, object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        # self.rl_shutter = ZeissRLShutter(dm, config, name + "_rl_shutter")
-        # self.tl_lamp = ZeissTLLamp(dm, config, name + "_tl_lamp")
-        # # self.rl_shutter.SetRLShutter(2)
-        # self.rl_shutter.sigSwitchChanged.connect(self.sigRLChanged)
-        # self.tl_lamp.sigSwitchChanged.connect(self.sigTLChanged)
+        self._zeiss = ZeissMtbSdk.getSingleton()
+        if config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
+            self._lamp = self._zeiss.getTLLamp()
+        else:
+            self._lamp = self._zeiss.getRLLamp()
+        self.addSource("default", config)
 
-    def rlChanged(self, position):
-        self.sigRLChanged.emit(self, position)
-
-    def tlChanged(self, position):
-        self.sigTLChanged.emit(self, position)
-
-    def setRLActive(self, state):
-        self.rl_shutter.setRLShutter(state)
-
-    def getRLIllumination(self):
-        return self.rl_shutter.getRLShutter()
-
-    def setTLIllumination(self, state):
-        self.tl_lamp.setTLLamp(state)
-
-    def getTLIllumination(self):
-        return self.tl_lamp._getIsActive()
-
-    def deviceInterface(self, win):
-        return ZeissIlluminationGui(self)
+    def setSourceActive(self, name, active):
+        self._lamp.setIsActive(active)
+        self._sources["default"]["active"] = active
 
 
 class ZeissRLShutter(Device):
@@ -55,7 +42,7 @@ class ZeissRLShutter(Device):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.m_shutter = self.zeiss.getShutter()
         self.zeiss.getShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
@@ -85,7 +72,7 @@ class ZeissTLLamp(Device):
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.m_tl = self.zeiss.getTLLamp()
         self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled)

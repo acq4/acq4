@@ -7,7 +7,7 @@ from acq4.drivers.zeiss import ZeissMtbSdk
 
 class ss:
     def __init__(self):
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.zeiss.getObjective().registerEvents(self.objectivePosChanged, self.objectivePosSettled)
         print("Started Zeiss Objective Switch")
@@ -30,7 +30,7 @@ class ss:
 class ZeissObjectiveSwitch:
 
     def __init__(self):
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.zeiss.getObjective().registerEvents(self.objectivePosChanged, self.shutterStateSettled)
         # self.zeiss.GetReflector().registerEvents(None, None)
@@ -56,7 +56,7 @@ class ZeissObjectiveSwitch:
 class SensapexZeissRLShutter:
 
     def __init__(self):
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.m_shutter = self.zeiss.getShutter()
         self.zeiss.getShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
@@ -87,7 +87,7 @@ class SensapexZeissRLShutter:
 class SensapexZeissTLLamp:
 
     def __init__(self):
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.m_tl = self.zeiss.getTLLamp()
         self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled)
@@ -114,7 +114,7 @@ class SensapexZeissTLLamp:
 
 # shutter = SensapexZeissShutter()
 
-zeiss = ZeissMtbSdk()
+zeiss = ZeissMtbSdk.getSingleton()
 
 root = zeiss.connect()
 reflector = zeiss.getReflector()

@@ -48,6 +48,14 @@ def defaultOnHWLimitReached(state, limit):
 
 # Main
 class ZeissMtbSdk:
+    _instance = None
+
+    @classmethod
+    def getSingleton(cls):
+        if cls._instance == None:
+            cls._instance = ZeissMtbSdk()
+        return cls._instance
+
     def __init__(self):
         # Initialization
         self.m_MTBConnection = None
@@ -63,8 +71,8 @@ class ZeissMtbSdk:
         self.m_focus = None
         self.m_shutter = None
         self.m_shutter_switch = None
-        self.m_tl_lamp = None
-        self.m_lamp = None
+        self._tl_lamp = None
+        self._rl_lamp = None
         # By default selected device is first
         self.m_selected_device_index = 0
         self.m_selected_component_index = 0
@@ -135,16 +143,16 @@ class ZeissMtbSdk:
         return self.m_reflector
 
     def getTLLamp(self):
-        if self.m_tl_lamp == None:
-            self.m_tl_lamp = ZeissMtbTLLamp(self.m_MTBRoot, self.m_ID)
+        if self._tl_lamp == None:
+            self._tl_lamp = ZeissMtbLamp(self.m_MTBRoot, self.m_ID, "MTBTLHalogenLamp")
 
-        return self.m_tl_lamp
+        return self._tl_lamp
 
     def getRLLamp(self):
-        if self.m_lamp == None:
-            self.m_lamp = ZeissMtbRLLamp(self.m_MTBRoot, self.m_ID)
+        if self._rl_lamp == None:
+            self._rl_lamp = ZeissMtbLamp(self.m_MTBRoot, self.m_ID, "MTBIDontKnowLamp")
 
-        return self.m_lamp
+        return self._rl_lamp
 
     def getObjective(self):
         if self.m_objective == None:
@@ -399,82 +407,53 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return self.m_shutterSwitch.State
 
 
-class ZeissMtbRLLamp(ZeissMtbContinual):
-    def __init__(self, root, mtbId, lampName):
-        self.m_MTBRoot = root
-        self.m_lamp = root.GetComponent(lampName)
-        self.m_ID = mtbId
-        self.m_lampEvents = None
-
-        ZeissMtbContinual.__init__(self, root, mtbId, "IMTBLamp")
-        self._registerLampEvents()
-
-    def _registerLampEvents(self):
-        if self.m_lamp == None:
-            return
-
-        # Register to Changer events
-
-        if self.m_lampEvents == None:
-            self.m_lampEvents = MTB.Api.MTBLampEventSink()
-        else:
-            self.disconnect()
-            self.m_lampEvents = MTB.Api.MTBLampEventSink()
-
-        # add the default event handlers for changing position of changers
-
-        self.onMTB3200KChangedEvent = self.handleMTB3200KChangedEvent
-        self.onMTBActiveChangedEvent = self.handleMTBLampActiveChanged
-        self.onMTBOnOffChangedEvent = self.handleMTBOnOffChangedEvent
-        self.m_lampEvents.handleMTBOnOffChangedEvent += MTB.Api.MTBOnOffChangedHandler(self.onMTBOnOffChangedEvent)
-        self.m_lampEvents.MTBLampActiveChangedEvent += MTB.Api.handleMTBLampActiveChanged(self.onMTBActiveChangedEvent)
-        self.m_lampEvents.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(
-            defaultOnHWLimitReached)
-
-        self.m_continualEvents.ClientID = self.m_ID
-        self.m_continualEvents.Advise(self.m_continual)
-
-    def handleMTBLampActiveChanged(self, position):
-        print("MTBLampActiveChangedHandler", position)
-
-    def handleMTB3200KChangedEvent(self, position):
-        print("MTB3200KChangedEvent", position)
-
-    def handleMTBOnOffChangedEvent(self, onoff):
-        print("MTBOnOffChangedEvent:", onoff)
-
-    def onShowLimitReachedFunc(self, position):
-        print("%1 shutter position settled to %2", position)
-
-
-class ZeissMtbTLLamp(ZeissMtbRLLamp):
+class ZeissMtbLamp(ZeissMtbContinual):
     # MTBRLShutter
     # MTBTLShutter 
-    def __init__(self, root, mtbId):
+    def __init__(self, root, mtbId, lampName):
         self.m_MTBRoot = root
         self.m_ID = mtbId
-        self.m_tlLamp = root.GetComponent("MTBTLHalogenLamp")
+        self._lamp = root.GetComponent(lampName)
+        ZeissMtbContinual.__init__(self, root, mtbId, lampName)
 
-        ZeissMtbRLLamp.__init__(self, root, mtbId, "IMTBLamp")
+        self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
+    #     self._lampEvents = None
+    #     self._registerLampEvents()
+    #
+    # def _registerLampEvents(self):
+    #     if self._lamp == None:
+    #         return
+    #
+    #     # Register to Changer events
+    #
+    #     if self._lampEvents == None:
+    #         self._lampEvents = MTB.Api.MTBLampEventSink()
+    #     else:
+    #         self.disconnect()
+    #         self._lampEvents = MTB.Api.MTBLampEventSink()
+    #
+    #     self._lampEvents.handleMTBOnOffChangedEvent += MTB.Api.MTBOnOffChangedHandler(lambda state: print(state))
+    #     self._lampEvents.MTBLampActiveChangedEvent += MTB.Api.handleMTBLampActiveChanged(lambda active: print(active))
+    #     self._lampEvents.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(
+    #         defaultOnHWLimitReached)
+    #
+    #     self.m_continualEvents.ClientID = self.m_ID
+    #     self.m_continualEvents.Advise(self.m_continual)
 
-        self.registerEvents(self.onTLPositionChanged, self.onTLPositionSettled)
+    def onIsActiveChanged(self, position):
+        print("{} Lamp changed state to {}".format(self.m_name, position))
 
-    def onTLPositionChanged(self, position):
-        print("TL Lamp changed to " + position)
-
-    def onTLPositionSettled(self, position):
-        print("TL Lamp settled to " + position)
+    def onIsActiveSettled(self, position):
+        print("{} Lamp settled state to {}".format(self.m_name, position))
 
     def setIsActive(self, isActive):
         if isActive:
-            self.m_tlLamp.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
+            self._lamp.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
         else:
-            self.m_tlLamp.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
+            self._lamp.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
 
     def getIsActive(self):
-        return self.m_tlLamp.GetOnOff()
-
-    # ------- ZEISS REFLEFCTOR ------
+        return self._lamp.GetOnOff()
 
 
 class ZeissMtbReflector(ZeissMtbChanger):

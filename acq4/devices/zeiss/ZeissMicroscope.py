@@ -14,7 +14,7 @@ class ZeissMicroscope(Microscope):
         self._startDepth = None
         Microscope.__init__(self, dm, config, name)
 
-        self.zeiss = ZeissMtbSdk()
+        self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
         self.zeiss.getObjective().registerEvents(self.zeissObjectivePosChanged, self.zeissObjectivePosSettled)
 
