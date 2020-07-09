@@ -20,11 +20,11 @@ class ZeissIllumination(Device):
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.rl_shutter = ZeissRLShutter(dm, config, name + "_rl_shutter")
-        self.tl_lamp = ZeissTLLamp(dm, config, name + "tl_lamp")
-        # self.rl_shutter.SetRLShutter(2)
-        self.rl_shutter.sigSwitchChanged.connect(self.sigRLChanged)
-        self.tl_lamp.sigSwitchChanged.connect(self.sigTLChanged)
+        # self.rl_shutter = ZeissRLShutter(dm, config, name + "_rl_shutter")
+        # self.tl_lamp = ZeissTLLamp(dm, config, name + "_tl_lamp")
+        # # self.rl_shutter.SetRLShutter(2)
+        # self.rl_shutter.sigSwitchChanged.connect(self.sigRLChanged)
+        # self.tl_lamp.sigSwitchChanged.connect(self.sigTLChanged)
 
     def rlChanged(self, position):
         self.sigRLChanged.emit(self, position)
@@ -32,7 +32,7 @@ class ZeissIllumination(Device):
     def tlChanged(self, position):
         self.sigTLChanged.emit(self, position)
 
-    def setRLIllumination(self, state):
+    def setRLActive(self, state):
         self.rl_shutter.setRLShutter(state)
 
     def getRLIllumination(self):
@@ -42,7 +42,7 @@ class ZeissIllumination(Device):
         self.tl_lamp.setTLLamp(state)
 
     def getTLIllumination(self):
-        return self.tl_lamp.getTLLamp()
+        return self.tl_lamp._getIsActive()
 
     def deviceInterface(self, win):
         return ZeissIlluminationGui(self)
@@ -99,10 +99,10 @@ class ZeissTLLamp(Device):
         self.sigSwitchChanged.emit(self, position)
 
     def setTLLamp(self, state):
-        self.m_tl.setTLLamp(state)
+        self.m_tl.setIsActive(state)
 
-    def getTLLamp(self):
-        return self.m_tl.getTLLamp()
+    def _getIsActive(self):
+        return self.m_tl.getIsActive()
 
     def disconnect(self):
         self.zeiss.disconnect()
@@ -120,7 +120,7 @@ class TLLampPollThread(Thread):
         while self.stopThread is False:
             try:
                 prev_pos = pos
-                pos = self.dev.getTLLamp()
+                pos = self.dev.getIsActive()
                 if pos != prev_pos:
                     self.dev.tlStateSettled(pos)
 
@@ -146,38 +146,31 @@ class ZeissIlluminationGui(Qt.QWidget):
         self.tlswitch = Qt.QPushButton("TL Illumination")
         self.tlswitch.setCheckable(True)
         self.layout.addWidget(self.tlswitch)
-        self.tlswitch.clicked.connect(self.tlswitchButtonClicked)
+        self.tlswitch.clicked.connect(self._tlSwitchButtonClicked)
 
         self.rlswitch = Qt.QPushButton("RL Illumination")
         self.rlswitch.setCheckable(True)
         self.layout.addWidget(self.rlswitch)
-        self.rlswitch.clicked.connect(self.rlswitchButtonClicked)
+        self.rlswitch.clicked.connect(self._rlSwitchButtonClicked)
 
-        self.readCurrentPos()
+        self._readCurrentPos()
 
-        self.dev.sigRLChanged.connect(self.readCurrentPos)
-        self.dev.sigTLChanged.connect(self.readCurrentPos)
+        self.dev.sigRLChanged.connect(self._readCurrentPos)
+        self.dev.sigTLChanged.connect(self._readCurrentPos)
 
-    def readCurrentPos(self):
-        if self.dev.getTLIllumination() == 1:
+    def _readCurrentPos(self):
+        if self.dev.getTLIllumination():
             self.tlswitch.setChecked(True)
         else:
             self.tlswitch.setChecked(False)
 
-        if self.dev.getRLIllumination() == 1:
+        if self.dev.getRLIllumination():
             self.rlswitch.setChecked(False)
         else:
             self.rlswitch.setChecked(True)
 
-    def tlswitchButtonClicked(self):
-        if self.dev.getTLIllumination() == 1:
-            self.dev.setTLIllumination(2)
+    def _tlSwitchButtonClicked(self):
+        self.dev.setTLIllumination(not self.dev.getTLIllumination())
 
-        else:
-            self.dev.setTLIllumination(1)
-
-    def rlswitchButtonClicked(self):
-        if self.dev.getRLIllumination() == 1:
-            self.dev.setRLIllumination(2)
-        else:
-            self.dev.setRLIllumination(1)
+    def _rlSwitchButtonClicked(self):
+        self.dev.setRLActive(not self.dev.getRLIllumination())

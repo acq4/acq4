@@ -49,7 +49,7 @@ class ZeissObjectiveSwitch:
     def rlShutterStateChanged(self, position):
         print(" RL shutter pos changes: " + str(position))
 
-    def Disconnect(self):
+    def disconnect(self):
         self.zeiss.disconnect()
 
 
@@ -71,16 +71,16 @@ class SensapexZeissRLShutter:
     def rlShutterStateChanged(self, position):
         print(" RL shutter pos changes: " + str(position))
 
-    def SetRLShutter(self, state):
+    def setRLShutter(self, state):
         self.m_shutter.setRLShutter(state)
 
-    def GetRLShutter(self):
+    def getRLShutter(self):
         return self.m_shutter.getRLShutter()
 
-    def SetTLShutter(self, state):
+    def setTLShutter(self, state):
         return self.m_shutter.setRLTLSwitch(state)
 
-    def Disconnect(self):
+    def disconnect(self):
         self.zeiss.disconnect()
 
 
@@ -98,13 +98,13 @@ class SensapexZeissTLLamp:
     def tlStateSettled(self, position):
         print("TL switch pos settled: " + str(position))
 
-    def SetTLLamp(self, state):
-        self.m_tl.setTLLamp(state)
+    def setTLLamp(self, state):
+        self.m_tl.setIsActive(state)
 
-    def GetTLLamp(self):
-        return self.m_tl.getTLLamp()
+    def getTLLamp(self):
+        return self.m_tl.getIsActive()
 
-    def Disconnect(self):
+    def disconnect(self):
         self.zeiss.disconnect()
 
 
@@ -122,11 +122,11 @@ reflector.setPosition(1)
 print(reflector.getPosition())
 
 shutter = SensapexZeissRLShutter()  # zeiss.GetShutter()
-shutter.SetRLShutter(0)
+shutter.setRLShutter(0)
 lamp = SensapexZeissTLLamp()  # zeiss.GetShutter()
 print("Changer:")
 print(lamp)
-print(lamp.GetTLLamp())
+print(lamp.getTLLamp())
 
 devs = zeiss.getDevices()
 print(devs)
@@ -172,20 +172,20 @@ while loop:
     if inputParam == 0:
         loop = 0
     if inputParam == 9:
-        print(shutter.GetRLShutter())
-        print(lamp.GetTLLamp())
+        print(shutter.getRLShutter())
+        print(lamp.getTLLamp())
 
     if inputParam == 1:
-        print(shutter.SetRLShutter(1))
-        print(lamp.SetTLLamp(1))
+        print(shutter.setRLShutter(1))
+        print(lamp.setTLLamp(True))
     if inputParam == 2:
-        print(shutter.SetRLShutter(2))
-        print(lamp.SetTLLamp(2))
+        print(shutter.setRLShutter(2))
+        print(lamp.setTLLamp(False))
     if inputParam == 3:
-        print(lamp.SetTLLamp(1))
+        print(lamp.setTLLamp(True))
 
     if inputParam == 4:
-        print(lamp.SetTLLamp(2))
+        print(lamp.setTLLamp(False))
 
     # objective = int(input("Stop with 0, Change objective (1-3), Move focus > 100 (100+1 = 1nm):"))
     # if objective <= 3 and objective >=1:

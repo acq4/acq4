@@ -8,8 +8,9 @@ from collections import OrderedDict
 
 
 class LightSource(Device):
-    """Device tracking the state and properties of multiple illumination sources.
+    """Device tracking the state and properties of a single light-emitting device with one or more internal illumination sources.
     """
+
     # emitted when the on/off status of a light changes
     sigLightChanged = Qt.Signal(object, object)  # self, light_name
     
