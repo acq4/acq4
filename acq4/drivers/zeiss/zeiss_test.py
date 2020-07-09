@@ -90,7 +90,7 @@ class SensapexZeissTLLamp:
         self.zeiss = ZeissMtbSdk()
         self.mtbRoot = self.zeiss.connect()
         self.m_tl = self.zeiss.getTLLamp()
-        self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled, None)
+        self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled)
 
     def tlStateChanged(self, position):
         print("TL switch pos change: " + str(position))

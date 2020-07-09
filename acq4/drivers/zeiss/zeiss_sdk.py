@@ -373,11 +373,11 @@ class ZeissMtbShutter(ZeissMtbChanger):
 
     def RegisterRLShutterEvents(self, positionChanged):
         if self.m_rlShutter:
-            self.m_rlShutter.registerEvents(None, positionChanged)
+            self.m_rlShutter.registerEvents(positionSettledFunc=positionChanged)
 
     def RegisterTLShutterEvents(self, positionChanged):
         if self.m_tlShutter:
-            self.m_tlShutter.registerEvents(None, positionChanged)
+            self.m_tlShutter.registerEvents(positionSettledFunc=positionChanged)
 
     def SetRLShutter(self, state):
         self.m_rlShutter.SetPosition(state)
@@ -465,7 +465,7 @@ class ZeissMtbTLLamp(ZeissMtbRLLamp):
 
         ZeissMtbRLLamp.__init__(self, root, mtbId, "IMTBLamp")
 
-        self.registerEvents(self.onTLPositionChanged, self.onTLPositionSettled, None)
+        self.registerEvents(self.onTLPositionChanged, self.onTLPositionSettled)
 
     def onTLPositionChanged(self, position):
         print("TL Lamp changed to " + position)

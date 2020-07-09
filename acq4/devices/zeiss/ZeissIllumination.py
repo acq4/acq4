@@ -88,7 +88,7 @@ class ZeissTLLamp(Device):
         self.zeiss = ZeissMtbSdk()
         self.mtbRoot = self.zeiss.connect()
         self.m_tl = self.zeiss.getTLLamp()
-        self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled, None)
+        self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled)
         self.readThread = TLLampPollThread(self, interval=1.0)
         self.readThread.start()
 
