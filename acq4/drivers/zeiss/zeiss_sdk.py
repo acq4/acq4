@@ -182,7 +182,7 @@ class ZeissMtbCommon:
         except:
             self.m_name = "Noname"
 
-    def GetName(self):
+    def getName(self):
         if self.m_name == "":
             self.m_name = self.m_zeissclass.Name
         return self.m_name
@@ -204,7 +204,7 @@ class ZeissMtbChanger(ZeissMtbCommon):
         self.m_changerEvents = None
         ZeissMtbCommon.__init__(self, self.m_changer)
 
-    def GetChanger(self):
+    def getChanger(self):
         return self.m_changer
 
     def registerEvents(self, changeEventFunc=defaultOnPositionChanged,
@@ -217,7 +217,7 @@ class ZeissMtbChanger(ZeissMtbCommon):
         if self.m_changerEvents == None:
             self.m_changerEvents = ZEISS.MTB.Api.MTBChangerEventSink()
         else:
-            self.Disconnect()
+            self.disconnect()
             self.m_changerEvents = ZEISS.MTB.Api.MTBChangerEventSink()
 
         self.onChangerPositionChanged = changeEventFunc
@@ -229,7 +229,7 @@ class ZeissMtbChanger(ZeissMtbCommon):
         self.m_changerEvents.ClientID = self.m_ID
         self.m_changerEvents.Advise(self.m_changer)
 
-    def Disconnect(self):
+    def disconnect(self):
         # print ("Deregistering changer events")
         try:
             self.m_changerEvents.Unadvise(self.m_changer)
@@ -242,18 +242,18 @@ class ZeissMtbChanger(ZeissMtbCommon):
 
         self.m_changerEvents = None
 
-    def GetElementCount(self):
-        return self.m_changer.GetElementCount()
+    def getElementCount(self):
+        return self.m_changer.getElementCount()
 
-    def GetElement(self, position):
-        return self.m_changer.GetElement(position)
+    def getElement(self, position):
+        return self.m_changer.getElement(position)
 
-    def GetPosition(self):
+    def getPosition(self):
         return self.m_changer.Position
 
-    def SetPosition(self, newposition):
+    def setPosition(self, newposition):
         with ZeissDeviceThreadLock:
-            self.m_changer.SetPosition(newposition, ZEISS.MTB.Api.MTBCmdSetModes.Default)
+            self.m_changer.setPosition(newposition, ZEISS.MTB.Api.MTBCmdSetModes.Default)
 
 
 class ZeissMtbContinual(ZeissMtbCommon):
@@ -265,7 +265,7 @@ class ZeissMtbContinual(ZeissMtbCommon):
         self.m_continualEvents = None
         ZeissMtbCommon.__init__(self, self.m_continual)
 
-    def GetContinual(self):
+    def getContinual(self):
         return self.m_continual
 
     def registerEvents(self, changeEventFunc=defaultOnPositionChanged,
@@ -279,7 +279,7 @@ class ZeissMtbContinual(ZeissMtbCommon):
         if self.m_continualEvents == None:
             self.m_continualEvents = ZEISS.MTB.Api.MTBContinualEventSink()
         else:
-            self.Disconnect()
+            self.disconnect()
             self.m_continualEvents = ZEISS.MTB.Api.MTBContinualEventSink()
 
         self.onContinualPositionChanged = changeEventFunc
@@ -294,7 +294,7 @@ class ZeissMtbContinual(ZeissMtbCommon):
         self.m_continualEvents.ClientID = self.m_ID
         self.m_continualEvents.Advise(self.m_continual)
 
-    def Disconnect(self):
+    def disconnect(self):
         # print ("Deregistering changer events")
         try:
             self.m_continualEvents.Unadvise(self.m_continual)
@@ -309,15 +309,15 @@ class ZeissMtbContinual(ZeissMtbCommon):
 
         self.m_continualEvents = None
 
-    def GetElement(self, position):
-        return self.m_continual.GetElement(position)
+    def getElement(self, position):
+        return self.m_continual.getElement(position)
 
-    def GetPosition(self):
+    def getPosition(self):
         return self.m_continual.Position
 
-    def SetPosition(self, newposition):
+    def setPosition(self, newposition):
         with ZeissDeviceThreadLock:
-            self.m_continual.SetPosition(newposition, ZEISS.MTB.Api.MTBCmdSetModes.Default)
+            self.m_continual.setPosition(newposition, ZEISS.MTB.Api.MTBCmdSetModes.Default)
 
 
 class ZeissMtbFocus(ZeissMtbCommon):
@@ -342,20 +342,20 @@ class ZeissMcbObjective(ZeissMtbChanger):
     def onObjectivePositionSettled(self, position):
         print(" Objective position settled to " + position)
 
-    def Magnification(self):
-        return self.m_objective.Magnification
+    def magnification(self):
+        return self.m_objective.magnification
 
-    def Aperture(self):
-        return self.m_objective.Aperture
+    def aperture(self):
+        return self.m_objective.aperture
 
-    def ContrastMethod(self):
-        return self.m_objective.ContrastMethod
+    def contrastMethod(self):
+        return self.m_objective.contrastMethod
 
-    def Features(self):
-        return self.m_objective.Features
+    def features(self):
+        return self.m_objective.features
 
-    def WorkingDistance(self):
-        return self.m_objective.WorkingDistance
+    def workingDistance(self):
+        return self.m_objective.workingDistance
 
 
 class ZeissMtbShutter(ZeissMtbChanger):
@@ -371,25 +371,25 @@ class ZeissMtbShutter(ZeissMtbChanger):
         ZeissMtbChanger.__init__(self, root, mtbId, "MTBRLShutter")
         self.registerEvents(self.onShutterPositionChanged, self.onShutterPositionSettled)
 
-    def RegisterRLShutterEvents(self, positionChanged):
+    def registerRLShutterEvents(self, positionChanged):
         if self.m_rlShutter:
             self.m_rlShutter.registerEvents(positionSettledFunc=positionChanged)
 
-    def RegisterTLShutterEvents(self, positionChanged):
+    def registerTLShutterEvents(self, positionChanged):
         if self.m_tlShutter:
             self.m_tlShutter.registerEvents(positionSettledFunc=positionChanged)
 
-    def SetRLShutter(self, state):
-        self.m_rlShutter.SetPosition(state)
+    def setRLShutter(self, state):
+        self.m_rlShutter.setPosition(state)
 
-    def GetRLShutter(self):
-        return self.m_rlShutter.GetPosition()
+    def getRLShutter(self):
+        return self.m_rlShutter.getPosition()
 
-    def SetTLShutter(self, state):
-        self.m_tlShutter.SetPosition(state)
+    def getTLShutter(self, state):
+        self.m_tlShutter.setPosition(state)
 
-    def SetRLTLSwitch(self, state):
-        self.m_shutterSwitch.SetPosition(state)
+    def setRLTLSwitch(self, state):
+        self.m_shutterSwitch.setPosition(state)
 
     def onShutterPositionChanged(self, position):
         print("%1 shutter position changed to %2", self.m_shutterName, position)
@@ -397,7 +397,7 @@ class ZeissMtbShutter(ZeissMtbChanger):
     def onShutterPositionSettled(self, position):
         print("%1 shutter position settled to %2", self.m_shutterName, position)
 
-    def GetState(self):
+    def getState(self):
         # ReflectedLight = 1,
         # TransmittedLight = 2,
         # Observation = 4,
@@ -425,30 +425,30 @@ class ZeissMtbRLLamp(ZeissMtbContinual):
         if self.m_lampEvents == None:
             self.m_lampEvents = ZEISS.MTB.Api.MTBLampEventSink()
         else:
-            self.Disconnect()
+            self.disconnect()
             self.m_lampEvents = ZEISS.MTB.Api.MTBLampEventSink()
 
-        # add the default events for changing position of changers
+        # add the default event handlers for changing position of changers
 
-        self.onMTB3200KChangedEvent = self.MTB3200KChangedEvent
-        self.onMTBActiveChangedEvent = self.MTBLampActiveChangedHandler
-        self.onMTBOnOffChangedEvent = self.MTBOnOffChangedEvent
+        self.onMTB3200KChangedEvent = self.handleMTB3200KChangedEvent
+        self.onMTBActiveChangedEvent = self.handleMTBLampActiveChanged
+        self.onMTBOnOffChangedEvent = self.handleMTBOnOffChangedEvent
         self.onMTBRemoteChangedEvent = self.MTBRemoteChangedEvent
-        self.m_lampEvents.MTBOnOffChangedEvent += ZEISS.MTB.Api.MTBOnOffChangedHandler(self.onMTBOnOffChangedEvent)
-        self.m_lampEvents.MTBLampActiveChangedEvent += ZEISS.MTB.Api.MTBLampActiveChangedHandler(self.onMTBActiveChangedEvent)
+        self.m_lampEvents.handleMTBOnOffChangedEvent += ZEISS.MTB.Api.MTBOnOffChangedHandler(self.onMTBOnOffChangedEvent)
+        self.m_lampEvents.MTBLampActiveChangedEvent += ZEISS.MTB.Api.handleMTBLampActiveChanged(self.onMTBActiveChangedEvent)
         self.m_lampEvents.MTBPHWLimitReachedEvent += ZEISS.MTB.Api.MTBContinualHWLimitReachedHandler(
             defaultOnHWLimitReached)
 
         self.m_continualEvents.ClientID = self.m_ID
         self.m_continualEvents.Advise(self.m_continual)
 
-    def MTBLampActiveChangedHandler(self, position):
+    def handleMTBLampActiveChanged(self, position):
         print("MTBLampActiveChangedHandler", position)
 
-    def MTB3200KChangedEvent(self, position):
+    def handleMTB3200KChangedEvent(self, position):
         print("MTB3200KChangedEvent", position)
 
-    def MTBOnOffChangedEvent(self, onoff):
+    def handleMTBOnOffChangedEvent(self, onoff):
         print("MTBOnOffChangedEvent:", onoff)
 
     def onShowLimitReachedFunc(self, position):
@@ -473,13 +473,13 @@ class ZeissMtbTLLamp(ZeissMtbRLLamp):
     def onTLPositionSettled(self, position):
         print("TL Lamp settled to " + position)
 
-    def SetTLLamp(self, state):
+    def setTLLamp(self, state):
         if state == 1:
             self.m_tlLamp.SetOnOff(ZEISS.MTB.Api.MTBOnOff.On, ZEISS.MTB.Api.MTBCmdSetModes.Default)
         if state == 2:
             self.m_tlLamp.SetOnOff(ZEISS.MTB.Api.MTBOnOff.Off, ZEISS.MTB.Api.MTBCmdSetModes.Default)
 
-    def GetTLLamp(self):
+    def getTLLamp(self):
         return self.m_tlLamp.GetOnOff()
 
     # ------- ZEISS REFLEFCTOR ------
@@ -499,17 +499,17 @@ class ZeissMtbReflector(ZeissMtbChanger):
     def onReflectorPositionSettled(self, position):
         print(" Reflector position settled to " + position)
 
-    def GetWavelengthArea(self, index):
-        return self.m_reflector.GetWavelengthArea(index)
+    def getWavelengthArea(self, index):
+        return self.m_reflector.getWavelengthArea(index)
 
-    def GetWavelengthAreaCount(self):
-        return self.m_reflector.GetWavelengthAreaCount()
+    def getWavelengthAreaCount(self):
+        return self.m_reflector.getWavelengthAreaCount()
 
-    def ContrastMethod(self):
-        return self.m_reflector.ContrastMethod
+    def contrastMethod(self):
+        return self.m_reflector.contrastMethod
 
-    def Features(self):
-        return self.m_reflector.Features
+    def features(self):
+        return self.m_reflector.features
 
 
 # EVENT HANDLERS

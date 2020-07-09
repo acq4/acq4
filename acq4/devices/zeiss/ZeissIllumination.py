@@ -32,17 +32,17 @@ class ZeissIllumination(Device):
     def tlChanged(self, position):
         self.sigTLChanged.emit(self, position)
 
-    def SetRLIllumination(self, state):
-        self.rl_shutter.SetRLShutter(state)
+    def setRLIllumination(self, state):
+        self.rl_shutter.setRLShutter(state)
 
-    def GetRLIllumination(self):
-        return self.rl_shutter.GetRLShutter()
+    def getRLIllumination(self):
+        return self.rl_shutter.getRLShutter()
 
-    def SetTLIllumination(self, state):
-        self.tl_lamp.SetTLLamp(state)
+    def setTLIllumination(self, state):
+        self.tl_lamp.setTLLamp(state)
 
-    def GetTLIllumination(self):
-        return self.tl_lamp.GetTLLamp()
+    def getTLIllumination(self):
+        return self.tl_lamp.getTLLamp()
 
     def deviceInterface(self, win):
         return ZeissIlluminationGui(self)
@@ -59,7 +59,7 @@ class ZeissRLShutter(Device):
         self.mtbRoot = self.zeiss.connect()
         self.m_shutter = self.zeiss.getShutter()
         self.zeiss.getShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
-        self.zeiss.getShutter().RegisterRLShutterEvents(self.rlShutterStateChanged)
+        self.zeiss.getShutter().registerRLShutterEvents(self.rlShutterStateChanged)
 
     def shutterStateChanged(self, position):
         pass
@@ -70,13 +70,13 @@ class ZeissRLShutter(Device):
     def rlShutterStateChanged(self, position):
         pass
 
-    def SetRLShutter(self, state):
-        self.m_shutter.SetRLShutter(state)
+    def setRLShutter(self, state):
+        self.m_shutter.setRLShutter(state)
 
-    def GetRLShutter(self):
-        return self.m_shutter.GetRLShutter()
+    def getRLShutter(self):
+        return self.m_shutter.getRLShutter()
 
-    def Disconnect(self):
+    def disconnect(self):
         self.zeiss.disconnect()
 
 
@@ -98,13 +98,13 @@ class ZeissTLLamp(Device):
     def tlStateSettled(self, position):
         self.sigSwitchChanged.emit(self, position)
 
-    def SetTLLamp(self, state):
-        self.m_tl.SetTLLamp(state)
+    def setTLLamp(self, state):
+        self.m_tl.setTLLamp(state)
 
-    def GetTLLamp(self):
+    def getTLLamp(self):
         return self.m_tl.getTLLamp()
 
-    def Disconnect(self):
+    def disconnect(self):
         self.zeiss.disconnect()
 
 
@@ -159,25 +159,25 @@ class ZeissIlluminationGui(Qt.QWidget):
         self.dev.sigTLChanged.connect(self.readCurrentPos)
 
     def readCurrentPos(self):
-        if self.dev.GetTLIllumination() == 1:
+        if self.dev.getTLIllumination() == 1:
             self.tlswitch.setChecked(True)
         else:
             self.tlswitch.setChecked(False)
 
-        if self.dev.GetRLIllumination() == 1:
+        if self.dev.getRLIllumination() == 1:
             self.rlswitch.setChecked(False)
         else:
             self.rlswitch.setChecked(True)
 
     def tlswitchButtonClicked(self):
-        if self.dev.GetTLIllumination() == 1:
-            self.dev.SetTLIllumination(2)
+        if self.dev.getTLIllumination() == 1:
+            self.dev.setTLIllumination(2)
 
         else:
-            self.dev.SetTLIllumination(1)
+            self.dev.setTLIllumination(1)
 
     def rlswitchButtonClicked(self):
-        if self.dev.GetRLIllumination() == 1:
-            self.dev.SetRLIllumination(2)
+        if self.dev.getRLIllumination() == 1:
+            self.dev.setRLIllumination(2)
         else:
-            self.dev.SetRLIllumination(1)
+            self.dev.setRLIllumination(1)

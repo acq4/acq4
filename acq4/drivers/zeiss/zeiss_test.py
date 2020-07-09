@@ -60,7 +60,7 @@ class SensapexZeissRLShutter:
         self.mtbRoot = self.zeiss.connect()
         self.m_shutter = self.zeiss.getShutter()
         self.zeiss.getShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
-        self.zeiss.getShutter().RegisterRLShutterEvents(self.rlShutterStateChanged)
+        self.zeiss.getShutter().registerRLShutterEvents(self.rlShutterStateChanged)
 
     def shutterStateChanged(self, position):
         print("shutterswitch pos change: " + str(position))
@@ -72,13 +72,13 @@ class SensapexZeissRLShutter:
         print(" RL shutter pos changes: " + str(position))
 
     def SetRLShutter(self, state):
-        self.m_shutter.SetRLShutter(state)
+        self.m_shutter.setRLShutter(state)
 
     def GetRLShutter(self):
-        return self.m_shutter.GetRLShutter()
+        return self.m_shutter.getRLShutter()
 
     def SetTLShutter(self, state):
-        return self.m_shutter.SetRLTLSwitch(state)
+        return self.m_shutter.setRLTLSwitch(state)
 
     def Disconnect(self):
         self.zeiss.disconnect()
@@ -99,7 +99,7 @@ class SensapexZeissTLLamp:
         print("TL switch pos settled: " + str(position))
 
     def SetTLLamp(self, state):
-        self.m_tl.SetTLLamp(state)
+        self.m_tl.setTLLamp(state)
 
     def GetTLLamp(self):
         return self.m_tl.getTLLamp()
@@ -118,8 +118,8 @@ zeiss = ZeissMtbSdk()
 
 root = zeiss.connect()
 reflector = zeiss.getReflector()
-reflector.SetPosition(1)
-print(reflector.GetPosition())
+reflector.setPosition(1)
+print(reflector.getPosition())
 
 shutter = SensapexZeissRLShutter()  # zeiss.GetShutter()
 shutter.SetRLShutter(0)

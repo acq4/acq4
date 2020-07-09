@@ -4,11 +4,15 @@
 # Version: 0.3
 
 from __future__ import print_function
-import threading, time
-from acq4.util import Qt
-from acq4.util.Mutex import Mutex
+
+import threading
+import time
+
 from acq4.devices.Device import Device
 from acq4.devices.FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
+from acq4.drivers.zeiss import ZeissMtbSdk
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 
 
 class ZeissMotorizedReflectorChanger(FilterWheel):
@@ -52,7 +56,7 @@ class ZeissMotorizedReflectorChanger(FilterWheel):
     def quit(self):
         self.stop()
 
-    
+
 class ZeissTurretFuture(FilterWheelFuture):
     def _atTarget(self):
         if self.dev._getPosition() == self.position:
@@ -80,35 +84,30 @@ class ZeissDevGui(FilterWheelDevGui):
         self.rightBtn.pressed.connect(self.moveRight)
         self.btnLayout.addWidget(self.rightBtn, 1, 1)
 
-
     def moveLeft(self):
         current_pos = self.dev._getPosition()
-        if current_pos-1 >= 0:
-            self.dev._setPosition(current_pos-1)
-        
+        if current_pos - 1 >= 0:
+            self.dev._setPosition(current_pos - 1)
 
     def moveRight(self):
         current_pos = self.dev._getPosition()
-        if current_pos+1 < self.dev.getPositionCount():
-            self.dev._setPosition(current_pos+1)
-
-
+        if current_pos + 1 < self.dev.getPositionCount():
+            self.dev._setPosition(current_pos + 1)
 
 
 class ZeissReflector(Device):
-
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-        self.zeiss = SensapexZeiss()
+        self.zeiss = ZeissMtbSdk()
         self.mtbRoot = self.zeiss.connect()
         self.m_reflector = self.zeiss.getReflector()
         self.currentIndex = -1
         self.m_reflector.registerEvents(self.onReflectorPosChanged, self.onReflectorPosSettled)
-        self.currentIndex = self.m_reflector.GetPosition()
+        self.currentIndex = self.m_reflector.getPosition()
         self.is_moving = False
         # print ("Started Zeiss Reflector Changer:" + str(self.currentIndex) )
         # used to emit signal when position passes a threshold
@@ -119,43 +118,39 @@ class ZeissReflector(Device):
         #     print ("Reflector change started to: " + str(position-1))
 
     def onReflectorPosSettled(self, position):
-        changes = {'reflector':position-1}
+        changes = {'reflector': position - 1}
         # print ("Reflector settled to: " + str(position-1))
         self.currentIndex = position
         self.sigSwitchChanged.emit(self, changes)
-        self.is_moving=False
-    
+        self.is_moving = False
+
     def quit(self):
-        print ("Disconnecting Zeiss")
+        print("Disconnecting Zeiss")
         self.zeiss.disconnect()
-    
+
     def getPositionCount(self):
-        return self.m_reflector.GetElementCount()
+        return self.m_reflector.getElementCount()
 
     def stop(self):
-        print ("Stopping")
+        print("Stopping")
         # Cannot be stopped
 
     def getPosition(self):
         if self.currentIndex == -1:
-            self.currentIndex = self.m_reflector.GetPosition()
-       
-        if self.currentIndex-1 < 0:
+            self.currentIndex = self.m_reflector.getPosition()
+
+        if self.currentIndex - 1 < 0:
             return 0
 
-        return self.currentIndex-1
+        return self.currentIndex - 1
 
     def setPosition(self, newPosition):
         self.is_moving = True
 
-        if self.currentIndex != newPosition+1:
-            self.m_reflector.SetPosition(newPosition+1)
+        if self.currentIndex != newPosition + 1:
+            self.m_reflector.setPosition(newPosition + 1)
 
         else:
-            changes = {'reflector':newPosition}
+            changes = {'reflector': newPosition}
             self.sigSwitchChanged.emit(self, changes)
-            self.is_moving=False
-            
-
-
-        
+            self.is_moving = False

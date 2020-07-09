@@ -38,7 +38,7 @@ class ZeissMicroscope(Microscope):
         Microscope.quit(self)
 
     def zeissCurrentPosition(self):
-        return self.zeiss.getObjective().GetPosition() - 1
+        return self.zeiss.getObjective().getPosition() - 1
 
     def setObjectiveIndex(self, index):
         if int(index) == self.zeissCurrentPosition():
@@ -48,7 +48,7 @@ class ZeissMicroscope(Microscope):
         self.moveToSafeDepth().wait()
 
         # TODO: Take this away after confirming the stage be always in safe position.
-        self.zeiss.getObjective().SetPosition(int(index) + 1)
+        self.zeiss.getObjective().setPosition(int(index) + 1)
 
         # TODO: Remove following line after above enabled.
         # self.setFocusDepth(startDepth).wait()
