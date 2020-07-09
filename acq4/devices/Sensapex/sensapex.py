@@ -30,7 +30,6 @@ class Sensapex(Stage):
         if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
-        time.sleep(2)
         all_devs = ump.list_devices()
         if self.devid not in all_devs:
             raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))

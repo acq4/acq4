@@ -201,6 +201,7 @@ class UMP(object):
         self.max_acceleration = {}
         
         self.lib = self.get_lib()
+        self._initTime = time.time()
         self.lib.um_errorstr.restype = c_char_p
 
         min_version = (0, 915)
@@ -239,6 +240,10 @@ class UMP(object):
     def list_devices(self, max_id=20):
         """Return a list of all connected device IDs.
         """
+        # wait = 2 - (time.time() - self._initTime)
+        # if wait > 0:
+        #     time.sleep(wait)
+        # self.recv_all()
         devarray = (c_int*max_id)()
         r = self.call('um_get_device_list', byref(devarray) )
         devs = [devarray[i] for i in range(r)]
