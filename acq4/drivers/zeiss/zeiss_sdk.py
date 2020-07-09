@@ -407,16 +407,16 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return self.m_shutterSwitch.State
 
 
-class ZeissMtbLamp(ZeissMtbContinual):
+class ZeissMtbLamp(ZeissMtbCommon):
     # MTBRLShutter
     # MTBTLShutter 
     def __init__(self, root, mtbId, lampName):
         self.m_MTBRoot = root
         self.m_ID = mtbId
         self._lamp = root.GetComponent(lampName)
-        ZeissMtbContinual.__init__(self, root, mtbId, lampName)
+        ZeissMtbCommon.__init__(self, root, mtbId, lampName)
 
-        self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
+        # self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
     #     self._lampEvents = None
     #     self._registerLampEvents()
     #
@@ -440,11 +440,11 @@ class ZeissMtbLamp(ZeissMtbContinual):
     #     self.m_continualEvents.ClientID = self.m_ID
     #     self.m_continualEvents.Advise(self.m_continual)
 
-    def onIsActiveChanged(self, position):
-        print("{} Lamp changed state to {}".format(self.m_name, position))
-
-    def onIsActiveSettled(self, position):
-        print("{} Lamp settled state to {}".format(self.m_name, position))
+    # def onIsActiveChanged(self, position):
+    #     print("{} Lamp changed state to {}".format(self.m_name, position))
+    #
+    # def onIsActiveSettled(self, position):
+    #     print("{} Lamp settled state to {}".format(self.m_name, position))
 
     def setIsActive(self, isActive):
         if isActive:
