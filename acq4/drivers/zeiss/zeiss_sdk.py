@@ -54,10 +54,10 @@ class ZeissMtbSdk:
     def getSingleton(cls):
         if cls._instance is None:
             cls._instance = ZeissMtbSdk()
+            cls._instance.connect()
         return cls._instance
 
     def __init__(self):
-        # Initialization
         self.m_MTBConnection = None
         self.m_MTBRoot = None
         self.m_MTBDevice = None
@@ -406,14 +406,13 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return self.m_shutterSwitch.State
 
 
-class ZeissMtbLamp(ZeissMtbComponent):
+class ZeissMtbLamp:
     # MTBRLShutter
     # MTBTLShutter 
     def __init__(self, root, mtbId, lampName):
         self.m_MTBRoot = root
         self.m_ID = mtbId
         self._lamp = root.GetComponent(lampName)
-        ZeissMtbComponent.__init__(self, self._lamp)
 
         # self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
     #     self._lampEvents = None
