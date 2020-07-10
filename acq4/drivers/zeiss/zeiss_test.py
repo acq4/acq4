@@ -2,8 +2,6 @@
 # All Rights Reserved. Copyright (c) Sensapex Oy 2019
 # Author: Ari Salmi
 # Version: 0.3
-import atexit
-
 from acq4.drivers.zeiss import ZeissMtbSdk
 
 
@@ -55,69 +53,7 @@ class ZeissObjectiveSwitch:
         self.zeiss.disconnect()
 
 
-class SensapexZeissRLShutter:
-
-    def __init__(self):
-        self.zeiss = ZeissMtbSdk.getSingleton()
-        self.mtbRoot = self.zeiss.connect()
-        self.m_shutter = self.zeiss.getShutter()
-        self.zeiss.getShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
-        self.zeiss.getShutter().registerRLShutterEvents(self.rlShutterStateChanged)
-
-    def shutterStateChanged(self, position):
-        print("shutterswitch pos change: " + str(position))
-
-    def shutterStateSettled(self, position):
-        print("shutterswitch pos settled: " + str(position))
-
-    def rlShutterStateChanged(self, position):
-        print(" RL shutter pos changes: " + str(position))
-
-    def setRLShutter(self, state):
-        self.m_shutter.setRLShutter(state)
-
-    def getRLShutter(self):
-        return self.m_shutter.getRLShutter()
-
-    def setTLShutter(self, state):
-        return self.m_shutter.setRLTLSwitch(state)
-
-    def disconnect(self):
-        self.zeiss.disconnect()
-
-
-class SensapexZeissTLLamp:
-
-    def __init__(self):
-        self.zeiss = ZeissMtbSdk.getSingleton()
-        self.mtbRoot = self.zeiss.connect()
-        self.m_tl = self.zeiss.getTLLamp()
-        self.m_tl.registerEvents(self.tlStateChanged, self.tlStateSettled)
-
-    def tlStateChanged(self, position):
-        print("TL switch pos change: " + str(position))
-
-    def tlStateSettled(self, position):
-        print("TL switch pos settled: " + str(position))
-
-    def setTLLamp(self, state):
-        self.m_tl.setIsActive(state)
-
-    def getTLLamp(self):
-        return self.m_tl.getIsActive()
-
-    def disconnect(self):
-        self.zeiss.disconnect()
-
-
-# MAI
-# objective = ss()
-
-
-# shutter = SensapexZeissShutter()
-
 zeiss = ZeissMtbSdk.getSingleton()
-atexit.register(lambda: zeiss.disconnect())
 
 devs = zeiss.getDevices()
 print(devs)
@@ -175,19 +111,19 @@ while loop:
         loop = 0
     if inputParam == 9:
         print(shutter.getRLShutter())
-        print(lamp.getTLLamp())
+        print(lamp.getIsActive())
 
     if inputParam == 1:
         print(shutter.setRLShutter(1))
-        print(lamp.setTLLamp(True))
+        print(lamp.setIsActive(True))
     if inputParam == 2:
         print(shutter.setRLShutter(2))
-        print(lamp.setTLLamp(False))
+        print(lamp.setIsActive(False))
     if inputParam == 3:
-        print(lamp.setTLLamp(True))
+        print(lamp.setIsActive(True))
 
     if inputParam == 4:
-        print(lamp.setTLLamp(False))
+        print(lamp.setIsActive(False))
 
     # objective = int(input("Stop with 0, Change objective (1-3), Move focus > 100 (100+1 = 1nm):"))
     # if objective <= 3 and objective >=1:

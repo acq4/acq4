@@ -12,6 +12,7 @@
 
 
 # Importing MTB.Api generated with makepy
+import atexit
 import threading
 import time
 from threading import Thread, Lock
@@ -55,6 +56,7 @@ class ZeissMtbSdk:
         if cls._instance is None:
             cls._instance = ZeissMtbSdk()
             cls._instance.connect()
+            atexit.register(cls._instance.disconnect)
         return cls._instance
 
     def __init__(self):
