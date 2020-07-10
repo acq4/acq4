@@ -116,18 +116,6 @@ class SensapexZeissTLLamp:
 
 zeiss = ZeissMtbSdk.getSingleton()
 
-root = zeiss.connect()
-reflector = zeiss.getReflector()
-reflector.setPosition(1)
-print(reflector.getPosition())
-
-shutter = SensapexZeissRLShutter()  # zeiss.GetShutter()
-shutter.setRLShutter(0)
-lamp = SensapexZeissTLLamp()  # zeiss.GetShutter()
-print("Changer:")
-print(lamp)
-print(lamp.getTLLamp())
-
 devs = zeiss.getDevices()
 print(devs)
 for d in devs:
@@ -135,6 +123,17 @@ for d in devs:
     combos = zeiss.getDeviceComponents(d)
     for c in combos:
         print(c.Name)
+
+reflector = zeiss.getReflector()
+reflector.setPosition(1)
+print(reflector.getPosition())
+
+shutter = zeiss.getShutter()
+shutter.setRLShutter(0)
+lamp = zeiss.getTLLamp()
+print("Changer:")
+print(lamp)
+print(lamp.getIsActive())
 
 # def posChanged(position):
 #     # in case, the changer position has changed, the current position is printed
