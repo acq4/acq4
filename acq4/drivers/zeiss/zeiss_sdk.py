@@ -82,12 +82,6 @@ class ZeissMtbSdk:
         self.m_selected_component_index = 0
         self.m_selected_element_index = 0
         self.device_busy = threading.Event()
-        self.mainLoopRunning = 0
-
-    def mainLoop(self):
-        self.mainLoopRunning = 1
-        while self.mainLoopRunning == 1:
-            time.sleep(0.1)
 
     def onMTBServerLoggerEvent(self, logMessage):
         print(logMessage)
@@ -103,10 +97,6 @@ class ZeissMtbSdk:
         self.getShutter()
 
         ZeissDeviceThreadLock = Lock()
-        self.m_deviceThread = Thread(target=self.mainLoop)
-
-        # start the thread
-        self.m_deviceThread.start()
 
         return self.m_MTBRoot
 
@@ -120,8 +110,6 @@ class ZeissMtbSdk:
 
         print("Logging out..")
         self.m_MTBConnection.Logout(self.m_ID)
-        self.mainLoopRunning = 0
-        self.m_deviceThread.join()
 
     def getDevices(self):
         self.m_devices = []
