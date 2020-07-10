@@ -17,16 +17,12 @@ import threading
 import time
 from threading import Thread, Lock
 
-# import the the common language runtime
-# it is needed to use the MTB API dll
 # in order to import clr, it is required to install python for .Net (pip install pythonnet) under windows
 # running under linux has not been tested yet
 import clr
 
-# the reference to the current MTB version needs to be set (possibly to the GAC)
-clr.AddReference(r"C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll")
-
-from ZEISS import MTB
+DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
+MTB = None
 
 # Thread lock for device change info
 ZeissDeviceThreadLock = None
@@ -52,11 +48,17 @@ class ZeissMtbSdk:
     _instance = None
 
     @classmethod
-    def getSingleton(cls):
+    def getSingleton(cls, dllLocation=None):
         if cls._instance is None:
+            global MTB
+            clr.AddReference(dllLocation or DEFAULT_API_DLL_LOCATION)
+            import ZEISS
+            MTB = ZEISS.MTB
+
             cls._instance = ZeissMtbSdk()
             cls._instance.connect()
             atexit.register(cls._instance.disconnect)
+
         return cls._instance
 
     def __init__(self):
@@ -417,6 +419,7 @@ class ZeissMtbLamp:
         self._lamp = root.GetComponent(lampName)
 
         # self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
+
     #     self._lampEvents = None
     #     self._registerLampEvents()
     #
