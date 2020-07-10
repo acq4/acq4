@@ -240,9 +240,9 @@ class UMP(object):
     def list_devices(self, max_id=20):
         """Return a list of all connected device IDs.
         """
-        # wait = 2 - (time.time() - self._initTime)
-        # if wait > 0:
-        #     time.sleep(wait)
+        wait = 4 - (time.time() - self._initTime)
+        if wait > 0:
+            time.sleep(wait)
         # self.recv_all()
         devarray = (c_int*max_id)()
         r = self.call('um_get_device_list', byref(devarray) )
