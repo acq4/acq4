@@ -2,6 +2,8 @@
 # All Rights Reserved. Copyright (c) Sensapex Oy 2019
 # Author: Ari Salmi
 # Version: 0.3
+import atexit
+
 from acq4.drivers.zeiss import ZeissMtbSdk
 
 
@@ -115,6 +117,7 @@ class SensapexZeissTLLamp:
 # shutter = SensapexZeissShutter()
 
 zeiss = ZeissMtbSdk.getSingleton()
+atexit.register(lambda: zeiss.disconnect())
 
 devs = zeiss.getDevices()
 print(devs)
@@ -199,8 +202,3 @@ while loop:
     # if int(objective) == 0:
     #    loop = False
     #    break;
-print("Disconnecting..")
-zeiss.disconnect()
-# shutter.Disconnect()
-# reflector.Disconnect()
-# shutter.Disconnect()
