@@ -28,6 +28,7 @@ class Sensapex(Stage):
         self.maxMoveError = config.pop('maxError', 1e-6)
         
         address = config.pop('address', None)
+        address = None if address is None else address.encode()
         group = config.pop('group', None)
         if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
