@@ -17,6 +17,8 @@ class Sensapex(Stage):
     A Sensapex manipulator.
     """
     
+    _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
+
     devices = {}
     
     def __init__(self, man, config, name):
@@ -39,6 +41,8 @@ class Sensapex(Stage):
         self._updateTimer = Qt.QTimer()
         self._updateTimer.timeout.connect(self._getPosition)
         self._lastUpdate = 0
+
+        self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
         # create handle to this manipulator
         # note: n_axes is used in cases where the device is not capable of answering this on its own 
@@ -131,9 +135,12 @@ class Sensapex(Stage):
         # rate limit updates to 10 Hz
         wait = 100e-3 - (now - self._lastUpdate)
         if wait > 0:
-            self._updateTimer.start(int(wait * 1000))
+            self._sigRestartUpdateTimer.emit(wait)
         else:
             self._getPosition()
+
+    def _restartUpdateTimer(self, wait):
+        self._updateTimer.start(int(wait * 1000))
 
     def targetPosition(self):
         with self.lock:
