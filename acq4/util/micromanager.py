@@ -11,6 +11,26 @@ _mmc = None
 microManagerPath = 'C:\\Program Files\\Micro-Manager-2.0gamma'
 
 
+class MMCWrapper:
+    """Wraps MMCorePy to raise more helpfule exceptions
+    """
+    def __init__(self, mmc):
+        self.__mmc = mmc
+
+    def __getattr__(self, name):
+        attr = getattr(self.__mmc, name)
+        if not callable(attr):
+            return attr
+
+        def fn(*args, **kwds):
+            try:
+               return attr(*args, **kwds) 
+            except RuntimeError as exc:
+                raise RuntimeError(exc.args[0].getFullMsg() + " (calling mmc.%s)"%name)
+        fn.__name__ = name + '_wrapped'
+        return fn
+
+
 def getMMCorePy(path=None):
     """Return a singleton MMCorePy instance that is shared by all devices for accessing micromanager.
     """
@@ -18,7 +38,7 @@ def getMMCorePy(path=None):
     if _mmc is None:
         try:
             import pymmcore
-            _mmc = pymmcore.CMMCore()
+            _mmc = MMCWrapper(pymmcore.CMMCore())
             _mmc.setDeviceAdapterSearchPaths([microManagerPath])
         except ImportError:
 
