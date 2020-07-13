@@ -16,11 +16,15 @@ class MMCWrapper:
     """
     def __init__(self, mmc):
         self.__mmc = mmc
+        self.__wrapper_cache = {}
 
     def __getattr__(self, name):
         attr = getattr(self.__mmc, name)
         if not callable(attr):
             return attr
+
+        if name in self.__wrapper_cache:
+            return self.__wrapper_cache[name]
 
         def fn(*args, **kwds):
             try:
@@ -28,6 +32,7 @@ class MMCWrapper:
             except RuntimeError as exc:
                 raise RuntimeError(exc.args[0].getFullMsg() + " (calling mmc.%s)"%name)
         fn.__name__ = name + '_wrapped'
+        self.__wrapper_cache[name] = fn
         return fn
 
 
