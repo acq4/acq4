@@ -7,8 +7,6 @@ import os
 import sys
 
 # try importing Qt libraries in order of preference
-from pyqtgraph.Qt import loadUiType
-
 qtLibs = ['PyQt5', 'PyQt4', 'PySide', 'PySide2', None]
 for mod in qtLibs:
     if mod is None:
@@ -48,6 +46,50 @@ globals().update(pg.Qt.QtTest.__dict__)
 # signal disconnect with exception handling
 # allows (calling disconnect even if no connection currently exists)
 disconnect = pg.disconnect
+
+
+def loadUiType(uiFile, package=None):
+    """
+    PySide lacks a "loadUiType" command like PyQt4's, so we have to convert
+    the ui file to py code in-memory first and then execute it in a
+    special frame to retrieve the form_class.
+
+    The *package* argument must be specified if the ui file contains relative
+    imports.
+
+    from stackoverflow: http://stackoverflow.com/a/14195313/3781327
+    """
+    if QT_LIB == PYSIDE:
+        from pysideuic import compileUi
+    elif QT_LIB == PYSIDE2:
+        from pyside2uic import compileUi
+    elif QT_LIB == PYQT4:
+        from PyQt4.uic import compileUi
+    elif QT_LIB == PYQT5:
+        from PyQt5.uic import compileUi
+
+    import xml.etree.ElementTree as xml
+    
+    parsed = xml.parse(uiFile)
+    widget_class = parsed.find('widget').get('class')
+    form_class = parsed.find('class').text
+    
+    if package is None:
+        globalns = {}
+    else:
+        globalns = {'__package__': package}
+
+    # load, compile, and execute ui code
+    o = _StringIO()
+    compileUi(open(uiFile, 'r'), o, indent=0)
+    pyc = compile(o.getvalue(), uiFile, 'exec')
+    exec(pyc, globalns)
+
+    #Fetch the base_class and form class based on their type in the xml from designer
+    form_class = globalns['Ui_%s'%form_class]
+    base_class = getattr(QtGui, widget_class)
+
+    return form_class, base_class
 
 
 def importTemplate(templateName):
