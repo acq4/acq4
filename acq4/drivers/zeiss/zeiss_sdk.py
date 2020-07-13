@@ -444,7 +444,7 @@ class ZeissMtbLamp:
             self._lamp.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
 
     def getIsActive(self):
-        return self._lamp.GetOnOff()
+        return self._lamp.GetOnOff() == MTB.Api.MTBOnOff.On
 
 
 class ZeissMtbReflector(ZeissMtbChanger):
