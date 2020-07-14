@@ -39,11 +39,13 @@ import pyqtgraph as pg
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions
-globals().update(pg.Qt.__dict__)
-globals().update(pg.Qt.QtGui.__dict__)
-globals().update(pg.Qt.QtCore.__dict__)
-globals().update(pg.Qt.QtTest.__dict__)
-# globals().update(importlib.import_module(pg.Qt.QT_LIB + '.QtSql').__dict__)
+for mod in [pg.Qt, pg.Qt.QtGui, pg.Qt.QtCore, pg.Qt.QtTest]:
+    ns = mod.__dict__.copy()
+    # don't copy special variables like __name__, __file__, etc.
+    for k in list(ns.keys()):
+        if k.startswith('__'):
+            ns.pop(k)
+    globals().update(ns)
 
 # signal disconnect with exception handling
 # allows (calling disconnect even if no connection currently exists)
