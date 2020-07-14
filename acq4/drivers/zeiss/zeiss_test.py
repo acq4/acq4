@@ -9,7 +9,7 @@ class ss:
     def __init__(self):
         self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
-        self.zeiss.getObjective().registerEvents(self.objectivePosChanged, self.objectivePosSettled)
+        self.zeiss.getObjective().registerEventHandlers(self.objectivePosChanged, self.objectivePosSettled)
         print("Started Zeiss Objective Switch")
 
     def objectivePosChanged(self, position):
@@ -32,7 +32,7 @@ class ZeissObjectiveSwitch:
     def __init__(self):
         self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
-        self.zeiss.getObjective().registerEvents(self.objectivePosChanged, self.shutterStateSettled)
+        self.zeiss.getObjective().registerEventHandlers(self.objectivePosChanged, self.shutterStateSettled)
         # self.zeiss.GetReflector().registerEvents(None, None)
         # self.zeiss.GetShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
         # self.zeiss.GetShutter().RegisterRLShutterEvents(self.rlShutterStateChanged)
@@ -55,13 +55,15 @@ class ZeissObjectiveSwitch:
 
 zeiss = ZeissMtbSdk.getSingleton()
 
-devs = zeiss.getDevices()
-print(devs)
-for d in devs:
-    print(d.Name)
-    combos = zeiss.getDeviceComponents(d)
-    for c in combos:
-        print(c.Name)
+for dev, compos in zeiss.getComponentsByDevice().items():
+    print(dev.Name)
+    for c in compos:
+        print(c.ID, c.Name)
+
+lamp = zeiss.getTLLamp()
+print("Transmissive Lamp:")
+print(lamp)
+print(lamp.getIsActive())
 
 reflector = zeiss.getReflector()
 reflector.setPosition(1)
@@ -69,10 +71,6 @@ print(reflector.getPosition())
 
 shutter = zeiss.getShutter()
 shutter.setRLShutter(0)
-lamp = zeiss.getTLLamp()
-print("Changer:")
-print(lamp)
-print(lamp.getIsActive())
 
 # def posChanged(position):
 #     # in case, the changer position has changed, the current position is printed

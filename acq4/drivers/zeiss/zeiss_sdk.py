@@ -24,9 +24,6 @@ import clr
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
 
-# Thread lock for device change info
-ZeissDeviceThreadLock = None
-
 
 def defaultOnPositionChanged(position):
     # in case, the changer position has changed, the current position is printed
@@ -62,6 +59,7 @@ class ZeissMtbSdk:
         return cls._instance
 
     def __init__(self):
+        self.threadLock = None
         self.m_MTBConnection = None
         self.m_MTBRoot = None
         self.m_MTBDevice = None
@@ -83,22 +81,11 @@ class ZeissMtbSdk:
         self.m_selected_element_index = 0
         self.device_busy = threading.Event()
 
-    def onMTBServerLoggerEvent(self, logMessage):
-        print(logMessage)
-
     def connect(self):
-        global ZeissDeviceThreadLock
         self.m_MTBConnection = MTB.Api.MTBConnection()
         self.m_ID = self.m_MTBConnection.Login("en", "")
         self.m_MTBRoot = self.m_MTBConnection.GetRoot(self.m_ID)
-        self.getDevices()
-        self.getObjective()
-        self.getReflector()
-        self.getShutter()
-
-        ZeissDeviceThreadLock = Lock()
-
-        return self.m_MTBRoot
+        self.threadLock = Lock()
 
     def getID(self):
         return self.m_ID
@@ -112,20 +99,13 @@ class ZeissMtbSdk:
         self.m_MTBConnection.Logout(self.m_ID)
 
     def getDevices(self):
-        self.m_devices = []
         count = self.m_MTBRoot.GetDeviceCount()
-        for i in range(0, count):
-            zdevice = self.m_MTBRoot.GetDevice(i)  # ZeissMtbDevice(self.m_MTBRoot, i)
-            self.m_devices.append(zdevice)
+        return [self.m_MTBRoot.GetDevice(i) for i in range(0, count)]
 
-        return self.m_devices
-
-    def getDeviceComponents(self, device):
-        self.m_components = []
-        for x in range(0, device.GetComponentCount()):
-            self.m_components.append(device.GetComponentFullConfig(x))
-
-        return self.m_components
+    def getComponentsByDevice(self):
+        return {
+            device: [device.GetComponentFullConfig(i) for i in range(0, device.GetComponentCount())]
+            for device in self.getDevices()}
 
     def getReflector(self):
         if self.m_reflector is None:
@@ -136,13 +116,13 @@ class ZeissMtbSdk:
 
     def getTLLamp(self):
         if self._tl_lamp is None:
-            self._tl_lamp = ZeissMtbLamp(self.m_MTBRoot, self.m_ID, "MTBTLHalogenLamp")
+            self._tl_lamp = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent("MTBTLHalogenLamp"))
 
         return self._tl_lamp
 
     def getRLLamp(self):
         if self._rl_lamp is None:
-            self._rl_lamp = ZeissMtbLamp(self.m_MTBRoot, self.m_ID, "MTBIDontKnowLamp")
+            self._rl_lamp = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent("MTBIDontKnowLamp"))
 
         return self._rl_lamp
 
@@ -164,37 +144,13 @@ class ZeissMtbSdk:
         return self.m_shutter
 
 
-class ZeissMtbCommon:
-    def __init__(self, zeissClass):
-        # To extend makepy COM class's internal variables,
-        # variables need to be defined into __dict__ in order
-        # to be able to use then with self.attr
-        self.m_zeissclass = zeissClass
-        try:
-            self.m_name = zeissClass.Name
-        except:
-            self.m_name = "Noname"
-
-    def getName(self):
-        return self.m_name
-
-
-class ZeissMtbComponent(ZeissMtbCommon):
-    def __init__(self, component):
-        # self.m_component = MTB.Api.IMTBComponent()
-        self.m_component = component
-        ZeissMtbCommon.__init__(self, self.m_component)
-        # MTB.Api.IMTBComponent.__init__(self, component)
-
-
-class ZeissMtbChanger(ZeissMtbCommon):
+class ZeissMtbChanger:
     def __init__(self, root, mtbId, changerName):
         self.m_MTBRoot = root
         self.m_changer = root.GetComponent(changerName)
         self.m_changerName = changerName
         self.m_ID = mtbId
         self.m_changerEvents = None
-        ZeissMtbCommon.__init__(self, self.m_changer)
 
     def getChanger(self):
         return self.m_changer
@@ -244,80 +200,66 @@ class ZeissMtbChanger(ZeissMtbCommon):
         return self.m_changer.Position
 
     def setPosition(self, newposition):
-        with ZeissDeviceThreadLock:
+        with self._zeiss.threadLock:
             self.m_changer.setPosition(newposition, MTB.Api.MTBCmdSetModes.Default)
 
 
-class ZeissMtbContinual(ZeissMtbCommon):
-    def __init__(self, root, mtbId, continualName):
-        self.m_MTBRoot = root
-        self.m_continual = root.GetComponent(continualName)
-        self.m_continualName = continualName
-        self.m_ID = mtbId
-        self.m_continualEvents = None
-        ZeissMtbCommon.__init__(self, self.m_continual)
+class ZeissMtbContinual:
+    """
+    "Continual" refers to the general concept of hardware which can be set to a value in a range. Used here
+     primarily to encapsulate the event listeners.
+    """
 
-    def getContinual(self):
-        return self.m_continual
+    def __init__(self, sdk, device):
+        self._zeiss = sdk
+        self._device = device
+        self._eventSink = None
+        self._onChange = None
+        self._onSettle = None
+        self._onReachLimit = None
 
-    def registerEvents(self, changeEventFunc=defaultOnPositionChanged,
-                       positionSettledFunc=defaultOnPositionSettled,
-                       hwLimitReachedFunc=defaultOnHWLimitReached):
-        if self.m_continual is None:
-            return
-
-        # Register to Changer events
-
-        if self.m_continualEvents is None:
-            self.m_continualEvents = MTB.Api.MTBContinualEventSink()
-        else:
+    def registerEventHandlers(self, onChange=None, onSettle=None, onReachLimit=None):
+        if self._eventSink is not None:
             self.disconnect()
-            self.m_continualEvents = MTB.Api.MTBContinualEventSink()
+        self._eventSink = MTB.Api.MTBContinualEventSink()
 
-        self.onContinualPositionChanged = changeEventFunc
-        self.onContinualPositionSettled = positionSettledFunc
-        self.onContinualHWLimitReached = hwLimitReachedFunc
+        if onChange is not None:
+            self._onChange = onChange
+            self._eventSink.MTBPositionChangedEvent += MTB.Api.MTBContinualPositionChangedHandler(onChange)
+        if onSettle is not None:
+            self._onSettle = onSettle
+            self._eventSink.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(onSettle)
+        if onReachLimit is not None:
+            self._onReachLimit = onReachLimit
+            self._eventSink.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(onReachLimit)
 
-        self.m_continualEvents.MTBPositionChangedEvent += MTB.Api.MTBContinualPositionChangedHandler(changeEventFunc)
-        self.m_continualEvents.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(
-            positionSettledFunc)
-        self.m_continualEvents.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(hwLimitReachedFunc)
-
-        self.m_continualEvents.ClientID = self.m_ID
-        self.m_continualEvents.Advise(self.m_continual)
+        self._eventSink.ClientID = self._zeiss.getID()
+        self._eventSink.Advise(self._device)
 
     def disconnect(self):
-        # print ("Deregistering changer events")
-        try:
-            self.m_continualEvents.Unadvise(self.m_continual)
-            self.m_continualEvents.MTBPositionChangedEvent -= MTB.Api.MTBContinualPositionChangedHandler(
-                self.onContinualPositionChanged)
-            self.m_continualEvents.MTBPositionSettledEvent -= MTB.Api.MTBContinualPositionSettledHandler(
-                self.onContinualPositionSettled)
-            self.m_continualEvents.MTBPHWLimitReachedEvent -= MTB.Api.MTBContinualHWLimitReachedHandler(
-                self.onContinualHWLimitReached)
-        except:
-            pass
+        self._eventSink.Unadvise(self._device)
+        if self._onChange is not None:
+            self._eventSink.MTBPositionChangedEvent -= MTB.Api.MTBContinualPositionChangedHandler(self._onChange)
+        if self._onSettle is not None:
+            self._eventSink.MTBPositionSettledEvent -= MTB.Api.MTBContinualPositionSettledHandler(self._onSettle)
+        if self._onReachLimit is not None:
+            self._eventSink.MTBPHWLimitReachedEvent -= MTB.Api.MTBContinualHWLimitReachedHandler(self._onReachLimit)
 
-        self.m_continualEvents = None
-
-    def getElement(self, position):
-        return self.m_continual.getElement(position)
+        self._eventSink = None
 
     def getPosition(self):
-        return self.m_continual.Position
+        # TODO check this for correctness, if it ends up being used
+        return self._device.Position
 
     def setPosition(self, newposition):
-        with ZeissDeviceThreadLock:
-            self.m_continual.setPosition(newposition, MTB.Api.MTBCmdSetModes.Default)
+        # TODO this probably needs units, if it ends up being used
+        with self._zeiss.threadLock:
+            self._device.setPosition(newposition, MTB.Api.MTBCmdSetModes.Default)
 
 
-class ZeissMtbFocus(ZeissMtbCommon):
+class ZeissMtbFocus:
     def __init__(self, root):
         self.m_component = root.GetComponent("MTBFocus")
-        ZeissMtbCommon.__init__(self, self.m_component)
-
-    # ------- ZEISS OBJECTIVE ------
 
 
 class ZeissMtbObjective(ZeissMtbChanger):
@@ -398,53 +340,30 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return self.m_shutterSwitch.State
 
 
-class ZeissMtbLamp:
+class ZeissMtbLamp(ZeissMtbContinual):
     # MTBRLShutter
     # MTBTLShutter 
-    def __init__(self, root, mtbId, lampName):
-        self.m_MTBRoot = root
-        self.m_ID = mtbId
-        self._lamp = root.GetComponent(lampName)
-
-        # self.registerEvents(self.onIsActiveChanged, self.onIsActiveSettled)
-
-    #     self._lampEvents = None
-    #     self._registerLampEvents()
-    #
-    # def _registerLampEvents(self):
-    #     if self._lamp is None:
-    #         return
-    #
-    #     # Register to Changer events
-    #
-    #     if self._lampEvents is None:
-    #         self._lampEvents = MTB.Api.MTBLampEventSink()
-    #     else:
-    #         self.disconnect()
-    #         self._lampEvents = MTB.Api.MTBLampEventSink()
-    #
-    #     self._lampEvents.handleMTBOnOffChangedEvent += MTB.Api.MTBOnOffChangedHandler(lambda state: print(state))
-    #     self._lampEvents.MTBLampActiveChangedEvent += MTB.Api.handleMTBLampActiveChanged(lambda active: print(active))
-    #     self._lampEvents.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(
-    #         defaultOnHWLimitReached)
-    #
-    #     self.m_continualEvents.ClientID = self.m_ID
-    #     self.m_continualEvents.Advise(self.m_continual)
-
-    # def onIsActiveChanged(self, position):
-    #     print("{} Lamp changed state to {}".format(self.m_name, position))
-    #
-    # def onIsActiveSettled(self, position):
-    #     print("{} Lamp settled state to {}".format(self.m_name, position))
+    def __init__(self, sdk, lamp):
+        self._zeiss = sdk
+        self._lamp = lamp
+        ZeissMtbContinual.__init__(self, sdk, lamp)
 
     def setIsActive(self, isActive):
-        if isActive:
-            self._lamp.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
-        else:
-            self._lamp.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
+        with self._zeiss.threadLock:
+            if isActive:
+                self._lamp.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
+            else:
+                self._lamp.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
 
     def getIsActive(self):
         return self._lamp.GetOnOff() == MTB.Api.MTBOnOff.On
+
+    def setBrightness(self, percent):
+        with self._zeiss.threadLock:
+            self._lamp.setPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
+
+    def getBrightness(self):
+        return self._lamp.getPosition("%")
 
 
 class ZeissMtbReflector(ZeissMtbChanger):

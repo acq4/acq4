@@ -16,7 +16,7 @@ class ZeissMicroscope(Microscope):
 
         self.zeiss = ZeissMtbSdk.getSingleton()
         self.mtbRoot = self.zeiss.connect()
-        self.zeiss.getObjective().registerEvents(self.zeissObjectivePosChanged, self.zeissObjectivePosSettled)
+        self.zeiss.getObjective().registerEventHandlers(self.zeissObjectivePosChanged, self.zeissObjectivePosSettled)
 
         self.objectiveIndexChanged(str(self.zeissCurrentPosition()))
 

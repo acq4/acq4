@@ -15,7 +15,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 
 
-class ZeissMotorizedReflectorChanger(FilterWheel):
+class ZeissReflectorChanger(FilterWheel):
     def __init__(self, dm, config, name):
 
         self.reflector = ZeissReflector(dm, config, name)
@@ -106,7 +106,7 @@ class ZeissReflector(Device):
         self.mtbRoot = self.zeiss.connect()
         self.m_reflector = self.zeiss.getReflector()
         self.currentIndex = -1
-        self.m_reflector.registerEvents(self.onReflectorPosChanged, self.onReflectorPosSettled)
+        self.m_reflector.registerEventHandlers(self.onReflectorPosChanged, self.onReflectorPosSettled)
         self.currentIndex = self.m_reflector.getPosition()
         self.is_moving = False
         # print ("Started Zeiss Reflector Changer:" + str(self.currentIndex) )
