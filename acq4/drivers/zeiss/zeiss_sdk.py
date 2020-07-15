@@ -361,10 +361,10 @@ class ZeissMtbLamp(ZeissMtbContinual):
 
     def setBrightness(self, percent):
         with self._zeiss.threadLock:
-            self._device.setPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
+            self._device.SetPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
 
     def getBrightness(self):
-        return self._device.getPosition("%")
+        return self._device.GetPosition("%")
 
 
 class ZeissMtbReflector(ZeissMtbChanger):
