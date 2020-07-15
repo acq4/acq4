@@ -204,15 +204,23 @@ class ZeissMtbChanger:
             self.m_changer.setPosition(newposition, MTB.Api.MTBCmdSetModes.Default)
 
 
-class ZeissMtbContinual:
+class ZeissMtbComponent:
+    def __init__(self, sdk, device):
+        self._zeiss = sdk
+        self._device = device
+
+    def getID(self):
+        return self._device.ID
+
+
+class ZeissMtbContinual(ZeissMtbComponent):
     """
     "Continual" refers to the general concept of hardware which can be set to a value in a range. Used here
      primarily to encapsulate the event listeners.
     """
 
     def __init__(self, sdk, device):
-        self._zeiss = sdk
-        self._device = device
+        super(ZeissMtbContinual, self).__init__(sdk, device)
         self._eventSink = None
         self._onChange = None
         self._onSettle = None
@@ -341,29 +349,22 @@ class ZeissMtbShutter(ZeissMtbChanger):
 
 
 class ZeissMtbLamp(ZeissMtbContinual):
-    # MTBRLShutter
-    # MTBTLShutter 
-    def __init__(self, sdk, lamp):
-        self._zeiss = sdk
-        self._lamp = lamp
-        ZeissMtbContinual.__init__(self, sdk, lamp)
-
     def setIsActive(self, isActive):
         with self._zeiss.threadLock:
             if isActive:
-                self._lamp.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
+                self._device.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
             else:
-                self._lamp.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
+                self._device.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
 
     def getIsActive(self):
-        return self._lamp.GetOnOff() == MTB.Api.MTBOnOff.On
+        return self._device.GetOnOff() == MTB.Api.MTBOnOff.On
 
     def setBrightness(self, percent):
         with self._zeiss.threadLock:
-            self._lamp.setPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
+            self._device.setPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
 
     def getBrightness(self):
-        return self._lamp.getPosition("%")
+        return self._device.getPosition("%")
 
 
 class ZeissMtbReflector(ZeissMtbChanger):

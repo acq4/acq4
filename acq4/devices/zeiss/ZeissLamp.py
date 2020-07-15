@@ -28,20 +28,23 @@ class ZeissLamp(LightSource):
         else:
             self._lamp = self._zeiss.getRLLamp()
 
-        self.targetBrightness = self.getBrightness()
-        self.isOn = self.getIsOn()
-
+        self.addSource(self._lamp.getID(), {"adjustableBrightness": True})
         self._lamp.registerEventHandlers(
             onChange=self.sigLightChanged.emit,
             onSettle=self.sigLightChanged.emit,
             onReachLimit=self.sigLightChanged.emit)
 
+    def sourceActive(self, name):
+        return self._lamp.getIsActive()
+
+    def setSourceActive(self, name, active):
+        self._lamp.setIsActive(active)
+
     def getSourceBrightness(self, name):
-        return self._lamp.getBrightness()
+        return (self._lamp.getBrightness() or 0.0) / 100.
 
     def setSourceBrightness(self, name, percent):
-        self._lamp.setBrightness(percent)
-        self.targetBrightness = percent
+        self._lamp.setBrightness(percent * 100.)
 
 
 class ZeissRLShutter(Device):
