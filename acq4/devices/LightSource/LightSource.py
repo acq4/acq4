@@ -110,8 +110,8 @@ class LightSourceGui(Qt.QWidget):
         self.sourceActivationButtons = {}
         self.sourceBrightnessSliders = {}
         for i, name in enumerate(self.dev.sourceConfigs):
-            src = self.dev.sourceConfigs[name]
-            if src.get("adjustableBrightness", False):
+            conf = self.dev.sourceConfigs[name]
+            if conf.get("adjustableBrightness", False):
                 slider = Qt.QSlider()
                 slider_cont = Qt.QGridLayout()
                 self.sourceBrightnessSliders[name] = slider
@@ -123,9 +123,17 @@ class LightSourceGui(Qt.QWidget):
             self.sourceActivationButtons[name] = btn
             self.layout.addWidget(btn, 1, i)
             btn.clicked.connect(lambda isOn: self.dev.setSourceActive(name, isOn))
-        # TODO get initial values
-        # TODO hook into device changes
-        # TODO test that device changes don't mess with user
+        self._updateValuesToMatchDev()
+        self.dev.sigLightChanged.connect(self.onDevChange)
+
+    def _updateValuesToMatchDev(self):
+        for name in self.dev.sourceConfigs:
+            self.sourceActivationButtons[name].setChecked(self.dev.sourceActive(name))
+            if name in self.sourceBrightnessSliders:
+                self.sourceBrightnessSliders[name].setValue(int(self.dev.getSourceBrightness(name) * 99))
+
+    def onDevChange(self):
+        self._updateValuesToMatchDev()
 
 
 class LightSourceTaskGui(TaskGui):
