@@ -237,7 +237,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
         if onSettle is not None:
             self._onSettle = onSettle
             self._eventSink.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(onSettle)
-        if onReachLimit is not None:
+        if onReachLimit is not None and hasattr(self._eventSink, "MTBPHWLimitReachedEvent"):
             self._onReachLimit = onReachLimit
             self._eventSink.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(onReachLimit)
 

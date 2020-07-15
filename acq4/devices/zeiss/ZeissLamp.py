@@ -30,8 +30,7 @@ class ZeissLamp(LightSource):
         self.addSource(self._lamp.getID(), {"adjustableBrightness": True})
         self._lamp.registerEventHandlers(
             onChange=self.sigLightChanged.emit,
-            onSettle=self.sigLightChanged.emit,
-            onReachLimit=self.sigLightChanged.emit)
+            onSettle=self.sigLightChanged.emit)
 
     def sourceActive(self, name):
         return self._lamp.getIsActive()
