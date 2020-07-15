@@ -20,8 +20,7 @@ class ZeissLamp(LightSource):
     REFLECTIVE = "Reflective"
 
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
-        self._config = config
+        super(ZeissLamp, self).__init__(dm, config, name)
         self._zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
         if config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
             self._lamp = self._zeiss.getTLLamp()
