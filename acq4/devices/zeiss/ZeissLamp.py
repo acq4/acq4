@@ -20,23 +20,28 @@ class ZeissLamp(LightSource):
     REFLECTIVE = "Reflective"
 
     def __init__(self, dm, config, name):
-        LightSource.__init__(self, dm, config, name)
+        Device.__init__(self, dm, config, name)
+        self._config = config
         self._zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
         if config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
             self._lamp = self._zeiss.getTLLamp()
         else:
             self._lamp = self._zeiss.getRLLamp()
 
+        self.targetBrightness = self.getBrightness()
+        self.isOn = self.getIsOn()
+
         self._lamp.registerEventHandlers(
             onChange=self.sigLightChanged.emit,
             onSettle=self.sigLightChanged.emit,
             onReachLimit=self.sigLightChanged.emit)
-        self.addSource("default", config)  # A fake, as this is a single-source lamp
 
-    def setSourceActive(self, name, active):
-        # TODO handle setting the brightness apart from on-/-off-ness
-        self._lamp.setIsActive(active)
-        self._sources["default"]["active"] = active
+    def getSourceBrightness(self, name):
+        return self._lamp.getBrightness()
+
+    def setSourceBrightness(self, name, percent):
+        self._lamp.setBrightness(percent)
+        self.targetBrightness = percent
 
 
 class ZeissRLShutter(Device):

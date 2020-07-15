@@ -316,7 +316,6 @@ class TaskGui(Qt.QWidget):
         """Return a dictionary representing the current state of the widget."""
         return {}
         
-        
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         pass

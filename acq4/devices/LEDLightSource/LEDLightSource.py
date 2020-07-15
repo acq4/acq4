@@ -30,13 +30,13 @@ class LEDLightSource(LightSource):
         if name is None:
             return
         state = bool(value)
-        if self._sources[name]['active'] != state:
-            self._sources[name]['active'] = state
+        if self.sourceConfigs[name]['active'] != state:
+            self.sourceConfigs[name]['active'] = state
             self.sigLightChanged.emit(self, name)
             self._updateXkeyLight(name)
 
     def setSourceActive(self, name, active):
         dev, chan = self._channelsByName[name]
-        level = float(active) * self._sources[name].get('onValue', 1.0)
+        level = float(active) * self.sourceConfigs[name].get('onValue', 1.0)
         dev.setChanHolding(chan,  level)
 
