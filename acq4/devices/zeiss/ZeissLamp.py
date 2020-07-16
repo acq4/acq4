@@ -18,8 +18,11 @@ class ZeissLamp(LightSource):
 
         self.addSource(self._lamp.getID(), {"adjustableBrightness": True})
         self._lamp.registerEventHandlers(
-            onChange=self.sigLightChanged.emit,
-            onSettle=self.sigLightChanged.emit)  # TODO this doesn't seem to work
+            onChange=self._noticeLightChange,
+            onSettle=self._noticeLightChange)
+
+    def _noticeLightChange(self, newValue):
+        self.sigLightChanged.emit(self, self._lamp.getID())
 
     def sourceActive(self, name):
         return self._lamp.getIsActive()
