@@ -13,6 +13,7 @@
 
 # Importing MTB.Api generated with makepy
 import atexit
+import inspect
 import threading
 import time
 from threading import Thread, Lock
@@ -168,26 +169,33 @@ class ZeissMtbContinual(ZeissMtbComponent):
      primarily to encapsulate the event listeners.
     """
 
-    def __init__(self, sdk, device):
+    def __init__(self, sdk, device, units="%"):
         super(ZeissMtbContinual, self).__init__(sdk, device)
         self._eventSink = None
         self._onChange = None
         self._onSettle = None
         self._onReachLimit = None
+        self._units = units
 
     def registerEventHandlers(self, onChange=None, onSettle=None, onReachLimit=None):
-        # TODO this code doesn't give us event callbacks ever. where's the problem?
         if self._eventSink is not None:
             self.disconnect()
         self._eventSink = MTB.Api.MTBContinualEventSink()
 
         if onChange is not None:
-            self._onChange = onChange
-            self._eventSink.MTBPositionChangedEvent += MTB.Api.MTBContinualPositionChangedHandler(onChange)
+            assert len(inspect.signature(onChange).parameters) == 1, "onChange handler must accept exactly one arg"
+            def wrappedOnChange(hashtable):
+                return onChange(hashtable[self._units])
+            self._onChange = wrappedOnChange
+            self._eventSink.MTBPositionChangedEvent += MTB.Api.MTBContinualPositionChangedHandler(wrappedOnChange)
         if onSettle is not None:
-            self._onSettle = onSettle
-            self._eventSink.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(onSettle)
+            assert len(inspect.signature(onSettle).parameters) == 1, "onSettle handler must accept exactly one arg"
+            def wrappedOnSettle(hashtable):
+                return onSettle(hashtable[self._units])
+            self._onSettle = wrappedOnSettle
+            self._eventSink.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(wrappedOnSettle)
         if onReachLimit is not None and hasattr(self._eventSink, "MTBPHWLimitReachedEvent"):
+            # TODO find out what args this needs
             self._onReachLimit = onReachLimit
             self._eventSink.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(onReachLimit)
 
@@ -198,10 +206,13 @@ class ZeissMtbContinual(ZeissMtbComponent):
         self._eventSink.Unadvise(self._device)
         if self._onChange is not None:
             self._eventSink.MTBPositionChangedEvent -= MTB.Api.MTBContinualPositionChangedHandler(self._onChange)
+            self._onChange = None
         if self._onSettle is not None:
             self._eventSink.MTBPositionSettledEvent -= MTB.Api.MTBContinualPositionSettledHandler(self._onSettle)
+            self._onSettle = None
         if self._onReachLimit is not None:
             self._eventSink.MTBPHWLimitReachedEvent -= MTB.Api.MTBContinualHWLimitReachedHandler(self._onReachLimit)
+            self._onReachLimit = None
 
         self._eventSink = None
 
