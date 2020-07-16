@@ -141,4 +141,4 @@ class LightSourceTaskGui(TaskGui):
         super(LightSourceTaskGui, self).__init__(dev, taskRunner)
         self.dev = dev
         self.taskRunner = taskRunner
-        # TODO
+        # TODO?
