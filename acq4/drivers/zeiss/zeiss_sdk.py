@@ -176,6 +176,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
         self._onReachLimit = None
 
     def registerEventHandlers(self, onChange=None, onSettle=None, onReachLimit=None):
+        # TODO this code doesn't give us event callbacks ever. where's the problem?
         if self._eventSink is not None:
             self.disconnect()
         self._eventSink = MTB.Api.MTBContinualEventSink()
@@ -209,7 +210,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
         return self._device.Position
 
     def setPosition(self, newposition):
-        # TODO this probably needs units, if it ends up being used
+        # TODO this probably needs units? if it ends up being used.
         with self._zeiss.threadLock:
             self._device.setPosition(newposition, MTB.Api.MTBCmdSetModes.Default)
 
