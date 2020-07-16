@@ -60,10 +60,16 @@ for dev, compos in zeiss.getComponentsByDevice().items():
     for c in compos:
         print(c.ID, c.Name)
 
+def notice(value):
+    print("we have a new value", value)
+
 lamp = zeiss.getTLLamp()
+lamp.registerEventHandlers(onChange=notice, onSettle=notice)
 print("Transmissive Lamp:")
 print(lamp)
 print(lamp.getIsActive())
+lamp.setBrightness(lamp.getBrightness() / 2)
+lamp.setBrightness(lamp.getBrightness() * 2)
 
 reflector = zeiss.getReflector()
 reflector.setPosition(1)
