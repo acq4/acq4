@@ -72,7 +72,10 @@ lamp.setBrightness(lamp.getBrightness() / 2)
 lamp.setBrightness(lamp.getBrightness() * 2)
 
 reflector = zeiss.getReflectorChanger()
+reflector.registerEventHandlers(onSettle=notice)
 reflector.setPosition(1)
+print(reflector.getPosition())
+reflector.setPosition(2)
 print(reflector.getPosition())
 
 shutter = zeiss.getShutter()
