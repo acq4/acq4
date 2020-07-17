@@ -160,7 +160,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
     def registerEventHandlers(self, onChange=None, onSettle=None, onReachLimit=None):
         if self._eventSink is not None:
             self.disconnect()
-        self._eventSink = MTB.Api.MTBContinualEventSink()
+        self._eventSink = self._createEventSink()
 
         if onChange is not None:
             if hasattr(inspect, "signature") and len(inspect.signature(onChange).parameters) != 1:
@@ -179,6 +179,9 @@ class ZeissMtbContinual(ZeissMtbComponent):
 
         self._eventSink.ClientID = self._zeiss.getID()
         self._eventSink.Advise(self._component)
+
+    def _createEventSink(self):
+        return MTB.Api.MTBContinualEventSink()
 
     def _wrapEventHandler(self, handler):
         def wrappedHandler(hashtable):
@@ -213,6 +216,9 @@ class ZeissMtbContinual(ZeissMtbComponent):
 class ZeissMtbChanger(ZeissMtbContinual):
     def __init__(self, sdk, component):
         super(ZeissMtbChanger, self).__init__(sdk, component, units=None)
+
+    def _createEventSink(self):
+        return MTB.Api.MTBChangerEventSink()
 
     def getElementCount(self):
         return self._component.getElementCount()
