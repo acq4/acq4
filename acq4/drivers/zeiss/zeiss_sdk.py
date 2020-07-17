@@ -240,6 +240,60 @@ class ZeissMtbChanger(ZeissMtbContinual):
         return self._component.getElementCount()
 
 
+class ZeissMtbLamp(ZeissMtbContinual):
+    def _wrapOnChange(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onChange handler must accept exactly one arg")
+
+        def wrappedHandler(hashtable):
+            return handler(hashtable["%"])
+
+        return MTB.Api.MTBContinualPositionChangedHandler(wrappedHandler)
+
+    def _wrapOnSettle(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onSettle handler must accept exactly one arg")
+
+        def wrappedHandler(hashtable):
+            return handler(hashtable["%"])
+
+        return MTB.Api.MTBContinualPositionSettledHandler(wrappedHandler)
+
+    def setIsActive(self, isActive):
+        with self._zeiss.threadLock:
+            if isActive:
+                self._component.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
+            else:
+                self._component.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
+
+    def getIsActive(self):
+        return self._component.GetOnOff() == MTB.Api.MTBOnOff.On
+
+    def setBrightness(self, percent):
+        with self._zeiss.threadLock:
+            self._component.SetPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
+
+    def getBrightness(self):
+        return self._component.GetPosition("%")
+
+
+class ZeissMtbReflectorChanger(ZeissMtbChanger):
+    def getWavelengthArea(self, index):
+        return self._component.getWavelengthArea(index)
+
+    def getWavelengthAreaCount(self):
+        return self._component.getWavelengthAreaCount()
+
+    def contrastMethod(self):
+        return self._component.contrastMethod
+
+    def features(self):
+        return self._component.features
+
+
+# Unfinished below this line
+
+
 class ZeissMtbFocus:
     def __init__(self, root):
         self.m_component = root.GetComponent("MTBFocus")
@@ -321,54 +375,3 @@ class ZeissMtbShutter(ZeissMtbChanger):
         # Left = 8,
         # Right = 16
         return self.m_shutterSwitch.State
-
-
-class ZeissMtbLamp(ZeissMtbContinual):
-    def _wrapOnChange(self, handler):
-        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
-            raise ValueError("onChange handler must accept exactly one arg")
-
-        def wrappedHandler(hashtable):
-            return handler(hashtable["%"])
-
-        return MTB.Api.MTBContinualPositionChangedHandler(wrappedHandler)
-
-    def _wrapOnSettle(self, handler):
-        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
-            raise ValueError("onSettle handler must accept exactly one arg")
-
-        def wrappedHandler(hashtable):
-            return handler(hashtable["%"])
-
-        return MTB.Api.MTBContinualPositionSettledHandler(wrappedHandler)
-
-    def setIsActive(self, isActive):
-        with self._zeiss.threadLock:
-            if isActive:
-                self._component.SetOnOff(MTB.Api.MTBOnOff.On, MTB.Api.MTBCmdSetModes.Default)
-            else:
-                self._component.SetOnOff(MTB.Api.MTBOnOff.Off, MTB.Api.MTBCmdSetModes.Default)
-
-    def getIsActive(self):
-        return self._component.GetOnOff() == MTB.Api.MTBOnOff.On
-
-    def setBrightness(self, percent):
-        with self._zeiss.threadLock:
-            self._component.SetPosition(float(percent), "%", MTB.Api.MTBCmdSetModes.Default)
-
-    def getBrightness(self):
-        return self._component.GetPosition("%")
-
-
-class ZeissMtbReflectorChanger(ZeissMtbChanger):
-    def getWavelengthArea(self, index):
-        return self._component.getWavelengthArea(index)
-
-    def getWavelengthAreaCount(self):
-        return self._component.getWavelengthAreaCount()
-
-    def contrastMethod(self):
-        return self._component.contrastMethod
-
-    def features(self):
-        return self._component.features
