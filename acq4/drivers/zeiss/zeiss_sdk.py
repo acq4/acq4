@@ -237,7 +237,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
         return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
     def getElementCount(self):
-        return self._component.getElementCount()
+        return self._component.GetElementCount()
 
 
 class ZeissMtbLamp(ZeissMtbContinual):
@@ -279,16 +279,16 @@ class ZeissMtbLamp(ZeissMtbContinual):
 
 class ZeissMtbReflectorChanger(ZeissMtbChanger):
     def getWavelengthArea(self, index):
-        return self._component.getWavelengthArea(index)
+        return self._component.GetWavelengthArea(index)
 
     def getWavelengthAreaCount(self):
-        return self._component.getWavelengthAreaCount()
+        return self._component.GetWavelengthAreaCount()
 
     def contrastMethod(self):
-        return self._component.contrastMethod
+        return self._component.ContrastMethod
 
     def features(self):
-        return self._component.features
+        return self._component.Features
 
 
 # Unfinished below this line
