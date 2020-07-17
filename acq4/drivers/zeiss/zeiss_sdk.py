@@ -149,13 +149,12 @@ class ZeissMtbContinual(ZeissMtbComponent):
      primarily to encapsulate the event listeners.
     """
 
-    def __init__(self, sdk, component, units="%"):
+    def __init__(self, sdk, component):
         super(ZeissMtbContinual, self).__init__(sdk, component)
         self._eventSink = None
         self._onChange = None
         self._onSettle = None
         self._onReachLimit = None
-        self._units = units
 
     def registerEventHandlers(self, onChange=None, onSettle=None, onReachLimit=None):
         if self._eventSink is not None:
@@ -163,19 +162,15 @@ class ZeissMtbContinual(ZeissMtbComponent):
         self._eventSink = self._createEventSink()
 
         if onChange is not None:
-            if hasattr(inspect, "signature") and len(inspect.signature(onChange).parameters) != 1:
-                raise ValueError("onChange handler must accept exactly one arg")
-            self._onChange = self._wrapEventHandler(onChange)
-            self._eventSink.MTBPositionChangedEvent += MTB.Api.MTBContinualPositionChangedHandler(self._onChange)
+            self._onChange = self._wrapOnChange(onChange)
+            self._eventSink.MTBPositionChangedEvent += self._onChange
         if onSettle is not None:
-            if hasattr(inspect, "signature") and len(inspect.signature(onSettle).parameters) != 1:
-                raise ValueError("onSettle handler must accept exactly one arg")
-            self._onSettle = self._wrapEventHandler(onSettle)
-            self._eventSink.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(self._onSettle)
+            self._onSettle = self._wrapOnSettle(onSettle)
+            self._eventSink.MTBPositionSettledEvent += self._onSettle
         if onReachLimit is not None and hasattr(self._eventSink, "MTBPHWLimitReachedEvent"):
-            # TODO find out what args this needs
-            self._onReachLimit = onReachLimit
-            self._eventSink.MTBPHWLimitReachedEvent += MTB.Api.MTBContinualHWLimitReachedHandler(onReachLimit)
+            # TODO find out how to wrap this
+            self._onReachLimit =self._wrapOnReachLimit(onReachLimit)
+            self._eventSink.MTBPHWLimitReachedEvent += self._onReachLimit
 
         self._eventSink.ClientID = self._zeiss.getID()
         self._eventSink.Advise(self._component)
@@ -183,11 +178,14 @@ class ZeissMtbContinual(ZeissMtbComponent):
     def _createEventSink(self):
         return MTB.Api.MTBContinualEventSink()
 
-    def _wrapEventHandler(self, handler):
-        def wrappedHandler(hashtable):
-            return handler(hashtable[self._units])
+    def _wrapOnChange(self, handler):
+        raise NotImplementedError()
 
-        return wrappedHandler
+    def _wrapOnSettle(self, handler):
+        raise NotImplementedError()
+
+    def _wrapOnReachLimit(self, handler):
+        raise NotImplementedError()
 
     def disconnect(self):
         if self._eventSink is None:
@@ -214,33 +212,35 @@ class ZeissMtbContinual(ZeissMtbComponent):
 
 
 class ZeissMtbChanger(ZeissMtbContinual):
+    """
+    Positions are 1-based indexes.
+    """
     def __init__(self, sdk, component):
         super(ZeissMtbChanger, self).__init__(sdk, component, units=None)
 
     def _createEventSink(self):
         return MTB.Api.MTBChangerEventSink()
 
+    def _wrapOnChange(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onChange handler must accept exactly one arg")
+
+        def wrappedHandler(pos):
+            return handler(pos)
+
+        return MTB.Api.MTBChangerPositionChangedHandler(wrappedHandler)
+
+    def _wrapOnSettle(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onSettle handler must accept exactly one arg")
+
+        def wrappedHandler(pos):
+            return handler(pos)
+
+        return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
+
     def getElementCount(self):
         return self._component.getElementCount()
-
-    def getPosition(self):
-        """
-        Returns
-        -------
-        int
-            1-based index of the current filter
-        """
-        return super(ZeissMtbChanger, self).getPosition()
-
-    def setPosition(self, newPosition):
-        """
-        Parameters
-        ----------
-        newPosition : int
-            1-based index of the filter to change to.
-
-        """
-        super(ZeissMtbChanger, self).setPosition(newPosition)
 
 
 class ZeissMtbFocus:
@@ -327,6 +327,24 @@ class ZeissMtbShutter(ZeissMtbChanger):
 
 
 class ZeissMtbLamp(ZeissMtbContinual):
+    def _wrapOnChange(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onChange handler must accept exactly one arg")
+
+        def wrappedHandler(hashtable):
+            return handler(hashtable["%"])
+
+        return MTB.Api.MTBContinualPositionChangedHandler(wrappedHandler)
+
+    def _wrapOnSettle(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onSettle handler must accept exactly one arg")
+
+        def wrappedHandler(hashtable):
+            return handler(hashtable["%"])
+
+        return MTB.Api.MTBContinualPositionSettledHandler(wrappedHandler)
+
     def setIsActive(self, isActive):
         with self._zeiss.threadLock:
             if isActive:
