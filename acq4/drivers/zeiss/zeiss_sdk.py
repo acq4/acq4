@@ -187,6 +187,8 @@ class ZeissMtbContinual(ZeissMtbComponent):
         return wrappedHandler
 
     def disconnect(self):
+        if self._eventSink is None:
+            return
         self._eventSink.Unadvise(self._component)
         if self._onChange is not None:
             self._eventSink.MTBPositionChangedEvent -= MTB.Api.MTBContinualPositionChangedHandler(self._onChange)
