@@ -48,7 +48,7 @@ class ZeissReflectorChanger(FilterWheel):
         return FilterWheelFuture(self, newPosition)
 
     def _stop(self):
-        warn("`stop` called, but is not implemented for Zeiss Reflector Changers")
+        warn("`stop` called, but is not supported by Zeiss reflector changers")
 
     def isMoving(self):
         return self._isMoving
