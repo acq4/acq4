@@ -60,7 +60,7 @@ class ZeissMtbSdk:
         return cls._instance
 
     def __init__(self):
-        self._devicesToDisconnect = []
+        self._devicesByID = {}
         self.threadLock = None
         self.m_MTBConnection = None
         self.m_MTBRoot = None
@@ -93,7 +93,7 @@ class ZeissMtbSdk:
         return self.m_ID
 
     def disconnect(self):
-        for dev in self._devicesToDisconnect:
+        for dev in self._devicesByID.values():
             dev.disconnect()
 
         print("Logging out of MTB..")
@@ -112,42 +112,39 @@ class ZeissMtbSdk:
         if self.m_reflector is None:
             # self.m_devices[self.m_selected_device_index]
             self.m_reflector = ZeissMtbReflector(self.m_MTBRoot, self.m_ID)
-            self._devicesToDisconnect.append(self.m_reflector)
+            self._devicesByID[self.m_reflector.getID()] = self.m_reflector
 
         return self.m_reflector
 
     def getTLLamp(self):
-        if self._tl_lamp is None:
-            self._tl_lamp = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent("MTBTLHalogenLamp"))
-            self._devicesToDisconnect.append(self._tl_lamp)
-
-        return self._tl_lamp
+        return self.getSpecificLamp("MTBTLHalogenLamp")
 
     def getRLLamp(self):
-        if self._rl_lamp is None:
-            self._rl_lamp = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent("MTBIDontKnowLamp"))
-            self._devicesToDisconnect.append(self._rl_lamp)
+        return self.getSpecificLamp("MTBRLHalogenLamp")
 
-        return self._rl_lamp
+    def getSpecificLamp(self, componentID):
+        if componentID not in self._devicesByID:
+            self._devicesByID[componentID] = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent(componentID))
+        return self._devicesByID[componentID]
 
     def getObjective(self):
         if self.m_objective is None:
             # self.m_devices[self.m_selected_device_index]
             self.m_objective = ZeissMtbObjective(self.m_MTBRoot, self.m_ID)
-            self._devicesToDisconnect.append(self.m_objective)
+            self._devicesByID[self.m_objective.getID()] = self.m_objective
 
         return self.m_objective
 
     def getFocus(self):
         if self.m_focus is None:
             self.m_focus = self.m_MTBRoot.GetComponent("MTBFocus")
-            self._devicesToDisconnect.append(self.m_focus)
+            self._devicesByID[self.m_focus.getID()] = self.m_focus
         return self.m_focus
 
     def getShutter(self):
         if self.m_shutter is None:
             self.m_shutter = ZeissMtbShutter(self.m_MTBRoot, self.m_ID)
-            self._devicesToDisconnect.append(self.m_shutter)
+            self._devicesByID[self.m_shutter.getID()] = self.m_shutter
         return self.m_shutter
 
 
