@@ -23,7 +23,7 @@ class Sensapex(Stage):
     
     def __init__(self, man, config, name):
         self.devid = config.get('deviceId')
-        self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
+        self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.pop('maxError', 1e-6)
         
@@ -118,7 +118,7 @@ class Sensapex(Stage):
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
-            if self._lastPos is None or dif > 100:
+            if self._lastPos is None or dif > 0.1:
                 self._lastPos = pos
                 emit = True
             else:
@@ -165,6 +165,7 @@ class Sensapex(Stage):
 
     def deviceInterface(self, win):
         return SensapexInterface(self, win)
+
 
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
@@ -315,8 +316,6 @@ class SensapexInterface(Qt.QWidget):
         self.softStartBtn.clicked.connect(self.softstartClicked)
         self.getSoftStartState()
 
-       
-
         self.calibrateWindow = None
 
         cap = dev.capabilities()
@@ -353,8 +352,6 @@ class SensapexInterface(Qt.QWidget):
             text = pg.siFormat(globalPos[i], suffix='m', precision=5)
             self.posLabels[i][0].setText(text)
             self.posLabels[i][1].setText(str(stagePos[i]))
-
-   
 
     def goHomeClicked(self):
         self.dev.goHome()

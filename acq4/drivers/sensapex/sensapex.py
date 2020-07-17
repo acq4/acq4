@@ -20,6 +20,7 @@ LIBUM_DEF_TIMEOUT = 20
 LIBUM_DEF_BCAST_ADDRESS = b"169.254.255.255"
 LIBUM_DEF_GROUP = 0
 LIBUM_MAX_MESSAGE_SIZE = 1502
+LIBUM_ARG_UNDEF = 0x7fffffff
 
 # error codes
 LIBUM_NO_ERROR     =  0,  # No error
@@ -193,15 +194,15 @@ class UMP(object):
         # duration that manipulator must be not busy before a move is considered complete.
         self.move_expire_time = 50e-3
 
-        # if we miss by more than 0.5 um, try again
-        self.retry_threshold = 500
+        # if we miss any axis by more than 0.5 um, try again
+        self.retry_threshold = np.array([500, 500, 500, 500])
+
         # retry up to 3 times, then fail
         self.max_move_retry = 3
 
         self.max_acceleration = {}
         
         self.lib = self.get_lib()
-        self._initTime = time.time()
         self.lib.um_errorstr.restype = c_char_p
 
         min_version = (0, 915)
@@ -237,15 +238,11 @@ class UMP(object):
         self.lib.um_get_version.restype = ctypes.c_char_p
         return self.lib.um_get_version()
         
-    def list_devices(self, max_id=20):
+    def list_devices(self, max_id=50):
         """Return a list of all connected device IDs.
         """
-        wait = 4 - (time.time() - self._initTime)
-        if wait > 0:
-            time.sleep(wait)
-        # self.recv_all()
         devarray = (c_int*max_id)()
-        r = self.call('um_get_device_list', byref(devarray) )
+        r = self.call('um_get_device_list', byref(devarray), c_int(max_id))
         devs = [devarray[i] for i in range(r)]
         
         return devs
@@ -318,14 +315,14 @@ class UMP(object):
             self.h = None
 
     def get_pos(self, dev, timeout=0):
-        """Return the absolute position of the specified device (in nm).
+        """Return the absolute position of the specified device (in um).
         
         If *timeout* == 0, then the position is returned directly from cache
         and not queried from the device.
         """
         if timeout is None:
             timeout = self._timeout
-        xyzwe = c_int(), c_int(), c_int(), c_int(), c_int()
+        xyzwe = c_float(), c_float(), c_float(), c_float(), c_int()
         timeout = c_int(timeout)
        
         r = self.call('um_get_positions', c_int(dev), timeout, *[byref(x) for x in xyzwe]) 
@@ -336,14 +333,15 @@ class UMP(object):
         return [x.value for x in xyzwe[:n_axes]]
 
     def goto_pos(self, dev, pos, speed, simultaneous=True, linear=False, max_acceleration=0, _request=None):
-        """Request the specified device to move to an absolute position (in nm).
+        """Request the specified device to move to an absolute position (in um).
 
         Parameters
         ----------
         dev : int
             ID of device to move
         pos : array-like
-            X,Y,Z,(W) coordinates to move to
+            X,Y,Z,W coordinates to move to. Values may be None or omitted to leave
+            the axis unaffected.
         speed : float
             Manipulator speed in um/sec
         simultaneous: bool
@@ -360,11 +358,12 @@ class UMP(object):
         """
         kwargs = {'dev': dev, 'pos': pos, 'speed': speed, 'simultaneous': simultaneous, 'linear': linear, 'max_acceleration': max_acceleration}
 
-        pos_arg = list(pos) + [0] * (4-len(pos))
+        pos4 = list(pos) + [None] * (4-len(pos))  # extend to 4 values
+
         mode = int(bool(simultaneous))  # all axes move simultaneously
 
         current_pos = self.get_pos(dev)
-        diff = [float(p-c) for p,c in zip(pos_arg, current_pos)]
+        diff = [float(p-c) for p,c in zip(pos4, current_pos) if p is not None]
         dist = max(1, np.linalg.norm(diff))
         original_speed = speed
         if linear:
@@ -379,7 +378,8 @@ class UMP(object):
             else:
                 max_acceleration = 0
 
-        args = [c_int(int(x)) for x in [dev] + pos_arg + speed + [mode] + [max_acceleration]]
+        pos_arg = [(LIBUM_ARG_UNDEF if x is None else x) for x in pos4]  # replace None with UNDEF
+        args = [c_int(dev)] + [c_float(float(x)) for x in pos_arg] + [c_int(int(x)) for x in speed + [mode] + [max_acceleration]]
         # print (args)
         duration = max(np.array(diff) / speed[:len(diff)])
 
@@ -390,7 +390,7 @@ class UMP(object):
                 last_move._interrupt("started another move before the previous finished")
 
             if _request is None:
-                next_move = MoveRequest(dev, current_pos, pos, original_speed, duration, kwargs)
+                next_move = MoveRequest(dev, current_pos, pos4, original_speed, duration, kwargs)
             else:
                 # We are retrying a previous move; re-use the old request object.
                 next_move = _request
@@ -417,20 +417,11 @@ class UMP(object):
             else:
                 return False
 
-    def stop_all(self):
-        """Stop all manipulators.
-        """
-        with self.lock:
-            self.call('um_stop_all')
-            for dev in self._last_move:
-                move = self._last_move.pop(dev, None)
-                move._interrupt('stop all requested before move finished')
-
     def stop(self, dev):
         """Stop the specified manipulator.
         """
         with self.lock:
-            self.call('um_stop_ext', c_int(dev))
+            self.call('um_stop', c_int(dev))
             move = self._last_move.pop(dev, None)
             if move is not None:
                 move._interrupt('stop requested before move finished')
@@ -488,23 +479,23 @@ class UMP(object):
 
     def get_soft_start_state(self, dev):
         feature_soft_start = 33
-        return self.call('um_get_ext_feature',c_int(dev),c_int(feature_soft_start))
+        return self.call('um_get_ext_feature', c_int(dev), c_int(feature_soft_start))
     
     def set_soft_start_state(self, dev, enabled):
         feature_soft_start = 33
-        return self.call('um_set_ext_feature',c_int(dev),c_int(feature_soft_start), c_int(enabled))
+        return self.call('um_set_ext_feature', c_int(dev), c_int(feature_soft_start), c_int(enabled))
 
     def get_soft_start_value(self, dev):
         return self.get_um_param(dev,15)
 
     def set_soft_start_value(self, dev, value):
         return self.set_um_param(dev,15, value)
- 
 
     def recv_all(self):
         """Receive all queued position/status update packets and update any pending moves.
         """
-        self.call('um_receive', 0)
+        while self.call('um_receive', 1) > 0:
+            pass
         self._update_moves()
 
     def _update_moves(self):
@@ -513,9 +504,11 @@ class UMP(object):
                 if not self.is_busy(dev):
                     move_req = self._last_move.pop(dev)
 
-                    pos = self.get_pos(dev, timeout=-1)
-                    err = np.linalg.norm(np.array(pos) - np.array(move_req.target_pos))
-                    if err < self.retry_threshold or move_req.retry_count >= self.max_move_retry:
+                    pos = np.array(self.get_pos(dev, timeout=-1))
+                    target = np.array(move_req.target_pos).astype(float)
+                    err = np.abs(pos - target)
+                    mask = np.isfinite(err)
+                    if np.all(err[mask] < self.retry_threshold[mask]) or move_req.retry_count >= self.max_move_retry:
                         move._finish(pos)
                     else:
                         # retry move if we missed the target
@@ -647,6 +640,7 @@ class SensapexDevice(object):
 
     def set_soft_start_value(self, value):
         return self.ump.set_soft_start_value(self.devid,value)
+
 
 class PollThread(threading.Thread):
     """Thread to poll for all manipulator position changes.
