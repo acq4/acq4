@@ -57,6 +57,7 @@ class ObjectiveChangeFuture(Future):
             pos = dev.getLensPosition()
             if pos == target:
                 self._taskDone()
+                break
             try:
                 self._checkStop(delay=0.2)
             except self.StopRequested:

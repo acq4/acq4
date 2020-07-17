@@ -86,6 +86,7 @@ class Microscope(Device, OptomechDevice):
             except:
                 printExc("Could not set initial objective state:")
         else:
+            self.switchDevice = None
             self.objectiveIndexChanged(0)
         
         cal = self.readConfigFile('calibration')
@@ -112,8 +113,10 @@ class Microscope(Device, OptomechDevice):
         """Selects the objective currently in position *index*
         
         This method is called when the user selects an objective index from the manager UI."""
-        # by default, we just accept; subclasses may reimplement
-        self.objectiveIndexChanged(index)
+        if self.switchDevice is not None and hasattr(self.switchDevice, 'setSwitch'):
+            self.switchDevice.setSwitch(self.objSwitchId, int(index))
+        else:
+            self.objectiveIndexChanged(index)
     
     def objectiveIndexChanged(self, index):
         # called when the objective index has changed.
