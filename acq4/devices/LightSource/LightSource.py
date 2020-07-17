@@ -9,10 +9,21 @@ from collections import OrderedDict
 
 class LightSource(Device):
     """Device tracking the state and properties of a single light-emitting device with one or more internal
-    illumination sources.
+    illumination sub-sources.
+
+    Config Options
+    --------------
+    For each sub-source, the following options are supported:
+
+    active | bool
+        Whether the source should be turned on at the start.
+    adjustableBrightness | bool
+        Whether or not the device supports setting brightness.
+    xkey | tuple
+        Configuration for hotkey light source toggle
     """
 
-    # emitted when the on/off status of a light changes
+    # emitted when the on/off/brightness status of a light changes
     sigLightChanged = Qt.Signal(object, object)  # self, light_name
 
     def __init__(self, dm, config, name):

@@ -5,13 +5,23 @@ from acq4.drivers.zeiss import ZeissMtbSdk
 
 
 class ZeissLamp(LightSource):
+    """
+    Config Options
+    --------------
+    transOrReflect : str
+        "Transmissive" | "Reflective" Which of the two standard light sources to represent.
+    ZeissMtbComponentID : str
+        If pointing to a different Zeiss component, this overrides `transOrReflect`.
+    """
     TRANSMISSIVE = "Transmissive"
     REFLECTIVE = "Reflective"
 
     def __init__(self, dm, config, name):
         super(ZeissLamp, self).__init__(dm, config, name)
         self._zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
-        if config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
+        if config.get("ZeissMtbComponentID", None) is not None:
+            self._lamp = self._zeiss.getSpecificLamp(config["ZeissMtbComponentID"])
+        elif config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
             self._lamp = self._zeiss.getTLLamp()
         else:
             self._lamp = self._zeiss.getRLLamp()
