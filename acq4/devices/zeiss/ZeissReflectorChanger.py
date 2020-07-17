@@ -12,13 +12,9 @@ class ZeissReflectorChanger(FilterWheel):
     def __init__(self, dm, config, name):
         self._reflectors = ZeissMtbSdk.getSingleton().getReflectorChanger()
         self._reflectors.registerEventHandlers(onSettle=self._onReflectorPosSettled)
-        FilterWheel.__init__(self, dm, config, name)
         self._isMoving = False
         self._targetPosition = self.getPosition()
-        self._initialSlot = config.pop('initialSlot')
-
-        if self._initialSlot is not None:
-            threading.Thread(target=self._setInitialPos).start()  # throwaway so as not to block
+        FilterWheel.__init__(self, dm, config, name)
 
     def _onReflectorPosSettled(self, position):
         changes = {'reflector': position}
