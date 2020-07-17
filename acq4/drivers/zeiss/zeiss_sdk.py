@@ -192,13 +192,13 @@ class ZeissMtbContinual(ZeissMtbComponent):
             return
         self._eventSink.Unadvise(self._component)
         if self._onChange is not None:
-            self._eventSink.MTBPositionChangedEvent -= MTB.Api.MTBContinualPositionChangedHandler(self._onChange)
+            self._eventSink.MTBPositionChangedEvent -= self._onChange
             self._onChange = None
         if self._onSettle is not None:
-            self._eventSink.MTBPositionSettledEvent -= MTB.Api.MTBContinualPositionSettledHandler(self._onSettle)
+            self._eventSink.MTBPositionSettledEvent -= self._onSettle
             self._onSettle = None
         if self._onReachLimit is not None:
-            self._eventSink.MTBPHWLimitReachedEvent -= MTB.Api.MTBContinualHWLimitReachedHandler(self._onReachLimit)
+            self._eventSink.MTBPHWLimitReachedEvent -= self._onReachLimit
             self._onReachLimit = None
 
         self._eventSink = None
