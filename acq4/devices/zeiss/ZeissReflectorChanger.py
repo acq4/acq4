@@ -50,6 +50,12 @@ class ZeissReflectorChanger(FilterWheel):
     def _stop(self):
         warn("`stop` called, but is not supported by Zeiss reflector changers")
 
+    def setSpeed(self, speed):
+        warn("`setSpeed' not supported on Zeiss reflector changers")
+
+    def getSpeed(self):
+        warn("`getSpeed' not supported on Zeiss reflector changers")
+
     def isMoving(self):
         return self._isMoving
 
