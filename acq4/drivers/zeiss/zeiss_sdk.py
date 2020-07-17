@@ -201,13 +201,11 @@ class ZeissMtbContinual(ZeissMtbComponent):
         self._eventSink = None
 
     def getPosition(self):
-        # TODO check this for correctness, if it ends up being used
         return self._component.Position
 
     def setPosition(self, newPosition):
-        # TODO this probably needs units? if it ends up being used.
         with self._zeiss.threadLock:
-            self._component.setPosition(newPosition, MTB.Api.MTBCmdSetModes.Default)
+            self._component.SetPosition(newPosition, MTB.Api.MTBCmdSetModes.Default)
 
 
 class ZeissMtbChanger(ZeissMtbContinual):
