@@ -55,6 +55,7 @@ class DIOSwitch(Device):
     
     def quit(self):
         self.timer.stop()
+
  
 class DevGui(Qt.QWidget):
     def __init__(self, dev, state):

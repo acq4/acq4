@@ -12,11 +12,8 @@ class SensapexPressureControl(PressureControl):
         self.devid = config.get('deviceId')       
         address = config.pop('address', None)
         group = config.pop('group', None)
-        all_devs = UMP.get_ump(address=address, group=group).list_devices()
-        if self.devid not in all_devs:
-            raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
-
-        self.dev = SensapexDevice(self.devid)
+        ump = UMP.get_ump(address=address, group=group)
+        self.dev = ump.get_device(self.devid)
 
         PressureControl.__init__(self, manager, config, name)
 

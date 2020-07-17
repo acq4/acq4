@@ -33,9 +33,8 @@ class Sensapex(Stage):
         if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
-        all_devs = ump.list_devices()
-        if self.devid not in all_devs:
-            raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
+        # create handle to this manipulator
+        self.dev = ump.get_device(self.devid)
 
         Stage.__init__(self, man, config, name)
          # Read position updates on a timer to rate-limit
@@ -45,9 +44,14 @@ class Sensapex(Stage):
 
         self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
-        # create handle to this manipulator
         # note: n_axes is used in cases where the device is not capable of answering this on its own 
-        self.dev = SensapexDevice(self.devid, callback=self._positionChanged, n_axes=config.get('nAxes'), max_acceleration=config.get('maxAcceleration'))
+        if 'nAxes' in config:
+            self.dev.set_n_axes(config['nAxes'])
+        if 'maxAcceeration' in config:
+            self.dev.set_max_acceleration(config['maxAcceleration'])
+
+        self.dev.add_callback(self._positionChanged)
+
         # force cache update for this device.
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
@@ -62,7 +66,6 @@ class Sensapex(Stage):
 
         # TODO: set any extra parameters specified in the config        
         Sensapex.devices[self.devid] = self
-       
 
     def axes(self):
         return ('x', 'y', 'z')

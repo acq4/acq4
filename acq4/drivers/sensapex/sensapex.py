@@ -220,17 +220,22 @@ class UMP(object):
         # last time each device was seen moving
         self._last_busy_time = {}
 
-        # view cached position and state data as a numpy array
-        # self._positions = np.frombuffer(self.h.contents.last_positions, 
-        #     dtype=[('x', 'int32'), ('y', 'int32'), ('z', 'int32'), ('w', 'int32'), ('t', 'uint32')], count=LIBUM_MAX_MANIPULATORS)
-        #self._status = np.frombuffer(self.h.contents.last_status, dtype='int32', count=LIBUM_MAX_MANIPULATORS)
-
         self._um_has_axis_count = hasattr(self.lib, 'um_get_axis_count_ext')
         self._axis_counts = {}
+
+        self.devices = {}
 
         self.poller = PollThread(self)
         if start_poller:
             self.poller.start()
+
+    def get_device(self, dev_id):
+        if dev_id not in self.devices:
+            all_devs = self.list_devices()
+            if dev_id not in all_devs:
+                raise Exception("Invalid sensapex device ID %s. Options are: %r" % (dev_id, all_devs))
+            self.devices[dev_id] = SensapexDevice(dev_id)
+        return self.devices[dev_id]
 
     def sdk_version(self):
         """Return version of UM SDK.
@@ -556,23 +561,34 @@ class SensapexDevice(object):
         pos[0] += 10000  # add 10 um to x axis 
         dev.goto_pos(pos, speed=10)
     """
-    def __init__(self, devid, callback=None, n_axes=None, max_acceleration = 0):
+    def __init__(self, devid, callback=None, n_axes=None, max_acceleration=0):
         self.devid = int(devid)
         self.ump = UMP.get_ump()
 
         # Save max acceleration from config
         if max_acceleration == None:
             max_acceleration = 0
-
-        self.ump.set_max_acceleration(devid, max_acceleration)
+        self.set_max_acceleration(max_acceleration)
 
         # some devices will fail when asked how many axes they have; this
         # allows a manual override.
         if n_axes is not None:
-            self.ump._axis_counts[devid] = n_axes
+            self.set_n_axes(n_axes)
 
         self.ump.poller.add_callback(devid, self._change_callback)
-        self.callback = callback
+        self.callbacks = []
+
+        if callback is not None:
+            self.add_callback(callback)
+
+    def set_n_axes(self, n_axes):
+        self.ump._axis_counts[self.devid] = n_axes
+
+    def set_max_acceleration(self, max_acceleration):
+        self.ump.set_max_acceleration(self.devid, max_acceleration)
+
+    def add_callback(self, callback):
+        self.callbacks.append(callback)
         
     def get_pos(self, timeout=None):
         return self.ump.get_pos(self.devid, timeout=timeout)
@@ -593,8 +609,8 @@ class SensapexDevice(object):
         return self.ump.set_active(self.devid, active)
 
     def _change_callback(self, devid, new_pos, old_pos):
-        if self.callback is not None:
-            self.callback(self, new_pos, old_pos)
+        for cb in self.callbacks:
+            cb(self, new_pos, old_pos)
 
     def set_pressure(self, channel, value):
         """
@@ -619,6 +635,12 @@ class SensapexDevice(object):
 
     def get_valve(self, channel):
         return self.ump.get_valve(self.devid, int(channel)) 
+
+    def set_lens_position(self, pos):
+        return self.ump.call('ums_set_lens_position', c_int(self.devid), c_int(pos))
+
+    def get_lens_position(self):
+        return self.ump.call('ums_get_lens_position', c_int(self.devid))
 
     def set_custom_slow_speed(self, enabled):
         return self.ump.set_custom_slow_speed(self.devid, enabled)
