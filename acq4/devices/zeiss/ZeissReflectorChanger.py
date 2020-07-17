@@ -13,7 +13,7 @@ class ZeissReflectorChanger(FilterWheel):
         self._reflectors = ZeissMtbSdk.getSingleton().getReflectorChanger()
         self._reflectors.registerEventHandlers(onSettle=self._onReflectorPosSettled)
         self._isMoving = False
-        self._targetPosition = self.getPosition()
+        self._targetPosition = self._getPosition()
         FilterWheel.__init__(self, dm, config, name)
 
     def _onReflectorPosSettled(self, position):
