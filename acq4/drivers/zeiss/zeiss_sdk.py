@@ -163,12 +163,12 @@ class ZeissMtbContinual(ZeissMtbComponent):
         self._eventSink = MTB.Api.MTBContinualEventSink()
 
         if onChange is not None:
-            if len(inspect.signature(onChange).parameters) != 1:
+            if hasattr(inspect, "signature") and len(inspect.signature(onChange).parameters) != 1:
                 raise ValueError("onChange handler must accept exactly one arg")
             self._onChange = self._wrapEventHandler(onChange)
             self._eventSink.MTBPositionChangedEvent += MTB.Api.MTBContinualPositionChangedHandler(self._onChange)
         if onSettle is not None:
-            if len(inspect.signature(onSettle).parameters) != 1:
+            if hasattr(inspect, "signature") and len(inspect.signature(onSettle).parameters) != 1:
                 raise ValueError("onSettle handler must accept exactly one arg")
             self._onSettle = self._wrapEventHandler(onSettle)
             self._eventSink.MTBPositionSettledEvent += MTB.Api.MTBContinualPositionSettledHandler(self._onSettle)
