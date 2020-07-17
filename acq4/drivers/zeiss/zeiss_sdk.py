@@ -94,7 +94,7 @@ class ZeissMtbSdk(object):
 
     def getReflectorChanger(self):
         if self._reflectorChanger is None:
-            self._reflectorChanger = ZeissMtbReflectorChanger(self, self.m_MTBRoot.GetComponent("IMTBReflector"))
+            self._reflectorChanger = ZeissMtbReflectorChanger(self, self.m_MTBRoot.GetComponent("MTBReflectorChanger"))
             self._devicesByID[self._reflectorChanger.getID()] = self._reflectorChanger
 
         return self._reflectorChanger
