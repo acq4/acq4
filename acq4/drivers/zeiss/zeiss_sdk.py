@@ -215,9 +215,6 @@ class ZeissMtbChanger(ZeissMtbContinual):
     """
     Positions are 1-based indexes.
     """
-    def __init__(self, sdk, component):
-        super(ZeissMtbChanger, self).__init__(sdk, component, units=None)
-
     def _createEventSink(self):
         return MTB.Api.MTBChangerEventSink()
 

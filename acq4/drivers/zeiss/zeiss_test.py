@@ -64,12 +64,11 @@ def notice(value):
     print("we have a new value", value)
 
 lamp = zeiss.getTLLamp()
-lamp.registerEventHandlers(onChange=notice, onSettle=notice)
+lamp.registerEventHandlers(onSettle=notice)
 print("Transmissive Lamp:")
 print(lamp)
 print(lamp.getIsActive())
-lamp.setBrightness(lamp.getBrightness() / 2)
-lamp.setBrightness(lamp.getBrightness() * 2)
+lamp.setBrightness(20)
 
 reflector = zeiss.getReflectorChanger()
 reflector.registerEventHandlers(onSettle=notice)
