@@ -3,6 +3,8 @@ import time
 from collections import OrderedDict
 
 import pyqtgraph as pg
+from six.moves import map, range
+
 import acq4.util.debug as debug
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -10,8 +12,6 @@ from acq4.util import Qt
 from acq4.util import ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from six.moves import map
-from six.moves import range
 
 Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
 
@@ -43,7 +43,6 @@ class FilterWheel(Device, OptomechDevice):
     sigFilterWheelSpeedChanged = Qt.Signal(object, object)  # self, speed
     
     def __init__(self, dm, config, name):
-        
         Device.__init__(self, dm, config, name)
         
         self.lock = Mutex(Qt.QMutex.Recursive)

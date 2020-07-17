@@ -108,7 +108,7 @@ class ZeissMtbSdk:
             device: [device.GetComponentFullConfig(i) for i in range(0, device.GetComponentCount())]
             for device in self.getDevices()}
 
-    def getReflector(self):
+    def getReflectorChanger(self):
         if self.m_reflector is None:
             # self.m_devices[self.m_selected_device_index]
             self.m_reflector = ZeissMtbReflector(self.m_MTBRoot, self.m_ID)
@@ -276,9 +276,22 @@ class ZeissMtbChanger:
         return self.m_changer.getElement(position)
 
     def getPosition(self):
+        """
+        Returns
+        -------
+        int
+            1-based index of the current filter
+        """
         return self.m_changer.Position
 
     def setPosition(self, newposition):
+        """
+        Parameters
+        ----------
+        newposition : int
+            1-based index of the filter to change to.
+
+        """
         with self._zeiss.threadLock:
             self.m_changer.setPosition(newposition, MTB.Api.MTBCmdSetModes.Default)
 

@@ -71,7 +71,7 @@ print(lamp.getIsActive())
 lamp.setBrightness(lamp.getBrightness() / 2)
 lamp.setBrightness(lamp.getBrightness() * 2)
 
-reflector = zeiss.getReflector()
+reflector = zeiss.getReflectorChanger()
 reflector.setPosition(1)
 print(reflector.getPosition())
 
