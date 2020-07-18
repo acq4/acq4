@@ -20,7 +20,7 @@ LIBUM_DEF_TIMEOUT = 20
 LIBUM_DEF_BCAST_ADDRESS = b"169.254.255.255"
 LIBUM_DEF_GROUP = 0
 LIBUM_MAX_MESSAGE_SIZE = 1502
-LIBUM_ARG_UNDEF = 0x7fffffff
+LIBUM_ARG_UNDEF = float('nan')
 
 # error codes
 LIBUM_NO_ERROR     =  0,  # No error
@@ -205,7 +205,7 @@ class UMP(object):
         self.lib = self.get_lib()
         self.lib.um_errorstr.restype = c_char_p
 
-        min_version = (0, 915)
+        min_version = (0, 917)
         min_version_str = 'v%d.%d' % min_version
         version_str = self.sdk_version()
         version = tuple(map(int, version_str.lstrip(b'v').split(b'.')))
@@ -345,7 +345,7 @@ class UMP(object):
         dev : int
             ID of device to move
         pos : array-like
-            X,Y,Z,W coordinates to move to. Values may be None or omitted to leave
+            X,Y,Z,W coordinates to move to. Values may be NaN or omitted to leave
             the axis unaffected.
         speed : float
             Manipulator speed in um/sec
@@ -363,7 +363,7 @@ class UMP(object):
         """
         kwargs = {'dev': dev, 'pos': pos, 'speed': speed, 'simultaneous': simultaneous, 'linear': linear, 'max_acceleration': max_acceleration}
 
-        pos4 = list(pos) + [None] * (4-len(pos))  # extend to 4 values
+        pos4 = [float(x) for x in pos] + [float('nan')] * (4-len(pos))  # extend to 4 values
 
         mode = int(bool(simultaneous))  # all axes move simultaneously
 
@@ -383,9 +383,7 @@ class UMP(object):
             else:
                 max_acceleration = 0
 
-        pos_arg = [(LIBUM_ARG_UNDEF if x is None else x) for x in pos4]  # replace None with UNDEF
-        args = [c_int(dev)] + [c_float(float(x)) for x in pos_arg] + [c_int(int(x)) for x in speed + [mode] + [max_acceleration]]
-        # print (args)
+        args = [c_int(dev)] + [c_float(x) for x in pos4] + [c_int(int(x)) for x in speed + [mode] + [max_acceleration]]
         duration = max(np.array(diff) / speed[:len(diff)])
 
         with self.lock:
@@ -450,10 +448,10 @@ class UMP(object):
         return p.value
 
     def set_valve(self, dev, channel, value):
-        return self.call('umv_set_valve', dev, int(channel), int (value))
+        return self.call('umc_set_valve', dev, int(channel), int(value))
 
     def get_valve(self, dev, channel):
-        return self.call('umv_get_valve', dev, int(channel))
+        return self.call('umc_get_valve', dev, int(channel))
 
     def set_custom_slow_speed(self, dev, enabled):
         feature_custom_slow_speed = 32
