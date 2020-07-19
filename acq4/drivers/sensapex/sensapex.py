@@ -195,7 +195,7 @@ class UMP(object):
         self.move_expire_time = 50e-3
 
         # if we miss any axis by more than 0.5 um, try again
-        self.retry_threshold = np.array([500, 500, 500, 500])
+        self.retry_threshold = np.array([0.5, 0.5, 0.5, 0.5])
 
         # retry up to 3 times, then fail
         self.max_move_retry = 3
@@ -220,7 +220,7 @@ class UMP(object):
         # last time each device was seen moving
         self._last_busy_time = {}
 
-        self._um_has_axis_count = hasattr(self.lib, 'um_get_axis_count_ext')
+        self._um_has_axis_count = hasattr(self.lib, 'um_get_axis_count')
         self._axis_counts = {}
 
         self.devices = {}
@@ -257,7 +257,7 @@ class UMP(object):
             return 4
         c = self._axis_counts.get(dev, None)
         if c is None:
-            c = self.call('um_get_axis_count_ext', dev)
+            c = self.call('um_get_axis_count', dev)
             self._axis_counts[dev] = c
         return c
 
@@ -362,8 +362,8 @@ class UMP(object):
             Unique ID that can be used to retrieve the status of this move at a later time.
         """
         kwargs = {'dev': dev, 'pos': pos, 'speed': speed, 'simultaneous': simultaneous, 'linear': linear, 'max_acceleration': max_acceleration}
-
-        pos4 = [float(x) for x in pos] + [float('nan')] * (4-len(pos))  # extend to 4 values
+        pos = [float(x) for x in pos]
+        pos4 = pos + [float('nan')] * (4-len(pos))  # extend to 4 values
 
         mode = int(bool(simultaneous))  # all axes move simultaneously
 
@@ -393,7 +393,7 @@ class UMP(object):
                 last_move._interrupt("started another move before the previous finished")
 
             if _request is None:
-                next_move = MoveRequest(dev, current_pos, pos4, original_speed, duration, kwargs)
+                next_move = MoveRequest(dev, current_pos, pos, original_speed, duration, kwargs)
             else:
                 # We are retrying a previous move; re-use the old request object.
                 next_move = _request
@@ -401,7 +401,6 @@ class UMP(object):
             self._last_move[dev] = next_move
 
             self.call('um_goto_position_ext', *args)
-
 
         return next_move
 
@@ -511,7 +510,8 @@ class UMP(object):
                     target = np.array(move_req.target_pos).astype(float)
                     err = np.abs(pos - target)
                     mask = np.isfinite(err)
-                    if np.all(err[mask] < self.retry_threshold[mask]) or move_req.retry_count >= self.max_move_retry:
+                    reached_target = np.all(err[mask] < self.retry_threshold[:len(mask)][mask])
+                    if reached_target or move_req.retry_count >= self.max_move_retry:
                         move._finish(pos)
                     else:
                         # retry move if we missed the target
@@ -580,6 +580,7 @@ class SensapexDevice(object):
             self.add_callback(callback)
 
     def set_n_axes(self, n_axes):
+        print("set_n_axes", self.devid, n_axes)
         self.ump._axis_counts[self.devid] = n_axes
 
     def set_max_acceleration(self, max_acceleration):
