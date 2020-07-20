@@ -135,16 +135,13 @@ class LightSourceDevGui(Qt.QWidget):
             self.layout.addWidget(btn, 1, i)
             btn.clicked.connect(lambda isOn: self.dev.setSourceActive(name, isOn))
         self._updateValuesToMatchDev()
-        self.dev.sigLightChanged.connect(self.onDevChange)
+        self.dev.sigLightChanged.connect(self._updateValuesToMatchDev)
 
     def _updateValuesToMatchDev(self):
         for name in self.dev.sourceConfigs:
             self.sourceActivationButtons[name].setChecked(self.dev.sourceActive(name))
             if name in self.sourceBrightnessSliders:
                 self.sourceBrightnessSliders[name].setValue(int(self.dev.getSourceBrightness(name) * 99))
-
-    def onDevChange(self):
-        self._updateValuesToMatchDev()
 
 
 class LightSourceTaskGui(TaskGui):
