@@ -10,7 +10,7 @@ from acq4.util import Qt
 
 class ZeissReflectorChanger(FilterWheel):
     def __init__(self, dm, config, name):
-        self._reflectors = ZeissMtbSdk.getSingleton().getReflectorChanger()
+        self._reflectors = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None)).getReflectorChanger()
         self._reflectors.registerEventHandlers(onSettle=self._onReflectorPosSettled)
         self._isMoving = False
         self._targetPosition = self._getPosition()

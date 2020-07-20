@@ -118,7 +118,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             self._lock_tb_ = None
         except:
             printExc("WARNING: Failed to release device lock for %s" % self.name())
-            
+
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.
         Allows the DAQ to trigger off of this device."""

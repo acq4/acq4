@@ -32,7 +32,7 @@ class LightSource(Device):
         self._lock = Mutex.Mutex()
 
     def deviceInterface(self, win):
-        return LightSourceGui(self)
+        return LightSourceDevGui(self)
 
     def taskInterface(self, taskRunner):
         return LightSourceTaskGui(self, taskRunner)
@@ -104,14 +104,14 @@ class LightSource(Device):
         self.setSourceActive(name, not self.sourceActive(name))
 
 
-class LightSourceGui(Qt.QWidget):
+class LightSourceDevGui(Qt.QWidget):
     def __init__(self, dev):
         """
         Parameters
         ----------
         dev : LightSource
         """
-        super(LightSourceGui, self).__init__()
+        super(LightSourceDevGui, self).__init__()
         self.dev = dev
 
         self.layout = Qt.QGridLayout()
