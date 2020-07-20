@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import threading
 from warnings import warn
 
 from acq4.devices.FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
