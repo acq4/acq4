@@ -3,7 +3,7 @@ from __future__ import print_function
 import os, sys, time, argparse
 import numpy as np
 import pyqtgraph as pg
-from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
+from acq4.drivers.sensapex import UMP
 from six.moves import map
 from six.moves import range
 
@@ -28,7 +28,7 @@ args = parser.parse_args()
 ump = UMP.get_ump(group=args.group)
 time.sleep(2)
 devids = ump.list_devices()
-devs = {i:SensapexDevice(i) for i in devids}
+devs = {i:ump.get_device(i) for i in devids}
 
 print("SDK version:", ump.sdk_version())
 print("Found device IDs:", devids)
@@ -84,8 +84,8 @@ def update(update_error=False):
     now = pg.ptime.time() - start
     times.append(now)
     for i in range(3):
-        pos[i].append((p[i] - start_pos[i]) * 1e-9)
-        tgt[i].append((target[i] - start_pos[i]) * 1e-9)
+        pos[i].append((p[i] - start_pos[i]) * 1e-6)
+        tgt[i].append((target[i] - start_pos[i]) * 1e-6)
         if update_error:
             err[i].append(pos[i][-1] - tgt[i][-1])
         else:
@@ -116,17 +116,17 @@ if args.test_pos is None:
     zmoves=[]
 
     if  args.x:
-        xmoves = (np.random.random(size=(args.iter, 1)) * args.distance*1000).astype(int)
+        xmoves = (np.random.random(size=(args.iter, 1)) * args.distance).astype(int)
     else:
         xmoves = np.zeros(args.iter)
 
     if  args.y:
-        ymoves = (np.random.random(size=(args.iter, 1)) * args.distance*1000).astype(int)
+        ymoves = (np.random.random(size=(args.iter, 1)) * args.distance).astype(int)
     else:
         ymoves = np.zeros(args.iter)
 
     if  args.z:
-        zmoves = (np.random.random(size=(args.iter, 1)) * args.distance*1000).astype(int)
+        zmoves = (np.random.random(size=(args.iter, 1)) * args.distance).astype(int)
     else:
         zmoves = np.zeros(args.iter)
 
@@ -169,7 +169,7 @@ for i in range(args.iter):
         # time.sleep(0.05)
     p2 = dev.get_pos(timeout=200)
     positions.append(p2)
-    diff = (p2 - target) * 1e-9
+    diff = (p2 - target) * 1e-6
     diffs.append(diff)
     errs.append(np.linalg.norm(diff))
     print(i, diff, errs[-1])
