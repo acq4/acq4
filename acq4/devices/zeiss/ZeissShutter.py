@@ -31,11 +31,10 @@ class ZeissShutter(Device):
             self._shutter = self._zeiss.getRLShutter()
         else:
             self._shutter = self._zeiss.getTLShutter()
-        self._shutter = self._zeiss.getShutter()
         self._shutter.registerEventHandlers(onSettle=self.shutterStateSettled)
 
-    def shutterStateSettled(self, position):
-        self.sigShutterStatewitchChanged.emit(position)
+    def shutterStateSettled(self, isOpen):
+        self.sigShutterStatewitchChanged.emit(isOpen)
 
     def setIsOpen(self, isOpen):
         self._shutter.setIsOpen(isOpen)

@@ -287,6 +287,15 @@ class ZeissMtbShutter(ZeissMtbChanger):
         else:
             self.setPosition(self.CLOSED)
 
+    def _wrapOnSettle(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onSettle handler must accept exactly one arg")
+
+        def wrappedHandler(pos):
+            return handler(pos == self.OPEN)
+
+        return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
+
 
 # Unfinished below this line
 
