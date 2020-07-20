@@ -22,6 +22,8 @@ from threading import Thread, Lock
 # running under linux has not been tested yet
 import clr
 
+from acq4.util.debug import printExc
+
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
 
@@ -161,13 +163,22 @@ class ZeissMtbContinual(ZeissMtbComponent):
         return MTB.Api.MTBContinualEventSink()
 
     def _wrapOnChange(self, handler):
-        raise NotImplementedError()
+        return self._printExceptionsInHandler(handler)
+
+    def _printExceptionsInHandler(self, handler):
+        def wrappedHandler(*args, **kwargs):
+            try:
+                return handler(*args, **kwargs)
+            except Exception:
+                printExc("")
+
+        return wrappedHandler()
 
     def _wrapOnSettle(self, handler):
-        raise NotImplementedError()
+        return self._printExceptionsInHandler(handler)
 
     def _wrapOnReachLimit(self, handler):
-        raise NotImplementedError()
+        return self._printExceptionsInHandler(handler)
 
     def disconnect(self):
         if self._eventSink is None:
@@ -206,7 +217,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
             raise ValueError("onChange handler must accept exactly one arg")
 
         def wrappedHandler(pos):
-            return handler(pos)
+            return self._printExceptionsInHandler(handler)(pos)
 
         return MTB.Api.MTBChangerPositionChangedHandler(wrappedHandler)
 
@@ -215,7 +226,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
             raise ValueError("onSettle handler must accept exactly one arg")
 
         def wrappedHandler(pos):
-            return handler(pos)
+            return self._printExceptionsInHandler(handler)(pos)
 
         return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
@@ -229,7 +240,7 @@ class ZeissMtbLamp(ZeissMtbContinual):
             raise ValueError("onChange handler must accept exactly one arg")
 
         def wrappedHandler(hashtable):
-            return handler(hashtable["%"])
+            return self._printExceptionsInHandler(handler)(hashtable["%"])
 
         return MTB.Api.MTBContinualPositionChangedHandler(wrappedHandler)
 
@@ -238,7 +249,7 @@ class ZeissMtbLamp(ZeissMtbContinual):
             raise ValueError("onSettle handler must accept exactly one arg")
 
         def wrappedHandler(hashtable):
-            return handler(hashtable["%"])
+            return self._printExceptionsInHandler(handler)(hashtable["%"])
 
         return MTB.Api.MTBContinualPositionSettledHandler(wrappedHandler)
 
@@ -292,7 +303,7 @@ class ZeissMtbShutter(ZeissMtbChanger):
             raise ValueError("onSettle handler must accept exactly one arg")
 
         def wrappedHandler(pos):
-            return handler(pos == self.OPEN)
+            return self._printExceptionsInHandler(handler)(pos == self.OPEN)
 
         return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
