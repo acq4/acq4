@@ -274,6 +274,20 @@ class ZeissMtbReflectorChanger(ZeissMtbChanger):
         return self._component.Features
 
 
+class ZeissMtbShutter(ZeissMtbChanger):
+    OPEN = 1
+    CLOSED = 2
+
+    def getIsOpen(self):
+        return self.getPosition() == self.OPEN
+
+    def setIsOpen(self, isOpen):
+        if isOpen:
+            self.setPosition(self.OPEN)
+        else:
+            self.setPosition(self.CLOSED)
+
+
 # Unfinished below this line
 
 
@@ -310,51 +324,3 @@ class ZeissMtbObjective(ZeissMtbChanger):
 
     def workingDistance(self):
         return self.m_objective.workingDistance
-
-
-class ZeissMtbShutter(ZeissMtbChanger):
-    # MTBRLShutter
-    # MTBTLShutter 
-    def __init__(self, root, mtbId):
-        self.m_MTBRoot = root
-        self.m_rlShutter = ZeissMtbChanger(root, mtbId, "MTBRLShutter")
-        self.m_tlShutter = ZeissMtbChanger(root, mtbId, "MTBLamp")
-        self.m_shutterSwitch = ZeissMtbChanger(root, mtbId, "MTBRLTLSwitch")
-        self.m_ID = mtbId
-
-        ZeissMtbChanger.__init__(self, root, mtbId, "MTBRLShutter")
-        self.registerEvents(self.onShutterPositionChanged, self.onShutterPositionSettled)
-
-    def registerRLShutterEvents(self, positionChanged):
-        if self.m_rlShutter:
-            self.m_rlShutter.registerEvents(positionSettledFunc=positionChanged)
-
-    def registerTLShutterEvents(self, positionChanged):
-        if self.m_tlShutter:
-            self.m_tlShutter.registerEvents(positionSettledFunc=positionChanged)
-
-    def setRLShutter(self, state):
-        self.m_rlShutter.setPosition(state)
-
-    def getRLShutter(self):
-        return self.m_rlShutter.getPosition()
-
-    def getTLShutter(self, state):
-        self.m_tlShutter.setPosition(state)
-
-    def setRLTLSwitch(self, state):
-        self.m_shutterSwitch.setPosition(state)
-
-    def onShutterPositionChanged(self, position):
-        print("%1 shutter position changed to %2", "self.m_shutterName", position)
-
-    def onShutterPositionSettled(self, position):
-        print("%1 shutter position settled to %2", "self.m_shutterName", position)
-
-    def getState(self):
-        # ReflectedLight = 1,
-        # TransmittedLight = 2,
-        # Observation = 4,
-        # Left = 8,
-        # Right = 16
-        return self.m_shutterSwitch.State
