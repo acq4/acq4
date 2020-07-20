@@ -177,15 +177,15 @@ class UMP(object):
         return cls._um_state
 
     @classmethod
-    def get_ump(cls, address=None, group=None, start_poller=True):
+    def get_ump(cls, address=None, start_poller=True):
         """Return a singleton UM instance.
         """
         # question: can we have multiple UM instances with different address/group ?
         if cls._single is None:
-            cls._single = UMP(address=address, group=group, start_poller=start_poller)
+            cls._single = UMP(address=address, start_poller=start_poller)
         return cls._single
     
-    def __init__(self, address=None, group=None, start_poller=True):
+    def __init__(self, address=None, start_poller=True):
         self.lock = threading.RLock()
         if self._single is not None:
             raise Exception("Won't create another UM object. Use get_ump() instead.")
@@ -205,7 +205,7 @@ class UMP(object):
         self.lib = self.get_lib()
         self.lib.um_errorstr.restype = c_char_p
 
-        min_version = (0, 917)
+        min_version = (0, 918)
         min_version_str = 'v%d.%d' % min_version
         version_str = self.sdk_version()
         version = tuple(map(int, version_str.lstrip(b'v').split(b'.')))
@@ -213,7 +213,7 @@ class UMP(object):
         assert version >= min_version, "SDK version %s or later required (your version is %s)" % (min_version_str, version_str)
 
         self.h = None
-        self.open(address=address, group=group)
+        self.open(address=address)
 
         # keep track of requested moves and whether they completed, failed, or were interrupted.
         self._last_move = {}  # {device: MoveRequest}
@@ -289,21 +289,19 @@ class UMP(object):
     def set_max_acceleration(self, dev, max_acc):
         self.max_acceleration[dev] = max_acc
 
-    def open(self, address=None, group=None):
+    def open(self, address=None):
         """Open the UM device at the given address.
         
         The default address "169.254.255.255" should suffice in most situations.
         """
         if address is None:
             address = LIBUM_DEF_BCAST_ADDRESS
-        if group is None:
-            group = LIBUM_DEF_GROUP
 
         if self.h is not None:
             raise TypeError("UM is already open.")
         addr = ctypes.create_string_buffer(address)
         self.lib.um_open.restype = c_longlong
-        ptr = self.lib.um_open(addr, c_uint(self._timeout), c_int(group))
+        ptr = self.lib.um_open(addr, c_uint(self._timeout))
         if ptr <= 0:
             raise RuntimeError("Error connecting to UM:", self.lib.um_errorstr(ptr))
         self.h = pointer(self.get_um_state_class().from_address(ptr))
@@ -496,8 +494,7 @@ class UMP(object):
     def recv_all(self):
         """Receive all queued position/status update packets and update any pending moves.
         """
-        while self.call('um_receive', 1) > 0:
-            pass
+        self.call('um_receive', 0)
         self._update_moves()
 
     def _update_moves(self):
