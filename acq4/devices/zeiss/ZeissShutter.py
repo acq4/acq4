@@ -20,7 +20,7 @@ class ZeissShutter(Device):
     TRANSMISSIVE = "Transmissive"
     REFLECTIVE = "Reflective"
 
-    sigShutterStateChanged = Qt.Signal(bool)
+    sigShutterStateChanged = Qt.Signal(object)  # (isOpen)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
