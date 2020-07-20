@@ -275,8 +275,8 @@ class ZeissMtbReflectorChanger(ZeissMtbChanger):
 
 
 class ZeissMtbShutter(ZeissMtbChanger):
-    OPEN = 1
-    CLOSED = 2
+    OPEN = 2
+    CLOSED = 1
 
     def getIsOpen(self):
         return self.getPosition() == self.OPEN
