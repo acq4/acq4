@@ -94,7 +94,11 @@ class ZeissMtbSdk(object):
 
     def getReflectorChanger(self):
         if self._reflectorChanger is None:
-            self._reflectorChanger = ZeissMtbReflectorChanger(self, self.m_MTBRoot.GetComponent("MTBReflectorChanger"))
+            componentID = "MTBReflectorChanger"
+            compID = self.m_MTBRoot.GetComponent(componentID)
+            if compID is None:
+                raise ValueError("no zeiss component named \"%s\"" % componentID)
+            self._reflectorChanger = ZeissMtbReflectorChanger(self, compID)
             self._devicesByID[self._reflectorChanger.getID()] = self._reflectorChanger
 
         return self._reflectorChanger
@@ -107,7 +111,10 @@ class ZeissMtbSdk(object):
 
     def getSpecificLamp(self, componentID):
         if componentID not in self._devicesByID:
-            self._devicesByID[componentID] = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent(componentID))
+            compID = self.m_MTBRoot.GetComponent(componentID)
+            if compID is None:
+                raise ValueError("no zeiss component named \"%s\"" % componentID)
+            self._devicesByID[componentID] = ZeissMtbLamp(self, compID)
         return self._devicesByID[componentID]
 
     def getObjective(self):
@@ -133,6 +140,7 @@ class ZeissMtbSdk(object):
 
 class ZeissMtbComponent(object):
     def __init__(self, sdk, component):
+        assert component is not None
         self._zeiss = sdk
         self._component = component
 

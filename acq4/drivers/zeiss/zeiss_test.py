@@ -2,6 +2,7 @@
 # All Rights Reserved. Copyright (c) Sensapex Oy 2019
 # Author: Ari Salmi
 # Version: 0.3
+import sys
 from acq4.drivers.zeiss import ZeissMtbSdk
 
 
@@ -53,7 +54,11 @@ class ZeissObjectiveSwitch:
         self.zeiss.disconnect()
 
 
-zeiss = ZeissMtbSdk.getSingleton()
+if len(sys.argv) > 1:
+    mtbPath = sys.argv[1]
+else: 
+    mtbPath = None
+zeiss = ZeissMtbSdk.getSingleton(mtbPath)
 
 for dev, compos in zeiss.getComponentsByDevice().items():
     print(dev.Name)

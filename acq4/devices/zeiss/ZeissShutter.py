@@ -5,7 +5,7 @@ class ZeissRLShutter(Device):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-        self.zeiss = ZeissMtbSdk.getSingleton()
+        self.zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
         self.mtbRoot = self.zeiss.connect()
         self.m_shutter = self.zeiss.getShutter()
         self.zeiss.getShutter().registerEventHandlers(self.shutterStateChanged, self.shutterStateSettled)
