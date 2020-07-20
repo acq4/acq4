@@ -1,5 +1,3 @@
-from pyqtgraph.util.mutex import Mutex
-
 from acq4.devices.Device import Device, TaskGui
 from acq4.drivers.zeiss import ZeissMtbSdk
 from acq4.util import Qt

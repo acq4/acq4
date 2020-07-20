@@ -15,8 +15,7 @@
 import atexit
 import inspect
 import threading
-import time
-from threading import Thread, Lock
+from threading import Lock
 
 # in order to import clr, it is required to install python for .Net (pip install pythonnet) under windows
 # running under linux has not been tested yet

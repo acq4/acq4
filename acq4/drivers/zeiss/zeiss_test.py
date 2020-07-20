@@ -7,54 +7,6 @@ import sys
 from acq4.drivers.zeiss import ZeissMtbSdk
 
 
-class ss:
-    def __init__(self):
-        self.zeiss = ZeissMtbSdk.getSingleton()
-        self.mtbRoot = self.zeiss.connect()
-        self.zeiss.getObjective().registerEventHandlers(self.objectivePosChanged, self.objectivePosSettled)
-        print("Started Zeiss Objective Switch")
-
-    def objectivePosChanged(self, position):
-        print("Objective changed: ")
-
-    def objectivePosSettled(self, position):
-        print("Objective settled: ")
-
-    def quit(self):
-        print("Disconnecting Zeiss")
-        self.zeiss.disconnect()
-
-    def getSwitch(self, name):
-        print("Get Switch:" + str(name))
-        return 0
-
-
-class ZeissObjectiveSwitch:
-
-    def __init__(self):
-        self.zeiss = ZeissMtbSdk.getSingleton()
-        self.mtbRoot = self.zeiss.connect()
-        self.zeiss.getObjective().registerEventHandlers(self.objectivePosChanged, self.shutterStateSettled)
-        # self.zeiss.GetReflector().registerEvents(None, None)
-        # self.zeiss.GetShutter().registerEvents(self.shutterStateChanged, self.shutterStateSettled)
-        # self.zeiss.GetShutter().RegisterRLShutterEvents(self.rlShutterStateChanged)
-
-    def objectivePosChanged(self, position):
-        print("Objective Changed: " + str(position))
-
-    def shutterStateChanged(self, position):
-        print("shutter pos settled: " + str(position))
-
-    def shutterStateSettled(self, position):
-        print("shutter pos settled: " + str(position))
-
-    def rlShutterStateChanged(self, position):
-        print(" RL shutter pos changes: " + str(position))
-
-    def disconnect(self):
-        self.zeiss.disconnect()
-
-
 if len(sys.argv) > 1:
     mtbPath = sys.argv[1]
 else:
@@ -65,6 +17,7 @@ for dev, compos in zeiss.getAllComponentsByDevice().items():
     print(dev.Name)
     for c in compos:
         print(c.ID, c.Name)
+
 
 def notice(value):
     print("we have a new value", value)
