@@ -55,7 +55,7 @@ class ZeissObjectiveSwitch:
 
 zeiss = ZeissMtbSdk.getSingleton()
 
-for dev, compos in zeiss.getComponentsByDevice().items():
+for dev, compos in zeiss.getAllComponentsByDevice().items():
     print(dev.Name)
     for c in compos:
         print(c.ID, c.Name)

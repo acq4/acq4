@@ -46,6 +46,9 @@ class ZeissShutter(Device):
     def disconnect(self):
         self._zeiss.disconnect()
 
+    def getName(self):
+        return self._shutter.getName()
+
     def deviceInterface(self, win):
         return ShutterDevGui(self)
 
@@ -55,20 +58,26 @@ class ZeissShutter(Device):
 
 class ShutterDevGui(Qt.QWidget):
     def __init__(self, dev):
+        """
+        Parameters
+        ----------
+        dev : ZeissShutter
+        """
         super(ShutterDevGui, self).__init__()
+        self.dev = dev
         name = dev.getName()
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
-        btn = Qt.QPushButton(name)
-        btn.setCheckable(True)
-        self.sourceActivationButtons[name] = btn
-        self.layout.addWidget(btn, 0, 0)
-        btn.clicked.connect(lambda isOpen: self.dev.setIsOpen(isOpen))
-        self.onDevChange()
+        self.btn = Qt.QPushButton(name)
+        self.btn.setCheckable(True)
+        self.layout.addWidget(self.btn, 0, 0)
+        self.btn.clicked.connect(lambda isOpen: self.dev.setIsOpen(isOpen))
+        self.noticeDevChange()
+        self.dev.sigShutterStateChanged.connect(self.noticeDevChange)
 
-    def onDevChange(self):
-        pass  # TODO
+    def noticeDevChange(self):
+        self.btn.setChecked(self.dev.getIsOpen())
 
 
 class ShutterTaskGui(TaskGui):

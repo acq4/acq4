@@ -44,7 +44,7 @@ class ZeissMtbSdk(object):
         return cls._instance
 
     def __init__(self):
-        self._devicesByID = {}
+        self._componentsByID = {}
         self.threadLock = None
         self.m_MTBConnection = None
         self.m_MTBRoot = None
@@ -77,7 +77,7 @@ class ZeissMtbSdk(object):
         return self.m_ID
 
     def disconnect(self):
-        for dev in self._devicesByID.values():
+        for dev in self._componentsByID.values():
             dev.disconnect()
 
         print("Logging out of MTB..")
@@ -87,48 +87,30 @@ class ZeissMtbSdk(object):
         count = self.m_MTBRoot.GetDeviceCount()
         return [self.m_MTBRoot.GetDevice(i) for i in range(0, count)]
 
-    def getComponentsByDevice(self):
+    def getAllComponentsByDevice(self):
         return {
             device: [device.GetComponentFullConfig(i) for i in range(0, device.GetComponentCount())]
             for device in self.getDevices()}
 
     def getReflectorChanger(self):
-        if self._reflectorChanger is None:
-            self._reflectorChanger = ZeissMtbReflectorChanger(self, self.m_MTBRoot.GetComponent("MTBReflectorChanger"))
-            self._devicesByID[self._reflectorChanger.getID()] = self._reflectorChanger
-
-        return self._reflectorChanger
+        return self.getComponentByID(ZeissMtbReflectorChanger, "MTBReflectorChanger")
 
     def getTLLamp(self):
-        return self.getSpecificLamp("MTBTLHalogenLamp")
+        return self.getComponentByID(ZeissMtbLamp, "MTBTLHalogenLamp")
 
     def getRLLamp(self):
-        return self.getSpecificLamp("MTBRLHalogenLamp")
+        return self.getComponentByID(ZeissMtbLamp, "MTBRLHalogenLamp")
 
-    def getSpecificLamp(self, componentID):
-        if componentID not in self._devicesByID:
-            self._devicesByID[componentID] = ZeissMtbLamp(self, self.m_MTBRoot.GetComponent(componentID))
-        return self._devicesByID[componentID]
+    def getTLShutter(self):
+        return self.getComponentByID(ZeissMtbShutter, "MTBTLShutter")
 
-    def getObjective(self):
-        if self.m_objective is None:
-            # self.m_devices[self.m_selected_device_index]
-            self.m_objective = ZeissMtbObjective(self.m_MTBRoot, self.m_ID)
-            self._devicesByID[self.m_objective.getID()] = self.m_objective
+    def getRLShutter(self):
+        return self.getComponentByID(ZeissMtbShutter, "MTBRLShutter")
 
-        return self.m_objective
-
-    def getFocus(self):
-        if self.m_focus is None:
-            self.m_focus = self.m_MTBRoot.GetComponent("MTBFocus")
-            self._devicesByID[self.m_focus.getID()] = self.m_focus
-        return self.m_focus
-
-    def getShutter(self):
-        if self.m_shutter is None:
-            self.m_shutter = ZeissMtbShutter(self.m_MTBRoot, self.m_ID)
-            self._devicesByID[self.m_shutter.getID()] = self.m_shutter
-        return self.m_shutter
+    def getComponentByID(self, deviceClass, componentID):
+        if componentID not in self._componentsByID:
+            self._componentsByID[componentID] = deviceClass(self, self.m_MTBRoot.GetComponent(componentID))
+        return self._componentsByID[componentID]
 
 
 class ZeissMtbComponent(object):
@@ -169,7 +151,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
             self._eventSink.MTBPositionSettledEvent += self._onSettle
         if onReachLimit is not None and hasattr(self._eventSink, "MTBPHWLimitReachedEvent"):
             # TODO find out how to wrap this
-            self._onReachLimit =self._wrapOnReachLimit(onReachLimit)
+            self._onReachLimit = self._wrapOnReachLimit(onReachLimit)
             self._eventSink.MTBPHWLimitReachedEvent += self._onReachLimit
 
         self._eventSink.ClientID = self._zeiss.getID()
@@ -215,6 +197,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
     """
     Positions are 1-based indexes.
     """
+
     def _createEventSink(self):
         return MTB.Api.MTBChangerEventSink()
 
