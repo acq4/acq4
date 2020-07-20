@@ -72,7 +72,7 @@ class ShutterDevGui(Qt.QWidget):
         self.btn.setCheckable(True)
         self.layout.addWidget(self.btn, 0, 0)
         self.btn.clicked.connect(lambda isOpen: self.dev.setIsOpen(isOpen))
-        self.noticeDevChange()
+        self.noticeDevChange(self.dev.getIsOpen())
         self.dev.sigShutterStateChanged.connect(self.noticeDevChange)
 
     def noticeDevChange(self, isOpen):
