@@ -172,7 +172,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
             except Exception:
                 printExc("")
 
-        return wrappedHandler()
+        return wrappedHandler
 
     def _wrapOnSettle(self, handler):
         return self._printExceptionsInHandler(handler)
