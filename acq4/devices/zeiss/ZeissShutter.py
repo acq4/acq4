@@ -48,7 +48,7 @@ class ZeissShutter(Device):
         return ShutterDevGui(self)
 
     def taskInterface(self, taskRunner):
-        return ShutterTaskGui(self, taskRunner)
+        return None  # TODO
 
 
 class ShutterDevGui(Qt.QWidget):

@@ -35,7 +35,7 @@ class LightSource(Device):
         return LightSourceDevGui(self)
 
     def taskInterface(self, taskRunner):
-        return LightSourceTaskGui(self, taskRunner)
+        return None  # TODO
 
     def addSource(self, name, conf):
         self.sourceConfigs[name] = conf
