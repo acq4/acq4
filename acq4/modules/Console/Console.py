@@ -24,6 +24,7 @@ class Console(Module):
             'np': np,
         }
         self.configFile = os.path.join('modules', 'Console.cfg')
+        self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
         
         msg = """
         Python console built-in variables:
@@ -47,7 +48,27 @@ class Console(Module):
         self.cw = ConsoleWidget(namespace=self.localNamespace, text=msg, editor=EDITOR, module=self)
         self.win.setCentralWidget(self.cw)
         self.win.setWindowTitle('ACQ4 Console')
+
+        state = self.manager.readConfigFile(self.stateFile)
+        # restore window position
+        if 'geometry' in state:
+            geom = Qt.QRect(*state['geometry'])
+            self.win.setGeometry(geom)
+
+        # restore dock configuration
+        if 'window' in state:
+            ws = Qt.QByteArray.fromPercentEncoding(state['window'].encode())
+            self.win.restoreState(ws)
+
         self.win.show()
+
+    def quit(self):
+        print("console quit", self.stateFile)
+        ## save ui configuration
+        geom = self.win.geometry()
+        state = {'window': bytes(self.win.saveState().toPercentEncoding()).decode(), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        self.manager.writeConfigFile(state, self.stateFile)
+        Module.quit(self)
 
 
 ## reimplement history save/restore methods

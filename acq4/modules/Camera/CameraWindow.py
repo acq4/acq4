@@ -121,7 +121,7 @@ class CameraWindow(Qt.QMainWindow):
             geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         if 'window' in uiState:
-            ws = Qt.QByteArray.fromPercentEncoding(six.b(uiState['window']))
+            ws = Qt.QByteArray.fromPercentEncoding(uiState['window'].encode())
             self.restoreState(ws)
         if 'docks' in uiState:
             self.cw.restoreState(uiState['docks'], missing='ignore')
@@ -240,7 +240,7 @@ class CameraWindow(Qt.QMainWindow):
     def quit(self):
         geom = self.geometry()
         uiState = {
-            'window': str(self.saveState().toPercentEncoding()), 
+            'window': bytes(self.saveState().toPercentEncoding()).decode(), 
             'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
             'docks': self.cw.saveState()
         }

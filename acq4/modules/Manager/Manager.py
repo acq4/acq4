@@ -67,9 +67,10 @@ class Manager(Module):
         if 'geometry' in state:
             geom = Qt.QRect(*state['geometry'])
             self.win.setGeometry(geom)
+
         # restore dock configuration
         if 'window' in state:
-            ws = Qt.QByteArray.fromPercentEncoding(six.b(state['window']))
+            ws = Qt.QByteArray.fromPercentEncoding(state['window'].encode())
             self.win.restoreState(ws)
 
         self.win.show()
@@ -175,6 +176,6 @@ class Manager(Module):
     def quit(self):
         ## save ui configuration
         geom = self.win.geometry()
-        state = {'window': str(self.win.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        state = {'window': bytes(self.win.saveState().toPercentEncoding()).decode(), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         self.manager.writeConfigFile(state, self.stateFile)
         Module.quit(self)
