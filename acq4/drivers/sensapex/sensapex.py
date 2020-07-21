@@ -577,7 +577,6 @@ class SensapexDevice(object):
             self.add_callback(callback)
 
     def set_n_axes(self, n_axes):
-        print("set_n_axes", self.devid, n_axes)
         self.ump._axis_counts[self.devid] = n_axes
 
     def set_max_acceleration(self, max_acceleration):

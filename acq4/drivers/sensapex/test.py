@@ -3,12 +3,12 @@ import os, sys, time, argparse
 from sensapex import SensapexDevice, UMP, UMError
 
 
-parser = argparse.ArgumentParser(
-    description="Test for sensapex devices; prints position and status updates continuously.")
-parser.add_argument('--group', type=int, default=0, help="Device group number")
-args = parser.parse_args()
+# parser = argparse.ArgumentParser(
+#     description="Test for sensapex devices; prints position and status updates continuously.")
+# parser.add_argument('--group', type=int, default=0, help="Device group number")
+# args = parser.parse_args()
 
-um = UMP.get_ump(group=args.group)
+um = UMP.get_ump()
 devids = um.list_devices()
 devs = {i:SensapexDevice(i) for i in devids}
 
