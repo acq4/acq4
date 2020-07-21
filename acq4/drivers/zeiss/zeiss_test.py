@@ -3,6 +3,7 @@
 # Author: Ari Salmi
 # Version: 0.3
 import sys
+
 from acq4.drivers.zeiss import ZeissMtbSdk
 
 
@@ -56,7 +57,7 @@ class ZeissObjectiveSwitch:
 
 if len(sys.argv) > 1:
     mtbPath = sys.argv[1]
-else: 
+else:
     mtbPath = None
 zeiss = ZeissMtbSdk.getSingleton(mtbPath)
 
@@ -65,8 +66,10 @@ for dev, compos in zeiss.getComponentsByDevice().items():
     for c in compos:
         print(c.ID, c.Name)
 
+
 def notice(value):
     print("we have a new value", value)
+
 
 lamp = zeiss.getTLLamp()
 lamp.registerEventHandlers(onSettle=notice)

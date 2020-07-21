@@ -15,8 +15,7 @@
 import atexit
 import inspect
 import threading
-import time
-from threading import Thread, Lock
+from threading import Lock
 
 # in order to import clr, it is required to install python for .Net (pip install pythonnet) under windows
 # running under linux has not been tested yet
@@ -177,7 +176,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
             self._eventSink.MTBPositionSettledEvent += self._onSettle
         if onReachLimit is not None and hasattr(self._eventSink, "MTBPHWLimitReachedEvent"):
             # TODO find out how to wrap this
-            self._onReachLimit =self._wrapOnReachLimit(onReachLimit)
+            self._onReachLimit = self._wrapOnReachLimit(onReachLimit)
             self._eventSink.MTBPHWLimitReachedEvent += self._onReachLimit
 
         self._eventSink.ClientID = self._zeiss.getID()
@@ -223,6 +222,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
     """
     Positions are 1-based indexes.
     """
+
     def _createEventSink(self):
         return MTB.Api.MTBChangerEventSink()
 
