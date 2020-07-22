@@ -225,7 +225,7 @@ class OutputChannelGui(DaqChannelGui):
         params = {}
         ps = self.ui.waveGeneratorWidget.listSequences()
         for k in ps:
-            params[k] = range(len(ps[k]))
+            params[k] = list(range(len(ps[k])))
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, list(params.keys())) ## appends waveforms for the entire parameter space to waves
 
@@ -313,6 +313,7 @@ class OutputChannelGui(DaqChannelGui):
             self._block_update = False
             
         self.updateWaves()
+
         
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):
@@ -324,7 +325,6 @@ class InputChannelGui(DaqChannelGui):
          
     def taskSequenceStarted(self):
         self.clearBeforeNextPlot = True
-        #self.clearPlots()
          
     def listSequence(self):
         return []
@@ -342,10 +342,3 @@ class InputChannelGui(DaqChannelGui):
                 self.clearBeforeNextPlot = False
 
             plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=mkPen(200, 200, 200), params=params)
-            #plot = PlotCurve('cell')
-            #plot.setPen(pg.mkPen(200, 200, 200))
-            #plot.setData(result.xvals('Time'), result)
-            #plot.attach(self.plot)
-            #self.plots.append(plot)
-            #self.plot.replot()
-    
