@@ -365,6 +365,9 @@ class MockClampTaskGui(DAQGenericTaskGui):
     def getMode(self):
         return str(self.modeCombo.currentText())
 
+    def sequenceChanged(self):
+        self.sigSequenceChanged.emit(self.clampDev.name())
+
     def getChanHolding(self, chan):
         if chan == 'command':
             return self.clampDev.getHolding(self.getMode())
