@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-from collections import OrderedDict
+
 from six.moves import range
+
+from acq4.util import Qt
+
 
 class ParamList(Qt.QTreeWidget):
     def __init__(self, *args):
@@ -26,7 +28,7 @@ class ParamList(Qt.QTreeWidget):
             if p not in items:
                 item = Qt.QTreeWidgetItem([dev, p, str(len(params[p]))])
                 item.setFlags(
-                    Qt.Qt.ItemIsSelectable | 
+                    Qt.Qt.ItemIsSelectable |
                     Qt.Qt.ItemIsDragEnabled |
                     Qt.Qt.ItemIsDropEnabled |
                     Qt.Qt.ItemIsUserCheckable |
@@ -42,7 +44,7 @@ class ParamList(Qt.QTreeWidget):
             items[p].setText(2, str(len(params[p])))
             items[p].paramData = [dev, p, len(params[p])]
             items[p].params = list(params[p])
-            
+
         ## remove non-existent sequence parameters (but not their children)
         for key in items:
             if key not in params:
@@ -73,9 +75,9 @@ class ParamList(Qt.QTreeWidget):
     def loadState(self, state):
         """Order all parameters to match order in list. Does not create or destroy any parameters."""
         items = self.topLevelItems()
-        
+
         ordered = []
-        
+
         ## Go through parameter list, remove items from treewidget and store in temporary list
         for p in state:
             (dev, param, enabled, childs) = p
@@ -92,7 +94,7 @@ class ParamList(Qt.QTreeWidget):
                     continue
                 item.setCheckState(0, ParamList.checkStateMap[enabled])
                 o2.append(self.takeItem(item))
-        
+
         ## Re-add items from param list in correct order
         for i in ordered:
             self.addTopLevelItem(i[0])
@@ -101,7 +103,7 @@ class ParamList(Qt.QTreeWidget):
 
     def dropEvent(self, ev):
         Qt.QTreeWidget.dropEvent(self, ev)
-        
+
         ## Enable drop for top-level items, disable for all others.
         for i in self.topLevelItems():
             i.setFlags(i.flags() | Qt.Qt.ItemIsDropEnabled)
@@ -112,8 +114,8 @@ class ParamList(Qt.QTreeWidget):
     def itemData(self, item):
         dev = str(item.text(0))
         param = str(item.text(1))
-        enab = (item.checkState(0)==Qt.Qt.Checked)
-        return(dev, param, enab)
+        enab = (item.checkState(0) == Qt.Qt.Checked)
+        return (dev, param, enab)
 
     def topLevelItems(self):
         items = []
@@ -139,7 +141,7 @@ class ParamList(Qt.QTreeWidget):
     def listParams(self):
         """Return a list of tuples, one for each parameter in the list: (device, parameter, number, [childs])
         If the parameter has children, then (device, parameter) is listed for each enabled parameter."""
-        
+
         params = []
         for i in self.topLevelItems():
             (dev, param, enabled) = self.itemData(i)
