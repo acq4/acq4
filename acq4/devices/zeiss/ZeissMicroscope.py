@@ -6,6 +6,9 @@ from acq4.drivers.zeiss import ZeissMtbSdk
 
 class ZeissMicroscope(Microscope):
     """Microscope subclass implementing control of a Zeiss objective changer
+
+    Note that this code is UNTESTED and UNVERIFIED; it was brought over with the rest of the Zeiss
+    code, but wasn't needed for the project at that time.
     """
 
     def __init__(self, dm, config, name):

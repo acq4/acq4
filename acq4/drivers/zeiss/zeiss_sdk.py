@@ -21,6 +21,8 @@ from threading import Lock
 # running under linux has not been tested yet
 import clr
 
+from acq4.util.debug import printExc
+
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
 
@@ -43,7 +45,7 @@ class ZeissMtbSdk(object):
         return cls._instance
 
     def __init__(self):
-        self._devicesByID = {}
+        self._componentsByID = {}
         self.threadLock = None
         self.m_MTBConnection = None
         self.m_MTBRoot = None
@@ -76,7 +78,7 @@ class ZeissMtbSdk(object):
         return self.m_ID
 
     def disconnect(self):
-        for dev in self._devicesByID.values():
+        for dev in self._componentsByID.values():
             dev.disconnect()
 
         print("Logging out of MTB..")
@@ -86,60 +88,34 @@ class ZeissMtbSdk(object):
         count = self.m_MTBRoot.GetDeviceCount()
         return [self.m_MTBRoot.GetDevice(i) for i in range(0, count)]
 
-    def getComponentsByDevice(self):
+    def getAllComponentsByDevice(self):
         return {
             device: [device.GetComponentFullConfig(i) for i in range(0, device.GetComponentCount())]
             for device in self.getDevices()}
 
     def getReflectorChanger(self):
-        if self._reflectorChanger is None:
-            componentID = "MTBReflectorChanger"
-            compID = self.m_MTBRoot.GetComponent(componentID)
-            if compID is None:
-                raise ValueError("no zeiss component named \"%s\"" % componentID)
-            self._reflectorChanger = ZeissMtbReflectorChanger(self, compID)
-            self._devicesByID[self._reflectorChanger.getID()] = self._reflectorChanger
-
-        return self._reflectorChanger
+        return self.getComponentByID(ZeissMtbReflectorChanger, "MTBReflectorChanger")
 
     def getTLLamp(self):
-        return self.getSpecificLamp("MTBTLHalogenLamp")
+        return self.getComponentByID(ZeissMtbLamp, "MTBTLHalogenLamp")
 
     def getRLLamp(self):
-        return self.getSpecificLamp("MTBRLHalogenLamp")
+        return self.getComponentByID(ZeissMtbLamp, "MTBRLHalogenLamp")
 
-    def getSpecificLamp(self, componentID):
-        if componentID not in self._devicesByID:
-            compID = self.m_MTBRoot.GetComponent(componentID)
-            if compID is None:
-                raise ValueError("no zeiss component named \"%s\"" % componentID)
-            self._devicesByID[componentID] = ZeissMtbLamp(self, compID)
-        return self._devicesByID[componentID]
+    def getTLShutter(self):
+        return self.getComponentByID(ZeissMtbShutter, "MTBTLShutter")
 
-    def getObjective(self):
-        if self.m_objective is None:
-            # self.m_devices[self.m_selected_device_index]
-            self.m_objective = ZeissMtbObjective(self.m_MTBRoot, self.m_ID)
-            self._devicesByID[self.m_objective.getID()] = self.m_objective
+    def getRLShutter(self):
+        return self.getComponentByID(ZeissMtbShutter, "MTBRLShutter")
 
-        return self.m_objective
-
-    def getFocus(self):
-        if self.m_focus is None:
-            self.m_focus = self.m_MTBRoot.GetComponent("MTBFocus")
-            self._devicesByID[self.m_focus.getID()] = self.m_focus
-        return self.m_focus
-
-    def getShutter(self):
-        if self.m_shutter is None:
-            self.m_shutter = ZeissMtbShutter(self.m_MTBRoot, self.m_ID)
-            self._devicesByID[self.m_shutter.getID()] = self.m_shutter
-        return self.m_shutter
+    def getComponentByID(self, deviceClass, componentID):
+        if componentID not in self._componentsByID:
+            self._componentsByID[componentID] = deviceClass(self, self.m_MTBRoot.GetComponent(componentID))
+        return self._componentsByID[componentID]
 
 
 class ZeissMtbComponent(object):
     def __init__(self, sdk, component):
-        assert component is not None
         self._zeiss = sdk
         self._component = component
 
@@ -186,13 +162,22 @@ class ZeissMtbContinual(ZeissMtbComponent):
         return MTB.Api.MTBContinualEventSink()
 
     def _wrapOnChange(self, handler):
-        raise NotImplementedError()
+        return self._printExceptionsInHandler(handler)
+
+    def _printExceptionsInHandler(self, handler):
+        def wrappedHandler(*args, **kwargs):
+            try:
+                return handler(*args, **kwargs)
+            except Exception:
+                printExc("")
+
+        return wrappedHandler
 
     def _wrapOnSettle(self, handler):
-        raise NotImplementedError()
+        return self._printExceptionsInHandler(handler)
 
     def _wrapOnReachLimit(self, handler):
-        raise NotImplementedError()
+        return self._printExceptionsInHandler(handler)
 
     def disconnect(self):
         if self._eventSink is None:
@@ -231,7 +216,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
             raise ValueError("onChange handler must accept exactly one arg")
 
         def wrappedHandler(pos):
-            return handler(pos)
+            return self._printExceptionsInHandler(handler)(pos)
 
         return MTB.Api.MTBChangerPositionChangedHandler(wrappedHandler)
 
@@ -240,7 +225,7 @@ class ZeissMtbChanger(ZeissMtbContinual):
             raise ValueError("onSettle handler must accept exactly one arg")
 
         def wrappedHandler(pos):
-            return handler(pos)
+            return self._printExceptionsInHandler(handler)(pos)
 
         return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
@@ -254,7 +239,7 @@ class ZeissMtbLamp(ZeissMtbContinual):
             raise ValueError("onChange handler must accept exactly one arg")
 
         def wrappedHandler(hashtable):
-            return handler(hashtable["%"])
+            return self._printExceptionsInHandler(handler)(hashtable["%"])
 
         return MTB.Api.MTBContinualPositionChangedHandler(wrappedHandler)
 
@@ -263,7 +248,7 @@ class ZeissMtbLamp(ZeissMtbContinual):
             raise ValueError("onSettle handler must accept exactly one arg")
 
         def wrappedHandler(hashtable):
-            return handler(hashtable["%"])
+            return self._printExceptionsInHandler(handler)(hashtable["%"])
 
         return MTB.Api.MTBContinualPositionSettledHandler(wrappedHandler)
 
@@ -297,6 +282,29 @@ class ZeissMtbReflectorChanger(ZeissMtbChanger):
 
     def features(self):
         return self._component.Features
+
+
+class ZeissMtbShutter(ZeissMtbChanger):
+    OPEN = 2
+    CLOSED = 1
+
+    def getIsOpen(self):
+        return self.getPosition() == self.OPEN
+
+    def setIsOpen(self, isOpen):
+        if isOpen:
+            self.setPosition(self.OPEN)
+        else:
+            self.setPosition(self.CLOSED)
+
+    def _wrapOnSettle(self, handler):
+        if hasattr(inspect, "signature") and len(inspect.signature(handler).parameters) != 1:
+            raise ValueError("onSettle handler must accept exactly one arg")
+
+        def wrappedHandler(pos):
+            return self._printExceptionsInHandler(handler)(pos == self.OPEN)
+
+        return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
 
 # Unfinished below this line
@@ -335,51 +343,3 @@ class ZeissMtbObjective(ZeissMtbChanger):
 
     def workingDistance(self):
         return self.m_objective.workingDistance
-
-
-class ZeissMtbShutter(ZeissMtbChanger):
-    # MTBRLShutter
-    # MTBTLShutter 
-    def __init__(self, root, mtbId):
-        self.m_MTBRoot = root
-        self.m_rlShutter = ZeissMtbChanger(root, mtbId, "MTBRLShutter")
-        self.m_tlShutter = ZeissMtbChanger(root, mtbId, "MTBLamp")
-        self.m_shutterSwitch = ZeissMtbChanger(root, mtbId, "MTBRLTLSwitch")
-        self.m_ID = mtbId
-
-        ZeissMtbChanger.__init__(self, root, mtbId, "MTBRLShutter")
-        self.registerEvents(self.onShutterPositionChanged, self.onShutterPositionSettled)
-
-    def registerRLShutterEvents(self, positionChanged):
-        if self.m_rlShutter:
-            self.m_rlShutter.registerEvents(positionSettledFunc=positionChanged)
-
-    def registerTLShutterEvents(self, positionChanged):
-        if self.m_tlShutter:
-            self.m_tlShutter.registerEvents(positionSettledFunc=positionChanged)
-
-    def setRLShutter(self, state):
-        self.m_rlShutter.setPosition(state)
-
-    def getRLShutter(self):
-        return self.m_rlShutter.getPosition()
-
-    def getTLShutter(self, state):
-        self.m_tlShutter.setPosition(state)
-
-    def setRLTLSwitch(self, state):
-        self.m_shutterSwitch.setPosition(state)
-
-    def onShutterPositionChanged(self, position):
-        print("%1 shutter position changed to %2", "self.m_shutterName", position)
-
-    def onShutterPositionSettled(self, position):
-        print("%1 shutter position settled to %2", "self.m_shutterName", position)
-
-    def getState(self):
-        # ReflectedLight = 1,
-        # TransmittedLight = 2,
-        # Observation = 4,
-        # Left = 8,
-        # Right = 16
-        return self.m_shutterSwitch.State

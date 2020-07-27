@@ -32,10 +32,10 @@ class LightSource(Device):
         self._lock = Mutex.Mutex()
 
     def deviceInterface(self, win):
-        return LightSourceGui(self)
+        return LightSourceDevGui(self)
 
     def taskInterface(self, taskRunner):
-        return LightSourceTaskGui(self, taskRunner)
+        return None  # TODO
 
     def addSource(self, name, conf):
         self.sourceConfigs[name] = conf
@@ -104,14 +104,14 @@ class LightSource(Device):
         self.setSourceActive(name, not self.sourceActive(name))
 
 
-class LightSourceGui(Qt.QWidget):
+class LightSourceDevGui(Qt.QWidget):
     def __init__(self, dev):
         """
         Parameters
         ----------
         dev : LightSource
         """
-        super(LightSourceGui, self).__init__()
+        super(LightSourceDevGui, self).__init__()
         self.dev = dev
 
         self.layout = Qt.QGridLayout()
@@ -135,16 +135,13 @@ class LightSourceGui(Qt.QWidget):
             self.layout.addWidget(btn, 1, i)
             btn.clicked.connect(lambda isOn: self.dev.setSourceActive(name, isOn))
         self._updateValuesToMatchDev()
-        self.dev.sigLightChanged.connect(self.onDevChange)
+        self.dev.sigLightChanged.connect(self._updateValuesToMatchDev)
 
     def _updateValuesToMatchDev(self):
         for name in self.dev.sourceConfigs:
             self.sourceActivationButtons[name].setChecked(self.dev.sourceActive(name))
             if name in self.sourceBrightnessSliders:
                 self.sourceBrightnessSliders[name].setValue(int(self.dev.getSourceBrightness(name) * 99))
-
-    def onDevChange(self):
-        self._updateValuesToMatchDev()
 
 
 class LightSourceTaskGui(TaskGui):

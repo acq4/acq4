@@ -9,9 +9,12 @@ class ZeissLamp(LightSource):
     Config Options
     --------------
     transOrReflect : str
-        "Transmissive" | "Reflective" Which of the two standard light sources to represent.
+        "Transmissive" | "Reflective" Which of the two standard light sources to represent
+        (Defaults to "Transmissive")
     ZeissMtbComponentID : str
         If pointing to a different Zeiss component, this overrides `transOrReflect`.
+    apiDllLocation : str
+        The path for the MTBApi.dll file, if non-standard.
     """
     TRANSMISSIVE = "Transmissive"
     REFLECTIVE = "Reflective"
@@ -19,12 +22,12 @@ class ZeissLamp(LightSource):
     def __init__(self, dm, config, name):
         super(ZeissLamp, self).__init__(dm, config, name)
         self._zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
-        if config.get("ZeissMtbComponentID", None) is not None:
-            self._lamp = self._zeiss.getSpecificLamp(config["ZeissMtbComponentID"])
-        elif config["transOrReflect"] == ZeissLamp.TRANSMISSIVE:
-            self._lamp = self._zeiss.getTLLamp()
-        else:
+        if config.get("ZeissMtbComponentID") is not None:
+            self._lamp = self._zeiss.getComponentByID(config["ZeissMtbComponentID"])
+        elif config.get("transOrReflect") == ZeissLamp.REFLECTIVE:
             self._lamp = self._zeiss.getRLLamp()
+        else:
+            self._lamp = self._zeiss.getTLLamp()
 
         self.addSource(self._lamp.getID(), {"adjustableBrightness": True})
         self._lamp.registerEventHandlers(
