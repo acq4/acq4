@@ -912,7 +912,7 @@ class Task:
             print("================== Manager Task.__init__ command: =================")
             print(command)
             print("===========================================================")
-            raise Exception("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
+            raise TypeError("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
         self.id = Task.id
         Task.id += 1
 

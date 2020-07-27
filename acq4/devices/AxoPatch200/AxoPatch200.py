@@ -141,7 +141,7 @@ class AxoPatch200(DAQGeneric):
             self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
             self.lpf_freq[-1] = 100.0  # 200B's highest LPF value is 100kHz instead of 50.
         else:
-            raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % version)
+            raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % self.version)
 
         self.holding = {
             'vc': config.get('vcHolding', -0.05),

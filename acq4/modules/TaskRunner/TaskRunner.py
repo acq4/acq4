@@ -1072,7 +1072,7 @@ class TaskThread(Thread):
             print("========= TaskRunner.runOnce params: ==================")
             print("Params:", params)
             print("===========================")
-            raise Exception(
+            raise TypeError(
                 "TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(
                     cmd))
 
