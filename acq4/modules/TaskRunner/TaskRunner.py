@@ -623,7 +623,7 @@ class TaskRunner(Module):
             for i in items:
                 key = i[:2]
                 params[key] = i[2]
-                paramInds[key] = range(len(i[2]))
+                paramInds[key] = list(range(len(i[2])))
                 pLen *= len(i[2])
                 linkedParams[key] = i[3]
 
