@@ -298,7 +298,7 @@ class TaskRunner(Module):
             if rep == 0:
                 params = {}
             else:
-                params = {'repetitions': range(rep)}
+                params = {'repetitions': range(int(rep))}
         elif dev not in self.currentTask.enabledDevices():
             return
         else:
