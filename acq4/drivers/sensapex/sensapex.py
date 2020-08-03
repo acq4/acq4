@@ -177,15 +177,15 @@ class UMP(object):
         return cls._um_state
 
     @classmethod
-    def get_ump(cls, address=None, start_poller=True):
+    def get_ump(cls, address=None, group=None, start_poller=True):
         """Return a singleton UM instance.
         """
         # question: can we have multiple UM instances with different address/group ?
         if cls._single is None:
-            cls._single = UMP(address=address, start_poller=start_poller)
+            cls._single = UMP(address=address, group=group, start_poller=start_poller)
         return cls._single
     
-    def __init__(self, address=None, start_poller=True):
+    def __init__(self, address=None, group=None, start_poller=True):
         self.lock = threading.RLock()
         if self._single is not None:
             raise Exception("Won't create another UM object. Use get_ump() instead.")
@@ -213,7 +213,7 @@ class UMP(object):
         assert version >= min_version, "SDK version %s or later required (your version is %s)" % (min_version_str, version_str)
 
         self.h = None
-        self.open(address=address)
+        self.open(address=address, group=group)
 
         # keep track of requested moves and whether they completed, failed, or were interrupted.
         self._last_move = {}  # {device: MoveRequest}
@@ -282,14 +282,10 @@ class UMP(object):
             # print "   ->", rval
             return rval
 
-    def set_timeout(self, timeout):
-        self._timeout = timeout
-        self.call('um_set_timeout', timeout)
-
     def set_max_acceleration(self, dev, max_acc):
         self.max_acceleration[dev] = max_acc
 
-    def open(self, address=None):
+    def open(self, address=None, group=LIBUM_DEF_GROUP):
         """Open the UM device at the given address.
         
         The default address "169.254.255.255" should suffice in most situations.
@@ -301,7 +297,7 @@ class UMP(object):
             raise TypeError("UM is already open.")
         addr = ctypes.create_string_buffer(address)
         self.lib.um_open.restype = c_longlong
-        ptr = self.lib.um_open(addr, c_uint(self._timeout))
+        ptr = self.lib.um_open(addr, c_uint(self._timeout), c_int(group))
         if ptr <= 0:
             raise RuntimeError("Error connecting to UM:", self.lib.um_errorstr(ptr))
         self.h = pointer(self.get_um_state_class().from_address(ptr))
@@ -425,16 +421,6 @@ class UMP(object):
             move = self._last_move.pop(dev, None)
             if move is not None:
                 move._interrupt('stop requested before move finished')
-
-    def select(self, dev):
-        """Select a device on the TCU.
-        """
-        self.call('um_cu_select_manipulator', dev)
-
-    def set_active(self, dev, active):
-        """Set whether TCU remote control can move a manipulator.
-        """
-        self.call('um_cu_set_active', dev, int(active))
 
     def set_pressure(self, dev, channel, value):
         return self.call('umc_set_pressure_setting', dev, int(channel), c_float(value))
@@ -596,12 +582,6 @@ class SensapexDevice(object):
     
     def stop(self):
         return self.ump.stop(self.devid)
-
-    def select(self):
-        return self.ump.select(self.devid)
-
-    def set_active(self, active):
-        return self.ump.set_active(self.devid, active)
 
     def _change_callback(self, devid, new_pos, old_pos):
         for cb in self.callbacks:
