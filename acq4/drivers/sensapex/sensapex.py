@@ -1,14 +1,21 @@
 from __future__ import print_function
-import os, sys, ctypes, atexit, time, threading, platform
-import numpy as np
+
+import atexit
+import ctypes
+import os
+import platform
+import sys
+import threading
+import time
 from ctypes import (c_int, c_uint, c_ulong, c_short, c_ushort,
                     c_byte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure, c_float)
 from timeit import default_timer
+
+import numpy as np
 from six.moves import map
 from six.moves import range
 from six.moves import zip
-
 
 SOCKET = c_int
 if sys.platform == 'win32' and platform.architecture()[0] == '64bit':
