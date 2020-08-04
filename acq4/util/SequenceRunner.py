@@ -6,6 +6,8 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 from __future__ import print_function
 
+from collections import Iterable
+
 import numpy as np
 from pyqtgraph import MetaArray
 from six.moves import range
@@ -172,8 +174,8 @@ class SequenceRunner:
                 params = eval('self._params["%s"]%s' % (name, ind))
             else:
                 params = self._params[i]
-                
-            if not isinstance(params, (list, tuple)):
+
+            if not isinstance(params, Iterable):
                 params = [params]
             self._paramSpace[i] = params
         

@@ -298,7 +298,7 @@ class TaskRunner(Module):
             if rep == 0:
                 params = {}
             else:
-                params = {'repetitions': range(rep)}
+                params = {'repetitions': range(int(rep))}
         elif dev not in self.currentTask.enabledDevices():
             return
         else:
@@ -555,7 +555,7 @@ class TaskRunner(Module):
 
         self.lastProtoTime = ptime.time()
         ## Disable all start buttons
-        self.enableStartBtns(False)
+        self.setStartBtnsEnable(False)
 
         ## Set storage dir
         try:
@@ -586,7 +586,7 @@ class TaskRunner(Module):
             # print "runSingle: taskThreadStarted"
         except:
             exc = sys.exc_info()
-            self.enableStartBtns(True)
+            self.setStartBtnsEnable(True)
             self.loopEnabled = False
             # print "Error starting task. "
             raise HelpfulException("Error occurred while starting task", exc=exc)
@@ -605,7 +605,7 @@ class TaskRunner(Module):
         Return a TaskFuture instance that can be used to monitor progress and results.
         """
         ## Disable all start buttons
-        self.enableStartBtns(False)
+        self.setStartBtnsEnable(False)
 
         # good time to collect garbage
         if self._reduceMemoryUsage:
@@ -623,7 +623,7 @@ class TaskRunner(Module):
             for i in items:
                 key = i[:2]
                 params[key] = i[2]
-                paramInds[key] = range(len(i[2]))
+                paramInds[key] = list(range(len(i[2])))
                 pLen *= len(i[2])
                 linkedParams[key] = i[3]
 
@@ -660,7 +660,7 @@ class TaskRunner(Module):
             future = self.taskThread.startTask(prot, paramInds)
 
         except:
-            self.enableStartBtns(True)
+            self.setStartBtnsEnable(True)
             raise
 
         return future
@@ -747,18 +747,25 @@ class TaskRunner(Module):
             desc['sequenceParams'] = params
         return desc
 
-    def enableStartBtns(self, v):
+    def setStartBtnsEnable(self, val):
         btns = [self.ui.testSingleBtn, self.ui.runTaskBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]
         for b in btns:
-            b.setEnabled(v)
+            if not val or self.canEnableBtn(b):
+                b.setEnabled(val)
+
+    def canEnableBtn(self, btn):
+        if btn == self.ui.testSequenceBtn or btn == self.ui.runSequenceBtn:
+            return len(self.ui.sequenceParamList.listParams()) > 0
+        else:
+            return True
 
     def taskThreadStopped(self):
         self.sigTaskFinished.emit()
         if not self.loopEnabled:  ## what if we quit due to error?
-            self.enableStartBtns(True)
+            self.setStartBtnsEnable(True)
 
     def taskErrored(self):
-        self.enableStartBtns(True)
+        self.setStartBtnsEnable(True)
 
     def taskThreadPaused(self):
         self.sigTaskPaused.emit()
@@ -829,7 +836,7 @@ class TaskRunner(Module):
     def loop(self):
         """Run one iteration when in loop mode"""
         if not self.loopEnabled:
-            self.enableStartBtns(True)
+            self.setStartBtnsEnable(True)
             return
 
         if self.taskThread.isRunning():  ## If a task is still running, delay 10ms and try again
@@ -1065,7 +1072,7 @@ class TaskThread(Thread):
             print("========= TaskRunner.runOnce params: ==================")
             print("Params:", params)
             print("===========================")
-            raise Exception(
+            raise TypeError(
                 "TaskRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(
                     cmd))
 

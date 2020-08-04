@@ -3,7 +3,6 @@ from __future__ import division, with_statement, print_function
 
 import time
 from collections import OrderedDict
-from functools import cached_property
 
 import numpy as np
 import six
@@ -14,6 +13,11 @@ from pyqtgraph.debug import Profiler
 from acq4.util import micromanager
 from acq4.util.Mutex import Mutex
 from six.moves import range
+
+try:
+    from functools import lru_cache
+except ImportError:
+    from backports.functools_lru_cache import lru_cache
 
 # Micromanager does not standardize trigger modes across cameras,
 # so we use this dict to translate the modes of various cameras back
@@ -230,7 +234,7 @@ class MicroManagerCamera(Camera):
             rgn[3] = int(rgn[3] / self.getParam('binningY'))
         self.mmc.setROI(*rgn)
 
-    @cached_property
+    @lru_cache(maxsize=None)
     def _useBinnedPixelsForROI(self):
         # Adjusting ROI to be in binned-pixel units is necessary in all versions of
         # MMCore 7.0.2 and above.

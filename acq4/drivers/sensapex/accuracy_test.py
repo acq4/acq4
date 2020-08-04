@@ -25,7 +25,7 @@ parser.add_argument('--start-pos', type=str, default=None, dest='start_pos', hel
 parser.add_argument('--test-pos', type=str, default=None, dest='test_pos', help="x,y,z position to test (by default, random steps from the starting position are used)")
 args = parser.parse_args()
 
-ump = UMP.get_ump()
+ump = UMP.get_ump(group=args.group)
 time.sleep(2)
 devids = ump.list_devices()
 devs = {i:ump.get_device(i) for i in devids}

@@ -29,9 +29,10 @@ class Sensapex(Stage):
         
         address = config.pop('address', None)
         address = None if address is None else address.encode()
+        group = config.pop('group', None)
         if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
-        ump = UMP.get_ump(address=address)
+        ump = UMP.get_ump(address=address, group=group)
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid)
 

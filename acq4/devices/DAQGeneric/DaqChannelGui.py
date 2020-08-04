@@ -330,8 +330,6 @@ class InputChannelGui(DaqChannelGui):
         return []
     
     def generateTask(self, params=None):
-        if params is None:
-            params = {}
         state = self.stateGroup.state()
         return {'record': state['recordCheck'], 'recordInit': state['recordInitCheck']}
     
