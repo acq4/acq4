@@ -65,7 +65,7 @@ class Sensapex(Stage):
         Sensapex.devices[self.devid] = self
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return 'x', 'y', 'z'
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -202,7 +202,8 @@ class SensapexMoveFuture(MoveFuture):
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
             if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
                 # missed
-                self._errorMsg = "%s stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed)
+                self._errorMsg = "%s stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (
+                    self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed)
 
         self._checked = True
 
@@ -227,29 +228,29 @@ class SensapexMoveFuture(MoveFuture):
         return self._errorMsg
 
 
+# class SensapexGUI(StageInterface):
+#     def __init__(self, dev, win):
+#         StageInterface.__init__(self, dev, win)
+#
+#         # Insert Sensapex-specific controls into GUI
+#         self.zeroBtn = Qt.QPushButton('Zero position')
+#         self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
+#         self.nextRow += 1
+#
+#         self.psGroup = Qt.QGroupBox('Rotary Controller')
+#         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
+#         self.nextRow += 1
+#
+#         self.psLayout = Qt.QGridLayout()
+#         self.psGroup.setLayout(self.psLayout)
+#         self.speedLabel = Qt.QLabel('Speed')
+#         self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
+#         self.psLayout.addWidget(self.speedLabel, 0, 0)
+#         self.psLayout.addWidget(self.speedSpin, 0, 1)
+#
+#         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
+#         self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
-#class SensapexGUI(StageInterface):
-    #def __init__(self, dev, win):
-        #StageInterface.__init__(self, dev, win)
-
-        ## Insert Sensapex-specific controls into GUI
-        #self.zeroBtn = Qt.QPushButton('Zero position')
-        #self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-        #self.nextRow += 1
-
-        #self.psGroup = Qt.QGroupBox('Rotary Controller')
-        #self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-        #self.nextRow += 1
-
-        #self.psLayout = Qt.QGridLayout()
-        #self.psGroup.setLayout(self.psLayout)
-        #self.speedLabel = Qt.QLabel('Speed')
-        #self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
-        #self.psLayout.addWidget(self.speedLabel, 0, 0)
-        #self.psLayout.addWidget(self.speedSpin, 0, 1)
-
-        #self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-        #self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
 class SensapexInterface(Qt.QWidget):
     def __init__(self, dev, win):
