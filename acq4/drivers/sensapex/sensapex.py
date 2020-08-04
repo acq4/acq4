@@ -273,24 +273,18 @@ class UMP(object):
         return c
 
     def call(self, fn, *args):
-        # print "%s%r" % (fn, args)
         with self.lock:
             if self.h is None:
                 raise TypeError("UM is not open.")
-            # print("Call:", fn, self.h, args)
             rval = getattr(self.lib, fn)(self.h, *args)
-            #if 'get_pos' not in fn:
-                #print "sensapex:", rval, fn, args
             if rval < 0:
                 err = self.lib.um_last_error(self.h)
                 errstr = self.lib.um_errorstr(err)
-                # print "   -!", errstr
                 if err == -1:
                     oserr = self.lib.um_last_os_errno(self.h)
                     raise UMError("UM OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
                     raise UMError("UM Error %d: %s  From %s%r" % (err, errstr, fn, args), err, None)
-            # print "   ->", rval
             return rval
 
     def set_max_acceleration(self, dev, max_acc):
