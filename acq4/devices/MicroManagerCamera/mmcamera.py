@@ -6,7 +6,6 @@ from collections import OrderedDict
 
 import numpy as np
 import six
-from backports.functools_lru_cache import lru_cache
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
@@ -14,6 +13,11 @@ from pyqtgraph.debug import Profiler
 from acq4.util import micromanager
 from acq4.util.Mutex import Mutex
 from six.moves import range
+
+try:
+    from functools import lru_cache
+except ImportError:
+    from backports.functools_lru_cache import lru_cache
 
 # Micromanager does not standardize trigger modes across cameras,
 # so we use this dict to translate the modes of various cameras back
