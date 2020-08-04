@@ -21,6 +21,10 @@ LIBUM_DEF_BCAST_ADDRESS = b"169.254.255.255"
 LIBUM_DEF_GROUP = 0
 LIBUM_MAX_MESSAGE_SIZE = 1502
 LIBUM_ARG_UNDEF = float('nan')
+X_AXIS = 1
+Y_AXIS = 2
+Z_AXIS = 4
+D_AXIS = 8
 
 # error codes
 LIBUM_NO_ERROR     =  0,  # No error
@@ -444,11 +448,6 @@ class UMP(object):
         feature_custom_slow_speed = 32
         return self.call('um_get_ext_feature', c_int(dev), c_int(feature_custom_slow_speed))
 
-    def send_um_cmd(self, dev, cmd, argList):
-        args = (c_int * len(argList))()
-        args[:] = argList
-        return self.call('um_cmd', c_int(dev), c_int(cmd), len(argList), args)
-
     def get_um_param(self, dev, param):
         value = c_int()
         self.call('um_get_param',c_int(dev),c_int(param), *[byref(value)])
@@ -458,10 +457,10 @@ class UMP(object):
         return self.call('um_set_param',c_int(dev),c_int(param), value)
 
     def calibrate_zero_position(self, dev):
-        return self.send_um_cmd(dev, 4, [])
+        self.call("um_init_zero", X_AXIS | Y_AXIS | Z_AXIS | D_AXIS)
 
     def calibrate_load(self, dev):
-        return self.send_um_cmd(dev, 5, [0])
+        self.call("ump_calibrate_load")
 
     def get_soft_start_state(self, dev):
         feature_soft_start = 33
