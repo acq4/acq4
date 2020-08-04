@@ -3,10 +3,10 @@ from __future__ import division, with_statement, print_function
 
 import time
 from collections import OrderedDict
-from functools import cached_property
 
 import numpy as np
 import six
+from backports.functools_lru_cache import lru_cache
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
@@ -230,7 +230,7 @@ class MicroManagerCamera(Camera):
             rgn[3] = int(rgn[3] / self.getParam('binningY'))
         self.mmc.setROI(*rgn)
 
-    @cached_property
+    @lru_cache(maxsize=None)
     def _useBinnedPixelsForROI(self):
         # Adjusting ROI to be in binned-pixel units is necessary in all versions of
         # MMCore 7.0.2 and above.
