@@ -1,7 +1,8 @@
 from __future__ import print_function
-import os, sys, time, argparse
-from sensapex import SensapexDevice, UMP, UMError
 
+import argparse
+import sys
+import time
 
 from sensapex import SensapexDevice, UMP
 
@@ -12,10 +13,11 @@ args = parser.parse_args()
 
 um = UMP.get_ump(group=args.group)
 devids = um.list_devices()
-devs = {i:SensapexDevice(i) for i in devids}
+devs = {i: SensapexDevice(i) for i in devids}
 
 print("SDK version:", um.sdk_version())
 print("Found device IDs:", devids)
+
 
 def print_pos(timeout=None):
     line = ""

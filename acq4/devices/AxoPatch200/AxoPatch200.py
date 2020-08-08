@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
-from acq4.util.Mutex import Mutex
-from acq4.util import Qt
+
 import time
+from collections import OrderedDict
+
 import numpy as np
 from pyqtgraph.WidgetGroup import WidgetGroup
-from collections import OrderedDict
+
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
 
 Ui_devGui = Qt.importTemplate('.devGuiTemplate')

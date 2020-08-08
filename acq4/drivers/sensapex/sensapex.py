@@ -1,14 +1,21 @@
 from __future__ import print_function
-import os, sys, ctypes, atexit, time, threading, platform
-import numpy as np
+
+import atexit
+import ctypes
+import os
+import platform
+import sys
+import threading
+import time
 from ctypes import (c_int, c_uint, c_ulong, c_short, c_ushort,
                     c_byte, c_void_p, c_char, c_char_p, c_longlong,
                     byref, POINTER, pointer, Structure, c_float)
 from timeit import default_timer
+
+import numpy as np
 from six.moves import map
 from six.moves import range
 from six.moves import zip
-
 
 SOCKET = c_int
 if sys.platform == 'win32' and platform.architecture()[0] == '64bit':
@@ -266,24 +273,18 @@ class UMP(object):
         return c
 
     def call(self, fn, *args):
-        # print "%s%r" % (fn, args)
         with self.lock:
             if self.h is None:
                 raise TypeError("UM is not open.")
-            # print("Call:", fn, self.h, args)
             rval = getattr(self.lib, fn)(self.h, *args)
-            #if 'get_pos' not in fn:
-                #print "sensapex:", rval, fn, args
             if rval < 0:
                 err = self.lib.um_last_error(self.h)
                 errstr = self.lib.um_errorstr(err)
-                # print "   -!", errstr
                 if err == -1:
                     oserr = self.lib.um_last_os_errno(self.h)
                     raise UMError("UM OS Error %d: %s" % (oserr, os.strerror(oserr)), None, oserr)
                 else:
                     raise UMError("UM Error %d: %s  From %s%r" % (err, errstr, fn, args), err, None)
-            # print "   ->", rval
             return rval
 
     def set_max_acceleration(self, dev, max_acc):

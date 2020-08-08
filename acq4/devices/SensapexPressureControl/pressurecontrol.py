@@ -9,7 +9,7 @@ class SensapexPressureControl(PressureControl):
     """
 
     def __init__(self, manager, config, name):
-        self.devid = config.get('deviceId')       
+        self.devid = config.get('deviceId')
         address = config.pop('address', None)
         group = config.pop('group', None)
         ump = UMP.get_ump(address=address, group=group)
