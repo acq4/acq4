@@ -50,7 +50,6 @@ python distribution plus a few extra packages.
 2. Create a conda environment for acq4 (windows users must do this from the anaconda prompt):
 
     ```bash
-    conda config --set restore_free_channel true
     conda create --name=acq4 python=3.7 pyqt=5 numpy scipy pyserial pyparsing pillow h5py
     conda activate acq4
     ```
@@ -58,7 +57,7 @@ python distribution plus a few extra packages.
 3. Add development version of pyqtgraph:
 
     ```bash
-    pip install git+https://github.com/pyqtgraph/pyqtgraph@abfac52#egg=pyqtgraph
+    pip install git+https://github.com/pyqtgraph/pyqtgraph@master#egg=pyqtgraph
     ```
 
 4. Clone the ACQ4 source repository (this requires [git](https://git-scm.com/downloads) to be installed):
