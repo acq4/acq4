@@ -261,7 +261,7 @@ class CameraInterface(CameraModuleInterface):
         if updateCamera:
             self.ui.binningCombo.setCurrentIndex(ind)
         else:
-            with self.binningComboProxy.block():
+            with self.binningComboProxy.signalBlockingContext():
                 self.ui.binningCombo.setCurrentIndex(ind)
 
     def setExposure(self, e=None, autoRestart=True):
