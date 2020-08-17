@@ -5,8 +5,8 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph import ptime, Transform3D, solve3DTransform
 
-from acq4.drivers.sensapex import UMP, setLibraryPath
 from acq4.util import Qt
+from sensapex import UMP
 from ..Stage import Stage, MoveFuture, CalibrationWindow
 
 
@@ -29,7 +29,7 @@ class Sensapex(Stage):
         address = None if address is None else address.encode()
         group = config.pop('group', None)
         if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
-            setLibraryPath(man.config["drivers"]["sensapex"]["driverPath"])
+            UMP.set_library_path(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid)

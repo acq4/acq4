@@ -1,8 +1,10 @@
-import time, threading
-from acq4.util.future import Future
-from acq4.devices.Device import Device
-from acq4.drivers.sensapex import UMP
+import threading
+
+from sensapex import UMP
+
 import acq4.util.Qt as Qt
+from acq4.devices.Device import Device
+from acq4.util.future import Future
 
 
 class SensapexObjectiveChanger(Device):
@@ -12,6 +14,8 @@ class SensapexObjectiveChanger(Device):
         Device.__init__(self, dm, config, name)
 
         self.devid = config.get('deviceId')       
+        if dm.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
+            UMP.set_library_path(dm.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
         ump = UMP.get_ump(address=address, group=group)
