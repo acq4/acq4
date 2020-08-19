@@ -1,6 +1,6 @@
 import threading
 
-from sensapex import UMP
+from acq4.drivers.sensapex import UMP
 
 import acq4.util.Qt as Qt
 from acq4.devices.Device import Device

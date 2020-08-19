@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from sensapex import UMP
+from acq4.drivers.sensapex import UMP
 
 from ..PressureControl import PressureControl
 
