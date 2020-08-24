@@ -10,6 +10,7 @@ from .contrast_ctrl import ContrastCtrl
 
 MAX_FPS = 33
 
+
 class _FrameDrawThread(Qt.QThread):
     def __init__(self, drawFunc):
         super(_FrameDrawThread, self).__init__()
@@ -18,7 +19,7 @@ class _FrameDrawThread(Qt.QThread):
         self._timer.moveToThread(self)
 
     def run(self):
-        self._timer.start(int((1. / MAX_FPS) * 1000))  # convert MAX_FPS to ms-per-frame
+        self._timer.start(int((1.0 / MAX_FPS) * 1000))  # convert MAX_FPS to ms-per-frame
         Qt.QEventLoop().exec_()
 
 
