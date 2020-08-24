@@ -21,6 +21,9 @@ class PatchPipette(Device):
         * Input resistance, access resistance, and holding levels
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
+
+    If you intend this for use with the MultiPatch module, the device name in the configuration
+    needs to end in a number.
     """
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
     sigActiveChanged = Qt.Signal(object, object)  # self, active
