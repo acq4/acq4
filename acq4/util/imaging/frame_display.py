@@ -7,11 +7,12 @@ from acq4.util.debug import printExc
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
+from ..Thread import Thread
 
 MAX_FPS = 33
 
 
-class _FrameDrawThread(Qt.QThread):
+class _FrameDrawThread(Thread):
     def __init__(self, drawFunc):
         super(_FrameDrawThread, self).__init__()
         self._timer = Qt.QTimer()
