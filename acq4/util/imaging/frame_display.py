@@ -8,15 +8,17 @@ from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
 
-class FrameDrawThread(Qt.QThread):
+MAX_FPS = 33
+
+class _FrameDrawThread(Qt.QThread):
     def __init__(self, drawFunc):
-        super(FrameDrawThread, self).__init__()
+        super(_FrameDrawThread, self).__init__()
         self._timer = Qt.QTimer()
         self._timer.timeout.connect(drawFunc)
         self._timer.moveToThread(self)
 
     def run(self):
-        self._timer.start(30)  # this determines max frame rate
+        self._timer.start(int((1. / MAX_FPS) * 1000))  # convert MAX_FPS to ms-per-frame
         Qt.QEventLoop().exec_()
 
 
@@ -55,7 +57,7 @@ class FrameDisplay(Qt.QObject):
 
         # Check for new frame updates repeatedly
         # Some checks may be skipped even if there is a new frame waiting to avoid drawing too quickly
-        self._drawingThread = FrameDrawThread(self.drawFrame)
+        self._drawingThread = _FrameDrawThread(self.drawFrame)
         self._drawingThread.start()
         # Qt.QTimer.singleShot(1, self.drawFrame)
         # avoiding possible singleShot-induced crashes
