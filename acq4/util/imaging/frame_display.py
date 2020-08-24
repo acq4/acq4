@@ -7,7 +7,8 @@ from acq4.util.debug import printExc
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
-from ..Thread import Thread
+from acq4.util.Thread import Thread
+
 
 MAX_FPS = 33
 
