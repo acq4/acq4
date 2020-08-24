@@ -8,6 +8,18 @@ from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
 
+class FrameDrawThread(Qt.QThread):
+    def __init__(self, drawFunc):
+        super(FrameDrawThread, self).__init__()
+        self._timer = Qt.QTimer()
+        self._timer.timeout.connect(drawFunc)
+        self._timer.moveToThread(self)
+
+    def run(self):
+        self._timer.start(30)  # this determines max frame rate
+        Qt.QEventLoop().exec_()
+
+
 class FrameDisplay(Qt.QObject):
     """Used with live imaging to hold the most recently acquired frame and allow
     user control of contrast, gain, and background subtraction.
@@ -41,12 +53,10 @@ class FrameDisplay(Qt.QObject):
         self.displayFps = None
         self.hasQuit = False
 
-        # Check for new frame updates every 16ms
-        # Some checks may be skipped even if there is a new frame waiting to avoid drawing more than
-        # 60fps.
-        self.frameTimer = Qt.QTimer()
-        self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(30)  # draw frames no faster than 60Hz
+        # Check for new frame updates repeatedly
+        # Some checks may be skipped even if there is a new frame waiting to avoid drawing too quickly
+        self._drawingThread = FrameDrawThread(self.drawFrame)
+        self._drawingThread.start()
         # Qt.QTimer.singleShot(1, self.drawFrame)
         # avoiding possible singleShot-induced crashes
 
