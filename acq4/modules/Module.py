@@ -12,6 +12,14 @@ class Module(Qt.QObject):
     moduleCategory = None
 
     def __init__(self, manager, name, config):
+        """
+
+        Parameters
+        ----------
+        manager : acq4.Manager.Manager
+        name : str
+        config : dict
+        """
         Qt.QObject.__init__(self)
         self.name = name
         self.manager = manager
