@@ -185,7 +185,6 @@ class PatchPipette(Device):
             ('sealSuccessful', None),
             ('fouledBeforeSeal', None),
             ('resistanceBeforeSeal', None),
-            ('maxSealResistance', None),
             ('resistanceBeforeBreakin', None),
             ('offsetBeforeSeal', None),
             ('attemptedBreakin', False),
