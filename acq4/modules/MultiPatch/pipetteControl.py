@@ -364,12 +364,12 @@ class PlotWidget(Qt.QWidget):
             data = tp.data
             pri = data['Channel': 'primary']
             units = pri._info[-1]['ClampState']['primaryUnits'] 
-            self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
-            self.plot.setLabels(left=('', units))
+            # self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
+            # self.plot.setLabels(left=('', units))
 
             if self.mode == 'tp analysis':
                 t,y = tp.getFitData()
-                self.plot.plot(t, y, pen='b')
+                # self.plot.plot(t, y, pen='b')
 
         elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
             key,units = {
@@ -380,13 +380,13 @@ class PlotWidget(Qt.QWidget):
                 'time constant': ('fitExpTau', 's'),
                 'capacitance': ('capacitance', 'F'),
             }[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
+            # self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
             tpa = tp.analysis()
             self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=units))
 
         elif self.mode in ['ss resistance', 'peak resistance']:
             key = {'ss resistance': 'steadyStateResistance', 'peak resistance': 'peakResistance'}[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
+            # self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
             tpa = tp.analysis()
             self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=u'Ω'))
 
