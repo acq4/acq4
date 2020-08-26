@@ -1,6 +1,7 @@
 from __future__ import print_function
 
-from acq4.drivers.sensapex import SensapexDevice, UMP
+from acq4.drivers.sensapex import UMP
+
 from ..PressureControl import PressureControl
 
 
@@ -10,6 +11,8 @@ class SensapexPressureControl(PressureControl):
 
     def __init__(self, manager, config, name):
         self.devid = config.get('deviceId')
+        if manager.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
+            UMP.set_library_path(manager.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
         ump = UMP.get_ump(address=address, group=group)
