@@ -825,7 +825,8 @@ class LogWidget(Qt.QWidget):
                 tb = self.entries[int(url[4:])-1]['tracebackHtml']
             except IndexError:
                 try:
-                    tb = self.entries[self.entryArray[self.entryArray['entryId']==(int(url[4:]))]['index']]['tracebackHtml']
+                    matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(url[4:])))]
+                    tb = self.entries[int(matchingEntry["index"])]["tracebackHtml"]
                 except:
                     print("requested index %d, but only %d entries exist." % (int(url[4:])-1, len(self.entries)))
                     raise
