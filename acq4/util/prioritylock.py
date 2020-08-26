@@ -135,23 +135,29 @@ class PriorityLockRequest(Future):
 
     def __enter__(self):
         return self
-    
+
     def __exit__(self, *args):
-        self.release()    
+        self.release()
 
     def __repr__(self):
         return "<%s %s 0x%x>" % (self.__class__.__name__, self.name, id(self))
-        
 
 
 class Counter(object):
     """Just a thread-safe counter, returns the next integer every time next() is called.
     """
+
     def __init__(self):
         self.value = 0
         self.lock = Lock()
-        
-    def next(self):
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):  # for py3
         with self.lock:
             self.value += 1
             return self.value - 1
+
+    def next(self):  # for py2
+        return self.__next__()
