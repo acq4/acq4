@@ -2,7 +2,9 @@ from __future__ import print_function, division
 
 import weakref
 from threading import Lock, Thread, Event
+
 from six.moves import queue
+
 from .future import Future
 
 
@@ -30,18 +32,19 @@ class PriorityLock(object):
             # .. do stuff while lock is acquired
         
     """
+
     def __init__(self, name=None):
         self.name = name
         self.req_count = Counter()
         self.lock_queue = queue.PriorityQueue()
-        
+
         self.unlock_event = Event()
         self.unlock_event.set()
-        
+
         self.lock_thread = Thread(target=self._lock_loop)
         self.lock_thread.daemon = True
-        self.lock_thread.start()        
-        
+        self.lock_thread.start()
+
     def acquire(self, priority=0, name=None):
         """Return a Future that completes when the lock is acquired.
         
@@ -51,7 +54,7 @@ class PriorityLock(object):
         # print("request lock:", fut)
         self.lock_queue.put((-priority, next(self.req_count), fut))
         return fut
-    
+
     def _release_lock(self, fut):
         with fut._acq_lock:
             # print("release request:", fut)
@@ -64,12 +67,12 @@ class PriorityLock(object):
                 self.unlock_event.set()
             else:
                 fut._taskDone(interrupted=True)
-    
+
     def _lock_loop(self):
         while True:
             # wait for lock to become available
             self.unlock_event.wait()
-            
+
             # get next lock request
             while True:
                 _, _, fut = self.lock_queue.get()
@@ -97,20 +100,20 @@ class PriorityLockRequest(Future):
         self._wait_event = Event()
         self._acquired = False
         self._released = False
-        
+
     @property
     def acquired(self):
         """If True, then this request currently has the lock acquired and prevents other requests
         from acquiring the lock.
         """
         return self._acquired
-        
+
     @property
     def released(self):
         """If True, then this request has released its lock (if any) and can never acquire the lock again.
         """
         return self._released
-        
+
     def _wait(self, timeout):
         self._wait_event.wait(timeout=timeout)
 
