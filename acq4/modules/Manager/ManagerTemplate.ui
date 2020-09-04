@@ -127,6 +127,13 @@
        </spacer>
       </item>
       <item>
+       <widget class="QPushButton" name="organizeUIBtn">
+        <property name="text">
+         <string>Organize UI</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="reloadModuleBtn">
         <property name="text">
          <string>Reload Libraries</string>

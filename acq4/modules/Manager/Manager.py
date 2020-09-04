@@ -23,39 +23,18 @@ class Manager(Module):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         self.stateFile = os.path.join("modules", self.name + "_ui.cfg")
-        firstDock = None
 
         self.modGroupOrder = ["Acquisition", "Analysis", "Utilities"]
 
-        self.devRackDocks = {}
-        for d in self.manager.listDevices():
-            try:
-                dw = self.manager.getDevice(d).deviceInterface(self)
-                if dw is None:
-                    continue
-                dock = Qt.QDockWidget(d)
-                dock.setFeatures(dock.DockWidgetMovable | dock.DockWidgetFloatable)
-                dock.setObjectName(d)
-                dock.setWidget(dw)
-
-                self.devRackDocks[d] = dock
-                self.win.addDockWidget(Qt.Qt.RightDockWidgetArea, dock)
-
-                # By default, we stack all docks
-                if firstDock is None:
-                    firstDock = dock
-                else:
-                    self.win.tabifyDockWidget(firstDock, dock)
-            except:
-                self.showMessage("Error creating dock for device '%s', see console for details." % d, 10000)
-                printExc("Error while creating dock for device '%s':" % d)
-
+        self._deviceDocksByName = {}
+        self.addDeviceDocks()
         self.updateModList()
         self.updateConfList()
 
         self.ui.loadConfigBtn.clicked.connect(self.loadConfig)
         self.ui.loadModuleBtn.clicked.connect(self.loadSelectedModule)
         self.ui.reloadModuleBtn.clicked.connect(self.reloadAll)
+        self.ui.organizeUIBtn.clicked.connect(self.organizeUI)
         self.ui.configList.itemDoubleClicked.connect(self.loadConfig)
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
@@ -72,6 +51,82 @@ class Manager(Module):
             self.win.restoreState(ws)
 
         self.win.show()
+
+    def addDeviceDocks(self):
+        firstDock = None
+        for d in self.manager.listDevices():
+            try:
+                dock = self.createDockForDevice(d)
+                if dock is None:
+                    continue
+                self._deviceDocksByName[d] = dock
+                self.win.addDockWidget(Qt.Qt.RightDockWidgetArea, dock)
+
+                # By default, we stack all docks
+                if firstDock is None:
+                    firstDock = dock
+                else:
+                    self.win.tabifyDockWidget(firstDock, dock)
+            except:
+                self.showMessage("Error creating dock for device '%s', see console for details." % d, 10000)
+                printExc("Error while creating dock for device '%s':" % d)
+
+    def createDockForDevice(self, deviceName):
+        dw = self.manager.getDevice(deviceName).deviceInterface(self)
+        if dw is None:
+            return None
+        dock = Qt.QDockWidget(deviceName)
+        dock.setFeatures(dock.DockWidgetMovable | dock.DockWidgetFloatable)
+        dock.setObjectName(deviceName)
+        dock.setWidget(dw)
+        return dock
+
+    def organizeUI(self):
+        for dock in self._deviceDocksByName.values():
+            self.win.removeDockWidget(dock)
+            dock.close()
+
+        # shrink the main window to start
+        geom = self.win.geometry()
+        minWinSize = self.ui.verticalLayout.sizeHint()
+        heightSoFar = minWinSize.height()
+        self.win.setGeometry(geom.x(), geom.y(), minWinSize.width(), heightSoFar)
+
+        groupedDevices = {}
+        for devName in self._deviceDocksByName.keys():
+            groupedDevices.setdefault(devName[:5], {}).setdefault("device names", []).append(devName)
+        groups = [group for group in groupedDevices.values() if len(group["device names"]) > 1]
+        misc = [group["device names"][0] for group in groupedDevices.values() if len(group["device names"]) == 1]
+        groups.append({"device names": misc})
+
+        self._deviceDocksByName = {}
+        for group in groups:
+            for dev in group["device names"]:
+                dock = self.createDockForDevice(dev)
+                self._deviceDocksByName[dev] = dock
+
+                minSize = dock.sizeHint()
+                group["required width"] = max(minSize.width(), group.get("required width", 0))
+                group["required height"] = max(minSize.height(), group.get("required height", 0))
+
+        orient = Qt.Qt.Vertical
+        heightUsedThisColumn = 0
+        for group in sorted(groups, key=lambda g: (g["required height"], g["required width"])):
+            if heightUsedThisColumn + group["required height"] > heightSoFar:
+                orient = Qt.Qt.Horizontal
+                heightUsedThisColumn = 0
+            firstDock = None
+            for dev in group["device names"]:
+                dock = self._deviceDocksByName[dev]
+                self.win.addDockWidget(Qt.Qt.RightDockWidgetArea, dock, orient)
+                if firstDock is None:
+                    firstDock = dock
+                else:
+                    self.win.tabifyDockWidget(firstDock, dock)
+            if orient == Qt.Qt.Horizontal:
+                orient = Qt.Qt.Vertical
+            else:
+                heightUsedThisColumn += group["required height"]
 
     def showMessage(self, *args):
         self.ui.statusBar.showMessage(*args)
