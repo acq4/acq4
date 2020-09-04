@@ -229,9 +229,7 @@ class Scanner(Device, OptomechDevice):
     
     def deviceInterface(self, win):
         with self.lock:
-            if self.devGui is None:
-                self.devGui = ScannerDeviceGui(self, win)
-            return self.devGui
+            return ScannerDeviceGui(self, win)
 
 
 class ScannerTask(DeviceTask):
