@@ -780,11 +780,11 @@ class AcquireThread(Thread):
         self.acqBuffer = None
         self.bufferTime = 5.0
         self.tasks = []
-        
+
         ## This thread does not run an event loop,
         ## so we may need to deliver frames manually to some places
-        self.connections = set()
-        self.connectMutex = Mutex()
+        self._newFrameCallbacks = set()
+        self._newFrameCallbacksMutex = Mutex()
     
     def __del__(self):
         if hasattr(self, 'cam'):
@@ -797,13 +797,13 @@ class AcquireThread(Thread):
         Thread.start(self, *args)
     
     def connectCallback(self, method):
-        with self.connectMutex:
-            self.connections.add(method)
-    
+        with self._newFrameCallbacksMutex:
+            self._newFrameCallbacks.add(method)
+
     def disconnectCallback(self, method):
-        with self.connectMutex:
-            if method in self.connections:
-                self.connections.remove(method)
+        with self._newFrameCallbacksMutex:
+            if method in self._newFrameCallbacks:
+                self._newFrameCallbacks.remove(method)
     
     def run(self):
         size = self.dev.getParam('sensorSize')
@@ -870,9 +870,9 @@ class AcquireThread(Thread):
                         data = frame.pop('data')
                         frameInfo.update(frame)  # copies 'time' key supplied by camera
                         out = Frame(data, frameInfo)
-                        with self.connectMutex:
-                            conn = list(self.connections)
-                        for c in conn:
+                        with self._newFrameCallbacksMutex:
+                            callbacks = list(self._newFrameCallbacks)
+                        for c in callbacks:
                             c(out)
                         self.sigNewFrame.emit(out)
                         
