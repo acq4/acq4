@@ -136,7 +136,7 @@ class CalibrationWindow(Qt.QWidget):
         self.recalculate()
 
     def saveCalibrationToDevice(self):
-        self.recalculate()
+        self.recalculate(raiseOnInsufficientPoints=True)
         self.calibration["transform"] = (
             None if self.transform is None else [list(row) for row in self.transform.matrix()]
         )
@@ -153,49 +153,21 @@ class CalibrationWindow(Qt.QWidget):
         item.target = None
         return item
 
-    def recalculate(self):
+    def recalculate(self, raiseOnInsufficientPoints=False):
         # identity affine axis transform matrix
 
         # method: user generates many calibration points that are all colinear along each of the
         # stage axes. In this way, we can independently determine the orientation of each stage axis,
         # and combine these into a full transformation matrix.
 
-        npts = len(self.calibration["points"])
+        parentPos, stagePos = self._unzippedCalibrationPoints()
 
-        # build arrays of calibration points
-        stagePos = np.empty((npts, 3))
-        parentPos = np.empty((npts, 3))
-        for i, pt in enumerate(self.calibration["points"]):
-            stagePos[i] = pt[0]
-            parentPos[i] = pt[1]
-
-        def changeAxis(p1, p2):
-            # Which single axis has changed between 2 points?
-            diff = np.abs(p2 - p1)
-            dist = np.linalg.norm(diff)
-            axis = np.argmax(diff)
-            if diff[axis] > dist * 0.99:
-                return axis
-            else:
-                return None
-
-        # find the point groupings for each axis
-        axisPoints = [set(), set(), set()]
-        currentAxis = None
-        for i in range(1, npts):
-            currentAxis = changeAxis(stagePos[i - 1], stagePos[i])
-            if currentAxis is None:
-                continue
-            axisPoints[currentAxis].add(i - 1)
-            axisPoints[currentAxis].add(i)
-
-        for ax in (0, 1, 2):
-            if len(axisPoints[ax]) < 2:
-                for i in range(npts):
-                    item = self.pointTree.topLevelItem(i)
-                    item.setText(2, "")
-                self.transform = None
+        axisPoints = self._groupPointsByAxis(stagePos)
+        if not self._hasSufficientPoints(axisPoints):
+            self._clearCalibration()
+            if raiseOnInsufficientPoints:
                 raise Exception("Could not find colinear points along all 3 axes")
+            else:
                 return
 
         axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0, 1, 2)]
@@ -231,7 +203,7 @@ class CalibrationWindow(Qt.QWidget):
             return [mapPoint(axisTr, sp, [0, 0, 0]) - pp for sp, pp in zip(stagePos, parentPos)]
 
         error = mapError(self.transform, stagePos, parentPos)
-        for i in range(npts):
+        for i in range(len(self.calibration["points"])):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
             item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
@@ -241,106 +213,45 @@ class CalibrationWindow(Qt.QWidget):
         self.dev._inverseAxisTransform = None
         self.dev._updateTransform()
 
-    def _recalculate(self):
-        # identity affine axis transform matrix
-
-        # method: given >= 4 arbitrarily-located calibration points, attempt to find the
-        # affine transform that best matches all points.
-
-        # For any 4 point-pairs, we can get an exact solution that may not work as well for other points.
-        # With more points, we can try to pick an optimal transform that minimizes errors, but this
-        # turns out to be a tricky minimization problem.
-
+    def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])
-
-        # Need at least 4 points to generate a calibration
-        if npts < 4:
-            for i in range(npts):
-                item = self.pointTree.topLevelItem(i)
-                item.setText(2, "")
-            self.transform = None
-            return
-
         stagePos = np.empty((npts, 3))
         parentPos = np.empty((npts, 3))
         for i, pt in enumerate(self.calibration["points"]):
             stagePos[i] = pt[0]
             parentPos[i] = pt[1]
+        return parentPos, stagePos
 
-        def mapPoint(axisTr, stagePos, localPos):
-            # given a stage position and axis transform, map from localPos to parent coordinate system
-            if isinstance(axisTr, np.ndarray):
-                m = np.eye(4)
-                m[:3] = axisTr.reshape(3, 4)
-                axisTr = pg.Transform3D(m)
-            st = self.dev._makeStageTransform(stagePos, axisTr)[0]
-            tr = pg.Transform3D(self.dev.baseTransform() * st)
-            return tr.map(localPos)
+    @staticmethod
+    def _groupPointsByAxis(points):
+        def changeAxis(p1, p2):
+            # Which single axis has changed between 2 points?
+            diff = np.abs(p2 - p1)
+            dist = np.linalg.norm(diff)
+            axis = np.argmax(diff)
+            if diff[axis] > dist * 0.99:
+                return axis
+            else:
+                return None
 
-        def mapError(axisTr, stagePos, parentPos):
-            # Goal is to map origin to parent position correctly
-            return [mapPoint(axisTr, sp, [0, 0, 0]) - pp for sp, pp in zip(stagePos, parentPos)]
+        axisPoints = [set(), set(), set()]
+        for i in range(1, len(points)):
+            currentAxis = changeAxis(points[i - 1], points[i])
+            if currentAxis is None:
+                continue
+            axisPoints[currentAxis].add(i - 1)
+            axisPoints[currentAxis].add(i)
+        return axisPoints
 
-        def errFn(axisTr, stagePos, parentPos):
-            # reduce all point errors to a scalar error metric
-            dist = [np.linalg.norm(err) for err in mapError(axisTr, stagePos, parentPos)]
-            err = np.linalg.norm(dist)
-            if err < best[0]:
-                best[0] = err
-                best[1] = axisTr
-            return err
+    @staticmethod
+    def _hasSufficientPoints(axisPoints):
+        return all([len(axisPoints[ax]) > 2 for ax in (0, 1, 2)])
 
-        def srtErrFn(x, stagePos, parentPos):
-            # for solving with orthogonal axes and uniform scale factor
-            axisTr = vecToSRT(x)
-            return errFn(axisTr, stagePos, parentPos)
-
-        def vecToSRT(x):
-            return pg.SRTTransform3D({"pos": x[:3], "scale": x[3:6], "angle": x[6], "axis": [0, 0, 1]})
-
-        # use random combinations of 4 points to get an average of exact solutions
-        n_iter = min(100, 4 ** (stagePos.shape[0] - 4))
-        m = []
-        for i in range(n_iter):
-            inds = list(range(len(stagePos)))
-            np.random.shuffle(inds)
-            Xa = stagePos[inds[:4]]
-            Ya = parentPos[inds[:4]]
-            m1 = self.dev._solveAxisTransform(Xa, Ya, np.zeros((4, 3)))
-            m.append(m1)
-        mGuess = np.mean(np.dstack(m), axis=2)
-
-        # Fit the entire set of points, using the exact solution as initial guess
-        best = [np.inf, None]
-        self.result = scipy.optimize.minimize(
-            errFn,
-            x0=mGuess,
-            args=(stagePos, parentPos),
-            tol=1e-16,
-            options={
-                # 'eps': 1e-16,
-                "gtol": 1e-16,
-                # 'disp': True,
-                "maxiter": 20000,
-            },
-            method="Nelder-Mead",
-        )
-
-        m = np.eye(4)
-        m[:3] = best[1].reshape(3, 4)
-        self.transform = pg.Transform3D(m)
-
-        # measure and display errors for each point
-        error = mapError(self.transform, stagePos, parentPos)
-        for i in range(npts):
+    def _clearCalibration(self):
+        for i in range(len(self.calibration["points"])):
             item = self.pointTree.topLevelItem(i)
-            dist = np.linalg.norm(error[i])
-            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
-
-        # send new transform to device
-        self.dev._axisTransform = self.transform
-        self.dev._inverseAxisTransform = None
-        self.dev._updateTransform()
+            item.setText(2, "")
+        self.transform = None
 
     def getCameraModule(self):
         if self._cammod is None:
@@ -423,6 +334,7 @@ class StageCalibration(object):
 
     def processFrame(self, frame):
         import imreg_dft  # FFT image registration by Chris Gohlke; available via pip
+
         self.frames.append(frame)
         index = self.index
 
