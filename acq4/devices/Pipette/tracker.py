@@ -174,7 +174,7 @@ class PipetteTracker(object):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()["pixelSize"][0] * 100
 
-    def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=4, tipLength=None):
+    def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=4, tipLength=None, minFocusAccuracy=200e-9):
         """Collect a series of images of the pipette tip at various focal depths.
 
         The collected images are used as reference templates for determining the most likely location 
@@ -240,7 +240,7 @@ class PipetteTracker(object):
                             0.3
                         )  # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
                         focusError = abs(scope.getFocusDepth() - focus)
-                        if focusError > zStep * 0.2:
+                        if focusError > max(zStep * 0.2, minFocusAccuracy):
                             raise Exception("Requested focus missed (%0.2f um error)" % (focusError * 1e6))
 
                         frame = imager.acquireFrames(average)
