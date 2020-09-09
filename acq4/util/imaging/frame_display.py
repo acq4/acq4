@@ -145,8 +145,6 @@ class FrameDisplay(Qt.QObject):
 
         except:
             printExc("Error while drawing new frames:")
-        finally:
-            pass
 
     def quit(self):
         self._imageItem = None

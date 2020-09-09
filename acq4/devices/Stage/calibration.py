@@ -385,7 +385,6 @@ class StageCalibration(object):
         self.framedelay = None
 
     def calibrate(self, camera):
-        import imreg_dft  # FFT image registration by Chris Gohlke; available via pip
         n = 300
         dx = 10e-6
 
@@ -423,6 +422,7 @@ class StageCalibration(object):
             raise
 
     def processFrame(self, frame):
+        import imreg_dft  # FFT image registration by Chris Gohlke; available via pip
         self.frames.append(frame)
         index = self.index
 
