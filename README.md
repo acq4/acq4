@@ -54,7 +54,7 @@ python distribution plus a few extra packages.
     conda activate acq4
     ```
 
-3. Add development version of pyqtgraph:
+3. Add latest version of pyqtgraph:
 
     ```bash
     pip install git+https://github.com/pyqtgraph/pyqtgraph@master#egg=pyqtgraph

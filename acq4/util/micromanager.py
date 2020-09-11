@@ -41,10 +41,12 @@ def getMMCorePy(path=None):
     """
     global _mmc
     if _mmc is None:
+        if path is None:
+            path = microManagerPath
         try:
             import pymmcore
             _mmc = MMCWrapper(pymmcore.CMMCore())
-            _mmc.setDeviceAdapterSearchPaths([microManagerPath])
+            _mmc.setDeviceAdapterSearchPaths([path])
         except ImportError:
 
             try:
@@ -54,8 +56,6 @@ def getMMCorePy(path=None):
                     raise
                 # MM does not install itself to standard path. User should take care of this,
                 # but we can make a guess..
-                if path is None:
-                    path = microManagerPath
                 sys.path.append(path)
                 os.environ['PATH'] = os.environ['PATH'] + ';' + path
                 try:
