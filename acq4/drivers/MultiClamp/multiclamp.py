@@ -392,9 +392,9 @@ class MultiClamp:
                 ch1 = ch.copy()
                 ch1['model'] = MODELS[ch1['model']]
                 if ch1['model'] == 'MC700A':
-                    strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'com', 'dev', 'chan'])  
+                    strDesc = ",".join("%s:%s" % (k, ch1[k].decode('utf-8') if isinstance(ch1[k], bytes) else ch1[k]) for k in ['model', 'com', 'dev', 'chan'])
                 elif ch1['model'] == 'MC700B':
-                    strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'sn', 'chan'])  
+                    strDesc = ",".join("%s:%s" % (k, ch1[k].decode('utf-8') if isinstance(ch1[k], bytes) else ch1[k]) for k in ['model', 'sn', 'chan'])
                 if strDesc not in self.channels:
                     self.channels[strDesc] = MultiClampChannel(self, ch)
                 self.chanDesc[strDesc] = ch
