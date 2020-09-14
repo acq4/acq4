@@ -15,6 +15,8 @@ class Sensapex(Stage):
     A Sensapex manipulator.
     """
 
+    _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
+
     devices = {}
 
     def __init__(self, man, config, name):
@@ -33,28 +35,31 @@ class Sensapex(Stage):
         self.dev = ump.get_device(self.devid)
 
         Stage.__init__(self, man, config, name)
+        # Read position updates on a timer to rate-limit
+        self._updateTimer = Qt.QTimer()
+        self._updateTimer.timeout.connect(self._getPosition)
         self._lastUpdate = 0
 
-        # note: n_axes is used in cases where the device is not capable of answering this on its own
+        self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
+
+        # note: n_axes is used in cases where the device is not capable of answering this on its own 
         if 'nAxes' in config:
             self.dev.set_n_axes(config['nAxes'])
         if 'maxAcceeration' in config:
             self.dev.set_max_acceleration(config['maxAcceleration'])
 
-        self.dev.add_callback(self._handlePositionChange)
+        self.dev.add_callback(self._positionChanged)
 
         # force cache update for this device.
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
+
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
         self.getPosition(refresh=True)
-        self._positionRateLimitTimer = Qt.QTimer()
-        self._positionRateLimitTimer.timeout.connect(self._processPositionChange)
-        self._positionRateLimitTimer.start(100e-3)
 
         # TODO: set any extra parameters specified in the config        
         Sensapex.devices[self.devid] = self
@@ -106,40 +111,37 @@ class Sensapex(Stage):
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = self.dev.get_pos()[:3]
+            # using timeout=0 forces read from cache (the monitor thread ensures
+            # these values are up to date)
+            pos = self.dev.get_pos(timeout=0)[:3]
+            if self._lastPos is not None:
+                dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
-        self._updateFromNewPosition(pos)
-        return pos
+            # do not report changes < 100 nm
+            if self._lastPos is None or dif > 0.1:
+                self._lastPos = pos
+                emit = True
+            else:
+                emit = False
 
-    def _updateFromNewPosition(self, pos):
-        if self._lastPos is not None:
-            dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
-        # do not report changes < 100 nm
-        if self._lastPos is None or dif > 0.1:
-            self._lastPos = pos
-            emit = True
-        else:
-            emit = False
-        self._lastUpdate = ptime.time()
         if emit:
+            # don't emit signal while locked
             self.posChanged(pos)
 
-    def _handlePositionChange(self, dev, newPos, oldPos):
+        return pos
+
+    def _positionChanged(self, dev, newPos, oldPos):
         # called by driver poller when position has changed
         now = ptime.time()
         # rate limit updates to 10 Hz
         wait = 100e-3 - (now - self._lastUpdate)
         if wait > 0:
-            with self.lock:
-                self._unprocessedPosition = newPos
+            self._sigRestartUpdateTimer.emit(wait)
         else:
-            self._updateFromNewPosition(newPos)
+            self._getPosition()
 
-    def _processPositionChange(self):
-        if self._unprocessedPosition is not None:
-            with self.lock:
-                self._updateFromNewPosition(self._unprocessedPosition)
-                self._unprocessedPosition = None
+    def _restartUpdateTimer(self, wait):
+        self._updateTimer.start(int(wait * 1000))
 
     def targetPosition(self):
         with self.lock:
