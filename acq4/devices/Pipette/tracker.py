@@ -56,8 +56,8 @@ class PipetteTracker(object):
         imager = self._getImager(imager)
         self.__nextFrame = None
 
-        def newFrame(newFrame):
-            self.__nextFrame = newFrame
+        def newFrame(f):
+            self.__nextFrame = f
 
         imager.sigNewFrame.connect(newFrame)
         try:
