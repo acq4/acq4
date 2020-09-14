@@ -119,7 +119,7 @@ class FrameDisplay(Qt.QObject):
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
 
-            info = self.currentFrame.info()
+            self.currentFrame.info()
             data = self.currentFrame.getImage()
             # if we got a stack of frames, just display the first one. (not sure what else we could do here..)
             if data.ndim == 3:
@@ -143,7 +143,7 @@ class FrameDisplay(Qt.QObject):
 
             prof.finish()
 
-        except:
+        except Exception:
             printExc("Error while drawing new frames:")
 
     def quit(self):
