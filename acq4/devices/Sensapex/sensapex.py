@@ -20,14 +20,14 @@ class Sensapex(Stage):
     devices = {}
 
     def __init__(self, man, config, name):
-        self.devid = config.get('deviceId')
-        self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
-        self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
-        self.maxMoveError = config.pop('maxError', 1e-6)
+        self.devid = config.get("deviceId")
+        self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
+        self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
+        self.maxMoveError = config.pop("maxError", 1e-6)
 
-        address = config.pop('address', None)
+        address = config.pop("address", None)
         address = None if address is None else address.encode()
-        group = config.pop('group', None)
+        group = config.pop("group", None)
         if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             UMP.set_library_path(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
@@ -42,11 +42,11 @@ class Sensapex(Stage):
 
         self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
-        # note: n_axes is used in cases where the device is not capable of answering this on its own 
-        if 'nAxes' in config:
-            self.dev.set_n_axes(config['nAxes'])
-        if 'maxAcceeration' in config:
-            self.dev.set_max_acceleration(config['maxAcceleration'])
+        # note: n_axes is used in cases where the device is not capable of answering this on its own
+        if "nAxes" in config:
+            self.dev.set_n_axes(config["nAxes"])
+        if "maxAcceeration" in config:
+            self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self.dev.add_callback(self._positionChanged)
 
@@ -61,27 +61,27 @@ class Sensapex(Stage):
         self._lastPos = None
         self.getPosition(refresh=True)
 
-        # TODO: set any extra parameters specified in the config        
+        # TODO: set any extra parameters specified in the config
         Sensapex.devices[self.devid] = self
 
     def axes(self):
-        return 'x', 'y', 'z'
+        return "x", "y", "z"
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
-        if 'capabilities' in self.config:
-            return self.config['capabilities']
+        if "capabilities" in self.config:
+            return self.config["capabilities"]
         else:
             return {
-                'getPos': (True, True, True),
-                'setPos': (True, True, True),
-                'limits': (False, False, False),
+                "getPos": (True, True, True),
+                "setPos": (True, True, True),
+                "limits": (False, False, False),
             }
 
     def axisTransform(self):
         if self._axisTransform is None:
             # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
-            a = self.xPitch * np.pi / 180.
+            a = self.xPitch * np.pi / 180.0
             s = self.scale
             pts1 = np.array([  # unit vector in sensapex space
                 [0, 0, 0],
@@ -203,8 +203,9 @@ class SensapexMoveFuture(MoveFuture):
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
             if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
                 # missed
-                self._errorMsg = "%s stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (
-                    self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed)
+                self._errorMsg = "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
+                    self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed
+                )
 
         self._checked = True
 
@@ -270,9 +271,9 @@ class SensapexInterface(Qt.QWidget):
         self.positionLabelWidget.setLayout(self.positionLabelLayout)
         self.positionLabelLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.globalLabel = Qt.QLabel('global')
+        self.globalLabel = Qt.QLabel("global")
         self.positionLabelLayout.addWidget(self.globalLabel, 0, 1)
-        self.stageLabel = Qt.QLabel('stage')
+        self.stageLabel = Qt.QLabel("stage")
         self.positionLabelLayout.addWidget(self.stageLabel, 0, 2)
 
         self.btnContainer = Qt.QWidget()
@@ -281,28 +282,28 @@ class SensapexInterface(Qt.QWidget):
         self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.goHomeBtn = Qt.QPushButton('Home')
+        self.goHomeBtn = Qt.QPushButton("Home")
         self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
         self.goHomeBtn.clicked.connect(self.goHomeClicked)
 
-        self.setHomeBtn = Qt.QPushButton('Set Home')
+        self.setHomeBtn = Qt.QPushButton("Set Home")
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
         self.setHomeBtn.clicked.connect(self.setHomeClicked)
 
-        self.calibrateBtn = Qt.QPushButton('Calibrate')
+        self.calibrateBtn = Qt.QPushButton("Calibrate")
         self.btnLayout.addWidget(self.calibrateBtn, 0, 2)
         self.calibrateBtn.clicked.connect(self.calibrateClicked)
 
-        self.stopBtn = Qt.QPushButton('Stop!')
+        self.stopBtn = Qt.QPushButton("Stop!")
         self.btnLayout.addWidget(self.stopBtn, 1, 0)
         self.stopBtn.clicked.connect(self.stopClicked)
         self.stopBtn.setStyleSheet("QPushButton {background-color:red; color:white}")
 
-        self.calibrateZeroBtn = Qt.QPushButton('Run Zero Calibration')
+        self.calibrateZeroBtn = Qt.QPushButton("Run Zero Calibration")
         self.btnLayout.addWidget(self.calibrateZeroBtn, 1, 1)
         self.calibrateZeroBtn.clicked.connect(self.calibrateZeroClicked)
 
-        self.calibrateLoadBtn = Qt.QPushButton('Run Load Calibration')
+        self.calibrateLoadBtn = Qt.QPushButton("Run Load Calibration")
         self.btnLayout.addWidget(self.calibrateLoadBtn, 1, 2)
         self.calibrateLoadBtn.clicked.connect(self.calibrateLoadClicked)
 
@@ -312,7 +313,7 @@ class SensapexInterface(Qt.QWidget):
         self.softStartValue.editingFinished.connect(self.softstartChanged)
         self.getSoftStartValue()
 
-        self.softStartBtn = Qt.QPushButton('Soft Start Enabled')
+        self.softStartBtn = Qt.QPushButton("Soft Start Enabled")
         self.softStartBtn.setCheckable(True)
         self.softStartBtn.setStyleSheet("QPushButton:checked{background-color:lightgreen; color:black}")
         self.btnLayout.addWidget(self.softStartBtn, 2, 0)
@@ -323,17 +324,17 @@ class SensapexInterface(Qt.QWidget):
 
         cap = dev.capabilities()
         for axis, axisName in enumerate(self.dev.axes()):
-            if cap['getPos'][axis]:
+            if cap["getPos"][axis]:
                 axLabel = Qt.QLabel(axisName)
                 axLabel.setMaximumWidth(15)
-                globalPosLabel = Qt.QLabel('0')
-                stagePosLabel = Qt.QLabel('0')
+                globalPosLabel = Qt.QLabel("0")
+                stagePosLabel = Qt.QLabel("0")
                 self.posLabels[axis] = (globalPosLabel, stagePosLabel)
                 widgets = [axLabel, globalPosLabel, stagePosLabel]
-                if cap['limits'][axis]:
-                    minCheck = Qt.QCheckBox('Min:')
+                if cap["limits"][axis]:
+                    minCheck = Qt.QCheckBox("Min:")
                     minCheck.tag = (axis, 0)
-                    maxCheck = Qt.QCheckBox('Max:')
+                    maxCheck = Qt.QCheckBox("Max:")
                     maxCheck.tag = (axis, 1)
                     self.limitChecks[axis] = (minCheck, maxCheck)
                     widgets.extend([minCheck, maxCheck])
@@ -352,7 +353,7 @@ class SensapexInterface(Qt.QWidget):
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
         for i in self.posLabels:
-            text = pg.siFormat(globalPos[i], suffix='m', precision=5)
+            text = pg.siFormat(globalPos[i], suffix="m", precision=5)
             self.posLabels[i][0].setText(text)
             self.posLabels[i][1].setText(str(stagePos[i]))
 

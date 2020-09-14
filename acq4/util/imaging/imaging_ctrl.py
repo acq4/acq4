@@ -1,12 +1,13 @@
 from __future__ import print_function
 
-from acq4.util import Qt
 import pyqtgraph as pg
+
+from acq4.util import Qt
+from acq4.util.debug import printExc
 from .frame_display import FrameDisplay
 from .record_thread import RecordThread
-from acq4.util.debug import printExc
 
-Ui_Form = Qt.importTemplate('.imaging_template')
+Ui_Form = Qt.importTemplate(".imaging_template")
 
 
 class ImagingCtrl(Qt.QWidget):
@@ -43,7 +44,6 @@ class ImagingCtrl(Qt.QWidget):
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
 
-
     def __init__(self, parent=None):
         Qt.QWidget.__init__(self, parent)
 
@@ -60,19 +60,19 @@ class ImagingCtrl(Qt.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
-        ## format labels
-        self.ui.fpsLabel.setFormatStr('{avgValue:.1f} fps')
+        # format labels
+        self.ui.fpsLabel.setFormatStr("{avgValue:.1f} fps")
         self.ui.fpsLabel.setAverageTime(2.0)
-        self.ui.displayFpsLabel.setFormatStr('{avgValue:.1f} fps')
+        self.ui.displayFpsLabel.setFormatStr("{avgValue:.1f} fps")
         self.ui.displayFpsLabel.setAverageTime(2.0)
-        self.ui.displayPercentLabel.setFormatStr('({avgValue:.1f}%)')
+        self.ui.displayPercentLabel.setFormatStr("({avgValue:.1f}%)")
         self.ui.displayPercentLabel.setAverageTime(4.0)
 
         # disabled until first frame arrives
         self.ui.saveFrameBtn.setEnabled(False)
         self.ui.pinFrameBtn.setEnabled(False)
 
-        ## set up recording thread
+        # set up recording thread
         self.recordThread = RecordThread(self)
         self.recordThread.start()
         # self.recordThread.sigShowMessage.connect(self.showMessage)
@@ -81,7 +81,7 @@ class ImagingCtrl(Qt.QWidget):
         self.recordThread.sigRecordingFailed.connect(self.recordingFailed)
         self.recordThread.sigSavedFrame.connect(self.threadSavedFrame)
 
-        ## connect UI signals
+        # connect UI signals
         self.ui.acquireVideoBtn.clicked.connect(self.acquireVideoClicked)
         self.ui.acquireFrameBtn.clicked.connect(self.acquireFrameClicked)
         self.ui.recordStackBtn.toggled.connect(self.recordStackToggled)
@@ -116,7 +116,7 @@ class ImagingCtrl(Qt.QWidget):
         self.ui.pinFrameBtn.setEnabled(True)
 
         # update acquisition frame rate
-        now = frame.info()['time']
+        now = frame.info()["time"]
         if self.lastFrameTime is not None:
             dt = now - self.lastFrameTime
             if dt > 0:
@@ -134,12 +134,12 @@ class ImagingCtrl(Qt.QWidget):
             if self.stackShape is None:
                 self.stackShape = frameShape
             elif self.stackShape != frameShape:
-                # new iamge does not match stack shape; need to stop recording.
+                # new image does not match stack shape; need to stop recording.
                 self.endStack()
 
-        queued = self.recordThread.newFrame(frame)
+        self.recordThread.newFrame(frame)
         if self.ui.recordStackBtn.isChecked():
-            self.ui.stackSizeLabel.setText('%d frames' % self.recordThread.stackSize)
+            self.ui.stackSizeLabel.setText("%d frames" % self.recordThread.stackSize)
 
         self.frameDisplay.newFrame(frame)
 
@@ -161,7 +161,7 @@ class ImagingCtrl(Qt.QWidget):
         """
         if self.recordingStack():
             raise RuntimeError("Cannot start stack record; stack already in progress.")
-        self.ui.stackSizeLabel.setText('0 frames')
+        self.ui.stackSizeLabel.setText("0 frames")
         self.ui.recordStackBtn.setChecked(True)
         self.ui.recordXframesCheck.setEnabled(False)
         self.ui.recordXframesSpin.setEnabled(False)
@@ -194,7 +194,7 @@ class ImagingCtrl(Qt.QWidget):
 
     def recordThreadStopped(self):
         self.endStack()
-        self.ui.recordStackBtn.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
+        self.ui.recordStackBtn.setEnabled(False)  # Recording thread has stopped, can't record anymore.
         printExc("Recording thread died! See console for error message.")
 
     def recordingFailed(self):
@@ -266,7 +266,7 @@ class ImagingCtrl(Qt.QWidget):
         if fr.scene() is not None:
             fr.scene().removeItem(fr)
         fr.sigRemoveRequested.disconnect(self.removePinnedFrame)
-        
+
     def clearPinnedFramesClicked(self):
         if Qt.QMessageBox.question(self, "Really?", "Clear all pinned frames?", Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel) == Qt.QMessageBox.Ok:
             self.clearPinnedFrames()
@@ -275,18 +275,9 @@ class ImagingCtrl(Qt.QWidget):
         for frame in self.pinnedFrames[:]:
             self.removePinnedFrame(frame)
 
-    def threadSavedFrame(self, file):
+    def threadSavedFrame(self, filename):
         # Called when the recording thread saves a single frame
-        if file is False:
+        if filename is False:
             self.ui.saveFrameBtn.failure("Error.")
-        else:            
+        else:
             self.ui.saveFrameBtn.success("Saved.")
-
-
-
-
-
-
-
-
-

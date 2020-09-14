@@ -1,12 +1,15 @@
 from __future__ import print_function
+
 import numpy as np
-import scipy.stats, scipy.optimize
 import pyqtgraph as pg
+import scipy.optimize
+import scipy.stats
+from six.moves import range
+from six.moves import zip
+
 from acq4.Manager import getManager
 from acq4.util import Qt
 from acq4.util.target import Target
-from six.moves import range
-from six.moves import zip
 
 
 class CalibrationWindow(Qt.QWidget):
@@ -26,7 +29,7 @@ class CalibrationWindow(Qt.QWidget):
         # tree columns:
         #   stage x, y, z   global x, y, z   error
         self.pointTree = Qt.QTreeWidget()
-        self.pointTree.setHeaderLabels(['stage pos', 'parent pos', 'error'])
+        self.pointTree.setHeaderLabels(["stage pos", "parent pos", "error"])
         self.pointTree.setColumnCount(3)
         self.layout.addWidget(self.pointTree, 0, 0)
         self.pointTree.setColumnWidth(0, 200)
@@ -44,7 +47,7 @@ class CalibrationWindow(Qt.QWidget):
 
         self.removePointBtn = Qt.QPushButton("remove point")
         self.btnPanelLayout.addWidget(self.removePointBtn)
-        
+
         self.saveBtn = Qt.QPushButton("save calibration")
         self.btnPanelLayout.addWidget(self.saveBtn)
 
@@ -87,7 +90,7 @@ class CalibrationWindow(Qt.QWidget):
 
         stagePos = self.dev.getPosition()
 
-        self.calibration['points'].append((stagePos, parentPos))
+        self.calibration["points"].append((stagePos, parentPos))
         item = self._addCalibrationPoint(stagePos, parentPos)
 
         target = Target(movable=False)
@@ -118,7 +121,7 @@ class CalibrationWindow(Qt.QWidget):
         if sel.target is not None:
             sel.target.scene().removeItem(sel.target)
         items = [self.pointTree.topLevelItem(i) for i in range(self.pointTree.topLevelItemCount())]
-        self.calibration['points'] = [(item.stagePos, item.parentPos) for item in items]
+        self.calibration["points"] = [(item.stagePos, item.parentPos) for item in items]
         self.recalculate()
         self.saveBtn.setText("*save calibration*")
 
@@ -126,20 +129,24 @@ class CalibrationWindow(Qt.QWidget):
         self.saveCalibrationToDevice()
 
     def loadCalibrationFromDevice(self):
-        self.calibration = self.dev.readConfigFile('calibration')
-        self.calibration.setdefault('points', [])
-        for stagePos, parentPos in self.calibration['points']:
+        self.calibration = self.dev.readConfigFile("calibration")
+        self.calibration.setdefault("points", [])
+        for stagePos, parentPos in self.calibration["points"]:
             self._addCalibrationPoint(stagePos, parentPos)
         self.recalculate()
 
     def saveCalibrationToDevice(self):
         self.recalculate(raiseOnInsufficientPoints=True)
-        self.calibration['transform'] = None if self.transform is None else [list(row) for row in self.transform.matrix()]
-        self.dev.writeConfigFile(self.calibration, 'calibration')
+        self.calibration["transform"] = (
+            None if self.transform is None else [list(row) for row in self.transform.matrix()]
+        )
+        self.dev.writeConfigFile(self.calibration, "calibration")
         self.saveBtn.setText("save calibration")
 
     def _addCalibrationPoint(self, stagePos, parentPos):
-        item = Qt.QTreeWidgetItem(["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""])
+        item = Qt.QTreeWidgetItem(
+            ["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""]
+        )
         self.pointTree.addTopLevelItem(item)
         item.stagePos = stagePos
         item.parentPos = parentPos
@@ -162,15 +169,15 @@ class CalibrationWindow(Qt.QWidget):
                 raise Exception("Could not find colinear points along all 3 axes")
             else:
                 return
-                
-        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0,1,2)]
-        axParentPos = [parentPos[list(axisPoints[ax])] for ax in (0,1,2)]
+
+        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0, 1, 2)]
+        axParentPos = [parentPos[list(axisPoints[ax])] for ax in (0, 1, 2)]
 
         # find optimal linear mapping for each axis
         m = np.eye(4)
-        for i in (0,1,2):
-            for j in (0,1,2):
-                line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:,i])
+        for i in (0, 1, 2):
+            for j in (0, 1, 2):
+                line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
                 m[i, j] = line.slope
 
         transform = pg.Transform3D(m)
@@ -199,7 +206,7 @@ class CalibrationWindow(Qt.QWidget):
         for i in range(len(self.calibration["points"])):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
-            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6*dist, error[i][0], error[i][1], error[i][2]))
+            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
 
         # send new transform to device
         self.dev._axisTransform = self.transform
@@ -210,7 +217,7 @@ class CalibrationWindow(Qt.QWidget):
         npts = len(self.calibration["points"])
         stagePos = np.empty((npts, 3))
         parentPos = np.empty((npts, 3))
-        for i, pt in enumerate(self.calibration['points']):
+        for i, pt in enumerate(self.calibration["points"]):
             stagePos[i] = pt[0]
             parentPos[i] = pt[1]
         return parentPos, stagePos
@@ -249,7 +256,7 @@ class CalibrationWindow(Qt.QWidget):
     def getCameraModule(self):
         if self._cammod is None:
             manager = getManager()
-            mods = manager.listInterfaces('cameraModule')
+            mods = manager.listInterfaces("cameraModule")
             if len(mods) == 0:
                 raise Exception("Calibration requires an open camera module")
             self._cammod = manager.getModule(mods[0])
@@ -258,9 +265,9 @@ class CalibrationWindow(Qt.QWidget):
     def getCameraDevice(self):
         if self._camdev is None:
             manager = getManager()
-            camName = self.dev.config.get('imagingDevice', None)
+            camName = self.dev.config.get("imagingDevice", None)
             if camName is None:
-                cams = manager.listInterfaces('camera')
+                cams = manager.listInterfaces("camera")
                 if len(cams) == 1:
                     camName = cams[0]
                 else:
@@ -302,8 +309,8 @@ class StageCalibration(object):
 
         # where to move on each update
         self.positions = np.zeros((n, 2))
-        self.positions[:,0] = pos[0] + np.arange(n) * dx
-        self.positions[:,1] = pos[1]
+        self.positions[:, 0] = pos[0] + np.arange(n) * dx
+        self.positions[:, 1] = pos[1]
 
         camera.sigNewFrame.connect(self.newFrame)
 
@@ -316,8 +323,8 @@ class StageCalibration(object):
             if self.framedelay is None:
                 # stage has stopped; discard 2 more frames to be sure
                 # we get the right image.
-                self.framedelay = pg.ptime.time() + 1./frame.info()['fps']
-            elif self.framedelay < frame.info()['time']:
+                self.framedelay = pg.ptime.time() + 1.0 / frame.info()["fps"]
+            elif self.framedelay < frame.info()["time"]:
                 # now we are ready to keep this frame.
                 self.framedelay = None
                 self.processFrame(frame)
@@ -337,13 +344,13 @@ class StageCalibration(object):
         # decide whether to move the stage
         finished = self.index >= self.positions.shape[0]
         if not finished:
-            self.move = self.stage.moveTo(self.positions[self.index], 'slow')
+            self.move = self.stage.moveTo(self.positions[self.index], "slow")
 
         # calculate offset (while stage moves no next location)
         if index == 0:
             offset = (0, 0)
         else:
-            compareIndex = max(0, index-10)
+            compareIndex = max(0, index - 10)
             offset, _ = imreg_dft.translation(frame.getImage(), self.frames[compareIndex].getImage())
             px = self.camera.getPixelSize()
             offset = self.offsets[compareIndex] + offset.astype(float) * [px.x(), px.y()]
@@ -362,22 +369,29 @@ class StageCalibration(object):
         # self.imageView = pg.image(self.frameArray)
 
         # linear regression to determine scale between stage steps and camera microns
-        x = ((self.positions - self.positions[0])**2).sum(axis=1)**0.5
-        y = (self.offsets**2).sum(axis=1)**0.5
+        x = ((self.positions - self.positions[0]) ** 2).sum(axis=1) ** 0.5
+        y = (self.offsets ** 2).sum(axis=1) ** 0.5
         slope, yint, r, p, stdev = scipy.stats.linregress(x, y)
 
         # subtract linear approximation to get residual error
         y1 = x * slope + yint
         self.xvals = x
         self.error = y - y1
-        self.errorPlot = pg.plot(x, self.error, title='X axis error (slope = %0.2f um/step)' % (slope*1e6), labels={'left': ('Error', 'm'), 'bottom': ('position', 'steps')})
+        self.errorPlot = pg.plot(
+            x,
+            self.error,
+            title="X axis error (slope = %0.2f um/step)" % (slope * 1e6),
+            labels={"left": ("Error", "m"), "bottom": ("position", "steps")},
+        )
 
         # fit residual to combination of sine waves
         def fn(p, x):
-            return (p[2] * np.sin((x + p[0]) * 1 * p[1]) + 
-                    p[3] * np.sin((x + p[0]) * 2 * p[1]) + 
-                    p[4] * np.sin((x + p[0]) * 3 * p[1]) + 
-                    p[5] * np.sin((x + p[0]) * 4 * p[1]))
+            return (
+                p[2] * np.sin((x + p[0]) * 1 * p[1])
+                + p[3] * np.sin((x + p[0]) * 2 * p[1])
+                + p[4] * np.sin((x + p[0]) * 3 * p[1])
+                + p[5] * np.sin((x + p[0]) * 4 * p[1])
+            )
 
         def erf(p, x, y):
             return fn(p, x) - y
@@ -385,4 +399,4 @@ class StageCalibration(object):
         f0 = 6 * np.pi / x.max()  # guess there are 3 cycles in the data
         amp = self.error.max()
         self.fit = scipy.optimize.leastsq(erf, [0, f0, amp, amp, amp, amp], (x, self.error))[0]
-        self.errorPlot.plot(x, fn(self.fit, x), pen='g')
+        self.errorPlot.plot(x, fn(self.fit, x), pen="g")
