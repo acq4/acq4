@@ -2,6 +2,7 @@ from __future__ import print_function
 import time
 import pickle
 import numpy as np
+import scipy
 from acq4.util import Qt
 import pyqtgraph as pg
 from acq4.Manager import getManager
