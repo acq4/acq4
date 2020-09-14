@@ -114,6 +114,7 @@ class Sensapex(Stage):
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
             pos = self.dev.get_pos(timeout=0)[:3]
+            self._lastUpdate = ptime.time()
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
