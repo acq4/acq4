@@ -4,6 +4,7 @@ import scipy.stats, scipy.optimize
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
+from acq4.util.HelpfulException import HelpfulException
 from acq4.util.target import Target
 from six.moves import range
 from six.moves import zip
@@ -112,7 +113,10 @@ class CalibrationWindow(Qt.QWidget):
             item.target.setFocusDepth(fdepth)
 
     def removePointClicked(self):
-        sel = self.pointTree.selectedItems()[0]
+        selected_items = self.pointTree.selectedItems()
+        if selected_items is None or len(selected_items) <= 0:
+            raise HelpfulException("No points selected for removal")
+        sel = selected_items[0]
         index = self.pointTree.indexOfTopLevelItem(sel)
         self.pointTree.takeTopLevelItem(index)
         if sel.target is not None:
