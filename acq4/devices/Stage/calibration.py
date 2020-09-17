@@ -32,6 +32,7 @@ class CalibrationWindow(Qt.QWidget):
         self.layout.addWidget(self.pointTree, 0, 0)
         self.pointTree.setColumnWidth(0, 200)
         self.pointTree.setColumnWidth(1, 200)
+        self.pointTree.itemClicked.connect(self.enableRemoveBtnIfPossible)
 
         self.btnPanel = Qt.QWidget()
         self.btnPanelLayout = Qt.QHBoxLayout()
@@ -44,6 +45,7 @@ class CalibrationWindow(Qt.QWidget):
         self.btnPanelLayout.addWidget(self.addPointBtn)
 
         self.removePointBtn = Qt.QPushButton("remove point")
+        self.removePointBtn.setEnabled(False)
         self.btnPanelLayout.addWidget(self.removePointBtn)
         
         self.saveBtn = Qt.QPushButton("save calibration")
@@ -112,9 +114,12 @@ class CalibrationWindow(Qt.QWidget):
                 continue
             item.target.setFocusDepth(fdepth)
 
+    def enableRemoveBtnIfPossible(self):
+        self.removePointBtn.setEnabled(len(self.pointTree.selectedItems()) > 0)
+
     def removePointClicked(self):
         selected_items = self.pointTree.selectedItems()
-        if selected_items is None or len(selected_items) <= 0:
+        if len(selected_items) <= 0:
             raise HelpfulException("No points selected for removal")
         sel = selected_items[0]
         index = self.pointTree.indexOfTopLevelItem(sel)
@@ -124,6 +129,7 @@ class CalibrationWindow(Qt.QWidget):
         items = [self.pointTree.topLevelItem(i) for i in range(self.pointTree.topLevelItemCount())]
         self.calibration['points'] = [(item.stagePos, item.parentPos) for item in items]
         self.recalculate()
+        self.enableRemoveBtnIfPossible()
         self.saveBtn.setText("*save calibration*")
 
     def saveClicked(self):
