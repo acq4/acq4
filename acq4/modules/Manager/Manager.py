@@ -3,14 +3,12 @@ from __future__ import print_function
 
 import os
 
-import six
-
 from acq4 import modules
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.debug import printExc
 
-Ui_MainWindow = Qt.importTemplate('.ManagerTemplate')
+Ui_MainWindow = Qt.importTemplate(".ManagerTemplate")
 
 
 class Manager(Module):
@@ -21,7 +19,7 @@ class Manager(Module):
         Module.__init__(self, manager, name, config)
         self.win = Qt.QMainWindow()
         mp = os.path.dirname(__file__)
-        self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
+        self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, "icon.png")))
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         self.stateFile = os.path.join("modules", self.name + "_ui.cfg")
@@ -43,13 +41,13 @@ class Manager(Module):
 
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
-        if 'geometry' in state:
-            geom = Qt.QRect(*state['geometry'])
+        if "geometry" in state:
+            geom = Qt.QRect(*state["geometry"])
             self.win.setGeometry(geom)
 
         # restore dock configuration
-        if 'window' in state:
-            ws = Qt.QByteArray.fromPercentEncoding(state['window'].encode())
+        if "window" in state:
+            ws = Qt.QByteArray.fromPercentEncoding(state["window"].encode())
             self.win.restoreState(ws)
 
         self.win.show()
@@ -132,7 +130,7 @@ class Manager(Module):
 
     def showMessage(self, *args):
         self.ui.statusBar.showMessage(*args)
-        
+
     def updateModList(self):
         # Fill the list of modules.
 
@@ -145,7 +143,7 @@ class Manager(Module):
         # load defined configurations first
         confMods = []
         for name, conf in self.manager.listDefinedModules().items():
-            cls = modules.getModuleClass(conf['module'])
+            cls = modules.getModuleClass(conf["module"])
             confMods.append(cls)
             root = self._mkModGrpItem(cls.moduleCategory)
             item = Qt.QTreeWidgetItem([name])
@@ -154,9 +152,9 @@ class Manager(Module):
             item.setFont(0, font)
             item.confModName = name
             root.addChild(item)
-        
+
         # if a module has no defined configurations, then just give it a default entry without configuration.
-        for name,cls in modules.getModuleClasses().items():
+        for name, cls in modules.getModuleClasses().items():
             if cls is Manager or cls in confMods:
                 continue
             root = self._mkModGrpItem(cls.moduleCategory)
@@ -164,15 +162,15 @@ class Manager(Module):
             item = Qt.QTreeWidgetItem([dispName])
             item.modName = name
             root.addChild(item)
-    
+
     def _mkModGrpItem(self, name):
         if name is None:
             name = "Other"
         if name in self._modGrpItems:
             return self._modGrpItems[name]
-        parts = name.split('.')
+        parts = name.split(".")
         if len(parts) > 1:
-            root = self._mkModGrpItem('.'.join(parts[:-1]))
+            root = self._mkModGrpItem(".".join(parts[:-1]))
         else:
             root = self.ui.moduleList.invisibleRootItem()
         item = Qt.QTreeWidgetItem([parts[-1]])
@@ -185,7 +183,7 @@ class Manager(Module):
         self.ui.configList.clear()
         for m in self.manager.listConfigurations():
             self.ui.configList.addItem(m)
-        
+
     def show(self):
         self.win.show()
 
@@ -194,9 +192,9 @@ class Manager(Module):
 
     def loadSelectedModule(self):
         item = self.ui.moduleList.currentItem()
-        if hasattr(item, 'confModName'):
+        if hasattr(item, "confModName"):
             self.loadConfiguredModule(item.confModName)
-        elif hasattr(item, 'modName'):
+        elif hasattr(item, "modName"):
             self.loadModule(item.modName)
 
     def loadConfiguredModule(self, mod):
@@ -206,7 +204,7 @@ class Manager(Module):
             self.showMessage("Loaded module configuration '%s'." % mod, 10000)
         finally:
             Qt.QApplication.restoreOverrideCursor()
-        
+
     def loadModule(self, mod):
         try:
             Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.WaitCursor))
@@ -214,23 +212,26 @@ class Manager(Module):
             self.showMessage("Loaded module '%s'." % mod, 10000)
         finally:
             Qt.QApplication.restoreOverrideCursor()
-        
+
     def reloadAll(self):
         self.manager.reloadAll()
-        #mod = str(self.ui.moduleList.currentItem().text())
-        #self.manager.loadDefinedModule(mod, forceReload=True)
-        #self.showMessage("Loaded module '%s'." % mod, 10000)
-        
+        # mod = str(self.ui.moduleList.currentItem().text())
+        # self.manager.loadDefinedModule(mod, forceReload=True)
+        # self.showMessage("Loaded module '%s'." % mod, 10000)
+
     def loadConfig(self):
-        #print "LOAD CONFIG"
+        # print "LOAD CONFIG"
         cfg = str(self.ui.configList.currentItem().text())
         self.manager.loadDefinedConfig(cfg)
         self.updateModList()
         self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
     def quit(self):
-        ## save ui configuration
+        # save ui configuration
         geom = self.win.geometry()
-        state = {'window': bytes(self.win.saveState().toPercentEncoding()).decode(), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        state = {
+            "window": bytes(self.win.saveState().toPercentEncoding()).decode(),
+            "geometry": [geom.x(), geom.y(), geom.width(), geom.height()],
+        }
         self.manager.writeConfigFile(state, self.stateFile)
         Module.quit(self)

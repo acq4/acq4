@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import os, sys
-from acq4.util.Mutex import Mutex
+
+import os
+import sys
 
 # singleton MMCorePy instance
 _mmc = None
 
 # default location to search for micromanager
 # microManagerPath = 'C:\\Program Files\\Micro-Manager-1.4'
-microManagerPath = 'C:\\Program Files\\Micro-Manager-2.0gamma'
+microManagerPath = "C:\\Program Files\\Micro-Manager-2.0gamma"
 
 
 class MMCWrapper:
     """Wraps MMCorePy to raise more helpfule exceptions
     """
+
     def __init__(self, mmc):
         self.__mmc = mmc
         self.__wrapper_cache = {}
@@ -28,10 +30,11 @@ class MMCWrapper:
 
         def fn(*args, **kwds):
             try:
-               return attr(*args, **kwds) 
+                return attr(*args, **kwds)
             except RuntimeError as exc:
-                raise RuntimeError(exc.args[0].getFullMsg() + " (calling mmc.%s)"%name)
-        fn.__name__ = name + '_wrapped'
+                raise RuntimeError(exc.args[0].getFullMsg() + " (calling mmc.%s)" % name)
+
+        fn.__name__ = name + "_wrapped"
         self.__wrapper_cache[name] = fn
         return fn
 
@@ -45,6 +48,7 @@ def getMMCorePy(path=None):
             path = microManagerPath
         try:
             import pymmcore
+
             _mmc = MMCWrapper(pymmcore.CMMCore())
             _mmc.setDeviceAdapterSearchPaths([path])
         except ImportError:
@@ -52,12 +56,12 @@ def getMMCorePy(path=None):
             try:
                 import MMCorePy
             except ImportError:
-                if sys.platform != 'win32':
+                if sys.platform != "win32":
                     raise
                 # MM does not install itself to standard path. User should take care of this,
                 # but we can make a guess..
                 sys.path.append(path)
-                os.environ['PATH'] = os.environ['PATH'] + ';' + path
+                os.environ["PATH"] = os.environ["PATH"] + ";" + path
                 try:
                     import MMCorePy
                 finally:
