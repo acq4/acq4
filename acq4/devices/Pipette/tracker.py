@@ -4,8 +4,8 @@ import pickle
 import time
 
 import numpy as np
-import scipy
 import pyqtgraph as pg
+import scipy
 from six.moves import range
 
 from acq4.Manager import getManager
@@ -57,8 +57,8 @@ class PipetteTracker(object):
         imager = self._getImager(imager)
         self.__nextFrame = None
 
-        def newFrame(newFrame):
-            self.__nextFrame = newFrame
+        def newFrame(f):
+            self.__nextFrame = f
 
         imager.sigNewFrame.connect(newFrame)
         try:
