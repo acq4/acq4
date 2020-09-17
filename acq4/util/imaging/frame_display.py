@@ -119,7 +119,6 @@ class FrameDisplay(Qt.QObject):
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
 
-            self.currentFrame.info()
             data = self.currentFrame.getImage()
             # if we got a stack of frames, just display the first one. (not sure what else we could do here..)
             if data.ndim == 3:
