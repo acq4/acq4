@@ -695,8 +695,6 @@ class PatchPipetteSealState(PatchPipetteState):
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
 
-            patchrec['maxSealResistance'] = max(patchrec['maxSealResistance'] or 0, ssr)
-
             if not holdingSet and ssr > config['holdingThreshold']:
                 self.setState('enable holding potential %0.1f mV' % (config['holdingPotential']*1000))
                 dev.clampDevice.setHolding(mode=None, value=config['holdingPotential'])

@@ -1,13 +1,16 @@
 from __future__ import print_function
-import time
+
 import pickle
+import time
+
 import numpy as np
-from acq4.util import Qt
 import pyqtgraph as pg
-from acq4.Manager import getManager
-from .pipette_detection import TemplateMatchPipetteDetector
-from acq4.util.image_registration import imageTemplateMatch
 from six.moves import range
+
+from acq4.Manager import getManager
+from acq4.util import Qt
+from acq4.util.image_registration import imageTemplateMatch
+from .pipette_detection import TemplateMatchPipetteDetector
 
 
 class PipetteTracker(object):
@@ -18,13 +21,14 @@ class PipetteTracker(object):
     a stack of reference images collected with `takeReferenceFrames()`. 
 
     """
+
     detectorClass = TemplateMatchPipetteDetector
 
     def __init__(self, pipette):
         self.dev = pipette
-        fileName = self.dev.configFileName('ref_frames.pk')
+        fileName = self.dev.configFileName("ref_frames.pk")
         try:
-            self.reference = pickle.load(open(fileName, 'rb'))
+            self.reference = pickle.load(open(fileName, "rb"))
         except Exception:
             self.reference = {}
 
@@ -51,8 +55,10 @@ class PipetteTracker(object):
         """
         imager = self._getImager(imager)
         self.__nextFrame = None
+
         def newFrame(newFrame):
             self.__nextFrame = newFrame
+
         imager.sigNewFrame.connect(newFrame)
         try:
             start = pg.ptime.time()
@@ -69,10 +75,10 @@ class PipetteTracker(object):
 
     def _getImager(self, imager=None):
         if imager is None:
-            imager = 'Camera'
+            imager = "Camera"
         if isinstance(imager, str):
             man = getManager()
-            imager = man.getDevice('Camera')
+            imager = man.getDevice("Camera")
         return imager
 
     def getTipImageArea(self, frame, padding, pos=None, tipLength=None):
@@ -101,10 +107,10 @@ class PipetteTracker(object):
         tipPos = np.array([tipPos[0], tipPos[1]])
         angle = self.dev.yawRadians()
         da = 10 * np.pi / 180  # half-angle of the tip
-        pxw = frame.info()['pixelSize'][0]
+        pxw = frame.info()["pixelSize"][0]
         # compute back points of a triangle that circumscribes the tip
-        backPos1 = np.array([-tipLength * np.cos(angle+da), -tipLength * np.sin(angle+da)])
-        backPos2 = np.array([-tipLength * np.cos(angle-da), -tipLength * np.sin(angle-da)])
+        backPos1 = np.array([-tipLength * np.cos(angle + da), -tipLength * np.sin(angle + da)])
+        backPos2 = np.array([-tipLength * np.cos(angle - da), -tipLength * np.sin(angle - da)])
 
         # convert to image coordinates
         tr = frame.globalTransform().inverted()[0]
@@ -117,7 +123,7 @@ class PipetteTracker(object):
         # Pixel positions of bounding corners in the image relative to tip, including padding.
         # Note this is all calculated without actual tip position; this ensures the image
         # size is constant even as the tip moves.
-        allPos = np.vstack([[0, 0], backImgPos1, backImgPos2]).astype('int')
+        allPos = np.vstack([[0, 0], backImgPos1, backImgPos2]).astype("int")
         padding = int(padding / pxw)
         minRelPos = allPos.min(axis=0) - padding
         maxRelPos = allPos.max(axis=0) + padding
@@ -125,13 +131,17 @@ class PipetteTracker(object):
         # Get absolute pixel position of tip within image
         tipImgPos = tr.map(pg.Vector(tipPos))
         tipImgPos = np.array([tipImgPos.x(), tipImgPos.y()])
-        tipImgPx = tipImgPos.astype('int')
+        tipImgPx = tipImgPos.astype("int")
 
         # clip bounding coordinates
-        minRelPos = [np.clip(minRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
-                     np.clip(minRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
-        maxRelPos = [np.clip(maxRelPos[0], -tipImgPx[0], img.shape[0]-1-tipImgPx[0]), 
-                     np.clip(maxRelPos[1], -tipImgPx[1], img.shape[1]-1-tipImgPx[1])]
+        minRelPos = [
+            np.clip(minRelPos[0], -tipImgPx[0], img.shape[0] - 1 - tipImgPx[0]),
+            np.clip(minRelPos[1], -tipImgPx[1], img.shape[1] - 1 - tipImgPx[1]),
+        ]
+        maxRelPos = [
+            np.clip(maxRelPos[0], -tipImgPx[0], img.shape[0] - 1 - tipImgPx[0]),
+            np.clip(maxRelPos[1], -tipImgPx[1], img.shape[1] - 1 - tipImgPx[1]),
+        ]
 
         # absolute image coordinates of bounding rect
         minImgPos = tipImgPx + minRelPos
@@ -155,14 +165,14 @@ class PipetteTracker(object):
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
 
         # clipped image region
-        subimg = frame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+        subimg = frame.data()[0, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
 
         return subimg, tipRelPos
 
     def suggestTipLength(self, frame):
         # return a suggested tip length to image, given the image resolution
         # currently just returns the length of 100 pixels in the frame
-        return frame.info()['pixelSize'][0] * 100
+        return frame.info()["pixelSize"][0] * 100
 
     def takeReferenceFrames(self, zRange=None, zStep=None, imager=None, average=4, tipLength=None, minFocusAccuracy=200e-9):
         """Collect a series of images of the pipette tip at various focal depths.
@@ -186,13 +196,14 @@ class PipetteTracker(object):
             tipLength = self.suggestTipLength(centerFrame)
 
         if zRange is None:
-            zRange = tipLength*1.5
+            zRange = tipLength * 1.5
         if zStep is None:
-            zStep = zRange / 30.
+            zStep = zRange / 30.0
 
-
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength*0.15, tipLength=tipLength)
-        center = centerFrame.data()[0, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(
+            centerFrame, padding=tipLength * 0.15, tipLength=tipLength
+        )
+        center = centerFrame.data()[0, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
 
         # Decide how many frames to collect and at what z depths
         nFrames = (int(zRange / zStep) // 2) * 2
@@ -211,7 +222,7 @@ class PipetteTracker(object):
             imager.stop()
 
         try:
-            with pg.ProgressDialog('Acquiring reference frames...', 0, nFrames*2+1) as dlg:
+            with pg.ProgressDialog("Acquiring reference frames...", 0, nFrames * 2 + 1) as dlg:
                 # collect 2 stacks of images (second stack is for background subtraction)
                 for j in range(2):
                     # Set initial focus above start point to reduce hysteresis in focus mechanism
@@ -220,18 +231,24 @@ class PipetteTracker(object):
 
                     # Acquire multiple frames at different depths
                     for i in range(nFrames):
-                        #pos[2] = zStart - zStep * i
+                        # pos[2] = zStart - zStep * i
                         # self.dev._moveToGlobal(pos, 'slow').wait()
                         focus = zStart - zStep * i
-                        scope.setFocusDepth(focus, 'slow').wait()
+                        scope.setFocusDepth(focus, "slow").wait()
                         # verify this worked!
-                        time.sleep(0.3) # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
+                        time.sleep(
+                            0.3
+                        )  # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
                         focusError = abs(scope.getFocusDepth() - focus)
                         if focusError > max(zStep * 0.2, minFocusAccuracy):
                             raise Exception("Requested focus missed (%0.2f um error)" % (focusError * 1e6))
 
                         frame = imager.acquireFrames(average)
-                        img = frame.data()[:, minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]].astype(float).mean(axis=0)
+                        img = (
+                            frame.data()[:, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
+                            .astype(float)
+                            .mean(axis=0)
+                        )
                         if j == 0:
                             frames.append(img)
                             corr.append(imageTemplateMatch(img, center)[1])
@@ -243,9 +260,9 @@ class PipetteTracker(object):
 
                     if j == 0:
                         # move tip out-of-frame to collect background images
-                        self.dev._moveToLocal([-tipLength*3, 0, 0], 'slow').wait()
+                        self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow").wait()
                     else:
-                        self.dev._moveToLocal([tipLength*3, 0, 0], 'slow')
+                        self.dev._moveToLocal([tipLength * 3, 0, 0], "slow")
 
         finally:
             # restart camera if it was running
@@ -269,19 +286,21 @@ class PipetteTracker(object):
 
         key = imager.getDeviceStateKey()
         self.reference[key] = {
-            'frames': frames - bg_frames,
-            'zStep': zStep,
-            'centerInd': maxInd,
-            'centerPos': tipRelPos,
-            'pixelSize': frame.info()['pixelSize'],
-            'tipLength': tipLength,
+            "frames": frames - bg_frames,
+            "zStep": zStep,
+            "centerInd": maxInd,
+            "centerPos": tipRelPos,
+            "pixelSize": frame.info()["pixelSize"],
+            "tipLength": tipLength,
             # 'downsampledFrames' = ds,
         }
 
         # Store with pickle because configfile does not support arrays
-        pickle.dump(self.reference, open(self.dev.configFileName('ref_frames.pk'), 'wb'))
+        pickle.dump(self.reference, open(self.dev.configFileName("ref_frames.pk"), "wb"))
 
-    def measureTipPosition(self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False):
+    def measureTipPosition(
+        self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False
+    ):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
@@ -294,7 +313,7 @@ class PipetteTracker(object):
         # Grab one frame (if it is not already supplied) and crop it to the region around the pipette tip.
         if frame is None:
             frame = self.takeFrame()
-        elif frame == 'next':
+        elif frame == "next":
             frame = self.getNextFrame()
 
         # load up template images
@@ -302,13 +321,13 @@ class PipetteTracker(object):
 
         if tipLength is None:
             # select a tip length similar to template images
-            tipLength = reference['tipLength']
+            tipLength = reference["tipLength"]
 
         if movePipette:
             # move pipette and take a background frame
             if pos is None:
                 pos = self.dev.globalPosition()
-            self.dev._moveToLocal([-tipLength*3, 0, 0], 'fast').wait()
+            self.dev._moveToLocal([-tipLength * 3, 0, 0], "fast").wait()
             bg_frame = self.takeFrame()
         else:
             bg_frame = None
@@ -342,7 +361,9 @@ class PipetteTracker(object):
         try:
             return self.reference[key]
         except KeyError:
-            raise Exception("No reference frames found for this pipette / objective / filter combination: %s" % repr(key))
+            raise Exception(
+                "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
+            )
 
     def autoCalibrate(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
@@ -352,15 +373,15 @@ class PipetteTracker(object):
         All keyword arguments are passed to `measureTipPosition()`.
         """
         # If no image padding is given, then use the template tip length as a first guess
-        if 'padding' not in kwds:
+        if "padding" not in kwds:
             ref = self._getReference()
-            kwds['padding'] = ref['tipLength']
-        if 'frame' not in kwds:
-            kwds['frame'] = 'next'
+            kwds["padding"] = ref["tipLength"]
+        if "frame" not in kwds:
+            kwds["frame"] = "next"
         try:
             tipPos, corr = self.measureTipPosition(**kwds)
         except RuntimeError:
-            kwds['padding'] *= 2
+            kwds["padding"] *= 2
             tipPos, corr = self.measureTipPosition(**kwds)
 
         localError = self.dev.mapFromGlobal(tipPos)
@@ -369,8 +390,17 @@ class PipetteTracker(object):
         self.dev.setDeviceTransform(tr)
         return localError, corr
 
-    def mapErrors(self, nSteps=(5, 5, 7), stepSize=(50e-6, 50e-6, 50e-6),  padding=60e-6,
-                  threshold=0.4, speed='slow', show=False, intermediateDist=60e-6, moveStageXY=True):
+    def mapErrors(
+        self,
+        nSteps=(5, 5, 7),
+        stepSize=(50e-6, 50e-6, 50e-6),
+        padding=60e-6,
+        threshold=0.4,
+        speed="slow",
+        show=False,
+        intermediateDist=60e-6,
+        moveStageXY=True,
+    ):
         """Move pipette tip randomly to locations in a grid and measure the position error
         at each location.
 
@@ -385,7 +415,7 @@ class PipetteTracker(object):
         startTime = time.time()
         start = np.array(self.dev.globalPosition())
         npts = nSteps[0] * nSteps[1] * nSteps[2]
-        inds = np.mgrid[0:nSteps[0], 0:nSteps[1], 0:nSteps[2]].reshape((3, npts)).transpose()
+        inds = np.mgrid[0 : nSteps[0], 0 : nSteps[1], 0 : nSteps[2]].reshape((3, npts)).transpose()
         order = np.arange(npts)
         np.random.shuffle(order)
         misses = 0
@@ -417,7 +447,7 @@ class PipetteTracker(object):
         offsets = []
         try:
             with pg.ProgressDialog("Acquiring error map...", 0, len(order)) as dlg:
-                for i in range(len(order)+1):
+                for i in range(len(order) + 1):
                     print("Iteration %d/%d" % (i, len(order)))
                     if i > 0:
                         lastPos = pos
@@ -427,7 +457,7 @@ class PipetteTracker(object):
 
                         # Jump to position + a random 20um offset to avoid hysteresis
                         offset = np.random.normal(size=3)
-                        offset *= intermediateDist / (offset**2).sum()**0.5
+                        offset *= intermediateDist / (offset ** 2).sum() ** 0.5
                         offsets.append(offset)
 
                         # move manipulator
@@ -437,15 +467,17 @@ class PipetteTracker(object):
                         if moveStageXY:
                             cpos = pos
                         else:
-                            cpos = imager.globalCenterPosition('roi')
+                            cpos = imager.globalCenterPosition("roi")
                             cpos[2] = pos[2]
-                        ffut = imager.moveCenterToGlobal(cpos, speed, center='roi')
+                        ffut = imager.moveCenterToGlobal(cpos, speed, center="roi")
                     if i > 0:
-                        ind = inds[order[i-1]]
+                        ind = inds[order[i - 1]]
 
-                        print("Frame: %d/%d %s" % (i-1, len(order), lastPos))
+                        print("Frame: %d/%d %s" % (i - 1, len(order), lastPos))
                         try:
-                            err[tuple(ind)] = self.measureError(padding=padding, threshold=threshold, frame=frame, pos=lastPos)
+                            err[tuple(ind)] = self.measureError(
+                                padding=padding, threshold=threshold, frame=frame, pos=lastPos
+                            )
                         except RuntimeError:
                             print("Could not detect pipette here.")
                             err[tuple(ind)] = (np.nan, np.nan, np.nan)
@@ -480,96 +512,112 @@ class PipetteTracker(object):
                         pg.debug.printExc("Manipulator missed target:")
 
                     time.sleep(0.2)
-                    
+
                     frame = self.takeFrame()
                     reportedPos = self.dev.globalPosition()
 
                     if dlg.wasCanceled():
                         return None
         finally:
-            self.dev._moveToGlobal(start, 'fast')
-            self.dev.scopeDevice().setFocusDepth(start[2], 'fast')
+            self.dev._moveToGlobal(start, "fast")
+            self.dev.scopeDevice().setFocusDepth(start[2], "fast")
 
         self.errorMap = {
-            'err': err,
-            'nSteps': nSteps,
-            'stepSize': stepSize,
-            'order': order,
-            'inds': inds,
-            'offsets': offsets,
-            'time': time.time() - startTime,
-            'misses': misses,
+            "err": err,
+            "nSteps": nSteps,
+            "stepSize": stepSize,
+            "order": order,
+            "inds": inds,
+            "offsets": offsets,
+            "time": time.time() - startTime,
+            "misses": misses,
         }
 
         print("Manipulator missed target %d times" % misses)
 
-        filename = self.dev.configFileName('error_map.np')
-        np.save(open(filename, 'wb'), self.errorMap)
+        filename = self.dev.configFileName("error_map.np")
+        np.save(open(filename, "wb"), self.errorMap)
 
         return self.errorMap
 
     def showErrorAnalysis(self):
-        if not hasattr(self, 'errorMap'):
-            filename = self.dev.configFileName('error_map.np')
-            self.errorMap = np.load(open(filename, 'rb'))[np.newaxis][0]
+        if not hasattr(self, "errorMap"):
+            filename = self.dev.configFileName("error_map.np")
+            self.errorMap = np.load(open(filename, "rb"))[np.newaxis][0]
 
         err = self.errorMap
-        imx = pg.image(err['err'][..., 0].transpose(2, 0, 1), title='X error', axes={'t':0, 'x':1, 'y':2})
-        imy = pg.image(err['err'][..., 1].transpose(2, 0, 1), title='Y error', axes={'t':0, 'x':1, 'y':2})
-        imz = pg.image(err['err'][..., 2].transpose(2, 0, 1), title='Z error', axes={'t':0, 'x':1, 'y':2})
+        imx = pg.image(err["err"][..., 0].transpose(2, 0, 1), title="X error", axes={"t": 0, "x": 1, "y": 2})
+        imy = pg.image(err["err"][..., 1].transpose(2, 0, 1), title="Y error", axes={"t": 0, "x": 1, "y": 2})
+        imz = pg.image(err["err"][..., 2].transpose(2, 0, 1), title="Z error", axes={"t": 0, "x": 1, "y": 2})
 
         # get N,3 array of offset values used to randomize hysteresis
-        off = np.vstack(err['offsets'])
-        sh = err['err'].shape
+        off = np.vstack(err["offsets"])
+        sh = err["err"].shape
 
         # Get N,3 array of measured position errors
-        errf = err['err'].reshape(sh[0]*sh[1]*sh[2], 3)[err['order']]
+        errf = err["err"].reshape(sh[0] * sh[1] * sh[2], 3)[err["order"]]
 
         # Display histogram of errors
         win = pg.GraphicsWindow(title="%s error" % self.dev.name())
         # subtract out slow drift
         normErr = errf - scipy.ndimage.gaussian_filter(errf, (20, 0))
         # calculate magnitude of error
-        absErr = (normErr**2).sum(axis=1)**0.5
+        absErr = (normErr ** 2).sum(axis=1) ** 0.5
         # errPlot.plot(absErr)
-        title = "Error Histogram (mean=%s)" % pg.siFormat(absErr.mean(), suffix='m')
-        errPlot = win.addPlot(row=0, col=0, title=title, labels={'bottom': ('Position error', 'm')})
+        title = "Error Histogram (mean=%s)" % pg.siFormat(absErr.mean(), suffix="m")
+        errPlot = win.addPlot(row=0, col=0, title=title, labels={"bottom": ("Position error", "m")})
         hist = np.histogram(absErr, bins=50)
         errPlot.plot(hist[1], hist[0], stepMode=True)
 
         # display drift and hysteresis plots
-        driftPlot = win.addPlot(row=0, col=1, rowspan=1, colspan=2, title="Pipette Drift",
-                                labels={'left': ('Position error', 'm'), 'bottom': ('Time', 's')})
-        driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 0], pen='r')
-        driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 1], pen='g')
-        driftPlot.plot(np.linspace(0, err['time'], errf.shape[0]), errf[:, 2], pen='b')
+        driftPlot = win.addPlot(
+            row=0,
+            col=1,
+            rowspan=1,
+            colspan=2,
+            title="Pipette Drift",
+            labels={"left": ("Position error", "m"), "bottom": ("Time", "s")},
+        )
+        driftPlot.plot(np.linspace(0, err["time"], errf.shape[0]), errf[:, 0], pen="r")
+        driftPlot.plot(np.linspace(0, err["time"], errf.shape[0]), errf[:, 1], pen="g")
+        driftPlot.plot(np.linspace(0, err["time"], errf.shape[0]), errf[:, 2], pen="b")
 
-        xhplot = win.addPlot(row=1, col=0, title='X Hysteresis',
-                             labels={'left': ('Position error', 'm'), 'bottom': ('Last pipette movement', 'm')})
-        xhplot.plot(-off[:, 0], errf[:, 0], pen=None, symbol='o')
+        xhplot = win.addPlot(
+            row=1,
+            col=0,
+            title="X Hysteresis",
+            labels={"left": ("Position error", "m"), "bottom": ("Last pipette movement", "m")},
+        )
+        xhplot.plot(-off[:, 0], errf[:, 0], pen=None, symbol="o")
 
-        yhplot = win.addPlot(row=1, col=1, title='Y Hysteresis',
-                             labels={'left': ('Position error', 'm'), 'bottom': ('Last pipette movement', 'm')})
-        yhplot.plot(-off[:, 1], errf[:, 1], pen=None, symbol='o')
+        yhplot = win.addPlot(
+            row=1,
+            col=1,
+            title="Y Hysteresis",
+            labels={"left": ("Position error", "m"), "bottom": ("Last pipette movement", "m")},
+        )
+        yhplot.plot(-off[:, 1], errf[:, 1], pen=None, symbol="o")
 
-        zhplot = win.addPlot(row=1, col=2, title='Z Hysteresis',
-                             labels={'left': ('Position error', 'm'), 'bottom': ('Last pipette movement', 'm')})
-        zhplot.plot(-off[:, 2], errf[:, 2], pen=None, symbol='o')
+        zhplot = win.addPlot(
+            row=1,
+            col=2,
+            title="Z Hysteresis",
+            labels={"left": ("Position error", "m"), "bottom": ("Last pipette movement", "m")},
+        )
+        zhplot.plot(-off[:, 2], errf[:, 2], pen=None, symbol="o")
 
         # Print best fit for manipulator axes
-        expPos = err['inds'] * err['stepSize']
+        expPos = err["inds"] * err["stepSize"]
         measPos = expPos + off
-        guess = np.array([[1, 0, 0, 0],
-                          [0, 1, 0, 0],
-                          [0, 0, 1, 0]], dtype='float')
+        guess = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], dtype="float")
+
         def errFn(v):
-            return ((measPos - np.dot(expPos, v.reshape(3,4))[:,:3])**2).sum()
+            return ((measPos - np.dot(expPos, v.reshape(3, 4))[:, :3]) ** 2).sum()
 
         fit = scipy.optimize.minimize(errFn, guess)
         print("Pipette position transform:", fit)
 
         self.errorMapAnalysis = (imx, imy, imz, win)
-
 
 
 class DriftMonitor(Qt.QWidget):
@@ -587,11 +635,11 @@ class DriftMonitor(Qt.QWidget):
         self.gv = pg.GraphicsLayoutWidget()
         self.layout.addWidget(self.gv, 0, 0)
 
-        self.plot = self.gv.addPlot(labels={'left': ('Drift distance', 'm'), 'bottom': ('Time', 's')})
+        self.plot = self.gv.addPlot(labels={"left": ("Drift distance", "m"), "bottom": ("Time", "s")})
         self.plot.addLegend()
-        self.xplot = self.gv.addPlot(labels={'left': ('X position', 'm')}, row=1, col=0)
-        self.yplot = self.gv.addPlot(labels={'left': ('Y position', 'm')}, row=2, col=0)
-        self.zplot = self.gv.addPlot(labels={'left': ('Z position', 'm'), 'bottom': ('Time', 's')}, row=3, col=0)
+        self.xplot = self.gv.addPlot(labels={"left": ("X position", "m")}, row=1, col=0)
+        self.yplot = self.gv.addPlot(labels={"left": ("Y position", "m")}, row=2, col=0)
+        self.zplot = self.gv.addPlot(labels={"left": ("Z position", "m"), "bottom": ("Time", "s")}, row=3, col=0)
         for plt in [self.xplot, self.yplot, self.zplot]:
             plt.setYRange(-10e-6, 10e-6)
 
@@ -629,12 +677,12 @@ class DriftMonitor(Qt.QWidget):
                     # err = (self.cumulative[i]**2).sum()**0.5
                     pos.append(t.dev.globalPosition())
                 except RuntimeError:
-                    pos.append([np.nan]*3)
+                    pos.append([np.nan] * 3)
                 # self.errors[i].append(err)
             self.positions.append(pos)
             pos = np.array(self.positions)
             pos -= pos[0]
-            err = (pos**2).sum(axis=2)**0.5
+            err = (pos ** 2).sum(axis=2) ** 0.5
             for i, t in enumerate(self.trackers):
                 self.lines[i].setData(x, err[:, i])
             for ax, plt in enumerate([self.xplot, self.yplot, self.zplot]):
@@ -649,5 +697,3 @@ class DriftMonitor(Qt.QWidget):
     def closeEvent(self, event):
         self.timer.stop()
         return Qt.QWidget.closeEvent(self, event)
-
-
