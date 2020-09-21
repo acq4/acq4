@@ -28,6 +28,7 @@ class FrameDisplay(Qt.QObject):
         Qt.QObject.__init__(self)
 
         self._imageItem = pg.ImageItem()
+        self._imageItem.setAutoDownsample(True)
         self.contrastCtrl = self.contrastClass()
         self.contrastCtrl.setImageItem(self._imageItem)
         self.bgCtrl = self.bgSubtractClass()
