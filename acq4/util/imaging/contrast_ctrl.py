@@ -1,10 +1,11 @@
-from __future__ import print_function
 from __future__ import division
+from __future__ import print_function
 
-from acq4.util import Qt
 import numpy as np
 
-Ui_Form = Qt.importTemplate('.contrast_ctrl_template')
+from acq4.util import Qt
+
+Ui_Form = Qt.importTemplate(".contrast_ctrl_template")
 
 
 class ContrastCtrl(Qt.QWidget):
@@ -18,19 +19,20 @@ class ContrastCtrl(Qt.QWidget):
     * center weighted gain control
     * zoom-to-image button
     """
+
     def __init__(self, parent=None):
         Qt.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
         self.imageItem = None
-        self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
+        self.lastMinMax = None  # Records most recently measured maximum/minimum image values
         self.autoGainLevels = [0.0, 1.0]
         self.ignoreLevelChange = False
         self.alpha = 1.0
         self.lastAGCMax = None
 
-        ## Connect DisplayGain dock
+        # Connect DisplayGain dock
         self.ui.histogram.sigLookupTableChanged.connect(self.levelsChanged)
         self.ui.histogram.sigLevelsChanged.connect(self.levelsChanged)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
@@ -43,7 +45,7 @@ class ContrastCtrl(Qt.QWidget):
         """
         self.imageItem = item
         self.ui.histogram.setImageItem(item)
-        self.ui.histogram.fillHistogram(False)  ## for speed
+        self.ui.histogram.fillHistogram(False)  # for speed
 
     def zoomToImage(self):
         """Zoom the image's view such that the image fills most of the view.
@@ -56,14 +58,14 @@ class ContrastCtrl(Qt.QWidget):
                 return
             bl, wl = self.getLevels()
             mn, mx = self.lastMinMax
-            rng = float(mx-mn)
+            rng = float(mx - mn)
             if rng == 0:
                 return
-            newLevels = [(bl-mn) / rng, (wl-mn) / rng]
+            newLevels = [(bl - mn) / rng, (wl - mn) / rng]
             self.autoGainLevels = newLevels
-        
+
     def alphaChanged(self, val):
-        self.alpha = val / self.ui.alphaSlider.maximum() ## slider only works in integers and we need a 0 to 1 value
+        self.alpha = val / self.ui.alphaSlider.maximum()  # slider only works in integers and we need a 0 to 1 value
         self.imageItem.setOpacity(self.alpha)
 
     def getLevels(self):
