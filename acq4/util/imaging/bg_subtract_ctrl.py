@@ -29,7 +29,7 @@ class BgSubtractCtrl(Qt.QWidget):
         self.requestBgReset = False
         self.isDivideBgBtnChecked = False
         self.isSubtractBgBtnChecked = False
-        self.bgBlurSpinValue = None
+        self.bgBlurSpinValue = 0.0
 
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -40,11 +40,13 @@ class BgSubtractCtrl(Qt.QWidget):
 
     def divideClicked(self, newVal):
         self.isDivideBgBtnChecked = newVal
+        self.isSubtractBgBtnChecked = False
         self.needFrameUpdate.emit()
         self.ui.subtractBgBtn.setChecked(False)
 
     def subtractClicked(self, newVal):
         self.isSubtractBgBtnChecked = newVal
+        self.isDivideBgBtnChecked = False
         self.needFrameUpdate.emit()
         self.ui.divideBgBtn.setChecked(False)
 
