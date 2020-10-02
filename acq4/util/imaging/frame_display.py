@@ -150,7 +150,8 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # update image in viewport
-            self._imageItem.updateImage(data.copy())  # using data.copy() here avoids crashes!
+            # The data used to be copy()ed in this line, with a vague comment about crashing.
+            self._imageItem.updateImage(data)
             prof()
 
             self.imageUpdated.emit(self.currentFrame)
