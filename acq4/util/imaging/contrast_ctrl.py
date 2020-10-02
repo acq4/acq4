@@ -92,41 +92,41 @@ class ContrastCtrl(Qt.QWidget):
         if self.ui.btnAutoGain.isChecked():
             cw = self.ui.spinAutoGainCenterWeight.value()
             (w, h) = data.shape
-            center = data[w//2-w//6:w//2+w//6, h//2-h//6:h//2+h//6]
+            center = data[w // 2 - w // 6 : w // 2 + w // 6, h // 2 - h // 6 : h // 2 + h // 6]
 
             reduced = data
-            while reduced.size > 2**16:
+            while reduced.size > 2 ** 16:
                 ax = np.argmax(data.shape)
                 sl = [None] * data.ndim
                 sl[ax] = slice(None, None, 2)
                 reduced = reduced[tuple(sl)]
 
-            minVal = reduced.min() * (1.0-cw) + center.min() * cw
-            maxVal = reduced.max() * (1.0-cw) + center.max() * cw
+            minVal = reduced.min() * (1.0 - cw) + center.min() * cw
+            maxVal = reduced.max() * (1.0 - cw) + center.max() * cw
 
-            ## If there is inf/nan in the image, strip it out before computing min/max
-            if any([np.isnan(minVal), np.isinf(minVal),  np.isnan(minVal), np.isinf(minVal)]):
+            # If there is inf/nan in the image, strip it out before computing min/max
+            if any([np.isnan(minVal), np.isinf(minVal), np.isnan(minVal), np.isinf(minVal)]):
                 nanMask = np.isnan(reduced)
                 infMask = np.isinf(reduced)
                 valid = reduced[~nanMask * ~infMask]
-                minVal = valid.min() * (1.0-cw) + center.min() * cw
-                maxVal = valid.max() * (1.0-cw) + center.max() * cw
-            
-            ## Smooth min/max range to avoid noise
+                minVal = valid.min() * (1.0 - cw) + center.min() * cw
+                maxVal = valid.max() * (1.0 - cw) + center.max() * cw
+
+            # Smooth min/max range to avoid noise
             if self.lastMinMax is None:
                 minVal = minVal
                 maxVal = maxVal
             else:
-                s = 1.0 - 1.0 / (self.ui.spinAutoGainSpeed.value()+1.0)
-                minVal = self.lastMinMax[0] * s + minVal * (1.0-s)
-                maxVal = self.lastMinMax[1] * s + maxVal * (1.0-s)
-            
+                s = 1.0 - 1.0 / (self.ui.spinAutoGainSpeed.value() + 1.0)
+                minVal = self.lastMinMax[0] * s + minVal * (1.0 - s)
+                maxVal = self.lastMinMax[1] * s + maxVal * (1.0 - s)
+
             self.lastMinMax = [minVal, maxVal]
-            
-            ## and convert fraction of previous range into new levels
-            bl = self.autoGainLevels[0] * (maxVal-minVal) + minVal
-            wl = self.autoGainLevels[1] * (maxVal-minVal) + minVal
-            
+
+            # and convert fraction of previous range into new levels
+            bl = self.autoGainLevels[0] * (maxVal - minVal) + minVal
+            wl = self.autoGainLevels[1] * (maxVal - minVal) + minVal
+
             self.ignoreLevelChange = True
             try:
                 self.ui.histogram.setLevels(bl, wl)
