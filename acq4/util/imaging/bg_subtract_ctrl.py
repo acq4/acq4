@@ -27,21 +27,30 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self.lastFrameTime = None
         self.requestBgReset = False
+        self.isDivideBgBtnChecked = False
+        self.isSubtractBgBtnChecked = False
+        self.bgBlurSpinValue = None
 
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
         self.ui.collectBgBtn.clicked.connect(self.collectBgClicked)
         self.ui.divideBgBtn.clicked.connect(self.divideClicked)
         self.ui.subtractBgBtn.clicked.connect(self.subtractClicked)
-        self.ui.bgBlurSpin.valueChanged.connect(self.needFrameUpdate)
+        self.ui.bgBlurSpin.valueChanged.connect(self.blurValueUpdated)
 
-    def divideClicked(self):
+    def divideClicked(self, newVal):
+        self.isDivideBgBtnChecked = newVal
         self.needFrameUpdate.emit()
         self.ui.subtractBgBtn.setChecked(False)
 
-    def subtractClicked(self):
+    def subtractClicked(self, newVal):
+        self.isSubtractBgBtnChecked = newVal
         self.needFrameUpdate.emit()
         self.ui.divideBgBtn.setChecked(False)
+
+    def blurValueUpdated(self, newVal):
+        self.bgBlurSpinValue = newVal
+        self.needFrameUpdate.emit()
 
     def getBackgroundFrame(self):
         if self.backgroundFrame is None:
@@ -51,7 +60,7 @@ class BgSubtractCtrl(Qt.QWidget):
         return self.blurredBackgroundFrame
 
     def updateBackgroundBlur(self):
-        b = self.ui.bgBlurSpin.value()
+        b = self.bgBlurSpinValue
         if b > 0.0:
             self.blurredBackgroundFrame = scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
         else:
@@ -104,11 +113,12 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         
     def processImage(self, data):
-        if self.ui.divideBgBtn.isChecked():
+        # Needs to be thread-safe
+        if self.isDivideBgBtnChecked:
             bg = self.getBackgroundFrame()
             if bg is not None and bg.shape == data.shape:
                 data = data / bg
-        elif self.ui.subtractBgBtn.isChecked():
+        elif self.isSubtractBgBtnChecked:
             bg = self.getBackgroundFrame()
             if bg is not None and bg.shape == data.shape:
                 data = data - bg

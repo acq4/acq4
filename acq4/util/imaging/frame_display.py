@@ -47,6 +47,7 @@ class FrameDisplay(Qt.QObject):
         self._imageItem.setAutoDownsample(True)
         self.contrastCtrl = self.contrastClass()
         self.contrastCtrl.setImageItem(self._imageItem)
+        self.contrastCtrl.payAttentionToNewImageData(self.imageUpdated)
         self.bgCtrl = self.bgSubtractClass()
         self.bgCtrl.needFrameUpdate.connect(self.updateFrame)
 
@@ -144,7 +145,7 @@ class FrameDisplay(Qt.QObject):
             data = self.bgCtrl.processImage(data)
             prof()
 
-            # Set new levels if auto gain is enabled
+            # Set alpha from auto gain
             self.contrastCtrl.processImage(data)
             prof()
 

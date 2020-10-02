@@ -40,6 +40,9 @@ class ContrastCtrl(Qt.QWidget):
         self.ui.zoomLiveBtn.clicked.connect(self.zoomToImage)
         self.ui.alphaSlider.valueChanged.connect(self.alphaChanged)
 
+    def payAttentionToNewImageData(self, signal):
+        signal.connect(self.handleImageData)
+
     def setImageItem(self, item):
         """Sets the ImageItem that will be affected by the contrast / color controls
         """
@@ -85,10 +88,11 @@ class ContrastCtrl(Qt.QWidget):
         self.lastMinMax = None
 
     def processImage(self, data):
-        # Update auto gain for new image
-        # Note that histogram is linked to image item; this is what determines
-        # the final appearance of the image.
+        # Needs to be thread-safe
+        self.imageItem.setOpacity(self.alpha)
 
+    def handleImageData(self, frame):
+        data = frame.getImage()
         if self.ui.btnAutoGain.isChecked():
             cw = self.ui.spinAutoGainCenterWeight.value()
             (w, h) = data.shape
@@ -133,5 +137,3 @@ class ContrastCtrl(Qt.QWidget):
                 self.ui.histogram.setHistogramRange(minVal, maxVal, padding=0.05)
             finally:
                 self.ignoreLevelChange = False
-
-        self.imageItem.setOpacity(self.alpha)
