@@ -38,7 +38,7 @@ class MockCamera(Camera):
                 self.bgInfo[obj] = file.info().deepcopy()
                 self.bgInfo[obj]["depths"] = ma.xvals(0)
         else:
-            self.bgData = mandelbrot(w=4000, maxIter=60).astype(np.float32)
+            self.bgData = mandelbrot(width=WIDTH * 5, maxIter=60).astype(np.float32)
             self.bgInfo = None
 
         self.background = None
