@@ -3,12 +3,10 @@ from __future__ import print_function
 import pyqtgraph as pg
 
 from acq4.util import Qt
+from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
-
-from acq4.util.Thread import Thread
-
 
 MAX_FPS = 33
 MS_PER_FRAME = int((1.0 / MAX_FPS) * 1000)
