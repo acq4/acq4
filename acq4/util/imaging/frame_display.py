@@ -8,7 +8,7 @@ from acq4.util.debug import printExc
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
-MAX_FPS = 33
+MAX_FPS = 60
 MS_PER_FRAME = int((1.0 / MAX_FPS) * 1000)
 
 
@@ -111,7 +111,7 @@ class FrameDisplay(Qt.QObject):
         try:
             # If we last drew a frame < 1/30s ago, return.
             t = pg.ptime.time()
-            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < 0.03):
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < MS_PER_FRAME / 1000):
                 return
             # if there is no new frame and no controls have changed, just exit
             if not self._updateFrame and self.nextFrame is None:
