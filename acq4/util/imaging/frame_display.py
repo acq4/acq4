@@ -111,7 +111,7 @@ class FrameDisplay(Qt.QObject):
         try:
             # If we last drew a frame < 1/30s ago, return.
             t = pg.ptime.time()
-            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < MS_PER_FRAME / 1000):
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < MS_PER_FRAME / 1000.0):
                 return
             # if there is no new frame and no controls have changed, just exit
             if not self._updateFrame and self.nextFrame is None:
