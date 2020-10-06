@@ -8,7 +8,7 @@ from acq4.util.debug import printExc
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
-MAX_FPS = 60
+MAX_FPS = 30
 MS_PER_FRAME = int((1.0 / MAX_FPS) * 1000)
 
 
