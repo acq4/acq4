@@ -100,7 +100,9 @@ class MicroManagerCamera(Camera):
                 time.sleep(0.005)
                 if time.time() - start > 10.0:
                     raise Exception("Timed out waiting for camera frame.")
-            frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+            data = self.mmc.popNextImage().T
+            data.flags.writeable = False
+            frames.append(data[np.newaxis, ...])
         self.mmc.stopSequenceAcquisition()
         return np.concatenate(frames, axis=0)
 
@@ -123,7 +125,9 @@ class MicroManagerCamera(Camera):
                 frame = {}
                 frame['time'] = self.lastFrameTime + (dt * (i + 1))
                 frame['id'] = self.frameId
-                frame['data'] = self.mmc.popNextImage().T
+                data = self.mmc.popNextImage().T
+                data.flags.writeable = False
+                frame['data'] = data
                 frames.append(frame)
                 self.frameId += 1
 
