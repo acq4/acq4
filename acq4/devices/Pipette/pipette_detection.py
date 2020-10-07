@@ -1,8 +1,10 @@
 from __future__ import print_function
-import scipy.optimize, scipy.ndimage
+
 import numpy as np
-from acq4.util.image_registration import iterativeImageTemplateMatch
 import pyqtgraph as pg
+import scipy.ndimage
+
+from acq4.util.image_registration import iterativeImageTemplateMatch
 
 
 class PipetteDetector(object):

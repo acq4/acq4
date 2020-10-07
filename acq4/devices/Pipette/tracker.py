@@ -5,6 +5,8 @@ import time
 
 import numpy as np
 import pyqtgraph as pg
+import scipy.ndimage
+import scipy.optimize
 from six.moves import range
 
 from acq4.Manager import getManager
@@ -215,10 +217,7 @@ class PipetteTracker(object):
         bg_frames = []
         corr = []
 
-        print(
-            "Collecting %d frames of %0.2fum tip length at %0.2fum resolution."
-            % (nFrames, tipLength * 1e6, zStep * 1e6)
-        )
+        print("Collecting %d frames of %0.2fum tip length at %0.2fum resolution." % (nFrames, tipLength * 1e6, zStep * 1e6))
 
         # Stop camera if it is currently running
         restart = False
