@@ -1308,8 +1308,7 @@ class IVCurve(AnalysisModule):
             if len(self.ivss_cmd) > 0 and len(self.ivss) > 0:
                 self.r_in = np.max(np.diff
                                    (self.ivss) / np.diff(self.ivss_cmd))
-                self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9'
-                                              % (self.r_in * 1.0e-6))
+                self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9' % (self.r_in * 1.0e-6))
                 self.analysis_summary['Rin'] = self.r_in*1.0e-6
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')

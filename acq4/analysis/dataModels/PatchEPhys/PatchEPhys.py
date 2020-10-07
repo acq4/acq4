@@ -698,8 +698,7 @@ class GetClamps():
                     print('PatchEPhys/GetClamps: Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
-                raise Exception("Error loading data for protocol %s:"
-                                % directory_name)
+                raise Exception("Error loading data for protocol %s:" % directory_name)
             data_file = data_file_handle.read()
 
             self.data_mode = getClampMode(data_file, dir_handle=dh)
