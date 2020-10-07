@@ -47,8 +47,8 @@ class MockCamera(Camera):
             [
                 ("triggerMode", "Normal"),
                 ("exposure", 0.001),
-                # ('binning', (1,1)),
-                # ('region', (0, 0, WIDTH, WIDTH)),
+                # ("binning", (1, 1)),
+                # ("region", (0, 0, WIDTH, WIDTH)),
                 ("binningX", 1),
                 ("binningY", 1),
                 ("regionX", 0),
@@ -65,8 +65,8 @@ class MockCamera(Camera):
             [
                 ("triggerMode", (["Normal", "TriggerStart"], True, True, [])),
                 ("exposure", ((0.001, 10.0), True, True, [])),
-                # ('binning', ([range(1,10), range(1,10)], True, True, [])),
-                # ('region', ([(0, WIDTH - 1), (0, HEIGHT - 1), (1, WIDTH), (1, HEIGHT)], True, True, [])),
+                # ("binning", ([range(1, 10), range(1, 10)], True, True, [])),
+                # ("region", ([(0, WIDTH - 1), (0, HEIGHT - 1), (1, WIDTH), (1, HEIGHT)], True, True, [])),
                 ("binningX", (list(range(1, 10)), True, True, [])),
                 ("binningY", (list(range(1, 10)), True, True, [])),
                 ("regionX", ((0, WIDTH - 1), True, True, ["regionW"])),
