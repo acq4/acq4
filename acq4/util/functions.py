@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
-functions.py - Miscellaneous homeless functions 
+functions.py - Miscellaneous homeless functions
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 
@@ -13,21 +12,23 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 
 
 """
+from __future__ import print_function
 
-import six
+import math
+import re
+import time
 
-from six.moves import range
-import sys
-import os, re, math, time, threading, decimal
-from acq4.util.metaarray import *
-#from scipy import *
-#from scipy.optimize import leastsq
-#from scipy.ndimage import gaussian_filter, generic_filter, median_filter
-from scipy import stats
-import scipy.signal, scipy.ndimage, scipy.optimize
-import numpy.ma
-from acq4.util.debug import *
 import numpy as np
+import numpy.ma
+import scipy.ndimage
+import scipy.optimize
+import scipy.signal
+from scipy import stats, signal
+from scipy.signal import deconvolve
+from six.moves import range
+
+from pyqtgraph import MetaArray
+from acq4.util import Qt
 
 try:
     import scipy.weave as weave
@@ -172,6 +173,7 @@ def pspFunc(v, x, risePower=2.0):
     """
     
     if len(v) > 4:
+        from acq4.analysis.scripts.pspFitTest import processExtraVars
         v = processExtraVars(v)
     
     ## determine scaling factor needed to achieve correct amplitude
@@ -404,21 +406,6 @@ def fitDoublePsp(x, y, guess, bounds=None, risePower=2.0):
     return tuple(fit[:4]) + (min(*fit[4:]), max(*fit[4:]))
 
 
-
-
-STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
-def strncmp(a, b):
-    """Compare strings based on the numerical values they represent (for sorting). Each string may have multiple numbers."""
-    global STRNCMP_REGEX
-    am = STRNCMP_REGEX.findall(a)
-    bm = STRNCMP_REGEX.findall(b)
-    if len(am) > 0 and len(bm) > 0:
-        for i in range(0, len(am)):
-            c = cmp(float(am[i][0]), float(bm[i][0]))
-            if c != 0:
-                return c
-    return cmp(a, b)
-
 def downsample(data, n, axis=0, xvals='subsample'):
     """Downsample by averaging points together across axis.
     If multiple axes are specified, runs once per axis.
@@ -428,7 +415,7 @@ def downsample(data, n, axis=0, xvals='subsample'):
     ma = None
     if (hasattr(data, 'implements') and data.implements('MetaArray')):
         ma = data
-        data = data.view(ndarray)
+        data = data.view(np.ndarray)
         
     
     if hasattr(axis, '__len__'):
@@ -862,8 +849,8 @@ def volumeSum(data, alpha, axis=0, dtype=None):
 
 
 def slidingOp(template, data, op):
-    data = data.view(ndarray)
-    template = template.view(ndarray)
+    data = data.view(np.ndarray)
+    template = template.view(np.ndarray)
     tlen = template.shape[0]
     length = data.shape[0] - tlen
     result = np.empty((length), dtype=float)
@@ -895,8 +882,8 @@ def rmsMatch(template, data, thresh=0.75, scaleInvariant=False, noise=0.0):
 def fastRmsMatch(template, data, thresholds=[0.85, 0.75], scales=[0.2, 1.0], minTempLen=4):
     """Do multiple rounds of rmsMatch on scaled-down versions of the data set"""
     
-    data = data.view(ndarray)
-    template = template.view(ndarray)
+    data = data.view(np.ndarray)
+    template = template.view(np.ndarray)
     tlen = template.shape[0]
     
     inds = None
@@ -931,7 +918,7 @@ def fastRmsMatch(template, data, thresholds=[0.85, 0.75], scales=[0.2, 1.0], min
                     inds2.append(ind+n)
             inds = inds2
         lastScale = scale
-        inds = (array(inds) / scale).round()
+        inds = (np.array(inds) / scale).round()
     return inds.astype(int)
 
 
@@ -945,7 +932,7 @@ def highPass(data, cutoff, order=1, dt=None):
 def applyFilter(data, b, a, padding=100, bidir=True):
     """Apply a linear filter with coefficients a, b. Optionally pad the data before filtering
     and/or run the filter in both directions."""
-    d1 = data.view(ndarray)
+    d1 = data.view(np.ndarray)
     
     if padding > 0:
         d1 = numpy.hstack([d1[:padding], d1, d1[-padding:]])
@@ -976,7 +963,7 @@ def besselFilter(data, cutoff, order=1, dt=None, btype='low', bidir=True):
     
     return applyFilter(data, b, a, bidir=bidir)
     #base = data.mean()
-    #d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
+    #d1 = scipy.signal.lfilter(b, a, data.view(np.ndarray)-base) + base
     #if (hasattr(data, 'implements') and data.implements('MetaArray')):
         #return MetaArray(d1, info=data.infoCopy())
     #return d1
@@ -1135,7 +1122,7 @@ def generateSphere(radius):
             if r2 > radius2:
                 d[x,y] = 0.0
             else:
-                d[x,y] = sqrt(radius2 - r2)
+                d[x,y] = np.sqrt(radius2 - r2)
     return d
 
 def make3Color(r=None, g=None, b=None):
@@ -1184,7 +1171,7 @@ def xColumn(data, col):
     yCols.remove(col)
     b = data[yCols].copy()
     b._info[1] = data.infoCopy()[0]['cols'][col]
-    b._info[1]['values'] = data[col].view(ndarray)
+    b._info[1]['values'] = data[col].view(np.ndarray)
     return b
 
 
@@ -1196,7 +1183,7 @@ def stdFilter(data, kernShape):
     res = np.empty(tuple(shape), dtype=float)
     for ind, i in np.ndenumerate(res):
         sl = [slice(max(0, ind[j]-kernShape[j]/2), min(shape[j], ind[j]+(kernShape[j]/2))) for j in range(0, data.ndim)]
-        res[tuple(ind)] = std(data[tuple(sl)])
+        res[tuple(ind)] = np.std(data[tuple(sl)])
     return res
 
 def makeDispMap(im1, im2, maxDist=10, searchRange=None, normBlur=5.0, matchSize=10., printProgress=False, showProgress=False, method="diffNoise"):
@@ -1351,7 +1338,7 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
     
     ## Generate matched images
     print("Distorting image to match..")
-    im2d = geometric_transform(im2, lambda x: (x[0]+(dm2Blur[x[0], x[1], 0]), x[1]+(dm2Blur[x[0], x[1], 1])))
+    im2d = scipy.geometric_transform(im2, lambda x: (x[0] + (dm2Blur[x[0], x[1], 0]), x[1] + (dm2Blur[x[0], x[1], 1])))
     
     if showProgress:
         for w in imws:
@@ -1370,7 +1357,7 @@ def threshold(data, threshold, direction=1):
 
 def measureBaseline(data, threshold=2.0, iterations=2):
     """Find the baseline value of a signal by iteratively measuring the median value, then excluding outliers."""
-    data = data.view(ndarray)
+    data = data.view(np.ndarray)
     med = np.median(data)
     if iterations > 1:
         std = data.std()
@@ -1384,16 +1371,16 @@ def measureBaseline(data, threshold=2.0, iterations=2):
 
 def measureNoise(data, threshold=2.0, iterations=2):
     ## Determine the base level of noise
-    data = data.view(ndarray)
+    data = data.view(np.ndarray)
     if iterations > 1:
-        med = median(data)
+        med = np.median(data)
         std = data.std()
         thresh = std * threshold
         arr = numpy.ma.masked_outside(data, med - thresh, med + thresh)
         return measureNoise(arr[~arr.mask], threshold, iterations-1)
     else:
         return data.std()
-    #data2 = data.view(ndarray)[:10*(len(data)/10)]
+    #data2 = data.view(np.ndarray)[:10*(len(data)/10)]
     #data2.shape = (10, len(data2)/10)
     #return median(data2.std(axis=0))
     
@@ -1445,9 +1432,9 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
       - Events last more than minLength samples
       Return an array of events where each row is (start, length, sum, peak)
     """
-    ## just make sure this is an ndarray and not a MetaArray before operating..
+    ## just make sure this is an np.ndarray and not a MetaArray before operating..
     #p = Profiler('findEvents')
-    data1 = data.view(ndarray)
+    data1 = data.view(np.ndarray)
     #p.mark('view')
     xvals = None
     if (hasattr(data, 'implements') and data.implements('MetaArray')):
@@ -1505,7 +1492,7 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
         ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
         stdev = measureNoise(data1)
         #p.mark('measureNoise')
-        hist = histogram(events['sum'], bins=100)
+        hist = np.histogram(events['sum'], bins=100)
         #p.mark('histogram')
         histx = 0.5*(hist[1][1:] + hist[1][:-1]) ## get x values from middle of histogram bins
         #p.mark('histx')
@@ -1535,7 +1522,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
     """Finds regions in a trace that cross a threshold value (as measured by distance from baseline). Returns the index, time, length, peak, and sum of each event.
     Optionally adjusts times to an extrapolated baseline-crossing."""
     threshold = abs(threshold)
-    data1 = data.view(ndarray)
+    data1 = data.view(np.ndarray)
     data1 = data1-baseline
     #if (hasattr(data, 'implements') and data.implements('MetaArray')):
     try:
@@ -1567,7 +1554,7 @@ def thresholdEvents(data, threshold, adjustTimes=True, baseline=0.0):
             hits.append((onTimes[i], offTimes[i]))
     
     ## sort hits  ## NOTE: this can be sped up since we already know how to interleave the events..
-    hits.sort(lambda a,b: cmp(a[0], b[0]))
+    hits.sort(key=lambda a: a[0])
     
     nEvents = len(hits)
     if xvals is None:
@@ -1703,7 +1690,7 @@ def adaptiveDetrend(data, x=None, threshold=3.0):
     if x is None:
         x = data.xvals(0)
     
-    d = data.view(ndarray)
+    d = data.view(np.ndarray)
     
     d2 = scipy.signal.detrend(d)
     
@@ -1798,7 +1785,7 @@ def subtractMedian(data, time=None, width=100, dt=None):
             dt = x[1] - x[0]
         width = time / dt
     
-    d1 = data.view(ndarray)
+    d1 = data.view(np.ndarray)
     width = int(width)
     med = scipy.ndimage.median_filter(d1, size=width)
     d2 = d1 - med
@@ -1832,7 +1819,7 @@ def denoise(data, radius=2, threshold=4):
     
     
     r2 = radius * 2
-    d1 = data.view(ndarray)
+    d1 = data.view(np.ndarray)
     d2 = data[radius:] - data[:-radius] #a derivative
     #d3 = data[r2:] - data[:-r2]
     #d4 = d2 - d3
@@ -1870,8 +1857,8 @@ def clementsBekkers(data, template):
     """
     
     ## Strip out meta-data for faster computation
-    D = data.view(ndarray)
-    T = template.view(ndarray)
+    D = data.view(np.ndarray)
+    T = template.view(np.ndarray)
     
     ## Prepare a bunch of arrays we'll need later
     N = len(T)
@@ -1879,7 +1866,7 @@ def clementsBekkers(data, template):
     sumT2 = (T**2).sum()
     sumD = rollingSum(D, N)
     sumD2 = rollingSum(D**2, N)
-    sumTD = correlate(D, T, mode='valid')
+    sumTD = scipy.correlate(D, T, mode='valid')
     
     ## compute scale factor, offset at each location:
     scale = (sumTD - sumT * sumD /N) / (sumT2 - sumT**2 /N)
@@ -1889,7 +1876,7 @@ def clementsBekkers(data, template):
     SSE = sumD2 + scale**2 * sumT2 + N * offset**2 - 2 * (scale*sumTD + offset*sumD - scale*offset*sumT)
     
     ## finally, compute error and detection criterion
-    error = sqrt(SSE / (N-1))
+    error = np.sqrt(SSE / (N-1))
     DC = scale / error
     return DC, scale, offset
     
@@ -1912,7 +1899,7 @@ def cbTemplateMatch(data, template, threshold=3.0):
         i1 = times[i*2]
         i2 = times[(i*2)+1]
         d = dc[i1:i2]
-        p = argmax(d)
+        p = np.argmax(d)
         result[0] = p+i1
         result[1] = d[p]
         result[2] = scale[p+i1]
@@ -2069,7 +2056,7 @@ def suggestDType(x, singleValue=False):
         return x.dtype
     elif isinstance(x, float):
         return float
-    elif isinstance(x, int) or isinstance(x, long):
+    elif isinstance(x, int) or isinstance(x, np.long):
         return int
     #elif isinstance(x, six.string_types):  ## don't try to guess correct string length; use object instead.
         #return '<U%d' % len(x)
@@ -2092,7 +2079,7 @@ def isFloat(x):
     return isinstance(x, float) or isinstance(x, np.floating)
 
 def isInt(x):
-    for typ in [int, long, np.integer]:
+    for typ in [int, np.long, np.integer]:
         if isinstance(x, typ):
             return True
     return False
@@ -2302,12 +2289,12 @@ def alphas(t, tau, starts):
 
 ### TODO: replace with faster scipy filters
 def smooth(data, it=1):
-    data = data.view(ndarray)
+    data = data.view(np.ndarray)
     d = np.empty((len(data)), dtype=data.dtype)
     for i in range(0, len(data)):
         start = max(0, i-1)
         stop = min(i+1, len(data)-1)
-        d[i] = mean(data[start:stop+1])
+        d[i] = np.mean(data[start:stop+1])
     if it > 1:
         return smooth(d, it-1)
     else:
@@ -2350,10 +2337,10 @@ def cmd(func, n, time):
 def inpRes(data, v1Range, v2Range):
     r1 = [r for r in data if r['Time'] > v1Range[0] and r['Time'] < v1Range[1]]
     r2 = [r for r in data if r['Time'] > v2Range[0] and r['Time'] < v2Range[1]]
-    v1 = mean([r['voltage'] for r in r1])
+    v1 = np.mean([r['voltage'] for r in r1])
     v2 = min(smooth([r['voltage'] for r in r2], 10))
-    c1 = mean([r['current'] for r in r1])
-    c2 = mean([r['current'] for r in r2])
+    c1 = np.mean([r['current'] for r in r1])
+    c2 = np.mean([r['current'] for r in r2])
     return (v2-v1)/(c2-c1)
 
 
@@ -2362,7 +2349,7 @@ def findActionPots(data, lowLim=-20e-3, hiLim=0, maxDt=2e-3):
     Requires 2-column array:  array([[time...], [voltage...]])
     Defaults specify that an action potential is when the voltage trace crosses 
     from -20mV to 0mV in 2ms or less"""
-    data = data.view(ndarray)
+    data = data.view(np.ndarray)
     lastLow = None
     ap = []
     for i in range(0, data.shape[1]):
@@ -2384,14 +2371,14 @@ def getSpikeTemplate(ivc, traces):
     ## find threshold index
     ivd = ivc['max voltage'] - ivc['mean voltage']
     ivdd = ivd[1:] - ivd[:-1]
-    thrIndex = argmax(ivdd) + 1 + posCurr[0]
+    thrIndex = np.argmax(ivdd) + 1 + posCurr[0]
     
     ## subtract spike trace from previous trace
     minlen = min(traces[thrIndex].shape[1], traces[thrIndex-1].shape[1])
     di = traces[thrIndex]['Inp0', :minlen] - traces[thrIndex-1]['Inp0', :minlen]
     
     ## locate tallest spike
-    ind = argmax(di)
+    ind = np.argmax(di)
     maxval = di[ind]
     start = ind
     stop = ind
@@ -2412,7 +2399,7 @@ def getSpikeTemplate(ivc, traces):
 
 
 if __name__ == '__main__':
-    import user
+    pass
     
     
     

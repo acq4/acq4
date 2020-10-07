@@ -1,20 +1,27 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.util import Qt
-from acq4.pyqtgraph import WidgetGroup
-from acq4.pyqtgraph import PlotWidget
-from acq4.util.metaarray import *
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-import traceback, sys, time
-from numpy import *
+
+import os
+import sys
+import time
+
+import numpy as np
 import scipy.optimize
-from acq4.util.debug import *
-from acq4.pyqtgraph import siFormat
+import six
+
 import acq4.Manager as Manager
 import acq4.util.ptime as ptime
+from pyqtgraph import PlotWidget, mkPen
+from pyqtgraph import WidgetGroup, MetaArray
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
+from acq4.util.Thread import Thread
+from acq4.util.debug import printExc
+from six.moves import range
 
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 
@@ -79,7 +86,7 @@ class PatchWindow(Qt.QMainWindow):
             geom = Qt.QRect(*uiState['geometry'])
             self.setGeometry(geom)
         if 'window' in uiState:
-            ws = Qt.QByteArray.fromPercentEncoding(uiState['window'])
+            ws = Qt.QByteArray.fromPercentEncoding(six.b(uiState['window']))
             self.restoreState(ws)
             
         self.ui.splitter_2.setSizes([self.width()/4, self.width()*3./4.])
@@ -124,10 +131,10 @@ class PatchWindow(Qt.QMainWindow):
         self.stateGroup.setState(self.params)
         
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
-        self.patchCurve = self.ui.patchPlot.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
-        self.patchFitCurve = self.ui.patchPlot.plot(pen=Qt.QPen(Qt.QColor(0, 100, 200)))
+        self.patchCurve = self.ui.patchPlot.plot(pen=mkPen(200, 200, 200))
+        self.patchFitCurve = self.ui.patchPlot.plot(pen=mkPen(0, 100, 200))
         self.ui.commandPlot.setLabel('left', text='Command', units='V')
-        self.commandCurve = self.ui.commandPlot.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
+        self.commandCurve = self.ui.commandPlot.plot(pen=mkPen(200, 200, 200))
         
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.recordBtn.clicked.connect(self.recordClicked)
@@ -148,7 +155,7 @@ class PatchWindow(Qt.QMainWindow):
             w = getattr(self.ui, n+'Check')
             w.clicked.connect(self.showPlots)
             p = self.plots[n]
-            self.analysisCurves[n] = p.plot(pen=Qt.QPen(Qt.QColor(200, 200, 200)))
+            self.analysisCurves[n] = p.plot(pen=mkPen(200, 200, 200))
             for suf in ['', 'Std']:
                 self.analysisData[n+suf] = []
         self.showPlots()
@@ -159,7 +166,7 @@ class PatchWindow(Qt.QMainWindow):
     def quit(self):
         #print "Stopping patch thread.."
         geom = self.geometry()
-        uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        uiState = {'window': np.str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
@@ -478,7 +485,7 @@ class PatchThread(Thread):
             amplitude = params[mode+'Pulse']
         else:
             amplitude = 0.
-        cmdData = empty(numPts)
+        cmdData = np.empty(numPts)
         cmdData[:] = holding
         start = int(params['delayTime'] * params['rate'])
         stop = start + int(params['pulseTime'] * params['rate'])
@@ -533,7 +540,7 @@ class PatchThread(Thread):
             result = results[0]
             avg = result[clampName]
         else:
-            avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
+            avg = np.concatenate([res[clampName].view(np.ndarray)[np.newaxis, ...] for res in results], axis=0).mean(axis=0)
             avg = MetaArray(avg, info=results[0][clampName].infoCopy())
             result = results[0]
             result[clampName] = avg
@@ -566,7 +573,7 @@ class PatchThread(Thread):
         #  v[1] is amplitude of exp
         #  v[2] is tau
         def expFn(v, t):
-            return (v[0]-v[1]) + v[1] * exp(-t / v[2])
+            return (v[0]-v[1]) + v[1] * np.exp(-t / v[2])
         # predictions
         ar = 10e6
         ir = 200e6
@@ -622,7 +629,7 @@ class PatchThread(Thread):
             
         
         #err = max(abs(fit1[2]['fvec']).sum(), abs(fit2[2]['fvec']).sum())
-        err = abs(fit1[2]['fvec']).sum()
+        err = np.abs(fit1[2]['fvec']).sum()
         
         
         # Average fit1 with fit2 (needs massaging since fits have different starting points)
@@ -639,7 +646,7 @@ class PatchThread(Thread):
         (fitOffset, fitAmp, fitTau) = fit1
         #print fit1
         
-        fitTrace = empty(len(data))
+        fitTrace = np.empty(len(data))
         
         ## Handle analysis differently depenting on clamp mode
         if params['mode'] == 'vc':
@@ -666,9 +673,9 @@ class PatchThread(Thread):
             #self.iCap1 = iCap
             ## Instead, we will use the fit to guess how much charge transfer there would have been 
             ## if the charging curve had gone all the way back to the beginning of the pulse
-            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.linspace(0, iCapEnd-pTimes[0], iCap.shape[0]))
+            iCap = expFn((fit1[1],fit1[1],fit1[2]), np.linspace(0, iCapEnd - pTimes[0], iCap.shape[0]))
             #self.iCap2 = iCap
-            Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
+            Q = np.sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
             
             
             Rin = iRes
@@ -694,9 +701,9 @@ class PatchThread(Thread):
             iStep = iPulse.mean() - iBase.mean()
             
             if iStep >= 0:
-                vStep = max(1e-5, -fitAmp)
+                vStep = np.max(1e-5, -fitAmp)
             else:
-                vStep = min(-1e-5, -fitAmp)
+                vStep = np.min(-1e-5, -fitAmp)
             #sign = [-1, 1][iStep >= 0]
             #vStep = sign * max(1e-5, sign * (vPulseEnd.mean() - vBase.mean()))
             #vStep = sign * max(1e-5, sign * fitAmp)

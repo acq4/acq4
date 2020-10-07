@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import os, sys
+import os
+import sys
+
+from acq4.util.DataManager import DataManager
+from acq4.util.DirTreeWidget import DirTreeLoader
+
 d = os.path.split(os.path.abspath(__file__))[0]
 d1 = os.path.split(d)[0]
 d2 = os.path.split(d1)[0]
 sys.path.extend([d1, d2])
 
-from acq4.util.DirTreeWidget import *
-from .DirTreeLoader import *
-from acq4.util.DataManager import *
 from acq4.util import Qt
 
 app = Qt.QApplication([])

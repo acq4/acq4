@@ -5,7 +5,7 @@ from ..Device import Device
 from acq4.util import Qt
 from ...Manager import getManager
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import ptime
+from pyqtgraph import ptime
 from .devgui import PatchPipetteDeviceGui
 from .testpulse import TestPulseThread
 from .statemanager import PatchPipetteStateManager
@@ -21,6 +21,9 @@ class PatchPipette(Device):
         * Input resistance, access resistance, and holding levels
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
+
+    If you intend this for use with the MultiPatch module, the device name in the configuration
+    needs to end in a number.
     """
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
     sigActiveChanged = Qt.Signal(object, object)  # self, active
@@ -32,6 +35,8 @@ class PatchPipette(Device):
     sigMoveFinished = Qt.Signal(object, object)  # self, position
     sigTargetChanged = Qt.Signal(object, object)  # self, target
     sigNewPipetteRequested = Qt.Signal(object)  # self
+    sigTipCleanChanged = Qt.Signal(object, object)  # self, clean
+    sigTipBrokenChanged = Qt.Signal(object, object)  # self, broken
 
     # catch-all signal for event logging
     sigNewEvent = Qt.Signal(object, object)  # self, event
@@ -95,6 +100,26 @@ class PatchPipette(Device):
     def isTipClean(self):
         return self.clean
 
+    def setTipClean(self, clean):
+        if clean == self.clean:
+            return
+        self.clean = clean
+        self.sigTipCleanChanged.emit(self, clean)
+        self.emitNewEvent('tip_clean_changed', {'clean': clean})
+
+    def isTipBroken(self):
+        return self.broken
+
+    def setTipBroken(self, broken):
+        if broken == self.broken:
+            return
+        self.broken = broken
+        self.sigTipBrokenChanged.emit(self, broken)
+        self.emitNewEvent('tip_broken_changed', {'broken': broken})
+        # states should take care of this, but we want to make sure pressure stops quickly.
+        if broken and self.pressureDevice is not None:
+            self.pressureDevice.setPressure(pressure=0)
+
     def scopeDevice(self):
         return self.pipetteDevice.scopeDevice()
 
@@ -112,12 +137,14 @@ class PatchPipette(Device):
     def newPipette(self):
         """A new physical pipette has been attached; reset any per-pipette state.
         """
-        self.broken = False
-        self.clean = True
+        self.setTipBroken(False)
+        self.setTipClean(True)
         self.calibrated = False
         self.waitingForSwap = False
         self._pipetteRecord = None
+        self.emitNewEvent('new_pipette', {})
         self.newPatchAttempt()
+        self.setState('out')
         # todo: set calibration to average 
 
     def requestNewPipette(self):
@@ -139,6 +166,7 @@ class PatchPipette(Device):
         """
         self.finishPatchRecord()
         self.resetTestPulseHistory()
+        self.emitNewEvent('new_patch_attempt', {})
 
     def _resetPatchRecord(self):
         self.finishPatchRecord()
@@ -157,7 +185,6 @@ class PatchPipette(Device):
             ('sealSuccessful', None),
             ('fouledBeforeSeal', None),
             ('resistanceBeforeSeal', None),
-            ('maxSealResistance', None),
             ('resistanceBeforeBreakin', None),
             ('offsetBeforeSeal', None),
             ('attemptedBreakin', False),
@@ -192,16 +219,6 @@ class PatchPipette(Device):
 
     def setSelected(self):
         pass
-
-    def approach(self, initialMoveSpeed='fast'):
-        """Prepare pipette to enter tissue and patch a cell.
-
-        - Move pipette to diagonal approach position
-        - Auto-correct pipette offset
-        - May increase pressure
-        - Automatically hide tip/target markers when the tip is near the target
-        """
-        return self._stateManager.startApproach(initialMoveSpeed)
 
     def seal(self):
         """Attempt to seal onto a cell.

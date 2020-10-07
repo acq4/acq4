@@ -10,8 +10,8 @@ import six
 
 from acq4.util import Qt
 import traceback
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.util.mutex import Mutex, RecursiveMutex
+import pyqtgraph as pg
+from pyqtgraph.util.mutex import Mutex, RecursiveMutex
 
 
 class PriorityMutex(object):

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time
 from acq4.drivers.MultiClamp import MultiClamp
 mc = MultiClamp.instance()

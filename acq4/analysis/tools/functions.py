@@ -1,8 +1,9 @@
 from __future__ import print_function
 import numpy as np
 import math
-from acq4.pyqtgraph.debug import Profiler
+from pyqtgraph.debug import Profiler
 import acq4.util.functions as utilFn
+from six.moves import range
 
 
 

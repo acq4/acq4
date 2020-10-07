@@ -3,11 +3,12 @@ from __future__ import print_function
 from acq4.util import Qt
 from collections import OrderedDict
 from acq4.analysis.AnalysisModule import AnalysisModule
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from . import STDPFileLoader
+from six.moves import range
 
 Ui_Control = Qt.importTemplate('.STDPControlTemplate')
 Ui_Plots = Qt.importTemplate('.STDPPlotsTemplate')

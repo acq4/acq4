@@ -1,1 +1,1 @@
-from falconturret import FalconTurret
+from .falconturret import FalconTurret

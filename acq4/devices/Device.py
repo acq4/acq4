@@ -1,14 +1,22 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import time, traceback, sys, weakref
+
+import os
+import traceback
+import weakref
+
+from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
-from acq4.Interfaces import InterfaceMixin
+from acq4.util.debug import printExc
 
 
-class Device(Qt.QObject, InterfaceMixin):
+class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
     """Abstract class defining the standard interface for Device subclasses."""
+
+    # used to ensure devices are shut down in the correct order
+    _deviceCreationOrder = []
+
     def __init__(self, deviceManager, config, name):
         Qt.QObject.__init__(self)
 
@@ -21,6 +29,7 @@ class Device(Qt.QObject, InterfaceMixin):
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
+        Device._deviceCreationOrder.append(weakref.ref(self))
         self._name = name
             
     def name(self):
@@ -109,7 +118,7 @@ class Device(Qt.QObject, InterfaceMixin):
             self._lock_tb_ = None
         except:
             printExc("WARNING: Failed to release device lock for %s" % self.name())
-            
+
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.
         Allows the DAQ to trigger off of this device."""
@@ -307,7 +316,6 @@ class TaskGui(Qt.QWidget):
         """Return a dictionary representing the current state of the widget."""
         return {}
         
-        
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         pass
@@ -348,8 +356,3 @@ class TaskGui(Qt.QWidget):
 
     def quit(self):
         self.disable()
-
-
-
-
-

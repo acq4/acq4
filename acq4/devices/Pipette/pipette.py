@@ -8,7 +8,7 @@ from acq4.util import Qt
 import numpy as np
 import weakref
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -17,6 +17,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.target import Target
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
+from six.moves import range
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 

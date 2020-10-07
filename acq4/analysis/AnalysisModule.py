@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+from collections import OrderedDict
+
 import six
 
-from acq4.util import Qt
-import acq4.pyqtgraph as pg
-import acq4.util.FileLoader as FileLoader
-import acq4.util.DatabaseGui as DatabaseGui
+import pyqtgraph as pg
 import acq4.util.Canvas as Canvas
-#import acq4.pyqtgraph.widgets.DataTreeWidget as DataTreeWidget
-from collections import OrderedDict
+import acq4.util.FileLoader as FileLoader
+from acq4.util import Qt
+
 
 class AnalysisModule(Qt.QObject):
     """

@@ -2,10 +2,11 @@
 from __future__ import print_function
 import six
 import time
-from numpy import *
+import numpy as np
 import acq4.util.ptime as ptime  ## platform-independent precision timing
 from collections import OrderedDict
 from .base import NIDAQError
+from six.moves import map
 
 
 class SuperTask:
@@ -117,8 +118,8 @@ class SuperTask:
         ## For now, all ao waveforms must be between -10 and 10
         
         typ = self.channelInfo[chan]['task'][1]
-        if typ in 'ao' and (any(data > 10.0) or any(data < -10.0)):
-            self.channelInfo[chan]['data'] = clip(data, -10.0, 10.0)
+        if typ in 'ao' and (np.any(data > 10.0) or np.any(data < -10.0)):
+            self.channelInfo[chan]['data'] = np.clip(data, -10.0, 10.0)
             self.channelInfo[chan]['clipped'] = True
         else:
             self.channelInfo[chan]['data'] = data
@@ -138,9 +139,9 @@ class SuperTask:
             for c in self.taskInfo[key]['chans']:
                 if 'data' not in self.channelInfo[c]:
                     raise Exception("No data specified for DAQ channel %s" % c)
-                waves.append(atleast_2d(self.channelInfo[c]['data']))
+                waves.append(np.atleast_2d(self.channelInfo[c]['data']))
             try:
-                self.taskInfo[key]['cache'] = concatenate(waves)
+                self.taskInfo[key]['cache'] = np.concatenate(waves)
             except:
                 print("Input shapes for %s:" % ','.join(list(self.channelInfo.keys())))
                 for w in waves:

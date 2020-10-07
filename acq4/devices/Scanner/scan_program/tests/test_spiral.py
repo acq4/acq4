@@ -1,7 +1,8 @@
 from __future__ import print_function
 from __future__ import division
 import numpy as np
-from acq4.devices.Scanner.scan_program.spiral import SpiralScan
+
+from acq4.devices.Scanner.scan_program.spiral import SpiralGeometry
 
 
 def test_spiral():
@@ -9,7 +10,7 @@ def test_spiral():
     r2 = 20e-6
     a1 = 1.
     a2 = 30.
-    ss = SpiralScan((r1, r2), (a1, a2))
+    ss = SpiralGeometry((r1, r2), (a1, a2))
     
     # check that analytically computed path length matches numerically computed
     # paths

@@ -6,7 +6,7 @@ from acq4.util import Qt
 from acq4.modules.Module import Module
 import acq4.util.InterfaceCombo  # just to register 'interface' parameter type
 from acq4.util.DataManager import getDirHandle
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 
 class NoiseMonitor(Module):
@@ -254,7 +254,7 @@ class ChannelRecorder(Qt.QSplitter):
 
         # Spectrum analysis
         fft = np.abs(np.fft.fft(dataArr))
-        fft = fft[:len(fft)/2]
+        fft = fft[:int(len(fft)/2)]
         freqArr = np.linspace(0, rate/2., len(fft))
 
         # downsample spectrogram

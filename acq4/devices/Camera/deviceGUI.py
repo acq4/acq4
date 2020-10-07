@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-from acq4.pyqtgraph.parametertree import * 
+
 import collections
+import numpy as np
+from pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.parametertree import Parameter, ParameterTree
+from acq4.util import Qt
 
 
 class CameraDeviceGui(Qt.QWidget):
@@ -38,7 +40,7 @@ class CameraDeviceGui(Qt.QWidget):
                         step = 1
                     else:
                         raise TypeError("Invalid parameter specification for '%s': %s" % (k, repr(p)))
-                    if type(mx) in [int, long] and type(mn) in [int, long]:
+                    if type(mx) in [int, np.long] and type(mn) in [int, np.long]:
                         params.append({'name': k, 'type': 'int', 'value': val, 'limits': (mn, mx), 'step': step})
                     else:
                         params.append({'name': k, 'type': 'float', 'value': val, 'limits': (mn, mx), 'dec': True, 'step': 1})

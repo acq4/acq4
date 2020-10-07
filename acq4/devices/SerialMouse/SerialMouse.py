@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.devices.Device import *
-from acq4.pyqtgraph.SignalProxy import SignalProxy
-import serial, os, time
+
+import os
+import serial
+import time
+
+from acq4.devices.Device import Device
+from pyqtgraph.SignalProxy import SignalProxy
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-#import pdb
+
 
 class SerialMouse(Device):
     

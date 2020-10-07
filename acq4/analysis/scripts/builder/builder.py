@@ -1,5 +1,9 @@
 from __future__ import print_function
-import sys, os
+
+import os
+import sys
+from six.moves import range
+
 md = os.path.abspath(os.path.split(__file__)[0])
 sys.path = [os.path.join(md, '..', '..', 'util')] + sys.path
 
@@ -7,16 +11,15 @@ dataFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus.ma"
 labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
-import acq4.util.metaarray as metaarray
-import acq4.util.debug as debug
-import user
+from pyqtgraph.metaarray import MetaArray
+
 
 Ui_Form = Qt.importTemplate('.builderTemplate')
 
-
-Qt.QApplication.setGraphicsSystem('raster')
+if callable(getattr(Qt.QApplication, "setGraphicsSystem", None)):
+    Qt.QApplication.setGraphicsSystem('raster')
 app = Qt.QApplication([])
 
 win = Qt.QMainWindow()
@@ -29,12 +32,12 @@ win.resize(800,600)
 
 ui.labelTree.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
 
-data = metaarray.MetaArray(file=dataFile, mmap=True)
+data = MetaArray(file=dataFile, mmap=True)
 ## data must have axes (anterior, dorsal, right)
 if not os.path.exists(labelFile):
-    label = metaarray.MetaArray(np.zeros(data.shape[:-1], dtype=np.uint16), info=data.infoCopy()[:3] + [{'labels': {}}])
+    label = MetaArray(np.zeros(data.shape[:-1], dtype=np.uint16), info=data.infoCopy()[:3] + [{'labels': {}}])
     label.write(labelFile, mappable=True)
-label = metaarray.MetaArray(file=labelFile, mmap=True, writable=True)
+label = MetaArray(file=labelFile, mmap=True, writable=True)
 
     
     

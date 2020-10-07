@@ -4,8 +4,9 @@ import numpy as np
 import acq4.analysis.tools.functions as afn
 import scipy
 #from acq4.util.pyqtgraph.multiprocess import Parallelize
-from acq4.pyqtgraph.debug import Profiler
+from pyqtgraph.debug import Profiler
 import os, sys
+from six.moves import range
 try:
     import cv2
     HAVE_CV2 = True

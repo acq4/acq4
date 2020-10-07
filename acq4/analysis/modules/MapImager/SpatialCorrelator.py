@@ -3,7 +3,7 @@ from acq4.util import Qt
 import math
 from acq4.util.HelpfulException import HelpfulException
 import numpy as np
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.analysis.tools.functions as fn
 import scipy
 
@@ -212,7 +212,7 @@ class SpatialCorrelator(Qt.QWidget):
         ##path = self.shape()
         #p.setPen(self.currentPen)
         #p.drawPath(self.path)
-        ##p.setPen(Qt.QPen(Qt.QColor(255,0,0)))
+        ##p.setPen(pg.mkPen(255,0,0))
         ##p.drawPath(self.shape())
-        #p.setPen(Qt.QPen(Qt.QColor(0,0,255)))
+        #p.setPen(pg.mkPen(0,0,255))
         #p.drawRect(self.boundingRect())    

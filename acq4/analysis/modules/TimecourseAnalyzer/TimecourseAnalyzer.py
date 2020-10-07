@@ -1,15 +1,18 @@
 from __future__ import print_function
-from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
-from acq4.util.flowchart import *
-from collections import OrderedDict
-import numpy as np
-import acq4.pyqtgraph as pg
-from acq4.util import Qt
-#from RegionParameter import RegionParameter
+
 import os
+from collections import OrderedDict
+
+import numpy as np
+
+import pyqtgraph as pg
 import acq4.util.debug as debug
-#from acq4.pyqtgraph.parametertree import Parameter
+from acq4.analysis.AnalysisModule import AnalysisModule
+from pyqtgraph.flowchart import Flowchart
+from acq4.util import Qt
+from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
+from acq4.util.HelpfulException import HelpfulException
+
 
 class TimecourseAnalyzer(AnalysisModule):
 
@@ -239,4 +242,3 @@ class TimecourseAnalyzer(AnalysisModule):
                     if dlg.wasCanceled():
                         raise HelpfulException("Canceled by user.", msgType='status')
 
-        

@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from ctypes import *
+
+import atexit
 import ctypes
-import struct, os, threading, platform, atexit, inspect
-from acq4.util.clibrary import *
-from .MultiClampTelegraph import *
-from acq4.util.debug import *
+import inspect
+import os
+import sys
+import threading
+
+from acq4.drivers.MultiClamp.MultiClampTelegraph import wmlib, MultiClampTelegraph
+from acq4.util.clibrary import winDefs, CParser, find_lib, CLibrary
+from acq4.util.debug import printExc
+from six.moves import map
 
 DEBUG=False ## Global flag for debugging hangups
 if DEBUG:
@@ -54,7 +60,7 @@ def getAxlib(libPath=None):
             raise ValueError('MultiClamp DLL file "%s" does not exist' % libPath)
         print("Using MultiClamp DLL at ", libPath)
 
-        axlib = CLibrary(windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
+        axlib = CLibrary(ctypes.windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
         initializeGlobals()
 
     return axlib
@@ -386,9 +392,9 @@ class MultiClamp:
                 ch1 = ch.copy()
                 ch1['model'] = MODELS[ch1['model']]
                 if ch1['model'] == 'MC700A':
-                    strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'com', 'dev', 'chan'])  
+                    strDesc = ",".join("%s:%s" % (k, ch1[k].decode('utf-8') if isinstance(ch1[k], bytes) else ch1[k]) for k in ['model', 'com', 'dev', 'chan'])
                 elif ch1['model'] == 'MC700B':
-                    strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'sn', 'chan'])  
+                    strDesc = ",".join("%s:%s" % (k, ch1[k].decode('utf-8') if isinstance(ch1[k], bytes) else ch1[k]) for k in ['model', 'sn', 'chan'])
                 if strDesc not in self.channels:
                     self.channels[strDesc] = MultiClampChannel(self, ch)
                 self.chanDesc[strDesc] = ch
@@ -402,10 +408,10 @@ class MultiClamp:
             fn = 'FindNextMultiClamp'
             
         try:
-            serial = create_string_buffer(b'\0'*16)
+            serial = ctypes.create_string_buffer(b'\0' * 16)
             ret = self.call(fn, pszSerialNum=serial, uBufSize=16)
         except:
-            if sys.exc_info()[1][0] == 6000:  ## We have reached the end of the device list
+            if sys.exc_info()[1].args[0] == 6000:  ## We have reached the end of the device list
                 return None
             raise
         
@@ -434,7 +440,7 @@ class MultiClamp:
 
     def errString(self, err):
         try:
-            return axlib.BuildErrorText(self.handle, err, create_string_buffer(b'\0'*256), 256)['sTxtBuf'].decode()
+            return axlib.BuildErrorText(self.handle, err, ctypes.create_string_buffer(b'\0' * 256), 256)['sTxtBuf'].decode()
         except:
             sys.excepthook(*sys.exc_info())
             return "<could not generate error message>"

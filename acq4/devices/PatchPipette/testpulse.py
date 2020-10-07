@@ -1,13 +1,14 @@
 from __future__ import print_function, division
 import time, threading, functools
 import numpy as np
-import scipy.optimize
-from acq4.pyqtgraph import ptime
+import scipy.optimize, scipy.ndimage
+from pyqtgraph import ptime
 from ...Manager import getManager
 from acq4.util import Qt
 from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
+from six.moves import range
 
 
 class TestPulseThread(Thread):
@@ -314,7 +315,7 @@ class TestPulse(object):
             analysis['steadyStateResistance'] = np.clip(analysis['steadyStateResistance'], 0, 20e9)
 
             # do curve fitting
-            pulseStart = params['preDuration'] + 150e-6
+            pulseStart = params['preDuration'] #+ 150e-6
             pulseStop = params['preDuration'] + params['pulseDuration']
             pulse = pri['Time': pulseStart:pulseStop]
             t = pulse.xvals('Time')
@@ -325,16 +326,16 @@ class TestPulse(object):
             )
             bounds = (
                 np.array([yOffsetBounds[0], 50e-6, yOffsetBounds[0]]),
-                np.array([yOffsetBounds[1], tauGuess*100, yOffsetBounds[1]])
+                np.array([yOffsetBounds[1], 500e-3, yOffsetBounds[1]])
             )
             xoffset = params['preDuration']
+            pulseData = pulse.asarray()
             try:
-                fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, maxfev=1000)  # uses leastsq
+                fit = scipy.optimize.curve_fit(exp, t-xoffset, pulseData, guess, maxfev=1000)  # uses leastsq
                 # fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, bounds=bounds, max_nfev=1000)  # uses least_squares
                 amp, tau, yoffset = fit[0]
             except RuntimeError:
-                amp, tau, yoffset = np.nan
-                raise
+                amp = tau = yoffset = np.nan
 
             analysis['fitExpAmp'] = amp
             analysis['fitExpTau'] = tau
@@ -344,14 +345,16 @@ class TestPulse(object):
             if params['clampMode'] == 'VC':
                 # VC capacitance calculation adapted from Santos-Sacchi 1993
                 # (not very accurate, probably because Q is calculated incorrectly)
-                Q = (pulse.asarray() - yoffset).sum() * (t[-1]-t[0]) / len(pulse)
+                dt = t[1] - t[0]
+                Q = (pulseData - yoffset).sum() * dt
                 Rin = analysis['steadyStateResistance']
                 Vc = params['amplitude']
                 Rs_denom = (Q * Rin + tau * Vc)
                 if Rs_denom != 0.0:
-                    Rs = (Rin * tau * Vc) / Rs_denom
+                    # Rs = (Rin * tau * Vc) / Rs_denom
+                    Rs = analysis['peakResistance']
                     Rm = Rin - Rs
-                    Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+                    Cm = (Rin**2 * Q) / (Rm**2 * abs(Vc))
                 else:
                     Rs = 0
                     Rm = 0
@@ -360,6 +363,10 @@ class TestPulse(object):
             else:
                 analysis['capacitance'] = tau / analysis['steadyStateResistance']
 
+            # # detect bad fits
+            # noise = (pulseData - scipy.ndimage.gaussian_filter(pulseData, 3)).std()
+            # fitOk = tau < 1e-3 or tau > 0.5 or abs(amp) < noise * 2
+
             self._analysis = analysis
             return analysis
 
@@ -367,7 +374,7 @@ class TestPulse(object):
         params = self.taskParams
         analysis = self.analysis()
         pri = self.data['Channel': 'primary']
-        pulseStart = params['preDuration'] + 150e-6
+        pulseStart = params['preDuration']# + 150e-6
         pulseStop = params['preDuration'] + params['pulseDuration']
         pulse = pri['Time': pulseStart:pulseStop]
         t = pulse.xvals('Time')

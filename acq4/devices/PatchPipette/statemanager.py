@@ -1,12 +1,12 @@
 from __future__ import print_function
+
 import sys
 from collections import OrderedDict
-try:
-    import queue
-except ImportError:
-    import Queue as queue
+
+from six.moves import queue
+
 from acq4.util import Qt
-from acq4.pyqtgraph import disconnect
+from pyqtgraph import disconnect
 from acq4.util.debug import printExc
 from . import states
 
@@ -97,7 +97,7 @@ class PatchPipetteStateManager(Qt.QObject):
             return ret
         else:
             sys.excepthook(*ret)
-            raise RuntimeError("Error requesting state change; original exception appears above.")
+            raise RuntimeError("Error requesting state change to %r; original exception appears above." % state)
 
     def _stateChangeRequested(self, state, returnQueue):
         try:
@@ -139,7 +139,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 self.configureState(oldJob.stateName, _allowReset=False)
             except Exception:
                 printExc("Error occurred while trying to reset state from a previous error:")
-            raise exc[0], exc[1], exc[2]
+            six.reraise(*exc)
 
     def activeChanged(self, pip, active):
         if active:

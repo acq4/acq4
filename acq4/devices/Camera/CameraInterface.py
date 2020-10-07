@@ -1,19 +1,14 @@
 from __future__ import print_function
-import time, types, os.path, re, sys
-from acq4.util import Qt
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import SignalProxy, Point
-import acq4.pyqtgraph.dockarea as dockarea
-import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
-import numpy as np
-import scipy.ndimage
-from acq4.util.debug import printExc, Profiler
-from acq4.util.metaarray import *
+
 import acq4.Manager as Manager
+import pyqtgraph as pg
+import pyqtgraph.dockarea as dockarea
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
-from acq4.util.imaging import ImagingCtrl
 from acq4.modules.Camera import CameraModuleInterface
+from pyqtgraph import SignalProxy, Point
+from acq4.util import Qt
+from acq4.util.debug import printExc
+from acq4.util.imaging import ImagingCtrl
 
 CameraInterfaceTemplate = Qt.importTemplate('.CameraInterfaceTemplate')
 

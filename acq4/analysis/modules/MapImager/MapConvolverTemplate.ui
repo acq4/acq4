@@ -105,7 +105,7 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>acq4.pyqtgraph.widgets.SpinBox</header>
+   <header>pyqtgraph.widgets.SpinBox</header>
   </customwidget>
   <customwidget>
    <class>TreeWidget</class>

@@ -49,7 +49,7 @@ class ComboBox(Qt.QComboBox):
         else:
             return data.toInt()[0]    
         
-    def restoreState(w, v):
+    def restoreState(self, v):
         if type(v) is int:
             #ind = self.findData(Qt.QVariant(v))
             ind = self.findData(v)

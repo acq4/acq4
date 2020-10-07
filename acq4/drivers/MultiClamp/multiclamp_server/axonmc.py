@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from ctypes import *
-import sys, re, types, ctypes, os
+
+from ctypes import byref, windll, c_double, c_uint, c_char_p, c_int, create_string_buffer
+import os
+import re
+import sys
+
 import cheader
+
 
 def init():
     ## System-specific code
@@ -142,7 +147,7 @@ class _MULTICLAMP:
 
 
     def findMultiClamp(self):
-        serial = create_string_buffer(b'\0'*16)
+        serial = create_string_buffer(b'\0' * 16)
         model = c_uint(0)
         port = c_uint(0)
         devID = c_uint(0)

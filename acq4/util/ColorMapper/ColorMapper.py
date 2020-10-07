@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
 if __name__ == '__main__':
     import sys
     sys.path.append('..')
-    
+
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import SpinBox
-from acq4.pyqtgraph import GradientWidget
+import pyqtgraph as pg
+from pyqtgraph import SpinBox
+from pyqtgraph import GradientWidget
 import numpy as np
 import os
-import acq4.util.configfile as configfile
+import pyqtgraph.configfile as configfile
 
 Ui_Form = Qt.importTemplate('.CMTemplate')
 

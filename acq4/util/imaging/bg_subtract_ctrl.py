@@ -2,7 +2,7 @@ from __future__ import print_function
 import scipy.ndimage
 import numpy as np
 from acq4.util import Qt
-from acq4 import pyqtgraph as pg
+import pyqtgraph as pg
 
 Ui_Form = Qt.importTemplate('.bg_subtract_template')
 

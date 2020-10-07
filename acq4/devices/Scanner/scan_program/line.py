@@ -2,11 +2,12 @@ from __future__ import print_function
 from six.moves import range
 import weakref
 import numpy as np
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.util import Qt
-import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
+from six.moves import map
 
 
 class LineScanComponent(ScanProgramComponent):
@@ -21,7 +22,7 @@ class LineScanComponent(ScanProgramComponent):
 
     def ctrlParameter(self):
         """
-        The Parameter (see acq4.pyqtgraph.parametertree) set used to allow the 
+        The Parameter (see pyqtgraph.parametertree) set used to allow the
         user to define this component.        
         """
         return self.ctrl.parameters()

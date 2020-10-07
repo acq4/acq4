@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
 """
 Used for measuring illumination depth profiles from photobleached tissue.
 """
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import acq4.pyqtgraph as pg
-from acq4.util.metaarray import MetaArray
+import pyqtgraph as pg
+from pyqtgraph.metaarray import MetaArray
 import numpy as np
 import acq4.util.functions as fn
-#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
+#import pyqtgraph.ProgressDialog as ProgressDialog
 import scipy.optimize
 
 class DepthProfiler(AnalysisModule):

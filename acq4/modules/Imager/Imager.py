@@ -7,45 +7,44 @@
 # Ti:Sapphire, but it could be something else), using the existing
 # mirror calibrations, over a sample. The light is detected with
 # a photomultiplier, amplified/filtered, and sampled with the A/D.
-# 
+#
 # The Module offers the ability to select the region to be scanned
 # using the existing camera image and an ROI, adjustment of the scan
 # rate, pixel size (within reason), overscan, scanning mode (bidirectional
 # versus sawtooth/flyback sweeps), and the ability to take videos
-# single images, and timed images. 
-# the image position is coordinated with the entire system, so that 
+# single images, and timed images.
+# the image position is coordinated with the entire system, so that
 # later reconstructions can be performed against either the Camera or
-# the laser scanned image. 
+# the laser scanned image.
 #
 # 2012-2013 Paul B. Manis, Ph.D. and Luke Campagnola
 # UNC Chapel Hill
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
 from __future__ import print_function
-import time
+
 import copy
-import pprint
-from acq4.util import Qt
-import numpy as np
+import time
 from collections import OrderedDict
 
-from acq4.modules.Module import Module
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.dockarea
+import numpy as np
+import pyqtgraph as pg
+import pyqtgraph.dockarea
+from pyqtgraph import parametertree as PT
+from six.moves import range
+
 import acq4.Manager
-import acq4.util.InterfaceCombo as InterfaceCombo
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program import ScanProgram
-from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.pyqtgraph import parametertree as PT
-from acq4.util import metaarray as MA
-from acq4.util.Mutex import Mutex
+from acq4.modules.Module import Module
+from acq4.util import Qt
 from acq4.util import imaging
+from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 
-Ui_Form = Qt.importTemplate('.imagerTemplate') 
+Ui_Form = Qt.importTemplate(".imagerTemplate")
 
 
 # Create some useful configurations for the user.
@@ -95,17 +94,16 @@ class ImagerWindow(Qt.QMainWindow):
     This is only done this way so that we can catch the window
     close event (with "X").
     """
+
     def __init__(self, module):
         self.hasQuit = False
-        self.module = module ## handle to the rest of the module class
-   
+        self.module = module  ## handle to the rest of the module class
+
         ## Create the main window
-        win = Qt.QMainWindow.__init__(self)
-        return win
-    
+        Qt.QMainWindow.__init__(self)
+
     def closeEvent(self, ev):
         self.module.quit()
-
 
 
 class Black(Qt.QWidget):
@@ -127,7 +125,7 @@ class Black(Qt.QWidget):
 
         center = self.rect().center()
         r = Qt.QPoint(70, 30)
-        self.cancelRect = Qt.QRect(center-r, center+r)
+        self.cancelRect = Qt.QRect(center - r, center + r)
         p.setPen(pg.mkPen(150, 0, 0))
         f = p.font()
         f.setPointSize(18)
@@ -151,7 +149,6 @@ class Black(Qt.QWidget):
             self.cancelPressed = False
             self.update()
 
-     
 
 class ScreenBlanker(Qt.QObject):
     """
@@ -159,6 +156,7 @@ class ScreenBlanker(Qt.QObject):
     This is so that extraneous light does not leak into the 
     detector during acquisition.
     """
+
     sigCancelClicked = Qt.Signal()
 
     def __init__(self):
@@ -166,25 +164,25 @@ class ScreenBlanker(Qt.QObject):
         self.cancelled = False
         self.widgets = []
         d = Qt.QApplication.desktop()
-        for i in range(d.screenCount()): # look for all screens
+        for i in range(d.screenCount()):  # look for all screens
             w = Black()
             w.hide()
             w.sigCancelClicked.connect(self.cancelClicked)
             self.widgets.append(w)
-            sg = d.screenGeometry(i) # get the screen size
-            w.move(sg.x(), sg.y()) # put the widget there
+            sg = d.screenGeometry(i)  # get the screen size
+            w.move(sg.x(), sg.y())  # put the widget there
 
     def blank(self):
         self.cancelled = False
         for w in self.widgets:
             w.showFullScreen()
             w.show()
-        Qt.QApplication.processEvents() # make it so
+        Qt.QApplication.processEvents()  # make it so
 
     def unblank(self):
         for w in self.widgets:
             w.hide()
-        
+
     def __enter__(self):
         self.blank()
         return self
@@ -199,7 +197,7 @@ class ScreenBlanker(Qt.QObject):
         self.unblank()
         self.sigCancelClicked.emit()
 
-        
+
 class RegionCtrl(pg.ROI):
     """
     Create an ROI "Region Control" with handles, with specified size
@@ -209,24 +207,26 @@ class RegionCtrl(pg.ROI):
     window().addItem, the position is lost, and will have to be
     reset in the ROI.
     """
-    def __init__(self, pos, size, roiColor = 'r'):
+
+    def __init__(self, pos, size, roiColor="r"):
         pg.ROI.__init__(self, pos, size=size, pen=roiColor)
-        self.addScaleHandle([0,0], [1,1])
-        self.addScaleHandle([1,1], [0,0])
-        self.addScaleHandle([0,1], [1,0])
-        self.addScaleHandle([1,0], [0,1])
+        self.addScaleHandle([0, 0], [1, 1])
+        self.addScaleHandle([1, 1], [0, 0])
+        self.addScaleHandle([0, 1], [1, 0])
+        self.addScaleHandle([1, 0], [0, 1])
         self.setZValue(1200)
+
 
 class TileControl(pg.ROI):
     """
     Create an ROI for the Tile Regions. Note that the color is RED, 
-    """    
-    def __init__(self, pos, size, roiColor = 'r'):
+    """
+
+    def __init__(self, pos, size, roiColor="r"):
         pg.ROI.__init__(self, pos, size=size, pen=roiColor)
-        self.addScaleHandle([0,0], [1,1])
-        self.addScaleHandle([1,1], [0,0])
+        self.addScaleHandle([0, 0], [1, 1])
+        self.addScaleHandle([1, 1], [0, 0])
         self.setZValue(1400)
-    
 
 
 class Imager(Module):
@@ -234,15 +234,15 @@ class Imager(Module):
     moduleCategory = "Acquisition"
 
     def __init__(self, manager, name, config):
-        Module.__init__(self, manager, name, config) 
-        self.win = ImagerWindow(self) # make the main window - mostly to catch window close event...
+        Module.__init__(self, manager, name, config)
+        self.win = ImagerWindow(self)  # make the main window - mostly to catch window close event...
         self.win.show()
-        self.win.setWindowTitle('Multiphoton Imager')
-        self.win.resize(500, 900) # make the window big enough to use on a large monitor...
+        self.win.setWindowTitle("Multiphoton Imager")
+        self.win.resize(500, 900)  # make the window big enough to use on a large monitor...
 
-        self.w1 = Qt.QSplitter() # divide l, r
+        self.w1 = Qt.QSplitter()  # divide l, r
         self.w1.setOrientation(Qt.Qt.Horizontal)
-        self.win.setCentralWidget(self.w1) # w1 is the "main window" splitter
+        self.win.setCentralWidget(self.w1)  # w1 is the "main window" splitter
 
         self.dockarea = pg.dockarea.DockArea()
         self.w1.addWidget(self.dockarea)
@@ -254,33 +254,41 @@ class Imager(Module):
         self.w2sl.setSpacing(0)
         self.ctrlWidget = Qt.QWidget()
         self.ui = Ui_Form()
-        self.ui.setupUi(self.ctrlWidget)  # put the ui on the top 
+        self.ui.setupUi(self.ctrlWidget)  # put the ui on the top
         self.w2sl.addWidget(self.ctrlWidget)
 
         # create the parameter tree for controlling device behavior
         self.tree = PT.ParameterTree()
         self.w2sl.addWidget(self.tree)
 
-        # takes care of displaying image data, 
+        # takes care of displaying image data,
         # contrast & background subtraction user interfaces
         self.imagingCtrl = imaging.ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
         self.imageItem = self.frameDisplay.imageItem()
 
         # create docks for imaging, contrast, and background subtraction
-        recDock = pg.dockarea.Dock(name="Acquisition Control", widget=self.imagingCtrl, size=(250, 10), autoOrientation=False)
+        recDock = pg.dockarea.Dock(
+            name="Acquisition Control", widget=self.imagingCtrl, size=(250, 10), autoOrientation=False
+        )
         scanDock = pg.dockarea.Dock(name="Device Control", widget=self.w2s, size=(250, 800), autoOrientation=False)
-        dispDock = pg.dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(250, 800), autoOrientation=False)
-        bgDock = pg.dockarea.Dock(name="Background Subtraction", widget=self.frameDisplay.backgroundWidget(), size=(250, 10), autoOrientation=False)
+        dispDock = pg.dockarea.Dock(
+            name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(250, 800), autoOrientation=False
+        )
+        bgDock = pg.dockarea.Dock(
+            name="Background Subtraction",
+            widget=self.frameDisplay.backgroundWidget(),
+            size=(250, 10),
+            autoOrientation=False,
+        )
         self.dockarea.addDock(recDock)
-        self.dockarea.addDock(dispDock, 'right', recDock)
-        self.dockarea.addDock(scanDock, 'bottom', recDock)
-        self.dockarea.addDock(bgDock, 'bottom', dispDock)
-
+        self.dockarea.addDock(dispDock, "right", recDock)
+        self.dockarea.addDock(scanDock, "bottom", recDock)
+        self.dockarea.addDock(bgDock, "bottom", dispDock)
 
         # TODO: resurrect this for situations when the camera module can't be used
         # self.view = ImagerView()
-        # self.w1.addWidget(self.view)   # add the view to the right of w1     
+        # self.w1.addWidget(self.view)   # add the view to the right of w1
 
         self.blanker = ScreenBlanker()
         self.blanker.sigCancelClicked.connect(self.blankerCancelClicked)
@@ -291,11 +299,11 @@ class Imager(Module):
         self.ignoreRoiChange = False
         self.lastFrame = None
 
-        self.fieldSize = 63.0*120e-6 # field size for 63x, will be scaled for others
+        self.fieldSize = 63.0 * 120e-6  # field size for 63x, will be scaled for others
 
         self.scanVoltageCache = None  # cached scan protocol computed by generateScanProtocol
-        
-        self.objectiveROImap = {} # this is a dict that we will populate with the name
+
+        self.objectiveROImap = {}  # this is a dict that we will populate with the name
         # of the objective and the associated ROI object .
         # That way, each objective has a scan region appopriate for it's magnification.
 
@@ -304,14 +312,13 @@ class Imager(Module):
         # if this is to be allowed on a system, the change must be signaled to this class,
         # and we need to pick up the device in a routine that handles the change.
         try:
-            self.cameraModule = self.manager.getModule(config['cameraModule'])
+            self.cameraModule = self.manager.getModule(config["cameraModule"])
         except:
-            self.manager.loadDefinedModule(config['cameraModule'])
+            self.manager.loadDefinedModule(config["cameraModule"])
             Qt.QApplication.processEvents()
-            self.cameraModule = self.manager.getModule(config['cameraModule'])
-        self.laserDev = self.manager.getDevice(config['laser'])
-        self.scannerDev = self.manager.getDevice(config['scanner'])
-
+            self.cameraModule = self.manager.getModule(config["cameraModule"])
+        self.laserDev = self.manager.getDevice(config["laser"])
+        self.scannerDev = self.manager.getDevice(config["scanner"])
 
         self.imagingThread = ImagingThread(self.laserDev, self.scannerDev)
         self.imagingThread.sigNewFrame.connect(self.newFrame)
@@ -330,27 +337,25 @@ class Imager(Module):
         if dev is not None:
             self.scopeDev.sigObjectiveChanged.connect(self.objectiveUpdate)
             self.scopeDev.sigGlobalTransformChanged.connect(self.transformChanged)
-        
-        # config may specify a single detector device (dev, channel) or a list of devices 
+
+        # config may specify a single detector device (dev, channel) or a list of devices
         # to select from [(dev1, channel1), ...]
-        self.detectors = config.get('detectors', [config.get('detector')])
-        
+        self.detectors = config.get("detectors", [config.get("detector")])
+
         det = self.manager.getDevice(self.detectors[0][0])
-        filt = det.getFilterDevice()
-        if filt is not None:
-            self.filterDevice =  self.manager.getDevice(filt)
-        else:
-            self.filterDevice = None
-            
-        if self.filterDevice is not None:
-            self.filterDevice.sigFilterChanged.connect(self.filterUpdate)
-        
+        self.filterDevice = None
+        if callable(getattr(det, "getFilterDevice", None)):
+            filt = det.getFilterDevice()
+            if filt is not None:
+                self.filterDevice = self.manager.getDevice(filt)
+                self.filterDevice.sigFilterChanged.connect(self.filterUpdate)
+
         self.laserMonitor = Qt.QTimer()
         self.laserMonitor.timeout.connect(self.updateLaserInfo)
-        ival = self.config.get('powerCheckInterval', 3.0)
+        ival = self.config.get("powerCheckInterval", 3.0)
         if ival is not False:
-            self.laserMonitor.start(ival*1000)
-        
+            self.laserMonitor.start(ival * 1000)
+
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
         self.imagingCtrl.sigStartVideoClicked.connect(self.startVideoClicked)
@@ -366,8 +371,8 @@ class Imager(Module):
         # self.ui.run_button.clicked.connect(self.PMT_Run)
         # self.ui.stop_button.clicked.connect(self.PMT_Stop)
         # self.ui.set_TilesButton.clicked.connect(self.setTilesROI)
-        
-        #self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
+
+        # self.ui.cameraSnapBtn.clicked.connect(self.cameraSnap)
         self.ui.restoreROI.clicked.connect(self.restoreROI)
         self.ui.saveROI.clicked.connect(self.saveROI)
         self.ui.Align_to_Camera.clicked.connect(self.reAlign)
@@ -436,19 +441,18 @@ class Imager(Module):
         ])
         self.tree.setParameters(self.param, showTop=False)
 
-        # insert an ROI into the camera image that corresponds to our scan area                
-        self.objectiveUpdate() # force update of objective information and create appropriate ROI
+        # insert an ROI into the camera image that corresponds to our scan area
+        self.objectiveUpdate()  # force update of objective information and create appropriate ROI
         self.filterUpdate()
-        # check the devices...        
-        self.updateParams() # also force update now to make sure all parameters are synchronized
-        self.param.child('Scan Control').sigTreeStateChanged.connect(self.updateParams)
-        self.param.child('Image Control').sigTreeStateChanged.connect(self.updateDecomb)
-        self.param.child('Image Control', 'Decomb', 'Auto').sigActivated.connect(self.autoDecomb)
+        # check the devices...
+        self.updateParams()  # also force update now to make sure all parameters are synchronized
+        self.param.child("Scan Control").sigTreeStateChanged.connect(self.updateParams)
+        self.param.child("Image Control").sigTreeStateChanged.connect(self.updateDecomb)
+        self.param.child("Image Control", "Decomb", "Auto").sigActivated.connect(self.autoDecomb)
 
         self.manager.sigAbortAll.connect(self.abortTask)
 
         self.updateImagingProtocol()
-
 
     def quit(self):
         self.abortTask()
@@ -481,24 +485,25 @@ class Imager(Module):
         Used to report that the objective has changed in the parameter tree,
         and then reposition the ROI that drives the image region.
         """
-        self.param['Scan Properties', 'Objective'] = self.scopeDev.currentObjective.name()
+        self.param["Scan Properties", "Objective"] = self.scopeDev.currentObjective.name()
         if reset:
             self.clearROIMap()
-        if self.param['Scan Properties', 'Objective'] not in self.objectiveROImap: # add the objective and an ROI
-            self.objectiveROImap[self.param['Scan Properties', 'Objective']] = self.createROI()
+        if self.param["Scan Properties", "Objective"] not in self.objectiveROImap:  # add the objective and an ROI
+            self.objectiveROImap[self.param["Scan Properties", "Objective"]] = self.createROI()
         for obj, roi in self.objectiveROImap.items():
-            if obj == self.param['Scan Properties', 'Objective']:
+            if obj == self.param["Scan Properties", "Objective"]:
                 self.currentRoi = roi
                 roi.show()
-                self.roiChanged() # do this now as well so that the parameter tree is correct. 
+                self.roiChanged()  # do this now as well so that the parameter tree is correct.
             else:
                 roi.hide()
+
     def filterUpdate(self, reset=False):
         """ Update the filter information
         Used to report that the filter has changed in the parameter tree,
         """
         if self.filterDevice is not None:
-            self.param['Scan Properties', 'Filter'] = self.filterDevice.currentFilter.name()
+            self.param["Scan Properties", "Filter"] = self.filterDevice.currentFilter.name()
 
     def clearROIMap(self):
         for k in self.objectiveROImap.keys():
@@ -506,7 +511,7 @@ class Imager(Module):
             if roi.scene() is not None:
                 roi.scene().removeItem(roi)
         self.objectiveROImap = {}
-    
+
     def transformChanged(self):
         """
         Report that the tranform has changed, which might include the objective, or
@@ -520,7 +525,7 @@ class Imager(Module):
         diff = pt2 - pt1
         pg.disconnect(self.currentRoi.sigRegionChangeFinished, self.roiChanged)
         try:
-            self.currentRoi.setState({'pos': pt1, 'size': diff, 'angle': 0})
+            self.currentRoi.setState({"pos": pt1, "size": diff, "angle": 0})
         finally:
             self.currentRoi.sigRegionChangeFinished.connect(self.roiChanged)
         self.setScanPosFromRoi()
@@ -533,60 +538,62 @@ class Imager(Module):
         """
         color = Qt.QColor("red")
         id = objective.key()[1]
-        if id == u'63x0.9':
+        if id == u"63x0.9":
             color = Qt.QColor("darkBlue")
-        elif id == u'40x0.8':
+        elif id == u"40x0.8":
             color = Qt.QColor("blue")
-        elif id == u'40x0.75':
+        elif id == u"40x0.75":
             color = Qt.QColor("blue")
-        elif id == u'5x0.25':
+        elif id == u"5x0.25":
             color = Qt.QColor("red")
-        elif id == u'4x0.1':
+        elif id == u"4x0.1":
             color = Qt.QColor("darkRed")
         else:
             color = Qt.QColor("lightGray")
-        return(color)
-            
-    def createROI(self, roiColor='r'):
+        return color
+
+    def createROI(self, roiColor="r"):
         # the initial ROI will be nearly as big as the field, and centered.
-        cpos = self.scannerDev.mapToGlobal((0,0)) # get center position in scanner coordinates
+        cpos = self.scannerDev.mapToGlobal((0, 0))  # get center position in scanner coordinates
         csize = self.scannerDev.mapToGlobal((self.fieldSize, self.fieldSize))
         objScale = self.scannerDev.parentDevice().getObjective().scale().x()
-        height = width = self.fieldSize*objScale
-        
+        height = width = self.fieldSize * objScale
+
         csize = pg.Point(width, height)
-        cpos = cpos - csize/2.
-        
-        roiColor = self.getObjectiveColor(self.scopeDev.currentObjective) # pick up an objective color...
-        roi = RegionCtrl(cpos, csize, roiColor) # Note that the position actually gets over ridden by the camera additem below..
+        cpos = cpos - csize / 2.0
+
+        roiColor = self.getObjectiveColor(self.scopeDev.currentObjective)  # pick up an objective color...
+        roi = RegionCtrl(
+            cpos, csize, roiColor
+        )  # Note that the position actually gets over ridden by the camera additem below..
         self.cameraModule.window().addItem(roi)
         roi.setPos(cpos)
         roi.sigRegionChangeFinished.connect(self.roiChanged)
         return roi
-    
+
     def restoreROI(self):
-        
+
         if self.storedROI is not None:
             (width, height, x, y) = self.storedROI
             self.currentRoi.setSize([width, height])
             self.currentRoi.setPos([x, y])
             self.roiChanged()
         else:
-            cpos = self.cameraModule.ui.view.viewRect().center() # center position, stage coordinates
-            csize = pg.Point([x*400 for x in self.cameraModule.ui.view.viewPixelSize()])
-            width  = csize[0]*2 # width is x in M
-            height = csize[1]*2
+            cpos = self.cameraModule.ui.view.viewRect().center()  # center position, stage coordinates
+            csize = pg.Point([x * 400 for x in self.cameraModule.ui.view.viewPixelSize()])
+            width = csize[0] * 2  # width is x in M
+            height = csize[1] * 2
             csize = pg.Point(width, height)
-            cpos = cpos - csize/2.
+            cpos = cpos - csize / 2.0
             self.currentRoi.setSize([width, height])
             self.currentRoi.setPos(cpos)
-            
+
     def saveROI(self):
         state = self.currentRoi.getState()
-        (width, height) = state['size']
-        x, y = state['pos']
+        (width, height) = state["size"]
+        x, y = state["pos"]
         self.storedROI = [width, height, x, y]
-        
+
     def roiChanged(self):
         """ read the ROI rectangle width and height and repost
         in the parameter tree """
@@ -601,14 +608,14 @@ class Imager(Module):
         # update scan shape if needed
         roi = self.currentRoi
         state = roi.getState()
-        w, h = state['size']
+        w, h = state["size"]
         rparam = self.scanProgram.components[0].ctrlParameter()
-        param = self.param.child('Scan Control')
-        rows = int(param['Image Width'] * h / w)
-        if param['Image Height'] != rows:
+        param = self.param.child("Scan Control")
+        rows = int(param["Image Width"] * h / w)
+        if param["Image Height"] != rows:
             # update image height; this will cause acq thread protocol to be updated
             with param.treeChangeBlocker():
-                param['Image Height'] = rows
+                param["Image Height"] = rows
         else:
             # ..otherwise we need to request the update here.
             if self.imagingThread.isRunning():
@@ -616,31 +623,31 @@ class Imager(Module):
 
         # record position of ROI in Scanner's local coordinate system
         # we can use this later to allow the ROI to track stage movement
-        tr = self.scannerDev.inverseGlobalTransform() # maps from global to device local
-        pt1 = pg.Point(*state['pos'])
-        pt2 = pt1 + pg.Point(*state['size'])
+        tr = self.scannerDev.inverseGlobalTransform()  # maps from global to device local
+        pt1 = pg.Point(*state["pos"])
+        pt2 = pt1 + pg.Point(*state["size"])
         self.currentRoi.scannerCoords = [
             tr.map(pt1),
             tr.map(pt2),
-            ]
+        ]
 
     def setScanPosFromRoi(self):
         # Update the position of the scan rectangle from the ROI
         roi = self.currentRoi
         w, h = roi.size()
-        
+
         # get top-left ROI corner in global coordinates
-        p0 = roi.mapToView(pg.Point(0,h))
+        p0 = roi.mapToView(pg.Point(0, h))
         if p0 is None:
             # could not map point; probably view has been closed.
-            return 
+            return
 
         rparam = self.scanProgram.components[0].ctrlParameter()
         rparam.system.p0 = pg.Point(p0)  # top-left
-        rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w,h)))  # rop-right
+        rparam.system.p1 = pg.Point(roi.mapToView(pg.Point(w, h)))  # rop-right
 
     def reAlign(self):
-        self.objectiveUpdate(reset=True) # try this... 
+        self.objectiveUpdate(reset=True)  # try this...
         self.roiChanged()
 
     # def setTilesROI(self, roiColor = 'r'):
@@ -650,12 +657,11 @@ class Imager(Module):
     #         self.tileRoiVisible = False
     #         if self.tileRoi is not None:
     #             return
-           
-            
+
     #     state = self.currentRoi.getState()
     #     width, height = state['size']
     #     x, y = state['pos']
-        
+
     #     csize= [width*3.0,  height*3.0]
     #     cpos = [x, y]
     #     self.tileRoi = RegionCtrl(cpos, csize, [255., 0., 0.]) # Note that the position actually gets overridden by the camera additem below..
@@ -665,7 +671,7 @@ class Imager(Module):
     #     self.tileRoi.sigRegionChangeFinished.connect(self.tileROIChanged)
     #     self.tileRoiVisible = True
     #     return self.tileRoi
-        
+
     # def tileROIChanged(self):
     #     """ read the TILE ROI rectangle width and height and repost
     #     in the parameter tree """
@@ -689,21 +695,20 @@ class Imager(Module):
     #         tr.map(pt2),
     #         ]
 
-        
     def updateParams(self, root=None, changes=()):
         """Parameters have changed; update any dependent parameters and the scan program.
         """
-        #check the devices first        
+        # check the devices first
         # use the presets if they are engaged
         # preset = self.param['Preset']
         # self.loadPreset(preset)
 
-        scanControl = self.param.child('Scan Control')
+        scanControl = self.param.child("Scan Control")
 
         self.scanVoltageCache = None  # invalidate cache
 
-        sampleRate = scanControl['Sample Rate']
-        downsample = scanControl['Downsample']
+        sampleRate = scanControl["Sample Rate"]
+        downsample = scanControl["Downsample"]
         # we'll let the rect tell us later how many samples are needed
         self.scanProgram.setSampling(rate=sampleRate, samples=0, downsample=downsample)
         self.scanProgram.setDevices(scanner=self.scannerDev, laser=self.laserDev)
@@ -712,27 +717,27 @@ class Imager(Module):
         rparams = rect.ctrlParameter()
 
         for param, change, args in changes:
-            if change == 'value' and param is scanControl.child('Image Height'):
+            if change == "value" and param is scanControl.child("Image Height"):
                 # user explicitly requested image height; change ROI to match.
                 try:
                     self.ignoreRoiChange = True
                     w, h = self.currentRoi.size()
-                    h2 = w * scanControl['Image Height'] / scanControl['Image Width']
+                    h2 = w * scanControl["Image Height"] / scanControl["Image Width"]
                     self.currentRoi.setSize([w, h2])
                     pos = self.currentRoi.pos()
                     self.currentRoi.setPos([pos[0], pos[1] + h - h2])
                 finally:
                     self.ignoreRoiChange = False
 
-        rparams['imageRows'] = scanControl['Image Height']
-        rparams['imageRows', 'fixed'] = True
-        rparams['imageCols'] = scanControl['Image Width']
-        rparams['imageCols', 'fixed'] = True
-        rparams['minOverscan'] = scanControl['Overscan']
-        rparams['bidirectional'] = True
-        rparams['pixelAspectRatio'] = 1.0
-        rparams['pixelAspectRatio', 'fixed'] = True
-        rparams['numFrames'] = scanControl['Average']
+        rparams["imageRows"] = scanControl["Image Height"]
+        rparams["imageRows", "fixed"] = True
+        rparams["imageCols"] = scanControl["Image Width"]
+        rparams["imageCols", "fixed"] = True
+        rparams["minOverscan"] = scanControl["Overscan"]
+        rparams["bidirectional"] = True
+        rparams["pixelAspectRatio"] = 1.0
+        rparams["pixelAspectRatio", "fixed"] = True
+        rparams["numFrames"] = scanControl["Average"]
 
         rparams.system.solve()
         nSamples = rparams.system.scanStride[0] * rparams.system.numFrames
@@ -740,13 +745,13 @@ class Imager(Module):
         self.scanProgram.setSampling(rate=sampleRate, samples=nSamples, downsample=downsample)
 
         # Update dependent parameters
-        scanProp = self.param.child('Scan Properties')
-        scanProp['Pixel Size'] = rparams.system.pixelWidth
-        scanProp['Frame Time'] = rparams.system.frameDuration
+        scanProp = self.param.child("Scan Properties")
+        scanProp["Pixel Size"] = rparams.system.pixelWidth
+        scanProp["Frame Time"] = rparams.system.frameDuration
 
-        scanProp['Scan Speed'] = rparams.system.scanSpeed
-        scanProp['Exposure per Frame'] = rparams.system.frameExposure
-        scanProp['Total Exposure'] = rparams.system.totalExposure
+        scanProp["Scan Speed"] = rparams.system.scanSpeed
+        scanProp["Exposure per Frame"] = rparams.system.frameExposure
+        scanProp["Total Exposure"] = rparams.system.totalExposure
 
         if rparams.system.checkOverconstraint() is not False:
             raise RuntimeError("Scan calculator is overconstrained (this is a bug).")
@@ -765,16 +770,18 @@ class Imager(Module):
 
     def updateDecomb(self):
         if self.lastFrame is not None:
-            self.lastFrame.setDecomb(self.param['Image Control', 'Decomb'], self.param['Image Control', 'Decomb', 'Subpixel'])
+            self.lastFrame.setDecomb(
+                self.param["Image Control", "Decomb"], self.param["Image Control", "Decomb", "Subpixel"]
+            )
             self.frameDisplay.updateFrame()
 
     def autoDecomb(self):
         if self.lastFrame is not None:
             self.lastFrame.autoDecomb()
-            self.param.child('Image Control', 'Decomb').setValue(self.lastFrame._decomb[0])
-            
+            self.param.child("Image Control", "Decomb").setValue(self.lastFrame._decomb[0])
+
     def loadModeSettings(self, params):
-        param = self.param.child('Scan Control')
+        param = self.param.child("Scan Control")
         with param.treeChangeBlocker():  # accumulate changes, emit once at the end.
             for name, val in params.items():
                 param[name] = val
@@ -790,7 +797,7 @@ class Imager(Module):
             self.loadModeSettings(FrameModes[mode])
         self.updateImagingProtocol()
         self.takeImage()
-        
+
     def startVideoClicked(self, mode):
         self.start(mode)
 
@@ -821,7 +828,7 @@ class Imager(Module):
 
     def saveParams(self, root=None):
         params = {}
-        for grp in ('Scan Control', 'Scan Properties'):
+        for grp in ("Scan Control", "Scan Properties"):
             for ch in self.param.child(grp):
                 params[ch.name()] = ch.value()
 
@@ -829,11 +836,11 @@ class Imager(Module):
 
     def updateLaserInfo(self):
         if self.laserDev is not None:
-            self.param['Scan Properties', 'Wavelength'] = (self.laserDev.getWavelength()*1e9)
-            self.param['Scan Properties', 'Power'] = (self.laserDev.outputPower())
+            self.param["Scan Properties", "Wavelength"] = self.laserDev.getWavelength() * 1e9
+            self.param["Scan Properties", "Power"] = self.laserDev.outputPower()
         else:
-            self.param['Scan Properties', 'Wavelength'] = 0.0
-            self.param['Scan Properties', 'Power'] = 0.0
+            self.param["Scan Properties", "Wavelength"] = 0.0
+            self.param["Scan Properties", "Power"] = 0.0
 
     def openShutter(self, open):
         if self.laserDev is not None and self.laserDev.hasShutter:
@@ -856,7 +863,7 @@ class Imager(Module):
         Take an image using the scanning system and PMT, and return with the data.
         """
         # Blank screen and start acquisition
-        blank = allowBlanking and self.param['Scan Control', 'Blank Screen'] is True
+        blank = allowBlanking and self.param["Scan Control", "Blank Screen"] is True
         if blank:
             self.blanker.blank()
 
@@ -890,21 +897,21 @@ class Imager(Module):
         # sample rate, duration, and other meta data
         rect = self.scanProgram.components[0].ctrlParameter()
 
-        scanParams = self.param.child('Scan Control')
+        scanParams = self.param.child("Scan Control")
         samples = vscan.shape[0]
-        sampleRate = scanParams['Sample Rate']
+        sampleRate = scanParams["Sample Rate"]
         duration = float(samples) / sampleRate
         program = self.scanProgram.saveState()  # meta-data to annotate protocol
 
-        laserCmd = {'shutterMode': 'open'}
+        laserCmd = {"shutterMode": "open"}
         if self.laserDev.hasPCell:
             pcell = np.empty(vscan.shape[0], dtype=np.float64)  # DAQmx requires float64!
-            pcell[:] = scanParams['Pockels']
+            pcell[:] = scanParams["Pockels"]
             pcell[-1] = 0
-            laserCmd['pCell'] = {'command': pcell}
+            laserCmd["pCell"] = {"command": pcell}
 
         # Look up device names
-        pdDevice, pdChannel = scanParams['Photodetector']
+        pdDevice, pdChannel = scanParams["Photodetector"]
         scanDev = self.scannerDev.name()
 
         prot = {
@@ -939,19 +946,19 @@ class Imager(Module):
     #     automatically collected. The 3 modes implemented are:
     #     Z-stack (currently not used as the stage isn't good enough...)
     #     Tiles - collect a tiled x-y sequence of images as single images.
-    #     Timed - collect a series of images as a 2p-stack. 
+    #     Timed - collect a series of images as a 2p-stack.
     #     The parameters for each are set in the paramtree, and the
     #     data collection is initiated with the "Run" button and
     #     can be terminated early with the "stop" button.
     #     """
-        
+
     #     info = {}
     #     frameInfo = None  # will be filled in by takeImage()
     #     self.stopFlag = False
     #     if (self.param['Z-Stack'] and self.param['Timed']) or (self.param['Z-Stack'] and self.param['Tiles']) or self.param['Timed'] and self.param['Tiles']:
-    #         return # only one mode at a time... 
+    #         return # only one mode at a time...
     #     self.view.resetFrameCount() # always reset the ROI display in the imager window (different than in camera window) if it is being used
-        
+
     #     if self.param['Z-Stack']: # moving in z for a focus stack
     #         imageFilename = '2pZstack'
     #         info['2pImageType'] = 'Z-Stack'
@@ -965,22 +972,22 @@ class Imager(Module):
     #                 break
     #             images.append(img)
     #             self.view.setImage(img)
-                
+
     #             if i < nSteps-1:
     #                 ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
-    #                 stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
+    #                 stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)
     #         imgData = np.concatenate(images, axis=0)
     #         info.update(frameInfo)
     #         if self.param['Store']:
     #             dh = self.manager.getCurrentDir().writeFile(imgData, imageFilename + '.ma', info=info, autoIncrement=True)
-        
+
     #     elif self.param['Tiles']: # moving in x and y to get a tiled image set
     #         info['2pImageType'] = 'Tiles'
     #         dirhandle = self.manager.getCurrentDir()
     #         if self.param['Store']:
     #             dirhandle = dirhandle.mkdir('2PTiles', autoIncrement=True, info=info)
     #         imageFilename = '2pImage'
-            
+
     #         stage = self.manager.getDevice(self.param['Tiles', 'Stage'])
     #         #print dir(stage.mp285)
     #         #print stage.mp285.stat()
@@ -1000,12 +1007,12 @@ class Imager(Module):
     #         tileXY = self.param['Tiles', 'StepSize']*1e-6
     #         nXTiles = np.ceil((x1-x0)/tileXY)
     #         nYTiles = np.ceil((y1-y0)/tileXY)
-           
+
     #         # positions are relative......
     #         xpos = np.arange(x0, x0+nXTiles*tileXY, tileXY) +originalPos[0]
     #         ypos = np.arange(y0, y0+nYTiles*tileXY, tileXY) +originalPos[1]
     #         stage.moveTo([xpos[0], ypos[0]],
-    #                      speed=mp285speed, fine = True, block=True) # move and wait until complete.  
+    #                      speed=mp285speed, fine = True, block=True) # move and wait until complete.
 
     #         ypath = 0
     #         xdir = 1 # positive movement direction (serpentine tracking)
@@ -1025,9 +1032,9 @@ class Imager(Module):
     #             else:
     #                 xpos1 = xpos
     #         stage.moveTo([xpos[0], ypos[0]],
-    #                      speed=originalSpeed, fine = True, block=True, timeout = 30.) # move and wait until complete.  
+    #                      speed=originalSpeed, fine = True, block=True, timeout = 30.) # move and wait until complete.
 
-    #     elif self.param['Timed']: # 
+    #     elif self.param['Timed']: #
     #         imageFilename = '2pTimed'
     #         info['2pImageType'] = 'Timed'
     #         self.param['Timed', 'Current Frame'] = 0
@@ -1045,7 +1052,7 @@ class Imager(Module):
     #             self.view.setImage(img)
     #             if self.stopFlag:
     #                 break
-                
+
     #             if i < nSteps-1:
     #                 time.sleep(self.param['Timed', 'Interval'])
     #         imgData = np.concatenate(images, axis=0)
@@ -1071,6 +1078,7 @@ class Imager(Module):
 class ImagerCamModInterface(CameraModuleInterface):
     """For plugging in the 2p imager system to the camera module.
     """
+
     def __init__(self, imager, mod):
         self.imager = imager
 
@@ -1146,7 +1154,7 @@ class ImagingThread(Thread):
         self.scannerDev = scannerDev
 
     def setProtocol(self, prot, meta, sys):
-        #  prot = task protocol 
+        #  prot = task protocol
         #  meta = output of saveParams to be stored with image
         #  sys = rectscan system for extracting image from pmt data
         with self.lock:
@@ -1216,16 +1224,16 @@ class ImagingThread(Thread):
             meta = self.metainfo
             rectSystem = self.system
 
-        # Need to build task from a deep copy of the protocol because 
+        # Need to build task from a deep copy of the protocol because
         # it will be modified after execution.
         task = self.manager.createTask(copy.deepcopy(prot))
-        
-        dur = prot['protocol']['duration']
+
+        dur = prot["protocol"]["duration"]
         start = pg.ptime.time()
-        endtime = start + dur - 0.005 
+        endtime = start + dur - 0.005
 
         # Start the task
-        task.execute(block = False)
+        task.execute(block=False)
 
         # Wait until the task has finished
         while not task.isDone():
@@ -1238,27 +1246,20 @@ class ImagingThread(Thread):
             now = pg.ptime.time()
             if now < endtime:
                 # long sleep until we expect the protocol to be almost done
-                time.sleep(min(0.1, endtime-now))
+                time.sleep(min(0.1, endtime - now))
             else:
                 time.sleep(5e-3)
 
         # Get acquired data and generate metadata
         data = task.getResult()
-        pdDevice, pdChannel = meta['Photodetector']
+        pdDevice, pdChannel = meta["Photodetector"]
         pmtData = data[pdDevice][pdChannel].view(np.ndarray)
         info = meta.copy()
-        info['time'] = start
+        info["time"] = start
 
-        info['deviceTranform'] = pg.SRTTransform3D(self.scannerDev.globalTransform())
+        info["deviceTranform"] = pg.SRTTransform3D(self.scannerDev.globalTransform())
         tr = rectSystem.imageTransform()
-        info['transform'] = pg.SRTTransform3D(tr)
+        info["transform"] = pg.SRTTransform3D(tr)
 
         frame = ImagingFrame(pmtData, rectSystem.copy(), info)
         self.sigNewFrame.emit(frame)
-
-
-
-
-
-
-

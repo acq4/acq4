@@ -1,12 +1,19 @@
 from __future__ import print_function
+
+import os
+from collections import OrderedDict
+
+import numpy as np
 import six
 from six.moves import range
 
-from .database import *
-from acq4.util import DataManager
-from acq4.pyqtgraph.widgets.ProgressDialog import ProgressDialog
 import acq4.util.debug as debug
-from acq4.Manager import logExc, logMsg
+from acq4 import Manager
+from pyqtgraph.pgcollections import CaselessDict
+from pyqtgraph.widgets.ProgressDialog import ProgressDialog
+from acq4.util import DataManager, functions
+from acq4.util.database.database import SqliteDatabase, parseColumnDefs, TableData
+from six.moves import map
 
 
 class AnalysisDatabase(SqliteDatabase):
@@ -34,7 +41,7 @@ class AnalysisDatabase(SqliteDatabase):
     def __init__(self, dbFile, dataModel, baseDir=None):
         create = False
         self.tableConfigCache = None
-        self.columnConfigCache = advancedTypes.CaselessDict()
+        self.columnConfigCache = CaselessDict()
         
         self.setDataModel(dataModel)
         self._baseDir = None
@@ -146,7 +153,7 @@ class AnalysisDatabase(SqliteDatabase):
             oldDb.close()
             newDb.close()
             if not prog.wasCanceled():
-                os.rename(dbFile, dbFile+'version_upgrade_backup')
+                os.rename(dbFile, dbFile + 'version_upgrade_backup')
                 os.rename(newFileName, dbFile)
         else:
             raise Exception("Don't know how to convert from version %s" % str(version))
@@ -228,7 +235,7 @@ class AnalysisDatabase(SqliteDatabase):
         self._baseDir = baseDir
 
     def ctrlParam(self, param):
-        res = SqliteDatabase.select(self, 'DbParameters', ['Value'], sql="where Param='%s'"%param)
+        res = SqliteDatabase.select(self, 'DbParameters', ['Value'], sql="where Param='%s'" % param)
         if len(res) == 0:
             return None
         else:
@@ -388,7 +395,7 @@ class AnalysisDatabase(SqliteDatabase):
         
         with self.transaction():
             ## Ask manager what columns we think should go with this directory
-            columns = list(acq4.Manager.getManager().suggestedDirFields(dirHandle).keys())
+            columns = list(Manager.getManager().suggestedDirFields(dirHandle).keys())
             
             ## Add in any other columns present
             #for k in dirHandle.info():   ## Let's leave it to the user to add these if they want
@@ -495,7 +502,7 @@ class AnalysisDatabase(SqliteDatabase):
     def makeJoinStatement(self, tables):
         ### construct an expresion that joins multiple tables automatically
         cmd = '"%s"' % tables[0]
-        for i in range(1,len(tables)):  ## figure out how to join each table one at a time
+        for i in range(1, len(tables)):  ## figure out how to join each table one at a time
             nextTable = tables[i]
             
             cols = None
@@ -565,13 +572,13 @@ class AnalysisDatabase(SqliteDatabase):
             if len(recs) == 0:
                 return {}
             
-            self.columnConfigCache[table] = collections.OrderedDict([(r['Column'], r) for r in recs])
+            self.columnConfigCache[table] = OrderedDict([(r['Column'], r) for r in recs])
         return self.columnConfigCache[table]
         
     def getTableConfig(self, table):
         if self.tableConfigCache is None:
             recs = SqliteDatabase.select(self, 'TableConfig')
-            self.tableConfigCache = advancedTypes.CaselessDict()
+            self.tableConfigCache = CaselessDict()
             for rec in recs:
                 self.tableConfigCache[rec['Table']] = rec
         #recs = self.select('TableConfig', sql="where \"Table\"='%s'" % table)
@@ -655,7 +662,7 @@ class AnalysisDatabase(SqliteDatabase):
 
     def describeData(self, data):
         """Given a dict or record array, return a table description suitable for creating / checking tables."""
-        columns = collections.OrderedDict()
+        columns = OrderedDict()
         if isinstance(data, list):  ## list of dicts is ok
             data = data[0]
             

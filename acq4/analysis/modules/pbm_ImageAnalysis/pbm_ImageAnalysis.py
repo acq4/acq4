@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 pbm_ImageAnalysis is an analysis module for ACQ4.
 This module provides:
@@ -23,6 +22,11 @@ This module provides:
         DC009809 (Auditory Cortex: Synaptic organization and plasticity)
     Has potential dependency on openCV for some functions.
 """
+from __future__ import print_function
+
+import matplotlib.pyplot as PL
+from six.moves import map
+from six.moves import zip
 
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
@@ -32,11 +36,11 @@ import shutil
 import csv
 import os.path
 import pickle
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.debug as debug
+import pyqtgraph as pg
+import pyqtgraph.debug as debug
 import acq4.util.DatabaseGui as DatabaseGui
 import PIL as Image
-from acq4.util.metaarray import MetaArray
+from pyqtgraph.metaarray import MetaArray
 import numpy as np
 import scipy
 from acq4.analysis.tools import Utility
@@ -54,9 +58,6 @@ try:
 except:
     openCVInstalled = False
     
-
-import pylab as PL
-#from mpl_toolkits.axes_grid1 import AxesGrid
 
 #
 # We use matplotlib/pylab for *some* figure generation.
@@ -376,7 +377,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         if len(dlh) % 2 == 1:
             self.MPRnrows += 2
         if self.firstPlot is False:
-            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison", 
+            (self.MPLFig, self.MPPhysPlots) = PL.subplots(num="Physiology-Fluor comparison",
                     nrows=self.MPRnrows, ncols=self.MPRncolumns, sharex=True, sharey=False)
             self.MPLFig.suptitle('Dataset: %s' % (head) , fontsize=10)
 
@@ -461,7 +462,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.rs = None
         img = None
         self.clearImageTypes()
-        if self.dataStruct is 'flat':
+        if self.dataStruct == 'flat':
             #print 'getting Flat data structure!'
             if dh.isFile():
                 fhandle = dh
@@ -599,7 +600,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.specImageCalcFlag = False  # we need to recalculate the spectrum
         npts = self.imageData.shape[0]/2
         freq = np.fft.fftfreq(npts, d=self.imagedT)
-        freq = freq[0:npts/2 + 1]
+        freq = freq[0:int(npts/2 + 1)]
         self.ctrlROIFunc.ImagePhys_SpecHPF.setMinimum(0.0)
         self.ctrlROIFunc.ImagePhys_SpecHPF.setMaximum(np.max(freq))
         self.ctrlROIFunc.ImagePhys_SpecHPF.setValue(freq[1])
@@ -747,7 +748,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             
         npts = self.imageData.shape[0]/2
         freq = np.fft.fftfreq(npts, d=self.imagedT)  # get frequency list
-        freq = freq[0:npts/2 + 1]
+        freq = freq[0:int(npts/2 + 1)]
         hpf = self.ctrlROIFunc.ImagePhys_SpecHPF.value()
         lpf = self.ctrlROIFunc.ImagePhys_SpecLPF.value()
         u = np.where(freq > hpf) # from frequencies, select those from the window
@@ -1573,7 +1574,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         roi.ID = self.nROI  # give each ROI a unique identification number
         rgb = self.RGB[self.nROI]
         self.nROI = self.nROI + 1
-        roi.setPen(Qt.QPen(Qt.QColor(rgb[0], rgb[1], rgb[2])))
+        roi.setPen(pg.mkPen(rgb[0], rgb[1], rgb[2]))
         roi.color = rgb
         self.AllRois.append(roi)
         self.imageView.addItem(roi)
@@ -2563,7 +2564,7 @@ class pbm_ImageAnalysis(AnalysisModule):
             Fy = np.fft.fft(yanom, npad, axis=axis)
             iFxy = np.fft.ifft(Fx.conj()*Fy,n=npad,axis=axis).real
         # We juste turn the lags into correct positions:
-        iFxy = np.concatenate((iFxy[len(iFxy)/2:len(iFxy)],iFxy[0:len(iFxy)/2]))
+        iFxy = np.concatenate((iFxy[int(len(iFxy)/2):len(iFxy)],iFxy[0:int(len(iFxy)/2)]))
         return iFxy/varxy
 
 #

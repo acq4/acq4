@@ -1,6 +1,7 @@
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
+
+from acq4.drivers.sensapex import UMP
+
 from ..PressureControl import PressureControl
 
 
@@ -9,20 +10,17 @@ class SensapexPressureControl(PressureControl):
     """
 
     def __init__(self, manager, config, name):
-        self.devid = config.get('deviceId')       
+        self.devid = config.get('deviceId')
+        if manager.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
+            UMP.set_library_path(manager.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
-        all_devs = UMP.get_ump(address=address, group=group).list_devices()
-        if self.devid not in all_devs:
-            raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
-
-        self.dev = SensapexDevice(self.devid)
+        ump = UMP.get_ump(address=address, group=group)
+        self.dev = ump.get_device(self.devid)
 
         PressureControl.__init__(self, manager, config, name)
 
         self.pressureChannel = config.pop('pressureChannel')
-        self.pressureScale = config.pop('pressureScale') * 1e6
-        self.voltageOffset = config.pop('voltageOffset') * 1e6
         self.sources = config.pop('sources')
 
         # try to infer current source from channel state
@@ -35,14 +33,14 @@ class SensapexPressureControl(PressureControl):
             if match:
                 self.source = source
                 break
-        self.pressure = (self.dev.get_pressure(self.pressureChannel) - self.voltageOffset) / self.pressureScale
+        self.pressure = self.dev.get_pressure(self.pressureChannel) * 1000
 
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals) to the pipette.
 
         Note: this does _not_ change the configuration of any values.
         """
-        self.dev.set_pressure(self.pressureChannel, p * self.pressureScale + self.voltageOffset)
+        self.dev.set_pressure(self.pressureChannel, p / 1000.)
         self.pressure = p
 
     def _setSource(self, source):

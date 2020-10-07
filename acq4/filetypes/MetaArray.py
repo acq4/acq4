@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from acq4.util.metaarray import MetaArray as MA
+import os
+
+from pyqtgraph.metaarray import MetaArray as MA
 from numpy import ndarray
-from .FileType import *
+from .FileType import FileType
 
 #class MetaArray(FileType):
     #@staticmethod

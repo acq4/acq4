@@ -1,14 +1,17 @@
 from __future__ import print_function
-import os, sys, user
+import os, sys
+
+from acq4.util.generator.StimGenerator import StimGenerator
+from six.moves import range
+
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(md, '..'))
 
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import acq4.util.SequenceRunner as SequenceRunner
 from acq4.util import Qt
-if not hasattr(QtCore, 'Signal'):
+if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal
-from .StimGenerator import *
 app = Qt.QApplication([])
 sg = StimGenerator()
 sg.show()

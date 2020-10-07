@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from .CanvasItem import CanvasItem
 from .itemtypes import registerItemType
 

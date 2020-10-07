@@ -1,8 +1,10 @@
 """Wrapper around Qt libraries to make it easier to swap out backends in the future
 """
 from __future__ import print_function
-import os, sys, importlib, inspect
 
+import importlib
+import os
+import sys
 
 # try importing Qt libraries in order of preference
 qtLibs = ['PyQt5', 'PyQt4', 'PySide', 'PySide2', None]
@@ -15,11 +17,11 @@ for mod in qtLibs:
     except ImportError:
         pass
 
-
-# If we are using PyQt4, ACQ4 requires API version 2 for QString and QVariant. 
+# If we are using PyQt4, ACQ4 requires API version 2 for QString and QVariant.
 # Check for those here..
 if 'PyQt4' in sys.modules:
     import sip
+
     for api in ['QString', 'QVariant']:
         try:
             v = sip.getapi(api)
@@ -31,21 +33,65 @@ if 'PyQt4' in sys.modules:
             sip.setapi(api, 2)
             print("SIP API", api)
 
-
-from .. import pyqtgraph as pg
-
+import pyqtgraph as pg
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions
-globals().update(pg.Qt.__dict__)
-globals().update(pg.Qt.QtGui.__dict__)
-globals().update(pg.Qt.QtCore.__dict__)
-globals().update(pg.Qt.QtTest.__dict__)
-#globals().update(importlib.import_module(pg.Qt.QT_LIB + '.QtSql').__dict__)
+for mod in [pg.Qt, pg.Qt.QtGui, pg.Qt.QtCore, pg.Qt.QtTest]:
+    ns = mod.__dict__.copy()
+    # don't copy special variables like __name__, __file__, etc.
+    for k in list(ns.keys()):
+        if k.startswith('__'):
+            ns.pop(k)
+    globals().update(ns)
 
 # signal disconnect with exception handling
 # allows (calling disconnect even if no connection currently exists)
 disconnect = pg.disconnect
+
+
+def loadUiType(uiFile, package=None):
+    """
+    PySide lacks a "loadUiType" command like PyQt4's, so we have to convert
+    the ui file to py code in-memory first and then execute it in a
+    special frame to retrieve the form_class.
+
+    The *package* argument must be specified if the ui file contains relative
+    imports.
+
+    from stackoverflow: http://stackoverflow.com/a/14195313/3781327
+    """
+    if QT_LIB == PYSIDE:
+        from pysideuic import compileUi
+    elif QT_LIB == PYSIDE2:
+        from pyside2uic import compileUi
+    elif QT_LIB == PYQT4:
+        from PyQt4.uic import compileUi
+    elif QT_LIB == PYQT5:
+        from PyQt5.uic import compileUi
+
+    import xml.etree.ElementTree as xml
+    
+    parsed = xml.parse(uiFile)
+    widget_class = parsed.find('widget').get('class')
+    form_class = parsed.find('class').text
+    
+    if package is None:
+        globalns = {}
+    else:
+        globalns = {'__package__': package}
+
+    # load, compile, and execute ui code
+    o = _StringIO()
+    compileUi(open(uiFile, 'r'), o, indent=0)
+    pyc = compile(o.getvalue(), uiFile, 'exec')
+    exec(pyc, globalns)
+
+    #Fetch the base_class and form class based on their type in the xml from designer
+    form_class = globalns['Ui_%s'%form_class]
+    base_class = getattr(QtGui, widget_class)
+
+    return form_class, base_class
 
 
 def importTemplate(templateName):
@@ -65,36 +111,20 @@ def importTemplate(templateName):
         # for PyQt5, this is equivalent to
         from .MyTemplate_pyqt5 import Ui_MainWindow
     """
-    modName = templateName
-    if pg.Qt.QT_LIB == 'PyQt5':
-        modName = modName + '_pyqt5'
-
     frame = sys._getframe().f_back
     pkg = frame.f_globals['__package__']
 
-    try:    
-        if modName[0] != '.':
-            pkg = None
-        # try importing pre-compiled template file first
-        mod = importlib.import_module(modName, package=pkg)
-        for k,v in mod.__dict__.items():
-            if k[:3] == 'Ui_' and inspect.isclass(v):
-                return v        
-        raise Exception("Could not find Ui_* class in module %s" % modName)
-    except Exception:
-        # otherwise, try dynamic read from .ui file
+    # Find location of calling module
+    modParts = pkg.split('.')
+    mod = sys.modules[modParts.pop(0)]
+    root = os.path.dirname(mod.__file__)
 
-        # Find location of calling module 
-        modParts = pkg.split('.')
-        mod = sys.modules[modParts.pop(0)]
-        root = os.path.dirname(mod.__file__)
-
-        # construct full path to ui file
-        ndots = len(templateName) - len(templateName.lstrip('.'))
-        if ndots > 1:
-            modParts = modParts[:-ndots]
-        pathParts = modParts + templateName.lstrip('.').split('.')
-        uipath = os.path.join(root, *pathParts) + '.ui'
-        if not os.path.isfile(uipath):
-            raise ValueError("ui file not found: %r" % uipath)
-        return loadUiType(uipath, package=pkg)[0]
+    # construct full path to ui file
+    ndots = len(templateName) - len(templateName.lstrip('.'))
+    if ndots > 1:
+        modParts = modParts[:-ndots]
+    pathParts = modParts + templateName.lstrip('.').split('.')
+    uipath = os.path.join(root, *pathParts) + '.ui'
+    if not os.path.isfile(uipath):
+        raise ValueError("ui file not found: %r" % uipath)
+    return loadUiType(uipath, package=pkg)[0]

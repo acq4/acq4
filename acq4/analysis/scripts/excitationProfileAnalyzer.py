@@ -1,7 +1,7 @@
 from __future__ import print_function
 from acq4.util import Qt
 import acq4.Manager
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 import acq4.util.functions as fn
 

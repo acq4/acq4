@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.OptomechDevice import *
-from acq4.devices.LightSource import LightSource
-from acq4.devices.Stage import Stage
-from acq4.util.Mutex import Mutex
-from acq4.modules.Camera import CameraModuleInterface
-from acq4.util.debug import printExc
-from acq4.Manager import getManager
-import acq4.pyqtgraph as pg
-from acq4.util import Qt
+
 import collections
+
+import pyqtgraph as pg
+from acq4.Manager import getManager
+from acq4.devices.Device import Device
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.Stage import Stage
+from acq4.modules.Camera import CameraModuleInterface
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
+from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
 
@@ -52,13 +54,12 @@ class Microscope(Device, OptomechDevice):
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
         
-        for k1,objs in config['objectives'].items():  ## Set default values for each objective
+        for k1, objs in config['objectives'].items():  ## Set default values for each objective
             self.objectives[k1] = collections.OrderedDict()
-            for k2,o in objs.items():
+            for k2, o in objs.items():
                 obj = Objective(o, self, (k1, k2))
                 self.objectives[k1][k2] = obj
                 #obj.sigTransformChanged.connect(self.objectiveTransformChanged)
-                
 
         ## Keep track of the objective currently in use for each position
         ## Format is: { switchPosition1: objective1,  ... }
@@ -67,8 +68,7 @@ class Microscope(Device, OptomechDevice):
         )
         for obj in self.selectedObjectives.values():
             self.addSubdevice(obj)
-        
-        
+
         ## if there is a light source, configure it here
         if 'lightSource' in config:
             self.lightSource = dm.getDevice(config['lightSource'])
@@ -86,6 +86,7 @@ class Microscope(Device, OptomechDevice):
             except:
                 printExc("Could not set initial objective state:")
         else:
+            self.switchDevice = None
             self.objectiveIndexChanged(0)
         
         cal = self.readConfigFile('calibration')
@@ -112,8 +113,10 @@ class Microscope(Device, OptomechDevice):
         """Selects the objective currently in position *index*
         
         This method is called when the user selects an objective index from the manager UI."""
-        # by default, we just accept; subclasses may reimplement
-        self.objectiveIndexChanged(index)
+        if self.switchDevice is not None and hasattr(self.switchDevice, 'setSwitch'):
+            self.switchDevice.setSwitch(self.objSwitchId, int(index))
+        else:
+            self.objectiveIndexChanged(index)
     
     def objectiveIndexChanged(self, index):
         # called when the objective index has changed.
@@ -401,6 +404,8 @@ class ScopeGUI(Qt.QWidget):
         index = spin.index
         (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
+        if callable(getattr(obj, "toPyObject", None)):
+            obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
             obj.setOffset((xs.value(), ys.value(), zs.value()))
@@ -413,6 +418,8 @@ class ScopeGUI(Qt.QWidget):
         index = spin.index
         (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
+        if callable(getattr(obj, "toPyObject", None)):
+            obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
             obj.setScale(ss.value())
@@ -423,6 +430,8 @@ class ScopeGUI(Qt.QWidget):
         for k, w in self.objWidgets.items():
             (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
+            if callable(getattr(obj, "toPyObject", None)):
+                obj = obj.toPyObject()
             offset = obj.offset()
             xs.setValue(offset.x())
             ys.setValue(offset.y())

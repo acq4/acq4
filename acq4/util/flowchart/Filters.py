@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.pyqtgraph.flowchart.Node import Node
-from acq4.util import Qt
-import numpy as np
-import acq4.util.metaarray as metaarray
-from acq4.pyqtgraph.flowchart.library.common import *
+
 import acq4.util.functions as functions
+from pyqtgraph.flowchart.library.common import CtrlNode
 
 
 class ExpDeconvolve(CtrlNode):

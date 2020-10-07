@@ -1,9 +1,11 @@
+from __future__ import print_function
 import time, atexit
 import pygame.joystick
 from .Device import Device
 from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import QtCore
+from pyqtgraph import QtCore
+from six.moves import range
 
 pygame.init()
 pygame.joystick.init()

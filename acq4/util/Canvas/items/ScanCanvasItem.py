@@ -4,7 +4,7 @@ from acq4.util import Qt
 from .CanvasItem import CanvasItem
 from .ImageCanvasItem import ImageCanvasItem
 import acq4.Manager
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 from .itemtypes import registerItemType
 
@@ -32,7 +32,7 @@ class ScanCanvasItem(CanvasItem):
         if 'name' not in opts:
             opts['name'] = dirHandle.shortName()
             
-        ## Get the specific list of subdirs to use from which to pull spot information
+        ## Get the specific list of subdirectory to use from which to pull spot information
         if 'subDirs' in opts:
             dirs = opts['subDirs']
         else:

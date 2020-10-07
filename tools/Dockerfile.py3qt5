@@ -1,0 +1,15 @@
+FROM python:3.7
+
+RUN apt-get update
+RUN apt-get install -y python3-pyqt5 python3-pyqt5.qtopengl python3-pyqt5.qtsql python3-serial python3-scipy python3-pyparsing python3-h5py python3-pil python3-opengl python3-sip python3-matplotlib
+RUN apt-get install -y python3-setuptools python3-pip python3-ipython python3-ipdb
+RUN pip install git+https://github.com/pyqtgraph/pyqtgraph@abfac52#egg=pyqtgraph
+
+ENV PATH /bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+ENV PYTHONPATH /usr/local/lib/python3.7/site-packages/
+RUN mkdir /code
+WORKDIR /code
+
+#### Usage
+# docker build -f tools/Dockerfile.py3qt5 -t acq4:py3qt5 .
+# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code -v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py3qt5 python3 -m acq4

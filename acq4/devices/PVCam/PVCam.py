@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
+
+import time
+
+import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera, CameraTask
 from acq4.drivers.pvcam import PVCam as PVCDriver
-from acq4.util import Qt
-import time, sys, traceback
-from numpy import *
-from acq4.util.metaarray import *
-import acq4.util.ptime as ptime
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
+from six.moves import range
 
 
 class PVCam(Camera):
@@ -99,7 +98,7 @@ class PVCam(Camera):
         # 2015.11: discovered that simply opening connections to multiple USB-serial devices on the same hub as the 
         # camera can cause it to fail to return frames, even if there is no data being sent to/from the serial devices.
         # 
-        print("Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff)
+        print("Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % time)
         print("This can be caused by insufficient USB bandwidth; try moving the camera to its own exclusive USB hub.")
         print("Alternatively, reduce the bandwidth requirements of the camera by increasing the binning or decreasing the ROI size.")
 

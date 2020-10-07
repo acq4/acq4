@@ -9,6 +9,9 @@ class PressureControl(Device):
 
     Pressure control may be implemented by a combination of a pressure regulator
     and multiple valves.
+
+    The configuration for these devices should look like:
+        sources: ('regulator', 'atmosphere', 'user')
     """
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
 

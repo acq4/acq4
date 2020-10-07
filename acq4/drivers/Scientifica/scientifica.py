@@ -9,6 +9,8 @@ import numpy as np
 from acq4.util.Mutex import RecursiveMutex as RLock
 from acq4.util.debug import printExc
 from ..SerialDevice import SerialDevice, TimeoutError, DataError
+from six.moves import map
+from six.moves import range
 
 
 # Data provided by Scientifica

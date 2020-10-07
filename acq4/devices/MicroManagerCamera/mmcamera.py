@@ -1,18 +1,23 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import division, with_statement
-import re
+from __future__ import division, with_statement, print_function
+
+import time
 from collections import OrderedDict
-from acq4.devices.Camera import Camera, CameraTask
-from acq4.util import Qt
+
+import numpy as np
 import six
-import time, sys, traceback
-from numpy import *
-from acq4.util.metaarray import *
+from pyqtgraph.debug import Profiler
+from six.moves import range
+
 import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
+from acq4.devices.Camera import Camera
 from acq4.util import micromanager
+from acq4.util.Mutex import Mutex
+
+try:
+    from functools import lru_cache
+except ImportError:
+    from backports.functools_lru_cache import lru_cache
 
 # Micromanager does not standardize trigger modes across cameras,
 # so we use this dict to translate the modes of various cameras back
@@ -36,6 +41,7 @@ class MicroManagerCamera(Camera):
     * mmAdapterName
     * mmDeviceName
     """
+
     def __init__(self, manager, config, name):
         self.camName = str(name)  # we will use this name as the handle to the MM camera
         mmpath = config.get('path')
@@ -50,7 +56,7 @@ class MicroManagerCamera(Camera):
         self.acqBuffer = None
         self.frameId = 0
         self.lastFrameTime = None
-    
+
     def setupCamera(self):
         # sanity check for MM adapter and device name
         adapterName = self._config['mmAdapterName']
@@ -60,17 +66,18 @@ class MicroManagerCamera(Camera):
         deviceName = self._config['mmDeviceName']
         allDevices = self.mmc.getAvailableDevices(adapterName)
         if deviceName not in allDevices:
-            raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (deviceName, adapterName, allDevices))
+            raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (
+                deviceName, adapterName, allDevices))
 
         self.mmc.loadDevice(self.camName, adapterName, deviceName)
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
-        
+
     def startCamera(self):
         with self.camLock:
             self.mmc.startContinuousSequenceAcquisition(0)
-            
+
     def stopCamera(self):
         with self.camLock:
             self.mmc.stopSequenceAcquisition()
@@ -99,7 +106,7 @@ class MicroManagerCamera(Camera):
 
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
-        
+
         with self.camLock:
             nFrames = self.mmc.getRemainingImageCount()
             if nFrames == 0:
@@ -108,22 +115,22 @@ class MicroManagerCamera(Camera):
         now = ptime.time()
         if self.lastFrameTime is None:
             self.lastFrameTime = now
-        
+
         dt = (now - self.lastFrameTime) / nFrames
         frames = []
         with self.camLock:
             for i in range(nFrames):
                 frame = {}
-                frame['time'] = self.lastFrameTime + (dt * (i+1))
+                frame['time'] = self.lastFrameTime + (dt * (i + 1))
                 frame['id'] = self.frameId
                 frame['data'] = self.mmc.popNextImage().T
                 frames.append(frame)
                 self.frameId += 1
-                
+
         self.lastFrame = frame
         self.lastFrameTime = now
         return frames
-        
+
     def quit(self):
         self.mmc.stopSequenceAcquisition()
         self.mmc.unloadDevice(self.camName)
@@ -150,7 +157,7 @@ class MicroManagerCamera(Camera):
                 else:
                     vals = list(vals)
                 readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
-                
+
                 # translate standard properties to the names / formats that we expect
                 if prop == 'Exposure':
                     prop = 'exposure'
@@ -170,7 +177,7 @@ class MicroManagerCamera(Camera):
                 elif prop in triggerModes:
                     self._triggerProp = prop
                     modes = triggerModes[prop]
-                    self._triggerModes = (modes, {v:k for k,v in modes.items()})
+                    self._triggerModes = (modes, {v: k for k, v in modes.items()})
                     prop = 'triggerMode'
                     vals = [modes[v] for v in vals]
 
@@ -187,12 +194,12 @@ class MicroManagerCamera(Camera):
             bin = '1' if self._binningMode == 'x' else '1x1'
             self.mmc.setProperty(self.camName, 'Binning', bin)
             self.mmc.clearROI()
-            rgn = self.mmc.getROI(self.camName)
+            rgn = self.getROI()
             self._sensorSize = rgn[2:]
 
             params.update({
-                'regionX': [(0, rgn[2]-1, 1), True, True, []],
-                'regionY': [(0, rgn[3]-1, 1), True, True, []],
+                'regionX': [(0, rgn[2] - 1, 1), True, True, []],
+                'regionY': [(0, rgn[3] - 1, 1), True, True, []],
                 'regionW': [(1, rgn[2], 1), True, True, []],
                 'regionH': [(1, rgn[3], 1), True, True, []],
             })
@@ -205,6 +212,38 @@ class MicroManagerCamera(Camera):
                 params['binningY'] = [[1], False, True, []]
 
             self._allParams = params
+
+    def getROI(self):
+        camRegion = self.mmc.getROI(self.camName)
+        if self._useBinnedPixelsForROI:
+            xAdjustment = self.getParam("binningX")
+            yAdjustment = self.getParam("binningY")
+        else:
+            xAdjustment = 1
+            yAdjustment = 1
+        return [
+            camRegion[0] * xAdjustment,
+            camRegion[1] * yAdjustment,
+            camRegion[2] * xAdjustment,
+            camRegion[3] * yAdjustment,
+        ]
+
+    def setROI(self, rgn):
+        if self._useBinnedPixelsForROI:
+            rgn[0] = int(rgn[0] / self.getParam('binningX'))
+            rgn[1] = int(rgn[1] / self.getParam('binningY'))
+            rgn[2] = int(rgn[2] / self.getParam('binningX'))
+            rgn[3] = int(rgn[3] / self.getParam('binningY'))
+        self.mmc.setROI(*rgn)
+
+    @lru_cache(maxsize=None)
+    def _useBinnedPixelsForROI(self):
+        # Adjusting ROI to be in binned-pixel units is necessary in all versions of
+        # MMCore 7.0.2 and above.
+        version = self.mmc.getVersionInfo()  # e.g. "MMCore version 7.0.2"
+        ver_num = version.split(" ")[-1].split(".")
+        ver_tup = tuple([int(d) for d in ver_num])
+        return ver_tup >= (7, 0, 2)
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
@@ -224,23 +263,23 @@ class MicroManagerCamera(Camera):
             self.stop()
             p('stop')
         else:
-            restart = False        
+            restart = False
 
         # Join region params into one request (_setParam can be very slow)
         regionKeys = ['regionX', 'regionY', 'regionW', 'regionH']
         nRegionKeys = len([k for k in regionKeys if k in params])
         if nRegionKeys > 1:
-            rgn = list(self.mmc.getROI(self.camName))
+            rgn = list(self.getROI())
             for k in regionKeys:
                 if k not in params:
                     continue
-                i = {'X':0, 'Y':1, 'W':2, 'H':3}[k[-1]]
+                i = {'X': 0, 'Y': 1, 'W': 2, 'H': 3}[k[-1]]
                 rgn[i] = params[k]
                 del params[k]
             params['region'] = rgn
 
         newVals = {}
-        for k,v in params.items():
+        for k, v in params.items():
             self._setParam(k, v, autoCorrect=autoCorrect)
             p('setParam %r' % k)
             if k == 'binning':
@@ -256,32 +295,29 @@ class MicroManagerCamera(Camera):
         if restart:
             self.start()
             p('start')
-        
+
         needRestart = False
-        return (newVals, needRestart)
+        return newVals, needRestart
 
     def setParam(self, param, value, autoCorrect=True, autoRestart=True):
         return self.setParams({param: value}, autoCorrect=autoCorrect, autoRestart=autoRestart)
 
     def _setParam(self, param, value, autoCorrect=True):
-        if param == 'region':
-            value = (value[0], value[1], value[2], value[3])
-            self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*value)
-            return
-
         if param.startswith('region'):
-            rgn = list(self.mmc.getROI(self.camName))
-            if param[-1] == 'X':
-                rgn[0] = value
-            elif param[-1] == 'Y':
-                rgn[1] = value
-            elif param[-1] == 'W':
-                rgn[2] = value
-            elif param[-1] == 'H':
-                rgn[3] = value
+            if param == 'region':
+                rgn = [value[0], value[1], value[2], value[3]]
+            else:
+                rgn = list(self.getROI())
+                if param[-1] == 'X':
+                    rgn[0] = value
+                elif param[-1] == 'Y':
+                    rgn[1] = value
+                elif param[-1] == 'W':
+                    rgn[2] = value
+                elif param[-1] == 'H':
+                    rgn[3] = value
             self.mmc.setCameraDevice(self.camName)
-            self.mmc.setROI(*rgn)
+            self.setROI(rgn)
             return
 
         # translate requested parameter into a list of sub-parameters to set
@@ -356,7 +392,7 @@ class MicroManagerCamera(Camera):
         if param == 'sensorSize':
             return self._sensorSize
         elif param.startswith('region'):
-            rgn = self.mmc.getROI(self.camName)
+            rgn = self.getROI()
             if param == 'region':
                 return rgn
             i = ['regionX', 'regionY', 'regionW', 'regionH'].index(param)
@@ -364,7 +400,7 @@ class MicroManagerCamera(Camera):
         elif param.startswith('binning') and self._binningMode is None:
             # camera does not support binning; fake it here
             if param == 'binning':
-                return (1,1)
+                return 1, 1
             elif param in ('binningX', 'binningY'):
                 return 1
         elif param == 'triggerMode' and self._triggerProp is None:
@@ -412,4 +448,3 @@ class MicroManagerCamera(Camera):
             val = self._triggerModes[0][val]
 
         return val
-

@@ -1,20 +1,25 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.devices.Camera import Camera, CameraTask
-from acq4.util import Qt
-import six
-from six.moves import range
-import time, sys, traceback
-import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
-import acq4.util.functions as fn
+
+from collections import OrderedDict
+
 import numpy as np
 import scipy
-from collections import OrderedDict
-import acq4.pyqtgraph as pg
+import six
+from six.moves import range
 
+import pyqtgraph as pg
+import acq4.util.functions as fn
+import acq4.util.ptime as ptime
+from acq4.devices.Camera import Camera, CameraTask
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
+from six.moves import zip
+
+
+WIDTH = 512
+HEIGHT = 512
 
 class MockCamera(Camera):
     
@@ -43,15 +48,15 @@ class MockCamera(Camera):
             ('triggerMode',     'Normal'),
             ('exposure',        0.001),
             #('binning',         (1,1)),
-            #('region',          (0, 0, 512, 512)), 
+            #('region',          (0, 0, WIDTH, WIDTH)),
             ('binningX',        1),
             ('binningY',        1),
             ('regionX',         0),
             ('regionY',         0),
-            ('regionW',         512),
-            ('regionH',         512),
+            ('regionW',         WIDTH),
+            ('regionH',         HEIGHT),
             ('gain',            1.0),
-            ('sensorSize',      (512, 512)),
+            ('sensorSize',      (WIDTH, HEIGHT)),
             ('bitDepth',        16),
         ])
             
@@ -59,13 +64,13 @@ class MockCamera(Camera):
             ('triggerMode',     (['Normal', 'TriggerStart'], True, True, [])),
             ('exposure',        ((0.001, 10.), True, True, [])),
             #('binning',         ([range(1,10), range(1,10)], True, True, [])),
-            #('region',          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, [])),
+            #('region',          ([(0, WIDTH - 1), (0, HEIGHT - 1), (1, WIDTH), (1, HEIGH)], True, True, [])),
             ('binningX',        (list(range(1,10)), True, True, [])),
             ('binningY',        (list(range(1,10)), True, True, [])),
-            ('regionX',         ((0, 511), True, True, ['regionW'])),
-            ('regionY',         ((0, 511), True, True, ['regionH'])),
-            ('regionW',         ((1, 512), True, True, ['regionX'])),
-            ('regionH',         ((1, 512), True, True, ['regionY'])),
+            ('regionX',         ((0, WIDTH - 1), True, True, ['regionW'])),
+            ('regionY',         ((0, HEIGHT - 1), True, True, ['regionH'])),
+            ('regionW',         ((1, WIDTH), True, True, ['regionX'])),
+            ('regionH',         ((1, HEIGHT), True, True, ['regionY'])),
             ('gain',            ((0.1, 10.0), True, True, [])),
             ('sensorSize',      (None, False, True, [])),
             ('bitDepth',        (None, False, True, [])),
@@ -76,7 +81,7 @@ class MockCamera(Camera):
             'region':          ('regionX', 'regionY', 'regionW', 'regionH')
         }
         
-        sig = np.random.normal(size=(512, 512), loc=1.0, scale=0.3)
+        sig = np.random.normal(size=(WIDTH, HEIGHT), loc=1.0, scale=0.3)
         sig = scipy.ndimage.gaussian_filter(sig, (3, 3))
         sig[20:40, 20:40] += 1
         sig[sig<0] = 0
@@ -266,8 +271,7 @@ class MockCamera(Camera):
             frames.append({'data': data, 'time': now + (i / fps), 'id': self.frameId})
         prof()
         return frames
-            
-                
+
     def quit(self):
         pass
         

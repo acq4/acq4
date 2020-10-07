@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
 """
 Simple Hodgkin-Huxley simulator for Python. VERY slow.
 Includes Ih from Destexhe 1993 [disabled]
@@ -131,7 +132,7 @@ def hh(y, t, mode, cmd, dt):
 
     
 
-#import acq4.pyqtgraph as pg
+#import pyqtgraph as pg
 #win = pg.GraphicsWindow()
 #plt1 = win.addPlot(labels={'left': ('Vm', 'V'), 'bottom': ('Time', 's')})
 #win.nextRow()

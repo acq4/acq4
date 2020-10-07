@@ -1,19 +1,27 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import six
-
-from ctypes import *
-import sys, numpy, time, re, os, platform
-from acq4.util.clibrary import *
-from collections import OrderedDict
-from acq4.util.debug import backtrace
-import acq4.util.ptime as ptime
-from acq4.util.Mutex import Mutex
 import atexit
+import ctypes
+import os
+import platform
+import re
+import sys
+import time
+from collections import OrderedDict
+from ctypes import create_string_buffer, byref, c_int, c_ulong, c_byte, c_ubyte, c_short, c_ushort, c_uint, \
+    c_double, c_char_p, c_void_p
+
+import numpy
+import six
+from six.moves import filter
+from six.moves import range
+from six.moves import zip
+
+from acq4.util.Mutex import Mutex
+from acq4.util.clibrary import CParser, winDefs, CLibrary
 
 __all__ = ['PVCam']
-
 
 ### Load header files, open DLL
 modDir = os.path.dirname(__file__)
@@ -26,9 +34,9 @@ headerFiles = [
 HEADERS = CParser(headerFiles, cache=os.path.join(modDir, 'pvcam_headers.cache'), copyFrom=winDefs())
 
 if platform.architecture()[0] == '64bit':
-    LIB = CLibrary(windll.Pvcam64, HEADERS, prefix='pl_')
+    LIB = CLibrary(ctypes.windll.Pvcam64, HEADERS, prefix='pl_')
 else:
-    LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
+    LIB = CLibrary(ctypes.windll.Pvcam32, HEADERS, prefix='pl_')
 
 
 ### Default configuration parameters. 
@@ -98,7 +106,7 @@ externalParams = [
 
 
 
-
+PVCam = None
 def init():
     ## System-specific code
     global PVCam
@@ -697,7 +705,7 @@ class _CameraClass:
             frame = self.call('pl_exp_get_latest_frame', self.hCam)[1]
             #frame = LIB.pl_exp_get_latest_frame(self.hCam)[1]
         except Exception as ex:
-            # if sys.exc_info()[1][1] == 3029:  ## No frame is ready yet (?)
+            # if sys.exc_info()[1].args[1] == 3029:  ## No frame is ready yet (?)
             #     return None
             if ex.args[1] == 38:   # No frame ready yet
                 return None

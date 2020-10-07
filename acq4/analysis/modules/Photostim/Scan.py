@@ -2,8 +2,8 @@
 from __future__ import print_function
 from acq4.util import Qt
 import numpy as np
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.multiprocess as mp
+import pyqtgraph as pg
+import pyqtgraph.multiprocess as mp
 import six
 import time, os
 import acq4.util.Canvas as Canvas
@@ -24,7 +24,7 @@ def loadScanSequence(fh, host):
             del params[('Scanner', 'targets')]
     
             
-        ## Determine the set of subdirs for each scan present in the sequence
+        ## Determine the set of subdirectory for each scan present in the sequence
         ## (most sequences will have only one scan)
         scans = {}
         for dhName in fh.subDirs():

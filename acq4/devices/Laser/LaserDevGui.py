@@ -3,7 +3,7 @@ from acq4.util import Qt
 from acq4.Manager import getManager, logExc, logMsg
 import numpy as np
 from scipy import stats
-from acq4.pyqtgraph.functions import siFormat
+from pyqtgraph.functions import siFormat
 import six
 import time
 
@@ -173,7 +173,7 @@ class LaserDevGui(Qt.QWidget):
         powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
         channels = powerDev.listChannels()
         text = str(self.ui.channelCombo.currentText())
-        if text is not '':
+        if text != '':
             sTime = channels[text].get('settlingTime', None)
             mTime = channels[text].get('measurementTime', None)
         else:

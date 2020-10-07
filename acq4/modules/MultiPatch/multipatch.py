@@ -9,9 +9,10 @@ from acq4.util import Qt
 from acq4.modules.Module import Module
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from .pipetteControl import PipetteControl
 from .mockPatch import MockPatch
+from six.moves import zip
 
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
@@ -504,7 +505,7 @@ class MultiPatchWindow(Qt.QWidget):
         pips = self.selectedPipettes()
         for pip in pips:
             if isinstance(pip, PatchPipette):
-                pip.setState('clean')
+                pip.setState('pipette clean')
         
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()

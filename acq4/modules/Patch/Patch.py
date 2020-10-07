@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.modules.Module import *
-from .PatchWindow import *
+
 import os
+
+from acq4.modules.Module import Module
+from acq4.modules.Patch.PatchWindow import PatchWindow
 from acq4.util import Qt
+
 
 class Patch(Module):
     moduleDisplayName = "Patch"
@@ -15,7 +18,7 @@ class Patch(Module):
         self.ui.sigWindowClosed.connect(self.quit)
         mp = os.path.dirname(__file__)
         self.ui.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
-    
+
     def window(self):
         return self.ui
 

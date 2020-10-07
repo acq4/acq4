@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
-from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.drivers.ThorlabsFW102C import FilterWheelDriver
-from acq4.devices.FilterWheel.FilterWheelDevGui import FilterWheelDevGui
-from acq4.devices.Microscope import Microscope
-from acq4.util.SequenceRunner import SequenceRunner
-from acq4.devices.Device import *
-from acq4.devices.Device import TaskGui
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-import acq4.util.debug as debug
-from acq4.util import Qt
-import acq4.pyqtgraph as pg
 import time
 from collections import OrderedDict
 
-Ui_Form = Qt.importTemplate('.FilterWheelTaskTemplate')
+import pyqtgraph as pg
+import acq4.util.debug as debug
+from acq4.devices.Device import TaskGui, Device, DeviceTask
+from acq4.devices.FilterWheel.filterwheel import FilterWheelDevGui
+from acq4.devices.Microscope import Microscope
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.drivers.ThorlabsFW102C.thorFW102cDriver import FilterWheelDriver
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
+from six.moves import map
+from six.moves import range
+
+Ui_Form = Qt.importTemplate('.FilterWheelTemplate')
 
 
 class FilterWheel(Device, OptomechDevice):
@@ -47,10 +48,10 @@ class FilterWheel(Device, OptomechDevice):
 
     """
     
-    sigFilterChanged = QtCore.Signal(object)
-    sigFilterWheelSpeedChanged = QtCore.Signal(object)
-    sigFilterWheelTrigModeChanged = QtCore.Signal(object)
-    sigFilterWheelSensorModeChanged = QtCore.Signal(object)
+    sigFilterChanged = Qt.QtCore.Signal(object)
+    sigFilterWheelSpeedChanged = Qt.QtCore.Signal(object)
+    sigFilterWheelTrigModeChanged = Qt.QtCore.Signal(object)
+    sigFilterWheelSensorModeChanged = Qt.QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
         
@@ -71,8 +72,8 @@ class FilterWheel(Device, OptomechDevice):
         
         
         self.driver = FilterWheelDriver(self.port, self.baud)
-        self.driverLock = Mutex(QtCore.QMutex.Recursive)  ## access to low level driver calls
-        self.filterWheelLock = Mutex(QtCore.QMutex.Recursive)  ## access to self.attributes
+        self.driverLock = Mutex(Qt.QtCore.QMutex.Recursive)  ## access to low level driver calls
+        self.filterWheelLock = Mutex(Qt.QtCore.QMutex.Recursive)  ## access to self.attributes
         
         
         self.filters = OrderedDict()
@@ -329,11 +330,11 @@ class FilterWheelTaskGui(TaskGui):
     
 class FilterWheelThread(Thread):
 
-    fwPosChanged = QtCore.Signal(object)
+    fwPosChanged = Qt.QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
         Thread.__init__(self)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Qt.QtCore.QMutex.Recursive)
         self.dev = dev
         self.driver = driver
         self.driverLock = lock

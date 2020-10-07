@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 import time
+
 import numpy as np
-from acq4.util import Qt
-from ..Stage import Stage, MoveFuture, StageInterface
+from pyqtgraph import debug
+
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug, ptime, SpinBox
 from acq4.util.micromanager import getMMCorePy
+from ..Stage import Stage, MoveFuture, StageInterface
 
 
 class MicroManagerStage(Stage):
@@ -15,6 +17,7 @@ class MicroManagerStage(Stage):
     Class to wrap the micromanager xy stage
 
     """
+
     def __init__(self, man, config, name):
         self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
         self.speedToMeters = .001
@@ -42,7 +45,8 @@ class MicroManagerStage(Stage):
             mmDeviceName = stageCfg.get('mmDeviceName', None)
             allDevices = self.mmc.getAvailableDevices(adapterName)
             if mmDeviceName not in allDevices:
-                raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (mmDeviceName, adapterName, allDevices))
+                raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (
+                mmDeviceName, adapterName, allDevices))
 
             # Load this device
             devName = str(name) + '_' + axes
@@ -82,7 +86,7 @@ class MicroManagerStage(Stage):
         self._lastPos = None
         time.sleep(1.0)
         self.getPosition(refresh=True)
-        
+
         # thread for polling position changes
         self.monitor = MonitorThread(self)
         self.monitor.start()
@@ -199,16 +203,16 @@ class MicroManagerStage(Stage):
         raise Exception("MicroManager stage does not support startMoving() function.")
 
 
-
 class MonitorThread(Thread):
     """Thread to poll for manipulator position changes.
     """
+
     def __init__(self, dev):
         self.dev = dev
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
-        
+
         Thread.__init__(self)
 
     def start(self):
@@ -222,7 +226,7 @@ class MonitorThread(Thread):
     def setInterval(self, i):
         with self.lock:
             self.interval = i
-    
+
     def run(self):
         minInterval = 100e-3
         interval = minInterval
@@ -240,17 +244,18 @@ class MonitorThread(Thread):
                     interval = minInterval
                     lastPos = pos
                 else:
-                    interval = min(maxInterval, interval*2)
+                    interval = min(maxInterval, interval * 2)
 
                 time.sleep(interval)
             except:
                 debug.printExc('Error in MicromanagerStage monitor thread:')
                 time.sleep(maxInterval)
-                
+
 
 class MicroManagerMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a micromanager stage.
     """
+
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
@@ -262,7 +267,7 @@ class MicroManagerMoveFuture(MoveFuture):
                 self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[0:1])
             if moveXY:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
-        
+
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
         """
@@ -289,7 +294,7 @@ class MicroManagerMoveFuture(MoveFuture):
 
         # did we reach target?
         pos = self.dev._getPosition()
-        dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
+        dif = ((np.array(pos) - np.array(self.targetPos)) ** 2).sum() ** 0.5
         if dif < 2.5e-6:
             # reached target
             self._finished = True
@@ -317,7 +322,6 @@ class MicroManagerMoveFuture(MoveFuture):
 
     def errorMessage(self):
         return self._errorMsg
-
 
 
 class MicroManagerGUI(StageInterface):

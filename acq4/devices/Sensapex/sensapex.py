@@ -1,46 +1,55 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import time
+
 import numpy as np
+import pyqtgraph as pg
+from pyqtgraph import ptime, Transform3D, solve3DTransform
+
 from acq4.util import Qt
-from ..Stage import Stage, MoveFuture, StageInterface, CalibrationWindow
-from acq4.drivers.sensapex import SensapexDevice, UMP, UMPError
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug, ptime, SpinBox, Transform3D, solve3DTransform
-import acq4.pyqtgraph as pg
+from acq4.drivers.sensapex import UMP
+from ..Stage import Stage, MoveFuture, CalibrationWindow
 
 
 class Sensapex(Stage):
     """
     A Sensapex manipulator.
     """
-    
+
+    _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
+
     devices = {}
-    
+
     def __init__(self, man, config, name):
-        self.devid = config.get('deviceId')
-        self.scale = config.pop('scale', (1e-9, 1e-9, 1e-9))
-        self.xPitch = config.pop('xPitch', 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
-        self.maxMoveError = config.pop('maxError', 1e-6)
-        
-        address = config.pop('address', None)
-        group = config.pop('group', None)
+        self.devid = config.get("deviceId")
+        self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
+        self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
+        self.maxMoveError = config.pop("maxError", 1e-6)
+
+        address = config.pop("address", None)
+        address = None if address is None else address.encode()
+        group = config.pop("group", None)
+        if man.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
+            UMP.set_library_path(man.config["drivers"]["sensapex"]["driverPath"])
         ump = UMP.get_ump(address=address, group=group)
-        time.sleep(2)
-        all_devs = ump.list_devices()
-        if self.devid not in all_devs:
-            raise Exception("Invalid sensapex device ID %s. Options are: %r" % (self.devid, all_devs))
+        # create handle to this manipulator
+        self.dev = ump.get_device(self.devid)
 
         Stage.__init__(self, man, config, name)
-         # Read position updates on a timer to rate-limit
+        # Read position updates on a timer to rate-limit
         self._updateTimer = Qt.QTimer()
         self._updateTimer.timeout.connect(self._getPosition)
         self._lastUpdate = 0
 
-        # create handle to this manipulator
-        # note: n_axes is used in cases where the device is not capable of answering this on its own 
-        self.dev = SensapexDevice(self.devid, callback=self._positionChanged, n_axes=config.get('nAxes'), max_acceleration=config.get('maxAcceleration'))
+        self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
+
+        # note: n_axes is used in cases where the device is not capable of answering this on its own
+        if "nAxes" in config:
+            self.dev.set_n_axes(config["nAxes"])
+        if "maxAcceeration" in config:
+            self.dev.set_max_acceleration(config["maxAcceleration"])
+
+        self.dev.add_callback(self._positionChanged)
+
         # force cache update for this device.
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
@@ -48,33 +57,31 @@ class Sensapex(Stage):
         self._lastMove = None
         man.sigAbortAll.connect(self.stop)
 
-
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
         self.getPosition(refresh=True)
 
-        # TODO: set any extra parameters specified in the config        
+        # TODO: set any extra parameters specified in the config
         Sensapex.devices[self.devid] = self
-       
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return "x", "y", "z"
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
-        if 'capabilities' in self.config:
-            return self.config['capabilities']
+        if "capabilities" in self.config:
+            return self.config["capabilities"]
         else:
             return {
-                'getPos': (True, True, True),
-                'setPos': (True, True, True),
-                'limits': (False, False, False),
+                "getPos": (True, True, True),
+                "setPos": (True, True, True),
+                "limits": (False, False, False),
             }
 
     def axisTransform(self):
         if self._axisTransform is None:
             # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
-            a = self.xPitch * np.pi / 180.
+            a = self.xPitch * np.pi / 180.0
             s = self.scale
             pts1 = np.array([  # unit vector in sensapex space
                 [0, 0, 0],
@@ -89,7 +96,7 @@ class Sensapex(Stage):
                 [0, 0, s[2]],
             ])
             tr = solve3DTransform(pts1, pts2)
-            tr[3,3] = 1
+            tr[3, 3] = 1
             self._axisTransform = Transform3D(tr)
             self._inverseAxisTransform = None
         return self._axisTransform
@@ -107,11 +114,12 @@ class Sensapex(Stage):
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
             pos = self.dev.get_pos(timeout=0)[:3]
+            self._lastUpdate = ptime.time()
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
-            if self._lastPos is None or dif > 100:
+            if self._lastPos is None or dif > 0.1:
                 self._lastPos = pos
                 emit = True
             else:
@@ -129,9 +137,12 @@ class Sensapex(Stage):
         # rate limit updates to 10 Hz
         wait = 100e-3 - (now - self._lastUpdate)
         if wait > 0:
-            self._updateTimer.start(int(wait * 1000))
+            self._sigRestartUpdateTimer.emit(wait)
         else:
             self._getPosition()
+
+    def _restartUpdateTimer(self, wait):
+        self._updateTimer.start(int(wait * 1000))
 
     def targetPosition(self):
         with self.lock:
@@ -156,9 +167,11 @@ class Sensapex(Stage):
     def deviceInterface(self, win):
         return SensapexInterface(self, win)
 
+
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
     """
+
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
@@ -166,7 +179,7 @@ class SensapexMoveFuture(MoveFuture):
         self._finished = False
         self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6)
         self._checked = False
-        
+
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
         """
@@ -174,7 +187,7 @@ class SensapexMoveFuture(MoveFuture):
 
     def isDone(self):
         """Return True if the move is complete.
-        """        
+        """
         return self._moveReq.finished
 
     def _checkError(self):
@@ -190,54 +203,56 @@ class SensapexMoveFuture(MoveFuture):
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
             if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
                 # missed
-                self._errorMsg = "%s stopped before reaching target (start=%s, target=%s, position=%s, dif=%s, speed=%s)." % (self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed)
+                self._errorMsg = "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
+                    self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed
+                )
 
         self._checked = True
 
     def wait(self, timeout=None, updates=False):
-            """Block until the move has completed, has been interrupted, or the
-            specified timeout has elapsed.
+        """Block until the move has completed, has been interrupted, or the
+        specified timeout has elapsed.
 
-            If *updates* is True, process Qt events while waiting.
+        If *updates* is True, process Qt events while waiting.
 
-            If the move did not complete, raise an exception.
-            """
-            if updates is False:
-                # if we don't need gui updates, then block on the finished_event for better performance
-                if not self._moveReq.finished_event.wait(timeout=timeout):
-                    raise self.Timeout("Timed out waiting for %s move to complete." % self.dev.name())
-                self._raiseError()
-            else:
-                return MoveFuture.wait(self, timeout=timeout, updates=updates)
-    
+        If the move did not complete, raise an exception.
+        """
+        if updates is False:
+            # if we don't need gui updates, then block on the finished_event for better performance
+            if not self._moveReq.finished_event.wait(timeout=timeout):
+                raise self.Timeout("Timed out waiting for %s move to complete." % self.dev.name())
+            self._raiseError()
+        else:
+            return MoveFuture.wait(self, timeout=timeout, updates=updates)
+
     def errorMessage(self):
         self._checkError()
         return self._errorMsg
 
 
+# class SensapexGUI(StageInterface):
+#     def __init__(self, dev, win):
+#         StageInterface.__init__(self, dev, win)
+#
+#         # Insert Sensapex-specific controls into GUI
+#         self.zeroBtn = Qt.QPushButton('Zero position')
+#         self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
+#         self.nextRow += 1
+#
+#         self.psGroup = Qt.QGroupBox('Rotary Controller')
+#         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
+#         self.nextRow += 1
+#
+#         self.psLayout = Qt.QGridLayout()
+#         self.psGroup.setLayout(self.psLayout)
+#         self.speedLabel = Qt.QLabel('Speed')
+#         self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
+#         self.psLayout.addWidget(self.speedLabel, 0, 0)
+#         self.psLayout.addWidget(self.speedSpin, 0, 1)
+#
+#         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
+#         self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
-#class SensapexGUI(StageInterface):
-    #def __init__(self, dev, win):
-        #StageInterface.__init__(self, dev, win)
-
-        ## Insert Sensapex-specific controls into GUI
-        #self.zeroBtn = Qt.QPushButton('Zero position')
-        #self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-        #self.nextRow += 1
-
-        #self.psGroup = Qt.QGroupBox('Rotary Controller')
-        #self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-        #self.nextRow += 1
-
-        #self.psLayout = Qt.QGridLayout()
-        #self.psGroup.setLayout(self.psLayout)
-        #self.speedLabel = Qt.QLabel('Speed')
-        #self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
-        #self.psLayout.addWidget(self.speedLabel, 0, 0)
-        #self.psLayout.addWidget(self.speedSpin, 0, 1)
-
-        #self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-        #self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
 class SensapexInterface(Qt.QWidget):
     def __init__(self, dev, win):
@@ -256,9 +271,9 @@ class SensapexInterface(Qt.QWidget):
         self.positionLabelWidget.setLayout(self.positionLabelLayout)
         self.positionLabelLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.globalLabel = Qt.QLabel('global')
+        self.globalLabel = Qt.QLabel("global")
         self.positionLabelLayout.addWidget(self.globalLabel, 0, 1)
-        self.stageLabel = Qt.QLabel('stage')
+        self.stageLabel = Qt.QLabel("stage")
         self.positionLabelLayout.addWidget(self.stageLabel, 0, 2)
 
         self.btnContainer = Qt.QWidget()
@@ -267,28 +282,28 @@ class SensapexInterface(Qt.QWidget):
         self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.goHomeBtn = Qt.QPushButton('Home')
+        self.goHomeBtn = Qt.QPushButton("Home")
         self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
         self.goHomeBtn.clicked.connect(self.goHomeClicked)
 
-        self.setHomeBtn = Qt.QPushButton('Set Home')
+        self.setHomeBtn = Qt.QPushButton("Set Home")
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
         self.setHomeBtn.clicked.connect(self.setHomeClicked)
 
-        self.calibrateBtn = Qt.QPushButton('Calibrate')
+        self.calibrateBtn = Qt.QPushButton("Calibrate")
         self.btnLayout.addWidget(self.calibrateBtn, 0, 2)
         self.calibrateBtn.clicked.connect(self.calibrateClicked)
 
-        self.stopBtn = Qt.QPushButton('Stop!')
+        self.stopBtn = Qt.QPushButton("Stop!")
         self.btnLayout.addWidget(self.stopBtn, 1, 0)
         self.stopBtn.clicked.connect(self.stopClicked)
         self.stopBtn.setStyleSheet("QPushButton {background-color:red; color:white}")
 
-        self.calibrateZeroBtn = Qt.QPushButton('Run Zero Calibration')
+        self.calibrateZeroBtn = Qt.QPushButton("Run Zero Calibration")
         self.btnLayout.addWidget(self.calibrateZeroBtn, 1, 1)
         self.calibrateZeroBtn.clicked.connect(self.calibrateZeroClicked)
 
-        self.calibrateLoadBtn = Qt.QPushButton('Run Load Calibration')
+        self.calibrateLoadBtn = Qt.QPushButton("Run Load Calibration")
         self.btnLayout.addWidget(self.calibrateLoadBtn, 1, 2)
         self.calibrateLoadBtn.clicked.connect(self.calibrateLoadClicked)
 
@@ -298,30 +313,28 @@ class SensapexInterface(Qt.QWidget):
         self.softStartValue.editingFinished.connect(self.softstartChanged)
         self.getSoftStartValue()
 
-        self.softStartBtn = Qt.QPushButton('Soft Start Enabled')
-        self.softStartBtn.setCheckable(True);
+        self.softStartBtn = Qt.QPushButton("Soft Start Enabled")
+        self.softStartBtn.setCheckable(True)
         self.softStartBtn.setStyleSheet("QPushButton:checked{background-color:lightgreen; color:black}")
         self.btnLayout.addWidget(self.softStartBtn, 2, 0)
         self.softStartBtn.clicked.connect(self.softstartClicked)
         self.getSoftStartState()
 
-       
-
         self.calibrateWindow = None
 
         cap = dev.capabilities()
         for axis, axisName in enumerate(self.dev.axes()):
-            if cap['getPos'][axis]:
+            if cap["getPos"][axis]:
                 axLabel = Qt.QLabel(axisName)
                 axLabel.setMaximumWidth(15)
-                globalPosLabel = Qt.QLabel('0')
-                stagePosLabel = Qt.QLabel('0')
+                globalPosLabel = Qt.QLabel("0")
+                stagePosLabel = Qt.QLabel("0")
                 self.posLabels[axis] = (globalPosLabel, stagePosLabel)
                 widgets = [axLabel, globalPosLabel, stagePosLabel]
-                if cap['limits'][axis]:
-                    minCheck = Qt.QCheckBox('Min:')
+                if cap["limits"][axis]:
+                    minCheck = Qt.QCheckBox("Min:")
                     minCheck.tag = (axis, 0)
-                    maxCheck = Qt.QCheckBox('Max:')
+                    maxCheck = Qt.QCheckBox("Max:")
                     maxCheck.tag = (axis, 1)
                     self.limitChecks[axis] = (minCheck, maxCheck)
                     widgets.extend([minCheck, maxCheck])
@@ -329,22 +342,20 @@ class SensapexInterface(Qt.QWidget):
                         check.clicked.connect(self.limitCheckClicked)
 
                 nextRow = self.positionLabelLayout.rowCount()
-                for i,w in enumerate(widgets):
+                for i, w in enumerate(widgets):
                     self.positionLabelLayout.addWidget(w, nextRow, i)
                 self.axCtrls[axis] = widgets
         self.dev.sigPositionChanged.connect(self.update)
-        
+
         self.update()
 
     def update(self):
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
         for i in self.posLabels:
-            text = pg.siFormat(globalPos[i], suffix='m', precision=5)
+            text = pg.siFormat(globalPos[i], suffix="m", precision=5)
             self.posLabels[i][0].setText(text)
             self.posLabels[i][1].setText(str(stagePos[i]))
-
-   
 
     def goHomeClicked(self):
         self.dev.goHome()
@@ -369,7 +380,7 @@ class SensapexInterface(Qt.QWidget):
 
     def getSoftStartState(self):
         state = self.dev.dev.get_soft_start_state()
-       
+
         if state == 1:
             self.softStartBtn.setChecked(True)
             self.softStartBtn.setText("Soft Start Enabled")
@@ -398,4 +409,3 @@ class SensapexInterface(Qt.QWidget):
     def getSoftStartValue(self):
         value = self.dev.dev.get_soft_start_value()
         self.softStartValue.setText(str(value))
-
