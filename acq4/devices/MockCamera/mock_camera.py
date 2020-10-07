@@ -79,7 +79,10 @@ class MockCamera(Camera):
             ]
         )
 
-        self.groupParams = {"binning": ("binningX", "binningY"), "region": ("regionX", "regionY", "regionW", "regionH")}
+        self.groupParams = {
+            "binning": ("binningX", "binningY"),
+            "region": ("regionX", "regionY", "regionW", "regionH"),
+        }
 
         sig = np.random.normal(size=(WIDTH, HEIGHT), loc=1.0, scale=0.3)
         sig = scipy.ndimage.gaussian_filter(sig, (3, 3))
