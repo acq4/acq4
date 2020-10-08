@@ -2,7 +2,7 @@
 """
 debug.py - Functions to aid in debugging 
 Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
+Distributed under MIT/X11 license. See license.txt for more information.
 """
 from __future__ import print_function
 
@@ -16,31 +16,34 @@ LOG_UI = None
 def __reload__(old):
     # preserve old log window
     global LOG_UI
-    LOG_UI = old['LOG_UI']
+    LOG_UI = old["LOG_UI"]
 
 
 def installExceptionHandler():
-    ## install global exception handler for others to hook into.
+    # install global exception handler for others to hook into.
     import pyqtgraph.exceptionHandling as exceptionHandling
+
     exceptionHandling.setTracebackClearing(True)
     exceptionHandling.register(exceptionCallback)
 
 
 def createLogWindow(manager):
     from .LogWindow import LogWindow
+
     global LOG_UI
     assert LOG_UI is None
     LOG_UI = LogWindow(manager)
     return LOG_UI
 
 
-def printExc(msg='', indent=4, prefix='|', msgType='error'):
+def printExc(msg="", indent=4, prefix="|", msgType="error"):
     """Print an error message followed by an indented exception backtrace
     (This function is intended to be called within except: blocks)"""
     pgdebug.printExc(msg, indent, prefix)
     try:
         import acq4.Manager
-        if hasattr(acq4, 'Manager'):
+
+        if hasattr(acq4, "Manager"):
             acq4.Manager.logExc(msg=msg, msgType=msgType)
     except Exception:
         pgdebug.printExc("[failed to log this error to manager]")
@@ -54,7 +57,7 @@ def logMsg(msg, **kwargs):
           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
           docs: a list of strings where documentation related to the message can be found
           reasons: a list of reasons (as strings) for the message
-          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+          traceback: a list of formatted callstack/traceback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
        Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
         """
     global LOG_UI
@@ -93,15 +96,16 @@ blockLogging = False
 
 
 def exceptionCallback(*args):
-    ## Called whenever there is an unhandled exception.
+    # Called whenever there is an unhandled exception.
 
-    ## unhandled exceptions generate an error message by default, but this
-    ## can be overridden by raising HelpfulException(msgType='...')
+    # unhandled exceptions generate an error message by default, but this
+    # can be overridden by raising HelpfulException(msgType='...')
     global blockLogging
-    if not blockLogging:  ## if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
+    if not blockLogging:
+        # if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
         try:
             blockLogging = True
-            logMsg("Unexpected error: ", exception=args, msgType='error')
+            logMsg("Unexpected error: ", exception=args, msgType="error")
         except:
             print("Error: Exception could no be logged.")
             original_excepthook(*sys.exc_info())

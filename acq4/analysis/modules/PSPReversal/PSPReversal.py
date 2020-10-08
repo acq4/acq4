@@ -621,8 +621,7 @@ class PSPReversal(AnalysisModule):
                           'Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
-                print("Error loading data for protocol %s:"
-                      % directory_name)
+                print("Error loading data for protocol %s:" % directory_name)
                 continue  # If something goes wrong here, we just carry on
             data_file = data_file_handle.read()
             self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
@@ -1600,8 +1599,7 @@ class PSPReversal(AnalysisModule):
             if len(self.cmd) > 0 and len(self.measure[window]) > 0:
                 self.r_in = np.max(np.diff
                                    (self.measure[window]) / np.diff(self.cmd))
-                self.ctrl.PSPReversal_Rin.setText(u'%9.1f M\u03A9'
-                                                  % (self.r_in * 1.0e-6))
+                self.ctrl.PSPReversal_Rin.setText(u'%9.1f M\u03A9' % (self.r_in * 1.0e-6))
             else:
                 self.ctrl.PSPReversal_Rin.setText(u'No valid points')
         else:

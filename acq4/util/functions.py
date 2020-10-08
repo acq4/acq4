@@ -33,7 +33,7 @@ from acq4.util import Qt
 try:
     import scipy.weave as weave
     from scipy.weave import converters
-except:
+except ImportError:
     pass    
 
 
@@ -446,7 +446,7 @@ def downsample(data, n, axis=0, xvals='subsample'):
             elif xvals == 'downsample':
                 info[axis]['values'] = downsample(info[axis]['values'], n)
         return MetaArray(d2, info=info)
-    
+
         
 def downsamplend(data, div):
     """Downsample multiple axes at once. Probably slower than just using downsample multiple times."""

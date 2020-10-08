@@ -761,8 +761,9 @@ class SequencerThread(Thread):
                         except RuntimeError:
                             if i == 4:
                                 print(
-                                    "Did not reach focus after 5 iterations (%g != %g)"
-                                    % (self.prot["imager"].getDevice().getFocusDepth(), depths[depthIndex])
+                                    "Did not reach focus after 5 iterations ({:g} != {:g})".format(
+                                        self.prot["imager"].getDevice().getFocusDepth(), depths[depthIndex]
+                                    )
                                 )
 
                     frame = self.getFrame()
