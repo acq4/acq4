@@ -37,9 +37,10 @@ class MicroManagerCamera(Camera):
     """Camera device that uses MicroManager to provide imaging.
 
     Configuration keys:
-
-    * mmAdapterName
-    * mmDeviceName
+        copyFramesOnAcquisition: True
+            (default: True) if acquisition speed is too slow, this can be turned off at a risk of occasional app crashes.
+        mmAdapterName: 'some adapter name'
+        mmDeviceName: 'some device name'
     """
 
     def __init__(self, manager, config, name):
@@ -47,6 +48,7 @@ class MicroManagerCamera(Camera):
         mmpath = config.get('path')
         self.mmc = micromanager.getMMCorePy(mmpath)
 
+        self._copyFramesOnAcquisition = config.get("copyFramesOnAcquisition", True)
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
         self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
@@ -100,7 +102,10 @@ class MicroManagerCamera(Camera):
                 time.sleep(0.005)
                 if time.time() - start > 10.0:
                     raise Exception("Timed out waiting for camera frame.")
-            frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+            frame = self.mmc.popNextImage().T[np.newaxis, ...]
+            if self._copyFramesOnAcquisition:
+                frame = frame.copy()
+            frames.append(frame)
         self.mmc.stopSequenceAcquisition()
         return np.concatenate(frames, axis=0)
 
@@ -124,6 +129,8 @@ class MicroManagerCamera(Camera):
                 frame['time'] = self.lastFrameTime + (dt * (i + 1))
                 frame['id'] = self.frameId
                 frame['data'] = self.mmc.popNextImage().T
+                if self._copyFramesOnAcquisition:
+                    frame["data"] = frame["data"].copy()
                 frames.append(frame)
                 self.frameId += 1
 

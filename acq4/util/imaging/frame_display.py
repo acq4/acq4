@@ -135,7 +135,8 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # update image in viewport
-            self._imageItem.updateImage(data.copy())  # using data.copy() here avoids crashes!
+            # This line was previously using data.copy() to prevent crashes, but said instruction was moved to MicroManagerCamera
+            self._imageItem.updateImage(data)
             prof()
 
             self.imageUpdated.emit(self.currentFrame)
