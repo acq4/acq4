@@ -159,13 +159,13 @@ class MultiClampTelegraph:
     def createWindow(self):
         if self.debug:
             print("MultiClampTelegraph.createWindow called.")
-        self.wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(self.wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")
+        self.wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(self.wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, b"", b"AxTelegraphWin")
         ret = wmlib.RegisterClassA(self.wndClass)
         #print "Register class:", ret()
         if ret() == 0:
             raise Exception("Error registering window class.")
         cwret = wmlib.CreateWindowExA(
-            0, self.wndClass.lpszClassName, "title", 
+            0, self.wndClass.lpszClassName, b"title",
             wmlib.WS_OVERLAPPEDWINDOW,
             wmlib.CW_USEDEFAULT,
             wmlib.CW_USEDEFAULT,
@@ -274,8 +274,8 @@ class MultiClampTelegraph:
             print("MultiClampTelegraph.registerMessages called.")
         self.msgIds = {}
         for m in ['OPEN', 'CLOSE', 'REQUEST', 'BROADCAST', 'RECONNECT', 'ID']:
-            self.msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', 'MCTG_' + m + '_MESSAGE_STR'))()
-        self.msgIds['COMMAND'] = wmlib.RegisterWindowMessageA(wmlib('values', 'MC_COMMAND_MESSAGE_STR'))()
+            self.msgIds[m] = wmlib.RegisterWindowMessageA(wmlib("values", "MCTG_" + m + "_MESSAGE_STR").encode("ascii"))()
+        self.msgIds["COMMAND"] = wmlib.RegisterWindowMessageA(wmlib("values", "MC_COMMAND_MESSAGE_STR").encode("ascii"))()
 
     def post(self, msg, val):
         if self.debug:
