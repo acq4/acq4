@@ -267,13 +267,13 @@ class CLibrary:
                     if m[0] == '*' or m[0] == '&':
                         for i in m:
                             cls = POINTER(cls)
-                elif type(m) is list:          ## array
+                elif isinstance(m, list) and isinstance(m[0], int):          ## array
                     for i in m:
                         if i == -1:            ## -1 indicates an 'incomplete type' like "int variable[]"
                             cls = POINTER(cls) ## which we should interpret like "int *variable"
                         else:
                             cls = cls * i
-                elif type(m) is tuple:   ## Probably a function pointer
+                elif isinstance(m, (list, tuple)) and not isinstance(m[0], int):   ## Probably a function pointer
                     ## Find pointer and calling convention
                     isPtr = False
                     conv = '__cdecl'
