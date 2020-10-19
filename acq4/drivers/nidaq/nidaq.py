@@ -141,7 +141,7 @@ class _NIDAQ:
         if errCode is None:
             err = self.GetExtendedErrorInfo()
         else:
-            err = self.GetErrorString(errCode)
+            err = self.GetErrorString(errCode).decode('ascii')
         err.replace('\\n', '\n')
         return err
 
