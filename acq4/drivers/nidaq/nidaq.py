@@ -56,24 +56,28 @@ class _NIDAQ:
 
     def __getattr__(self, attr):
         if hasattr(PyDAQmx, attr):
-            return lambda *args: getattr(PyDAQmx, attr)(*args)
+            if callable(getattr(PyDAQmx, attr)):
+                return lambda *args: self.call(attr, *args)
+            else:
+                return getattr(PyDAQmx, attr)
         else:
             raise NameError("{} not found among DAQmx constants or functions")
 
     def call(self, func, *args):
-        return getattr(PyDAQmx, func)(*args)
-        # fn = getattr(PyDAQmx, func)
-        # retType, argSig = fn.sig
-        #
-        # returnValue = None
-        # if func[:8] == "DAQmxGet":  # byref arguments will be handled automatically.
-        #     # functions that return char* can be called with a null pointer to get the size of the buffer needed.
-        #     if (argSig[-2][1] == ["char", "*"] or argSig[-2][1] == ["char", [-1]]) and argSig[-1][0] == "bufferSize":
-        #         returnValue = argSig[-2][0]
-        #         extra = {returnValue: None, "bufferSize": 0}
-        #         buffSize = fn(*args, **extra)()
-        #         ret = ctypes.create_string_buffer(b"\0" * buffSize)
-        #         args += (ret, buffSize)
+        fn = getattr(PyDAQmx, func)
+
+        retType, argSig = fn.sig
+
+        if func[:3] == "Get":  # byref arguments will be handled automatically.
+            # functions that return char* can be called with a null pointer to get the size of the buffer needed.
+            if (argSig[-2][1] == ["char", "*"] or argSig[-2][1] == ["char", [-1]]) and argSig[-1][0] == "bufferSize":
+                returnValue = argSig[-2][0]
+                extra = {returnValue: None, "bufferSize": 0}
+                buffSize = fn(*args, **extra)()
+                ret = ctypes.create_string_buffer(b"\0" * buffSize)
+                args += (ret, buffSize)
+
+        return fn(*args)
         #
         # # Python 3 requires bytes instead of str arguments here
         # args = list(args)
