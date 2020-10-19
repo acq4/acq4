@@ -82,6 +82,7 @@ class Manager(Qt.QObject):
         self.config = OrderedDict()
         self.currentDir = None
         self.baseDir = None
+        self.exitOnError = False
         self.gui = None
         self.shortcuts = []
         self.disableDevs = []
@@ -103,13 +104,14 @@ class Manager(Qt.QObject):
             if argv is not None:
                 try:
                     opts, args = getopt.getopt(
-                        argv, 'c:a:m:b:s:d:nD',
+                        argv, 'c:a:x:m:b:s:d:nD',
                         ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=',
-                         'disable=', 'no-manager', 'disable-all'])
+                         'disable=', 'no-manager', 'disable-all', 'exit-on-error'])
                 except getopt.GetoptError as err:
                     print(str(err))
                     print("""
     Valid options are:
+        -x --exit-on-error Whether to exit immidiately on the first exception
         -c --config=       Configuration file to load
         -a --config-name=  Named configuration to load
         -m --module=       Module name to load
@@ -153,6 +155,8 @@ class Manager(Qt.QObject):
                     self.disableDevs.append(a)
                 elif o in ['-D', '--disable-all']:
                     self.disableAllDevs = True
+                elif o == "--exit-on-error":
+                    self.exitOnError = True
                 else:
                     print("Unhandled option", o, a)
 
@@ -190,11 +194,15 @@ class Manager(Qt.QObject):
 
             except:
                 printExc("\nError while acting on command line options: (but continuing on anyway..)")
+                if self.exitOnError:
+                    raise
 
         except:
             printExc("Error while configuring Manager:")
             Manager.CREATED = False
             Manager.single = None
+            if self.exitOnError:
+                raise
 
         finally:
             if len(self.modules) == 0:
@@ -308,6 +316,8 @@ class Manager(Qt.QObject):
                             self.loadDevice(driverName, conf, k)
                         except:
                             printExc("Error configuring device %s:" % k)
+                            if self.exitOnError:
+                                raise
                     print("=== Device configuration complete ===")
                     logMsg("=== Device configuration complete ===")
 
@@ -381,6 +391,8 @@ class Manager(Qt.QObject):
 
             except:
                 printExc("Error in ACQ4 configuration:")
+                if self.exitOnError:
+                    raise
         # print self.config
         self.sigConfigChanged.emit()
 
@@ -540,6 +552,8 @@ class Manager(Qt.QObject):
             except Exception:
                 f = False
                 logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+                if self.exitOnError:
+                    raise
             return f
 
     def getModule(self, name):
@@ -602,6 +616,8 @@ class Manager(Qt.QObject):
             # print "    request quit done"
         except:
             printExc("Error while requesting module '%s' quit." % name)
+            if self.exitOnError:
+                raise
 
         ## Module should have called moduleHasQuit already, but just in case:
         with self.lock:
@@ -630,6 +646,8 @@ class Manager(Qt.QObject):
             sh.activated.connect(lambda *args: win.raise_())
         except:
             printExc("Error creating shortcut '%s':" % keys)
+            if self.exitOnError:
+                raise
 
         with self.lock:
             self.shortcuts.append((sh, keys, weakref.ref(win)))
@@ -836,6 +854,8 @@ class Manager(Qt.QObject):
                         d.quit()
                     except:
                         printExc("Error while requesting device '%s' quit." % d.name)
+                        if self.exitOnError:
+                            raise
                     dlg.setValue(lm + ld - len(devs))
 
                 print("Closing windows..")
