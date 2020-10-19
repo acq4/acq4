@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import ctypes
+from inspect import signature
 
 import numpy as np
 import six
@@ -66,18 +67,25 @@ class _NIDAQ:
     def call(self, func, *args):
         fn = getattr(PyDAQmx, func)
 
-        retType, argSig = fn.sig
+        sig = signature(fn)
 
-        if func[:3] == "Get":  # byref arguments will be handled automatically.
-            # functions that return char* can be called with a null pointer to get the size of the buffer needed.
-            if (argSig[-2][1] == ["char", "*"] or argSig[-2][1] == ["char", [-1]]) and argSig[-1][0] == "bufferSize":
-                returnValue = argSig[-2][0]
-                extra = {returnValue: None, "bufferSize": 0}
-                buffSize = fn(*args, **extra)()
-                ret = ctypes.create_string_buffer(b"\0" * buffSize)
-                args += (ret, buffSize)
+        if "bufferSize" in sig.parameters:
+            buffSize = fn(data=None, bufferSize=0, *args)
+            ret = ctypes.create_string_buffer(b"\0" * buffSize)
+            args += (ret, buffSize)
+            fn(*args)
+            return ret.value
+        else:
+            return fn(*args)
 
-        return fn(*args)
+        # if func[:3] == "Get":  # byref arguments will be handled automatically.
+        #     # functions that return char* can be called with a null pointer to get the size of the buffer needed.
+        #     if (argSig[-2][1] == ["char", "*"] or argSig[-2][1] == ["char", [-1]]) and argSig[-1][0] == "bufferSize":
+        #         returnValue = argSig[-2][0]
+        #         extra = {returnValue: None, "bufferSize": 0}
+        #         buffSize = fn(*args, **extra)()
+        #         ret = ctypes.create_string_buffer(b"\0" * buffSize)
+        #         args += (ret, buffSize)
         #
         # # Python 3 requires bytes instead of str arguments here
         # args = list(args)
