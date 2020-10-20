@@ -111,8 +111,8 @@ class SuperTask:
         }
 
     # def setChannelInfo(self, chan, info):
-    # chan = self.absChanName(chan)
-    # self.channelInfo[chan] = info
+    #     chan = self.absChanName(chan)
+    #     self.channelInfo[chan] = info
 
     def setWaveform(self, chan, data):
         chan = self.absChanName(chan)

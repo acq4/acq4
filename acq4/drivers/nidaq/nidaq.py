@@ -73,14 +73,18 @@ class _NIDAQ:
         if "bufferSize" in sig.parameters:
             buffSize = fn(data=None, bufferSize=0, *args)
             ret = ctypes.create_string_buffer(b"\0" * buffSize)
-            args += (ret, buffSize)
-            fn(*args)
+            fn(*args, data=ret, bufferSize=buffSize)
             return ret.value.decode("utf-8")
         elif "data" in sig.parameters:
-            ret = ctypes.c_ulong()
-            args += (ret,)
-            fn(*args)
-            return ret.value
+            cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
+            dataIndex = cfuncInfo["arg_name"].index("data")
+            dataType = cfuncInfo["arg_type"][dataIndex]
+            ret = dataType()
+            fn(*args, data=ret)
+            if hasattr(ret, "value"):
+                return ret.value
+            else:
+                return ret.content
         else:
             return fn(*args)
 
