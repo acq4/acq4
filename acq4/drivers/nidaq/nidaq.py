@@ -4,18 +4,42 @@ from __future__ import print_function
 import ctypes
 from inspect import signature
 
-import PyDAQmx
 import numpy as np
 import six
+import PyDAQmx
 
-dtypeToDAQFunction = {
-    "<f8": "F64",
-    "<i2": "I16",
-    "<i4": "I32",
-    "<u2": "U16",
-    "<u4": "U32",
-    "|u1": "U8",
-}
+dataTypeConversions = [
+    {
+        "numpy": "<f8",
+        "function name": "F64",
+        "PyDAQmx": "float64"
+    },
+    {
+        "numpy": "<i2",
+        "function name": "I16",
+        "PyDAQmx": "int16"
+    },
+    {
+        "numpy": "<i4",
+        "function name": "I32",
+        "PyDAQmx": "int32"
+    },
+    {
+        "numpy": "<u2",
+        "function name": "U16",
+        "PyDAQmx": "uInt"
+    },
+    {
+        "numpy": "<u4",
+        "function name": "U32",
+        "PyDAQmx": "uInt"
+    },
+    {
+        "numpy": "|u1",
+        "function name": "U8",
+        "PyDAQmx": "uInt"
+    },
+]
 
 
 def init():
@@ -314,15 +338,14 @@ class Task:
             raise Exception("read() not allowed for this task type (%s)" % chTypes[tt])
 
         numpyDtype = np.dtype(dtype).descr[0][1]
-        fName += dtypeToDAQFunction[numpyDtype]
+        dtypeConversion = next((conv for conv in dataTypeConversions if conv["numpy"] == numpyDtype))
+        fName += dtypeConversion["function name"]
 
         self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
         self.SetReadOffset(0)
 
         # buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
-        funcInfo = PyDAQmx.function_dict["DAQmx" + fName]
-        argIndex = funcInfo["arg_name"].index("readArray")
-        argCType = funcInfo["arg_type"][argIndex]
+        argCType = getattr(PyDAQmx, dtypeConversion["PyDAQmx"])
         cbuf = ctypes.cast(buf.ctypes, argCType)
 
         nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, cbuf, buf.size)
@@ -355,12 +378,11 @@ class Task:
             raise Exception("write() not implemented for this task type (%s)" % chTypes[tt])
 
         numpyDtype = data.dtype.descr[0][1]
-        fName += dtypeToDAQFunction[numpyDtype]
+        dtypeConversion = next((conv for conv in dataTypeConversions if conv["numpy"] == numpyDtype))
+        fName += dtypeConversion["function name"]
 
         # buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
-        funcInfo = PyDAQmx.function_dict["DAQmx" + fName]
-        argIndex = funcInfo["arg_name"].index("writeArray")
-        argCType = funcInfo["arg_type"][argIndex]
+        argCType = getattr(PyDAQmx, dtypeConversion["PyDAQmx"])
         cbuf = ctypes.cast(data.ctypes, argCType)
 
         nPts = getattr(self, fName)(data.size / numChans, False, timeout, PyDAQmx.Val_GroupByChannel, cbuf)
