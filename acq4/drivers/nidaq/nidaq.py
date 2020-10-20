@@ -8,8 +8,6 @@ import numpy as np
 import six
 import PyDAQmx
 
-from .base import NIDAQError
-
 dtypes = {  # for converting numpy dtypes to nidaq type strings
     "<f8": "F64",
     "<i2": "I16",
