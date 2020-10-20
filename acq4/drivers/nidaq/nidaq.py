@@ -9,18 +9,12 @@ import six
 import PyDAQmx
 
 dtypes = {  # for converting numpy dtypes to nidaq type strings
-    "<f8": "F64",
-    "<i2": "I16",
-    "<i4": "I32",
-    "<u2": "U16",
-    "<u4": "U32",
-    "|u1": "U8",
-    # float64.descr[0][1]: 'F64',
-    # int16.descr[0][1]: 'I16',
-    # int32.descr[0][1]: 'I32',
-    # uint16.descr[0][1]: 'U16',
-    # uint32.descr[0][1]: 'U32',
-    # uint8.descr[0][1]: 'U8'
+    "<f8": "float64",
+    "<i2": "int16",
+    "<i4": "int32",
+    "<u2": "uInt16",
+    "<u4": "uInt32",
+    "|u1": "uInt8",
 }
 for d in list(dtypes.keys()):
     dtypes[dtypes[d]] = d
