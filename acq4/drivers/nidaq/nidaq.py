@@ -346,7 +346,7 @@ class Task:
 
         # buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
         argCType = getattr(PyDAQmx, dtypeConversion["PyDAQmx"])
-        cbuf = ctypes.cast(buf.ctypes, argCType)
+        cbuf = ctypes.cast(buf.ctypes, ctypes.POINTER(argCType))
 
         nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, cbuf, buf.size)
         return buf, nPts
@@ -383,7 +383,7 @@ class Task:
 
         # buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
         argCType = getattr(PyDAQmx, dtypeConversion["PyDAQmx"])
-        cbuf = ctypes.cast(data.ctypes, argCType)
+        cbuf = ctypes.cast(data.ctypes, ctypes.POINTER(argCType))
 
         nPts = getattr(self, fName)(data.size / numChans, False, timeout, PyDAQmx.Val_GroupByChannel, cbuf)
         return nPts
