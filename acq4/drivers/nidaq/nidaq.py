@@ -78,6 +78,11 @@ class _NIDAQ:
             args += (ret, buffSize)
             fn(*args)
             return ret.value.decode("utf-8")
+        elif "data" in sig.parameters:
+            ret = ctypes.c_ulong()
+            args += (ret,)
+            fn(*args)
+            return ret.value
         else:
             return fn(*args)
 
