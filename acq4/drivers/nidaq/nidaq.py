@@ -125,6 +125,11 @@ class _NIDAQ:
             print(func, args)
             raise
 
+    def CreateTask(self, taskName):
+        taskPtr = PyDAQmx.TaskHandle()
+        self.call("CreateTask", taskName, taskPtr)
+        return taskPtr.value
+
     def error(self, errCode=None):
         """Return a string with error information. If errCode is None, then the currently 'active' error will be used."""
         if errCode is None:
