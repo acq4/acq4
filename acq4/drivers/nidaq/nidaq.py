@@ -62,12 +62,15 @@ class _NIDAQ:
             else:
                 return getattr(PyDAQmx, attr)
         else:
-            raise NameError("{} not found among DAQmx constants or functions")
+            raise NameError("{} not found among DAQmx constants or functions".format(attr))
 
     def call(self, func, *args):
         fn = getattr(PyDAQmx, func)
 
         sig = signature(fn)
+
+        if "reserved" in sig.parameters and len(args) < len(sig.parameters):
+            args += (None,)
 
         if "bufferSize" in sig.parameters:
             buffSize = fn(data=None, bufferSize=0, *args)
