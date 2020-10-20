@@ -80,7 +80,8 @@ class _NIDAQ:
             cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
             dataType = cfuncInfo["arg_type"][-1]
             ret = dataType._type_()
-            fn(*args, data=dataType(ret))
+            args += (dataType(ret),)
+            fn(*args)
             return ret.value
         else:
             return fn(*args)
