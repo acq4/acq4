@@ -53,7 +53,7 @@ class _NIDAQ:
         return "<niDAQmx driver wrapper>"
 
     def listDevices(self):
-        return self.GetSysDevNames().split(b", ")
+        return self.GetSysDevNames().split(", ")
 
     def __getattr__(self, attr):
         if hasattr(PyDAQmx, attr):
@@ -77,7 +77,7 @@ class _NIDAQ:
             ret = ctypes.create_string_buffer(b"\0" * buffSize)
             args += (ret, buffSize)
             fn(*args)
-            return ret.value
+            return ret.value.decode("utf-8")
         else:
             return fn(*args)
 
