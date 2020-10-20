@@ -75,10 +75,10 @@ class _NIDAQ:
             ret = ctypes.create_string_buffer(b"\0" * buffSize)
             fn(*args, data=ret, bufferSize=buffSize)
             return ret.value.decode("utf-8")
-        elif "data" in sig.parameters:
+        elif len(args) < len(sig.parameters):
+            # Assume 1 missing arg, which is the pointer to the useful return value
             cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
-            dataIndex = cfuncInfo["arg_name"].index("data")
-            dataType = cfuncInfo["arg_type"][dataIndex]
+            dataType = cfuncInfo["arg_type"][-1]
             ret = dataType._type_()
             fn(*args, data=dataType(ret))
             return ret.value
