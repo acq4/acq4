@@ -79,12 +79,9 @@ class _NIDAQ:
             cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
             dataIndex = cfuncInfo["arg_name"].index("data")
             dataType = cfuncInfo["arg_type"][dataIndex]
-            ret = dataType()
-            fn(*args, data=ret)
-            if hasattr(ret, "value"):
-                return ret.value
-            else:
-                return ret.content
+            ret = dataType._type_()
+            fn(*args, data=dataType(ret))
+            return ret.value
         else:
             return fn(*args)
 
