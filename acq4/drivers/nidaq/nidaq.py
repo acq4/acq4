@@ -8,14 +8,14 @@ import PyDAQmx
 import numpy as np
 import six
 
-dataTypeConversions = [
-    {"numpy": "<f8", "function name": "F64", "PyDAQmx": PyDAQmx.float64,},
-    {"numpy": "<i2", "function name": "I16", "PyDAQmx": PyDAQmx.int16,},
-    {"numpy": "<i4", "function name": "I32", "PyDAQmx": PyDAQmx.int32,},
-    {"numpy": "<u2", "function name": "U16", "PyDAQmx": PyDAQmx.uInt16,},
-    {"numpy": "<u4", "function name": "U32", "PyDAQmx": PyDAQmx.uInt32,},
-    {"numpy": "|u1", "function name": "U8", "PyDAQmx": PyDAQmx.uInt8,},
-]
+dataTypeConversions = {
+    "<f8": "F64",
+    "<i2": "I16",
+    "<i4": "I32",
+    "<u2": "U16",
+    "<u4": "U32",
+    "|u1": "U8",
+}
 
 
 def init():
@@ -313,9 +313,7 @@ class Task:
         else:
             raise Exception("read() not allowed for this task type (%s)" % chTypes[tt])
 
-        numpyDtype = np.dtype(dtype).descr[0][1]
-        dtypeConversion = next((conv for conv in dataTypeConversions if conv["numpy"] == numpyDtype))
-        fName += dtypeConversion["function name"]
+        fName += dataTypeConversions[np.dtype(dtype).descr[0][1]]
 
         self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
         self.SetReadOffset(0)
@@ -349,9 +347,7 @@ class Task:
         else:
             raise Exception("write() not implemented for this task type (%s)" % chTypes[tt])
 
-        numpyDtype = data.dtype.descr[0][1]
-        dtypeConversion = next((conv for conv in dataTypeConversions if conv["numpy"] == numpyDtype))
-        fName += dtypeConversion["function name"]
+        fName += dataTypeConversions[data.dtype.descr[0][1]]
 
         nPts = getattr(self, fName)(data.size // numChans, False, timeout, PyDAQmx.Val_GroupByChannel, data, None)
         return nPts
