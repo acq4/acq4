@@ -320,7 +320,7 @@ class Task:
         self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
         self.SetReadOffset(0)
 
-        nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, buf, buf.size)
+        nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, buf, buf.size, None)
         return buf, nPts
 
     def write(self, data, timeout=10.0):
