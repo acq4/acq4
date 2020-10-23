@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import cupy
 import pyqtgraph as pg
 
 from acq4.util import Qt
@@ -138,7 +139,7 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # update image in viewport
-            self._imageItem.updateImage(data.copy())  # using data.copy() here avoids crashes!
+            self._imageItem.updateImage(cupy.asarray(data))
             prof()
 
             self.imageUpdated.emit(self.currentFrame)
