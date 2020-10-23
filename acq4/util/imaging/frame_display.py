@@ -1,6 +1,12 @@
 from __future__ import print_function
 
-import cupy
+import numpy
+
+try:
+    import cupy as cp
+except ImportError:
+    from pyqtgraph.util import empty_cupy as cp
+
 import pyqtgraph as pg
 
 from acq4.util import Qt
@@ -139,7 +145,10 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # update image in viewport
-            self._imageItem.updateImage(cupy.asarray(data))
+            if cp == numpy:
+                self._imageItem.updateImage(data.copy())
+            else:
+                self._imageItem.updateImage(cp.asarray(data))
             prof()
 
             self.imageUpdated.emit(self.currentFrame)
