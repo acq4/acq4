@@ -24,9 +24,12 @@ class FrameDisplay(Qt.QObject):
 
     imageUpdated = Qt.Signal(object)  # emits frame when the image is redrawn
 
-    def __init__(self):
+    def __init__(self, maxFPS=30):
         Qt.QObject.__init__(self)
 
+        self._maxFPS = maxFPS
+        self._sPerFrame = 1.0 / maxFPS
+        self._msPerFrame = int(self._sPerFrame * 1000)
         self._imageItem = pg.ImageItem()
         self._imageItem.setAutoDownsample(True)
         self.contrastCtrl = self.contrastClass()
@@ -46,7 +49,7 @@ class FrameDisplay(Qt.QObject):
         # 60fps.
         self.frameTimer = Qt.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(30)  # draw frames no faster than 60Hz
+        self.frameTimer.start(self._msPerFrame)  # draw frames no faster than 60Hz
         # Qt.QTimer.singleShot(1, self.drawFrame)
         # avoiding possible singleShot-induced crashes
 
@@ -96,7 +99,7 @@ class FrameDisplay(Qt.QObject):
         try:
             # If we last drew a frame < 1/30s ago, return.
             t = pg.ptime.time()
-            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < 0.03):
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
                 return
             # if there is no new frame and no controls have changed, just exit
             if not self._updateFrame and self.nextFrame is None:

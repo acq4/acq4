@@ -139,9 +139,9 @@ class _NIDAQ:
     def error(self, errCode=None):
         """Return a string with error information. If errCode is None, then the currently 'active' error will be used."""
         if errCode is None:
-            err = self.GetExtendedErrorInfo()
+            err = self.GetExtendedErrorInfo().decode('ascii')
         else:
-            err = self.GetErrorString(errCode)
+            err = self.GetErrorString(errCode).decode('ascii')
         err.replace('\\n', '\n')
         return err
 
