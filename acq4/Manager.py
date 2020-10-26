@@ -111,7 +111,7 @@ class Manager(Qt.QObject):
                     print(str(err))
                     print("""
     Valid options are:
-        -x --exit-on-error Whether to exit immidiately on the first exception
+        -x --exit-on-error Whether to exit immidiately on the first exception during initial Manager setup
         -c --config=       Configuration file to load
         -a --config-name=  Named configuration to load
         -m --module=       Module name to load
