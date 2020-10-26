@@ -8,10 +8,6 @@ from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
 
 
-MAX_FRAMES_PER_SECOND = 30
-S_PER_FRAME = 1.0 / MAX_FRAMES_PER_SECOND
-MS_PER_FRAME = int(S_PER_FRAME * 1000)
-
 class FrameDisplay(Qt.QObject):
     """Used with live imaging to hold the most recently acquired frame and allow
     user control of contrast, gain, and background subtraction.
@@ -28,9 +24,12 @@ class FrameDisplay(Qt.QObject):
 
     imageUpdated = Qt.Signal(object)  # emits frame when the image is redrawn
 
-    def __init__(self):
+    def __init__(self, maxFPS=30):
         Qt.QObject.__init__(self)
 
+        self._maxFPS = maxFPS
+        self._sPerFrame = 1.0 / maxFPS
+        self._msPerFrame = int(self._sPerFrame * 1000)
         self._imageItem = pg.ImageItem()
         self._imageItem.setAutoDownsample(True)
         self.contrastCtrl = self.contrastClass()
@@ -50,7 +49,7 @@ class FrameDisplay(Qt.QObject):
         # 60fps.
         self.frameTimer = Qt.QTimer()
         self.frameTimer.timeout.connect(self.drawFrame)
-        self.frameTimer.start(MS_PER_FRAME)  # draw frames no faster than 60Hz
+        self.frameTimer.start(self._msPerFrame)  # draw frames no faster than 60Hz
         # Qt.QTimer.singleShot(1, self.drawFrame)
         # avoiding possible singleShot-induced crashes
 
@@ -100,7 +99,7 @@ class FrameDisplay(Qt.QObject):
         try:
             # If we last drew a frame < 1/30s ago, return.
             t = pg.ptime.time()
-            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < S_PER_FRAME):
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
                 return
             # if there is no new frame and no controls have changed, just exit
             if not self._updateFrame and self.nextFrame is None:
