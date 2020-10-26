@@ -9,12 +9,12 @@ import numpy as np
 import six
 
 dataTypeConversions = {
-    "<f8": "F64",
-    "<i2": "I16",
-    "<i4": "I32",
-    "<u2": "U16",
-    "<u4": "U32",
-    "|u1": "U8",
+    '<f8': 'F64',
+    '<i2': 'I16',
+    '<i4': 'I32',
+    '<u2': 'U16',
+    '<u4': 'U32',
+    '|u1': 'U8',
 }
 
 
