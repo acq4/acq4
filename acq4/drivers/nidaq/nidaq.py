@@ -1,55 +1,26 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, division
 
 import ctypes
-import os
-import sys
+from inspect import signature
 
+import PyDAQmx
 import numpy as np
 import six
 
-import acq4.util.clibrary as clibrary
-from .base import NIDAQError
-
-dtypes = {  # for converting numpy dtypes to nidaq type strings
-    "<f8": "F64",
-    "<i2": "I16",
-    "<i4": "I32",
-    "<u2": "U16",
-    "<u4": "U32",
-    "|u1": "U8",
-    # float64.descr[0][1]: 'F64',
-    # int16.descr[0][1]: 'I16',
-    # int32.descr[0][1]: 'I32',
-    # uint16.descr[0][1]: 'U16',
-    # uint32.descr[0][1]: 'U32',
-    # uint8.descr[0][1]: 'U8'
+dataTypeConversions = {
+    '<f8': 'F64',
+    '<i2': 'I16',
+    '<i4': 'I32',
+    '<u2': 'U16',
+    '<u4': 'U32',
+    '|u1': 'U8',
 }
-for d in list(dtypes.keys()):
-    dtypes[dtypes[d]] = d
-    dtypes[np.dtype(d)] = dtypes[d]
 
 
 def init():
-    modDir = os.path.dirname(__file__)
-    headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
-    # xmlFiles = [os.path.join(os.path.dirname(__file__), "NIDAQmx.xml")]
-    # defs = cheader.getDefs(headerFiles)
-
-    # cache files appear to be platform-dependent due to some pickling bug..
-    cacheFile = os.path.join(modDir, "NIDAQmx_headers_%s.cache" % sys.platform)
-
-    global DEFS
-    DEFS = clibrary.CParser(headerFiles, cache=cacheFile, types={"__int64": "long long"}, verbose=False)
-    global LIB
-    LIB = clibrary.CLibrary(ctypes.windll.nicaiu, DEFS, prefix=["DAQmx", "DAQmx_"])
-
     global NIDAQ
     NIDAQ = _NIDAQ()
-    # for k in defs:
-    #     setattr(sys.modules[__name__], re.sub('^DAQmx_?', '', k), defs[k])
-    # NIDAQ.functions = cheader.getFuncs(xmlFiles)
-    # time.clock()
 
 
 class _NIDAQ:
@@ -71,60 +42,80 @@ class _NIDAQ:
         return "<niDAQmx driver wrapper>"
 
     def listDevices(self):
-        return self.GetSysDevNames().split(b", ")
+        return self.GetSysDevNames().split(", ")
 
     def __getattr__(self, attr):
-        try:
-            return LIB("values", "DAQmx_" + attr)
-        except NameError:
-            LIB("functions", "DAQmx" + attr)  # try again for NameError
-            return lambda *args: self.call(attr, *args)
+        if hasattr(PyDAQmx, attr):
+            if callable(getattr(PyDAQmx, attr)):
+                return lambda *args: self.call(attr, *args)
+            else:
+                return getattr(PyDAQmx, attr)
+        else:
+            raise NameError("{} not found among DAQmx constants or functions".format(attr))
 
     def call(self, func, *args):
-        func = "DAQmx" + func
-        fn = LIB("functions", func)
-        retType, argSig = fn.sig
+        fn = getattr(PyDAQmx, func)
 
-        returnValue = None
-        if func[:8] == "DAQmxGet":  # byref arguments will be handled automatically.
-            # functions that return char* can be called with a null pointer to get the size of the buffer needed.
-            if (argSig[-2][1] == ["char", "*"] or argSig[-2][1] == ["char", [-1]]) and argSig[-1][0] == "bufferSize":
-                returnValue = argSig[-2][0]
-                extra = {returnValue: None, "bufferSize": 0}
-                buffSize = fn(*args, **extra)()
-                ret = ctypes.create_string_buffer(b"\0" * buffSize)
-                args += (ret, buffSize)
+        sig = signature(fn)
 
-        # Python 3 requires bytes instead of str arguments here
-        args = list(args)
-        for i, arg in enumerate(args):
-            if isinstance(arg, str):
-                args[i] = arg.encode()
+        if "reserved" in sig.parameters and len(args) < len(sig.parameters):
+            args += (None,)
 
-        # if there is a 'reserved' argument, it MUST be 0 (don't let clibrary try to fill it for us)
-        if argSig[-1][0] == "reserved":
-            ret = fn(*args, reserved=None)
+        if "bufferSize" in sig.parameters:
+            buffSize = fn(data=None, bufferSize=0, *args)
+            ret = ctypes.create_string_buffer(b"\0" * buffSize)
+            fn(*args, data=ret, bufferSize=buffSize)
+            return ret.value.decode("utf-8")
+        elif len(args) < len(sig.parameters):
+            # Assume 1 missing arg, which is the pointer to the useful return value
+            cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
+            dataType = cfuncInfo["arg_type"][-1]
+            ret = dataType._type_()
+            args += (dataType(ret),)
+            fn(*args)
+            return ret.value
         else:
-            ret = fn(*args)
+            return fn(*args)
 
-        errCode = ret()
-
-        if errCode < 0:
-            msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error())
-            raise NIDAQError(errCode, msg)
-        elif errCode > 0:
-            print("NiDAQ Warning while running function '%s%s'" % (func, str(args)))
-            print(self.error(errCode))
-
-        if returnValue is not None:  # If a specific return value was indicated, return it now
-            return ret[returnValue]
-
-        # otherwise, try to guess which values should be returned
-        vals = ret.auto()
-        if len(vals) == 1:
-            return vals[0]
-        elif len(vals) > 1:
-            return vals
+        # if func[:3] == "Get":  # byref arguments will be handled automatically.
+        #     # functions that return char* can be called with a null pointer to get the size of the buffer needed.
+        #     if (argSig[-2][1] == ["char", "*"] or argSig[-2][1] == ["char", [-1]]) and argSig[-1][0] == "bufferSize":
+        #         returnValue = argSig[-2][0]
+        #         extra = {returnValue: None, "bufferSize": 0}
+        #         buffSize = fn(*args, **extra)()
+        #         ret = ctypes.create_string_buffer(b"\0" * buffSize)
+        #         args += (ret, buffSize)
+        #
+        # # Python 3 requires bytes instead of str arguments here
+        # args = list(args)
+        # for i, arg in enumerate(args):
+        #     if isinstance(arg, str):
+        #         args[i] = arg.encode()
+        #
+        # # if there is a 'reserved' argument, it MUST be 0 (don't let clibrary try to fill it for us)
+        # if argSig[-1][0] == "reserved":
+        #     ret = fn(*args, reserved=None)
+        # else:
+        #     ret = fn(*args)
+        #
+        # errCode = ret()
+        #
+        # if errCode < 0:
+        #     msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error())
+        #     raise NIDAQError(errCode, msg)
+        # elif errCode > 0:
+        #     print("NiDAQ Warning while running function '%s%s'" % (func, str(args)))
+        #     print(self.error(errCode))
+        #
+        # if returnValue is not None:  # If a specific return value was indicated, return it now
+        #     return ret[returnValue]
+        #
+        # # otherwise, try to guess which values should be returned
+        # vals = ret.auto()
+        # if len(vals) == 1:
+        #     return vals[0]
+        # elif len(vals) > 1:
+        #     return vals
 
     def _call(self, func, *args, **kargs):
         try:
@@ -132,6 +123,11 @@ class _NIDAQ:
         except:
             print(func, args)
             raise
+
+    def CreateTask(self, taskName):
+        taskPtr = PyDAQmx.TaskHandle()
+        self.call("CreateTask", taskName, taskPtr)
+        return taskPtr.value
 
     def error(self, errCode=None):
         """Return a string with error information. If errCode is None, then the currently 'active' error will be used."""
@@ -155,11 +151,11 @@ class _NIDAQ:
 
     def interpretMode(self, mode):
         modes = {
-            "rse": LIB.Val_RSE,
-            "nrse": LIB.Val_NRSE,
-            "diff": LIB.Val_Diff,
-            "chanperline": LIB.Val_ChanPerLine,
-            "chanforalllines": LIB.Val_ChanForAllLines,
+            "rse": PyDAQmx.Val_RSE,
+            "nrse": PyDAQmx.Val_NRSE,
+            "diff": PyDAQmx.Val_Diff,
+            "chanperline": PyDAQmx.Val_ChanPerLine,
+            "chanforalllines": PyDAQmx.Val_ChanForAllLines,
         }
         if isinstance(mode, six.string_types):
             mode = mode.lower()
@@ -172,14 +168,14 @@ class _NIDAQ:
         t = self._scalarTasks.get(key, None)
         if t is None:
             t = self.createTask()
-            t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], LIB.Val_Volts, None)
+            t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], PyDAQmx.Val_Volts, None)
             self._scalarTasks[key] = t
         t.WriteAnalogScalarF64(True, timeout, value)
 
     def readAnalogSample(self, chan, mode=None, vRange=(-10.0, 10.0), timeout=10.0):
         """Get the value of an AI port"""
         if mode is None:
-            mode = LIB.Val_Cfg_Default
+            mode = PyDAQmx.Val_Cfg_Default
         else:
             mode = self.interpretMode(mode)
 
@@ -187,7 +183,7 @@ class _NIDAQ:
         t = self._scalarTasks.get(key, None)
         if t is None:
             t = self.createTask()
-            t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], LIB.Val_Volts, None)
+            t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], PyDAQmx.Val_Volts, None)
             self._scalarTasks[key] = t
         return t.ReadAnalogScalarF64(timeout)
 
@@ -197,7 +193,7 @@ class _NIDAQ:
         t = self._scalarTasks.get(key, None)
         if t is None:
             t = self.createTask()
-            t.CreateDOChan(chan, "", LIB.Val_ChanForAllLines)
+            t.CreateDOChan(chan, "", PyDAQmx.Val_ChanForAllLines)
             self._scalarTasks[key] = t
         t.WriteDigitalScalarU32(True, timeout, value)
 
@@ -207,7 +203,7 @@ class _NIDAQ:
         t = self._scalarTasks.get(key, None)
         if t is None:
             t = self.createTask()
-            t.CreateDIChan(chan, "", LIB.Val_ChanForAllLines)
+            t.CreateDIChan(chan, "", PyDAQmx.Val_ChanForAllLines)
             self._scalarTasks[key] = t
         return t.ReadDigitalScalarU32(timeout)
 
@@ -233,12 +229,12 @@ class _NIDAQ:
 init()
 
 chTypes = {
-    LIB.Val_AI: "AI",
-    LIB.Val_AO: "AO",
-    LIB.Val_DI: "DI",
-    LIB.Val_DO: "DO",
-    LIB.Val_CI: "CI",
-    LIB.Val_CO: "CO",
+    PyDAQmx.Val_AI: "AI",
+    PyDAQmx.Val_AO: "AO",
+    PyDAQmx.Val_DI: "DI",
+    PyDAQmx.Val_DO: "DO",
+    PyDAQmx.Val_CI: "CI",
+    PyDAQmx.Val_CO: "CO",
 }
 
 
@@ -285,9 +281,9 @@ class Task:
         # Determine the default dtype based on the task type
         tt = self.taskType()
         if dtype is None:
-            if tt in [LIB.Val_AI, LIB.Val_AO]:
+            if tt in [PyDAQmx.Val_AI, PyDAQmx.Val_AO]:
                 dtype = np.float64
-            elif tt in [LIB.Val_DI, LIB.Val_DO]:
+            elif tt in [PyDAQmx.Val_DI, PyDAQmx.Val_DO]:
                 dtype = np.uint32  # uint8 / 16 might be sufficient, but don't seem to work anyway.
             else:
                 raise Exception("No default dtype for %s tasks." % chTypes[tt])
@@ -297,7 +293,7 @@ class Task:
 
         # Determine the correct function name to call based on the dtype requested
         fName = "Read"
-        if tt == LIB.Val_AI:
+        if tt == PyDAQmx.Val_AI:
             if dtype == np.float64:
                 fName += "Analog"
             elif dtype in [np.int16, np.uint16, np.int32, np.uint32]:
@@ -307,26 +303,22 @@ class Task:
                     "dtype %s not allowed for AI channels (must be float64, int16, uint16, int32, or uint32)"
                     % str(dtype)
                 )
-        elif tt == LIB.Val_DI:
+        elif tt == PyDAQmx.Val_DI:
             if dtype in [np.uint8, np.uint16, np.uint32]:
                 fName += "Digital"
             else:
                 raise Exception("dtype %s not allowed for DI channels (must be uint8, uint16, or uint32)" % str(dtype))
-        elif tt == LIB.Val_CI:
+        elif tt == PyDAQmx.Val_CI:
             fName += "Counter"
         else:
             raise Exception("read() not allowed for this task type (%s)" % chTypes[tt])
 
-        fName += dtypes[np.dtype(dtype).descr[0][1]]
+        fName += dataTypeConversions[np.dtype(dtype).descr[0][1]]
 
-        self.SetReadRelativeTo(LIB.Val_FirstSample)
+        self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
         self.SetReadOffset(0)
 
-        # buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
-        fn = LIB("functions", fName)
-        cbuf = ctypes.cast(buf.ctypes, fn.argCType("readArray"))
-
-        nPts = getattr(self, fName)(reqSamps, timeout, LIB.Val_GroupByChannel, cbuf, buf.size)
+        nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, buf, buf.size, None)
         return buf, nPts
 
     def write(self, data, timeout=10.0):
@@ -336,7 +328,7 @@ class Task:
         # Determine the correct write function to call based on dtype and task type
         fName = "Write"
         tt = self.taskType()
-        if tt == LIB.Val_AO:
+        if tt == PyDAQmx.Val_AO:
             if data.dtype == np.float64:
                 fName += "Analog"
             elif data.dtype in [np.int16, np.uint16]:
@@ -345,7 +337,7 @@ class Task:
                 raise Exception(
                     "dtype %s not allowed for AO channels (must be float64, int16, or uint16)" % str(data.dtype)
                 )
-        elif tt == LIB.Val_DO:
+        elif tt == PyDAQmx.Val_DO:
             if data.dtype in [np.uint8, np.uint16, np.uint32]:
                 fName += "Digital"
             else:
@@ -355,13 +347,9 @@ class Task:
         else:
             raise Exception("write() not implemented for this task type (%s)" % chTypes[tt])
 
-        fName += dtypes[data.dtype.descr[0][1]]
+        fName += dataTypeConversions[data.dtype.descr[0][1]]
 
-        # buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
-        fn = LIB("functions", fName)
-        cbuf = ctypes.cast(data.ctypes, fn.argCType("writeArray"))
-
-        nPts = getattr(self, fName)(data.size / numChans, False, timeout, LIB.Val_GroupByChannel, cbuf)
+        nPts = getattr(self, fName)(data.size // numChans, False, timeout, PyDAQmx.Val_GroupByChannel, data, None)
         return nPts
 
     def absChannelName(self, n):
@@ -382,7 +370,7 @@ class Task:
         return self.GetChanType(ch)
 
     def isInputTask(self):
-        return self.taskType() in [LIB.Val_AI, LIB.Val_DI]
+        return self.taskType() in [PyDAQmx.Val_AI, PyDAQmx.Val_DI]
 
     def isOutputTask(self):
-        return self.taskType() in [LIB.Val_AO, LIB.Val_DO]
+        return self.taskType() in [PyDAQmx.Val_AO, PyDAQmx.Val_DO]

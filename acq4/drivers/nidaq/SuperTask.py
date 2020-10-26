@@ -6,10 +6,10 @@ from collections import OrderedDict
 
 import numpy as np
 import six
+from PyDAQmx import DAQException
 from six.moves import map
 
 import acq4.util.ptime as ptime  # platform-independent precision timing
-from .base import NIDAQError
 
 
 class SuperTask:
@@ -111,8 +111,8 @@ class SuperTask:
         }
 
     # def setChannelInfo(self, chan, info):
-    # chan = self.absChanName(chan)
-    # self.channelInfo[chan] = info
+    #     chan = self.absChanName(chan)
+    #     self.channelInfo[chan] = info
 
     def setWaveform(self, chan, data):
         chan = self.absChanName(chan)
@@ -206,8 +206,8 @@ class SuperTask:
             # TODO: this must be skipped for the task which uses clkSource by default.
             try:
                 maxrate = self.tasks[k].GetSampClkMaxRate()
-            except NIDAQError as exc:
-                if exc.errCode == -200452:
+            except DAQException as exc:
+                if exc.error == -200452:
                     # Task does not support GetSampClkMaxRate
                     pass
             else:
