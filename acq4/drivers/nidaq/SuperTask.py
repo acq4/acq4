@@ -6,7 +6,11 @@ from collections import OrderedDict
 
 import numpy as np
 import six
-from PyDAQmx import DAQException
+
+try:
+    from PyDAQmx import DAQException
+except (NotImplementedError, ImportError):
+    DAQException = Exception
 from six.moves import map
 
 import acq4.util.ptime as ptime  # platform-independent precision timing
@@ -207,7 +211,7 @@ class SuperTask:
             try:
                 maxrate = self.tasks[k].GetSampClkMaxRate()
             except DAQException as exc:
-                if exc.error == -200452:
+                if getattr(exc, "error") == -200452:
                     # Task does not support GetSampClkMaxRate
                     pass
             else:
