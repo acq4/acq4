@@ -45,7 +45,7 @@ Installation
 The easiest way to get all of the requirements is by installing the Anaconda
 python distribution plus a few extra packages. 
 
-1. Download and install [Anaconda](https://www.anaconda.com/download/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) for python 2.7 (64-bit recommended)
+1. Download and install [Anaconda](https://www.anaconda.com/download/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
 
 2. Create a conda environment for acq4 (windows users must do this from the anaconda prompt):
 
