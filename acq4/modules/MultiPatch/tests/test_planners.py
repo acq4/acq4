@@ -45,6 +45,10 @@ class TestExtraction(TestCase):
         self.assertRaises(ValueError, lambda: _extractionWaypoint([-1, 0, 1], 2))
         self.assertRaises(ValueError, lambda: _extractionWaypoint([-1, 0, 1], -1))
 
+    def test_goes_nowhere_when_already_there(self):
+        waypoint = _extractionWaypoint(ORIGIN, np.pi / 4)
+        np.testing.assert_array_almost_equal(ORIGIN, waypoint)
+
     @staticmethod
     def assert_np_array_less_or_equal(a, b):
         assert np.alltrue(a <= b), f"{a} is not less than or equal to {b}"
