@@ -38,48 +38,70 @@ class PipetteMotionPlanner(object):
             self.future.stop()
 
     def _move(self):
-        raise NotImplememtedError()
+        raise NotImplementedError()
+
+
+ORIGIN = (0, 0, 0)
+
+
+def _extractionWaypoint(dest, pipAngle):
+    """
+    Parameters
+    ----------
+    dest
+        Destination coordinates. Extraction is only needed when +z and -x from the origin.
+    pipAngle
+        The angle of the pipette in radians, oriented to be between 0 and π/4.
+
+    Returns
+    -------
+    waypoint
+        Coordinates of the extraction waypoint, or the origin if none is needed.
+    """
+    destX = dest[0]
+    destZ = dest[2]
+    if destX > 0 or destZ < 0:
+        # no clear diagonal extraction to go forward or down
+        return ORIGIN
+
+    destAngle = np.arctan2(destZ, -destX)
+
+    if destAngle > pipAngle:
+        dz = destX * np.tan(pipAngle)
+        waypoint = (destX, 0, dz)
+    else:
+        dx = destZ / np.tan(pipAngle)
+        waypoint = (-dx, 0, destZ)
+
+    # sanity check, floating point errors
+    return np.clip(waypoint, ORIGIN, dest)
 
 
 class HomeMotionPlanner(PipetteMotionPlanner):
-    """Extract pipette tip diagonally, then move stage to home position.
+    """Extract pipette tip diagonally, then move to home position.
     """
     def _move(self):
         pip = self.pip
         speed = self.speed
-        stage = pip.parentDevice()
-        stagePos = stage.globalPosition()
-        stageHome = stage.homePosition()
-        assert stageHome is not None, "No home position defined for %s" % stage.name()
-        globalMove = np.asarray(stageHome) - np.asarray(stagePos) # this is how much electrode should move in global coordinates
+        manipulator = pip.parentDevice()
+        manipulatorHome = manipulator.homePosition()
+        assert manipulatorHome is not None, "No home position defined for %s" % manipulator.name()
+        # how much should the pipette move in global coordinates
+        globalMove = np.asarray(manipulatorHome) - np.asarray(manipulator.globalPosition())
 
         startPosGlobal = pip.globalPosition()
-        endPosGlobal = np.asarray(startPosGlobal) + globalMove  # this is where electrode should end up in global coordinates
-        endPos = pip.mapFromGlobal(endPosGlobal)  # and in local coordinates
+        # where should the pipette tip end up in global coordinates
+        endPosGlobal = np.asarray(startPosGlobal) + globalMove
+        # use local coordinates to make it easier to do the boundary intersections
+        endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        # define the path to take in local coordinates because that makes it
-        # easier to do the boundary intersections
-        homeAngle = np.arctan2(endPos[2], -endPos[0])
-        if homeAngle > pip.pitchRadians():
-            # diagonal move to 
-            dz = -endPos[0] * np.tan(pip.pitchRadians())
-            waypoint = pip.mapToGlobal([endPos[0], 0, dz])
-        else:
-            dx = -endPos[2] / np.tan(pip.pitchRadians())
-            waypoint = pip.mapToGlobal([dx, 0, endPos[2]])
-            if dx > 0:  # in case home z position is below the current z pos.
-                waypoint = None
-        
-        if waypoint is None:
-            path = [(endPosGlobal, speed, False)]
-        else:
-            # sanity check
-            for i in range(3):
-                waypoint[i] = np.clip(waypoint[i], startPosGlobal[i], endPosGlobal[i])
-            path = [
-                (waypoint, speed, True),
-                (endPosGlobal, speed, False),
-            ]
+        waypointLocal = _extractionWaypoint(endPosLocal, pip.pitchRadians())
+        waypointGlobal = pip.mapToGlobal(waypointLocal)
+
+        path = [
+            (waypointGlobal, speed, True),
+            (endPosGlobal, speed, False),
+        ]
 
         return pip._movePath(path)
 
