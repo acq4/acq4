@@ -51,13 +51,15 @@ def _extractionWaypoint(dest, pipAngle):
     dest
         Destination coordinates. Extraction is only needed when +z and -x from the origin.
     pipAngle
-        The angle of the pipette in radians, oriented to be between 0 and π/4.
+        The angle of the pipette in radians, oriented to be between 0 and π/2.
 
     Returns
     -------
     waypoint
         Coordinates of the extraction waypoint, or the origin if none is needed.
     """
+    if pipAngle < 0 or pipAngle > np.pi / 2:
+        raise ValueError("Invalid pipette pitch; orient your measurement to put it between 0 and π/2")
     destX = dest[0]
     destZ = dest[2]
     if destX > 0 or destZ < 0:

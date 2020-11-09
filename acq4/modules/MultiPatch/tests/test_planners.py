@@ -41,6 +41,10 @@ class TestExtraction(TestCase):
         self.assert_np_array_less_or_equal(np.abs(waypoint), np.abs(dest))
         self.assert_np_array_greater_or_equal(np.abs(waypoint), ORIGIN)
 
+    def test_invalid_pitch_gets_a_value_error(self):
+        self.assertRaises(ValueError, lambda: _extractionWaypoint([-1, 0, 1], 2))
+        self.assertRaises(ValueError, lambda: _extractionWaypoint([-1, 0, 1], -1))
+
     @staticmethod
     def assert_np_array_less_or_equal(a, b):
         assert np.alltrue(a <= b), f"{a} is not less than or equal to {b}"
