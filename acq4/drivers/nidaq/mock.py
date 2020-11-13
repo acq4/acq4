@@ -1,33 +1,22 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import os
-import sys
 import time
 
 import numpy as np
 import six
 from six.moves import range
 
-import acq4.util.clibrary as clibrary
-
-modDir = os.path.dirname(__file__)
-headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
-cacheFile = os.path.join(modDir, 'NIDAQmx_headers_%s.cache' % sys.platform)
-
-DEFS = clibrary.CParser(headerFiles, cache=cacheFile, types={'__int64': ('long long')}, verbose=False)
-
 from . import SuperTask
 
 
 class MockNIDAQ:
     def __init__(self):
-        self.lib = clibrary.CLibrary(None, DEFS, prefix='DAQmx_')
         # self.data = mockdata.getMockData('cell')
         # self.data = hstack([self.data, self.data])
-        # self.sampleRate = 20000.
         # self.loopTime = 20.
         # self.dataPtr = 0.0
+        self.clocks = {}
         self.devs = {
             'Dev1': {
                 'aiChans': {'/Dev1/ai0': 0, '/Dev1/ai1': 0, '/Dev1/ai2': 0, '/Dev1/ai3': 0},
@@ -41,10 +30,17 @@ class MockNIDAQ:
                 },
             }
         }
-        self.clocks = {}
-
-    def __getattr__(self, attr):
-        return getattr(self.lib, attr)
+        self.sampleRate = 20000.
+        self.Val_Cfg_Default = -1
+        self.Val_ChanForAllLines = 1
+        self.Val_ChanPerLine = 0
+        self.Val_Diff = 10106
+        self.Val_FiniteSamps = 10178
+        self.Val_NRSE = 10078
+        self.Val_RSE = 10083
+        self.Val_Rising = 10280
+        self.Val_Task_Unreserve = 5
+        self.Val_Volts = 10348
 
     def listAIChannels(self, dev):
         return list(self.devs[dev]['aiChans'].keys())
@@ -95,11 +91,11 @@ class MockNIDAQ:
 
     def interpretMode(self, mode):
         modes = {
-            'rse': self.lib.Val_RSE,
-            'nrse': self.lib.Val_NRSE,
-            'diff': self.lib.Val_Diff,
-            'chanperline': self.lib.Val_ChanPerLine,
-            'chanforalllines': self.lib.Val_ChanForAllLines
+            'rse': self.Val_RSE,
+            'nrse': self.Val_NRSE,
+            'diff': self.Val_Diff,
+            'chanperline': self.Val_ChanPerLine,
+            'chanforalllines': self.Val_ChanForAllLines
         }
         if isinstance(mode, six.string_types):
             mode = mode.lower()
@@ -107,7 +103,6 @@ class MockNIDAQ:
         return mode
 
     def interpretChannel(self, chan):
-
         parts = chan.lstrip('/').split('/')
         dev = parts.pop(0)
         if len(parts) == 1 and parts[0].startswith('line'):
@@ -120,17 +115,17 @@ class MockNIDAQ:
     def writeAnalogSample(self, chan, value, vRange=(-10., 10.), timeout=10.0):
         """Set the value of an AO or DO port"""
         t = self.createTask()
-        t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.lib.Val_Volts, None)
+        t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.Val_Volts, None)
         # t.WriteAnalogScalarF64(True, timeout, value, None)
 
     def readAnalogSample(self, chan, mode=None, vRange=(-10., 10.), timeout=10.0):
         """Get the value of an AI port"""
         if mode is None:
-            mode = self.lib.Val_Cfg_Default
+            mode = self.Val_Cfg_Default
         else:
             mode = self.interpretMode(mode)
         t = self.createTask()
-        t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.lib.Val_Volts, None)
+        t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.Val_Volts, None)
         # val = ctypes.c_double(0.)
         # t.ReadAnalogScalarF64(timeout, byref(val), None)
         # return val.value
@@ -142,7 +137,7 @@ class MockNIDAQ:
         chan = '/%s/%s' % (dev, chan)
         self.devs[dev]['lines'][chan] = value
         # t = self.createTask()
-        # t.CreateDOChan(chan, "", self.lib.Val_ChanForAllLines)
+        # t.CreateDOChan(chan, "", self.Val_ChanForAllLines)
         # t.WriteDigitalScalarU32(True, timeout, value, None)
 
     def readDigitalSample(self, chan, timeout=10.0):
@@ -151,7 +146,7 @@ class MockNIDAQ:
         chan = '/%s/%s' % (dev, chan)
         return self.devs[dev]['lines'][chan]
         # t = self.createTask()
-        # t.CreateDIChan(chan, "", self.lib.Val_ChanForAllLines)
+        # t.CreateDIChan(chan, "", self.Val_ChanForAllLines)
         # val = ctypes.c_ulong(0)
         # t.ReadDigitalScalarU32(timeout, byref(val), None)
         # return val.value
