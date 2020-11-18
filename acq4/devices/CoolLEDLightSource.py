@@ -14,12 +14,9 @@ class CoolLEDLightSource(LightSource):
         else:
             self._port = self._detectCoolLEDPort()
         self._devConn = serial.Serial(self._port, 38400, timeout=0)
-        # self.addSource("A", {"active": True, "brightness": 100})
-        # self.addSource("B", {"active": True, "brightness": 100})
-        # self.addSource("C", {"active": True, "brightness": 100})
-        # for name, config in self.sourceConfigs.items():
-        #     self.setSourceBrightness(name, config["brightness"])
-        #     self.setSourceActive(name, config["active"])
+        self.addSource("A", {"adjustableBrightness": True})
+        self.addSource("B", {"adjustableBrightness": True})
+        self.addSource("C", {"adjustableBrightness": True})
         self._readStatus()
 
     def _detectCoolLEDPort(self):
@@ -76,13 +73,13 @@ class CoolLEDLightSource(LightSource):
         return self._readStatus()[name]["active"]
 
     def setSourceActive(self, name, active):
-        cmd = self._makeSetterCommand(name, active, self.getSourceBrightness(name))
+        cmd = self._makeSetterCommand(name, active, int(self.getSourceBrightness(name) * 100))
         self._devConn.write(cmd)
         self.sourceConfigs[name]["active"] = active
 
     def getSourceBrightness(self, name):
-        return self._readStatus()[name]["brightness"]
+        return self._readStatus()[name]["brightness"] / 100.
 
     def setSourceBrightness(self, name, percent):
-        cmd = self._makeSetterCommand(name, percent > 0, percent)
+        cmd = self._makeSetterCommand(name, percent > 0, int(percent * 100))
         self._devConn.write(cmd)
