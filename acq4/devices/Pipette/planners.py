@@ -98,12 +98,14 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
         waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
-        waypointGlobal = pip.mapToGlobal(waypointLocal)
-
-        path = [
-            (waypointGlobal, speed, True),
-            (endPosGlobal, speed, False),
-        ]
+        if waypointLocal is None:
+            path = [(endPosGlobal, speed, False),]
+        else:
+            waypointGlobal = pip.mapToGlobal(waypointLocal)
+            path = [
+                (waypointGlobal, speed, True),
+                (endPosGlobal, speed, False),
+            ]
 
         return pip._movePath(path)
 
