@@ -13,7 +13,8 @@ class CoolLEDLightSource(LightSource):
             self._port = config["port"]
         else:
             self._port = self._detectCoolLEDPort()
-        self._devConn = serial.Serial(self._port, 38400, timeout=0)
+        self._devConn = serial.Serial(self._port, 57600, timeout=0)
+        self._devConn.readline()
         self.addSource("A", {"adjustableBrightness": True})
         self.addSource("B", {"adjustableBrightness": True})
         self.addSource("C", {"adjustableBrightness": True})
@@ -47,7 +48,7 @@ class CoolLEDLightSource(LightSource):
             except (OSError, serial.SerialException):
                 pass
 
-        raise HelpfulException("Could not detect a CoolLED light source. Are the drivers installed?")
+        raise HelpfulException("Could not detect a usb CoolLED light source. Are the drivers installed?")
 
     def _readStatus(self):
         self._devConn.write("CSS?\n".encode("utf-8"))
@@ -60,7 +61,7 @@ class CoolLEDLightSource(LightSource):
             self.sourceConfigs["B"]["brightness"] = int(resp[12:15])
             self.sourceConfigs["C"]["active"] = (resp[17] == "N")
             self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
-        except IndexError:
+        except (IndexError, ValueError):
             pass
         return self.sourceConfigs
 
