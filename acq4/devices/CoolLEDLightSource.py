@@ -79,7 +79,7 @@ class CoolLEDLightSource(LightSource):
     def setSourceActive(self, name, active):
         cmd = self._makeSetterCommand(name, active, int(self.getSourceBrightness(name) * 100))
         self._devConn.write(cmd)
-        self.sourceConfigs[name]["active"] = active
+        self._devConn.readline()
 
     def getSourceBrightness(self, name):
         return self._readStatus()[name]["brightness"] / 100.
@@ -87,3 +87,4 @@ class CoolLEDLightSource(LightSource):
     def setSourceBrightness(self, name, percent):
         cmd = self._makeSetterCommand(name, percent > 0, int(percent * 100))
         self._devConn.write(cmd)
+        self._devConn.readline()
