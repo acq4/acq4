@@ -14,9 +14,13 @@ class CoolLEDLightSource(LightSource):
         else:
             self._port = self._detectCoolLEDPort()
         self._devConn = serial.Serial(self._port, 38400, timeout=0)
-        self.addSource("A", {"active": False})
-        self.addSource("B", {"active": False})
-        self.addSource("C", {"active": False})
+        # self.addSource("A", {"active": True, "brightness": 100})
+        # self.addSource("B", {"active": True, "brightness": 100})
+        # self.addSource("C", {"active": True, "brightness": 100})
+        # for name, config in self.sourceConfigs.items():
+        #     self.setSourceBrightness(name, config["brightness"])
+        #     self.setSourceActive(name, config["active"])
+        self._readStatus()
 
     def _detectCoolLEDPort(self):
         if sys.platform.startswith("win"):
@@ -48,25 +52,37 @@ class CoolLEDLightSource(LightSource):
 
         raise HelpfulException("Could not detect a CoolLED light source. Are the drivers installed?")
 
+    def _readStatus(self):
+        self._devConn.write("CSS?\n".encode("utf-8"))
+        resp = self._devConn.readline().decode("utf-8")
+        print(f"CoolLED resp: {resp}")
+        self.sourceConfigs["A"]["active"] = (resp[5] == "N")
+        self.sourceConfigs["A"]["brightness"] = int(resp[6:9])
+        self.sourceConfigs["B"]["active"] = (resp[11] == "N")
+        self.sourceConfigs["B"]["brightness"] = int(resp[12:15])
+        self.sourceConfigs["C"]["active"] = (resp[17] == "N")
+        self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
+        return self.sourceConfigs
+
     @staticmethod
-    def _makeCommandString(channel, onOrOff, intensity):
+    def _makeSetterCommand(channel, onOrOff, brightness):
         onOrOff = "N" if onOrOff else "F"
-        return f"CSS{channel}S{onOrOff}{intensity:03d}\n".encode("utf-8")
+        return f"CSS{channel}S{onOrOff}{brightness:03d}\n".encode("utf-8")
 
     def quit(self):
         self._devConn.close()
 
-    # def sourceActive(self, name):
-    #     return False
+    def sourceActive(self, name):
+        return self._readStatus()[name]["active"]
 
     def setSourceActive(self, name, active):
-        cmd = self._makeCommandString(name, active, self.getSourceBrightness(name))
+        cmd = self._makeSetterCommand(name, active, self.getSourceBrightness(name))
         self._devConn.write(cmd)
         self.sourceConfigs[name]["active"] = active
 
     def getSourceBrightness(self, name):
-        return 100
+        return self._readStatus()[name]["brightness"]
 
     def setSourceBrightness(self, name, percent):
-        cmd = self._makeCommandString(name, True, percent)
+        cmd = self._makeSetterCommand(name, percent > 0, percent)
         self._devConn.write(cmd)
