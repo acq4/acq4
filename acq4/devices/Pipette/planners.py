@@ -41,30 +41,30 @@ class PipetteMotionPlanner(object):
         raise NotImplementedError()
 
 
-ORIGIN = (0, 0, 0)
+_LOCAL_ORIGIN = (0, 0, 0)
 
 
-def _extractionWaypoint(dest, pipAngle):
+def _homeExtractionWaypoint(destLocal, pipAngle):
     """
     Parameters
     ----------
-    dest
-        Destination coordinates. Extraction is only needed when +z and -x from the origin.
+    destLocal
+        Destination coordinates in pipette-local frame of reference. Extraction is only needed when +z and -x from the origin.
     pipAngle
         The angle of the pipette in radians, oriented to be between 0 and π/2.
 
     Returns
     -------
     waypoint
-        Coordinates of the extraction waypoint, or the origin if none is needed.
+        Local coordinates of the extraction waypoint, or None if none is needed.
     """
     if pipAngle < 0 or pipAngle > np.pi / 2:
         raise ValueError("Invalid pipette pitch; orient your measurement to put it between 0 and π/2")
-    destX = dest[0]
-    destZ = dest[2]
-    if destX > 0 or destZ < 0:
+    destX = destLocal[0]
+    destZ = destLocal[2]
+    if destX > 0 or destZ < 0 or (destX, destZ) == (0, 0):
         # no clear diagonal extraction to go forward or down
-        return ORIGIN
+        return None
 
     destAngle = np.arctan2(destZ, -destX)
 
@@ -76,7 +76,7 @@ def _extractionWaypoint(dest, pipAngle):
         waypoint = (-dx, 0, destZ)
 
     # sanity check, floating point errors
-    return np.clip(waypoint, ORIGIN, dest)
+    return np.clip(waypoint, _LOCAL_ORIGIN, destLocal)
 
 
 class HomeMotionPlanner(PipetteMotionPlanner):
@@ -97,7 +97,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         # use local coordinates to make it easier to do the boundary intersections
         endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        waypointLocal = _extractionWaypoint(endPosLocal, pip.pitchRadians())
+        waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
         waypointGlobal = pip.mapToGlobal(waypointLocal)
 
         path = [
