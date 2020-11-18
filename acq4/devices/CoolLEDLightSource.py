@@ -53,12 +53,15 @@ class CoolLEDLightSource(LightSource):
         self._devConn.write("CSS?\n".encode("utf-8"))
         resp = self._devConn.readline().decode("utf-8")
         print(f"CoolLED resp: {resp}")
-        self.sourceConfigs["A"]["active"] = (resp[5] == "N")
-        self.sourceConfigs["A"]["brightness"] = int(resp[6:9])
-        self.sourceConfigs["B"]["active"] = (resp[11] == "N")
-        self.sourceConfigs["B"]["brightness"] = int(resp[12:15])
-        self.sourceConfigs["C"]["active"] = (resp[17] == "N")
-        self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
+        try:
+            self.sourceConfigs["A"]["active"] = (resp[5] == "N")
+            self.sourceConfigs["A"]["brightness"] = int(resp[6:9])
+            self.sourceConfigs["B"]["active"] = (resp[11] == "N")
+            self.sourceConfigs["B"]["brightness"] = int(resp[12:15])
+            self.sourceConfigs["C"]["active"] = (resp[17] == "N")
+            self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
+        except IndexError:
+            pass
         return self.sourceConfigs
 
     @staticmethod
