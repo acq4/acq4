@@ -120,20 +120,27 @@ class LightSourceDevGui(Qt.QWidget):
 
         self.sourceActivationButtons = {}
         self.sourceBrightnessSliders = {}
+
+        def activeResponderFactory(name):
+            return lambda isOn: self.dev.setSourceActive(name, isOn)
+
+        def brightnessResponderFactory(name):
+            return lambda val: self.dev.setSourceBrightness(name, val / 99.)  # 0-99 => 0-100
+
         for i, name in enumerate(self.dev.sourceConfigs):
             conf = self.dev.sourceConfigs[name]
             if conf.get("adjustableBrightness", False):
                 slider = Qt.QSlider()
                 slider_cont = Qt.QGridLayout()
                 self.sourceBrightnessSliders[name] = slider
-                slider.valueChanged.connect(lambda val: self.dev.setSourceBrightness(name, val / 99.))  # 0-99
+                slider.valueChanged.connect(brightnessResponderFactory(name))
                 slider_cont.addWidget(slider, 0, 0)
                 self.layout.addLayout(slider_cont, 0, i)
             btn = Qt.QPushButton(name)
             btn.setCheckable(True)
             self.sourceActivationButtons[name] = btn
             self.layout.addWidget(btn, 1, i)
-            btn.clicked.connect(lambda isOn: self.dev.setSourceActive(name, isOn))
+            btn.clicked.connect(activeResponderFactory(name))
         self._updateValuesToMatchDev()
         self.dev.sigLightChanged.connect(self._updateValuesToMatchDev)
 
