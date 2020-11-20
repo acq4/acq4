@@ -121,6 +121,7 @@ class LightSourceDevGui(Qt.QWidget):
         self.sourceActivationButtons = {}
         self.sourceBrightnessSliders = {}
 
+        # `name` has to be passed into factory methods because lambdas don't bind their local contexts
         def activeResponderFactory(name):
             return lambda isOn: self.dev.setSourceActive(name, isOn)
 
