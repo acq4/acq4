@@ -98,18 +98,15 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         # use local coordinates to make it easier to do the boundary intersections
         endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        if isinstance(pip.parentDevice(), Sensapex):
-            # Sensapex implement proper extraction by default with non-linear movements.
-            waypointLocal = None
-        else:
-            waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
+        waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
 
         if waypointLocal is None:
             path = [(endPosGlobal, speed, False),]
         else:
             waypointGlobal = pip.mapToGlobal(waypointLocal)
             path = [
-                (waypointGlobal, speed, True),
+                # sensapex manipulators shouldn't need linear to perform correct extraction
+                (waypointGlobal, speed, not isinstance(pip.parentDevice(), Sensapex)),
                 (endPosGlobal, speed, False),
             ]
 
