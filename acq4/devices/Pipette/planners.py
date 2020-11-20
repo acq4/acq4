@@ -1,4 +1,5 @@
 import numpy as np
+from acq4.devices.Sensapex import Sensapex
 from six.moves import range
 
 
@@ -97,7 +98,12 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         # use local coordinates to make it easier to do the boundary intersections
         endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
+        if isinstance(pip.parentDevice(), Sensapex):
+            # Sensapex implement proper extraction by default with non-linear movements.
+            waypointLocal = None
+        else:
+            waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
+
         if waypointLocal is None:
             path = [(endPosGlobal, speed, False),]
         else:
