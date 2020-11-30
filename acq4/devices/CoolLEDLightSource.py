@@ -85,9 +85,10 @@ class CoolLEDLightSource(LightSource):
             self.sourceConfigs["B"]["brightness"] = int(resp[12:15])
             self.sourceConfigs["C"]["active"] = (resp[17] == "N")
             self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
+            # Current uses of this signal ignore the source name
+            self.sigLightChanged.emit(self, "A")
         except (IndexError, ValueError):
             pass
-        self.sigLightChanged.emit(self.sourceConfigs)
 
     @staticmethod
     def _makeSetterCommand(channel, onOrOff, brightness):
