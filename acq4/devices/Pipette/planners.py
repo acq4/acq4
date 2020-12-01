@@ -98,7 +98,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         # use local coordinates to make it easier to do the boundary intersections
         endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        waypointLocal = _homeExtractionWaypoint(endPosLocal, pip.pitchRadians())
+        waypointLocal = _homeExtractionWaypoint(endPosLocal, manipulator.calculatedXPitchRadians())
 
         if waypointLocal is None:
             path = [(endPosGlobal, speed, False),]
