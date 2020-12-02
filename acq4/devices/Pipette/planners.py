@@ -71,7 +71,7 @@ def _homeExtractionWaypoint(destLocal, pipAngle):
 
     if destAngle > pipAngle:
         dz = destX * np.tan(pipAngle)
-        waypoint = (destX, 0, dz)
+        waypoint = (destX, 0, -dz)
     else:
         dx = destZ / np.tan(pipAngle)
         waypoint = (-dx, 0, destZ)

@@ -13,6 +13,12 @@ class TestExtraction(TestCase):
         self.assert_np_array_less_or_equal(np.abs(waypoint), np.abs(dest))
         self.assert_np_array_greater_or_equal(np.abs(waypoint), _LOCAL_ORIGIN)
 
+    def test_no_going_down(self):
+        pip_angle = 0.43274141446715286
+        end_pos = (-0.01292786,  0.00458062,  0.00665165)
+        waypoint = _homeExtractionWaypoint(end_pos, pip_angle)
+        self.assertGreater(waypoint[2], 0)
+
     def test_goes_to_x_first_if_above_pitch(self):
         dest = [-1, 0, 2]
         waypoint = _homeExtractionWaypoint(dest, np.pi / 4)
