@@ -100,13 +100,13 @@ class HomeMotionPlanner(PipetteMotionPlanner):
 
         waypointLocal = _homeExtractionWaypoint(endPosLocal, manipulator.calculatedXPitchRadians())
 
-        if waypointLocal is None:
+        # sensapex manipulators shouldn't need a waypoint to perform correct extraction
+        if isinstance(manipulator, Sensapex) or waypointLocal is None:
             path = [(endPosGlobal, speed, False),]
         else:
             waypointGlobal = pip.mapToGlobal(waypointLocal)
             path = [
-                # sensapex manipulators shouldn't need linear to perform correct extraction
-                (waypointGlobal, speed, not isinstance(pip.parentDevice(), Sensapex)),
+                (waypointGlobal, speed, True),
                 (endPosGlobal, speed, False),
             ]
 
