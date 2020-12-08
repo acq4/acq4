@@ -41,6 +41,9 @@ class PipetteMotionPlanner(object):
     def _move(self):
         raise NotImplementedError()
 
+    def shouldUseLinearMotion(self):
+        return not isinstance(self.pip.parentDevice(), Sensapex)
+
 
 _LOCAL_ORIGIN = (0, 0, 0)
 
@@ -101,8 +104,8 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         waypointLocal = _homeExtractionWaypoint(endPosLocal, manipulator.calculatedXPitchRadians())
 
         # sensapex manipulators shouldn't need a waypoint to perform correct extraction
-        if isinstance(manipulator, Sensapex) or waypointLocal is None:
-            path = [(endPosGlobal, speed, False),]
+        if waypointLocal is None or not self.shouldUseLinearMotion():
+            path = [(endPosGlobal, speed, False), ]
         else:
             waypointGlobal = pip.mapToGlobal(waypointLocal)
             path = [
@@ -179,7 +182,7 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
             dz = stbyDepth - pos[2]
             dx = -dz / np.tan(pip.pitchRadians())
             last = np.array([dx, 0., dz])
-            path.append([pip.mapToGlobal(last), 100e-6, True])  # slow removal from sample
+            path.append([pip.mapToGlobal(last), 100e-6, self.shouldUseLinearMotion()])  # slow removal from sample
         else:
             last = np.array([0., 0., 0.])
 
@@ -203,8 +206,8 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
 
         if np.linalg.norm(stby - last) > 1e-6:
             if (closest[2] > stby[2]) and (np.linalg.norm(stby - closest) > 1e-6):
-                path.append([pip.mapToGlobal(closest), speed, True])
-            path.append([pip.mapToGlobal(stby), speed, True])
+                path.append([pip.mapToGlobal(closest), speed, self.shouldUseLinearMotion()])
+            path.append([pip.mapToGlobal(stby), speed, self.shouldUseLinearMotion()])
 
         return path
 
@@ -219,7 +222,7 @@ class TargetMotionPlanner(ApproachMotionPlanner):
         if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
             return
         path = self.approachPath(target, speed)
-        path.append([target, 100e-6, True])
+        path.append([target, 100e-6, self.shouldUseLinearMotion()])
         return pip._movePath(path)
 
 
