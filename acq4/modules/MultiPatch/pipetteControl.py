@@ -27,7 +27,7 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
             self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
-            self.pip.sigPressureChanged.connect(self.pressureChanged)
+            self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
@@ -51,10 +51,6 @@ class PipetteControl(Qt.QWidget):
         self.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
         self.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
         self.ui.autoBiasBtn.clicked.connect(self.autoBiasClicked)
-        self.ui.pressureWidget.regulatorPressureBtn.clicked.connect(self.regulatorPressureClicked)
-        self.ui.pressureWidget.userPressureBtn.clicked.connect(self.userPressureClicked)
-        self.ui.pressureWidget.atmospherePressureBtn.clicked.connect(self.atmospherePressureClicked)
-        self.ui.pressureWidget.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
         self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
         self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
@@ -257,22 +253,6 @@ class PipetteControl(Qt.QWidget):
     def autoBiasClicked(self):
         self.pip.enableAutoBias(self.ui.autoBiasBtn.isChecked())
         self.updateHoldingInfo()
-
-    def regulatorPressureClicked(self):
-        self.pip.pressureDevice.setPressure(source='regulator')
-
-    def userPressureClicked(self):
-        self.pip.pressureDevice.setPressure(source='user')
-
-    def atmospherePressureClicked(self):
-        self.pip.pressureDevice.setPressure(source='atmosphere')
-
-    def pressureSpinChanged(self):
-        self.pip.pressureDevice.setPressure(pressure=self.ui.pressureWidget.pressureSpin.value())
-
-    def pressureChanged(self, pip, source, pressure):
-        with pg.SignalBlock(self.ui.pressureWidget.pressureSpin.valueChanged, self.pressureSpinChanged):
-            self.ui.pressureWidget.pressureChanged(source, pressure)
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
