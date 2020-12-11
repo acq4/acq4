@@ -23,14 +23,8 @@ class MIESPressureControl(PressureControl):
     def getPressure(self):
         pass
 
-    def measurePressure(self):
-        pass
-
     def getSource(self):
         pass
 
     def _setSource(self, source):
-        pass
-
-    def calibrate(self):
         pass

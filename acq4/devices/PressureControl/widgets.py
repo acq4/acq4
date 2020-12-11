@@ -37,6 +37,8 @@ class PressureControlWidget(Qt.QWidget):
         """
         self.dev = dev
         self.pressureChanged(dev, dev.getSource(), dev.getPressure())
+        self.ui.pressureSpin.setMaximum(dev.maximum)
+        self.ui.pressureSpin.setMinimum(dev.minimum)
         dev.sigPressureChanged.connect(self.pressureChanged)
         self.ui.regulatorPressureBtn.clicked.connect(self.regulatorPressureClicked)
         self.ui.userPressureBtn.clicked.connect(self.userPressureClicked)

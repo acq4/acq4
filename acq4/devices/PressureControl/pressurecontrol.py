@@ -15,13 +15,17 @@ class PressureControl(Device):
 
     The configuration for these devices should look like:
         sources: ('regulator', 'atmosphere', 'user')
+        maximum: 50kPa
+        minimum: -50kPa
+        regulatorSettlingTime: 0.4
     """
     sigBusyChanged = Qt.Signal(object, object)  # self, busyOrNot
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
 
     def __init__(self, manager, config, name):
         Device.__init__(self, manager, config, name)
-        self.source = None
+        self.maximum = config.get('maximum', 5e4)
+        self.minimum = config.get('minimum', -5e4)
         self.pressure = None
         self.regulatorSettlingTime = config.get('regulatorSettlingTime', 0.3)
         self.source = None
