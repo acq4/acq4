@@ -7,9 +7,14 @@ Ui_DatabaseTemplate = Qt.importTemplate('.PressureControlWidget')
 
 class PressureControlWidget(Qt.QWidget):
     """Presents a compact interface for controlling a pressure-control device."""
+    styles = {
+        'regulator': 'background-color: #FCC; color: #000',
+        'user': 'background-color: #CCF; color: #AAA',
+        'atmosphere': 'color: #AAA',
+    }
 
-    def __init__(self, parent=None):
-        Qt.QWidget.__init__(self)
+    def __init__(self, parent=None, dev=None):
+        Qt.QWidget.__init__(self, parent)
         self.dev = None
         self.ui = Ui_DatabaseTemplate()
         self.ui.setupUi(self)
@@ -21,9 +26,17 @@ class PressureControlWidget(Qt.QWidget):
             step=1e3,
             format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
         )
+        if dev is not None:
+            self.connectPressureDevice(dev)
 
     def connectPressureDevice(self, dev):
+        """
+        Parameters
+        ----------
+        dev : PressureControl
+        """
         self.dev = dev
+        self.pressureChanged(dev, dev.getSource(), dev.getPressure())
         dev.sigPressureChanged.connect(self.pressureChanged)
         self.ui.regulatorPressureBtn.clicked.connect(self.regulatorPressureClicked)
         self.ui.userPressureBtn.clicked.connect(self.userPressureClicked)
@@ -48,12 +61,10 @@ class PressureControlWidget(Qt.QWidget):
         self.ui.atmospherePressureBtn.setChecked(source == 'atmosphere')
         self.ui.userPressureBtn.setChecked(source == 'user')
         self.ui.regulatorPressureBtn.setChecked(source == 'regulator')
+        self.setStyle(source)
 
-        style = {
-            'regulator': 'background-color: #FCC; color: #000',
-            'user': 'background-color: #CCF; color: #AAA',
-            'atmosphere': 'color: #AAA',
-        }.get(source, '')
+    def setStyle(self, source=None):
+        style = self.styles.get(source, self.styles.get(self.dev.source, ''))
         self.ui.pressureSpin.setStyleSheet(style)
 
     @property

@@ -1,6 +1,9 @@
 from __future__ import print_function
+
 import time
+
 from acq4.util import Qt
+from .widgets import PressureControlWidget
 from ..Device import Device
 
 
@@ -13,14 +16,16 @@ class PressureControl(Device):
     The configuration for these devices should look like:
         sources: ('regulator', 'atmosphere', 'user')
     """
+    sigBusyChanged = Qt.Signal(object, object)  # self, busyOrNot
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
 
     def __init__(self, manager, config, name):
         Device.__init__(self, manager, config, name)
         self.source = None
         self.pressure = None
-        self.sources = config.get('sources', ())
         self.regulatorSettlingTime = config.get('regulatorSettlingTime', 0.3)
+        self.source = None
+        self.sources = config.get('sources', ())
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
@@ -31,12 +36,15 @@ class PressureControl(Device):
         # order of operations depends on the requested source
         if source is not None and source != 'regulator':
             self._setSource(source)
+            self.source = source
         if pressure is not None:
             self._setPressure(pressure)
+            self.pressure = pressure
         if source == 'regulator':
             if pressure is not None:
                 time.sleep(self.regulatorSettlingTime)  # let pressure settle before switching valves
             self._setSource(source)
+            self.source = source
 
         self.sigPressureChanged.emit(self, self.source, self.pressure)
 
@@ -45,9 +53,25 @@ class PressureControl(Device):
 
         Note: this does _not_ change the configuration of any valves.
         """
-        self.pressure = p
+        raise NotImplementedError()
+
+    def getPressure(self):
+        raise NotImplementedError()
+
+    def setSource(self, source):
+        self.setPressure(source=source)
 
     def _setSource(self, source):
         """Configure valves for the specified pressure source: "atmosphere", "user", or "regulator"
         """
-        self.source = source
+        raise NotImplementedError()
+
+    def getSource(self):
+        raise NotImplementedError()
+
+    def getBusyStatus(self):
+        """Override this if your subclass implements a busy state."""
+        return False
+
+    def deviceInterface(self, win):
+        return PressureControlWidget(dev=self)

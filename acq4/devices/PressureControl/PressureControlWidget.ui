@@ -8,12 +8,6 @@
         <height>0</height>
       </size>
     </property>
-    <property name="maximumSize">
-      <size>
-        <width>65</width>
-        <height>16777215</height>
-      </size>
-    </property>
     <layout class="QVBoxLayout" name="verticalLayout_4">
       <property name="spacing">
         <number>2</number>
@@ -23,6 +17,12 @@
       </property>
       <item>
         <widget class="SpinBox" name="pressureSpin">
+          <property name="minimumSize">
+            <size>
+              <width>65</width>
+              <height>30</height>
+            </size>
+          </property>
           <property name="font">
             <font>
               <weight>75</weight>
@@ -44,6 +44,12 @@
           </property>
           <item>
             <widget class="QPushButton" name="regulatorPressureBtn">
+          <property name="minimumSize">
+            <size>
+              <width>20</width>
+              <height>30</height>
+            </size>
+          </property>
               <property name="text">
                 <string>R</string>
               </property>
@@ -54,6 +60,12 @@
           </item>
           <item>
             <widget class="QPushButton" name="userPressureBtn">
+          <property name="minimumSize">
+            <size>
+              <width>20</width>
+              <height>30</height>
+            </size>
+          </property>
               <property name="text">
                 <string>U</string>
               </property>
@@ -64,6 +76,12 @@
           </item>
           <item>
             <widget class="QPushButton" name="atmospherePressureBtn">
+          <property name="minimumSize">
+            <size>
+              <width>20</width>
+              <height>30</height>
+            </size>
+          </property>
               <property name="text">
                 <string>A</string>
               </property>
