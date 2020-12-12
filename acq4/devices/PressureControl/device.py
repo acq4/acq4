@@ -74,7 +74,7 @@ class PressureControl(Device):
         raise NotImplementedError()
 
     def getBusyStatus(self):
-        """Override this if your subclass implements a busy state."""
+        """Override this and emit sigBusyChanged appropriately if your subclass implements a busy state."""
         return False
 
     def deviceInterface(self, win):

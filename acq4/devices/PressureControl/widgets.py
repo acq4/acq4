@@ -42,17 +42,23 @@ class PressureControlWidget(Qt.QWidget):
         dev.sigPressureChanged.connect(self.pressureChanged)
         self.ui.regulatorPressureBtn.clicked.connect(self.regulatorPressureClicked)
         self.ui.userPressureBtn.clicked.connect(self.userPressureClicked)
+        self._userButtonCanBeUsed = ("user" in dev.sources)
         self.ui.atmospherePressureBtn.clicked.connect(self.atmospherePressureClicked)
         self.ui.pressureSpin.valueChanged.connect(self.pressureSpinChanged)
+        self._busyChanged(dev, dev.getBusyStatus())
+        dev.sigBusyChanged.connect(self._busyChanged)
 
     def regulatorPressureClicked(self):
         self.dev.setPressure(source='regulator')
+        self.ui.pressureSpin.setEnabled(True)
 
     def userPressureClicked(self):
         self.dev.setPressure(source='user')
+        self.ui.pressureSpin.setEnabled(False)
 
     def atmospherePressureClicked(self):
         self.dev.setPressure(source='atmosphere')
+        self.ui.pressureSpin.setEnabled(False)
 
     def pressureSpinChanged(self):
         self.dev.setPressure(pressure=self.ui.pressureSpin.value())
@@ -65,6 +71,12 @@ class PressureControlWidget(Qt.QWidget):
         self.ui.regulatorPressureBtn.setChecked(source == 'regulator')
         self.setStyle(source)
 
+    def _busyChanged(self, dev, isBusy):
+        self.ui.pressureSpin.setEnabled(not isBusy)
+        self.ui.atmospherePressureBtn.setEnabled(not isBusy)
+        self.ui.userPressureBtn.setEnabled(self._userButtonCanBeUsed and not isBusy)
+        self.ui.regulatorPressureBtn.setEnabled(not isBusy)
+
     def setStyle(self, source=None):
         style = self.styles.get(source, self.styles.get(self.dev.source, ''))
         self.ui.pressureSpin.setStyleSheet(style)
@@ -72,15 +84,3 @@ class PressureControlWidget(Qt.QWidget):
     @property
     def pressureSpin(self):
         return self.ui.pressureSpin
-
-    @property
-    def regulatorPressureBtn(self):
-        return self.ui.regulatorPressureBtn
-
-    @property
-    def userPressureBtn(self):
-        return self.ui.userPressureBtn
-
-    @property
-    def atmospherePressureBtn(self):
-        return self.ui.atmospherePressureBtn
