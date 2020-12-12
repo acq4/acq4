@@ -94,7 +94,7 @@ class SensapexPressureControlWidget(Qt.QWidget):
         self.layout.addWidget(self.controlWidget, 0, 1)
 
         self.measurement = Qt.QLabel("-")
-        self.measurement.setContentMargins(20, 20, 20, 20)
+        self.measurement.setMargin(20)
         self.layout.addWidget(self.measurement, 0, 2)
         self._measurementChanged(dev, dev.measurePressure())
         dev.sigMeasuredPressureChanged.connect(self._measurementChanged)
@@ -103,7 +103,7 @@ class SensapexPressureControlWidget(Qt.QWidget):
         dev.sigBusyChanged.connect(self._busyChanged)
 
     def _measurementChanged(self, dev, pressure):
-        self.measurement.setText(f"{pressure} Pa")
+        self.measurement.setText(f"{pressure} kPa")
 
     def _busyChanged(self, dev, isBusy):
         self.calibrateButton.setEnabled(not isBusy)
