@@ -33,6 +33,7 @@ class SensapexPressureControl(PressureControl):
         self.source = self.getSource()
         self.pressure = self.getPressure()
         self._pollThread = Thread(target=self._poll)
+        self._pollThread.run()
 
     def _poll(self):
         while True:
