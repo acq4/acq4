@@ -1,51 +1,106 @@
 from __future__ import print_function
 
-from acq4.drivers.sensapex import UMP
+from threading import Thread
+from time import sleep
 
-from ..PressureControl import PressureControl
+from acq4.drivers.sensapex import UMP
+from acq4.util import Qt
+from .PressureControl import PressureControl, PressureControlWidget
 
 
 class SensapexPressureControl(PressureControl):
     """Pressure control device driven by Sensapex analog/digital channels.
     """
+    sigMeasuredPressureChanged = Qt.Signal(object, object)  # self, pressure
 
     def __init__(self, manager, config, name):
-        self.devid = config.get('deviceId')
+        self.devId = config.get('deviceId')
         if manager.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             UMP.set_library_path(manager.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
         ump = UMP.get_ump(address=address, group=group)
-        self.dev = ump.get_device(self.devid)
-
+        self.dev = ump.get_device(self.devId)
+        config.setdefault("maximum", 7e4)
+        config.setdefault("minimum", -7e4)
         PressureControl.__init__(self, manager, config, name)
 
         self.pressureChannel = config.pop('pressureChannel')
-        self.sources = config.pop('sources')
+        self._valveValueBySource = {"regulator": 1, "atmosphere": 0}
+        self.sources = tuple(self._valveValueBySource.keys())
+        self._busy = self.dev.is_busy()
+        self._measurement = self.dev.measure_pressure(self.pressureChannel)
+        self.source = self.getSource()
+        self.pressure = self.getPressure()
+        self._pollThread = Thread(target=self._poll)
 
-        # try to infer current source from channel state
-        for source, chans in self.sources.items():
-            match = True
-            for chan, val in chans.items():
-                if self.dev.get_valve(int(chan)) != val:
-                    match = False
-                    break
-            if match:
-                self.source = source
-                break
-        self.pressure = self.dev.get_pressure(self.pressureChannel) * 1000
+    def _poll(self):
+        while True:
+            self.getBusyStatus()
+            self.measurePressure()
+            sleep(self.regulatorSettlingTime)
 
     def _setPressure(self, p):
-        """Set the regulated output pressure (in Pascals) to the pipette.
-
-        Note: this does _not_ change the configuration of any values.
-        """
         self.dev.set_pressure(self.pressureChannel, p / 1000.)
-        self.pressure = p
+
+    def getPressure(self):
+        return self.dev.get_pressure(self.pressureChannel) * 1000
+
+    def measurePressure(self):
+        pressure = self.dev.measure_pressure(self.pressureChannel)
+        if pressure != self._measurement:
+            self._measurement = pressure
+            self.sigMeasuredPressureChanged.emit(self, pressure)
+        return pressure
+
+    def getSource(self):
+        if self.dev.get_valve(self.pressureChannel) == 1:
+            return "regulator"
+        else:
+            return "atmosphere"
 
     def _setSource(self, source):
-        """Configure valves for the specified pressure source: "atmosphere", "user", or "regulator"
-        """
-        for chan, val in self.sources[source].items():
-            self.dev.set_valve(int(chan), val)
-        self.source = source
+        self.dev.set_valve(self.pressureChannel, self._valveValueBySource[source])
+
+    def calibrate(self):
+        self.dev.calibrate_pressure()
+
+    def getBusyStatus(self):
+        busy = self.dev.is_busy()
+        if busy != self._busy:
+            self._busy = busy
+            self.sigBusyChanged.emit(self, busy)
+        return busy
+
+    def deviceInterface(self, win):
+        return SensapexPressureControlWidget(dev=self)
+
+
+class SensapexPressureControlWidget(Qt.QWidget):
+    """Supports measured pressure display and calibration"""
+
+    def __init__(self, dev):
+        super(SensapexPressureControlWidget, self).__init__()
+        self.dev = dev
+        self.layout = Qt.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.calibrateButton = Qt.QPushButton("Calibrate")
+        self.calibrateButton.clicked.connect(self.dev.calibrate)
+        self.layout.addWidget(self.calibrateButton, 0, 0)
+
+        self.controlWidget = PressureControlWidget(self, dev)
+        self.layout.addWidget(self.controlWidget, 0, 1)
+
+        self._measurementChanged(dev, dev.measurePressure())
+        dev.sigMeasuredPressureChanged.connect(self._measurementChanged)
+
+        self._busyChanged(dev, dev.getBusyStatus())
+        dev.sigBusyChanged.connect(self._busyChanged)
+
+    def _measurementChanged(self, dev, pressure):
+        self.measurement.setText(f"{pressure} Pa")
+
+    def _busyChanged(self, dev, isBusy):
+        self.calibrateButton.setEnabled(not isBusy)
