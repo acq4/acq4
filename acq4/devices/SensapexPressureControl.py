@@ -93,6 +93,7 @@ class SensapexPressureControlWidget(Qt.QWidget):
         self.controlWidget = PressureControlWidget(self, dev)
         self.layout.addWidget(self.controlWidget, 0, 1)
 
+        self.measurement = Qt.QLabel("-")
         self._measurementChanged(dev, dev.measurePressure())
         dev.sigMeasuredPressureChanged.connect(self._measurementChanged)
 
