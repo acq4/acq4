@@ -63,7 +63,7 @@ class SensapexPressureControl(PressureControl):
         self.dev.set_valve(self.pressureChannel, self._valveValueBySource[source])
 
     def calibrate(self):
-        self.dev.calibrate_pressure()
+        self.dev.calibrate_pressure(self.pressureChannel)
 
     def getBusyStatus(self):
         busy = self.dev.is_busy()
@@ -94,6 +94,8 @@ class SensapexPressureControlWidget(Qt.QWidget):
         self.layout.addWidget(self.controlWidget, 0, 1)
 
         self.measurement = Qt.QLabel("-")
+        self.measurement.setContentMargins(20, 20, 20, 20)
+        self.layout.addWidget(self.measurement, 0, 2)
         self._measurementChanged(dev, dev.measurePressure())
         dev.sigMeasuredPressureChanged.connect(self._measurementChanged)
 
