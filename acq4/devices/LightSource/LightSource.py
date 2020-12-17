@@ -3,8 +3,6 @@ from __future__ import print_function
 
 from collections import OrderedDict
 
-import pyqtgraph as pg
-
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
@@ -126,16 +124,10 @@ class LightSourceDevGui(Qt.QWidget):
 
         # `name` has to be passed into factory methods because lambdas don't bind their local contexts
         def activeResponderFactory(name):
-            def responder(isOn):
-                with pg.SignalBlock(self.dev.sigLightChanged, self._updateValuesToMatchDev):
-                    self.dev.setSourceActive(name, isOn)
-            return responder
+            return lambda isOn: self.dev.setSourceActive(name, isOn)
 
         def brightnessResponderFactory(name):
-            def responder(val):
-                with pg.SignalBlock(self.dev.sigLightChanged, self._updateValuesToMatchDev):
-                    self.dev.setSourceBrightness(name, val / 99.)  # 0-99 => 0-100
-            return responder
+            return lambda val: self.dev.setSourceBrightness(name, val / 99.)  # 0-99 => 0-100
 
         for i, name in enumerate(self.dev.sourceConfigs):
             conf = self.dev.sourceConfigs[name]
