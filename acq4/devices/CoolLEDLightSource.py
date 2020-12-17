@@ -65,14 +65,15 @@ class CoolLEDLightSource(LightSource):
                     dataToWrite = self._writeBuffer
                     self._writeBuffer = ""
                 self._devConn.write(dataToWrite.encode("utf-8"))
-            while self._devConn.out_waiting > 0:
-                self._handleData(self._devConn.readline().decode("utf-8"))
+            while self._devConn.in_waiting > 0:
+                self._handleData(self._devConn.readline(self._devConn.in_waiting).decode("utf-8"))
             sleep(0.2)
 
     def _requestStatus(self):
         self._sendCommand("CSS?")
 
     def _sendCommand(self, cmd):
+        print(f"sending CoolLED cmd '{cmd}'")
         with self._writeLock:
             self._writeBuffer += f"{cmd}\n"
 
