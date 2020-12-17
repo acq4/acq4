@@ -73,12 +73,10 @@ class CoolLEDLightSource(LightSource):
         self._sendCommand("CSS?")
 
     def _sendCommand(self, cmd):
-        print(f"sending CoolLED cmd '{cmd}'")
         with self._writeLock:
             self._writeBuffer += f"{cmd}\n"
 
     def _handleData(self, resp):
-        print(f"CoolLED resp: {resp}")
         try:
             self.sourceConfigs["A"]["active"] = (resp[5] == "N")
             self.sourceConfigs["A"]["brightness"] = int(resp[6:9])
