@@ -7,7 +7,7 @@ from pyqtgraph import ptime, Transform3D, solve3DTransform
 
 from acq4.util import Qt
 from acq4.drivers.sensapex import UMP
-from ..Stage import Stage, MoveFuture, CalibrationWindow
+from .Stage import Stage, MoveFuture, CalibrationWindow
 
 
 class Sensapex(Stage):

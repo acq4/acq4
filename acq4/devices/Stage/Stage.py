@@ -219,18 +219,6 @@ class Stage(Device, OptomechDevice):
         m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
         return m
 
-    def calculatedXPitchRadians(self):
-        """
-        Returns
-        -------
-        float
-            The angle in radians of the x axis relative to the horizontal plane.
-        """
-        if self._axisTransform is None:
-            self.axisTransform()  # Side-effect: this assigns _axisTransform
-        xAxis, yAxis, zAxis = self._axisTransform.axes()
-        return (np.pi / 2) - xAxis.angleRadians(zAxis)
-
     # def mapToStage(self, obj):
     #     return self._mapTransform(obj, self._stageTransform)
 
@@ -395,7 +383,7 @@ class Stage(Device, OptomechDevice):
 
         return mfut
         
-    def _move(self, abs, rel, speed, linear):
+    def _move(self, abs, rel, speed, linear, **kwds):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()

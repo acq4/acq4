@@ -1,25 +1,23 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 from __future__ import division
+from __future__ import print_function
 
-import pickle
-import threading
-from acq4.util import Qt
-import numpy as np
 import weakref
 
+import numpy as np
 import pyqtgraph as pg
+from six.moves import range
+
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.Sensapex import Sensapex
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.util import Qt
 from acq4.util.target import Target
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
-from six.moves import range
-
-from ..Sensapex import Sensapex
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 

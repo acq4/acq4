@@ -48,7 +48,7 @@ class PipetteMotionPlanner(object):
 _LOCAL_ORIGIN = (0, 0, 0)
 
 
-def _homeExtractionWaypoint(destLocal, pipAngle):
+def _extractionWaypoint(destLocal, pipAngle):
     """
     Parameters
     ----------
@@ -70,7 +70,7 @@ def _homeExtractionWaypoint(destLocal, pipAngle):
         # no clear diagonal extraction to go forward or down
         return None
 
-    destAngle = np.arctan2(destZ, -destX)
+    destAngle = np.arctan2(destZ, -destX)  # `-x` to match the pipAngle orientation
 
     if destAngle > pipAngle:
         dz = destX * np.tan(pipAngle)
@@ -101,7 +101,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         # use local coordinates to make it easier to do the boundary intersections
         endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        waypointLocal = _homeExtractionWaypoint(endPosLocal, manipulator.calculatedXPitchRadians())
+        waypointLocal = _extractionWaypoint(endPosLocal, pip.pitchRadians())
 
         # sensapex manipulators shouldn't need a waypoint to perform correct extraction
         if waypointLocal is None or not self.shouldUseLinearMotion():
