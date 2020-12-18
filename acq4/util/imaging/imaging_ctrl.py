@@ -44,10 +44,10 @@ class ImagingCtrl(Qt.QWidget):
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, useCUDA=False):
         Qt.QWidget.__init__(self, parent)
 
-        self.frameDisplay = self.frameDisplayClass()
+        self.frameDisplay = self.frameDisplayClass(useCUDA=useCUDA)
 
         self.pinnedFrames = []
         self.stackShape = None

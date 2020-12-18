@@ -1,11 +1,11 @@
 from __future__ import print_function
 
-import numpy
-
 try:
     import cupy as cp
+    cupyLibraryAvailable = True
 except ImportError:
-    from pyqtgraph.util import empty_cupy as cp
+    cp = None
+    cupyLibraryAvailable = False
 
 import pyqtgraph as pg
 
@@ -31,7 +31,7 @@ class FrameDisplay(Qt.QObject):
 
     imageUpdated = Qt.Signal(object)  # emits frame when the image is redrawn
 
-    def __init__(self, maxFPS=30):
+    def __init__(self, maxFPS=30, useCUDA=False):
         Qt.QObject.__init__(self)
 
         self._maxFPS = maxFPS
@@ -39,6 +39,7 @@ class FrameDisplay(Qt.QObject):
         self._msPerFrame = int(self._sPerFrame * 1000)
         self._imageItem = pg.ImageItem()
         self._imageItem.setAutoDownsample(True)
+        self._useCUDA = useCUDA
         self.contrastCtrl = self.contrastClass()
         self.contrastCtrl.setImageItem(self._imageItem)
         self.bgCtrl = self.bgSubtractClass()
@@ -144,11 +145,10 @@ class FrameDisplay(Qt.QObject):
             self.contrastCtrl.processImage(data)
             prof()
 
-            # update image in viewport
-            if cp == numpy:
-                self._imageItem.updateImage(data.copy())
-            else:
+            if self._useCUDA and cupyLibraryAvailable:
                 self._imageItem.updateImage(cp.asarray(data))
+            else:
+                self._imageItem.updateImage(data.copy())
             prof()
 
             self.imageUpdated.emit(self.currentFrame)
