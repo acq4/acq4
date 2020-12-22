@@ -100,7 +100,7 @@ class ZeissMtbSdk(object):
         return self.getComponentByID(ZeissMtbLamp, "MTBTLHalogenLamp")
 
     def getObjective(self):
-        return self.getComponentByID(ZeissMtbObjective, "MTBObjectiveChanger")
+        return self.getComponentByID(ZeissMtbObjectiveChanger, "MTBObjectiveChanger")
 
     def getRLLamp(self):
         return self.getComponentByID(ZeissMtbLamp, "MTBRLHalogenLamp")
@@ -310,39 +310,14 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
 
+class ZeissMtbObjectiveChanger(ZeissMtbChanger):
+    def __init__(self, root, component):
+        ZeissMtbChanger.__init__(self, root, component)
+
+
 # Unfinished below this line
 
 
 class ZeissMtbFocus:
     def __init__(self, root):
         self.m_component = root.GetComponent("MTBFocus")
-
-
-class ZeissMtbObjective(ZeissMtbChanger):
-    def __init__(self, root, mtbId):
-        self.m_MTBRoot = root
-        self.m_objective = root.GetComponent("IMTBObjective")
-        self.m_ID = mtbId
-        ZeissMtbChanger.__init__(self, root, mtbId, "MTBObjectiveChanger")
-        self.registerEvents(self.onObjectivePositionChanged, self.onObjectivePositionSettled)
-
-    def onObjectivePositionChanged(self, position):
-        print(" Objective position changed to " + position)
-
-    def onObjectivePositionSettled(self, position):
-        print(" Objective position settled to " + position)
-
-    def magnification(self):
-        return self.m_objective.magnification
-
-    def aperture(self):
-        return self.m_objective.aperture
-
-    def contrastMethod(self):
-        return self.m_objective.contrastMethod
-
-    def features(self):
-        return self.m_objective.features
-
-    def workingDistance(self):
-        return self.m_objective.workingDistance
