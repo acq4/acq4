@@ -99,7 +99,7 @@ class ZeissMtbSdk(object):
     def getTLLamp(self):
         return self.getComponentByID(ZeissMtbLamp, "MTBTLHalogenLamp")
 
-    def getObjective(self):
+    def getObjectiveChanger(self):
         return self.getComponentByID(ZeissMtbObjectiveChanger, "MTBObjectiveChanger")
 
     def getRLLamp(self):
