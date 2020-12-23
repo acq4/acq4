@@ -13,10 +13,11 @@ from acq4.util.HelpfulException import HelpfulException
 class CoolLEDLightSource(LightSource):
     def __init__(self, dm, config, name):
         super(CoolLEDLightSource, self).__init__(dm, config, name)
-        if "port" in config:
-            self._port = config["port"]
-        else:
+        self._port = config["port"]
+        if self._port == "probe":
+            # TODO dockument
             self._port = self._detectCoolLEDPort()
+        # TODO use acq4's serial
         self._devConn = serial.Serial(self._port, 57600, timeout=0)
         self.addSource("A", {"adjustableBrightness": True})
         self.addSource("B", {"adjustableBrightness": True})
@@ -66,6 +67,8 @@ class CoolLEDLightSource(LightSource):
                     self._writeBuffer = ""
                 self._devConn.write(dataToWrite.encode("utf-8"))
             while self._devConn.in_waiting > 0:
+                # TODO read-until?
+                # TODO do we want to put a timeout on getting a newline
                 self._handleData(self._devConn.readline(self._devConn.in_waiting).decode("utf-8"))
             sleep(0.2)
 
