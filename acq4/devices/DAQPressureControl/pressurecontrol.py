@@ -5,14 +5,18 @@ from ..PressureControl import PressureControl
 
 class DAQPressureControl(PressureControl):
     """Pressure control device driven by DAQ analog/digital channels.
-    The configuration for these devices should look like:
-        sources:
-            regulator:
-                channel_name: TODO what?
-            atmosphere:
-                channel_name: TODO what?
-            user:
-                channel_name: TODO what?
+    The configuration for these devices might look like::
+
+    sources:
+        regulator:
+            valve_1: 1  # activate only valve 1 for regulator
+            valve_2: 0
+        atmosphere:
+            valve_1: 0  # deactivate all valves for atmosphere
+            valve_2: 0
+        user:
+            valve_1: 0  # activate only valve 2 for user
+            valve_2: 1
     """
 
     def __init__(self, manager, config, name):

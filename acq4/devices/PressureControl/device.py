@@ -13,11 +13,11 @@ class PressureControl(Device):
     Pressure control may be implemented by a combination of a pressure regulator
     and multiple valves.
 
-    The configuration for these devices should look like:
-        sources: ('regulator', 'atmosphere', 'user')
-        maximum: 50kPa
-        minimum: -50kPa
-        regulatorSettlingTime: 0.4
+    The configuration for these devices should look like::
+
+        maximum: 50*kPa
+        minimum: -50*kPa
+        regulatorSettlingTime: 0.3
     """
     sigBusyChanged = Qt.Signal(object, object)  # self, busyOrNot
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
@@ -29,7 +29,7 @@ class PressureControl(Device):
         self.pressure = None
         self.regulatorSettlingTime = config.get('regulatorSettlingTime', 0.3)
         self.source = None
-        self.sources = config.get('sources', ())
+        self.sources = ("regulator", "user", "atmosphere")
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).

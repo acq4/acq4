@@ -11,8 +11,6 @@ class MIESPressureControl(PressureControl):
     def __init__(self, manager, config, name):
         self._headstage = config.pop('headstage')
         self.mies = MIES.getBridge(True)
-
-        config['sources'] = ['atmosphere', 'regulator', 'user']
         PressureControl.__init__(self, manager, config, name)
 
     def _setPressure(self, source=None, pressure=None):

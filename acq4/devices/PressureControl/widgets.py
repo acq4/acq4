@@ -49,6 +49,7 @@ class PressureControlWidget(Qt.QWidget):
         dev.sigBusyChanged.connect(self._busyChanged)
 
     def regulatorPressureClicked(self):
+        # TODO this sleeps for 0.3s in the UI thread
         self.dev.setPressure(source='regulator')
         self.ui.pressureSpin.setEnabled(True)
 
