@@ -22,6 +22,7 @@ class SensapexObjectiveChanger(Device):
         self.dev = ump.get_device(self.devid)
 
         self._lastPos = None
+        self.getLensPosition()
 
     def setLensPosition(self, pos):
         return ObjectiveChangeFuture(self, pos)

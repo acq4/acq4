@@ -280,8 +280,6 @@ class Objective(OptomechDevice):
         self._config = config
         self._scope = scope
         self._key = key
-        offset = config.get('offset', pg.Vector(0,0,0))
-        scale = config.get('scale', pg.Vector(1,1,1))
         name = config['name']
         
         OptomechDevice.__init__(self, scope.dm, {}, name)
