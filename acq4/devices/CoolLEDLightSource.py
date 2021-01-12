@@ -3,11 +3,10 @@ import sys
 from threading import Thread
 from time import sleep
 
-import serial
-from pyqtgraph.util.mutex import Mutex
-
 from acq4.devices.LightSource import LightSource
+from acq4.drivers.SerialDevice import SerialDevice, TimeoutError
 from acq4.util.HelpfulException import HelpfulException
+from acq4.util.Mutex import Mutex
 
 
 class CoolLEDLightSource(LightSource):
@@ -28,8 +27,7 @@ class CoolLEDLightSource(LightSource):
         self._port = config["port"]
         if self._port == "probe":
             self._port = self._detectCoolLEDPort()
-        # TODO use acq4's serial
-        self._devConn = serial.Serial(self._port, 57600, timeout=0)
+        self._devConn = SerialDevice(port=self._port, baudrate=57600, timeout=0)
         self.addSource("A", {"adjustableBrightness": True})
         self.addSource("B", {"adjustableBrightness": True})
         self.addSource("C", {"adjustableBrightness": True})
@@ -53,7 +51,7 @@ class CoolLEDLightSource(LightSource):
 
         for port in ports:
             try:
-                conn = serial.Serial(port, timeout=0.1)
+                conn = SerialDevice(port=port, baudrate=57600, timeout=0.1)
                 if conn.readline()[0:7] == b"CoolLED" or conn.readline() == 4:
                     conn.close()
                     return port
@@ -65,7 +63,7 @@ class CoolLEDLightSource(LightSource):
                         return port
                 else:
                     conn.close()
-            except (OSError, serial.SerialException):
+            except (OSError, TimeoutError):
                 pass
 
         raise HelpfulException("Could not detect a usb CoolLED light source. Are the drivers installed?")
@@ -77,10 +75,8 @@ class CoolLEDLightSource(LightSource):
                     dataToWrite = self._writeBuffer
                     self._writeBuffer = ""
                 self._devConn.write(dataToWrite.encode("utf-8"))
-            while self._devConn.in_waiting > 0:
-                # TODO read-until?
-                # TODO do we want to put a timeout on getting a newline
-                self._handleData(self._devConn.readline(self._devConn.in_waiting).decode("utf-8"))
+            while self._devConn.hasDataToRead():
+                self._handleData(self._devConn.readline().decode("utf-8"))
             sleep(0.2)
 
     def _requestStatus(self):

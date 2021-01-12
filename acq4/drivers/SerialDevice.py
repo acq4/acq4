@@ -114,7 +114,7 @@ class SerialDevice(object):
         logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
 
-    def read(self, length, timeout=5, term=None):
+    def read(self, length, timeout=5.0, term=None):
         """
         Read *length* bytes or raise TimeoutError after *timeout* has elapsed.
 
@@ -122,7 +122,7 @@ class SerialDevice(object):
         return the packet excluding *term*. If the packet is not terminated 
         with *term*, then DataError is raised.
         """
-        #self.serial.setTimeout(timeout) #broken!
+        # self.serial.setTimeout(timeout) # broken!
         packet = self._readWithTimeout(length, timeout)
         if len(packet) < length:
             raise TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet), packet)
@@ -187,6 +187,12 @@ class SerialDevice(object):
             if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet
 
+    def readline(self, **kwargs):
+        return self.readUntil("\n", **kwargs)
+
+    def hasDataToRead(self):
+        return self.serial.inWaiting() > 0
+
     def clearBuffer(self):
         ## not recommended..
         d = self.readAll()
@@ -213,7 +219,7 @@ if __name__ == '__main__':
     try:
         port, baud = sys.argv[1:3]
     except ValueError:
-        print("Usage: python -i SerialDevice port baudrate")
+        print("Missing arguments! Usage:\n\tpython -i SerialDevice PORT BAUDRATE")
         exit(1)
     else:
         sd = SerialDevice(port=port, baudrate=baud)
