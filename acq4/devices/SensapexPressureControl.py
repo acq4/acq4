@@ -95,9 +95,10 @@ class SensapexPressureControlWidget(Qt.QWidget):
         self.controlWidget = PressureControlWidget(self, dev)
         self.layout.addWidget(self.controlWidget, 0, 1)
 
-        self.measurement = Qt.QLineEdit("-")  # TODO
-        self.measurement.setFont(Qt.QFont("monospace"))
-        self.measurement.setMargin(20)
+        self.measurement = Qt.QLineEdit()
+        self.measurement.setPlaceholderText("-")
+        self.measurement.setReadOnly(True)
+        self.measurement.setTextMargins(20, 4, 20, 4)
         self.layout.addWidget(self.measurement, 0, 2)
         self._measurementChanged(dev, dev.measurePressure())
         dev.sigMeasuredPressureChanged.connect(self._measurementChanged)
