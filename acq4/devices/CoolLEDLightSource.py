@@ -11,11 +11,22 @@ from acq4.util.HelpfulException import HelpfulException
 
 
 class CoolLEDLightSource(LightSource):
+    """
+    The Cool LED family of light sources should conform to the protocol used here.
+
+    Config options
+    --------------
+
+    port | string
+        The name of the serial port to connect to ( e.g. COM1, /dev/ttyS2 ). If the port is
+        set to "probe", this will scan through all the available ports in search of a device
+        that responds like a Cool LED device. This may produce unexpected behavior in other
+        devices.
+    """
     def __init__(self, dm, config, name):
         super(CoolLEDLightSource, self).__init__(dm, config, name)
         self._port = config["port"]
         if self._port == "probe":
-            # TODO dockument
             self._port = self._detectCoolLEDPort()
         # TODO use acq4's serial
         self._devConn = serial.Serial(self._port, 57600, timeout=0)
