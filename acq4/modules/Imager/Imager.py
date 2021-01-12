@@ -263,7 +263,7 @@ class Imager(Module):
 
         # takes care of displaying image data,
         # contrast & background subtraction user interfaces
-        self.imagingCtrl = imaging.ImagingCtrl(useCUDA=config.get("cudaImageProcessing"))
+        self.imagingCtrl = imaging.ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
         self.imageItem = self.frameDisplay.imageItem()
 

@@ -41,7 +41,7 @@ class CameraInterface(CameraModuleInterface):
 
         # takes care of displaying image data, 
         # contrast & background subtraction user interfaces
-        self.imagingCtrl = ImagingCtrl(useCUDA=module.useCUDA)
+        self.imagingCtrl = ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
 
         ## Move control panels into docks

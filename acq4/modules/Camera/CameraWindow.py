@@ -31,7 +31,6 @@ class CameraWindow(Qt.QMainWindow):
     def __init__(self, module):
         self.hasQuit = False
         self.module = module  # handle to the rest of the application
-        self.useCUDA = module.useCUDA
 
         self.interfaces = OrderedDict()  # owner: widget
         self.docks = OrderedDict()  # owner: dock

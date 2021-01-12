@@ -14,7 +14,6 @@ class Camera(Module):
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
-        self.useCUDA = config.get("cudaImageProcessing", True)
         self.ui = CameraWindow(self)
         mp = os.path.dirname(__file__)
         self.ui.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
