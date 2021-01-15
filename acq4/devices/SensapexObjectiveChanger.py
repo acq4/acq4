@@ -1,9 +1,8 @@
 import threading
 
-from acq4.drivers.sensapex import UMP
-
 import acq4.util.Qt as Qt
 from acq4.devices.Device import Device
+from acq4.drivers.sensapex import UMP
 from acq4.util.future import Future
 
 
@@ -66,13 +65,12 @@ class ObjectiveChangeFuture(Future):
             try:
                 self._checkStop(delay=0.2)
             except self.StopRequested:
-                self._taskDone(interrupted=True, error="Stop requested bfore operation finished.")
+                self._taskDone(interrupted=True, error="Stop requested before operation finished.")
                 break
 
-    def stop(self):
+    def stop(self, **kwargs):
         self.dev.stop()
         Future.stop(self)
 
     def percentDone(self):
         return 100 if self.isDone() else 0
-

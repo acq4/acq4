@@ -8,7 +8,7 @@ import numpy as np
 
 from acq4.util.Mutex import RecursiveMutex as RLock
 from acq4.util.debug import printExc
-from ..SerialDevice import SerialDevice, TimeoutError, DataError
+from ..SerialDevice import SerialDevice, SerialTimeoutError, DataError
 from six.moves import map
 from six.moves import range
 
@@ -144,7 +144,7 @@ class Scientifica(SerialDevice):
                     raise ValueError("Received unexpected response from device at %s. (Is this a scientifica device?)" % port)
                 connected = True
                 break
-            except TimeoutError:
+            except SerialTimeoutError:
                 pass
 
         if not connected:
@@ -172,7 +172,7 @@ class Scientifica(SerialDevice):
             try:
                 result = self.readUntil(b'\r', timeout=timeout)[:-1]
                 self.readAll() # should be nothing left in the buffer at this point
-            except TimeoutError:
+            except SerialTimeoutError:
                 self.readAll()
                 raise
             if result.startswith(b'E,'):

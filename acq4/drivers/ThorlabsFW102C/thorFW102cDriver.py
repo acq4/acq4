@@ -1,7 +1,7 @@
 from __future__ import print_function
 import serial, struct, time, collections, threading, re, pdb
 try:
-    from ..SerialDevice import SerialDevice, TimeoutError, DataError
+    from ..SerialDevice import SerialDevice, SerialTimeoutError, DataError
 except ValueError:
     ## relative imports not allowed when running from command prompt, so
     ## we adjust sys.path when running the script for testing
@@ -163,7 +163,7 @@ class FilterWheelDriver(SerialDevice):
             
             time.sleep(0.01)
             if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)), s)
+                raise SerialTimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)), s)
 
         
 if __name__ == '__main__':

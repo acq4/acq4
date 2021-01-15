@@ -10,7 +10,7 @@ except ImportError:
     from threading import RLock
 
 try:
-    from ..SerialDevice import SerialDevice, TimeoutError, DataError
+    from ..SerialDevice import SerialDevice, SerialTimeoutError, DataError
 except ValueError:
     ## relative imports not allowed when running from command prompt
     if __name__ == '__main__':
@@ -260,7 +260,7 @@ class SutterMPC200(SerialDevice):
             # If the move is interrupted, sometimes we get junk on the serial line.
             time.sleep(0.03)
             self.readAll()
-        except TimeoutError:
+        except SerialTimeoutError:
             # just for debugging
             print("start pos:", currentPos, "move pos:", ustepPos)
             raise

@@ -14,7 +14,7 @@ except ImportError:
     from threading import RLock
 
 try:
-    from ..SerialDevice import SerialDevice, TimeoutError, DataError
+    from ..SerialDevice import SerialDevice, SerialTimeoutError, DataError
 except ValueError:
     ## relative imports not allowed when running from command prompt, so
     ## we adjust sys.path when running the script for testing

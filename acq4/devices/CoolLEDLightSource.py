@@ -4,7 +4,7 @@ from threading import Thread
 from time import sleep
 
 from acq4.devices.LightSource import LightSource
-from acq4.drivers.SerialDevice import SerialDevice, TimeoutError
+from acq4.drivers.SerialDevice import SerialDevice, SerialTimeoutError
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.Mutex import Mutex
 
@@ -63,7 +63,7 @@ class CoolLEDLightSource(LightSource):
                         return port
                 else:
                     conn.close()
-            except (OSError, TimeoutError):
+            except (OSError, SerialTimeoutError):
                 pass
 
         raise HelpfulException("Could not detect a usb CoolLED light source. Are the drivers installed?")
