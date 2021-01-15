@@ -39,7 +39,7 @@ class FrameDisplay(Qt.QObject):
         self._maxFPS = maxFPS
         self._sPerFrame = 1.0 / maxFPS
         self._msPerFrame = int(self._sPerFrame * 1000)
-        self._useCUDA = getManager().config["cudaImageProcessing"]
+        self._useCUDA = getManager().config.get("cudaImageProcessing", False)
         if self._useCUDA:
             setConfigOption("useCupy", True)
         self._imageItem = pg.ImageItem()  # Implicitly depends on global setConfigOption state
