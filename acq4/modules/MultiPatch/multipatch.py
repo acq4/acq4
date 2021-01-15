@@ -19,6 +19,20 @@ Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
 
 class MultiPatch(Module):
+    """
+    Config
+    ----------
+
+    enableMockPatch : bool
+        Whether or not to allow mock patching.
+
+    patchProfiles : dict
+        Use this config block to override automated patching. Keyed by
+        state name, see acq4/devices/PatchPipette/states.py for the
+        list of states and their possible options E.g.::
+            cell detect:
+                advanceStepInterval: 0.06
+    """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
 

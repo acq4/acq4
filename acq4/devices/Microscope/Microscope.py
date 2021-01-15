@@ -132,9 +132,9 @@ class Microscope(Device, OptomechDevice):
             self.currentSwitchPosition = index
             self.currentObjective = self.getObjective()
             if self.currentObjective == lastObj:
-                return    
-            
-        self.setCurrentSubdevice(self.currentObjective)        
+                return
+
+        self.setCurrentSubdevice(self.currentObjective)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
     def getObjective(self):
@@ -381,13 +381,11 @@ class ScopeGUI(Qt.QWidget):
         self.objWidgets[index][0].setChecked(True)
 
     def objRadioClicked(self):
-        checked = None
-        for r in self.objList:
-            if self.objWidgets[r][0].isChecked():
-                checked = r
+        for obj in self.objList:
+            if self.objWidgets[obj][0].isChecked():
+                self.dev.setObjectiveIndex(obj)
                 break
-        self.dev.setObjectiveIndex(r)
-    
+
     def objComboChanged(self):
         combo = self.sender()
         self.dev.selectObjective(combo.itemData(combo.currentIndex()))
