@@ -1,10 +1,11 @@
 from __future__ import print_function
 
 import logging
+import sys
+import time
 
 import serial
 import six
-import time
 
 
 class TimeoutError(Exception):
@@ -214,8 +215,6 @@ class SerialDevice(object):
 
 
 if __name__ == '__main__':
-    import sys
-
     try:
         port, baud = sys.argv[1:3]
     except ValueError:
