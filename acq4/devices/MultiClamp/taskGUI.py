@@ -344,6 +344,6 @@ class MultiClampTaskGui(TaskGui):
     def quit(self):
         TaskGui.quit(self)
         if not sip.isdeleted(self.daqUI):
-            Qt.QObject.disconnect(self.daqUI, Qt.SIGNAL('changed'), self.daqChanged)
+            self.daqUI.sigChanged.disconnect(self.daqChanged)
         self.ui.topPlotWidget.close()
         self.ui.bottomPlotWidget.close()
