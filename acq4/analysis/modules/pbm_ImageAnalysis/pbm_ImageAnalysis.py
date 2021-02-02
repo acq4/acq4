@@ -697,7 +697,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.imageView.getView().setAspectLocked(True)
         self.imageView.imageItem.resetTransform()
         if self.imageType == 'PMT':
-            self.imageView.imageItem.scale((self.rs.width/self.rs.height)/(float(self.imageData.shape[1])/float(self.imageData.shape[2])), 1.0)
+            self.imageView.imageItem.setTransform(pg.QtGui.QTransform.fromScale(1.0, abs((self.rs.width/self.rs.height)/(float(self.imageData.shape[1])/float(self.imageData.shape[2])), 1.0)), True)
         self.imageView.autoRange()
 
         self.dataState['Loaded'] = True
