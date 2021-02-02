@@ -30,7 +30,7 @@ ui.setupUi(cw)
 win.show()
 win.resize(800,600)
 
-ui.labelTree.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
+ui.labelTree.header().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
 
 data = MetaArray(file=dataFile, mmap=True)
 ## data must have axes (anterior, dorsal, right)
