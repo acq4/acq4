@@ -337,5 +337,5 @@ class ScientificaGUI(StageInterface):
         self.psLayout.addWidget(self.speedSpin, 0, 1)
 
         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-        self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
+        self.speedSpin.valueChanged.connect(self.dev.setDefaultSpeed)
 

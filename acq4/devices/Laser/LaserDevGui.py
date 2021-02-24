@@ -74,7 +74,7 @@ class LaserDevGui(Qt.QWidget):
         self.ui.channelCombo.currentIndexChanged.connect(self.channelChanged)
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
-        self.ui.checkPowerBtn.clicked.connect(lambda: self.dev.outputPower(forceUpdate=True))
+        self.ui.checkPowerBtn.clicked.connect(self._handleCheckPowerBtnClick)
         self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
         
         self.ui.GDDEnableCheck.toggled.connect(self.GDDEnableToggled)
@@ -88,6 +88,9 @@ class LaserDevGui(Qt.QWidget):
             pass
         
         self.powerMeterChanged() ## populate channel combo for default power meter
+
+    def _handleCheckPowerBtnClick(self):
+        self.dev.outputPower(forceUpdate=True)
 
     def GDDEnableToggled(self, b):
         if b:

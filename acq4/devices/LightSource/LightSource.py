@@ -6,6 +6,8 @@ from acq4.util import Qt
 import acq4.util.Mutex as Mutex
 from collections import OrderedDict
 
+from acq4.util.NamedWidgets import NameEmittingPushButton, NamedNormalizedSlider
+
 
 class LightSource(Device):
     """Device tracking the state and properties of a single light-emitting device with one or more internal
@@ -123,17 +125,17 @@ class LightSourceDevGui(Qt.QWidget):
         for i, name in enumerate(self.dev.sourceConfigs):
             conf = self.dev.sourceConfigs[name]
             if conf.get("adjustableBrightness", False):
-                slider = Qt.QSlider()
+                slider = NamedNormalizedSlider(name)
                 slider_cont = Qt.QGridLayout()
                 self.sourceBrightnessSliders[name] = slider
-                slider.valueChanged.connect(lambda val: self.dev.setSourceBrightness(name, val / 99.))  # 0-99
+                slider.valueChangedWithName.connect(self.dev.setSourceBrightness)
                 slider_cont.addWidget(slider, 0, 0)
                 self.layout.addLayout(slider_cont, 0, i)
-            btn = Qt.QPushButton(name)
+            btn = NameEmittingPushButton(name)
             btn.setCheckable(True)
             self.sourceActivationButtons[name] = btn
             self.layout.addWidget(btn, 1, i)
-            btn.clicked.connect(lambda isOn: self.dev.setSourceActive(name, isOn))
+            btn.clickedWithName.connect(self.dev.setSourceActive)
         self._updateValuesToMatchDev()
         self.dev.sigLightChanged.connect(self._updateValuesToMatchDev)
 

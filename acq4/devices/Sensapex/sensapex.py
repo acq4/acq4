@@ -251,7 +251,8 @@ class SensapexMoveFuture(MoveFuture):
 #         self.psLayout.addWidget(self.speedSpin, 0, 1)
 #
 #         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-#         self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
+#         # UNSAFE lambdas with self prevent GC
+#         # self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
 
 
 class SensapexInterface(Qt.QWidget):

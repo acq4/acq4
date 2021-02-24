@@ -6,6 +6,7 @@ from acq4.util import Qt
 from acq4.util.debug import printExc
 from .frame_display import FrameDisplay
 from .record_thread import RecordThread
+from ..NamedWidgets import NameEmittingPushButton
 
 Ui_Form = Qt.importTemplate(".imaging_template")
 
@@ -95,10 +96,13 @@ class ImagingCtrl(Qt.QWidget):
         When this button is clicked, the sigAcquireFrameClicked signal is emitted
         with *name* as the first argument.
         """
-        btn = Qt.QPushButton(name)
+        btn = NameEmittingPushButton(name)
         self.customButtons[0].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[0]), 0)
-        btn.clicked.connect(lambda: self.sigAcquireFrameClicked.emit(name))
+        btn.clicked.connect(self._onNamedFrameButtonClick)
+
+    def _onNamedFrameButtonClick(self, name, checked):
+        self.sigAcquireFrameClicked.emit(name)
 
     def addVideoButton(self, name):
         """Add a new button below the original "Acquire Video" button.
@@ -106,10 +110,10 @@ class ImagingCtrl(Qt.QWidget):
         When this button is clicked, the sigAcquireVideoClicked signal is emitted
         with *name* as the first argument.
         """
-        btn = Qt.QPushButton(name)
+        btn = NameEmittingPushButton(name)
         self.customButtons[1].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[1]), 1)
-        btn.clicked.connect(lambda: self.acquireVideoClicked(None, name))
+        btn.clickedWithName.connect(self._handleNamedVideoButtonClick)
 
     def newFrame(self, frame):
         self.ui.saveFrameBtn.setEnabled(True)
@@ -225,11 +229,14 @@ class ImagingCtrl(Qt.QWidget):
         for btn in [self.ui.acquireFrameBtn] + self.customButtons[0]:
             btn.setEnabled(False)
 
-    def acquireVideoClicked(self, b=None, name=None):
-        if name is not None or self.ui.acquireVideoBtn.isChecked():
-            self.sigStartVideoClicked.emit(name)
+    def acquireVideoClicked(self, checked):
+        if checked:
+            self.sigStartVideoClicked.emit()
         else:
             self.sigStopVideoClicked.emit()
+
+    def _handleNamedVideoButtonClick(self, name, checked):
+        self.sigStartVideoClicked(name)
 
     def acquireFrameClicked(self):
         self.sigAcquireFrameClicked.emit(None)
