@@ -1,5 +1,7 @@
 from __future__ import print_function
-import time
+
+from datetime import datetime
+
 import traceback
 import sys, os
 from six.moves import map
@@ -147,7 +149,7 @@ class LogWindow(Qt.QMainWindow):
         else:
             kwargs["currentDir"] = None
 
-        now = str(time.strftime("%Y.%m.%d %H:%M:%S"))
+        now = datetime.now().astimezone().isoformat()
         name = "LogEntry_" + str(self.msgCount)
         self.msgCount += 1
         entry = {
