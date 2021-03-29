@@ -233,7 +233,7 @@ class ImagingCtrl(Qt.QWidget):
         if checked:
             self.sigStartVideoClicked.emit(None)
         else:
-            self.sigStopVideoClicked.emit(None)
+            self.sigStopVideoClicked.emit()
 
     def _handleNamedVideoButtonClick(self, name, checked):
         self.sigStartVideoClicked(name)
