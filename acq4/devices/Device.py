@@ -98,7 +98,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
                 print("Timeout waiting for device lock for %s" % self.name())
                 print("  Device is currently locked from:")
                 print(self._lock_tb_)
-                raise Exception("Timed out waiting for device lock for %s" % self.name())
+                raise Exception("Timed out waiting for device lock for %s\n  Locking traceback:\n%s" % (self.name(), self._lock_tb_))
         else:
             l = self._lock_.tryLock()
             if not l:
