@@ -15,6 +15,7 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util.target import Target
+from pyqtgraph import Point
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
 from six.moves import range
@@ -555,7 +556,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     def targetChanged(self, dev, pos):
         self.target.setPos(pg.Point(pos[:2]))
         self.target.setDepth(pos[2])
-        self.depthTarget.setPos(0, pos[2])
+        self.depthTarget.setPos(Point(0, pos[2]))
         self.target.setVisible(True)
         self._haveTarget = True
         self.depthTarget.setVisible(True)
