@@ -45,7 +45,6 @@ from .util import Qt
 # Import pyqtgraph, get QApplication instance
 import pyqtgraph as pg
 
-pg.setConfigOptions(useWeave=False)
 app = pg.mkQApp()
 
 ## Install a simple message handler for Qt errors:
