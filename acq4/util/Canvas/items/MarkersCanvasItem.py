@@ -39,15 +39,15 @@ class MarkersCanvasItem(CanvasItem):
             PointParameter(name='Position', value=position)
         ]
         # allow adding extra parameters when adding new markers
-        if params is not None:
-            children.extend(kwds['params'])
+        # if params is not None:
+        # :MC: disabled because kwds does not exist
+        #     children.extend(kwds['params'])
         
         param = pg.parametertree.Parameter.create(name=name, autoIncrementName=True, type='group', renamable=True, removable=True, children=children)
         self.params.addChild(param)
 
         target = pg.graphicsItems.TargetItem.TargetItem()
-        target.setLabel(name)
-        target.setLabelAngle(45)
+        target.setLabel(name, {"angle": 45})
         target.setParentItem(self.graphicsItem())
         target.setPos(position[0], position[1])
         target.param = weakref.ref(param)

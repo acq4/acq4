@@ -493,8 +493,7 @@ class PipetteCamModInterface(CameraModuleInterface):
                     break
         if showLabel:
             num = dev.name()[len(basename):]
-            self.target.setLabel(num)
-            self.target.setLabelAngle(dev.yawAngle())
+            self.target.setLabel(num, {"angle": dev.yawAngle()})
 
         self.depthTarget = Target(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
@@ -579,9 +578,10 @@ class PipetteCamModInterface(CameraModuleInterface):
         # self.depthLine.setValue(pos[2])
         self.depthArrow.setPos(0, pos[2])
 
-        dev = self.getDevice()
-        yaw = dev.yawAngle()
-        self.target.setLabelAngle(yaw)
+        if self.target.label() is not None:
+            dev = self.getDevice()
+            yaw = dev.yawAngle()
+            self.target.label().setAngle(yaw)
 
     def analyzeTransform(self):
         """Return the position and yaw angle of the device transform
