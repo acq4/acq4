@@ -239,7 +239,7 @@ class ImagingCtrl(Qt.QWidget):
 
     def _handleNamedVideoButtonClick(self, checked):
         btn = self.sender()
-        self.sigStartVideoClicked(btn.objectName())
+        self.sigStartVideoClicked.emit(btn.objectName())
 
     def acquireFrameClicked(self):
         self.sigAcquireFrameClicked.emit(None)
