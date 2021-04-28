@@ -95,7 +95,7 @@ class ImagingCtrl(Qt.QWidget):
         When this button is clicked, the sigAcquireFrameClicked signal is emitted
         with *name* as the first argument.
         """
-        btn = Qt.QPushButton()
+        btn = Qt.QPushButton(name)
         btn.setObjectName(name)
         self.customButtons[0].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[0]), 0)
@@ -111,7 +111,7 @@ class ImagingCtrl(Qt.QWidget):
         When this button is clicked, the sigAcquireVideoClicked signal is emitted
         with *name* as the first argument.
         """
-        btn = Qt.QPushButton()
+        btn = Qt.QPushButton(name)
         btn.setObjectName(name)
         self.customButtons[1].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[1]), 1)
