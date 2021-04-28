@@ -10,6 +10,7 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 from pyqtgraph import ptime
+from pyqtgraph.graphicsItems.ROI import RulerROI
 from pyqtgraph.metaarray import MetaArray
 from six.moves import range
 
@@ -437,35 +438,46 @@ class ROIPlotter(Qt.QWidget):
         self.roiPlot = pg.PlotWidget()
         self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
 
-        self.rectBtn.clicked.connect(lambda: self.addROI("rect"))
-        self.ellipseBtn.clicked.connect(lambda: self.addROI("ellipse"))
-        self.polygonBtn.clicked.connect(lambda: self.addROI("polygon"))
-        self.rulerBtn.clicked.connect(lambda: self.addROI("ruler"))
+        self.rectBtn.clicked.connect(self._addRectROI)
+        self.ellipseBtn.clicked.connect(self._addEllipseROI)
+        self.polygonBtn.clicked.connect(self._addPolygonROI)
+        self.rulerBtn.clicked.connect(self._addRulerROI)
 
-    def addROI(self, roiType):
+    def _addRectROI(self):
+        center, size = self._getNewROIParams()
+        roi = PlotROI(center, size)
+        self._addROI(roi)
+
+    def _addEllipseROI(self):
+        center, size = self._getNewROIParams()
+        roi = pg.EllipseROI(center, size, removable=True)
+        self._addROI(roi)
+
+    def _addPolygonROI(self):
+        center, size = self._getNewROIParams()
+        pts = [center, center + pg.Point(0, size[1]), center + pg.Point(size[0], 0)]
+        roi = pg.PolyLineROI(pts, closed=True, removable=True)
+        self._addROI(roi)
+
+    def _addRulerROI(self):
+        center, size = self._getNewROIParams()
+        pts = [center, center + pg.Point(size[0], size[1])]
+        roi = RulerROI(pts, removable=True)
+        self._addROI(roi)
+
+    def _addROI(self, roi):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
-        center = self.view.viewRect().center()
-        # print 'camerawindow.py: addROI:: ', self.view.viewPixelSize()
-        size = [x * 50 for x in self.view.viewPixelSize()]
-        if roiType == "rect":
-            roi = PlotROI(center, size)
-        elif roiType == "ellipse":
-            roi = pg.EllipseROI(center, size, removable=True)
-        elif roiType == "polygon":
-            pts = [center, center + pg.Point(0, size[1]), center + pg.Point(size[0], 0)]
-            roi = pg.PolyLineROI(pts, closed=True, removable=True)
-        elif roiType == "ruler":
-            pts = [center, center + pg.Point(size[0], size[1])]
-            roi = pg.graphicsItems.ROI.RulerROI(pts, removable=True)
-        else:
-            raise ValueError("Invalid ROI type %s" % roiType)
-
         roi.setZValue(40000)
         roi.setPen(pen)
         self.view.addItem(roi)
         plot = self.roiPlot.plot(pen=pen)
         self.ROIs.append({"roi": roi, "plot": plot, "vals": [], "times": []})
         roi.sigRemoveRequested.connect(self.removeROI)
+
+    def _getNewROIParams(self):
+        center = self.view.viewRect().center()
+        size = [x * 50 for x in self.view.viewPixelSize()]
+        return center, size
 
     def removeROI(self, roi):
         self.view.removeItem(roi)

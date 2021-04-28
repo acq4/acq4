@@ -73,7 +73,7 @@ class LaserTaskGui(DAQGenericTaskGui):
             
         ## catch self.powerWidget.sigDataChanged and connect it to functions that calculate and plot raw shutter and qswitch traces
         self.powerWidget.sigDataChanged.connect(self.powerCmdChanged)
-        self.ui.checkPowerBtn.clicked.connect(lambda: self.dev.outputPower(forceUpdate=True))
+        self.ui.checkPowerBtn.clicked.connect(self._handleCheckPowerBtnClick)
         self.dev.sigOutputPowerChanged.connect(self.laserPowerChanged)
         self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
         
@@ -92,7 +92,10 @@ class LaserTaskGui(DAQGenericTaskGui):
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
-    
+
+    def _handleCheckPowerBtnClick(self):
+        self.dev.outputPower(forceUpdate=True)
+
     def samplePowerChanged(self, power):
         if power is None:
             self.ui.samplePowerLabel.setText("?")
