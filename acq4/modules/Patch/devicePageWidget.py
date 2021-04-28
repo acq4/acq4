@@ -1,6 +1,8 @@
 from __future__ import print_function
 from acq4.util import Qt
-from .devicePagetemplate import *
+
+Ui_Form = Qt.importTemplate('.devicePagetemplate')
+
 
 class DevicePageWidget(Qt.QWidget):
     def __init__(self, w):

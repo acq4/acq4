@@ -1,14 +1,22 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import time, traceback, sys, weakref
+
+import os
+import traceback
+import weakref
+
+from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
-from acq4.Interfaces import InterfaceMixin
+from acq4.util.debug import printExc
 
 
-class Device(Qt.QObject, InterfaceMixin):
+class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
     """Abstract class defining the standard interface for Device subclasses."""
+
+    # used to ensure devices are shut down in the correct order
+    _deviceCreationOrder = []
+
     def __init__(self, deviceManager, config, name):
         Qt.QObject.__init__(self)
 
@@ -21,6 +29,7 @@ class Device(Qt.QObject, InterfaceMixin):
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
+        Device._deviceCreationOrder.append(weakref.ref(self))
         self._name = name
             
     def name(self):
@@ -76,7 +85,13 @@ class Device(Qt.QObject, InterfaceMixin):
         return self.dm.appendConfigFile(data, fileName)
 
     def reserve(self, block=True, timeout=20):
-        #print "Device %s attempting lock.." % self.name()
+        """Reserve this device globally.
+
+        This lock allows subsystems to request exclusive access to the device. If
+        mutiple devices need to be locked simultaneously, then it is strongly
+        recommended to use Manager.reserveDevices() instead in order to avoid deadlocks.
+        """
+        # print("Device %s attempting lock.." % self.name())
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
@@ -87,22 +102,23 @@ class Device(Qt.QObject, InterfaceMixin):
         else:
             l = self._lock_.tryLock()
             if not l:
-                #print "Device %s lock failed." % self.name()
+                # print("Device %s lock failed." % self.name())
                 return False
                 #print "  Device is currently locked from:"
                 #print self._lock_tb_
                 #raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
-        #print "Device %s lock ok" % self.name()
+        # print("Device %s lock ok" % self.name())
         return True
         
     def release(self):
         try:
             self._lock_.unlock()
+            # print("Device %s unlocked" % self.name())
             self._lock_tb_ = None
         except:
             printExc("WARNING: Failed to release device lock for %s" % self.name())
-            
+
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.
         Allows the DAQ to trigger off of this device."""
@@ -183,18 +199,6 @@ class DeviceTask(object):
             parentTask.addStartDependency(self, 'device')
         """
         pass
-    
-    
-    def reserve(self, block=True, timeout=20):
-        """
-        Called by the parent task before configuration to reserve this 
-        hardware. This prevents tasks running in other threads from accessing
-        the same hardware simultaneously.
-        
-        The default implementation calls self.dev.reserve(...). Most subclasses
-        will not need to override this method.
-        """
-        return self.dev.reserve(block=block, timeout=timeout)
 
     def getStartOrder(self):
         """
@@ -234,12 +238,6 @@ class DeviceTask(object):
         The default implementation does nothing.
         """
         pass
-    
-    def release(self):
-        """
-        Release any resources that were acquired during the call to reserve().
-        """
-        self.dev.release()
     
     def getResult(self):
         """
@@ -318,7 +316,6 @@ class TaskGui(Qt.QWidget):
         """Return a dictionary representing the current state of the widget."""
         return {}
         
-        
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         pass
@@ -359,8 +356,3 @@ class TaskGui(Qt.QWidget):
 
     def quit(self):
         self.disable()
-
-
-
-
-

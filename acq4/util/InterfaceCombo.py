@@ -5,8 +5,8 @@ import six
 
 from acq4.util import Qt
 from acq4.Manager import getManager
-import acq4.pyqtgraph.parametertree as parametertree
-import acq4.pyqtgraph.parametertree.parameterTypes as ptypes
+import pyqtgraph.parametertree as parametertree
+import pyqtgraph.parametertree.parameterTypes as ptypes
 
 ### TODO: inherit from util/ComboBox instead.
 
@@ -21,7 +21,6 @@ class InterfaceCombo(Qt.QComboBox):
         self.interfaceMap = []
         self.preferred = None
         Qt.QComboBox.__init__(self, parent)
-        #Qt.QObject.connect(self.dir, Qt.SIGNAL('interfaceListChanged'), self.updateList)
         self.dir.sigInterfaceListChanged.connect(self.updateList)
         
         if types is not None:
@@ -64,15 +63,12 @@ class InterfaceCombo(Qt.QComboBox):
         if self.currentText() != current:
             self.currentIndexChanged.emit(self.currentIndex())
             
-            
-            
     def preferredValue(self):
         ## return the value we would most like to have selected if available
         if self.preferred is not None:
             return self.preferred
         else:
             return self.currentText()
-        
             
     def getSelectedObj(self):
         #if self.currentIndex() == 0:
@@ -96,19 +92,7 @@ class InterfaceCombo(Qt.QComboBox):
         pass
         
     def widgetGroupInterface(self):
-        return (self.currentIndexChanged, self.currentText, self.setCurrentText)
-        
-        
-#class InterfaceParameterItem(ptypes.ListParameterItem):
-    #def makeWidget(self):
-        #w = InterfaceCombo(types=self.param.opts['interfaceTypes'])
-        #w.setMaximumHeight(20)  ## set to match height of spin box and line edit
-        #w.sigChanged = w.currentIndexChanged
-        #w.value = self.value
-        #w.setValue = self.setValue
-        #self.widget = w
-        #return self.widget
-        
+        return self.currentIndexChanged, self.currentText, self.setCurrentText
 
 
 class InterfaceParameter(ptypes.ListParameter):

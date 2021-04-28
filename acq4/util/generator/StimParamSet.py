@@ -1,8 +1,8 @@
 from __future__ import print_function
 import six
 
-from acq4.pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
-import acq4.pyqtgraph as pg
+from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
+import pyqtgraph as pg
 import collections
 
 class StimParamSet(GroupParameter):

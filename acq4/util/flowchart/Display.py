@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.pyqtgraph.flowchart.Node import Node
-from acq4.pyqtgraph.flowchart.library.common import *
-import acq4.pyqtgraph as pg
-import weakref
-#from acq4.pyqtgraph import graphicsItems
-from acq4.util import Qt
-import numpy as np
+
+import pyqtgraph as pg
+from pyqtgraph.flowchart.library.common import CtrlNode
+
 
 class EventListPlotter(CtrlNode):
     """Prepares an event list for display in a PlotWidget."""

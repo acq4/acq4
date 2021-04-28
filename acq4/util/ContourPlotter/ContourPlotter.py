@@ -1,11 +1,10 @@
 from __future__ import print_function
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph.widgets.SpinBox import SpinBox
-from acq4.pyqtgraph.widgets.ColorButton import ColorButton
-from . import ContourPlotterTemplate
+import pyqtgraph as pg
+from pyqtgraph.widgets.SpinBox import SpinBox
+from pyqtgraph.widgets.ColorButton import ColorButton
 
-
+Ui_Form = Qt.importTemplate('.ContourPlotterTemplate')
 
 
 class ContourPlotter(Qt.QWidget):
@@ -16,7 +15,7 @@ class ContourPlotter(Qt.QWidget):
         Qt.QWidget.__init__(self)
         
         self.canvas = canvas
-        self.ui = ContourPlotterTemplate.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)
         
         self.addBtn = Qt.QPushButton('Add New')

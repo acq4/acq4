@@ -5,9 +5,9 @@ import numpy as np
 import scipy.interpolate
 from acq4.util import Qt
 
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.parametertree.parameterTypes as pTypes
-from acq4.pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+import pyqtgraph as pg
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
 
 
@@ -24,7 +24,7 @@ class SpiralScanComponent(ScanProgramComponent):
 
     def ctrlParameter(self):
         """
-        The Parameter set (see acq4.pyqtgraph.parametertree) that allows the 
+        The Parameter set (see pyqtgraph.parametertree) that allows the
         user to configure this component.
         """
         return self.ctrl.parameters()

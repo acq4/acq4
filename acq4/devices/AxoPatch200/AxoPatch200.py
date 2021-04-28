@@ -1,24 +1,19 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
-from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
-from acq4.util.Mutex import Mutex
-#from acq4.devices.Device import *
-from acq4.util import Qt
+
 import time
-import numpy as np
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
 from collections import OrderedDict
+
+import numpy as np
+from pyqtgraph.WidgetGroup import WidgetGroup
+
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from .devGuiTemplate import *
 
-
-
-        #GainChannel: 'DAQ', '/Dev1/ai14'
-        #LPFchannel: 'DAQ', '/Dev1/ai15'
-        #VCommand: 'DAQ', '/Dev1/ao0'
-        #ScaledSignal: 'DAQ', '/Dev1/ai5'
+Ui_devGui = Qt.importTemplate('.devGuiTemplate')
 
 
 class AP200DataMapping(DataMapping):
@@ -149,7 +144,7 @@ class AxoPatch200(DAQGeneric):
             self.modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
             self.lpf_freq[-1] = 100.0  # 200B's highest LPF value is 100kHz instead of 50.
         else:
-            raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % version)
+            raise Exception("AxoPatch200: version must be '200', '200A' or '200B' (got %r)" % self.version)
 
         self.holding = {
             'vc': config.get('vcHolding', -0.05),

@@ -2,15 +2,16 @@ from __future__ import print_function
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
-import acq4.pyqtgraph as pg
-from acq4.util.metaarray import MetaArray
+import pyqtgraph as pg
+from pyqtgraph.metaarray import MetaArray
 import numpy as np
 import scipy
 import acq4.util.functions as fn
-from . import CellHealthCtrlTemplate
 from acq4.util.HelpfulException import HelpfulException
-from acq4.pyqtgraph.widgets.FileDialog import FileDialog
+from pyqtgraph.widgets.FileDialog import FileDialog
 import sys
+
+Ui_widget = Qt.importTemplate('.CellHealthCtrlTemplate')
 
 
 class CellHealthTracker(AnalysisModule):

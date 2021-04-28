@@ -3,7 +3,7 @@ from acq4.util import Qt
 from .Device import Device
 from acq4.util.Mutex import Mutex
 from acq4.Interfaces import InterfaceMixin
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import collections
 import numpy as np
 import six
@@ -149,7 +149,7 @@ class OptomechDevice(InterfaceMixin):
         self.__subdevices = collections.OrderedDict()
         self.__subdevice = None
 
-        self.__lock = Mutex(recursive=True)
+        self.__lock = Mutex(recursive=True, debug=False)
         
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
@@ -195,14 +195,12 @@ class OptomechDevice(InterfaceMixin):
 
     def parentDevice(self):
         """Return this device's parent, or None if there is no parent."""
-        with self.__lock:
-            return self.__parent
+        return self.__parent
             
     def parentPort(self):
         """Return the port on this device's parent to which this device is attached.
         """
-        with self.__lock:
-            return self.__parentPort
+        return self.__parentPort
 
     def setParentDevice(self, parent, port='default'):
         """Set the parent of this device.
@@ -247,84 +245,81 @@ class OptomechDevice(InterfaceMixin):
         
     def mapToParentDevice(self, obj, subdev=None):
         """Map from local coordinates to the parent device (or to global if there is no parent)"""
-        with self.__lock:
-            tr = self.deviceTransform(subdev)
-            if tr is None:
-                raise Exception('Cannot map--device classes with no affine transform must override map methods.')
-            return self._mapTransform(obj, tr)
+        tr = self.deviceTransform(subdev)
+        if tr is None:
+            raise Exception('Cannot map--device classes with no affine transform must override map methods.')
+        return self._mapTransform(obj, tr)
     
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
-        with self.__lock:
-            tr = self.globalTransform(subdev)
-            if tr is not None:
-                mapped = self._mapTransform(obj, tr)
-                return mapped
+        tr = self.globalTransform(subdev)
+        if tr is not None:
+            mapped = self._mapTransform(obj, tr)
+            return mapped
 
-            ## If our transformation is nonlinear, then the local mapping step must be done separately.
-            subdev = self._subdevDict(subdev)
-            o2 = self.mapToParentDevice(obj, subdev)
-            parent = self.parentDevice()
-            if parent is None:
-                return o2
-            else:
-                return parent.mapToGlobal(o2, subdev)
+        ## If our transformation is nonlinear, then the local mapping step must be done separately.
+        subdev = self._subdevDict(subdev)
+        o2 = self.mapToParentDevice(obj, subdev)
+        parent = self.parentDevice()
+        if parent is None:
+            return o2
+        else:
+            return parent.mapToGlobal(o2, subdev)
     
     def mapToDevice(self, device, obj, subdev=None):
         """Map *obj* from local coordinates to *device*'s coordinate system."""
-        with self.__lock:
-            subdev = self._subdevDict(subdev)
-            return device.mapFromGlobal(self.mapToGlobal(obj, subdev), subdev)
+        subdev = self._subdevDict(subdev)
+        return device.mapFromGlobal(self.mapToGlobal(obj, subdev), subdev)
     
     def mapFromParentDevice(self, obj, subdev=None):
         """Map *obj* from parent coordinates (or from global if there is no parent) to local coordinates."""
-        with self.__lock:
-            tr = self.inverseDeviceTransform(subdev)
-            if tr is None:
-                raise Exception('Cannot map--device classes with no affine transform must override map methods.')
-            return self._mapTransform(obj, tr)
+        tr = self.inverseDeviceTransform(subdev)
+        if tr is None:
+            raise Exception('Cannot map--device classes with no affine transform must override map methods.')
+        return self._mapTransform(obj, tr)
     
     def mapFromGlobal(self, obj, subdev=None):
         """Map *obj* from global to local coordinates."""
-        with self.__lock:
-            tr = self.inverseGlobalTransform(subdev)
-            if tr is not None:
-                return self._mapTransform(obj, tr)
-        
-            ## If our transformation is nonlinear, then the local mapping step must be done separately.
-            subdev = self._subdevDict(subdev)
-            parent = self.parentDevice()
-            if parent is None:
-                obj = parent.mapFromGlobal(obj, subdev)
-            return self.mapFromParent(obj, subdev)
+        tr = self.inverseGlobalTransform(subdev)
+        if tr is not None:
+            return self._mapTransform(obj, tr)
+    
+        ## If our transformation is nonlinear, then the local mapping step must be done separately.
+        subdev = self._subdevDict(subdev)
+        parent = self.parentDevice()
+        if parent is None:
+            obj = parent.mapFromGlobal(obj, subdev)
+        return self.mapFromParent(obj, subdev)
     
     def mapFromDevice(self, device, obj, subdev=None):
         """Map *obj* from the coordinate system of the specified *device* to local coordiantes."""
-        with self.__lock:
-            subdev = self._subdevDict(subdev)
-            return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
+        subdev = self._subdevDict(subdev)
+        return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
     
     def mapGlobalToParent(self, obj, subdev=None):
         """Map *obj* from global coordinates to the parent device coordinates.
         If this device has no parent, then *obj* is returned unchanged.
         """
-        with self.__lock:
-            if self.parentDevice() is None:
-                return obj
-            else:
-                return self.parentDevice().mapFromGlobal(obj, subdev)
+        if self.parentDevice() is None:
+            return obj
+        else:
+            return self.parentDevice().mapFromGlobal(obj, subdev)
             
     def mapParentToGlobal(self, obj, subdev=None):
         """Map *obj* from parent device coordinates to global coordinates.
         If this device has no parent, then *obj* is returned unchanged.
         """
-        with self.__lock:
-            if self.parentDevice() is None:
-                return obj
-            else:
-                return self.parentDevice().mapToGlobal(obj, subdev)
+        if self.parentDevice() is None:
+            return obj
+        else:
+            return self.parentDevice().mapToGlobal(obj, subdev)
         
     def _mapTransform(self, obj, tr):
+        """Map an object through a transform.
+
+        *obj* may be tuple, list, QPointF, QVector3D, or ndarray.
+        Mapping multiple points at once is only supported with ndarray.
+        """
         # convert to a type that can be mapped
         retType = None
         if isinstance(obj, (tuple, list)):
@@ -353,11 +348,6 @@ class OptomechDevice(InterfaceMixin):
             return ret
 
         elif isinstance(obj, np.ndarray):
-            # m = np.array(tr.copyDataTo()).reshape(4,4)
-            # m1 = m[:2,:2, np.newaxis]
-            # obj = obj[np.newaxis,...]
-            # m2 = (m1*obj).sum(axis=0)
-            # m2 += m[:2,3,np.newaxis]
             m2 = pg.transformCoordinates(tr, obj)
             return m2
         else:
@@ -377,12 +367,12 @@ class OptomechDevice(InterfaceMixin):
         *subdev* may be the name of the device or the device itself.
         """
         with self.__lock:
-            tr = Qt.QMatrix4x4(self.__transform)
+            tr = self.__transform
             
             ## if a subdevice is specified, multiply by the subdevice's transform before returning
             dev = self.getSubdevice(subdev)
             if dev is None:
-                return tr
+                return tr * 1  # *1 makes a copy
             else:
                 return tr * dev.deviceTransform()
     
@@ -392,7 +382,7 @@ class OptomechDevice(InterfaceMixin):
         """
         invtr = self.__inverseTransform
         if invtr == 0:
-            tr = Qt.QMatrix4x4(self.__transform)
+            tr = self.__transform * 1  # *1 makes a copy
             if tr is None:
                 invtr = None
             else:
@@ -432,10 +422,10 @@ class OptomechDevice(InterfaceMixin):
             if gt == 0:
                 gt = self.__computeGlobalTransform()
                 self.__globalTransform = gt
-            return Qt.QMatrix4x4(gt)
+            return gt * 1  # *1 makes a copy
         else:
             return self.__computeGlobalTransform(subdev)
-                
+
     def __computeGlobalTransform(self, subdev=None, inverse=False):
         ## subdev must be a dict
         parent = self.parentDevice()
@@ -448,9 +438,8 @@ class OptomechDevice(InterfaceMixin):
         deviceTr = self.deviceTransform(subdev)
         if deviceTr is None:
             return None
+        transform = (parentTr * 1) * deviceTr
 
-        transform = parentTr * deviceTr
-                
         if inverse:
             inv, invertible = transform.inverted()
             if not invertible:
@@ -463,20 +452,18 @@ class OptomechDevice(InterfaceMixin):
         """
         See globalTransform; this method returns the inverse.
         """
-        #dev = self.getSubdevice(subdev)
-        if subdev is None: ## return cached transform
-            igt = self.__inverseGlobalTransform
-            if igt == 0:
+        # dev = self.getSubdevice(subdev)
+        if subdev is None:  ## return cached transform
+            if self.__inverseGlobalTransform == 0:
                 tr = self.globalTransform()
                 if tr is None:
-                    igt = None
+                    self.__inverseGlobalTransform = None
                 else:
                     inv, invertible = tr.inverted()
                     if not invertible:
                         raise Exception("Transform is not invertible.")
-                    igt = inv
-                self.__inverseGlobalTransform = igt
-            return Qt.QMatrix4x4(igt)
+                    self.__inverseGlobalTransform = inv
+            return self.__inverseGlobalTransform * 1  # *1 makes a copy
         else:
             return self.__computeGlobalTransform(subdev, inverse=True)
 
@@ -590,7 +577,7 @@ class OptomechDevice(InterfaceMixin):
         # child global transforms must also be invalidated before any change signals are emitted
         for ch in self.__children:
             ch.invalidateCachedTransforms(invalidateLocal=False)
-            
+
     def addSubdevice(self, subdev):
         subdev.setParentDevice(self)
         self.invalidateCachedTransforms()

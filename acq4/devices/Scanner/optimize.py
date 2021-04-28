@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+from six.moves import range
 #from debug import Profiler
 
 def opt2(locs, minTime, minDist, deadTime, greed=1.0, seed=None, compMethod='rms'):
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     
     import user, time, collections
     from acq4.util import Qt
-    import acq4.pyqtgraph as pg
+    import pyqtgraph as pg
     app = Qt.QApplication([])
     
     minTime = 10.

@@ -521,12 +521,12 @@
   <customwidget>
    <class>ComboBox</class>
    <extends>QComboBox</extends>
-   <header location="global">acq4.pyqtgraph.widgets.ComboBox</header>
+   <header location="global">pyqtgraph.widgets.ComboBox</header>
   </customwidget>
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header location="global">acq4.pyqtgraph.widgets.SpinBox</header>
+   <header location="global">pyqtgraph.widgets.SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

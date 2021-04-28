@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
+from pyqtgraph.flowchart import Flowchart
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.util.flowchart import *
 import os
+import numpy as np
 from collections import OrderedDict
 import acq4.util.debug as debug
 import acq4.util.FileLoader as FileLoader
 import acq4.util.DatabaseGui as DatabaseGui
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
+from acq4.util.HelpfulException import HelpfulException
+from six.moves import map
+
 
 class EventDetector(AnalysisModule):
     """
@@ -116,7 +121,8 @@ class EventDetector(AnalysisModule):
         
     def storeClicked(self):
         try:
-            self.storeToDB()
+            data = self.flowchart.output()['events']
+            self.storeToDB(data)
             self.dbCtrl.storeBtn.success("Stored (%s rec)" % len(data))
         except:
             self.dbCtrl.storeBtn.failure("Error.")

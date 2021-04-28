@@ -7,7 +7,7 @@ from ..Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.pyqtgraph import debug, ptime, SpinBox
+from pyqtgraph import debug, ptime, SpinBox
 
 
 class Scientifica(Stage):
@@ -30,7 +30,9 @@ class Scientifica(Stage):
         port = config.pop('port', None)
         name = config.pop('name', None)
 
-        self.scale = config.pop('scale', (1e-6, 1e-6, 1e-6))
+        # if user has not provided scale values, we can make a guess
+        config.setdefault('scale', (1e-6, 1e-6, 1e-6))
+
         baudrate = config.pop('baudrate', None)
         ctrl_version = config.pop('version', 2)
         try:
@@ -73,7 +75,7 @@ class Scientifica(Stage):
             else:
                 self.dev.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * abs(self.scale[0])))
+        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * 1e-6))
         
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get('monitorObjective', False)
@@ -85,6 +87,9 @@ class Scientifica(Stage):
 
         self.monitor = MonitorThread(self, self.monitorObj)
         self.monitor.start()
+
+    def axes(self):
+        return ('x', 'y', 'z')
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -121,13 +126,12 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setSpeed(v / abs(self.scale[0]))
+        self.dev.setSpeed(v * 1e6)  # requires um/s
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
             pos = self.dev.getPos()
-            pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
             if pos != self._lastPos:
                 self._lastPos = pos
                 emit = True
@@ -167,9 +171,6 @@ class Scientifica(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """
-        # s = [int(-v * 1000. / 67. / self.scale[i]) for i,v in enumerate(vel)]
-        # print(s)
-        # self.dev.send('VJ %d %d %d C' % tuple(s))
         s = [int(1e8 * v) for i,v in enumerate(vel)]
         self.dev.send('VJ -%d %d %d' % tuple(s))
 
@@ -245,14 +246,14 @@ class ScientificaMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, userSpeed):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
-        self._errorMSg = None
+        self._errorMsg = None
         self._finished = False
-        pos = np.array(pos) / np.array(self.dev.scale)
+        pos = np.array(pos)
         with self.dev.dev.lock:
-            self.dev.dev.moveTo(pos, speed / abs(self.dev.scale[0]))
+            self.dev.dev.moveTo(pos, speed / 1e-6)
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
-            self.dev.dev.setSpeed(userSpeed / abs(self.dev.scale[0]))
+            self.dev.dev.setSpeed(userSpeed / 1e-6)
         
     def wasInterrupted(self):
         """Return True if the move was interrupted before completing.
@@ -278,7 +279,7 @@ class ScientificaMoveFuture(MoveFuture):
         # did we reach target?
         pos = self.dev._getPosition()
         dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
-        if dif < 2.5e-6:
+        if dif < 1.0:
             # reached target
             self._finished = True
             return 1
@@ -291,17 +292,23 @@ class ScientificaMoveFuture(MoveFuture):
 
     def _stopped(self):
         # Called when the manipulator is stopped, possibly interrupting this move.
-        status = self._getStatus()
-        if status == 1:
-            # finished; ignore stop
-            return
-        elif status == -1:
-            self._errorMsg = "Move was interrupted before completion."
-        elif status == 0:
-            # not actually stopped! This should not happen.
-            raise RuntimeError("Interrupted move but manipulator is still running!")
-        else:
-            raise Exception("Unknown status: %s" % status)
+        startTime = ptime.time()
+        while True:
+            status = self._getStatus()
+            if status == 1:
+                # finished; ignore stop
+                return
+            elif status == -1:
+                self._errorMsg = "Move was interrupted before completion."
+                return
+            elif status == 0 and ptime.time() < startTime + 0.15:
+                # allow 150ms to stop
+                continue
+            elif status == 0:
+                # not actually stopped! This should not happen.
+                raise RuntimeError("Interrupted move but manipulator is still running!")
+            else:
+                raise Exception("Unknown status: %s" % status)
 
     def errorMessage(self):
         return self._errorMsg
@@ -314,12 +321,13 @@ class ScientificaGUI(StageInterface):
 
         # Insert Scientifica-specific controls into GUI
         self.zeroBtn = Qt.QPushButton('Zero position')
-        self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-        self.nextRow += 1
+        nextRow = self.layout.rowCount()
+        self.layout.addWidget(self.zeroBtn, nextRow, 0, 1, 2)
+        nextRow += 1
 
         self.psGroup = Qt.QGroupBox('Rotary Controller')
-        self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-        self.nextRow += 1
+        self.layout.addWidget(self.psGroup, nextRow, 0, 1, 2)
+        nextRow += 1
 
         self.psLayout = Qt.QGridLayout()
         self.psGroup.setLayout(self.psLayout)

@@ -1,25 +1,24 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from acq4.util import Qt
-from . import DatabaseTemplate, QueryTemplate
 import os
+
+Ui_DatabaseTemplate = Qt.importTemplate('.DatabaseTemplate')
+
 
 class DatabaseGui(Qt.QWidget):
     """Presents a very simple interface for selecting tables from an AnalysisDatabase."""
     
     sigTableChanged = Qt.Signal(str, str)  ## table purpose, table name
-    #sigStoreToDB = Qt.Signal()
     
     def __init__(self, parent=None, dm=None, tables=None):  ## datamanager tells us which DB is currently loaded.
         """tables should be a dict like {'owner': 'default', ...}"""
         Qt.QWidget.__init__(self)
         self.dm = dm
-        #self.ident = identity
         self.tables = {}
         self.db = None
-        self.ui = DatabaseTemplate.Ui_Form()
+        self.ui = Ui_DatabaseTemplate()
         self.ui.setupUi(self)
-        #self.ui.dbLabel.setText("[No DB Loaded]")
         self.tableWidgets = {}
         if dm is not None:
             self.setDataManager(dm)
@@ -83,28 +82,3 @@ class DatabaseGui(Qt.QWidget):
         combo = self.sender()
         self.sigTableChanged.emit(combo.ident, combo.currentText())
         
-        
-            
-        
-        
-#class QueryGui(Qt.QWidget):
-    #def __init__(self, dm):  ## datamanager tells us which DB is currently loaded.
-        #Qt.QWidget.__init__(self)
-        #self.ui = QueryTemplate.Ui_Form()
-        #self.ui.setupUi(self)
-        #self.dbChanged()
-        #self.ui.queryBtn.clicked.connect(self.runQuery)
-        #self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
-
-    #def runQuery(self):
-        #try:
-            #q = str(self.ui.queryText.text())
-            #res = self.db(q)
-            #self.ui.queryTable.setData(res)
-            #self.ui.queryBtn.success("OK (%d rows)" % len(res))
-        #except:
-            #self.ui.queryBtn.failure("Error.")
-            #raise
-
-    #def dbChanged(self):
-        #self.db = self.dm.currentDatabase()

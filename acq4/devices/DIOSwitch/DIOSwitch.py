@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.Device import *
+
+from acq4.devices.Device import Device
 from acq4.util import Qt
 import acq4.util.Mutex as Mutex
 
@@ -54,6 +55,7 @@ class DIOSwitch(Device):
     
     def quit(self):
         self.timer.stop()
+
  
 class DevGui(Qt.QWidget):
     def __init__(self, dev, state):

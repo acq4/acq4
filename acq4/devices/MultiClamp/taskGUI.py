@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-import sys
-from acq4.devices.Device import TaskGui
-from acq4.util.SequenceRunner import *
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
+
 import numpy
-from .TaskTemplate import *
-from acq4.util.debug import *
 import sip
+from pyqtgraph import mkPen
+
+from acq4.devices.Device import TaskGui
+from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.util import Qt
+from acq4.util.SequenceRunner import runSequence
+from acq4.util.debug import printExc
+from six.moves import range
+
+Ui_Form = Qt.importTemplate('.TaskTemplate')
+
 
 class MultiClampTaskGui(TaskGui):
     
@@ -196,7 +201,7 @@ class MultiClampTaskGui(TaskGui):
         if data is None:
             return
         plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals)
-        plot.setPen(Qt.QPen(color))
+        plot.setPen(mkPen(color))
         
         return plot
         

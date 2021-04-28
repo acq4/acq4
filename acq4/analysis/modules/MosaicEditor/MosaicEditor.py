@@ -11,15 +11,17 @@ import scipy
 import scipy.stats
 
 import acq4.util.debug as debug
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util import Qt
-from .MosaicEditorTemplate import *
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
 from acq4.util.Canvas import items
 import acq4
+from six.moves import range
+
+Ui_Form = Qt.importTemplate('.MosaicEditorTemplate')
 
 
 class MosaicEditor(AnalysisModule):

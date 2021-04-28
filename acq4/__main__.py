@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
+
 """
 Main ACQ4 invocation script
 Copyright 2010  Luke Campagnola
@@ -8,8 +10,10 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 print("Loading ACQ4...")
 import os, sys
+
 if __package__ is None:
     import acq4
+
     __package__ = 'acq4'
 
 from .util import Qt
@@ -29,29 +33,76 @@ if "--callgraph" in sys.argv:
 else:
     callgraph = False
 
-
 ## Enable stack trace output when a crash is detected
 from .util.debug import enableFaulthandler
+
 enableFaulthandler()
+
+
+# Initialize Qt
+from .util import Qt
+
+# Import pyqtgraph, get QApplication instance
+import pyqtgraph as pg
+
+app = pg.mkQApp()
+
+## Install a simple message handler for Qt errors:
+def messageHandler(*args):
+    if len(args) == 2:  # Qt4
+        msgType, msg = args
+    else:  # Qt5
+        msgType, context, msg = args
+    # ignore harmless ibus messages on linux
+    if 'ibus-daemon' in msg:
+        return
+    import traceback
+    print("Qt Error: (traceback follows)")
+    print(msg)
+    traceback.print_stack()
+    try:
+        logf = "crash.log"
+
+        fh = open(logf, 'a')
+        fh.write(msg + '\n')
+        fh.write('\n'.join(traceback.format_stack()))
+        fh.close()
+    except:
+        print("Failed to write crash log:")
+        traceback.print_exc()
+
+    if msgType == pg.QtCore.QtFatalMsg:
+        try:
+            print("Fatal error occurred; asking manager to quit.")
+            global man, app
+            man.quit()
+            app.processEvents()
+        except:
+            pass
+
+
+try:
+    pg.QtCore.qInstallMsgHandler(messageHandler)
+except AttributeError:
+    pg.QtCore.qInstallMessageHandler(messageHandler)
+
+
 
 
 ## Prevent Windows 7 from grouping ACQ4 windows under a single generic python icon in the taskbar
 if sys.platform == 'win32':
     import ctypes
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('ACQ4')
 
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('ACQ4')
 
 # Enable exception handling
 installExceptionHandler()
 
 
-## Initialize Qt
-app = Qt.pg.mkQApp()
-
-
-## Disable garbage collector to improve stability. 
+## Disable garbage collector to improve stability.
 ## (see pyqtgraph.util.garbage_collector for more information)
-from acq4.pyqtgraph.util.garbage_collector import GarbageCollector
+from pyqtgraph.util.garbage_collector import GarbageCollector
+
 gc = GarbageCollector(interval=1.0, debug=False)
 
 ## Create Manager. This configures devices and creates the main manager window.
@@ -71,24 +122,25 @@ if man.configFile.endswith(os.path.join('example', 'default.cfg')):
     mbox.setStandardButtons(mbox.Ok)
     mbox.exec_()
 
-
 ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
 timer = Qt.QTimer()
+
+
 def donothing(*args):
-    #print "-- beat --"
-    x = 0
-    for i in range(0, 100):
-        x += i
+    # print "-- beat --"
+    pass
+
+
 timer.timeout.connect(donothing)
 timer.start(1000)
 
-
 ## Start Qt event loop unless running in interactive mode.
-from . import pyqtgraph as pg
+import pyqtgraph as pg
+
 interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 if interactive:
     print("Interactive mode; not starting event loop.")
-    
+
     ## import some things useful on the command line
     from .util.debug import *
     from .util import functions as fn
@@ -97,6 +149,7 @@ if interactive:
     ### Use CLI history and tab completion
     import atexit
     import os
+
     historyPath = os.path.expanduser("~/.pyhistory")
     try:
         import readline
@@ -104,9 +157,12 @@ if interactive:
         print("Module readline not available.")
     else:
         import rlcompleter
+
         readline.parse_and_bind("tab: complete")
         if os.path.exists(historyPath):
             readline.read_history_file(historyPath)
+
+
     def save_history(historyPath=historyPath):
         try:
             import readline
@@ -114,19 +170,22 @@ if interactive:
             print("Module readline not available.")
         else:
             readline.write_history_file(historyPath)
+
     atexit.register(save_history)
 else:
     if profile:
         import cProfile
-        cProfile.run('app.exec_()', sort='cumulative')    
+
+        cProfile.run('app.exec_()', sort='cumulative')
         pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
-                   # this avoids otherwise irritating exit crashes.
+        # this avoids otherwise irritating exit crashes.
     elif callgraph:
         from pycallgraph import PyCallGraph
         from pycallgraph.output import GraphvizOutput
+
         with PyCallGraph(output=GraphvizOutput()):
             app.exec_()
     else:
         app.exec_()
         pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
-                   # this avoids otherwise irritating exit crashes.
+        # this avoids otherwise irritating exit crashes.

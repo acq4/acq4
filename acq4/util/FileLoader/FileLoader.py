@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from . import template
+
+from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.HelpfulException import HelpfulException
-from acq4.Manager import logMsg, logExc, getManager
+
+Ui_Form = Qt.importTemplate('.template')
 
 
 class FileLoader(Qt.QWidget):
@@ -23,7 +24,7 @@ class FileLoader(Qt.QWidget):
         self.dataManager = dataManager
         self.loaded = []
         Qt.QWidget.__init__(self)
-        self.ui = template.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.setHost(host)
         

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
 """
 IVCurve: Analysis module that analyzes current-voltage and firing
 relationships from current clamp data.
@@ -16,28 +17,22 @@ Refactoring begun 3/21/2015
 from collections import OrderedDict
 import os
 import os.path
-# import traceback
 import itertools
 import functools
-# import gc
 import numpy as np
 import scipy
-
 from acq4.util import Qt
-
-# from acq4.util import DataManager
 from acq4.analysis.AnalysisModule import AnalysisModule
-
-import acq4.pyqtgraph as pg
-# from acq4.pyqtgraph import configfile
-# from acq4.util.metaarray import MetaArray
+import pyqtgraph as pg
 import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
 import acq4.analysis.tools.Fitting as Fitting  # pbm's fitting stuff...
 import acq4.analysis.tools.ScriptProcessor as ScriptProcessor
-from . import ctrlTemplate
 import pprint
 import time
+
+Ui_Form = Qt.importTemplate('.ctrlTemplate')
+
 
 # noinspection PyPep8
 class IVCurve(AnalysisModule):
@@ -111,7 +106,7 @@ class IVCurve(AnalysisModule):
         # --------------graphical elements-----------------
         self._sizeHint = (1280, 900)  # try to establish size of window
         self.ctrlWidget = Qt.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl = Ui_Form()
         self.ctrl.setupUi(self.ctrlWidget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output
@@ -1313,8 +1308,7 @@ class IVCurve(AnalysisModule):
             if len(self.ivss_cmd) > 0 and len(self.ivss) > 0:
                 self.r_in = np.max(np.diff
                                    (self.ivss) / np.diff(self.ivss_cmd))
-                self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9'
-                                              % (self.r_in * 1.0e-6))
+                self.ctrl.IVCurve_Rin.setText(u'%9.1f M\u03A9' % (self.r_in * 1.0e-6))
                 self.analysis_summary['Rin'] = self.r_in*1.0e-6
             else:
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')

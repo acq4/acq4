@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.Laser import *
-#import serial, struct
-from acq4.drivers.Coherent import *
+
+from acq4.devices.Laser import Laser, LaserTask
+from acq4.drivers.Coherent import Coherent
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 import acq4.util.debug as debug
 import time
+
 
 class CoherentLaser(Laser):
 

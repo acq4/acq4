@@ -3,10 +3,12 @@ from __future__ import print_function
 
 import six
 
-from .DirTreeTemplate import Ui_Form
-from acq4.util import Qt
-from acq4.util.debug import *
 import acq4.util.DataManager as DataManager
+from acq4.util import Qt
+from acq4.util.debug import printExc
+
+Ui_Form = Qt.importTemplate('.DirTreeTemplate')
+
 
 class DirTreeLoader(Qt.QWidget):
     

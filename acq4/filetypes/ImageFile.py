@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import os
+
 from PIL import Image
+from six.moves import range
 
 ## Install support for 16-bit images in PIL
-
 if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.7':
     Image._MODE_CONV["I;16"] = ('%su2' % Image._ENDIAN, None)
     Image._fromarray_typemap[((1, 1), "<u2")] = ("I", "I;16")
@@ -57,15 +59,15 @@ if hasattr(Image, 'VERSION') and  Image.VERSION == '1.1.6':
         if strides is not None:
             obj = obj.tostring()
 
-        return frombuffer(mode, size, obj, "raw", mode, 0, 1)
+        return Image.frombuffer(mode, size, obj, "raw", mode, 0, 1)
         
     Image.fromarray=fromarray
 
 #import png ## better png support than PIL
 
 from numpy import array, ndarray
-from acq4.util.metaarray import MetaArray as MA
-from .FileType import *
+from pyqtgraph.metaarray import MetaArray as MA
+from .FileType import FileType
 
 #import libtiff
 #from acq4.util import Qt
@@ -128,7 +130,7 @@ class ImageFile(FileType):
             #arr.shape = (img.height(), img.width(), img.depth() / 8)
             
             
-        transp = range(arr.ndim)    ## switch axis order y,x to x,y
+        transp = list(range(arr.ndim))    ## switch axis order y,x to x,y
         if arr.ndim == 2:
             transp[0] = 1
             transp[1] = 0

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import range
 """
 For combining photostimulation maps across cells and displaying against 3D atlas.
 
@@ -11,9 +12,9 @@ import os
 from collections import OrderedDict
 #import DatabaseGui
 from acq4.util.ColorMapper import ColorMapper
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.parametertree as ptree
-import acq4.pyqtgraph.opengl as gl
+import pyqtgraph as pg
+import pyqtgraph.parametertree as ptree
+import pyqtgraph.opengl as gl
 import numpy as np
 #import acq4.analysis.modules.Photostim.Scan as Scan
 #from acq4.analysis.modules.Photostim.Map import Map

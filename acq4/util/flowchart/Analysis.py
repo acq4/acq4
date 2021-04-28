@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from acq4.pyqtgraph.flowchart.library.common import *
-import acq4.util.functions as functions
+from collections import OrderedDict
+
 import numpy as np
 import scipy
-#from acq4.pyqtgraph import graphicsItems
-import acq4.pyqtgraph as pg
-import acq4.util.metaarray as metaarray
-#import acq4.pyqtgraph.CheckTable as CheckTable
-from collections import OrderedDict
+
+import pyqtgraph as pg
+import acq4.util.functions as functions
+import pyqtgraph.metaarray as metaarray
 from acq4.analysis.tools.Fitting import Fitting
+from pyqtgraph.flowchart import Node
+from pyqtgraph.flowchart.library.common import CtrlNode
+from acq4.util import Qt
+from six.moves import map
+from six.moves import range
+
 
 class EventFitter(CtrlNode):
     """Takes a waveform and event list as input, returns extra information about each event.

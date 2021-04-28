@@ -2,7 +2,7 @@ from __future__ import print_function
 import tempfile, shutil, atexit, os
 import acq4.util.DataManager as dm
 from acq4.util.DirTreeWidget import DirTreeWidget
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 
 app = pg.mkQApp()
 

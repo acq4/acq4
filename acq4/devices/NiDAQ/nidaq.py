@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util.debug import *
-    
-from acq4.devices.Device import *
-import time, traceback, sys
-from .taskGUI import *
-#from numpy import byte
+
 import numpy
-#from scipy.signal import resample, bessel, lfilter
-import scipy.signal, scipy.ndimage
-import acq4.util.advancedTypes as advancedTypes
-from acq4.util.debug import *
+import scipy.ndimage
+import scipy.signal
+
 import acq4.util.Mutex as Mutex
+from acq4.devices.Device import Device, DeviceTask
+from acq4.devices.NiDAQ.taskGUI import NiDAQTask
+from acq4.util.debug import printExc
+
 
 class NiDAQ(Device):
     """
@@ -163,7 +161,7 @@ class NiDAQ(Device):
         """Resample data by taking mean of ds samples at a time"""
         newLen = int(data.shape[0] / ds) * ds
         data = data[:newLen]
-        data.shape = (data.shape[0]/ds, ds)
+        data.shape = (int(data.shape[0]/ds), ds)
         if binary:
             data = data.mean(axis=1).round().astype(numpy.byte)
         else:

@@ -244,12 +244,12 @@ the data manager window.</string>
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>acq4.pyqtgraph</header>
+   <header>pyqtgraph</header>
   </customwidget>
   <customwidget>
    <class>ValueLabel</class>
    <extends>QLabel</extends>
-   <header>acq4.pyqtgraph</header>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

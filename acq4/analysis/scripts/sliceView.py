@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import acq4.util.Qt as Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
-import acq4.pyqtgraph.opengl as gl 
+import pyqtgraph.opengl as gl 
 import acq4.Manager
 import acq4.analysis.atlas.CochlearNucleus as cn
 

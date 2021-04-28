@@ -1,30 +1,34 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import scipy.signal
-from numpy import *
-import numpy
-import time, sys
+
+import sys
+import time
+
+import numpy as np
+
+from pyqtgraph import PlotWindow
+from six.moves import zip
 
 sys.path.append('../../util')
 sys.path.append('../..')
 from .nidaq import NiDAQ
-from acq4.pyqtgraph.graphicsWindows import *
-from acq4.pyqtgraph.functions import mkPen
+from pyqtgraph.functions import mkPen, mkColor
+
 pw = PlotWindow()
 
 
 time.clock()
 sr = 100000
 dur = 2.0
-data = zeros(int(sr*dur))
+data = np.zeros(int(sr*dur))
 dlen = len(data)
-xVals = linspace(0, dur, dlen)
+xVals = np.linspace(0, dur, dlen)
 
-data += random.normal(size=dlen) + 20.
-data[dlen*0.102:dlen*0.3] += 20
-data[dlen*0.3:dlen*0.5] += 30
-data[dlen*0.4]+= 1000
-data += sin(xVals*40677*2.0*pi)*4.
+data += np.random.normal(size=dlen) + 20.
+data[round(dlen*0.102):round(dlen*0.3)] += 20
+data[round(dlen*0.3):round(dlen*0.5)] += 30
+data[round(dlen*0.4)]+= 1000
+data += np.sin(xVals*40677*2.0*np.pi)*4.
 #data = sin(linspace(0, dur, sr*dur)* linspace(0, sr*2, sr*dur))
 
 methods = ['subsample', 'mean', 'fourier', 'bessel_mean', 'butterworth_mean']
@@ -36,8 +40,8 @@ def run(ds):
         d1 = data.copy()
         t = time.clock()
         d2 = NiDAQ.downsample(d1, ds, method=m)
-        print("Method %d: %f" % (i, time.clock()-t))
-        p = pw.plot(y=d2, x=linspace(0, len(d2)*ds, len(d2)), pen=mkPen(c))
+        print("Method %d: %f" % (m, time.clock()-t))
+        p = pw.plot(y=d2, x=np.linspace(0, len(d2)*ds, len(d2)), pen=mkPen(c))
         p.setZValue(10000)
         #pw.plot(d2, pen=mkPen(colors[i-1]))
     
@@ -51,9 +55,9 @@ def showDownsample(**kwargs):
 
 
 def showTransfer(**kwargs):
-    xVals = linspace(0, dur, sr*dur)
+    xVals = np.linspace(0, dur, sr*dur)
     #data = sin(xVals* linspace(0, sampr*2, sampr*dur))
-    data = random.normal(size=sr*dur)
+    data = np.random.normal(size=sr*dur)
     
     data2 = NiDAQ.lowpass(data, **kwargs)
 

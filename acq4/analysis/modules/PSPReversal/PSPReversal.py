@@ -1,5 +1,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import print_function
+from six.moves import map
+from six.moves import range
 """
 PSPReversal: Analysis module that analyzes the current-voltage relationships
 relationships of PSPs from voltage clamp data.
@@ -23,20 +25,18 @@ import numpy.ma as ma
 import scipy
 
 from acq4.analysis.AnalysisModule import AnalysisModule
-import acq4.pyqtgraph as pg
-from acq4.pyqtgraph import configfile
-from acq4.util.metaarray import MetaArray
+import pyqtgraph as pg
+from pyqtgraph import configfile
+from pyqtgraph.metaarray import MetaArray
 
 standard_font = 'Arial'
 
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
-#from acq4.analysis.modules.PSPReversal.ctrlTemplate import ctrlTemplate
-from . import ctrlTemplate
-from . import resultsTemplate
-from . import scriptTemplate
-#import acq4.analysis.modules.PSPReversal.ctrlTemplate as ctrlTemplate
-#import acq4.analysis.modules.PSPReversal.resultsTemplate as resultsTemplate
-#import acq4.analysis.modules.PSPReversal.scriptTemplate as scriptTemplate
+
+Ui_Ctrl = Qt.importTemplate('.ctrlTemplate')
+Ui_Results = Qt.importTemplate('.resultsTemplate')
+Ui_Script = Qt.importTemplate('.scriptTemplate')
+
 
 def trace_calls_and_returns(frame, event, arg, indent=[0]):
     """
@@ -182,13 +182,13 @@ class PSPReversal(AnalysisModule):
         # --------------graphical elements-----------------
         self._sizeHint = (1280, 900)  # try to establish size of window
         self.ctrl_widget = Qt.QWidget()
-        self.ctrl = ctrlTemplate.Ui_Form()
+        self.ctrl = Ui_Ctrl()
         self.ctrl.setupUi(self.ctrl_widget)
         self.results_widget = Qt.QWidget()
-        self.results = resultsTemplate.Ui_ResultsDialogBox()
+        self.results = Ui_Results()
         self.results.setupUi(self.results_widget)
         self.scripts_widget = Qt.QWidget()
-        self.scripts_form = scriptTemplate.Ui_Form()
+        self.scripts_form = Ui_Script()
         self.scripts_form.setupUi(self.scripts_widget)
         self.main_layout = pg.GraphicsView()  # instead of GraphicsScene?
         # make fixed widget for the module output
@@ -621,8 +621,7 @@ class PSPReversal(AnalysisModule):
                           'Missing data in %s, element: %d' % (directory_name, i))
                     continue
             except:
-                print("Error loading data for protocol %s:"
-                      % directory_name)
+                print("Error loading data for protocol %s:" % directory_name)
                 continue  # If something goes wrong here, we just carry on
             data_file = data_file_handle.read()
             self.devicesUsed = self.dataModel.getDevices(data_dir_handle)
@@ -1600,8 +1599,7 @@ class PSPReversal(AnalysisModule):
             if len(self.cmd) > 0 and len(self.measure[window]) > 0:
                 self.r_in = np.max(np.diff
                                    (self.measure[window]) / np.diff(self.cmd))
-                self.ctrl.PSPReversal_Rin.setText(u'%9.1f M\u03A9'
-                                                  % (self.r_in * 1.0e-6))
+                self.ctrl.PSPReversal_Rin.setText(u'%9.1f M\u03A9' % (self.r_in * 1.0e-6))
             else:
                 self.ctrl.PSPReversal_Rin.setText(u'No valid points')
         else:

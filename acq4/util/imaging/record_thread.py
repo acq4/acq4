@@ -1,16 +1,18 @@
 from __future__ import print_function
+
 import time
+
+import numpy as np
+
+from acq4 import Manager
+from acq4.util import Qt
+from acq4.util import debug
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.util import Qt
-import acq4.util.debug as debug
-from acq4.util.metaarray import MetaArray
-import numpy as np
-import acq4.util.ptime as ptime
-import acq4.Manager
-from acq4.util.DataManager import FileHandle, DirHandle
+from pyqtgraph.metaarray import MetaArray
+
 try:
-    from acq4.filetypes.ImageFile import *
+    import acq4.filetypes.ImageFile
     HAVE_IMAGEFILE = True
 except ImportError:
     HAVE_IMAGEFILE = False
@@ -26,7 +28,7 @@ class RecordThread(Thread):
     
     def __init__(self, ui):
         Thread.__init__(self)
-        self.m = acq4.Manager.getManager()
+        self.m = Manager.getManager()
         
         self._stackSize = 0  # size of currently recorded stack
         self._recording = False
@@ -172,22 +174,18 @@ class RecordThread(Thread):
             if stack is False:
                 # Store single frame to new file
                 try:
-                    if HAVE_IMAGEFILE:
-                        fileName = 'image.tif'
-                        fh = dh.writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
-                    else:
-                        fileName = 'image.ma'
-                        fh = dh.writeFile(data, fileName, info, fileType="MetaArray", autoIncrement=True)
-
+                    fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
+                    fh = frame['frame'].saveImage(dh, fileName)
                     self.sigSavedFrame.emit(fh.name())
                 except:
                     self.sigSavedFrame.emit(False)
                     raise
                 continue
 
-            # Store frame to current (or new) stack
-            recFrames.append((data, info))
-            self.lastFrameTime = info['time']
+            else:
+                # Store frame to current (or new) stack
+                recFrames.append((data, info))
+                self.lastFrameTime = info['time']
             
         if len(recFrames) > 0:
             self.writeFrames(recFrames, dh)
@@ -202,7 +200,7 @@ class RecordThread(Thread):
         times = [f[1]['time'] for f in frames]
         translations = np.array([f[1]['transform'].getTranslation() for f in frames])
         arrayInfo = [
-            {'name': 'Time', 'values': array(times) - self.startFrameTime, 'units': 's', 'translation': translations},
+            {'name': 'Time', 'values': np.array(times) - self.startFrameTime, 'units': 's', 'translation': translations},
             {'name': 'X'},
             {'name': 'Y'}
         ]

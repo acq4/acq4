@@ -1,12 +1,13 @@
 from __future__ import print_function
 from acq4.util import Qt
 import acq4.Manager
-import acq4.pyqtgraph as pg
-import acq4.pyqtgraph.opengl as gl
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 
 import numpy as np
 import acq4.util.functions as fn
 import re
+from six.moves import range
 man = acq4.Manager.getManager() 
 
 ## update DB field to reflect dir meta info

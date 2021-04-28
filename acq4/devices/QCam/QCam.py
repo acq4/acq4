@@ -2,15 +2,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from __future__ import with_statement
+
+import time
+
 from acq4.devices.Camera import Camera
-from acq4.drivers.QImaging.QImagingDriver import *
-from acq4.util import Qt
-import time, sys, traceback
-from numpy import *
-from acq4.util.metaarray import *
-import acq4.util.ptime as ptime
+from acq4.drivers.QImaging.QImagingDriver import QCamDriverClass
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import *
+
 
 class QCam(Camera):
     def __init__(self, *args, **kargs):

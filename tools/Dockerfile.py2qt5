@@ -1,0 +1,15 @@
+FROM python:2
+
+RUN apt-get update
+RUN apt-get install -y python-pyqt5 python-pyqt5.qtopengl python-pyqt5.qtsql python-serial python-scipy python-pyparsing python-h5py python-pil python-opengl python-sip python-matplotlib
+RUN apt-get install -y python-setuptools python-pip python-ipython python-ipdb
+RUN pip install git+https://github.com/acq4/pyqtgraph@30d5e0df#egg=pyqtgraph
+
+ENV PATH /bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+ENV PYTHONPATH /usr/local/lib/python2.7/site-packages/
+RUN mkdir /code
+WORKDIR /code
+
+#### Usage
+# docker build -f tools/Dockerfile.py2qt5 -t acq4:py2qt5 .
+# docker run -it --rm -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 -v $PWD:/code -v /tmp/.X11-unix:/tmp/.X11-unix --user="$(id --user):$(id --group)" acq4:py2qt5 python -m acq4

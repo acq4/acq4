@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
-#import acq4.util.PySideImporter  ## Use PySide instead of PyQt
 from __future__ import print_function
 
 from acq4.util import Qt
 import os
 import acq4.util.database as database
-from .AnalysisTemplate import *
 import acq4.Manager
 import acq4.analysis.modules as analysis
 import acq4.analysis.AnalysisHost as AnalysisHost
 import acq4.analysis.dataModels as models
-#Qt.QString = str
-#def noop(x):
-#   return x
-#Qt.QVariant = noop
-from acq4.pyqtgraph import FileDialog
+from pyqtgraph import FileDialog
+from six.moves import range
+
+Ui_Form = Qt.importTemplate('.AnalysisTemplate')
+
 
 class FileAnalysisView(Qt.QWidget):
     
@@ -119,7 +117,7 @@ class FileAnalysisView(Qt.QWidget):
     def createDb(self, fileName):
         #fn = str(Qt.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, Qt.QFileDialog.DontConfirmOverwrite))
         fileName = str(fileName)
-        if fileName is '':
+        if fileName == '':
             return
             
         self.dbFile = fileName

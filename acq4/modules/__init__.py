@@ -14,8 +14,12 @@ def getModuleClass(name):
     try:
         return modClasses[name]
     except KeyError:
-        raise KeyError('No known module class named "%s"' % name)
-
+        if "." in name:
+            pkg, name = name.rsplit(".", 1)
+            module = import_module(pkg)
+            return getattr(module, name)
+        else:
+            raise KeyError('No known module class named "%s"' % name)
 
 def getModuleClasses():
     """Return a dict containing name:class pairs for all defined Module subclasses.

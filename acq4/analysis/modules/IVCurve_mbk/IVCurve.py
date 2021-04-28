@@ -3,16 +3,16 @@
 ##    load IV directory, plot raw data, sends data to a function(flowchart) which returns a list of parameters. 
 from __future__ import print_function
 
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
-from acq4.util.pyqtgraph.functions import mkPen
-from acq4.util.flowchart import *
 import os
 from collections import OrderedDict
+
+import numpy as np
+
 import acq4.util.debug as debug
-import acq4.util.FileLoader as FileLoader
-import acq4.util.DatabaseGui as DatabaseGui
-import FeedbackButton
+from acq4.analysis.AnalysisModule import AnalysisModule
+from pyqtgraph import mkPen
+from pyqtgraph.flowchart import Flowchart
+
 
 class IVCurve(AnalysisModule):
     def __init__(self, host, flowchartDir=None):

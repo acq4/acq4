@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-import sys
-from .TaskTemplate import *
-from .DaqChannelGui import *
-from acq4.devices.Device import TaskGui
-from acq4.util.SequenceRunner import *
-from acq4.pyqtgraph.WidgetGroup import WidgetGroup
-from acq4.pyqtgraph import PlotWidget
-import numpy
+
 import weakref
-from acq4.util.debug import *
+
+from acq4.devices.DAQGeneric.DaqChannelGui import OutputChannelGui, InputChannelGui
+from acq4.devices.Device import TaskGui
+from pyqtgraph import PlotWidget
+from pyqtgraph.WidgetGroup import WidgetGroup
+from acq4.util import Qt
+from acq4.util.debug import printExc
+
+Ui_Form = Qt.importTemplate('.TaskTemplate')
+
 
 class DAQGenericTaskGui(TaskGui):
-    
-    #sigSequenceChanged = Qt.Signal(object)  ## defined upstream
     
     def __init__(self, dev, task, ownUi=True):
         TaskGui.__init__(self, dev, task)

@@ -1,12 +1,13 @@
 from __future__ import print_function
 from acq4.util import Qt
 from acq4.Manager import getManager, logExc, logMsg
-from .devTemplate import Ui_Form
 import numpy as np
 from scipy import stats
-from acq4.pyqtgraph.functions import siFormat
+from pyqtgraph.functions import siFormat
 import six
 import time
+
+Ui_Form = Qt.importTemplate('.devTemplate')
 
 
 class LaserDevGui(Qt.QWidget):
@@ -14,7 +15,6 @@ class LaserDevGui(Qt.QWidget):
     def __init__(self, dev):
         Qt.QWidget.__init__(self)
         self.dev = dev
-        #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.calibrateWarning = self.dev.config.get('calibrationWarning', None)
@@ -50,43 +50,14 @@ class LaserDevGui(Qt.QWidget):
         if not self.dev.hasQSwitch:
             self.ui.qSwitchBtn.setEnabled(False)
         
-        
-        
-        
-        
         ### Populate device lists
-        #self.ui.microscopeCombo.setTypes('microscope')
         self.ui.meterCombo.setTypes('daqChannelGroup')
-        #defMicroscope = self.dev.config.get('scope', None)     
         defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
-        #self.ui.microscopeCombo.setCurrentText(defMicroscope)
         self.ui.meterCombo.setCurrentText(defPowerMeter)
-        #devs = self.dev.dm.listDevices()
-        #for d in devs:
-            #self.ui.microscopeCombo.addItem(d)
-            #self.ui.meterCombo.addItem(d)
-            #if d == defMicroscope:
-                #self.ui.microscopeCombo.setCurrentIndex(self.ui.microscopeCombo.count()-1)
-            #if d == defPowerMeter:
-                #self.ui.meterCombo.setCurrentIndex(self.ui.meterCombo.count()-1)
-         
-        ## get scope device to connect objective changed signal
-        #self.scope = getManager().getDevice(self.dev.config['scope'])
-        #self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
         
         ## Populate list of calibrations
         #self.microscopes = []
-        self.updateCalibrationList()
-        
-        ## get scope device to connect objective changed signal
-        #self.scope = None
-        #while self.scope == None:
-            #for m in self.microscopes:
-                #try:
-                    #self.scope = getManager().getDevice(m)
-                #except:
-                    #pass
-        
+        self.updateCalibrationList()        
 
         ## make connections
         self.ui.calibrateBtn.focusOutEvent = self.calBtnLostFocus
@@ -99,11 +70,8 @@ class LaserDevGui(Qt.QWidget):
         self.ui.toleranceSpin.valueChanged.connect(self.toleranceSpinChanged)
         self.ui.wavelengthSpin.valueChanged.connect(self.wavelengthSpinChanged)
         self.ui.wavelengthCombo.currentIndexChanged.connect(self.wavelengthComboChanged)
-        #self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
         self.ui.meterCombo.currentIndexChanged.connect(self.powerMeterChanged)
         self.ui.channelCombo.currentIndexChanged.connect(self.channelChanged)
-        #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
-        #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         self.ui.checkPowerBtn.clicked.connect(lambda: self.dev.outputPower(forceUpdate=True))
@@ -136,7 +104,6 @@ class LaserDevGui(Qt.QWidget):
          #   print 'gdd value from spinchanged: ', value
             self.dev.setGDD(value)
         
-        
     def currentPowerToggled(self, b):
         if b:
             self.dev.setParam(useExpectedPower=False)
@@ -166,7 +133,6 @@ class LaserDevGui(Qt.QWidget):
         elif not b:
             self.dev.closeQSwitch()
             self.ui.qSwitchBtn.setText('Turn On QSwitch')
-            
     
     def expectedPowerSpinChanged(self, value):
         self.dev.setParam(expectedPower=value)
@@ -194,8 +160,6 @@ class LaserDevGui(Qt.QWidget):
                 gddValue = self.ui.GDDSpin.setValue(wl[1])
             else:
                 print('bad entry in devices.cfg for wavelength, GDD value')
-    #def microscopeChanged(self):
-        #pass
     
     def powerMeterChanged(self):
         powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
@@ -209,7 +173,7 @@ class LaserDevGui(Qt.QWidget):
         powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
         channels = powerDev.listChannels()
         text = str(self.ui.channelCombo.currentText())
-        if text is not '':
+        if text != '':
             sTime = channels[text].get('settlingTime', None)
             mTime = channels[text].get('measurementTime', None)
         else:
@@ -219,15 +183,6 @@ class LaserDevGui(Qt.QWidget):
             self.ui.settlingSpin.setValue(sTime)
         if mTime is not None:
             self.ui.measurementSpin.setValue(mTime)
-            
-    
-    #def measurementSpinChanged(self, value):
-        #pass
-    
-    #def settlingSpinChanged(self, value):
-        #pass
-        
-
 
     def samplePowerChanged(self, power):
         if power is None:
@@ -261,7 +216,6 @@ class LaserDevGui(Qt.QWidget):
             try:
                 self.ui.calibrateBtn.setEnabled(False)
                 self.ui.calibrateBtn.setText('Calibrating...')
-                #scope = str(self.ui.microscopeCombo.currentText())
                 powerMeter = six.text_type(self.ui.meterCombo.currentText())
                 mTime = self.ui.measurementSpin.value()
                 sTime = self.ui.settlingSpin.value()
@@ -280,14 +234,10 @@ class LaserDevGui(Qt.QWidget):
     def calBtnLostFocus(self, ev):
         self.resetCalibrateBtnState()
     
-    
     def deleteClicked(self):
-        #self.dev.outputPower()
         cur = self.ui.calibrationList.currentItem()
         if cur is None:
             return
-        #scope = str(cur.text(0))
-        #opticState = str(cur.text(0))
         opticState = cur.key
         
         index = self.dev.getCalibrationIndex()
@@ -296,9 +246,3 @@ class LaserDevGui(Qt.QWidget):
 
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
-    
-
-            
-        
-       
-        

@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
+import weakref
+
+from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
+from acq4.util.debug import printExc
+from six.moves import map
+
 """
 DataManager.py - DataManager, FileHandle, and DirHandle classes 
 Copyright 2010  Luke Campagnola
@@ -10,24 +17,21 @@ to easily store and retrieve data files along with meta data. The objects
 probably only need to be created via functions in the Manager class.
 """
 
+import os, sys
+
 if __name__ == '__main__':
-    import os, sys
     path = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(os.path.join(path, '..', '..'))
 
-import threading, os, re, sys, shutil
-from acq4.util.functions import strncmp
-from acq4.util.configfile import *
+import re, shutil
 import time
 from acq4.util.Mutex import Mutex
-from acq4.pyqtgraph import SignalProxy, BusyCursor
+from pyqtgraph import SignalProxy, BusyCursor, OrderedDict
 from acq4.util import Qt
-if not hasattr(QtCore, 'Signal'):
+if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal
     Qt.Slot = Qt.pyqtSlot
 import acq4.filetypes as filetypes
-from acq4.util.debug import *
-import copy
 import acq4.util.advancedTypes as advancedTypes
 
 
@@ -187,7 +191,10 @@ class FileHandle(Qt.QObject):
         self.path = os.path.abspath(path)
         self.parentDir = None
         self.lock = Mutex(Qt.QMutex.Recursive)
-        self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
+        if Qt.QApplication.instance() is not None:
+            self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
+        else:
+            self.sigproxy = None
         
     def getFile(self, fn):
         return getFileHandle(os.path.join(self.name(), fn))
@@ -425,7 +432,8 @@ class FileHandle(Qt.QObject):
         
     def flushSignals(self):
         """If any delayed signals are pending, send them now."""
-        self.sigproxy.flush()
+        if self.sigproxy is not None:
+            self.sigproxy.flush()
 
 
 class DirHandle(FileHandle):
@@ -501,7 +509,7 @@ class DirHandle(FileHandle):
                             msg['subdir'] = ''
                         msg['subdir'] = os.path.join(dh.shortName(), msg['subdir'])
                     log  = log + subLog
-                log.sort(lambda a,b: cmp(a['__timestamp__'], b['__timestamp__']))
+                log.sort(key=lambda a: a['__timestamp__'])
             
             return log
         
@@ -616,8 +624,8 @@ class DirHandle(FileHandle):
             files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             ## show directories first when sorting alphabetically.
-            files.sort(lambda a,b: 2*cmp(os.path.isdir(os.path.join(self.name(),b)), os.path.isdir(os.path.join(self.name(),a))) + cmp(a,b))
-        elif sortMode == None:
+            files.sort(key=lambda a: (os.path.isdir(os.path.join(self.name(), a)), a))
+        elif sortMode is None:
             pass
         else:
             raise Exception('Unrecognized sort mode "%s"' % str(sortMode))

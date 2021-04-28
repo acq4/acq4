@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from .RackTemplate import *
 from acq4.util import Qt
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
+
+Ui_Form = Qt.importTemplate('.RackTemplate')
 
 
 class MCDeviceGui(Qt.QWidget):
@@ -54,18 +55,21 @@ class MCDeviceGui(Qt.QWidget):
 
             istate = self.dev.getLastState('IC')
             vstate = self.dev.getLastState('VC')
-            self.ui.icHoldingSpin.setValue(istate['holding'])
-            self.ui.vcHoldingSpin.setValue(vstate['holding'])
+            if istate is not None:
+                self.ui.icHoldingSpin.setValue(istate['holding'])
+            if vstate is not None:
+                self.ui.vcHoldingSpin.setValue(vstate['holding'])
 
         finally:
             self.state.sigChanged.connect(self.uiStateChanged)
 
     def devHoldingChanged(self, dev, mode):
-        state = self.dev.getLastState(mode)
-        if mode == 'VC':
-            self.ui.vcHoldingSpin.setValue(state['holding'])
-        elif mode == 'IC':
-            self.ui.icHoldingSpin.setValue(state['holding'])
+        with pg.SignalBlock(self.state.sigChanged, self.uiStateChanged):
+            state = self.dev.getLastState(mode)
+            if mode == 'VC':
+                self.ui.vcHoldingSpin.setValue(state['holding'])
+            elif mode == 'IC':
+                self.ui.icHoldingSpin.setValue(state['holding'])
 
     def uiStateChanged(self, name=None, value=None):
         if name == 'icRadio' and value is True:

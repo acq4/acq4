@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.pyqtgraph.flowchart.Node import Node
+
+from pyqtgraph.flowchart.Node import Node
 from acq4.util import Qt
-from acq4.util.DirTreeWidget import *
-import numpy as np
-import acq4.util.metaarray as metaarray
-from acq4.pyqtgraph.flowchart.library.common import *
-from acq4.pyqtgraph import SRTTransform, Point
-#from acq4.pyqtgraph import TreeWidget
-import acq4.util.functions as functions
+from acq4.util.DirTreeWidget import DirTreeWidget
+
 
 class SubtreeNode(Node):
     """Select files from within a directory. Input must be a DirHandle."""

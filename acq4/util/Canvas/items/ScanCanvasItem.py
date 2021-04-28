@@ -3,11 +3,12 @@ from __future__ import print_function
 from acq4.util import Qt
 from .CanvasItem import CanvasItem
 from .ImageCanvasItem import ImageCanvasItem
-from . import ScanCanvasItemTemplate
 import acq4.Manager
-import acq4.pyqtgraph as pg
+import pyqtgraph as pg
 import numpy as np
 from .itemtypes import registerItemType
+
+Ui_Form = Qt.importTemplate('.ScanCanvasItemTemplate')
 
 
 class ScanCanvasItem(CanvasItem):
@@ -31,7 +32,7 @@ class ScanCanvasItem(CanvasItem):
         if 'name' not in opts:
             opts['name'] = dirHandle.shortName()
             
-        ## Get the specific list of subdirs to use from which to pull spot information
+        ## Get the specific list of subdirectory to use from which to pull spot information
         if 'subDirs' in opts:
             dirs = opts['subDirs']
         else:
@@ -58,22 +59,15 @@ class ScanCanvasItem(CanvasItem):
         if len(pts) == 0:
             raise Exception("No data found in scan %s." % dirHandle.name(relativeTo=dirHandle.parent().parent()))
         gitem = pg.ScatterPlotItem(pts, pxMode=False, pen=(50,50,50,200))
-        #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
-        #self._addCanvasItem(citem)
-        #return [citem]
         CanvasItem.__init__(self, gitem, **opts)
-        #self.scatterPlot = gitem
         self.originalSpotSize = size
         
-        
-        
         self._ctrlWidget = Qt.QWidget()
-        self.ui = ScanCanvasItemTemplate.Ui_Form()
+        self.ui = Ui_Form()
         self.ui.setupUi(self._ctrlWidget)
         self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
         self.ui.outlineColorBtn.setColor((50,50,50,200))
         
-        #self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
         self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[1e-6, None])
         self.ui.sizeSpin.setValue(self.originalSpotSize)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
@@ -81,89 +75,7 @@ class ScanCanvasItem(CanvasItem):
         self.ui.outlineColorBtn.sigColorChanging.connect(self.updateOutline)
         
         self.addScanImageBtn = self.ui.loadSpotImagesBtn
-        #self.createGradientBtn = self.ui.createGradientBtn
-        #self.removeGradientBtn = self.ui.removeGradientBtn
         self.addScanImageBtn.connect(self.addScanImageBtn, Qt.SIGNAL('clicked()'), self.loadScanImage)
-        #self.createGradientBtn.connect(self.createGradientBtn, Qt.SIGNAL('clicked()'), self.createGradient)
-        #self.removeGradientBtn.connect(self.removeGradientBtn, Qt.SIGNAL('clicked()'), self.removeGradient)
-        #self.gradientNumber = self.ui.gradSpin
-
-    #def addScan(self, dirHandle, **opts):
-        #"""Returns a list of ScanCanvasItems."""
-        
-        #if 'sequenceParams' in dirHandle.info():
-            #dirs = [dirHandle[d] for d in dirHandle.subDirs()]
-        #else:
-            #dirs = [dirHandle]
-            
-        #if 'separateParams' not in opts:
-            #separateParams = False
-        #else:
-            #separateParams = opts['separateParams']
-            #del(opts['separateParams'])
-            
-        
-        #### check for sequence parameters (besides targets) so that we can separate them out into individual Scans
-        #paramKeys = []
-        #params = dirHandle.info()['protocol']['params']
-        #if len(params) > 1 and separateParams==True:
-            #for i in range(len(params)):
-                #k = (params[i][0], params[i][1])
-                #if k != ('Scanner', 'targets'):
-                    #paramKeys.append(k)
-            
-        #if 'name' not in opts:
-            #opts['name'] = dirHandle.shortName()
-            
-
-            
-        #if len(paramKeys) < 1:    
-            #pts = []
-            #for d in dirs: #d is a directory handle
-                ##d = dh[d]
-                #if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-                    #pos = d.info()['Scanner']['position']
-                    #if 'spotSize' in d.info()['Scanner']:
-                        #size = d.info()['Scanner']['spotSize']
-                    #else:
-                        #size = self.defaultSize
-                    #pts.append({'pos': pos, 'size': size, 'data': d})
-            
-            #item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
-            #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
-            #self._addCanvasItem(citem)
-            #return [citem]
-        #else:
-            #pts = {}
-            #for d in dirs:
-                #k = d.info()[paramKeys[0]]
-                #if len(pts) < k+1:
-                    #pts[k] = []
-                #if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-                    #pos = d.info()['Scanner']['position']
-                    #if 'spotSize' in d.info()['Scanner']:
-                        #size = d.info()['Scanner']['spotSize']
-                    #else:
-                        #size = self.defaultSize
-                    #pts[k].append({'pos': pos, 'size': size, 'data': d})
-            #spots = []
-            #for k in pts.keys():
-                #spots.extend(pts[k])
-            #item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
-            #parentCitem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
-            #self._addCanvasItem(parentCitem)
-            #scans = []
-            #for k in pts.keys():
-                #opts['name'] = paramKeys[0][0] + '_%03d' %k
-                #item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
-                #citem = ScanCanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
-                #self._addCanvasItem(citem)
-                ##scans[opts['name']] = citem
-                #scans.append(citem)
-            #return scans
-        
-        #print "Creating ScanCanvasItem...."
-    
     
     @classmethod
     def checkFile(cls, fh):
@@ -179,12 +91,8 @@ class ScanCanvasItem(CanvasItem):
             return 0
         except AttributeError:
             return 0
-        
     
     def loadScanImage(self):
-        #print 'loadScanImage called.'
-        #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
-        #scan = self.canvas.selectedItem()
         dh = self.opts['handle']
         dirs = [dh[d] for d in dh.subDirs()]
         if 'Camera' not in dirs[0].subDirs():
@@ -231,25 +139,13 @@ class ScanCanvasItem(CanvasItem):
                 if dlg.wasCanceled():
                     raise Exception("Processing canceled by user")                
         
-        #info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
-    
-        #pos =  info['imagePosition']
-        #scale = info['pixelSize']
-        #image = ImageCanvasItem(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
         image = ScanImageCanvasItem(scanImages, handles, z=self.opts['z']-1)
         item = self.canvas.addItem(image)
         self.scanImage = item
         
-        #self.scanImage.restoreTransform(self.saveTransform())
-        
-        #self.canvas.items[item] = scanImages
-        
     def sizeSpinEdited(self):
         self.ui.sizeCustomRadio.setChecked(True)
         self.updateSpotSize()
-        
-    #def calibrationRadioClicked(self):
-        #self.updateSpotSize()
 
     def updateSpotSize(self):
         size = self.getSpotSize()
@@ -270,8 +166,6 @@ class ScanCanvasItem(CanvasItem):
     def updateOutline(self):
         color = self.ui.outlineColorBtn.color()
         self.graphicsItem().setPen(color)
-        
-        
         
     def createGradient(self):
        # Generate a current scale bar from the console:
@@ -294,11 +188,8 @@ class ScanCanvasItem(CanvasItem):
         self.gradientLegend = pg.GradientLegend((50, 150), (-10, -10))
         self.gradientLegend.scale(1, -1)  # optional, depending on whether the canvas is y-inverted
         self.gradientLegend.setGradient(gradient)
-       # minStr = '%0.2g' % colormap.minSpin.value()
-       # maxStr = '%0.2g' % colormap.maxSpin.value()
-       # self.gradientLegendsetLabels({minStr: 0.0, maxStr: 1.0})
 
-       # A full set of labels:
+        # A full set of labels:
         self.gradientLegend.setLabels(dict((('- %3.1f' % x), x) for x in np.arange(0, 1+0.2, 0.2))) 
         # now show it
         self.canvas.addGraphicsItem(self.gradientLegend, name = 'Gradient_%d' % gradnum)

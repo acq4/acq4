@@ -1,17 +1,13 @@
 from __future__ import print_function
-import time
 
-import sys, os
+import os
+import sys
+from ctypes import byref, c_ulong
+
+from acq4.drivers.QImaging.QImagingDriver import QCamDriverClass, lib, dll
+
 d = os.path.dirname(__file__)
 sys.path.append(os.path.join(d, '../../util'))
-
-from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
-from acq4.pyqtgraph import graphicsWindows as gw
-from acq4.util import Qt
-from .QImagingDriver import *
-import atexit
-
-
 
 ###Load driver and camera
 qcd = QCamDriverClass()

@@ -1,1 +1,1 @@
-from FilterWheel import *
+from .FilterWheel import *

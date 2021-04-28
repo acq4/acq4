@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.OptomechDevice import *
-from acq4.devices.LightSource import LightSource
-from acq4.devices.Stage import Stage
-from .deviceTemplate import Ui_Form
-from acq4.util.Mutex import Mutex
-from acq4.modules.Camera import CameraModuleInterface
-import acq4.pyqtgraph as pg
+
 import collections
+
+import pyqtgraph as pg
+from acq4.Manager import getManager
+from acq4.devices.Device import Device
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.Stage import Stage
+from acq4.modules.Camera import CameraModuleInterface
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
+from acq4.util.debug import printExc
+
+Ui_Form = Qt.importTemplate('.deviceTemplate')
 
 
 class Microscope(Device, OptomechDevice):
@@ -48,13 +54,12 @@ class Microscope(Device, OptomechDevice):
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
         
-        for k1,objs in config['objectives'].items():  ## Set default values for each objective
+        for k1, objs in config['objectives'].items():  ## Set default values for each objective
             self.objectives[k1] = collections.OrderedDict()
-            for k2,o in objs.items():
+            for k2, o in objs.items():
                 obj = Objective(o, self, (k1, k2))
                 self.objectives[k1][k2] = obj
                 #obj.sigTransformChanged.connect(self.objectiveTransformChanged)
-                
 
         ## Keep track of the objective currently in use for each position
         ## Format is: { switchPosition1: objective1,  ... }
@@ -63,8 +68,7 @@ class Microscope(Device, OptomechDevice):
         )
         for obj in self.selectedObjectives.values():
             self.addSubdevice(obj)
-        
-        
+
         ## if there is a light source, configure it here
         if 'lightSource' in config:
             self.lightSource = dm.getDevice(config['lightSource'])
@@ -76,11 +80,14 @@ class Microscope(Device, OptomechDevice):
         if 'objectiveSwitch' in config:
             self.switchDevice = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
             self.objSwitchId = config['objectiveSwitch'][1]           ## Switch ID
-            #self.currentSwitchPosition = str(self.switchDevice.getSwitch(self.objSwitchId))
             self.switchDevice.sigSwitchChanged.connect(self.objectiveSwitchChanged)
-            self.objectiveSwitchChanged()
+            try:
+                self.objectiveSwitchChanged()
+            except:
+                printExc("Could not set initial objective state:")
         else:
-            self.setObjectiveIndex(0)
+            self.switchDevice = None
+            self.objectiveIndexChanged(0)
         
         cal = self.readConfigFile('calibration')
         if 'surfaceDepth' in cal:
@@ -100,23 +107,33 @@ class Microscope(Device, OptomechDevice):
         if self.objSwitchId not in change: ## the switch(es) that changed are not relevant to this device
             return
         state = str(change[self.objSwitchId])
-        self.setObjectiveIndex(state)
-    
+        self.objectiveIndexChanged(state)
+
     def setObjectiveIndex(self, index):
-        """Selects the objective currently in position *index*"""
+        """Selects the objective currently in position *index*
+        
+        This method is called when the user selects an objective index from the manager UI."""
+        if self.switchDevice is not None and hasattr(self.switchDevice, 'setSwitch'):
+            self.switchDevice.setSwitch(self.objSwitchId, int(index))
+        else:
+            self.objectiveIndexChanged(index)
+    
+    def objectiveIndexChanged(self, index):
+        # called when the objective index has changed.
         index = str(index)
         if index not in self.selectedObjectives:
             raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(list(self.objectives.keys()))))
             
         ## determine new objective, return early if there is no change
         ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
-        lastObj = self.currentObjective
-        self.currentSwitchPosition = index
-        self.currentObjective = self.getObjective()
-        if self.currentObjective == lastObj:
-            return
-        
-        self.setCurrentSubdevice(self.currentObjective)
+        with self.lock:
+            lastObj = self.currentObjective
+            self.currentSwitchPosition = index
+            self.currentObjective = self.getObjective()
+            if self.currentObjective == lastObj:
+                return    
+            
+        self.setCurrentSubdevice(self.currentObjective)        
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
     def getObjective(self):
@@ -140,13 +157,13 @@ class Microscope(Device, OptomechDevice):
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
-        ##This is _not_ the same as setObjectiveIndex.
+        ##This is _not_ the same as objectiveIndexChanged.
         index = obj.key()[0]
         with self.lock:
             self.removeSubdevice(self.selectedObjectives[index])
             self.selectedObjectives[index] = obj
             self.addSubdevice(obj)
-        self.setObjectiveIndex(self.currentSwitchPosition) # update self.currentObjective, send signals (if needed)
+        self.objectiveIndexChanged(self.currentSwitchPosition) # update self.currentObjective, send signals (if needed)
         self.sigObjectiveListChanged.emit()
 
     def _allObjectives(self):
@@ -233,12 +250,17 @@ class Microscope(Device, OptomechDevice):
 
     def focusDevice(self):
         if self._focusDevice is None:
-            p = self
-            while True:
-                if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
-                    self._focusDevice = p
-                    break
-                p = p.parentDevice()
+            if 'focusDevice' in self.config:
+                # check config first
+                self._focusDevice = getManager().getDevice(self.config['focusDevice'])
+            else:
+                # if nothing was specified, then use the first parent stage with z positioning
+                p = self
+                while True:
+                    if p is None or isinstance(p, Stage) and p.capabilities()['setPos'][2]:
+                        self._focusDevice = p
+                        break
+                    p = p.parentDevice()
         return self._focusDevice
 
     def positionDevice(self):
@@ -254,18 +276,10 @@ class Microscope(Device, OptomechDevice):
 
 class Objective(OptomechDevice):
     
-    #class SignalProxyObject(Qt.QObject):
-        #sigTransformChanged = Qt.Signal(object) ## self
-    
     def __init__(self, config, scope, key):
-        #self.__sigProxy = Objective.SignalProxyObject()
-        #self.sigTransformChanged = self.__sigProxy.sigTransformChanged
-        #self._config = config
         self._config = config
         self._scope = scope
         self._key = key
-        offset = config.get('offset', pg.Vector(0,0,0))
-        scale = config.get('scale', pg.Vector(1,1,1))
         name = config['name']
         
         OptomechDevice.__init__(self, scope.dm, {}, name)
@@ -274,12 +288,6 @@ class Objective(OptomechDevice):
             self.setOffset(config['offset'])
         if 'scale' in config:
             self.setScale(config['scale'])
-            
-    #def updateTransform(self):
-        #tr = pg.SRTTransform3D()
-        #tr.translate(self._offset)
-        #tr.scale(self._scale)
-        #self.setDeviceTransform(tr)
     
     def deviceTransform(self):
         return pg.SRTTransform3D(OptomechDevice.deviceTransform(self))
@@ -288,9 +296,6 @@ class Objective(OptomechDevice):
         tr = self.deviceTransform()
         tr.setTranslate(pos)
         self.setDeviceTransform(tr)
-        #self._offset = pg.Vector(pos)
-        #self.sigTransformChanged.emit(self)
-        #self.updateTransform()
     
     def setScale(self, scale):
         if not hasattr(scale, '__len__'):
@@ -299,20 +304,12 @@ class Objective(OptomechDevice):
         tr = self.deviceTransform()
         tr.setScale(scale)
         self.setDeviceTransform(tr)
-        #self._scale = pg.Vector(scale, scale, 1)
-        #self.sigTransformChanged.emit(self)
-        #self.updateTransform()
     
     def offset(self):
         return self.deviceTransform().getTranslation()
-        #return pg.Vector(self._offset)
         
     def scale(self):
         return self.deviceTransform().getScale()
-        #return pg.Vector(self._scale)
-
-    #def name(self):
-        #return self._name
     
     def key(self):
         return self._key
@@ -334,7 +331,7 @@ class ScopeGUI(Qt.QWidget):
         self.win = win
         self.dev = dev
         self.dev.sigObjectiveChanged.connect(self.objectiveChanged)
-        #self.dev.sigPositionChanged.connect(self.positionChanged)
+
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.objList = self.dev._allObjectives()
@@ -346,8 +343,7 @@ class ScopeGUI(Qt.QWidget):
             ## For each objective, create a set of widgets for selecting and updating.
             c = Qt.QComboBox()
             r = Qt.QRadioButton(i)
-            #first = list(self.objList[i].keys())[0]
-            #first = self.objList[i][first]
+
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
@@ -406,6 +402,8 @@ class ScopeGUI(Qt.QWidget):
         index = spin.index
         (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
+        if callable(getattr(obj, "toPyObject", None)):
+            obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
             obj.setOffset((xs.value(), ys.value(), zs.value()))
@@ -418,6 +416,8 @@ class ScopeGUI(Qt.QWidget):
         index = spin.index
         (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
+        if callable(getattr(obj, "toPyObject", None)):
+            obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
             obj.setScale(ss.value())
@@ -428,6 +428,8 @@ class ScopeGUI(Qt.QWidget):
         for k, w in self.objWidgets.items():
             (r, combo, xs, ys, zs, ss) = w
             obj = combo.itemData(combo.currentIndex())
+            if callable(getattr(obj, "toPyObject", None)):
+                obj = obj.toPyObject()
             offset = obj.offset()
             xs.setValue(offset.x())
             ys.setValue(offset.y())

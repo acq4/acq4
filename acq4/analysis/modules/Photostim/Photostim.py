@@ -1,25 +1,25 @@
 # -*- coding: utf-8 -*-
-
-from six.moves import range
-
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
-import acq4.analysis.modules.EventDetector as EventDetector
-from acq4.pyqtgraph.flowchart import *
+
 import os
 from collections import OrderedDict
-import acq4.util.debug as debug
+
+import numpy as np
+from six.moves import range
+
+import acq4.analysis.modules.EventDetector as EventDetector
+import pyqtgraph as pg
 import acq4.util.ColorMapper as ColorMapper
-import acq4.pyqtgraph as pg
-#import acq4.pyqtgraph.ProgressDialog as ProgressDialog
+import acq4.util.debug as debug
+from acq4.analysis.AnalysisModule import AnalysisModule
+from pyqtgraph import multiprocess
+from pyqtgraph.flowchart import Flowchart
+from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
-from .Scan import Scan, loadScanSequence
 from .DBCtrl import DBCtrl
+from .Scan import Scan, loadScanSequence
 from .ScatterPlotter import ScatterPlotter
-from acq4.util.Canvas import items
-import acq4.util.Canvas as Canvas
-import acq4.util.functions as fn
+
 
 class Photostim(AnalysisModule):
     """
@@ -181,9 +181,9 @@ class Photostim(AnalysisModule):
                 except:
                     debug.printExc("Error loading file %s" % fh.name())
                     return False
-                dlg += 1
-                if dlg.wasCanceled():
-                    return
+                # dlg += 1
+                # if dlg.wasCanceled():
+                #     return
 
     def loadScan(self, fh):
         ret = []
@@ -384,7 +384,7 @@ class Photostim(AnalysisModule):
             allScans.extend([s for s in self.maps if s.isVisible()])
             for i in range(len(allScans)):
                 allScans[i].recolor(i, len(allScans), parallel=self.recolorParallelCheck.isChecked())
-        except pg.multiprocess.CanceledError:
+        except multiprocess.CanceledError:
             pass
         
         #for i in range(len(self.scans)):

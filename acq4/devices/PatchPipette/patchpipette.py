@@ -1,10 +1,17 @@
 from __future__ import print_function
-from ..Pipette import Pipette
+import numpy as np
+from collections import OrderedDict
+from ..Device import Device
 from acq4.util import Qt
 from ...Manager import getManager
+from acq4.util.Mutex import Mutex
+from pyqtgraph import ptime
+from .devgui import PatchPipetteDeviceGui
+from .testpulse import TestPulseThread
+from .statemanager import PatchPipetteStateManager
 
 
-class PatchPipette(Pipette):
+class PatchPipette(Device):
     """Represents a single patch pipette, manipulator, and headstage.
 
     This class extends from the Pipette device class to provide automation and visual feedback
@@ -14,64 +21,204 @@ class PatchPipette(Pipette):
         * Input resistance, access resistance, and holding levels
 
     This is also a good place to implement pressure control, autopatching, slow voltage clamp, etc.
+
+    If you intend this for use with the MultiPatch module, the device name in the configuration
+    needs to end in a number.
     """
-    sigStateChanged = Qt.Signal(object)
+    sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
+    sigActiveChanged = Qt.Signal(object, object)  # self, active
+    sigTestPulseFinished = Qt.Signal(object, object)  # self, TestPulse
+    sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
+    sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
+    sigAutoBiasChanged = Qt.Signal(object, object, object)  # self, enabled, target
+    sigMoveStarted = Qt.Signal(object)  # self
+    sigMoveFinished = Qt.Signal(object, object)  # self, position
+    sigTargetChanged = Qt.Signal(object, object)  # self, target
+    sigNewPipetteRequested = Qt.Signal(object)  # self
+    sigTipCleanChanged = Qt.Signal(object, object)  # self, clean
+    sigTipBrokenChanged = Qt.Signal(object, object)  # self, broken
+
+    # catch-all signal for event logging
+    sigNewEvent = Qt.Signal(object, object)  # self, event
+
+    # emitted every time we finish a patch attempt
+    sigPatchAttemptFinished = Qt.Signal(object, object)  # self, patch record
+
+    # These attributes can be modified to customize state management and test pulse acquisition
+    defaultStateManagerClass = PatchPipetteStateManager
+    defaultTestPulseThreadClass = TestPulseThread
 
     def __init__(self, deviceManager, config, name):
-        self.pressures = {
-            'out': 'atmosphere',
-            'bath': 0.5,
-            'approach': 0.5,
-            'seal': 'user',
-        }
+        pipName = config.pop('pipetteDevice', None)
+        self.pipetteDevice = deviceManager.getDevice(pipName)
+        clampName = config.pop('clampDevice', None)
+        self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
 
-        self._clampName = config.pop('clampDevice', None)
-        self._clampDevice = None
-
-        Pipette.__init__(self, deviceManager, config, name)
-        self.state = "out"
+        Device.__init__(self, deviceManager, config, name)
+        self._eventLog = []  # chronological record of events 
+        self._eventLogLock = Mutex()
+        
+        # current state variables
         self.active = False
+        self.broken = False
+        self.clean = False
+        self.calibrated = False
+        self.waitingForSwap = False
+
+        # key measurements made during patch process and lifetime of pipette
+        self._patchRecord = None
+        self._pipetteRecord = None
 
         self.pressureDevice = None
         if 'pressureDevice' in config:
-            self.pressureDevice = PressureControl(config['pressureDevice'])
+            self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
+            self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
+        self.userPressure = False
+        
+        self._lastTestPulse = None
+        self._initTestPulse(config.get('testPulse', {}))
 
-    def getPatchStatus(self):
-        """Return a dict describing the status of the patched cell.
+        self._initStateManager()
 
-        Includes keys:
-        * state ('bath', 'sealing', 'on-cell', 'whole-cell', etc..)
-        * resting potential
-        * resting current
-        * input resistance
-        * access resistance
-        * capacitance
-        * clamp mode ('ic' or 'vc')
-        * timestamp of last measurement
+        self.pipetteDevice.sigCalibrationChanged.connect(self._pipetteCalibrationChanged)
+        self.pipetteDevice.sigMoveStarted.connect(self._pipetteMoveStarted)
+        self.pipetteDevice.sigMoveFinished.connect(self._pipetteMoveFinished)
+        self.pipetteDevice.sigMoveRequested.connect(self._pipetteMoveRequested)
+        self.pipetteDevice.sigTargetChanged.connect(self._pipetteTargetChanged)
 
-        """
-        # maybe 'state' should be available via a different method?
+        deviceManager.declareInterface(name, ['patchpipette'], self)
 
-    def getPressure(self):
-        pass
+        # restore last known state for this pipette
+        lastState = self.readConfigFile('last_state')
+        # restoring previous state is temporarily disabled -- this needs a lot more work to be safe.
+        # self.setState(lastState.get('state', 'out'))
+        # self.broken = lastState.get('broken', False)
+        # self.calibrated = lastState.get('calibrated', False)
+        # self.setActive(False)  # Always start pipettes disabled rather than restoring last state?
+        # # self.setActive(lastState.get('active', False))
 
-    def setPressure(self, pressure):
-        if self.pressureDevice is None:
+    def isTipClean(self):
+        return self.clean
+
+    def setTipClean(self, clean):
+        if clean == self.clean:
             return
-        self.pressureDevice.setPressure(pressure)        
+        self.clean = clean
+        self.sigTipCleanChanged.emit(self, clean)
+        self.emitNewEvent('tip_clean_changed', {'clean': clean})
+
+    def isTipBroken(self):
+        return self.broken
+
+    def setTipBroken(self, broken):
+        if broken == self.broken:
+            return
+        self.broken = broken
+        self.sigTipBrokenChanged.emit(self, broken)
+        self.emitNewEvent('tip_broken_changed', {'broken': broken})
+        # states should take care of this, but we want to make sure pressure stops quickly.
+        if broken and self.pressureDevice is not None:
+            self.pressureDevice.setPressure(pressure=0)
+
+    def scopeDevice(self):
+        return self.pipetteDevice.scopeDevice()
+
+    def imagingDevice(self):
+        return self.pipetteDevice.imagingDevice()
+
+    def focusOnTip(self, speed):
+        imdev = self.imagingDevice()
+        return imdev.moveCenterToGlobal(self.pipetteDevice.globalPosition(), speed=speed)
+
+    def focusOnTarget(self, speed):
+        imdev = self.imagingDevice()
+        return imdev.moveCenterToGlobal(self.pipetteDevice.targetPosition(), speed=speed)
+
+    def newPipette(self):
+        """A new physical pipette has been attached; reset any per-pipette state.
+        """
+        self.setTipBroken(False)
+        self.setTipClean(True)
+        self.calibrated = False
+        self.waitingForSwap = False
+        self._pipetteRecord = None
+        self.emitNewEvent('new_pipette', {})
+        self.newPatchAttempt()
+        self.setState('out')
+        # todo: set calibration to average 
+
+    def requestNewPipette(self):
+        """Call to emit a signal requesting a new pipette.
+        """
+        self.waitingForSwap = True
+        self.sigNewPipetteRequested.emit(self)
+
+    def pipetteRecord(self):
+        if self._pipetteRecord is None:
+            self._pipetteRecord = {
+                'originalResistance': None,
+                'cleanCount': 0,
+            }
+        return self._pipetteRecord
+
+    def newPatchAttempt(self):
+        """Ready to begin a new patch attempt; reset TP history and patch record.
+        """
+        self.finishPatchRecord()
+        self.resetTestPulseHistory()
+        self.emitNewEvent('new_patch_attempt', {})
+
+    def _resetPatchRecord(self):
+        self.finishPatchRecord()
+        piprec = self.pipetteRecord()
+        self._patchRecord = OrderedDict([
+            ('patchPipette', self.name()),
+            ('pipetteOriginalResistance', piprec['originalResistance']),
+            ('pipetteCleanCount', piprec['cleanCount']),
+            ('initialResistance', None),
+            ('initialOffset', None),
+            ('attemptedCellDetect', False),
+            ('detectedCell', None),
+            ('cellDetectInitialTarget', None),
+            ('cellDetectFinalTarget', None),
+            ('attemptedSeal', False),
+            ('sealSuccessful', None),
+            ('fouledBeforeSeal', None),
+            ('resistanceBeforeSeal', None),
+            ('resistanceBeforeBreakin', None),
+            ('offsetBeforeSeal', None),
+            ('attemptedBreakin', False),
+            ('breakinSuccessful', None),
+            ('spontaneousBreakin', None),
+            ('initialBaselineCurrent', None),
+            ('initialBaselinePotential', None),
+            ('wholeCellStartTime', None),
+            ('wholeCellStopTime', None),
+            ('wholeCellPosition', None),
+            ('resealResistance', None),
+            ('resistanceAfterBlowout', None),
+            ('offsetAfterBlowout', None),
+            ('complete', False),
+        ])
+
+    def patchRecord(self):
+        if self._patchRecord is None:
+            self._resetPatchRecord()
+        return self._patchRecord
+
+    def finishPatchRecord(self):
+        if self._patchRecord is None:
+            return
+        self._patchRecord['complete'] = True
+        self.sigPatchAttemptFinished.emit(self, self._patchRecord)
+        self._patchRecord = None
+
+    def pressureChanged(self, dev, source, pressure):
+        self.sigPressureChanged.emit(self, source, pressure)
+        self.emitNewEvent('pressure_changed', OrderedDict([('source', source), ('pressure', pressure)]))
 
     def setSelected(self):
         pass
-
-    def approach(self):
-        """Prepare pipette to enter tissue and patch a cell.
-
-        - Move pipette to diagonal approach position
-        - Auto-correct pipette offset
-        - May increase pressure
-        - Automatically hide tip/target markers when the tip is near the target
-        """
-
 
     def seal(self):
         """Attempt to seal onto a cell.
@@ -81,22 +228,35 @@ class PatchPipette(Pipette):
         """
 
     def setState(self, state):
-        """out, bath, approach, seal, attached, breakin, wholecell
-        """
-        if self.pressureDevice is not None and state in self.pressures:
-            p = self.pressures[state]
-            if isinstance(p, str):
-                self.pressureDevice.setSource(p)
-                self.pressureDevice.setPressure(0)
-            else:
-                self.pressureDevice.setPressure(p)
-                self.pressureDevice.setSource('regulator')
+        """Attempt to set the state (out, bath, seal, whole cell, etc.) of this patch pipette.
 
-        self.state = state
-        self.sigStateChanged.emit(self)
+        The actual resulting state is returned.
+        """
+        return self._stateManager.requestStateChange(state)
+
+    def listStates(self):
+        """Return a list of all known state names this pipette can be set to.
+        """
+        return self._stateManager.listStates()
+
+    def _setState(self, state, oldState):
+        """Called by state manager when state has changed.
+        """
+        self._writeStateFile()
+        self.emitNewEvent('state_change', OrderedDict([('state', state), ('old_state', oldState)]))
+        self.sigStateChanged.emit(self, state, oldState)
+
+    def _writeStateFile(self):
+        state = {
+            'state': self._stateManager.getState().stateName,
+            'active': self.active,
+            'calibrated': self.calibrated,
+            'broken': self.broken,
+        }
+        self.writeConfigFile(state, 'last_state')
 
     def getState(self):
-        return self.state
+        return self._stateManager.getState()
 
     def breakIn(self):
         """Rupture the cell membrane using negative current pulses.
@@ -106,45 +266,151 @@ class PatchPipette(Pipette):
         * longer wait time if needed
         """
 
+    def _pipetteCalibrationChanged(self):
+        self.calibrated = True
+        self.emitNewEvent('pipette_calibrated')
+
+    def _pipetteTransformChanged(self, pip, movedDevice):
+        pos = pip.globalPosition()
+        self.emitNewEvent('pipette_transform_changed', {'globalPosition': pos})
+
     def setActive(self, active):
         self.active = active
+        self.sigActiveChanged.emit(self, active)
+        self.emitNewEvent('active_changed', {'active': active})
 
-    def clampDevice(self):
-        if self._clampDevice is None:
-            if self._clampName is None:
-                return None
-            self._clampDevice = getManager().getDevice(self._clampName)
-        return self._clampDevice
+    def deviceInterface(self, win):
+        """Return a widget with a UI to put in the device rack"""
+        return PatchPipetteDeviceGui(self, win)
 
-    def autoPipetteOffset(self):
-        clamp = self.clampDevice()
-        if clamp is not None:
-            clamp.autoPipetteOffset()
+    def _testPulseFinished(self, dev, result):
+        self._lastTestPulse = result
+        if self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
+            newTPH = np.empty(self._testPulseHistory.shape[0]*2, dtype=self._testPulseHistory.dtype)
+            newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
+            self._testPulseHistory = newTPH
+        analysis = result.analysis()
+        self._testPulseHistory[self._testPulseHistorySize]['time'] = result.startTime()
+        for k in analysis:
+            self._testPulseHistory[self._testPulseHistorySize][k] = analysis[k]
+        self._testPulseHistorySize += 1
 
+        self.sigTestPulseFinished.emit(self, result)
+        self.emitNewEvent('test_pulse', result.analysis())
 
-class PressureControl(Qt.QObject):
-    def __init__(self, deviceName):
-        Qt.QObject.__init__(self)
-        man = getManager()
-        self.device = man.getDevice(deviceName)
+    def _initTestPulse(self, params):
+        self.resetTestPulseHistory()
+        if self.clampDevice is None:
+            self._testPulseThread = None
+            return
+        self._testPulseThread = self.defaultTestPulseThreadClass(self, params)
+        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
+        self._testPulseThread.started.connect(self.testPulseEnabledChanged)
+        self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
 
-    def setPressure(self, p):
-        """Set the regulated output pressure to the pipette.
+    def testPulseHistory(self):
+        return self._testPulseHistory[:self._testPulseHistorySize].copy()
 
-        Note: this does _not_ change the configuration of any values.
-        """
-        self.device.setChanHolding('pressure_out', p)
+    def resetTestPulseHistory(self):
+        self._lastTestPulse = None
+        self._testPulseHistory = np.empty(1000, dtype=[
+            ('time', 'float'),
+            ('baselinePotential', 'float'),
+            ('baselineCurrent', 'float'),
+            ('peakResistance', 'float'),
+            ('steadyStateResistance', 'float'),
+            ('fitExpAmp', 'float'),
+            ('fitExpTau', 'float'),
+            ('fitExpXOffset', 'float'),
+            ('fitExpYOffset', 'float'),
+            ('capacitance', 'float'),
+        ])
+            
+        self._testPulseHistorySize = 0
 
-    def setSource(self, mode):
-        """Configure valves for the specified pressure source: "atmosphere", "user", or "regulator"
-        """
-        if mode == 'atmosphere':
-            self.device.setChanHolding('user_valve', 0)
-            self.device.setChanHolding('regulator_valve', 0)
-        elif mode == 'user':
-            self.device.setChanHolding('user_valve', 1)
-            self.device.setChanHolding('regulator_valve', 0)
-        elif mode == 'regulator':
-            self.device.setChanHolding('regulator_valve', 1)
+    def enableTestPulse(self, enable=True, block=False):
+        if enable:
+            self._testPulseThread.start()
         else:
-            raise ValueError("Unknown pressure source %r" % mode)
+            self._testPulseThread.stop(block=block)
+
+    def testPulseEnabled(self):
+        return self._testPulseThread.isRunning()
+
+    def testPulseEnabledChanged(self):
+        en = self.testPulseEnabled()
+        self.sigTestPulseEnabled.emit(self, en)
+        self.emitNewEvent('test_pulse_enabled', {'enabled': en})
+
+    def setTestPulseParameters(self, **params):
+        self._testPulseThread.setParameters(**params)
+
+    def lastTestPulse(self):
+        return self._lastTestPulse
+
+    def enableAutoBias(self, enable=True):
+        self.setTestPulseParameters(autoBiasEnabled=enable)
+        self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
+        self.emitNewEvent('auto_bias_enabled', OrderedDict([('enabled', enable), ('target', self.autoBiasTarget())]))
+
+    def autoBiasEnabled(self):
+        return self._testPulseThread.getParameter('autoBiasEnabled')
+
+    def setAutoBiasTarget(self, v):
+        self.setTestPulseParameters(autoBiasTarget=v)
+        enabled = self.autoBiasEnabled()
+        self.sigAutoBiasChanged.emit(self, enabled, v)
+        self.emitNewEvent('auto_bias_target_changed', OrderedDict([('enabled', enabled), ('target', v)]))
+
+    def autoBiasTarget(self):
+        return self._testPulseThread.getParameter('autoBiasTarget')
+
+    def _initStateManager(self):
+        # allow external modification of state manager class
+        self._stateManager = self.defaultStateManagerClass(self)
+        self.setState('out')
+
+    def stateManager(self):
+        return self._stateManager
+
+    def quit(self):
+        self.enableTestPulse(False, block=True)
+        self._stateManager.quit()
+
+    def goHome(self, speed):
+        self.setState('out')
+        return self.pipetteDevice.goHome(speed)
+
+    def _pipetteMoveStarted(self, pip, pos):
+        self.sigMoveStarted.emit(self)
+        self.emitNewEvent('move_start', {'position': tuple(pos)})
+
+    def _pipetteMoveRequested(self, pip, pos, speed, opts):
+        self.emitNewEvent('move_requested', OrderedDict([
+            ('position', tuple(pos)), 
+            ('speed', speed), 
+            ('opts', repr(opts)),
+        ]))
+
+    def _pipetteMoveFinished(self, pip, pos):
+        self.sigMoveFinished.emit(self, pos)
+        self.emitNewEvent('move_stop', {'position': [pos[0], pos[1], pos[2]]})
+
+    def _pipetteTargetChanged(self, pip, pos):
+        self.sigTargetChanged.emit(self, pos)
+        self.emitNewEvent('target_changed', {'target_position': [pos[0], pos[1], pos[2]]})
+
+    def emitNewEvent(self, eventType, eventData=None):
+        newEv = OrderedDict([
+            ('device', self.name()),
+            ('event_time', ptime.time()),
+            ('event', eventType),
+        ])
+        if eventData is not None:
+            newEv.update(eventData)
+        self.sigNewEvent.emit(self, newEv)
+
+        self._eventLog.append(newEv)
+
+    def eventLog(self):
+        return self._eventLog

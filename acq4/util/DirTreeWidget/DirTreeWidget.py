@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.util.DataManager import *
-from acq4.util.debug import *
+
 import os
 
+from acq4.util import Qt
+from acq4.util.debug import printExc
+from six.moves import range
 
 
 class DirTreeWidget(Qt.QTreeWidget):
@@ -46,7 +47,7 @@ class DirTreeWidget(Qt.QTreeWidget):
         self.rebuildTree()
 
     def flushSignals(self):
-        for h in self.items.keys():
+        for h in list(self.items.keys()):
             h.flushSignals()
 
     def quit(self):
@@ -200,8 +201,9 @@ class DirTreeWidget(Qt.QTreeWidget):
         dirs = dh.name(relativeTo=self.baseDir).split(os.path.sep)
         node = self.baseDir
         while len(dirs) > 0:
-            item = self.items[node]
-            item.setExpanded(True)
+            item = self.items.get(node)
+            if item is not None:
+                item.setExpanded(True)
             node = node[dirs.pop(0)] 
 
     def watch(self, handle):

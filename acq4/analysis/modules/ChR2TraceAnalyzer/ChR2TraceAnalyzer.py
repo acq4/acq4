@@ -15,16 +15,14 @@ The specifics of the analysis depends on the choice of the flowchart.
 
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
-#import acq4.analysis.modules.EventDetector as EventDetector
+
 from collections import OrderedDict
 import pyqtgraph as pg
-#from metaarray import MetaArray
-#from DBCtrl import DBCtrl
-#import numpy as np
+
 from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.util.FileLoader import FileLoader
-import acq4.util.flowchart as fc  # was acq4.pyqtgraph.flowchart - but it does not have the same filters ??????????
-#import acq4.pyqtgraph.debug as debug
+import acq4.util.flowchart as fc  # was pyqtgraph.flowchart - but it does not have the same filters ??????????
+
 import os
 import glob
 import acq4.analysis.scripts.chr2analysis as ChR2

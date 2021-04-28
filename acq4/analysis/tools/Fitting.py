@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
+from six.moves import range
 
 """
 Python class wrapper for data fitting.
@@ -725,16 +726,16 @@ if __name__ == "__main__":
 
     stdFont = 'Arial'
 
-    import  matplotlib.pyplot as pylab
-    pylab.rcParams['text.usetex'] = True
-    pylab.rcParams['interactive'] = False
-    pylab.rcParams['font.family'] = 'sans-serif'
-    pylab.rcParams['font.sans-serif'] = 'Arial'
-    pylab.rcParams['mathtext.default'] = 'sf'
-    pylab.rcParams['figure.facecolor'] = 'white'
+    import  matplotlib.pyplot as PL
+    PL.rcParams['text.usetex'] = True
+    PL.rcParams['interactive'] = False
+    PL.rcParams['font.family'] = 'sans-serif'
+    PL.rcParams['font.sans-serif'] = 'Arial'
+    PL.rcParams['mathtext.default'] = 'sf'
+    PL.rcParams['figure.facecolor'] = 'white'
     # next setting allows pdf font to be readable in Adobe Illustrator
-    pylab.rcParams['pdf.fonttype'] = 42
-    pylab.rcParams['text.dvipnghack'] = True
+    PL.rcParams['pdf.fonttype'] = 42
+    PL.rcParams['text.dvipnghack'] = True
     ##################### to here (matplotlib stuff - touchy!
     
     Fits = Fitting.Fitting()
@@ -780,14 +781,14 @@ if __name__ == "__main__":
                 err[i,j] = f[0](pars, x, y0, C=C, sumsq = True)
                 yp[i,j] = f[0](pars, x, C=C, sumsq = False)
   
-        pylab.figure()
-        CS=pylab.contour(p1range*tau1, p2range*width, err, 25)
-        CB = pylab.colorbar(CS, shrink=0.8, extend='both')
-        pylab.figure()
+        PL.figure()
+        CS=PL.contour(p1range*tau1, p2range*width, err, 25)
+        CB = PL.colorbar(CS, shrink=0.8, extend='both')
+        PL.figure()
         for i, p1 in enumerate(p1range):
             for j, p2 in enumerate(p2range):
-                pylab.plot(x, yp[i,j])
-        pylab.plot(x, y0, 'r-', linewidth=2.0)
+                PL.plot(x, yp[i,j])
+        PL.plot(x, y0, 'r-', linewidth=2.0)
 
   
     # run tests for each type of fit, return results to compare parameters
@@ -883,10 +884,10 @@ if __name__ == "__main__":
         print( "FIT(%d)   : %s" % (j, outstr) )
         print( "init(%d) : %s" % (j, initstr) )
         print( "Error:   : %f" % (Fits.fitSum2Err))
-        if func is 'exp1':
-            pylab.figure()
-            pylab.plot(numpy.array(x), yd, 'ro-')
-            pylab.hold(True)
-            pylab.plot(numpy.array(x), initialgr, 'k--')
-            pylab.plot(xf[0], yf[0], 'b-') # fit
-            pylab.show()
+        if func == 'exp1':
+            PL.figure()
+            PL.plot(numpy.array(x), yd, 'ro-')
+            PL.hold(True)
+            PL.plot(numpy.array(x), initialgr, 'k--')
+            PL.plot(xf[0], yf[0], 'b-') # fit
+            PL.show()

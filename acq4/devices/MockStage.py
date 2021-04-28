@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.devices.OptomechDevice import *
+
 import time
+
 import numpy as np
-from acq4.Manager import getManager
+
 from acq4.devices.Stage import Stage, MoveFuture
-from acq4.util.Thread import Thread
-import acq4.pyqtgraph as pg
+from pyqtgraph import ptime
 from acq4.util import Qt
-from acq4.pyqtgraph import ptime
 from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
 
 
 class MockStage(Stage):
@@ -55,6 +55,9 @@ class MockStage(Stage):
                 'setPos': (True, True, True),
                 'limits': (False, False, False),
             }
+
+    def axes(self):
+        return ('x', 'y', 'z')
 
     def _move(self, abs, rel, speed, linear):
         """Called by base stage class when the user requests to move to an
@@ -264,7 +267,7 @@ class MockStageThread(Thread):
     
     def _setPosition(self, pos):
         self.pos = np.array(pos)
-        self.positionChanged.emit(pos)
+        self.positionChanged.emit(self.pos)
 
 
 #class MockStageInterface(Qt.QWidget):

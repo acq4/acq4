@@ -1,5 +1,5 @@
 from __future__ import print_function
-from acq4.pyqtgraph import Vector, SRTTransform3D
+from pyqtgraph import Vector, SRTTransform3D
 
 
 class Frame(object):
@@ -60,3 +60,15 @@ class Frame(object):
         """
         return self.globalTransform().map(obj)
     
+    def saveImage(self, dh, filename):
+        """Save this frame data to *filename* inside DirHandle *dh*.
+
+        The file name must endwith ".ma" (for MetaArray) or any supported image file extension.
+        """
+        data = self.getImage()
+        info = self.info()
+
+        if filename.endswith('.ma'):
+            return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
+        else:
+            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)

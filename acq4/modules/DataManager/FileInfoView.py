@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import time
+
 import six
 
-from .FileInfoViewTemplate import *
-from acq4.util import Qt
-from acq4.util.DataManager import DirHandle
 import acq4.Manager as Manager
-import time
-import acq4.util.configfile as configfile
-from acq4.util.DictView import *
+from acq4.util import Qt
+from acq4.util.DictView import DictView
+from six.moves import range
+
+Ui_Form = Qt.importTemplate('.FileInfoViewTemplate')
+
 
 class FocusEventCatcher(Qt.QObject):
     

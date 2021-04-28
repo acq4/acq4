@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.modules.TaskRunner.analysisModules import AnalysisModule
-from acq4.Manager import getManager
-from acq4.util import Qt
-from .PhotostimTemplate import Ui_Form
+
+import weakref
+
 import numpy as np
 import scipy.ndimage
-from acq4.util.metaarray import MetaArray
-from acq4.util.debug import *
-import acq4.pyqtgraph as pg
+
+import pyqtgraph as pg
+from acq4.Manager import getManager
+from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
+from acq4.util import Qt
+
+Ui_Form = Qt.importTemplate('.PhotostimTemplate')
+
 
 class PhotostimModule(AnalysisModule):
     def __init__(self, *args):
@@ -209,8 +213,8 @@ class Task:
         bstop = self.state['clampBaseStopSpin']
         tstart = self.state['clampTestStartSpin']
         tstop = self.state['clampTestStopSpin']
-        base = data['Time': bstart:bstop].view(ndarray)
-        test = data['Time': tstart:tstop].view(ndarray)
+        base = data['Time': bstart:bstop].view(np.ndarray)
+        test = data['Time': tstart:tstop].view(np.ndarray)
         if len(test) == 0:
             raise Exception("Uncaging analysis: No clamp data to evaluate. Check start/stop values?")
         time = data.xvals('Time')
