@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+from collections import OrderedDict
+
+import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
-import acq4.util.Mutex as Mutex
-from collections import OrderedDict
 
 
 class LightSource(Device):
@@ -135,6 +136,7 @@ class LightSourceDevGui(Qt.QWidget):
 
         self.sourceActivationButtons = {}
         self.sourceBrightnessSliders = {}
+
         for i, name in enumerate(self.dev.sourceConfigs):
             conf = self.dev.sourceConfigs[name]
             if conf.get("adjustableBrightness", False):

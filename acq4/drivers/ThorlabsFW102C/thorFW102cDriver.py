@@ -1,14 +1,14 @@
 from __future__ import print_function
 import serial, struct, time, collections, threading, re, pdb
 try:
-    from ..SerialDevice import SerialDevice, TimeoutError, DataError
+    from ..SerialDevice import SerialDevice, DataError
 except ValueError:
     ## relative imports not allowed when running from command prompt, so
     ## we adjust sys.path when running the script for testing
     if __name__ == '__main__':
         import sys, os
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-        from SerialDevice import SerialDevice, TimeoutError, DataError
+        from acq4.drivers.SerialDevice import SerialDevice, DataError
 from collections import OrderedDict
 
 errorMessages = {
@@ -83,7 +83,7 @@ class FilterWheelDriver(SerialDevice):
         if int(newSpeed) in [0,1]:
             self['speed'] = int(newSpeed)
         else:
-            raise Exception("FilterWheel speed has to be '0' or '1'", newMode)
+            raise Exception("FilterWheel speed has to be '0' or '1'", newSpeed)
     
     def getSensorMode(self):
         """ returns sensor behavior when wheel is idle : 
@@ -101,7 +101,7 @@ class FilterWheelDriver(SerialDevice):
         if int(newSensorMode) in [0,1]:
             self['sensors'] = int(newSensorMode)
         else:
-            raise Exception("FilterWheel speed has to be '0' or '1'", newMode)
+            raise Exception("FilterWheel speed has to be '0' or '1'", newSensorMode)
     
     def getIdentification(self):
         """ identification query """
@@ -163,7 +163,9 @@ class FilterWheelDriver(SerialDevice):
             
             time.sleep(0.01)
             if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)), s)
+                err = TimeoutError("Timeout while waiting for response. (Data so far: %s)" % (repr(s)))
+                err.data = s
+                raise err
 
         
 if __name__ == '__main__':
