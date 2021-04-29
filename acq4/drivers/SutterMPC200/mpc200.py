@@ -10,13 +10,13 @@ except ImportError:
     from threading import RLock
 
 try:
-    from ..SerialDevice import SerialDevice, SerialTimeoutError, DataError
+    from ..SerialDevice import SerialDevice, DataError
 except ValueError:
     ## relative imports not allowed when running from command prompt
     if __name__ == '__main__':
         import sys, os
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-        from SerialDevice import SerialDevice, TimeoutError, DataError
+        from acq4.drivers.SerialDevice import SerialDevice, TimeoutError, DataError
 
 
 def threadsafe(method):
@@ -260,7 +260,7 @@ class SutterMPC200(SerialDevice):
             # If the move is interrupted, sometimes we get junk on the serial line.
             time.sleep(0.03)
             self.readAll()
-        except SerialTimeoutError:
+        except TimeoutError:
             # just for debugging
             print("start pos:", currentPos, "move pos:", ustepPos)
             raise

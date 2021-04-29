@@ -7,7 +7,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 from __future__ import print_function
 
 import six
-from pyqtgraph.util.mutex import Mutex
+from pyqtgraph.util.mutex import Mutex, RecursiveMutex
 
 from acq4.util import Qt
 
@@ -118,6 +118,9 @@ def threadsafe(obj, *args, **kargs):
             attrs[n] = mkMethodWrapper(n)
     typ = type(clsName, (ThreadsafeWrapper,), attrs)
     return typ(obj, *args, **kargs)
+
+
+__all__ = ['Mutex', 'RecursiveMutex', 'PriorityMutex', 'ThreadsafeWrapper', 'mkMethodWrapper', 'threadsafe']
 
 
 if __name__ == '__main__':

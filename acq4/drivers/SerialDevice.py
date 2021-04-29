@@ -8,17 +8,6 @@ import serial
 import six
 
 
-class SerialTimeoutError(Exception):
-    """Raised when a serial communication times out.
-
-    *data* attribute contains any data received so far.
-    """
-
-    def __init__(self, msg, data):
-        self.data = data
-        Exception.__init__(self, msg)
-
-
 class DataError(Exception):
     """Raised when a serial communication is corrupt.
 
@@ -117,7 +106,7 @@ class SerialDevice(object):
 
     def read(self, length, timeout=5.0, term=None):
         """
-        Read *length* bytes or raise SerialTimeoutError after *timeout* has elapsed.
+        Read *length* bytes or raise TimeoutError after *timeout* has elapsed.
 
         If *term* is given, check that the packet is terminated with *term* and 
         return the packet excluding *term*. If the packet is not terminated 
@@ -126,7 +115,9 @@ class SerialDevice(object):
         # self.serial.setTimeout(timeout) # broken!
         packet = self._readWithTimeout(length, timeout)
         if len(packet) < length:
-            raise SerialTimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet), packet)
+            err = TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet))
+            err.data = packet
+            raise err
         if term is not None:
             if packet[-len(term):] != term:
                 time.sleep(0.01)
@@ -178,12 +169,15 @@ class SerialDevice(object):
         while True:
             elapsed = time.time() - start
             if elapsed >= timeout:
-                err = SerialTimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
+                err = TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet)
+                err.data = packet
                 raise err
             try:
                 packet += self.read(1, timeout=timeout - elapsed)
-            except SerialTimeoutError:
-                raise SerialTimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
+            except TimeoutError:
+                err = TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet)
+                err.data = packet
+                raise err
 
             if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet

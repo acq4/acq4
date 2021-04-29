@@ -13,15 +13,7 @@ try:
 except ImportError:
     from threading import RLock
 
-try:
-    from ..SerialDevice import SerialDevice, SerialTimeoutError, DataError
-except ValueError:
-    ## relative imports not allowed when running from command prompt, so
-    ## we adjust sys.path when running the script for testing
-    if __name__ == '__main__':
-        import sys, os
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-        from SerialDevice import SerialDevice, TimeoutError, DataError
+from acq4.drivers.SerialDevice import SerialDevice
 
 
 def threadsafe(method):
