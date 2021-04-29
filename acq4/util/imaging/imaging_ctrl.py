@@ -96,9 +96,14 @@ class ImagingCtrl(Qt.QWidget):
         with *name* as the first argument.
         """
         btn = Qt.QPushButton(name)
+        btn.setObjectName(name)
         self.customButtons[0].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[0]), 0)
-        btn.clicked.connect(lambda: self.sigAcquireFrameClicked.emit(name))
+        btn.clicked.connect(self._onNamedFrameButtonClick)
+
+    def _onNamedFrameButtonClick(self, checked):
+        btn = self.sender()
+        self.sigAcquireFrameClicked.emit(btn.objectName())
 
     def addVideoButton(self, name):
         """Add a new button below the original "Acquire Video" button.
@@ -107,9 +112,10 @@ class ImagingCtrl(Qt.QWidget):
         with *name* as the first argument.
         """
         btn = Qt.QPushButton(name)
+        btn.setObjectName(name)
         self.customButtons[1].append(btn)
         self.ui.acqBtnLayout.addWidget(btn, len(self.customButtons[1]), 1)
-        btn.clicked.connect(lambda: self.acquireVideoClicked(None, name))
+        btn.clicked.connect(self._handleNamedVideoButtonClick)
 
     def newFrame(self, frame):
         self.ui.saveFrameBtn.setEnabled(True)
@@ -225,11 +231,15 @@ class ImagingCtrl(Qt.QWidget):
         for btn in [self.ui.acquireFrameBtn] + self.customButtons[0]:
             btn.setEnabled(False)
 
-    def acquireVideoClicked(self, b=None, name=None):
-        if name is not None or self.ui.acquireVideoBtn.isChecked():
-            self.sigStartVideoClicked.emit(name)
+    def acquireVideoClicked(self, checked):
+        if checked:
+            self.sigStartVideoClicked.emit(None)
         else:
             self.sigStopVideoClicked.emit()
+
+    def _handleNamedVideoButtonClick(self, checked):
+        btn = self.sender()
+        self.sigStartVideoClicked.emit(btn.objectName())
 
     def acquireFrameClicked(self):
         self.sigAcquireFrameClicked.emit(None)

@@ -14,7 +14,11 @@ class LightSource(Device):
 
     Config Options
     --------------
-    For each sub-source, the following options are supported:
+    mock | bool
+        Whether to only pretend to be a light source
+
+    All other config options will be treated as the named light source channels (e.g. "blue"). For each of
+    these sub-sources, the following options are supported:
 
     active | bool
         Whether the source should be turned on at the start.
@@ -31,6 +35,11 @@ class LightSource(Device):
         Device.__init__(self, dm, config, name)
         self.sourceConfigs = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
         self._lock = Mutex.Mutex()
+        if config.get("mock", False):
+            for key in config:
+                if key.lower() in ("driver", "mock"):
+                    continue
+                self.addSource(key, config[key])
 
     def deviceInterface(self, win):
         return LightSourceDevGui(self)
@@ -39,6 +48,8 @@ class LightSource(Device):
         return None  # TODO
 
     def addSource(self, name, conf):
+        conf.setdefault("active", False)
+        conf.setdefault("adjustableBrightness", False)
         self.sourceConfigs[name] = conf
         if 'xkey' in conf:
             devname, row, col = self.sourceConfigs[name]['xkey']
@@ -69,6 +80,10 @@ class LightSource(Device):
         """Activate / deactivate a light source.
         """
         raise NotImplementedError()
+
+    def setSourceActiveFromNamedButton(self, active):
+        btn = self.sender()
+        self.setSourceActive(btn.objectName(), active)
 
     def getSourceBrightness(self, name):
         """
@@ -122,29 +137,28 @@ class LightSourceDevGui(Qt.QWidget):
         self.sourceActivationButtons = {}
         self.sourceBrightnessSliders = {}
 
-        # `name` has to be passed into factory methods because lambdas don't bind their local contexts
-        def activeResponderFactory(name):
-            return lambda isOn: self.dev.setSourceActive(name, isOn)
-
-        def brightnessResponderFactory(name):
-            return lambda val: self.dev.setSourceBrightness(name, val / 99.)  # 0-99 => 0-100
-
         for i, name in enumerate(self.dev.sourceConfigs):
             conf = self.dev.sourceConfigs[name]
             if conf.get("adjustableBrightness", False):
                 slider = Qt.QSlider()
+                slider.setObjectName(name)
                 slider_cont = Qt.QGridLayout()
                 self.sourceBrightnessSliders[name] = slider
-                slider.valueChanged.connect(brightnessResponderFactory(name))
+                slider.valueChanged.connect(self._sliderChanged)
                 slider_cont.addWidget(slider, 0, 0)
                 self.layout.addLayout(slider_cont, 0, i)
             btn = Qt.QPushButton(name)
+            btn.setObjectName(name)
             btn.setCheckable(True)
             self.sourceActivationButtons[name] = btn
             self.layout.addWidget(btn, 1, i)
-            btn.clicked.connect(activeResponderFactory(name))
+            btn.clicked.connect(self.dev.setSourceActiveFromNamedButton)
         self._updateValuesToMatchDev()
         self.dev.sigLightChanged.connect(self._updateValuesToMatchDev)
+
+    def _sliderChanged(self, value):
+        slider = self.sender()
+        self.dev.setSourceBrightness(slider.objectName(), value)
 
     def _updateValuesToMatchDev(self):
         for name in self.dev.sourceConfigs:
