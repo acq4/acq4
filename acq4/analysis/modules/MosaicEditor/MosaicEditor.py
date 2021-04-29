@@ -103,7 +103,7 @@ class MosaicEditor(AnalysisModule):
         self.btnLayout.addWidget(self.saveBtn, 1, 0)
 
         self.clearBtn = Qt.QPushButton("Clear All")
-        self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
+        self.clearBtn.clicked.connect(self._handleClearBtnClick)
         self.btnLayout.addWidget(self.clearBtn, 1, 1)
 
         self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
@@ -121,6 +121,9 @@ class MosaicEditor(AnalysisModule):
         self.registerItemType(items.getItemType('MarkersCanvasItem'))
         self.registerItemType(items.getItemType('CellCanvasItem'))
         self.registerItemType(items.getItemType('AtlasCanvasItem'))
+
+    def _handleClearBtnClick(self):
+        self.clear(ask=True)
 
     def registerItemType(self, itemclass, menuString=None):
         """Add an item type to the list of addable items. 
