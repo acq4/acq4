@@ -1,9 +1,8 @@
 import threading
 
-from acq4.drivers.sensapex import UMP
-
 import acq4.util.Qt as Qt
 from acq4.devices.Device import Device
+from acq4.drivers.sensapex import UMP
 from acq4.util.future import Future
 
 
@@ -13,13 +12,12 @@ class SensapexObjectiveChanger(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
 
-        self.devid = config.get('deviceId')       
         if dm.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
             UMP.set_library_path(dm.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
         ump = UMP.get_ump(address=address, group=group)
-        self.dev = ump.get_device(self.devid)
+        self.dev = ump.get_device(config.get('deviceId'))
 
         self._lastPos = None
         self.getLensPosition()
@@ -66,13 +64,12 @@ class ObjectiveChangeFuture(Future):
             try:
                 self._checkStop(delay=0.2)
             except self.StopRequested:
-                self._taskDone(interrupted=True, error="Stop requested bfore operation finished.")
+                self._taskDone(interrupted=True, error="Stop requested before operation finished.")
                 break
 
-    def stop(self):
+    def stop(self, **kwargs):
         self.dev.stop()
         Future.stop(self)
 
     def percentDone(self):
         return 100 if self.isDone() else 0
-

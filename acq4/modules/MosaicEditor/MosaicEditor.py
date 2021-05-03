@@ -178,7 +178,7 @@ class MosaicEditor(AnalysisModule):
         self.btnLayout.addWidget(self.saveBtn, 1, 0)
 
         self.clearBtn = Qt.QPushButton("Clear All")
-        self.clearBtn.clicked.connect(lambda: self.clear(ask=True))
+        self.clearBtn.clicked.connect(self._handleClearBtnClick)
         self.btnLayout.addWidget(self.clearBtn, 1, 1)
 
         self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved)
@@ -211,6 +211,9 @@ class MosaicEditor(AnalysisModule):
         itemtype = self._addTypes[self.addCombo.currentText()]
         self.addCombo.setCurrentIndex(0)
         self.addItem(type=itemtype)
+
+    def _handleClearBtnClick(self, checked):
+        self.clear(ask=True)
 
     def atlasComboChanged(self, ind):
         if ind == 0:

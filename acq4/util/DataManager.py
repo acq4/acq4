@@ -191,7 +191,10 @@ class FileHandle(Qt.QObject):
         self.path = os.path.abspath(path)
         self.parentDir = None
         self.lock = Mutex(Qt.QMutex.Recursive)
-        self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
+        if Qt.QApplication.instance() is not None:
+            self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
+        else:
+            self.sigproxy = None
         
     def getFile(self, fn):
         return getFileHandle(os.path.join(self.name(), fn))
@@ -429,7 +432,8 @@ class FileHandle(Qt.QObject):
         
     def flushSignals(self):
         """If any delayed signals are pending, send them now."""
-        self.sigproxy.flush()
+        if self.sigproxy is not None:
+            self.sigproxy.flush()
 
 
 class DirHandle(FileHandle):
