@@ -1,18 +1,11 @@
 from __future__ import print_function
-import serial, time, sys
+
 import logging
+import sys
+import time
 
+import serial
 import six
-
-
-class TimeoutError(Exception):
-    """Raised when a serial communication times out.
-
-    *data* attribute contains any data received so far.
-    """
-    def __init__(self, msg, data):
-        self.data = data
-        Exception.__init__(self, msg)
 
 
 class DataError(Exception):
@@ -22,6 +15,7 @@ class DataError(Exception):
     *extra* attribute contains any data left in the serial buffer 
     past the end of the packet.
     """
+
     def __init__(self, msg, data, extra):
         self.data = data
         self.extra = extra
@@ -35,6 +29,7 @@ class SerialDevice(object):
     Provides some commonly used functions for reading and writing 
     serial packets.
     """
+
     def __init__(self, **kwds):
         """
         All keyword arguments define the default arguments to use when 
@@ -45,8 +40,8 @@ class SerialDevice(object):
         """
         self.serial = None
         self.__serialOpts = {
-            'bytesize': serial.EIGHTBITS, 
-            'timeout': 0, # no timeout. See SerialDevice._readWithTimeout()
+            'bytesize': serial.EIGHTBITS,
+            'timeout': 0,  # no timeout. See SerialDevice._readWithTimeout()
         }
         self.__serialOpts.update(kwds)
 
@@ -62,7 +57,7 @@ class SerialDevice(object):
         """
         if sys.platform.startswith('win'):
             if isinstance(port, int):
-                port = 'com%d' % (port+1)
+                port = 'com%d' % (port + 1)
             elif isinstance(port, six.string_types) and port.lower()[:3] == 'com':
                 port = port.lower()
         return port
@@ -82,7 +77,7 @@ class SerialDevice(object):
         self.__serialOpts.update({
             'port': port,
             'baudrate': baudrate,
-            })
+        })
         self.__serialOpts.update(kwds)
         self.serial = serial.Serial(**self.__serialOpts)
         logging.info('Opened serial port: %s', self.__serialOpts)
@@ -101,7 +96,7 @@ class SerialDevice(object):
             logging.info('Serial port %s readAll: %r', self.__serialOpts['port'], d)
             return d
         return ''
-    
+
     def write(self, data):
         """Write *data* to the serial port"""
         if sys.version > '3' and isinstance(data, str):
@@ -109,7 +104,7 @@ class SerialDevice(object):
         logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
 
-    def read(self, length, timeout=5, term=None):
+    def read(self, length, timeout=5.0, term=None):
         """
         Read *length* bytes or raise TimeoutError after *timeout* has elapsed.
 
@@ -117,10 +112,12 @@ class SerialDevice(object):
         return the packet excluding *term*. If the packet is not terminated 
         with *term*, then DataError is raised.
         """
-        #self.serial.setTimeout(timeout) #broken!
+        # self.serial.setTimeout(timeout) # broken!
         packet = self._readWithTimeout(length, timeout)
         if len(packet) < length:
-            raise TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet), packet)
+            err = TimeoutError("Timed out waiting for serial data (received so far: %s)" % repr(packet))
+            err.data = packet
+            raise err
         if term is not None:
             if packet[-len(term):] != term:
                 time.sleep(0.01)
@@ -131,7 +128,7 @@ class SerialDevice(object):
             return packet[:-len(term)]
         logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
         return packet
-        
+
     def _readWithTimeout(self, nBytes, timeout):
         # Note: pyserial's timeout mechanism is broken (specifically, calling setTimeout can cause 
         # serial data to be lost) so we implement our own in readWithTimeout().
@@ -141,16 +138,16 @@ class SerialDevice(object):
         #   * start with very short interval for low-latency reads
         #   * iteratively increase interval duration to reduce CPU usage on long reads
         sleep = 100e-6  # initial sleep is 100 us
-        while time.time()-start < timeout:
+        while time.time() - start < timeout:
             waiting = self.serial.inWaiting()
             if waiting > 0:
-                readBytes = min(waiting, nBytes-len(packet))
+                readBytes = min(waiting, nBytes - len(packet))
                 packet += self.serial.read(readBytes)
                 sleep = 100e-6  # every time we read data, reset sleep time
             if len(packet) >= nBytes:
                 break
             time.sleep(sleep)
-            sleep = min(0.05, 2*sleep) # wait a bit longer next time
+            sleep = min(0.05, 2 * sleep)  # wait a bit longer next time
         return packet
 
     def readUntil(self, term, minBytes=0, timeout=5):
@@ -170,17 +167,26 @@ class SerialDevice(object):
             packet = b''
 
         while True:
-            elapsed = time.time()-start
+            elapsed = time.time() - start
             if elapsed >= timeout:
-                err = TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
+                err = TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet)
+                err.data = packet
                 raise err
             try:
-                packet += self.read(1, timeout=timeout-elapsed)
+                packet += self.read(1, timeout=timeout - elapsed)
             except TimeoutError:
-                raise TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet, packet)
+                err = TimeoutError("Timed out while reading serial packet. Data so far: '%r'" % packet)
+                err.data = packet
+                raise err
 
             if len(packet) > minBytes and packet[-len(term):] == term:
                 return packet
+
+    def readline(self, **kwargs):
+        return self.readUntil("\n", **kwargs)
+
+    def hasDataToRead(self):
+        return self.serial.inWaiting() > 0
 
     def clearBuffer(self):
         ## not recommended..
@@ -203,14 +209,13 @@ class SerialDevice(object):
 
 
 if __name__ == '__main__':
-    import sys, os
     try:
         port, baud = sys.argv[1:3]
-    except:
-        print("Usage: python -i SerialDevice port baudrate")
-        os._exit(1)
-
-    sd = SerialDevice(port=port, baudrate=baud)
-    print("")
-    print("Serial port opened and available as 'sd'.")
-    print("Try using sd.write(...), sd.readAll(), and sd.read(length, term, timeout)")
+    except ValueError:
+        print("Missing arguments! Usage:\n\tpython -i SerialDevice PORT BAUDRATE")
+        exit(1)
+    else:
+        sd = SerialDevice(port=port, baudrate=baud)
+        print("")
+        print("Serial port opened and available as 'sd'.")
+        print("Try using sd.write(...), sd.readAll(), and sd.read(length, term, timeout)")

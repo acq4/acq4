@@ -19,6 +19,20 @@ Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
 
 class MultiPatch(Module):
+    """
+    Config
+    ----------
+
+    enableMockPatch : bool
+        Whether or not to allow mock patching.
+
+    patchProfiles : dict
+        Use this config block to override automated patching. Keyed by
+        state name, see acq4/devices/PatchPipette/states.py for the
+        list of states and their possible options E.g.::
+            cell detect:
+                advanceStepInterval: 0.06
+    """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
 
@@ -121,8 +135,8 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
 
-        self.ui.fastBtn.clicked.connect(lambda: self.ui.slowBtn.setChecked(False))
-        self.ui.slowBtn.clicked.connect(lambda: self.ui.fastBtn.setChecked(False))
+        self.ui.fastBtn.clicked.connect(self._turnOffSlowBtn)
+        self.ui.slowBtn.clicked.connect(self._turnOffFastBtn)
 
         xkdevname = module.config.get('xkeysDevice', None)
         if xkdevname is not None:
@@ -140,6 +154,12 @@ class MultiPatchWindow(Qt.QWidget):
                 self.surfaceDepthChanged(d)
 
         self.loadConfig()
+
+    def _turnOffSlowBtn(self, checked):
+        self.ui.slowBtn.setChecked(False)
+
+    def _turnOffFastBtn(self, checked):
+        self.ui.FastBtn.setChecked(False)
 
     def saveConfig(self):
         geom = self.geometry()

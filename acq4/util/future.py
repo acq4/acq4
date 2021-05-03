@@ -1,8 +1,10 @@
 from __future__ import print_function, division
 
 import time
-from acq4.util import Qt
+
 from pyqtgraph import ptime
+
+from acq4.util import Qt
 
 
 class Future(Qt.QObject):

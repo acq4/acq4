@@ -108,7 +108,7 @@ class CameraInterface(CameraModuleInterface):
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
         #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
-        self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
+        self.ui.btnFullFrame.clicked.connect(self._setRegionToNone)
         self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from acq4.util.SpinBox) is delayed.
 
@@ -284,6 +284,9 @@ class CameraInterface(CameraModuleInterface):
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
+
+    def _setRegionToNone(self):
+        self.setRegion()
 
     def cameraParamsChanged(self, changes):
         # camera parameters changed; update ui to match
