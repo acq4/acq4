@@ -58,24 +58,33 @@ class _NIDAQ:
 
         sig = signature(fn)
 
-        if "reserved" in sig.parameters and len(args) < len(sig.parameters):
-            args += (None,)
-
         if "bufferSize" in sig.parameters:
             buffSize = fn(data=None, bufferSize=0, *args)
             ret = ctypes.create_string_buffer(b"\0" * buffSize)
+            if "reserved" in sig.parameters and len(args) < len(sig.parameters):
+                args += (None,)
             fn(*args, data=ret, bufferSize=buffSize)
             return ret.value.decode("utf-8")
         elif len(args) < len(sig.parameters):
             # Assume 1 missing arg, which is the pointer to the useful return value
+            # Assumptions are generally bad things...
             cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
             dataType = cfuncInfo["arg_type"][-1]
             ret = dataType._type_()
-            args += (dataType(ret),)
-            fn(*args)
+            if "data" in sig.parameters or "isTaskDone" in sig.parameters:
+                args += (dataType(ret),)
+            if "value" in sig.parameters and not func.startswith("Write"):
+                args += (dataType(ret),)
+            if "reserved" in sig.parameters and len(args) < len(sig.parameters):
+                    args += (None,)
+            try:
+                fn(*args)
+            except:
+                print("Error drivers/nidaq/nidaq.py in setting args: args= ", args)
             return ret.value
         else:
             return fn(*args)
+
 
         # if func[:3] == "Get":  # byref arguments will be handled automatically.
         #     # functions that return char* can be called with a null pointer to get the size of the buffer needed.
