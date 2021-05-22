@@ -124,7 +124,8 @@ class SutterMPC200(Stage):
             return self._lastMove.targetPos
 
     def quit(self):
-        self._monitor.stop()
+        SutterMPC200._monitor.stop()  # only one thread for all
+        # self._monitor.stop()  # this was never set to anything but None
         Stage.quit(self)
 
     def _move(self, abs, rel, speed, linear):
