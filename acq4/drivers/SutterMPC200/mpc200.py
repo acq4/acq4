@@ -95,7 +95,6 @@ class SutterMPC200(SerialDevice):
 
     def __init__(self, port):
         port = SerialDevice.normalizePortName(port)
-        print("***** PORT ****  ", port)
         if port in SutterMPC200.DEVICES:
             raise Exception("The port %s is already accessed by another instance of this class. Use getDevice(port) instead.")
         SutterMPC200.DEVICES[port] = self
@@ -109,7 +108,7 @@ class SutterMPC200(SerialDevice):
     def setDrive(self, drive):
         """Set the current drive (1-4)"""
         cmd = 'I' + chr(drive)
-        cmd = cmd.encode('utf8')  # turn into bytes 
+        cmd = cmd.encode('utf8')  # turn into bytes
         self.write(cmd)
         ret = self.read(2, term=b'\r')
         if ord(ret) == drive:
