@@ -62,6 +62,12 @@ class SutterMPC200(Stage):
             SutterMPC200._monitor = MonitorThread(self)
             SutterMPC200._monitor.start()
 
+    def axes(self):
+        if 'axes' in self.config:
+            return self.config['axes']
+        else:
+            return ('x', 'y')
+
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
         if 'capabilities' in self.config:
