@@ -1,38 +1,39 @@
-# import os, sys
 # sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 # import acq4.util.clibrary as clib
 from __future__ import print_function
 
-import os, sys, struct, ctypes, time, threading
+import os, sys, struct, ctypes, ctypes.wintypes, time, threading, platform
 import numpy as np
-from six.moves import range
-from six.moves import zip
-os.environ['PATH'] += ";C:\\Program Files (x86)\\PI Engineering\\P.I. Engineering SDK\\DLLs"
+
+if platform.architecture()[0] != '64bit':
+    raise Exception("32-bit PIE dll is no longer supported; download PIEHid64.dll from PI Engineering")
 
 # Delay loading PIEHid--this is only supported in 32-bit, and it helps multiprocessing to have this module
 # be importable on 64-bit (so we have access to PIEException)
 _pielib = None
+
 def pielib():
     global _pielib
     if _pielib is None:
-        _pielib = ctypes.windll.PIEHid
+        # Assume that the DLL is in the drivers/ directory
+        dll_location = "C:\\Program Files (x86)\\PI Engineering\\PI Engineering SDK\\DLLs"
+        _pielib = ctypes.windll.LoadLibrary( os.path.join( dll_location, "PIEHid64") )
     return _pielib
 
 
-# The following structure is defined with 10 fields in PieHid32.h, but it appears that only
-# 4 of them are actually used by the library (???)
+# The following structure is defined with 10 fields in PieHid32.h
 class TEnumHIDInfo(ctypes.Structure):
     _fields_ = [
-        ("PID", ctypes.c_uint32),
-        ("Usage", ctypes.c_uint32),
-        ("UP", ctypes.c_uint32),
-        # ("readSize", ctypes.c_long),
-        # ("writeSize", ctypes.c_long),
-        # ("DevicePath", ctypes.c_char*256),
-        ("Handle", ctypes.c_uint32),
-        # ("Version", ctypes.c_uint32),
-        # ("ManufacturerString", ctypes.c_char*128),
-        # ("ProductString", ctypes.c_char*128),
+        ("PID", ctypes.wintypes.DWORD  ),
+        ("Usage", ctypes.wintypes.DWORD),
+        ("UP", ctypes.wintypes.DWORD),
+        ("readSize", ctypes.c_long),
+        ("writeSize", ctypes.c_long),
+        ("DevicePath", ctypes.c_char*256),
+        ("Handle", ctypes.wintypes.DWORD),
+        ("Version", ctypes.wintypes.DWORD),
+        ("ManufacturerString", ctypes.c_char*128),
+        ("ProductString", ctypes.c_char*128),
     ]
 
 
@@ -122,6 +123,14 @@ errorStrings = {
 devicePIDs = {
     1062: 'XK12JS',
     1064: 'XK12JS',
+    1089: 'XK80',
+    1090: 'XK80',
+    1091: 'XK80',
+    1250: 'XK80',
+    1121: 'XK60',
+    1122: 'XK60',
+    1123: 'XK60',
+    1254: 'XK60',
     1227: 'XKE128',
     1228: 'XKE128',
     1229: 'XKE128',
@@ -132,6 +141,8 @@ devicePIDs = {
 # Maps device key to device name
 deviceNames = {
     'XK12JS': 'XK-12 Jog & Shuttle',
+    'XK60'  : 'XK-60',
+    'XK80'  : 'XK-80',
     'XKE128': 'XKE-128',
 }
 
@@ -140,14 +151,16 @@ deviceNames = {
 capabilityKeys = ['rows', 'columns', 'joysticks', 'jog/shuttle', 'touchpad']
 deviceCapabilities = {
     'XK12JS': (3, 4, 0, True, False),
+    'XK60'  : (8, 10, 0, False, False),
+    'XK80'  : (8, 10, 0, False, False),
     'XKE128': (8, 16, 0, False, False),
 }
 
 
 # Function signatures for callbacks
 if sys.platform == 'win32':
-    dataCallbackType = ctypes.WINFUNCTYPE(ctypes.c_uint32, ctypes.POINTER(ctypes.c_char), ctypes.c_uint32, ctypes.c_uint32)
-    errorCallbackType = ctypes.WINFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32)
+    dataCallbackType = ctypes.WINFUNCTYPE(ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.c_char), ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)
+    errorCallbackType = ctypes.WINFUNCTYPE(ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)
 else:
     dataCallbackType = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.POINTER(ctypes.c_char), ctypes.c_uint32, ctypes.c_uint32)
     errorCallbackType = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32)
@@ -220,7 +233,7 @@ class XKeysDevice(object):
         # Start monitor thread
         self._callback = None
         self._ctypes_cb = dataCallbackType(self._dataCallback)
-        callPieFunc('SetDataCallback', self.handle, 2, self._ctypes_cb)
+        callPieFunc('SetDataCallback', self.handle, self._ctypes_cb)
 
         # reset all backlights
         self.backlightState = np.zeros((rows, cols, 2), dtype='ubyte')
@@ -264,7 +277,7 @@ class XKeysDevice(object):
         """Set the state of all backlights.
 
         *state* must be an array of shape (rows, cols, 2), where state[..., 0] gives
-        values for the blue backlights and state[..., 1] are for red. Values may be 
+        values for the blue backlights and state[..., 1] are for red. Values may be
         0=off, 1=on, or 2=flashing.
 
         *axis* (0 or 1) and *reverse* (True or False) affect the direction that changes
@@ -344,7 +357,7 @@ class XKeysDevice(object):
         """
         writebuf = (ctypes.c_char * self._writesize)()
         pad = self._writesize-len(args)
-        writebuf[:] = struct.pack('=%dB%ds' % (len(args), pad), *(args + ('\0'*pad,)))
+        writebuf[:] = struct.pack('=%dB%ds' % (len(args), pad), *(args + (b'\0'*pad,)))
         while True:
             try:
                 callPieFunc('WriteData', self.handle, ctypes.byref(writebuf))
@@ -393,9 +406,24 @@ class XKeysDevice(object):
 
     def _unpackEventData_XKE128(self, data):
         rows, cols = self.keyshape
-        keybytes = np.array([list(bytearray(data[2:2+cols]))])
+        keybytes = np.array([list(bytearray(data[3:3+cols]))])  #MS: untested change from 2:2
         keys = (self._keymask & keybytes).astype(bool)
         return {'keys': keys}
+
+    def _unpackEventData_XK60(self, data):
+        rows, cols = self.keyshape
+        keybytes = np.array([list(bytearray(data[3:3+cols]))])
+        # print('keybytes: {}'.format(keybytes))
+        keys = (self._keymask & keybytes).astype(bool)
+        # print('keys: {}'.format(keys))
+        return {'keys': keys}
+
+    def _unpackEventData_XK80(self, data):
+        rows, cols = self.keyshape
+        keybytes = np.array([list(bytearray(data[3:3+cols]))])
+        keys = (self._keymask & keybytes).astype(bool)
+        return {'keys': keys}
+
 
     def _handleData(self, data):
         """Update the known device state from *data* and return a summary of state
@@ -428,7 +456,7 @@ class XKeysDevice(object):
         return changes
 
     def _dataCallback(self, data, devid, err):
-        # hexdump(data, self.readsize)
+        # hexdump(data, self._readsize)
         changes = self._handleData(data)
         if len(changes) > 0 and self._callback is not None:
             self._callback(changes)
@@ -448,6 +476,8 @@ def hexdump(data, size):
 
 
 if __name__ == '__main__':
+    import faulthandler
+    faulthandler.enable()
     import sys
     if len(sys.argv) > 1:
         index = int(sys.argv[1])
