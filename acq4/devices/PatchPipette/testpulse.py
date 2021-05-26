@@ -365,7 +365,10 @@ class TestPulse(object):
                     Cm = 0
                 analysis['capacitance'] = Cm
             else:
-                analysis['capacitance'] = tau / analysis['steadyStateResistance']
+                if analysis['steadyStateResistance'] > 0:
+                    analysis['capacitance'] = tau / analysis['steadyStateResistance']
+                else:
+                    analysis['capacitance'] = np.nan
 
             # # detect bad fits
             # noise = (pulseData - scipy.ndimage.gaussian_filter(pulseData, 3)).std()
