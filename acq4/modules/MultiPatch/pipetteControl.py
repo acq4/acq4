@@ -197,9 +197,6 @@ class PipetteControl(Qt.QWidget):
             else:
                 biasTarget = self.pip.autoBiasTarget()
                 spinVal = biasTarget
-                print("Update bias spin:", spinVal)
-                import traceback
-                traceback.print_stack()
                 units = 'V'
                 self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
             self.ui.autoBiasBtn.setChecked(True)
