@@ -1010,7 +1010,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
     Cycles +/- pressure in a "clean" bath followed by an optional "rinse" bath.
     """
-    stateName = 'pipette clean'
+    stateName = 'clean'
 
     _defaultConfig = {
         'initialPressureSource': 'atmosphere',
