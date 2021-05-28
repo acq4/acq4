@@ -242,14 +242,17 @@ class MultiClamp(PatchClamp):
             daqDev.setChannelValue(chan, holding*scale, block=False)
 
     def autoPipetteOffset(self):
-        self.mc.autoPipetteOffset()
+        with self.dm.reserveDevices([self]):
+            self.mc.autoPipetteOffset()
         
     def autoBridgeBalance(self):
-        self.mc.autoBridgeBal()
+        with self.dm.reserveDevices([self]):
+            self.mc.autoBridgeBal()
 
     def autoCapComp(self):
-        self.mc.autoFastComp()
-        self.mc.autoSlowComp()
+        with self.dm.reserveDevices([self]):
+            self.mc.autoFastComp()
+            self.mc.autoSlowComp()
 
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
