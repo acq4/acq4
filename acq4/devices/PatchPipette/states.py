@@ -180,7 +180,7 @@ class PatchPipetteState(Future):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
             raise self.StopRequested()
-        Future._checkStop(self)
+        Future._checkStop(self, delay)
 
     def __repr__(self):
         return '<%s "%s">' % (type(self).__name__, self.stateName)
@@ -338,7 +338,7 @@ class PatchPipetteBathState(PatchPipetteState):
                     continue
 
             # check for pipette break
-            if ssr < initialResistance + config['breakThreshold']:
+            if config['breakThreshold'] is not None and (ssr < initialResistance + config['breakThreshold']):
                 self.setState('broken pipette detected')
                 self._taskDone(interrupted=True, error="Pipette broken")
                 return 'broken'
@@ -346,8 +346,7 @@ class PatchPipetteBathState(PatchPipetteState):
             # if close to target, switch to cell detect
             # pos = dev.globalPosition()
             # target = dev.
-
-            if ssr > initialResistance + config['clogThreshold']:
+            if config['clogThreshold'] is not None and (ssr > initialResistance + config['clogThreshold']):
                 self.setState('clogged pipette detected')
                 self._taskDone(interrupted=True, error="Pipette clogged")
                 return 'fouled'
@@ -444,35 +443,36 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 
             self._checkStop()
 
-            if config['advanceContinuous']:
-                # Start continuous move if needed
-                if self.contAdvanceFuture is None:
-                    print(initialPosition)
-                    print(self.getSearchEndpoint())
-                    self.startContinuousMove()
-                if self.contAdvanceFuture.isDone():
-                    self.contAdvanceFuture.wait()  # check for move errors
-                    self._taskDone(interrupted=True, error="No cell found before end of search path")
-                    patchrec['detectedCell'] = False
-                    return config['fallbackState']
-            else:
-                # advance to next position if stepping
-                if self.advanceSteps is None:
-                    self.advanceSteps = self.getAdvanceSteps()
-                    print(len(self.advanceSteps))
-                    print(self.advanceSteps)
-                if self.stepCount >= len(self.advanceSteps):
-                    self._taskDone(interrupted=True, error="No cell found before end of search path")
-                    patchrec['detectedCell'] = False
-                    return config['fallbackState']
-                
-                # make sure we obey advanceStepInterval
-                now = ptime.time()
-                if now - self.lastMove < config['advanceStepInterval']:
-                    continue
-                self.lastMove = now
+            if config['autoAdvance']:
+                if config['advanceContinuous']:
+                    # Start continuous move if needed
+                    if self.contAdvanceFuture is None:
+                        print(initialPosition)
+                        print(self.getSearchEndpoint())
+                        self.startContinuousMove()
+                    if self.contAdvanceFuture.isDone():
+                        self.contAdvanceFuture.wait()  # check for move errors
+                        self._taskDone(interrupted=True, error="No cell found before end of search path")
+                        patchrec['detectedCell'] = False
+                        return config['fallbackState']
+                else:
+                    # advance to next position if stepping
+                    if self.advanceSteps is None:
+                        self.advanceSteps = self.getAdvanceSteps()
+                        print(len(self.advanceSteps))
+                        print(self.advanceSteps)
+                    if self.stepCount >= len(self.advanceSteps):
+                        self._taskDone(interrupted=True, error="No cell found before end of search path")
+                        patchrec['detectedCell'] = False
+                        return config['fallbackState']
 
-                self.singleStep()
+                    # make sure we obey advanceStepInterval
+                    now = ptime.time()
+                    if now - self.lastMove < config['advanceStepInterval']:
+                        continue
+                    self.lastMove = now
+
+                    self.singleStep()
 
     def getSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
@@ -769,13 +769,17 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
     Parameters
     ----------
     autoBreakInDelay : float
-        Delay time (seconds) before transitioning to 'break in' state
+        Delay time (seconds) before transitioning to 'break in' state. If None, then never automatically
+        transition to break-in.
     breakInThreshold : float
         Capacitance (Farads) above which the pipette is considered to be whole-cell and immediately
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
     holdingCurrentThreshold : float
         Holding current (Amps) below which the cell is considered to be lost and the state fails.
+    spontaneousBreakInState:
+        Name of state to transition to when the membrane breaks in spontaneously. Default
+        is 'break in' so that partial break-ins will be completed. To disable, set to 'whole cell'.
     """
     stateName = 'cell attached'
     _defaultConfig = {
@@ -786,6 +790,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
         'autoBreakInDelay': None,
         'breakInThreshold': 10e-12,
         'holdingCurrentThreshold': -1e-9,
+        'spontaneousBreakInState': 'break in',
     }
 
     def run(self):
@@ -811,9 +816,9 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
                 return
             
             cap = tp.analysis()['capacitance']
-            # if cap > config['breakInThreshold']:
-            #     patchrec['spontaneousBreakin'] = True
-            #     return 'break in'
+            if cap > config['breakInThreshold']:
+                patchrec['spontaneousBreakin'] = True
+                return config['spontaneousBreakInState']
 
             patchrec['resistanceBeforeBreakin'] = tp.analysis()['steadyStateResistance']
             patchrec['capacitanceBeforeBreakin'] = cap
