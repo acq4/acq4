@@ -20,6 +20,7 @@ class SensapexPressureControl(PressureControl):
             UMP.set_library_path(manager.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
+        self._pollInterval = config.get('pollInterval', 1)
         ump = UMP.get_ump(address=address, group=group)
         self.dev = ump.get_device(self.devId)
         config.setdefault("maximum", 7e4)
@@ -45,7 +46,7 @@ class SensapexPressureControl(PressureControl):
             except Exception:
                 logExc("Pressure poller thread hit an error; retrying")
             finally:
-                sleep(self.regulatorSettlingTime)
+                sleep(self._pollInterval)
 
     def _setPressure(self, p):
         self.dev.set_pressure(self.pressureChannel, p / 1000.)
