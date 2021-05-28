@@ -243,6 +243,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.pipetteDevice.goApproach(speed)
             if isinstance(pip, PatchPipette):
+                pip.setState('bath')
                 pip.clampDevice.autoPipetteOffset()
 
     def moveToTarget(self):
