@@ -30,7 +30,7 @@ class MultiClamp(PatchClamp):
         self.index = None
         self.devRackGui = None
         self.mc = None
-        
+
         self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
         self.lastState = {}
         self.lastMode = None
@@ -46,8 +46,8 @@ class MultiClamp(PatchClamp):
         # Get a handle to the multiclamp driver object, whether that is hosted locally or in a remote process.
         executable = self.config.get('pythonExecutable', None)
         if executable is not None:
-            # Run a remote python process to connect to the MC commander. 
-            # This is used on 64-bit systems where the MC connection must be run with 
+            # Run a remote python process to connect to the MC commander.
+            # This is used on 64-bit systems where the MC connection must be run with
             # 32-bit python.
             if MultiClamp.proc is False:
                 raise Exception("Already connected to multiclamp locally; cannot connect via remote process at the same time.")
@@ -294,9 +294,32 @@ class MultiClamp(PatchClamp):
 
 
 class MultiClampTask(DeviceTask):
-    
-    recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
-    
+    recordParams = [
+        'BridgeBalEnable',
+        'BridgeBalResist',
+        'FastCompCap',
+        'FastCompTau',
+        'Holding',
+        'HoldingEnable',
+        'LeakSubEnable',
+        'LeakSubResist',
+        'NeutralizationCap',
+        'NeutralizationEnable',
+        'OutputZeroAmplitude',
+        'OutputZeroEnable',
+        'PipetteOffset',
+        'PrimarySignalHPF',
+        'PrimarySignalLPF',
+        'RsCompBandwidth',
+        'RsCompCorrection',
+        'RsCompEnable',
+        'SlowCompCap',
+        'SlowCompTau',
+        'WholeCellCompCap',
+        'WholeCellCompEnable',
+        'WholeCellCompResist',
+    ]
+
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
