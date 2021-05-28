@@ -10,7 +10,15 @@ from ..util.debug import logExc
 
 
 class SensapexPressureControl(PressureControl):
-    """Pressure control device driven by Sensapex analog/digital channels.
+    """Pressure control device driven by Sensapex analog/digital channels. User and
+    Atmosphere are the same port for this device.
+    Additional config options::
+
+    deviceId : int
+    address : str
+    group : int
+    pressureChannel : int
+    pollInterval : float
     """
     sigMeasuredPressureChanged = Qt.Signal(object, object)  # self, pressure
 
@@ -28,10 +36,15 @@ class SensapexPressureControl(PressureControl):
         PressureControl.__init__(self, manager, config, name)
 
         self.pressureChannel = config.pop('pressureChannel')
-        self._valveValueBySource = {"regulator": 1, "atmosphere": 0}
+        self._valveValueBySource = {"regulator": 1, "atmosphere": 0, "user": 0}
         self.sources = tuple(self._valveValueBySource.keys())
         self._busy = self.dev.is_busy()
         self._measurement = self.dev.measure_pressure(self.pressureChannel)
+
+        # 'user' and 'atmosphere' are the same channel on this device, so
+        # we remember what channel was requested rather than relying entirely on the valve state
+        self._source = None
+
         self.source = self.getSource()
         self.pressure = self.getPressure()
         self._pollThread = Thread(target=self._poll)
@@ -62,12 +75,14 @@ class SensapexPressureControl(PressureControl):
         return pressure
 
     def getSource(self):
-        if self.dev.get_valve(self.pressureChannel) == 1:
+        valveIsReg = self.dev.get_valve(self.pressureChannel) == 1
+        if valveIsReg:
             return "regulator"
         else:
-            return "atmosphere"
+            return self._source or "atmosphere"
 
     def _setSource(self, source):
+        self._source = source
         self.dev.set_valve(self.pressureChannel, self._valveValueBySource[source])
 
     def calibrate(self):
