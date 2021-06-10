@@ -482,6 +482,7 @@ class CameraTask(DAQGenericTask):
         self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
+        self._dev_needs_restart = False
         self.stopAfter = False
         self.stoppedCam = False
         self.returnState = {}
@@ -490,6 +491,7 @@ class CameraTask(DAQGenericTask):
         self.stopRecording = False
         self._stopTime = 0
         self.resultObj = None
+        self._fixedAcqThread = FixedAcqThread(target=self.fixedAcquisition)
 
     def configure(self):
         # Merge command into default values:
@@ -553,6 +555,19 @@ class CameraTask(DAQGenericTask):
         prof.mark("DAQ configure")
         prof.finish()
 
+    @property
+    def fixedFrameCount(self):
+        return self.camCmd.get("minFrames", None)
+
+    def fixedAcquisition(self):
+        try:
+            with self.lock:
+                self.frames = self.dev.acquireFrames(self.fixedFrameCount)
+        finally:
+            if self._dev_needs_restart:
+                with self.lock:
+                    self.dev.start()
+
     def getStartOrder(self):
         order = DAQGenericTask.getStartOrder(self)
         return order[0] + self.__startOrder[0], order[1] + self.__startOrder[1]
@@ -573,8 +588,13 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.stopRecording = False
         self.recording = True
-        if not self.dev.isRunning():
-            self.dev.start(block=True)  # wait until camera is actually ready to acquire
+        if self.fixedFrameCount is not None:
+            self._dev_needs_restart = self.dev.isRunning()
+            if self._dev_needs_restart:
+                self.dev.stop(block=True)
+            self._fixedAcqThread.start()
+        elif not self.dev.isRunning():
+            self.dev.start(block=True)
 
         # Last I checked, this does nothing. It should be here anyway, though..
         DAQGenericTask.start(self)
@@ -598,6 +618,8 @@ class CameraTask(DAQGenericTask):
         with self.lock:
             self.stopRecording = True
             self._stopTime = time.time()
+            if abort and self._fixedAcqThread.isRunning():
+                self._fixedAcqThread.terminate()
 
         if "popState" in self.camCmd:
             self.dev.popState(self.camCmd["popState"])  # restores previous settings, stops/restarts camera if needed
@@ -906,3 +928,12 @@ class AcquireThread(Thread):
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             self.start()
+
+
+class FixedAcqThread(Thread):
+    def __init__(self, target, *args, **kwds):
+        super().__init__(*args, **kwds)
+        self._target = target
+
+    def run(self):
+        self._target()
