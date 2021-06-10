@@ -34,6 +34,8 @@ class PipetteControl(Qt.QWidget):
         self.ui.setupUi(self)
         self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, suffix='V', siPrefix=True, step=5e-3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
         self.ui.pressureSpin.setOpts(bounds=[None, None], decimals=0, suffix='Pa', siPrefix=True, step=1e3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
+        self.ui.autoOffsetBtn.connect(self.autoOffsetRequested)
+        self.ui.autoPipCapBtn.connect(self.autoPipCapRequested)
 
         self.displayWidgets = [
             self.ui.stateText,
@@ -197,9 +199,6 @@ class PipetteControl(Qt.QWidget):
             else:
                 biasTarget = self.pip.autoBiasTarget()
                 spinVal = biasTarget
-                print("Update bias spin:", spinVal)
-                import traceback
-                traceback.print_stack()
                 units = 'V'
                 self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
             self.ui.autoBiasBtn.setChecked(True)
@@ -305,6 +304,12 @@ class PipetteControl(Qt.QWidget):
         with pg.SignalBlock(self.ui.brokenCheck.stateChanged, self.brokenCheckChanged):
             self.ui.brokenCheck.setChecked(broken)
         self.ui.brokenCheck.setStyleSheet("" if not broken else "QCheckBox {border: 2px solid #F00;}")
+
+    def autoOffsetRequested(self):
+        self.pip.clampDevice.autoPipetteOffset()
+
+    def autoPipCapRequested(self):
+        self.pip.clampDevice.autoCapComp()
 
     def brokenCheckChanged(self, checked):
         self.pip.setTipBroken(self.ui.brokenCheck.isChecked())

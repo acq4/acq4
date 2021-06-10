@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 import time, threading, functools
+import warnings
+
 import numpy as np
 import scipy.optimize, scipy.ndimage
 from pyqtgraph import ptime
@@ -331,7 +333,9 @@ class TestPulse(object):
             xoffset = params['preDuration']
             pulseData = pulse.asarray()
             try:
-                fit = scipy.optimize.curve_fit(exp, t-xoffset, pulseData, guess, maxfev=1000)  # uses leastsq
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    fit = scipy.optimize.curve_fit(exp, t-xoffset, pulseData, guess, maxfev=1000)  # uses leastsq
                 # fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, bounds=bounds, max_nfev=1000)  # uses least_squares
                 amp, tau, yoffset = fit[0]
             except RuntimeError:
@@ -361,7 +365,10 @@ class TestPulse(object):
                     Cm = 0
                 analysis['capacitance'] = Cm
             else:
-                analysis['capacitance'] = tau / analysis['steadyStateResistance']
+                if analysis['steadyStateResistance'] > 0:
+                    analysis['capacitance'] = tau / analysis['steadyStateResistance']
+                else:
+                    analysis['capacitance'] = np.nan
 
             # # detect bad fits
             # noise = (pulseData - scipy.ndimage.gaussian_filter(pulseData, 3)).std()

@@ -96,8 +96,8 @@ class ContrastCtrl(Qt.QWidget):
 
             reduced = data
             while reduced.size > 2 ** 16:
-                ax = np.argmax(data.shape)
-                sl = [None] * data.ndim
+                ax = np.argmax(reduced.shape)
+                sl = [slice(None, None)] * data.ndim
                 sl[ax] = slice(None, None, 2)
                 reduced = reduced[tuple(sl)]
 

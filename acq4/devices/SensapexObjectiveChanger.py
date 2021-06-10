@@ -1,3 +1,5 @@
+from threading import Timer
+
 import threading
 
 import acq4.util.Qt as Qt
@@ -21,6 +23,8 @@ class SensapexObjectiveChanger(Device):
 
         self._lastPos = None
         self.getLensPosition()
+        self._pos_poller = Timer(1, self.getLensPosition)
+        self._pos_poller.start()
 
     def setLensPosition(self, pos):
         return ObjectiveChangeFuture(self, pos)
