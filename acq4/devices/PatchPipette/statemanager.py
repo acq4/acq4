@@ -142,7 +142,7 @@ class PatchPipetteStateManager(Qt.QObject):
             six.reraise(*exc)
 
     def activeChanged(self, pip, active):
-        if active:
+        if active and self.getState() is not None:
             self.configureState(self.getState().stateName)
         else:
             self.stopJob()
