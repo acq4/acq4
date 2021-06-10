@@ -45,7 +45,7 @@ class Sensapex(Stage):
         # note: n_axes is used in cases where the device is not capable of answering this on its own
         if "nAxes" in config:
             self.dev.set_n_axes(config["nAxes"])
-        if "maxAcceeration" in config:
+        if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self.dev.add_callback(self._positionChanged)

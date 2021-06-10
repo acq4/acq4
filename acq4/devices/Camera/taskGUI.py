@@ -29,11 +29,9 @@ class CameraTaskGui(DAQGenericTaskGui):
             p.plotItem.ctrl.maxTracesSpin.setValue(1)
             p.plotItem.ctrl.forgetTracesCheck.setChecked(True)
         
-        conf = self.dev.camConfig
-            
         tModes = self.dev.listParams('triggerMode')[0]
         for m in tModes:
-            item = self.ui.triggerModeCombo.addItem(m)
+            self.ui.triggerModeCombo.addItem(m)
         
         self.vLines = []
         if 'trigger' in self.plots:
@@ -130,4 +128,3 @@ class CameraTaskGui(DAQGenericTaskGui):
     def quit(self):
         self.ui.imageView.close()
         DAQGenericTaskGui.quit(self)
-        

@@ -534,7 +534,6 @@ class CameraTask(DAQGenericTask):
 
         # If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         #   (daq must be started first so that it is armed to received the camera trigger)
-        name = self.dev.name()
         if self.camCmd.get("triggerProtocol", False):
             restart = True
             daqName = self.dev.camConfig["triggerOutChannel"]["device"]

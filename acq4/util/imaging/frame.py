@@ -3,7 +3,7 @@ from pyqtgraph import Vector, SRTTransform3D
 
 
 class Frame(object):
-    """A single frame of imaging data including meta information.
+    """One or more frames of imaging data, including meta information.
 
     Expects *info* to be a dictionary with some minimal information:
 
