@@ -6,6 +6,8 @@ from collections import OrderedDict
 
 import numpy as np
 import six
+
+from acq4.util.debug import printExc
 from pyqtgraph.debug import Profiler
 from six.moves import range
 
@@ -99,7 +101,10 @@ class MicroManagerCamera(Camera):
             while self.mmc.getRemainingImageCount() == 0:
                 time.sleep(0.005)
                 if time.time() - start > 10.0:
-                    raise Exception("Timed out waiting for camera frame.")
+                    if self.mmc.isSequenceRunning():
+                        raise Exception("Timed out waiting for camera frame.")
+                    else:
+                        printExc("Fixed-frame camera acquisition was apparently canceled", msgType="warning")
             frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
         self.mmc.stopSequenceAcquisition()
         return np.concatenate(frames, axis=0)

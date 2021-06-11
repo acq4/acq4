@@ -564,8 +564,8 @@ class CameraTask(DAQGenericTask):
                 self.frames = self.dev.acquireFrames(self.fixedFrameCount).asarray()
         finally:
             if self._dev_needs_restart:
-                with self.lock:
-                    self.dev.start()
+                self.dev.start()
+                self._dev_needs_restart = False
 
     def getStartOrder(self):
         order = DAQGenericTask.getStartOrder(self)
@@ -617,8 +617,11 @@ class CameraTask(DAQGenericTask):
         with self.lock:
             self.stopRecording = True
             self._stopTime = time.time()
-            if abort and self._fixedAcqThread.isRunning():
-                self._fixedAcqThread.terminate()
+            if self._fixedAcqThread.isRunning():
+                self.dev.stopCamera()
+                if self._dev_needs_restart:
+                    self.dev.start()
+                    self._dev_needs_restart = False
 
         if "popState" in self.camCmd:
             self.dev.popState(self.camCmd["popState"])  # restores previous settings, stops/restarts camera if needed
