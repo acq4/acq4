@@ -561,7 +561,7 @@ class CameraTask(DAQGenericTask):
     def fixedAcquisition(self):
         try:
             with self.lock:
-                self.frames = self.dev.acquireFrames(self.fixedFrameCount)
+                self.frames = self.dev.acquireFrames(self.fixedFrameCount).asarray()
         finally:
             if self._dev_needs_restart:
                 with self.lock:
@@ -931,7 +931,7 @@ class AcquireThread(Thread):
 
 class FixedAcqThread(Thread):
     def __init__(self, target, *args, **kwds):
-        super().__init__(*args, **kwds)
+        super(FixedAcqThread, self).__init__(*args, **kwds)
         self._target = target
 
     def run(self):
