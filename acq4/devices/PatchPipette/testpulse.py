@@ -106,7 +106,7 @@ class TestPulseThread(Thread):
             except self.StopRequested:
                 break
             except Exception:
-                printExc("Error in test pulse thread:")
+                printExc("Error in test pulse thread (will try again):", msgType='warning')
                 time.sleep(2.0)
 
     def runOnce(self, _checkStop=False):
