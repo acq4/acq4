@@ -27,7 +27,6 @@ class DAQPressureControl(PressureControl):
         self.sources = config.pop('sources')
 
         self.source = self.getSource()
-        self.pressure = self.getPressure()
 
     def _setPressure(self, p):
         self.device.setChanHolding('pressure_out', p)
