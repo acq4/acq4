@@ -314,6 +314,21 @@ class ZeissMtbObjectiveChanger(ZeissMtbChanger):
     def __init__(self, root, component):
         ZeissMtbChanger.__init__(self, root, component)
 
+    # def magnification(self):
+    #     return self.m_objective.magnification
+    #
+    # def aperture(self):
+    #     return self.m_objective.aperture
+    #
+    # def contrastMethod(self):
+    #     return self.m_objective.contrastMethod
+    #
+    # def features(self):
+    #     return self.m_objective.features
+    #
+    # def workingDistance(self):
+    #     return self.m_objective.workingDistance
+
 
 # Unfinished below this line
 
