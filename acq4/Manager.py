@@ -285,6 +285,11 @@ class Manager(Qt.QObject):
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
 
+        self._loadConfig(cfg)
+
+        self.sigConfigChanged.emit()
+
+    def _loadConfig(self, cfg):
         for key, val in cfg.items():
             try:
                 # Handle custom import / exec
@@ -378,6 +383,10 @@ class Manager(Qt.QObject):
                 elif key == 'useOpenGL':
                     pg.setConfigOption('useOpenGL', cfg[key])
 
+                elif key == 'misc':
+                    # Let's start moving things out of the top level, but stay backwards compatible
+                    self._loadConfig(cfg[key])
+
                 ## Copy in any other configurations.
                 ## dicts are extended, all others are overwritten.
                 else:
@@ -393,8 +402,6 @@ class Manager(Qt.QObject):
                 printExc("Error in ACQ4 configuration:")
                 if self.exitOnError:
                     raise
-        # print self.config
-        self.sigConfigChanged.emit()
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
