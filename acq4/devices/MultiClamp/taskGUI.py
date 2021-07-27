@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import numpy
 import sip
-from pyqtgraph import mkPen
+from pyqtgraph import mkPen, disconnect
 
 from acq4.devices.Device import TaskGui
 from pyqtgraph.WidgetGroup import WidgetGroup
@@ -344,6 +344,6 @@ class MultiClampTaskGui(TaskGui):
     def quit(self):
         TaskGui.quit(self)
         if not sip.isdeleted(self.daqUI):
-            self.daqUI.sigChanged.disconnect(self.daqChanged)
+            disconnect(self.daqUI.sigChanged, self.daqChanged)
         self.ui.topPlotWidget.close()
         self.ui.bottomPlotWidget.close()
