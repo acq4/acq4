@@ -142,7 +142,10 @@ class SeqParameter(GroupParameter):
             else:
                 seq = np.linspace(start, stop, nPts)
         elif mode == 'list':
-            seq = list(self.evalStr('list'))
+            if self['list'] == '':
+                seq = []
+            else:
+                seq = list(self.evalStr('list'))
         elif mode == 'eval':
             seq = self.evalStr('expression')
         else:

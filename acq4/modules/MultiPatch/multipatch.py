@@ -243,6 +243,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.pipetteDevice.goApproach(speed)
             if isinstance(pip, PatchPipette):
+                pip.setState('bath')
                 pip.clampDevice.autoPipetteOffset()
 
     def moveToTarget(self):
@@ -525,7 +526,7 @@ class MultiPatchWindow(Qt.QWidget):
         pips = self.selectedPipettes()
         for pip in pips:
             if isinstance(pip, PatchPipette):
-                pip.setState('pipette clean')
+                pip.setState('clean')
         
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()

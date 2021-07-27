@@ -479,6 +479,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def setSurfaceClicked(self):
         focus = self.getDevice().getFocusDepth()
         self.getDevice().setSurfaceDepth(focus)
+        self.transformChanged()
 
     def surfaceDepthChanged(self, depth):
         self.surfaceLine.setValue(depth)
