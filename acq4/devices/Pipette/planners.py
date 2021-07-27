@@ -136,6 +136,14 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
         return pip._movePath(self.approachPath(target, speed))
     
     def approachPath(self, target, speed):
+        """
+        Describe a path that puts the pipette in-line to do straight movement along the pipette pitch to the target
+
+        Parameters
+        ----------
+        target: coordinates
+        speed: m/s
+        """
         pip = self.pip
 
         # Return steps (in global coords) needed to move to approach position

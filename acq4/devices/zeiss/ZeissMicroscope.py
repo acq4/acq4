@@ -19,13 +19,12 @@ class ZeissMicroscope(Microscope):
 
         self.zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
         self.mtbRoot = self.zeiss.connect()
-        self.zeiss.getObjective().registerEventHandlers(self.zeissObjectivePosChanged, self.zeissObjectivePosSettled)
+        self.zeiss.getObjectiveChanger().registerEventHandlers(self.zeissObjectivePosChanged, self.zeissObjectivePosSettled)
 
         self.objectiveIndexChanged(str(self.zeissCurrentPosition()))
 
     def zeissObjectivePosChanged(self, position):
         self.currentSwitchPosition = None
-        # print ("Objective changed: " + str(position))
 
     def zeissObjectivePosSettled(self, position):
         self.objectiveIndexChanged(str(position - 1))
@@ -41,7 +40,7 @@ class ZeissMicroscope(Microscope):
         Microscope.quit(self)
 
     def zeissCurrentPosition(self):
-        return self.zeiss.getObjective().getPosition() - 1
+        return self.zeiss.getObjectiveChanger().getPosition() - 1
 
     def setObjectiveIndex(self, index):
         if int(index) == self.zeissCurrentPosition():
@@ -50,11 +49,7 @@ class ZeissMicroscope(Microscope):
         self._startDepth = self.getFocusDepth()
         self.moveToSafeDepth().wait()
 
-        # TODO: Take this away after confirming the stage be always in safe position.
-        self.zeiss.getObjective().setPosition(int(index) + 1)
-
-        # TODO: Remove following line after above enabled.
-        # self.setFocusDepth(startDepth).wait()
+        self.zeiss.getObjectiveChanger().setPosition(int(index) + 1)
 
     def moveToSafeDepth(self, speed='fast'):
         """Move focus to a safe position for switching objectives.

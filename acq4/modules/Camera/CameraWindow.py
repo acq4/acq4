@@ -228,7 +228,7 @@ class CameraWindow(Qt.QMainWindow):
         if pos is None:
             pos = self.view.viewRect().center()
         item.setPos(pg.Point(pos))
-        item.scale(scale[0], scale[1])
+        item.setTransform(pg.QtGui.QTransform.fromScale(scale[0], scale[1]), True)
         if z is not None:
             item.setZValue(z)
 

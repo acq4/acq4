@@ -138,7 +138,7 @@ class ScannerDeviceGui(Qt.QWidget):
         """Add a circle to the image"""
         s2 = size/2.0
         s = Qt.QGraphicsEllipseItem(0, 0, 1, 1)
-        s.scale(size, size)
+        s.setTransform(pg.QtGui.QTransform.fromScale(size, size), True)
         s.setPos(pos[0]-s2, pos[1]-s2)
         s.setPen(pg.mkPen(100, 255, 100, 70))
         self.ui.view.addItem(s)
