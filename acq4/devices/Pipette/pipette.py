@@ -1,24 +1,24 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 from __future__ import division
+from __future__ import print_function
 
-import pickle
-import threading
-from acq4.util import Qt
-import numpy as np
 import weakref
 
+import numpy as np
 import pyqtgraph as pg
+from six.moves import range
+
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.Sensapex import Sensapex
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.util import Qt
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
-from six.moves import range
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -346,7 +346,7 @@ class Pipette(Device, OptomechDevice):
         pos = self.globalPosition()
         dz = depth - pos[2]
         dx = -dz / np.tan(self.pitchRadians())
-        return self._moveToLocal([dx, 0, dz], speed, linear=True)
+        return self._moveToLocal([dx, 0, dz], speed, linear=self._shouldUseLinearMovement())
 
     def retractFromSurface(self, speed='slow'):
         """Retract the pipette along its axis until it is above the slice surface.
@@ -370,7 +370,7 @@ class Pipette(Device, OptomechDevice):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
         """
-        kwds.setdefault('linear', True)
+        kwds.setdefault('linear', self._shouldUseLinearMovement())
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
         stage = self.parentDevice()
@@ -379,6 +379,9 @@ class Pipette(Device, OptomechDevice):
         except Exception as exc:
             print("Error moving %s to global position %r:" % (self, pos))
             raise
+
+    def _shouldUseLinearMovement(self):
+        return not isinstance(self.parentDevice(), Sensapex)
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.
@@ -400,7 +403,7 @@ class Pipette(Device, OptomechDevice):
         dif = target - pos
         unit = dif / (dif**2).sum()**0.5
         waypoint = pos + distance * unit
-        return self._moveToGlobal(waypoint, speed, linear=True)
+        return self._moveToGlobal(waypoint, speed, linear=self._shouldUseLinearMovement())
 
     def startAdvancing(self, speed):
         """Begin moving the pipette at a constant speed along its axis.
@@ -418,7 +421,7 @@ class Pipette(Device, OptomechDevice):
         """
         dz = distance * np.sin(self.pitchRadians())
         dx = -distance * np.cos(self.pitchRadians())
-        return self._moveToLocal([dx, 0, dz], speed, linear=True) 
+        return self._moveToLocal([dx, 0, dz], speed, linear=self._shouldUseLinearMovement())
 
     def setTarget(self, target):
         self.target = np.array(target)

@@ -7,7 +7,7 @@ from pyqtgraph import ptime, Transform3D, solve3DTransform
 
 from acq4.util import Qt
 from acq4.drivers.sensapex import UMP
-from ..Stage import Stage, MoveFuture, CalibrationWindow
+from .Stage import Stage, MoveFuture, CalibrationWindow
 
 
 class Sensapex(Stage):
@@ -161,7 +161,7 @@ class Sensapex(Stage):
         with self.lock:
             pos = self._toAbsolutePosition(abs, rel)
             speed = self._interpretSpeed(speed)
-            self._lastMove = SensapexMoveFuture(self, pos, speed)
+            self._lastMove = SensapexMoveFuture(self, pos, speed, linear)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -172,12 +172,13 @@ class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
     """
 
-    def __init__(self, dev, pos, speed):
+    def __init__(self, dev, pos, speed, linear):
         MoveFuture.__init__(self, dev, pos, speed)
+        self._linear = linear
         self._interrupted = False
         self._errorMsg = None
         self._finished = False
-        self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6)
+        self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6, simultaneous=linear, linear=linear)
         self._checked = False
 
     def wasInterrupted(self):

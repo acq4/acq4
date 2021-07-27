@@ -214,13 +214,9 @@ class MultiClampTelegraph:
                     if mode == 'VC':
                         priSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_VC_LONG_NAMES'][data.uScaledOutSignal]
                         secSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_VC_LONG_NAMES_RAW'][data.uRawOutSignal]
-                        priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                        secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
                     else:
                         priSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_IC_LONG_NAMES'][data.uScaledOutSignal]
                         secSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_IC_LONG_NAMES_RAW'][data.uRawOutSignal]
-                        priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                        secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
                 else:
                     try:
                         priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
@@ -232,8 +228,8 @@ class MultiClampTelegraph:
                     except IndexError:
                         secSignal = "Auxiliary"  # some amps give signal=44 here, which is not in the list..
 
-                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
                 
                 # Scale factors are 0 for aux signals.
                 sf = data.dScaleFactor if data.dScaleFactor != 0 else 1

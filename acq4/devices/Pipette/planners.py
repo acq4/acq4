@@ -1,4 +1,5 @@
 import numpy as np
+from acq4.devices.Sensapex import Sensapex
 from six.moves import range
 
 
@@ -40,44 +41,75 @@ class PipetteMotionPlanner(object):
     def _move(self):
         raise NotImplementedError()
 
+    def shouldUseLinearMotion(self):
+        return not isinstance(self.pip.parentDevice(), Sensapex)
+
+
+_LOCAL_ORIGIN = (0, 0, 0)
+
+
+def _extractionWaypoint(destLocal, pipAngle):
+    """
+    Parameters
+    ----------
+    destLocal
+        Destination coordinates in pipette-local frame of reference. Extraction is only needed when +z and -x from the origin.
+    pipAngle
+        The angle of the pipette in radians, oriented to be between 0 and π/2.
+
+    Returns
+    -------
+    waypoint
+        Local coordinates of the extraction waypoint, or None if none is needed.
+    """
+    if pipAngle < 0 or pipAngle > np.pi / 2:
+        raise ValueError("Invalid pipette pitch; orient your measurement to put it between 0 and π/2")
+    destX = destLocal[0]
+    destZ = destLocal[2]
+    if destX > 0 or destZ < 0 or (destX, destZ) == (0, 0):
+        # no clear diagonal extraction to go forward or down
+        return None
+
+    destAngle = np.arctan2(destZ, -destX)  # `-x` to match the pipAngle orientation
+
+    if destAngle > pipAngle:
+        dz = destX * np.tan(pipAngle)
+        waypoint = (destX, 0, -dz)
+    else:
+        dx = destZ / np.tan(pipAngle)
+        waypoint = (-dx, 0, destZ)
+
+    # sanity check, floating point errors
+    return np.clip(waypoint, _LOCAL_ORIGIN, destLocal)
+
 
 class HomeMotionPlanner(PipetteMotionPlanner):
-    """Extract pipette tip diagonally, then move stage to home position.
+    """Extract pipette tip diagonally, then move to home position.
     """
     def _move(self):
         pip = self.pip
         speed = self.speed
-        stage = pip.parentDevice()
-        stagePos = stage.globalPosition()
-        stageHome = stage.homePosition()
-        assert stageHome is not None, "No home position defined for %s" % stage.name()
-        globalMove = np.asarray(stageHome) - np.asarray(stagePos) # this is how much electrode should move in global coordinates
+        manipulator = pip.parentDevice()
+        manipulatorHome = manipulator.homePosition()
+        assert manipulatorHome is not None, "No home position defined for %s" % manipulator.name()
+        # how much should the pipette move in global coordinates
+        globalMove = np.asarray(manipulatorHome) - np.asarray(manipulator.globalPosition())
 
         startPosGlobal = pip.globalPosition()
-        endPosGlobal = np.asarray(startPosGlobal) + globalMove  # this is where electrode should end up in global coordinates
-        endPos = pip.mapFromGlobal(endPosGlobal)  # and in local coordinates
+        # where should the pipette tip end up in global coordinates
+        endPosGlobal = np.asarray(startPosGlobal) + globalMove
+        # use local coordinates to make it easier to do the boundary intersections
+        endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        # define the path to take in local coordinates because that makes it
-        # easier to do the boundary intersections
-        homeAngle = np.arctan2(endPos[2], -endPos[0])
-        if homeAngle > pip.pitchRadians():
-            # diagonal move to 
-            dz = -endPos[0] * np.tan(pip.pitchRadians())
-            waypoint = pip.mapToGlobal([endPos[0], 0, dz])
+        waypointLocal = _extractionWaypoint(endPosLocal, pip.pitchRadians())
+
+        # sensapex manipulators shouldn't need a waypoint to perform correct extraction
+        if waypointLocal is None or not self.shouldUseLinearMotion():
+            path = [(endPosGlobal, speed, False), ]
         else:
-            dx = -endPos[2] / np.tan(pip.pitchRadians())
-            waypoint = pip.mapToGlobal([dx, 0, endPos[2]])
-            if dx > 0:  # in case home z position is below the current z pos.
-                waypoint = None
-        
-        if waypoint is None:
-            path = [(endPosGlobal, speed, False)]
-        else:
-            # sanity check
-            for i in range(3):
-                waypoint[i] = np.clip(waypoint[i], startPosGlobal[i], endPosGlobal[i])
+            waypointGlobal = pip.mapToGlobal(waypointLocal)
             path = [
-                (waypoint, speed, True),
+                (waypointGlobal, speed, True),
                 (endPosGlobal, speed, False),
             ]
 
@@ -158,7 +190,7 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
             dz = stbyDepth - pos[2]
             dx = -dz / np.tan(pip.pitchRadians())
             last = np.array([dx, 0., dz])
-            path.append([pip.mapToGlobal(last), 100e-6, True])  # slow removal from sample
+            path.append([pip.mapToGlobal(last), 100e-6, self.shouldUseLinearMotion()])  # slow removal from sample
         else:
             last = np.array([0., 0., 0.])
 
@@ -182,8 +214,8 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
 
         if np.linalg.norm(stby - last) > 1e-6:
             if (closest[2] > stby[2]) and (np.linalg.norm(stby - closest) > 1e-6):
-                path.append([pip.mapToGlobal(closest), speed, True])
-            path.append([pip.mapToGlobal(stby), speed, True])
+                path.append([pip.mapToGlobal(closest), speed, self.shouldUseLinearMotion()])
+            path.append([pip.mapToGlobal(stby), speed, self.shouldUseLinearMotion()])
 
         return path
 
@@ -198,7 +230,7 @@ class TargetMotionPlanner(ApproachMotionPlanner):
         if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
             return
         path = self.approachPath(target, speed)
-        path.append([target, 100e-6, True])
+        path.append([target, 100e-6, self.shouldUseLinearMotion()])
         return pip._movePath(path)
 
 
