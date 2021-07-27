@@ -347,9 +347,9 @@ class _CameraClass:
             self.isOpen = False
             
     def call(self, fn, *args, **kargs):
-        # ret = LIB('functions', fn)(*args, **kargs)
-        # return ret
-        return self.pvcam.call(fn, *args, **kargs)
+        ret = LIB('functions', fn)(*args, **kargs)
+        return ret
+        #return self.pvcam.call(fn, *args, **kargs)
 
     def initCam(self, params=None):
         buf = create_string_buffer(b'\0' * LIB.CCD_NAME_LEN)
@@ -672,12 +672,14 @@ class _CameraClass:
         self.buf = numpy.ascontiguousarray(numpy.empty((ringSize, rgn.height, rgn.width), dtype=numpy.uint16))
         
         res = self.call('pl_exp_setup_cont', self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
-        #res = LIB.pl_exp_setup_cont(self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
+        # res = LIB.pl_exp_setup_cont(self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
         ssize = res[5]
         ssize = ssize*ringSize
         #print "   done"
-        if len(self.buf.data) != ssize:
-            raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
+        bufsize = 2*numpy.prod(self.buf.data.shape)
+        if bufsize != ssize:
+            raise Exception('Created wrong size buffer! (%d != %d) Error: %s'
+                     % bufsize, ssize, self.pvcam.error())
         self.call('pl_exp_start_cont', self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
 
         self.mode = 2

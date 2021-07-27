@@ -58,7 +58,6 @@ def getAxlib(libPath=None):
             libPath = find_lib('AxMultiClampMsg.dll', paths=searchPaths)
         if not os.path.isfile(libPath):
             raise ValueError('MultiClamp DLL file "%s" does not exist' % libPath)
-        print("Using MultiClamp DLL at ", libPath)
 
         axlib = CLibrary(ctypes.windll.LoadLibrary(libPath), axonDefs, prefix='MCCMSG_')
         initializeGlobals()

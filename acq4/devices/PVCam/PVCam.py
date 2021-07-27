@@ -121,7 +121,7 @@ class PVCam(Camera):
         
         ## Determine how many new frames have arrived since last check
         if self.lastIndex is not None:
-            diff = (index - self.lastIndex) % self.ringSize
+            diff = int((index - self.lastIndex) % self.ringSize)
             if diff > (self.ringSize / 2):
                 print("Image acquisition buffer is at least half full (possible dropped frames)")
         else:
@@ -131,7 +131,7 @@ class PVCam(Camera):
         dt = (now - self.lastFrameTime) / diff
         frames = []
         for i in range(diff):
-            fInd = (i+self.lastIndex+1) % self.ringSize
+            fInd = int((i+self.lastIndex+1) % self.ringSize)
             frame = {}
             frame['time'] = self.lastFrameTime + (dt * (i+1))
             frame['id'] = self.frameId
