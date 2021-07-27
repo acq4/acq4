@@ -177,6 +177,8 @@ class SequenceRunner:
 
             if not isinstance(params, Iterable):
                 params = [params]
+            elif isinstance(params, range):
+                params = list(params)  # force generator
             self._paramSpace[i] = params
 
     def buildReturnArray(self, ret):
@@ -196,6 +198,7 @@ class SequenceRunner:
             dtype = object
 
         info = [{'name': p, 'values': self._paramSpace[p]} for p in self._order]
+
         self._return = MetaArray(np.zeros(shape + shapeExtra, dtype=dtype), info=info)
         self._runMask = MetaArray(np.zeros(shape, dtype=bool), info=info)
 
