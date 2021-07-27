@@ -14,11 +14,11 @@ class SensapexPressureControl(PressureControl):
     Atmosphere are the same port for this device.
     Additional config options::
 
-    deviceId : int
-    address : str
-    group : int
-    pressureChannel : int
-    pollInterval : float
+        deviceId : int
+        address : str
+        group : int
+        pressureChannel : int
+        pollInterval : float
     """
     sigMeasuredPressureChanged = Qt.Signal(object, object)  # self, pressure
 
