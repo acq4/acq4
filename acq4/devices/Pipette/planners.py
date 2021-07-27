@@ -38,7 +38,7 @@ class PipetteMotionPlanner(object):
             self.future.stop()
 
     def _move(self):
-        raise NotImplememtedError()
+        raise NotImplementedError()
 
 
 class HomeMotionPlanner(PipetteMotionPlanner):

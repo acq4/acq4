@@ -24,21 +24,27 @@ class PatchPipetteStateManager(Qt.QObject):
 
     Note: all the real work is done in the individual state classes (see acq4.devices.PatchPipette.states)
     """
-    stateHandlers = OrderedDict([
-        ('out', states.PatchPipetteOutState),
-        ('bath', states.PatchPipetteBathState),
-        ('approach', states.PatchPipetteApproachState),
-        ('cell detect', states.PatchPipetteCellDetectState),
-        ('seal', states.PatchPipetteSealState),
-        ('cell attached', states.PatchPipetteCellAttachedState),
-        ('break in', states.PatchPipetteBreakInState),
-        ('whole cell', states.PatchPipetteWholeCellState),
-        ('reseal', states.PatchPipetteResealState),
-        ('blowout', states.PatchPipetteBlowoutState),
-        ('broken', states.PatchPipetteBrokenState),
-        ('fouled', states.PatchPipetteFouledState),
-        ('clean', states.PatchPipetteCleanState),
-    ])
+
+    stateHandlers = OrderedDict(
+        [
+            (state.stateName, state)
+            for state in [
+                states.PatchPipetteOutState,
+                states.PatchPipetteBathState,
+                states.PatchPipetteApproachState,
+                states.PatchPipetteCellDetectState,
+                states.PatchPipetteSealState,
+                states.PatchPipetteCellAttachedState,
+                states.PatchPipetteBreakInState,
+                states.PatchPipetteWholeCellState,
+                states.PatchPipetteResealState,
+                states.PatchPipetteBlowoutState,
+                states.PatchPipetteBrokenState,
+                states.PatchPipetteFouledState,
+                states.PatchPipetteCleanState,
+            ]
+        ]
+    )
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
     _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
@@ -68,7 +74,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
         Must be a dict like {'statename': {'opt': value}, ...}.
         """
-        self.stateConfig = config        
+        self.stateConfig = config
 
     def stateChanged(self, oldState, newState):
         """Called when state has changed (possibly by user)
@@ -92,7 +98,7 @@ class PatchPipetteStateManager(Qt.QObject):
             success, ret = returnQueue.get(timeout=10)
         except queue.Empty:
             raise Exception("State change request timed out.")
-        
+
         if success:
             return ret
         else:
@@ -130,7 +136,6 @@ class PatchPipetteStateManager(Qt.QObject):
             self.sigStateChanged.emit(self, job)
             return job
         except Exception:
-            exc = sys.exc_info()
             # in case of failure, attempt to restore previous state
             self.currentJob = None
             if not allowReset or oldJob is None:
@@ -139,10 +144,10 @@ class PatchPipetteStateManager(Qt.QObject):
                 self.configureState(oldJob.stateName, _allowReset=False)
             except Exception:
                 printExc("Error occurred while trying to reset state from a previous error:")
-            six.reraise(*exc)
+            raise
 
     def activeChanged(self, pip, active):
-        if active:
+        if active and self.getState() is not None:
             self.configureState(self.getState().stateName)
         else:
             self.stopJob()

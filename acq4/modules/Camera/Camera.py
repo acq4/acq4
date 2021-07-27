@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.modules.Module import Module
-from .CameraWindow import CameraWindow
+
 import os
+
+from acq4.modules.Module import Module
 from acq4.util import Qt
+from .CameraWindow import CameraWindow
+
 
 class Camera(Module):
     moduleDisplayName = "Camera"
@@ -23,6 +26,3 @@ class Camera(Module):
         if not fromUi:
             self.ui.quit()
         Module.quit(self)
-        
-    def insertROI(self, roi):
-        return handle
