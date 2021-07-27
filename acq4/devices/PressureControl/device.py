@@ -54,8 +54,6 @@ class PressureControl(Device):
 
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals).
-
-        Note: this does _not_ change the configuration of any valves.
         """
         raise NotImplementedError()
 

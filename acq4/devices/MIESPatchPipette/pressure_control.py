@@ -14,8 +14,6 @@ class MIESPressureControl(PressureControl):
         PressureControl.__init__(self, manager, config, name)
 
     def _setPressure(self, source=None, pressure=None):
-        """Set the output pressure (float; in Pa) and/or pressure source (str).
-        """
         print("STUB: set pressure", source, pressure)
 
     def getPressure(self):
