@@ -10,7 +10,7 @@ This module is used to assist in patching cells and to monitor cell health throu
 * Plots estimates of input resistance, access resistance, holding values, and capacitance over time. This aids the experimenter in seeing the effects of manipulations on seal resistance, access resistance, and the general health of the cell over the course of the experiment.
 * Stores a record of estimate data as it is collected (Note that the Patch module currently does *not* store raw recording data)
 
-    .. figure:: images/patch.png
+    .. figure:: images/patch.svg
 
 The patch module acquires data from a single patch clamp device, which is specified in the :ref:`modules section <userConfigurationModules>` of the configuration file. The following example configuration defines *two* different patch module instances, each of which will use a different clamp device::
 

@@ -6,8 +6,6 @@
 ACQ4 Documentation
 ==================
 
-**Note:** The ACQ4 documentation is currently under heavy development. Please post questions to the `mailing list <https://groups.google.com/forum/#!forum/acq4>`_.
-
 Contents:
 
 .. toctree::

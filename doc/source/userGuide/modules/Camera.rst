@@ -5,7 +5,7 @@ The Camera Module
 
 The Camera module provides a live video feed from one or more imaging devices and also serves as a visual representation of the global coordinate system for photostimulation and laser imaging controls. It may be used to record single frames or to stream video to disk alongside any available metadata including the imaging device settings in use, optical train state (such as which objective lens is in use), and the coordinate transformation needed to determine the original location and scale of the image.
 
-    .. figure:: images/camera.png
+    .. figure:: images/camera.svg
 
 The Camera module also provides image processing features helpful for enhancing image contrast for cell patching and calcium imaging. For patching, the module's background subtraction features remove optical artifacts and provide enhanced contrast by flattening the illumination gradient across the image. For experiments using calcium imaging (or other fluorescent indicators), the module provides background subtraction with a continuously-updating background. This acts as a high-pass filter, allowing active fluorescence signals to be quickly identified. Additionally, the module will plot the intensity over time of a region of interest, allowing a local fluorescence signal to be monitored by the experimenter. 
 

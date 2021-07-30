@@ -27,7 +27,7 @@ In this contex, a Microscope is essentially a switchable component in the optome
 
 It is important when collecting data that includes positioning or transform information, that ACQ4 know which objective is currently in use. For this purpose, the user may manually select the current objective every time it changes. However, we have found that it is much more convenient and reliable for these transitions to be handled automatically. Thus, we use a simple microswitch circuit to detect the currently active position on our two-slot objective mounts:
     
-    .. figure:: images/microscopeSwitch.png
+    .. figure:: images/microscopeSwitch.svg
 
 The state of the DAQ digital input is then polled with a :ref:`Switch device <userDevicesDIOSwitch>` to detect changes in the objective state.
 

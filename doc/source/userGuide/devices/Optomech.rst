@@ -8,7 +8,7 @@ The experiments that ACQ4 is designed to handle often involve multiple devices w
 
 A broad subclass of devices, referred to as optomechanical devices, represent hierarchically-linked hardware with defined physical or optical relationships to one another and, ultimately, to the global coordinate system. The choice of an appropriate global coordinate system is arbitrary and left to the experimenter, although in systems which use any type of imaging, the global coordinate system is typically chosen to be fixed relative to the imaged subject. Static relationships between devices are specified in the device configuration file, whereas any changes in dynamic relationships (for example, when a motorized stage moves, or an objective lens is changed) will be immediately reflected in the coordinate system transformations between devices in the hierarchy. In most cases, the static configuration is determined and written manually. For more complex relationships, however, automated calibration functions may be used to assist in generating the necessary configuration. 
 
-    .. figure:: images/optomech.png
+    .. figure:: images/optomech.svg
     
        An example optomechanical device hierarchy.
 

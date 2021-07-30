@@ -5,7 +5,7 @@ The Task Runner module
 
 The Task Runner is a customizable interface to ACQ4's task execution capabilities. It allows the user to interactively design and execute a wide range of multi-device tasks including basic patch-clamp stimulation and recording, laser scanning imaging and photostimulation, synchronized multichannel recordings, and complex stimulation paradigms. In this context, the word “task” is used to describe a single, coordinated action to be taken by multiple devices in synchrony. Typically a task involves a short period of recording from electrode amplifiers, cameras, photomultiplier tubes, and other analog or digital channel devices. Arbitrary waveforms may be defined to control stimulation devices, scanning mirrors, and triggering behavior.
 
-    .. figure:: images/taskRunner2.png
+    .. figure:: images/taskRunner2.svg
 
     Screen capture of the Task Runner module showing a calcium imaging task with the docks rearranged. The Task Settings and Sequence Settings docks now appear on the left edge, and the Loader Dock is currently hidden beneath the Task Settings dock. Three device control docks are arranged to make optimal use of the available screen space.
 
@@ -42,7 +42,7 @@ The user interface of the Task Runner is organized into 'docks' that may be resi
 #. A sequence settings dock that allows to execute tasks repeatedly while varying one or more parameters of the task.
 #. An online analysis dock allowing the inclusion of analysis modules in the task.
 
-    .. figure:: images/taskRunnerInit.png
+    .. figure:: images/taskRunnerInit.svg
     
     Screen capture of the Task Runner module immediately after it is loaded.
 

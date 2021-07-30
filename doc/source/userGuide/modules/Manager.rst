@@ -5,7 +5,7 @@ The Manager module
 
 The Manager module is the central control point for launching other user interface modules and directly configuring devices. This module is automatically loaded when ACQ4 is started unless the ``-n`` flag is given in the command line.
 
-    .. figure:: images/manager.png
+    .. figure:: images/manager.svg
 
 
 .. _userModulesManagerModuleList:

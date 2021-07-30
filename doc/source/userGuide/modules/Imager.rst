@@ -5,7 +5,7 @@ Imager Module
 
 The Imager module provides laser scanning imaging functionality for multiphoton and confocal microscopes. This module combines control of scanning mirrors, laser power, and signal detection devices (such as photomultiplier tubes or photodiodes). Like other modules, the Imager module operates in the global coordinate system and displays its output in the display area of a :ref:`Camera module <userModulesCamera>`. It also displays a user-positionable rectangle which defines the extents of the laser scanning area. The Imager module supports overscanning to remove retrace artifacts as well as bidirectional scanning with automated field shifting to reduce comb artifacts. While the interface includes detailed control of scanning parameters, tiling, and the collection of image stacks, common functionality such as fast (video) scanning or the collection of standardized high-resolution images may also be accessed from preset configurations to simplify user interaction during experiments. 
 
-    .. figure:: images/imager.png
+    .. figure:: images/imager.svg
 
 Configuration
 -------------

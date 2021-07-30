@@ -6,7 +6,7 @@ Hardware Configuration
 
 It is ultimately up to the experimenter to understand their hardware and decide how best to configure it. For the most part, deciding on a hardware configuration will depend on 1) the capabilities required by the experimenter and 2) the limitations of the hardware. Wherever possible, we have avoided imposing any unnecessary limitations through the software (although there are a few). Below is an example setup which makes use of many of the current capabilities in ACQ4.
 
-    .. figure:: images/hardware.png
+    .. figure:: images/hardware.svg
 
     Example hardware configuration for photostimulation experiments.
     
