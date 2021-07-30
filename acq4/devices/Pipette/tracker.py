@@ -224,12 +224,12 @@ class PipetteTracker(object):
             restart = True
             imager.stop()
 
+        scope = self.dev.scopeDevice()
         try:
             with pg.ProgressDialog("Acquiring reference frames...", 0, nFrames * 2 + 1) as dlg:
                 # collect 2 stacks of images (second stack is for background subtraction)
                 for j in range(2):
                     # Set initial focus above start point to reduce hysteresis in focus mechanism
-                    scope = self.dev.scopeDevice()
                     scope.setFocusDepth(zStart + 10e-6).wait()
 
                     # Acquire multiple frames at different depths

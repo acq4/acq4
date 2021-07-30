@@ -289,7 +289,7 @@ class ScanProgramPreview(object):
 
         self.path = pg.PlotCurveItem()
         self.spot = Qt.QGraphicsEllipseItem(Qt.QRectF(-1, -1, 2, 2))
-        self.spot.scale(1e-6, 1e-6)
+        self.spot.setTransform(pg.QtGui.QTransform.fromScale(1e-6, 1e-6), True)
         self.spot.setPen(pg.mkPen('y'))
 
         self.data = self.program.generatePositionArray()

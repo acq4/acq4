@@ -1001,6 +1001,4 @@ class TimelineMarker(pg.GraphicsObject):
         y1 = r.top() + r.height() * self.yRange[0]
         y2 = r.top() + r.height() * self.yRange[1]
         self.translate(0, y1)
-        self.scale(1.0, abs(y2-y1))
-        #print y1, y2
-        
+        self.setTransform(pg.QtGui.QTransform.fromScale(1.0, abs(y2-y1)), True)
