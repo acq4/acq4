@@ -24,11 +24,10 @@ Features
 - 2-photon imaging
 
 
-Links
------
+Questions?
+----------
 
-- [Documentation](https://acq4.readthedocs.io/en/latest/)
-- [Installation](https://acq4.readthedocs.io/en/latest/userGuide/installation.html)
-- [Support forum](https://groups.google.com/forum/?fromgroups#!forum/acq4)
-- [Main website](http://www.acq4.org)
+* Reach out on our [new discussion board](https://github.com/acq4/acq4/discussions) or browse our [old mailing list](https://groups.google.com/forum/?fromgroups#!forum/acq4).
+* Read our [documentation](https://acq4.readthedocs.io/en/latest/)
+* ..or skip straight to [installation](https://acq4.readthedocs.io/en/latest/userGuide/installation.html)
 
