@@ -1,16 +1,27 @@
--e git+git@github.com:acq4/acq4@6e267c18a25bc00332668d8398da7f14921d6daa#egg=acq4
+-e git+git@github.com:acq4/acq4@3391f9939fd92eba190e6352bcb98a5f2a60cc44#egg=acq4
+alabaster==0.7.12
+Babel==2.9.1
 cached-property @ file:///tmp/build/80754af9/cached-property_1600785575025/work
 certifi==2021.5.30
+charset-normalizer==2.0.3
+docutils==0.16
 fastrlock==0.6
 h5py @ file:///tmp/build/80754af9/h5py_1622088445520/work
+idna==3.2
+imagesize==1.2.0
+Jinja2==3.0.1
 llvmlite==0.36.0
+MarkupSafe==2.0.1
 mkl-fft==1.3.0
 mkl-random @ file:///tmp/build/80754af9/mkl_random_1626186064646/work
 mkl-service==2.4.0
 numba @ file:///tmp/build/80754af9/numba_1616774046117/work
 numpy @ file:///tmp/build/80754af9/numpy_and_numpy_base_1626271506491/work
+numpydoc==1.1.0
 olefile==0.46
+packaging==21.0
 Pillow @ file:///tmp/build/80754af9/pillow_1625655817137/work
+Pygments==2.9.0
 pyparsing @ file:///home/linux1/recipes/ci/pyparsing_1610983426697/work
 PyQt5==5.12.3
 PyQt5-sip==4.19.18
@@ -18,5 +29,17 @@ PyQtChart==5.12
 pyqtgraph @ file:///home/conda/feedstock_root/build_artifacts/pyqtgraph_1625762730618/work
 PyQtWebEngine==5.12.1
 pyserial==3.5
+pytz==2021.1
+requests==2.26.0
 scipy @ file:///tmp/build/80754af9/scipy_1618855647378/work
 six @ file:///tmp/build/80754af9/six_1623709665295/work
+snowballstemmer==2.1.0
+Sphinx==4.1.2
+sphinx-rtd-theme==0.5.2
+sphinxcontrib-applehelp==1.0.2
+sphinxcontrib-devhelp==1.0.2
+sphinxcontrib-htmlhelp==2.0.0
+sphinxcontrib-jsmath==1.0.1
+sphinxcontrib-qthelp==1.0.3
+sphinxcontrib-serializinghtml==1.1.5
+urllib3==1.26.6
