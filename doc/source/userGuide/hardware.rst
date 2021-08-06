@@ -24,6 +24,9 @@ ACQ4 supports two more advanced modes of patch clamp operation:
 
 These features require the availability of a camera (or other supported imaging setup), motorized XY stage and focus, and motorized micromanipulators. ACQ4 supports stages and manipulators made by `Sensapex <http://sensapex.com>`_, `Scientifica <https://www.scientifica.uk.com>`_, and `Sutter Instrument <https://www.sutter.com/>`_. A wider range of stage hardware may also be used via μManager, although this is less well tested. It is also strongly recommended to use a motorized objective changer or modify your microscope to report its currently-used objective to ACQ4.
 
+    .. figure:: images/auto_patch.svg
+
+
 For streamlined operation in semi-automated patch clamp experiments (especially with multiple pipettes), we recommend using an XKE-128 programmable keyboard.
 
 Stage and Manipulator Accuracy
