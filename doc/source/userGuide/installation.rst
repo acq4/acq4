@@ -21,14 +21,14 @@ ACQ4 depends on several free software packages to work properly. In most cases, 
 
 
 Improving performance with GPU
-==============================
+------------------------------
 
 ACQ4 can use nVidia GPUs to improve performance if the `cupy` python package is installed. See the `cupy documentation <https://docs.cupy.dev/en/stable/install.html>`_ for more information on configuring CUDA and cupy correctly.
 
 If you have a CUDA-supported GPU, this is highly recommended.
 
 Starting ACQ4
-=============
+-------------
 
 Activate your acq4 conda environment, then start acq4::
 
@@ -39,6 +39,6 @@ This should load the main manager window, from which you can interact with some 
 
 
 Legacy Python 2 support
-=======================
+-----------------------
 
 For systems that still require python 2 support, the ``python2`` git branch contains the most recent ACQ4 version known to support python 2. More information can be found in the README for that branch: https://github.com/acq4/acq4/tree/python2
