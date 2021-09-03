@@ -14,8 +14,6 @@ class SensapexObjectiveChanger(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
 
-        if dm.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
-            UMP.set_library_path(dm.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
         ump = UMP.get_ump(address=address, group=group)

@@ -24,8 +24,6 @@ class SensapexPressureControl(PressureControl):
 
     def __init__(self, manager, config, name):
         self.devId = config.get('deviceId')
-        if manager.config.get("drivers", {}).get("sensapex", {}).get("driverPath", None) is not None:
-            UMP.set_library_path(manager.config["drivers"]["sensapex"]["driverPath"])
         address = config.pop('address', None)
         group = config.pop('group', None)
         self._pollInterval = config.get('pollInterval', 1)
