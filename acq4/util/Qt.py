@@ -37,7 +37,7 @@ import pyqtgraph as pg
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions
-for mod in [pg.Qt, pg.Qt.QtGui, pg.Qt.QtCore, pg.Qt.QtTest]:
+for mod in [pg.Qt, pg.Qt.QtGui, pg.Qt.QtCore, pg.Qt.QtTest, pg.Qt.QtWidgets]:
     ns = mod.__dict__.copy()
     # don't copy special variables like __name__, __file__, etc.
     for k in list(ns.keys()):
