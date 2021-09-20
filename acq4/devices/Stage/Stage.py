@@ -24,6 +24,12 @@ class Stage(Device, OptomechDevice):
 
     where *baseTransform* is defined in the configuration for the device, and *stageTransform* is
     defined by the hardware.
+
+    Additional config options::
+
+        isManipulator : bool
+            Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
+            as a stage.
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
@@ -41,6 +47,7 @@ class Stage(Device, OptomechDevice):
 
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
+        self.isManipulator = config.get("isManipulator", False)
 
         self.config = config
         self.lock = Mutex(Qt.QMutex.Recursive)
@@ -678,7 +685,7 @@ class MovePathFuture(MoveFuture):
 
 
 class StageInterface(Qt.QWidget):
-    def __init__(self, dev, win):
+    def __init__(self, dev: Stage, win):
         Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
@@ -697,7 +704,10 @@ class StageInterface(Qt.QWidget):
 
         self.globalLabel = Qt.QLabel('global')
         self.positionLabelLayout.addWidget(self.globalLabel, 0, 1)
-        self.stageLabel = Qt.QLabel('stage')
+        if dev.isManipulator:
+            self.stageLabel = Qt.QLabel('manipulator')
+        else:
+            self.stageLabel = Qt.QLabel('stage')
         self.positionLabelLayout.addWidget(self.stageLabel, 0, 2)
 
         cap = dev.capabilities()
@@ -738,7 +748,7 @@ class StageInterface(Qt.QWidget):
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
         self.setHomeBtn.clicked.connect(self.setHomeClicked)
 
-        self.calibrateBtn = Qt.QPushButton('Calibrate')
+        self.calibrateBtn = Qt.QPushButton('Calibrate Axes')
         self.btnLayout.addWidget(self.calibrateBtn, 0, 2)
         self.calibrateBtn.clicked.connect(self.calibrateClicked)
 
