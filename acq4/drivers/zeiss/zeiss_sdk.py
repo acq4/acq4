@@ -23,6 +23,7 @@ import clr
 
 from acq4.util.debug import printExc
 
+# DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.17.0.15\MTB Api\MTBApi.dll"
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
 
@@ -99,6 +100,9 @@ class ZeissMtbSdk(object):
     def getTLLamp(self):
         return self.getComponentByID(ZeissMtbLamp, "MTBTLHalogenLamp")
 
+    def getObjectiveChanger(self):
+        return self.getComponentByID(ZeissMtbObjectiveChanger, "MTBObjectiveChanger")
+
     def getRLLamp(self):
         return self.getComponentByID(ZeissMtbLamp, "MTBRLHalogenLamp")
 
@@ -110,12 +114,15 @@ class ZeissMtbSdk(object):
 
     def getComponentByID(self, deviceClass, componentID):
         if componentID not in self._componentsByID:
-            self._componentsByID[componentID] = deviceClass(self, self.m_MTBRoot.GetComponent(componentID))
+            component = self.m_MTBRoot.GetComponent(componentID)
+            assert component is not None, f"No Zeiss component found with ID {componentID}. Components available: {self.getAllComponentsByDevice()}"
+            self._componentsByID[componentID] = deviceClass(self, component)
         return self._componentsByID[componentID]
 
 
 class ZeissMtbComponent(object):
     def __init__(self, sdk, component):
+        assert component is not None
         self._zeiss = sdk
         self._component = component
 
@@ -307,39 +314,29 @@ class ZeissMtbShutter(ZeissMtbChanger):
         return MTB.Api.MTBChangerPositionSettledHandler(wrappedHandler)
 
 
+class ZeissMtbObjectiveChanger(ZeissMtbChanger):
+    def __init__(self, root, component):
+        ZeissMtbChanger.__init__(self, root, component)
+
+    # def magnification(self):
+    #     return self.m_objective.magnification
+    #
+    # def aperture(self):
+    #     return self.m_objective.aperture
+    #
+    # def contrastMethod(self):
+    #     return self.m_objective.contrastMethod
+    #
+    # def features(self):
+    #     return self.m_objective.features
+    #
+    # def workingDistance(self):
+    #     return self.m_objective.workingDistance
+
+
 # Unfinished below this line
 
 
 class ZeissMtbFocus:
     def __init__(self, root):
         self.m_component = root.GetComponent("MTBFocus")
-
-
-class ZeissMtbObjective(ZeissMtbChanger):
-    def __init__(self, root, mtbId):
-        self.m_MTBRoot = root
-        self.m_objective = root.GetComponent("IMTBObjective")
-        self.m_ID = mtbId
-        ZeissMtbChanger.__init__(self, root, mtbId, "MTBObjectiveChanger")
-        self.registerEvents(self.onObjectivePositionChanged, self.onObjectivePositionSettled)
-
-    def onObjectivePositionChanged(self, position):
-        print(" Objective position changed to " + position)
-
-    def onObjectivePositionSettled(self, position):
-        print(" Objective position settled to " + position)
-
-    def magnification(self):
-        return self.m_objective.magnification
-
-    def aperture(self):
-        return self.m_objective.aperture
-
-    def contrastMethod(self):
-        return self.m_objective.contrastMethod
-
-    def features(self):
-        return self.m_objective.features
-
-    def workingDistance(self):
-        return self.m_objective.workingDistance

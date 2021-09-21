@@ -18,9 +18,9 @@ import acq4.util.ptime as ptime
 
 
 if sys.argv[-1] == "mock":
-    from .mock import NIDAQ as n
+    from acq4.drivers.nidaq.mock import NIDAQ as n
 else:
-    from .nidaq import NIDAQ as n
+    from acq4.drivers.nidaq.nidaq import NIDAQ as n
 
 
 print("Assert num devs > 0:")

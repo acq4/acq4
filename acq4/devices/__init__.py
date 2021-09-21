@@ -21,7 +21,11 @@ def getDeviceClass(name):
             import_module('acq4.devices.' + name)
             devClasses = getDeviceClasses()
         except ImportError as exc:
-            print("Warning: error importing device class %s: %s" % (name, str(exc)))
+            try:
+                import_module(name)
+                devClasses = getDeviceClasses()
+            except ImportError as exc:
+                print("Warning: error importing device class %s: %s" % (name, str(exc)))
 
     try:
         clsName = name.split(".")[-1]

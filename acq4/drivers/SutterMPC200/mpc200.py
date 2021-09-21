@@ -107,9 +107,10 @@ class SutterMPC200(SerialDevice):
     @threadsafe
     def setDrive(self, drive):
         """Set the current drive (1-4)"""
-        cmd = b'I' + chr(drive)
+        cmd = 'I' + chr(drive)
+        cmd = cmd.encode('utf8')  # turn into bytes
         self.write(cmd)
-        ret = self.read(2, term='\r')
+        ret = self.read(2, term=b'\r')
         if ord(ret) == drive:
             return
         else:
@@ -122,21 +123,21 @@ class SutterMPC200(SerialDevice):
             (N, [d1, d2, d3, d4])
         """
         self.write('U')
-        packet = self.read(length=6, term='\r')
+        packet = self.read(length=6, term=b'\r')
         res = struct.unpack('<BBBBB', packet)
         return res[0], res[1:]
 
     @threadsafe
     def getActiveDrive(self):
         self.write('K')
-        packet = self.read(4, term='\r')
-        return struct.unpack('<B', packet[0])[0]
+        packet = self.read(4, term=b'\r')
+        return struct.unpack('<BBB', packet)[0]  # unpack whole packet then take the first argument
     
     @threadsafe
     def getFirmwareVersion(self):
         self.write('K')
-        packet = self.read(4, term='\r')
-        return struct.unpack('<BB', packet[1:])
+        packet = self.read(4, term=b'\r')
+        return struct.unpack('<BB', packet[1:])  # get all but the first value
 
     @threadsafe
     def getPos(self, drive=None, scaled=True):
@@ -155,11 +156,11 @@ class SutterMPC200(SerialDevice):
         ## request position
         self.write('C')
         try:
-            packet = self.read(length=14, timeout=2.0, term='\r')
+            packet = self.read(length=14, timeout=2.0, term=b'\r')
         except DataError as err:
             packet = err.data
             # If interrupt occurred, there will be an extra 'I' byte at the beginning
-            if packet[0] == 'I' and err.extra == '\r':
+            if packet[0] == 'I' and err.extra == b'\r':
                 packet = packet[1:]
             else:
                 raise err
@@ -255,7 +256,7 @@ class SutterMPC200(SerialDevice):
         # wait for move to complete
         try:
             self._moving = True
-            self.read(1, term='\r', timeout=timeout)
+            self.read(1, term=b'\r', timeout=timeout)
         except DataError:
             # If the move is interrupted, sometimes we get junk on the serial line.
             time.sleep(0.03)
@@ -320,7 +321,7 @@ class SutterMPC200(SerialDevice):
         if self.lock.acquire(blocking=False):
             try:
                 self.write('\3')
-                self.read(1, term='\r')
+                self.read(1, term=b'\r')
             finally:
                 self.lock.release()
 

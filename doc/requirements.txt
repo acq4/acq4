@@ -1,0 +1,12 @@
+h5py
+numpy
+numpydoc==1.1.0
+Pillow
+pyparsing
+PyQt5==5.12.3
+pyqtgraph
+pyserial
+scipy
+six
+Sphinx==4.1.2
+sphinx-rtd-theme==0.5.2

@@ -9,7 +9,7 @@ from acq4.util import Qt
 class ParamList(Qt.QTreeWidget):
     def __init__(self, *args):
         Qt.QTreeWidget.__init__(self, *args)
-        self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
+        self.header().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
         self.setAnimated(False)
 
     checkStateMap = {

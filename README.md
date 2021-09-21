@@ -3,84 +3,31 @@ ACQ4
 
 Neurophysiology acquisition and analysis for Python
 
-<http://www.acq4.org>
-
 ACQ4 is a platform for data acquisition, management, and analysis in neurophysiology
 experiments, especially focusing on patch clamp electrophysiology, optogenetics, 
 and related techniques. It is used both as a platform for developing customized
 data acquisition tools and as an application that handles the most common
 requirements in whole-cell recording, calcium imaging, and photostimulation.
 
+ACQ4 is developed with support from the [Allen Institute for Brain Science](alleninstitute.org), [Sensapex Oy](sensapex.com), the [University of North Carolina at Chapel Hill](unc.edu), and many other users around the world.
 
-Requirements
-------------
+Features
+--------
 
-  * python 3.7
-  * PyQt 5+
-  * numpy, scipy
-  * six
-  * h5py
-  * optional:
-      * pyopengl
-      * pyserial
-      * pyparsing 2.0.3  (later versions do not work)
-      * pillow
-
-
-Documentation
--------------
-
-http://www.acq4.org/documentation
+- Semi- and fully-automated patch clamp electrophysiology
+   - Automated manipulator control--place your pipette tip anywhere you can click
+   - Pipette cleaning / reuse
+   - Resistance-based autopatch
+   - Multipatch
+- Photostimulation mapping
+- Fluorescent indicator imaging
+- 2-photon imaging
 
 
-Support
--------
+Questions?
+----------
 
-Post at the [mailing list / forum](https://groups.google.com/forum/?fromgroups#!forum/acq4)
+* Reach out on our [new discussion board](https://github.com/acq4/acq4/discussions) or browse our [old mailing list](https://groups.google.com/forum/?fromgroups#!forum/acq4).
+* Read our [documentation](https://acq4.readthedocs.io/en/latest/)
+* ..or skip straight to [installation](https://acq4.readthedocs.io/en/latest/userGuide/installation.html)
 
-
-Installation
-------------
-
-The easiest way to get all of the requirements is by installing the Anaconda
-python distribution plus a few extra packages. 
-
-1. Download and install [Anaconda](https://www.anaconda.com/download/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-
-2. Create a conda environment for acq4 (windows users must do this from the anaconda prompt):
-
-    ```bash
-    conda create --name=acq4 python=3.7 pyqt=5 numpy scipy pyserial pyparsing pillow h5py
-    conda activate acq4
-    ```
-
-3. Add latest version of pyqtgraph:
-
-    ```bash
-    pip install git+https://github.com/pyqtgraph/pyqtgraph@master#egg=pyqtgraph
-    ```
-
-4. Clone the ACQ4 source repository (this requires [git](https://git-scm.com/downloads) to be installed):
-
-    ```bash
-    git clone https://github.com/acq4/acq4.git
-    ```
-
-5. Install acq4 into your new conda environment:
-
-    ```bash
-    cd acq4
-    python setup.py develop
-    ```
-
-Starting ACQ4
--------------
-
-Activate your acq4 conda environment, then start acq4:
-
-```bash
-conda activate acq4
-python -m acq4
-```
-
-This should load the main manager window, from which you can interact with some devices and load modules. 

@@ -355,9 +355,8 @@ class Stage(Device, OptomechDevice):
         speed that was defined by the last call to setSpeed().
 
         If *linear* is True, then the movement is required to be in a straight line. By default,
-        this argument is True because nonlinear movements can cause unexpected collisions. In some
-        cases, however, using linear=False can allow the manipulator to move more quickly
-        (this is hardware dependent).
+        this argument is False, which means movement on each axis is conducted independently (the axis
+        order depends on hardware).
         
         If *progress* is True, then display a progress bar until the move is complete.
 
@@ -384,7 +383,7 @@ class Stage(Device, OptomechDevice):
 
         return mfut
         
-    def _move(self, abs, rel, speed, linear):
+    def _move(self, abs, rel, speed, linear, **kwds):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()

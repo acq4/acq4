@@ -753,7 +753,7 @@ class GetClamps():
             if len(sequence_values) > 0:
                 self.values.append(sequence_values[i])
             else:
-                self.values.append(cmd[len(cmd) / 2])
+                self.values.append(cmd[int(len(cmd) / 2)])
         if traces is None or len(traces) == 0:
             print("PatchEPhys/GetClamps: No data found in this run...")
             return None

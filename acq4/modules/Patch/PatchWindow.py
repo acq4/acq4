@@ -701,9 +701,9 @@ class PatchThread(Thread):
             iStep = iPulse.mean() - iBase.mean()
             
             if iStep >= 0:
-                vStep = np.max(1e-5, -fitAmp)
+                vStep = np.max((1e-5, -fitAmp))
             else:
-                vStep = np.min(-1e-5, -fitAmp)
+                vStep = np.min((-1e-5, -fitAmp))
             #sign = [-1, 1][iStep >= 0]
             #vStep = sign * max(1e-5, sign * (vPulseEnd.mean() - vBase.mean()))
             #vStep = sign * max(1e-5, sign * fitAmp)

@@ -1063,7 +1063,7 @@ class IVCurve(AnalysisModule):
         dt = self.Clamps.sample_interval
         rgnindx = [int((rgnpk[1]-0.005)/dt), int((rgnpk[1])/dt)]
         rmps = self.ivbaseline
-        vmeans = np.mean(self.Clamps.traces[:, rgnindx[0]:rgnindx[1]], axis=1) - self.ivbaseline
+        vmeans = np.mean(self.Clamps.traces[:, rgnindx[0]:rgnindx[1]].view(np.ndarray), axis=1) - self.ivbaseline
         indxs = np.where(np.logical_and((vrange[0]*1e-3 >= vmeans[ineg]), 
                          (vmeans[ineg] >= vrange[1]*1e-3)))
         indxs = list(indxs[0])
