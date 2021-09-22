@@ -421,14 +421,17 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             if initialResistance is None:
                 # take note of initial resistance
                 initialResistance = ssr
+                self.setState(f"cell detection: got initial resistance {ssr}")
 
             # check for pipette break
+            self.setState("cell detection: check for pipette break")
             if ssr < initialResistance + config['breakThreshold']:
                 self._taskDone(interrupted=True, error="Pipette broken")
                 patchrec['detectedCell'] = False
                 return 'broken'
 
             # fast cell detection
+            self.setState("cell detection: check for cell proximity")
             if ssr > initialResistance + config['fastDetectionThreshold']:
                 self.setState("cell detected (fast criteria)")
                 self._taskDone()
@@ -447,6 +450,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             self._checkStop()
 
             if config['autoAdvance']:
+                self.setState("cell detection: advance pipette")
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self.contAdvanceFuture is None:
@@ -634,7 +638,7 @@ class PatchPipetteSealState(PatchPipetteState):
         'nSlopeSamples': 5,
         'autoSealTimeout': 30.0,
         'maxVacuum': -3e3, #changed from -7e3
-        'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)], #initially 1e6,150e6,None
+        'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)],
         'delayBeforePressure': 0.0,
         'delayAfterSeal': 5.0,
         'afterSealPressure': -1000,
