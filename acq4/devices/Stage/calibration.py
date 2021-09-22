@@ -354,7 +354,7 @@ class StageCalibration(object):
         # decide whether to move the stage
         finished = self.index >= self.positions.shape[0]
         if not finished:
-            self.move = self.stage.moveTo(self.positions[self.index], "slow")
+            self.move = self.stage.move(self.positions[self.index], "slow")
 
         # calculate offset (while stage moves no next location)
         if index == 0:
