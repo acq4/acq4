@@ -277,6 +277,8 @@ class PatchPipette(Device):
         self.emitNewEvent('pipette_transform_changed', {'globalPosition': pos})
 
     def setActive(self, active):
+        if self.active == active:
+            return
         self.active = active
         self.sigActiveChanged.emit(self, active)
         self.emitNewEvent('active_changed', {'active': active})
