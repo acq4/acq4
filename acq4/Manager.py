@@ -520,7 +520,7 @@ class Manager(Qt.QObject):
         ## Find an unused name for this module
         baseName = name
         n = 0
-        while name in self.modules:
+        while name in self.listInterfaces().get("module", []):
             name = "%s_%d" % (baseName, n)
             n += 1
 
