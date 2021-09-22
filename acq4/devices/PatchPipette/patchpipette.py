@@ -227,11 +227,13 @@ class PatchPipette(Device):
         * increase suction if seal does not form
         """
 
-    def setState(self, state):
+    def setState(self, state, setActive=True):
         """Attempt to set the state (out, bath, seal, whole cell, etc.) of this patch pipette.
 
         The actual resulting state is returned.
         """
+        if setActive:
+            self.setActive(True)
         return self._stateManager.requestStateChange(state)
 
     def listStates(self):
