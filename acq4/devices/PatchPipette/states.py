@@ -62,10 +62,12 @@ class PatchPipetteState(Future):
             # set up test pulse monitoring
             self.testPulseResults = queue.Queue()
             
-            if self.run is not None and self.dev.active:
-                # start background thread if the device is "active" and the subclass has a run() method 
-                self._thread = threading.Thread(target=self._runJob)
-                self._thread.start()
+            if self.run is not None:
+                if self.dev.active:
+                    self._thread = threading.Thread(target=self._runJob)
+                    self._thread.start()
+                else:
+                    self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
             else:
                 # otherwise, just mark the task complete
                 self._taskDone(interrupted=False, error=None)
@@ -159,7 +161,8 @@ class PatchPipetteState(Future):
             # run must be reimplemented in subclass and call self._checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
-        except self.StopRequested:
+        except self.StopRequested as exc:
+            error = str(exc)
             # state was stopped early by calling stop()
             interrupted = True
         except Exception as exc:
@@ -179,7 +182,7 @@ class PatchPipetteState(Future):
     def _checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
-            raise self.StopRequested()
+            raise self.StopRequested("Stop state because device is not 'active'")
         Future._checkStop(self, delay)
 
     def __repr__(self):
