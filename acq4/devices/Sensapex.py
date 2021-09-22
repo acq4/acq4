@@ -43,7 +43,7 @@ class Sensapex(Stage):
         # note: n_axes is used in cases where the device is not capable of answering this on its own
         if "nAxes" in config:
             self.dev.set_n_axes(config["nAxes"])
-        if "maxAcceeration" in config:
+        if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self.dev.add_callback(self._positionChanged)
@@ -155,9 +155,8 @@ class Sensapex(Stage):
             UMP.get_ump().poller.stop()
         Stage.quit(self)
 
-    def _move(self, abs, rel, speed, linear):
+    def _move(self, pos, speed, linear):
         with self.lock:
-            pos = self._toAbsolutePosition(abs, rel)
             speed = self._interpretSpeed(speed)
             self._lastMove = SensapexMoveFuture(self, pos, speed, linear)
             return self._lastMove

@@ -58,6 +58,8 @@ class Stage(Device, OptomechDevice):
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
 
         self._limits = [(None, None)] * nAxes
+        if 'limits' in config:
+            self.setLimits(**config['limits'])
 
         self._progressDialog = None
         self._progressTimer = Qt.QTimer()
@@ -340,16 +342,12 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, abs=None, rel=None, globalPos=None, speed=None, progress=False, linear=False, **kwds):
+    def move(self, position, speed=None, progress=False, linear=False, **kwds):
         """Move the device to a new position.
         
-        Position may be specified using one of three arguments:
+        *position* specifies the absolute position in the stage coordinate system (as defined by the device)
 
-        * *abs* specifies the absolute position in the stage coordinate system (as defined by the device)
-        * *rel* specifies a relative step in the stage coordinate system (as defined by the device)
-        * *globalPos* specifies the position (in meters) in the global coordinate system
-
-        Optionally, *abs* or *rel* values may be None to indicate no movement along that axis.
+        Optionally, *position* values may be None to indicate no movement along that axis.
         
         If the *speed* argument is given, it temporarily overrides the default
         speed that was defined by the last call to setSpeed().
@@ -365,16 +363,9 @@ class Stage(Device, OptomechDevice):
         """
         if speed is None:
             speed = self._defaultSpeed
-        if speed is None:
-            raise TypeError("Must specify speed or set default speed before moving.")
-        if abs is None and rel is None and globalPos is None:
-            raise TypeError("Must specify one of abs, rel, or globalPos arguments.")
+        self.checkMove(position, speed=speed, progress=progress, linear=linear, **kwds)
 
-        if globalPos is not None:
-            localPos = self.mapFromGlobal(globalPos)
-            abs = self._solveStageTransform(localPos)
-
-        mfut = self._move(abs, rel, speed, linear=linear, **kwds)
+        mfut = self._move(position, speed=speed, linear=linear, **kwds)
 
         if progress:
             self._progressDialog = Qt.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
@@ -382,28 +373,34 @@ class Stage(Device, OptomechDevice):
             self._progressTimer.start(100)
 
         return mfut
-        
-    def _move(self, abs, rel, speed, linear, **kwds):
+
+    def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
+        """Raise an exception if arguments are invalid for move()
+        """
+        assert position is not None
+        speed = speed or self._defaultSpeed
+        speed = self._interpretSpeed(speed)
+        if speed is None:
+            raise ValueError("Must specify speed or set default speed before moving.")
+        if speed <= 0:
+            raise ValueError("Speed must be greater than 0")
+        if len(self.axes()) != len(position):
+            raise ValueError(f"Position {position} should have length {len(self.axes())}")
+        self.checkLimits(position)
+
+    def _move(self, pos, speed, linear, **kwds):
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
-        
-    def moveBy(self, pos, speed, progress=False, linear=False):
-        """Move by the specified relative distance. See move() for more 
-        information.
-        """
-        return self.move(rel=pos, speed=speed, progress=progress, linear=linear)
 
-    def moveTo(self, pos, speed, progress=False, linear=False):
-        """Move to the specified absolute position. See move() for more 
-        information.
-        """
-        return self.move(abs=pos, speed=speed, progress=progress, linear=linear)
+    def mapGlobalToDevicePosition(self, pos):
+        localPos = self.mapFromGlobal(pos)
+        return self._solveStageTransform(localPos)
 
     def moveToGlobal(self, pos, speed, progress=False, linear=False):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        return self.move(globalPos=pos, speed=speed, progress=progress, linear=linear)
+        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear)
 
     def movePath(self, path):
         """Move the stage along a path with multiple waypoints.
@@ -413,23 +410,17 @@ class Stage(Device, OptomechDevice):
         """
         return MovePathFuture(self, path)
 
-    def _toAbsolutePosition(self, abs, rel):
-        """Helper function to convert absolute or relative position (possibly 
+    def _toAbsolutePosition(self, abs):
+        """Helper function to convert absolute position (possibly
         containing Nones) to an absolute position.
         """
-        if rel is None:
-            if any([x is None for x in abs]):
-                pos = self.getPosition()
-                for i,x in enumerate(abs):
-                    if x is not None:
-                        pos[i] = x
-            else:
-                pos = abs
-        else:
+        if any([x is None for x in abs]):
             pos = self.getPosition()
-            for i,x in enumerate(rel):
+            for i,x in enumerate(abs):
                 if x is not None:
-                    pos[i] += x
+                    pos[i] = x
+        else:
+            pos = abs
         return pos
 
     def setVelocity(self, vel):
@@ -462,8 +453,8 @@ class Stage(Device, OptomechDevice):
             if limit is None:
                 continue
             assert len(limit) == 2
-            if self.capabilities()['limits'][axis] is not True:
-                raise TypeError("Device does not support settings limits for axis %d." % axis)
+            if self.capabilities()['limits'][axis] is True:
+                self._setHardwareLimits(axis=axis, limit=limit)
             if tuple(self._limits[axis]) != tuple(limit):
                 changed.append(axis)
                 self._limits[axis] = tuple(limit)
@@ -475,6 +466,21 @@ class Stage(Device, OptomechDevice):
         """Return a list the (min, max) position limits for each axis.
         """
         return self._limits[:]
+
+    def _setHardwareLimits(self, axis:int, limit:tuple):
+        raise NotImplementedError("Must be implemented in subclass.")
+
+    def checkLimits(self, pos):
+        """Raise an exception if *pos* is outside the configured limits"""
+        for axis, limit in enumerate(self._limits):
+            ax_name = 'xyz'[axis]
+            x = pos[axis]
+            if x is None:
+                continue
+            if limit[0] is not None and x < limit[0]:
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis < {limit[0]}")
+            if limit[1] is not None and x > limit[1]:
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis > {limit[1]}")
 
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
@@ -610,7 +616,7 @@ class MoveFuture(object):
 
 
 class MovePathFuture(MoveFuture):
-    def __init__(self, dev, path):
+    def __init__(self, dev: Stage, path):
         MoveFuture.__init__(self, dev, None, None)
 
         self.path = path
@@ -619,6 +625,12 @@ class MovePathFuture(MoveFuture):
         self._wasInterrupted = False
         self._errorMessage = None
         self._stopped = False
+
+        for step in self.path:
+            if step.get("globalPos") is not None:
+                step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
+        for step in self.path:
+            self.dev.checkMove(**step)
 
         self._moveThread = threading.Thread(target=self._movePath)
         self._moveThread.start()

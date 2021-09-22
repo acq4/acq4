@@ -155,11 +155,10 @@ class Scientifica(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _move(self, abs, rel, speed, linear):
+    def _move(self, pos, speed, linear):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
-            pos = self._toAbsolutePosition(abs, rel)
             speed = self._interpretSpeed(speed)
 
             self._lastMove = ScientificaMoveFuture(self, pos, speed, self.userSpeed)

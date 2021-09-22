@@ -173,21 +173,14 @@ class MicroManagerStage(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _move(self, abs, rel, speed, linear):
+    def _move(self, pos, speed, linear):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
 
-            pos = self._toAbsolutePosition(abs, rel)
-
             # Decide which axes to move
-            moveXY = True
-            if abs is not None:
-                moveZ = abs[2] is not None
-                moveXY = abs[0] is not None and abs[1] is not None
-            else:
-                moveZ = rel[2] is not None
-                moveXY = rel[0] is not None and rel[1] is not None
+            moveZ = pos[2] is not None
+            moveXY = pos[0] is not None and pos[1] is not None
 
             speed = self._interpretSpeed(speed)
 
