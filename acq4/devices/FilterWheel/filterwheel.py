@@ -121,6 +121,8 @@ class FilterWheel(Device, OptomechDevice):
         If *position* is None, then return the currently active Filter."""
         if position is None:
             position = self.getPosition()
+            if position is None:
+                return None
         return self._filters[position]
 
     def getPositionCount(self):
