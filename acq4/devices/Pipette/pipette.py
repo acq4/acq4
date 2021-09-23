@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import weakref
+from typing import List
 
 import numpy as np
 import pyqtgraph as pg
@@ -19,6 +20,7 @@ from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
+from ..RecordingChamber import RecordingChamber
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -457,7 +459,7 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self.sigMoveFinished.emit(self, self.globalPosition())
 
-    def getRecordingChambers(self):
+    def getRecordingChambers(self) -> List[RecordingChamber]:
         """Return a list of RecordingChamber instances that are associated with this Pipette (see
         'recordingChambers' config option).
         """

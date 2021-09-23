@@ -1,6 +1,8 @@
 from __future__ import print_function
 import numpy as np
 from collections import OrderedDict
+
+from ..Camera import Camera
 from ..Device import Device
 from acq4.util import Qt
 from ...Manager import getManager
@@ -123,7 +125,7 @@ class PatchPipette(Device):
     def scopeDevice(self):
         return self.pipetteDevice.scopeDevice()
 
-    def imagingDevice(self):
+    def imagingDevice(self) -> Camera:
         return self.pipetteDevice.imagingDevice()
 
     def focusOnTip(self, speed):
