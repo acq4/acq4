@@ -184,8 +184,14 @@ class MultiClamp(PatchClamp):
         return self._paramCache[param]
 
     def setParam(self, param, value):
-        self._paramCache.pop(param, None)
-        return self.mc.setParam(param, value)
+        if self.config.get('enableParameterCache', False):
+            if param in self._paramCache and self._paramCache[param] == value:
+                return
+            self.mc.setParam(param, value)
+            self._paramCache.pop(param)
+            self.getParam(param)
+        else:
+            self.mc.setParam(param, value)
 
     def deviceInterface(self, win):
         return MCDeviceGui(self, win)
