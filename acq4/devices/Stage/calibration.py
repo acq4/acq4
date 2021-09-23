@@ -251,6 +251,19 @@ class CalibrationWindow(Qt.QWidget):
                 continue
             axisPoints[currentAxis].add(i - 1)
             axisPoints[currentAxis].add(i)
+
+        # Choose longest contiguous group of calibration points for each axis
+        for axis, pts in enumerate(axisPoints):
+            current_group = []
+            contig_groups = [current_group]
+            for p in sorted(pts):
+                if len(current_group) == 0 or current_group[-1] == p - 1:
+                    current_group.append(p)
+                else:
+                    current_group = [p]
+                    contig_groups.append(current_group)
+            idx_at_longest = np.argmax([len(g) for g in contig_groups])
+            axisPoints[axis] = contig_groups[idx_at_longest]
         return axisPoints
 
     @staticmethod
