@@ -185,6 +185,11 @@ class FilterWheel(Device, OptomechDevice):
             else:
                 dev.setBacklight(key, blue=0, red=0)
 
+    def _checkMoveFuture(self):
+        if self._lastFuture is None:
+            return
+        self._lastFuture.isDone()
+
     def isMoving(self):
         """Return the current position of the filter wheel.
         """
@@ -244,7 +249,7 @@ class FilterWheelFuture(object):
 
     def _atTarget(self):
         return self.dev.getPosition() == self.position
-    
+
     def isDone(self):
         """Return True if the move has completed or was interrupted.
         """
@@ -258,7 +263,7 @@ class FilterWheelFuture(object):
             return True
         else:
             self._wasInterrupted = True
-            self._error = "Filter wheel did not reach target"
+            self._error = f"Filter wheel did not reach target while moving to {self.position} (got to {self.dev.getPosition()})"
             return True
 
     def errorMessage(self):
@@ -290,6 +295,9 @@ class FilterWheelFuture(object):
                 raise RuntimeError("Timeout waiting for filter wheel change")
             else:
                 raise RuntimeError("Move did not complete: %s" % err)
+        if self.wasInterrupted():
+            err = self.errorMessage()
+            raise RuntimeError("Move was interrupted: %s" % err)
 
 
 class FilterWheelTask(DeviceTask):
