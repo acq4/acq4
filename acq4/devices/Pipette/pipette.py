@@ -64,6 +64,7 @@ class Pipette(Device, OptomechDevice):
       Default is 1 mm.
     * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 mm.
+    * recordingChambers: list of names of RecordingChamber devices that this Pipette is meant to work with.
     """
 
     sigTargetChanged = Qt.Signal(object, object)
@@ -456,6 +457,13 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self.sigMoveFinished.emit(self, self.globalPosition())
 
+    def getRecordingChambers(self):
+        """Return a list of RecordingChamber instances that are associated with this Pipette (see
+        'recordingChambers' config option).
+        """
+        man = getManager()
+        return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
+
 
 class PipetteCamModInterface(CameraModuleInterface):
     """Implements user interface for Pipette.
@@ -681,7 +689,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep)
 
     def aboveTargetClicked(self):
-        self.getDevice().goAboveTarget(self.selectedSpeed())        
+        self.getDevice().goAboveTarget(self.selectedSpeed())
 
 
 class Axis(pg.ROI):
