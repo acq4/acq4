@@ -250,7 +250,7 @@ class CameraWindow(Qt.QMainWindow):
         }
         Manager.getManager().writeConfigFile(uiState, self.stateFile)
 
-        for iface in self.interfaces.values():
+        for iface in list(self.interfaces.values()):
             iface.quit()
 
         self.module.quit(fromUi=True)
