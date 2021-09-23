@@ -31,6 +31,10 @@ class MultiClamp(PatchClamp):
         self.devRackGui = None
         self.mc = None
 
+        # Cache MC parameters because they are very expensive to retrieve
+        # (especially with multiple channels)
+        self._paramCache = {}
+
         self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
         self.lastState = {}
         self.lastMode = None
@@ -133,6 +137,7 @@ class MultiClamp(PatchClamp):
     def mcUpdate(self, state=None, mode=None):
         """MC state (or internal holding state) has changed, handle the update."""
         with self.stateLock:
+            self._paramCache = {}  # not sure if this is necessary or helpful
             if state is None:
                 state = self.lastState[mode]
             mode = state['mode']
@@ -172,9 +177,14 @@ class MultiClamp(PatchClamp):
         return self.mc.getState()
 
     def getParam(self, param):
-        return self.mc.getParam(param)
+        if param not in self._paramCache:
+            val = self.mc.getParam(param)
+            if self.config.get('enableParameterCache', False):
+                self._paramCache[param] = val
+        return self._paramCache[param]
 
     def setParam(self, param, value):
+        self._paramCache.pop(param, None)
         return self.mc.setParam(param, value)
 
     def deviceInterface(self, win):
