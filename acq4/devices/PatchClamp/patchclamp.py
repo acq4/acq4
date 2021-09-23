@@ -74,7 +74,7 @@ class PatchClamp(Device):
         """
         raise NotImplementedError()
 
-    def getDAQName(self):
+    def getDAQName(self, channel):
         """Return the name of the DAQ device that performs digitization for this amplifier channel.
         """
         raise NotImplementedError()

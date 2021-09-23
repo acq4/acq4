@@ -21,7 +21,7 @@ class MultiClampTaskGui(TaskGui):
     
     def __init__(self, dev, taskRunner):
         TaskGui.__init__(self, dev, taskRunner)
-        daqDev = self.dev.getDAQName()
+        daqDev = self.dev.getDAQName("primary")
         self.daqUI = self.taskRunner.getDevice(daqDev)
         
         self.traces = {}  ## Stores traces from a sequence to allow average plotting

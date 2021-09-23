@@ -244,7 +244,7 @@ class MultiClamp(PatchClamp):
                 return
             
             holding = self.holding[mode]
-            daq = self.config['commandChannel']['device']
+            daq = self.getDAQName('command')
             chan = self.config['commandChannel']['channel']
             daqDev = self.dm.getDevice(daq)
             s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
@@ -304,9 +304,9 @@ class MultiClamp(PatchClamp):
             # MC requires 200-400 ms to mode switch; don't allow anyone else to access during that time.
             time.sleep(0.5)
 
-    def getDAQName(self):
+    def getDAQName(self, channel):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
-        return self.config['commandChannel']['device']
+        return self.config[channel + 'Channel']['device']
 
 
 class MultiClampTask(DeviceTask):
@@ -355,7 +355,7 @@ class MultiClampTask(DeviceTask):
 
     def getConfigOrder(self):
         """return lists of devices that should be configured (before, after) this device"""
-        return ([], [self.dev.getDAQName()])
+        return ([], [self.dev.getDAQName("primary")])
 
     def configure(self):
         """Sets the state of a remote multiclamp to prepare for a program run."""
