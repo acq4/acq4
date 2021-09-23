@@ -24,6 +24,7 @@ class Sensapex(Stage):
         self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
         self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.pop("maxError", 1e-6)
+        self._force_linear_movement = config.get("forceLinearMovement", False)
 
         address = config.pop("address", None)
         address = None if address is None else address.encode()
@@ -158,7 +159,7 @@ class Sensapex(Stage):
     def _move(self, pos, speed, linear):
         with self.lock:
             speed = self._interpretSpeed(speed)
-            self._lastMove = SensapexMoveFuture(self, pos, speed, linear)
+            self._lastMove = SensapexMoveFuture(self, pos, speed, self._force_linear_movement or linear)
             return self._lastMove
 
     def deviceInterface(self, win):
