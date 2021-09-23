@@ -1088,7 +1088,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         # first move back in x and up in z, leaving y unchanged
         approachPos1 = [pos[0], currentPos[1], pos[2] + self.config['approachHeight']]
         fut = dev.pipetteDevice._moveToGlobal(approachPos1, 'fast')
-        self.waitFor(fut)
+        self.waitFor(fut, timeout=30)
         if self.resetPos is None:
             self.resetPos = approachPos1
 
