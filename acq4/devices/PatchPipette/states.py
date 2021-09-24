@@ -5,6 +5,8 @@ import numpy as np
 import scipy.stats
 from six.moves import range, queue
 from pyqtgraph import ptime, disconnect
+
+from acq4 import getManager
 from acq4.util.future import Future
 from collections import deque
 from acq4.util.debug import printExc
@@ -390,14 +392,27 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         'slowDetectionThreshold': 0.2e6,
         'slowDetectionSteps': 3,
         'breakThreshold': -1e6,
+        'reserveDAQ': False,
+        'cellDetectTimeout': 30,
+        'DAQReservationTimeout': 30,
     }
 
     def run(self):
+        if self.config["reserveDAQ"]:
+            daq_name = self.dev.clampDevice.getDAQName("primary")
+            self.setState(f"cell detect: waiting for {daq_name} lock")
+            with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
+                self.setState(f"cell detect: {daq_name} lock acquired")
+                return self._do_cell_detect()
+        else:
+            return self._do_cell_detect()
 
-        self.monitorTestPulse()
-
+    def _do_cell_detect(self):
+        startTime = ptime.time()
         config = self.config
         dev = self.dev
+        self.monitorTestPulse()
+
         dev.clampDevice.autoPipetteOffset()
 
         patchrec = dev.patchRecord()
@@ -408,6 +423,9 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         patchrec['cellDetectInitialTarget'] = tuple(dev.pipetteDevice.targetPosition())
 
         while True:
+            if config['cellDetectTimeout'] is not None and ptime.time() - startTime > config['cellDetectTimeout']:
+                self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
+
             self._checkStop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
@@ -454,8 +472,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self.contAdvanceFuture is None:
-                        print(initialPosition)
-                        print(self.getSearchEndpoint())
                         self.startContinuousMove()
                     if self.contAdvanceFuture.isDone():
                         self.contAdvanceFuture.wait()  # check for move errors
