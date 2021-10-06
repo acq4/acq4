@@ -100,7 +100,7 @@ class Stage(Device, OptomechDevice):
     def quit(self):
         self.stop()
 
-    def axes(self):
+    def axes(self) -> Tuple[str]:
         """Return a tuple of axis names implemented by this device, like ('x', 'y', 'z').
 
         The axes described in the above data structure correspond to the mechanical
@@ -279,16 +279,15 @@ class Stage(Device, OptomechDevice):
         """Return the position of the stage as reported by the controller.
 
         If refresh==False, the last known position is returned. Otherwise, the
-        current position is requested from the controller. If request is True,
+        current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
         """
         if self._lastPos is None:
             refresh = True
-        if not refresh:
-            with self.lock:
-                return self._lastPos[:]
-        else:
+        if refresh:
             return self._getPosition()
+        with self.lock:
+            return self._lastPos[:]
 
     def globalPosition(self):
         """Return the position of the local coordinate system origin relative to 
