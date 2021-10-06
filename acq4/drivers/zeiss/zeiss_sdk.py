@@ -87,12 +87,16 @@ class ZeissMtbSdk(object):
 
     def getDevices(self):
         count = self.m_MTBRoot.GetDeviceCount()
-        return [self.m_MTBRoot.GetDevice(i) for i in range(0, count)]
+        return [self.m_MTBRoot.GetDevice(i) for i in range(count)]
 
     def getAllComponentsByDevice(self):
         return {
-            device: [device.GetComponentFullConfig(i) for i in range(0, device.GetComponentCount())]
-            for device in self.getDevices()}
+            device: [
+                device.GetComponentFullConfig(i)
+                for i in range(device.GetComponentCount())
+            ]
+            for device in self.getDevices()
+        }
 
     def getReflectorChanger(self):
         return self.getComponentByID(ZeissMtbReflectorChanger, "MTBReflectorChanger")
