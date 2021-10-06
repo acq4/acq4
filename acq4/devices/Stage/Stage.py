@@ -2,6 +2,8 @@
 from __future__ import division, print_function
 
 import threading
+from typing import Tuple
+
 import time
 
 from acq4.util import Qt, ptime
@@ -12,6 +14,8 @@ from .calibration import CalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from six.moves import range
+
+from ... import getManager
 
 
 class Stage(Device, OptomechDevice):
@@ -454,6 +458,20 @@ class Stage(Device, OptomechDevice):
         self._progressDialog.setValue(done)
         if done == 100:
             self._progressTimer.stop()
+
+    def getPreferredImagingDevice(self):
+        manager = getManager()
+        camName = self.config.get("imagingDevice", None)
+        if camName is None:
+            cams = manager.listInterfaces("camera")
+            if len(cams) == 1:
+                camName = cams[0]
+            else:
+                raise Exception(
+                    f"Could not determine preferred camera (found {len(cams)}). Set 'imagingDevice' key in stage "
+                    f"configuration to specify."
+                )
+        return manager.getDevice(camName)
 
     def setLimits(self, x=None, y=None, z=None):
         """Set the (min, max) position limits to enforce for each axis.
