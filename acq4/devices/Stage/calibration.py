@@ -250,19 +250,19 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.transform = pg.Transform3D(m)
 
         # measure and display errors for each point
-        def mapPoint(axisTr, stagePos, localPos):
+        def mapPoint(axisTr, _stage_pos, localPos):
             # given a stage position and axis transform, map from localPos to parent coordinate system
             if isinstance(axisTr, np.ndarray):
-                m = np.eye(4)
-                m[:3] = axisTr.reshape(3, 4)
-                axisTr = pg.Transform3D(m)
-            st = self.dev._makeStageTransform(stagePos, axisTr)[0]
+                ident = np.eye(4)
+                ident[:3] = axisTr.reshape(3, 4)
+                axisTr = pg.Transform3D(ident)
+            st = self.dev._makeStageTransform(_stage_pos, axisTr)[0]
             tr = pg.Transform3D(self.dev.baseTransform() * st)
             return tr.map(localPos)
 
-        def mapError(axisTr, stagePos, parentPos):
+        def mapError(axisTr, _stage_pos, _parent_pos):
             # Goal is to map origin to parent position correctly
-            return [mapPoint(axisTr, sp, [0, 0, 0]) - pp for sp, pp in zip(stagePos, parentPos)]
+            return [mapPoint(axisTr, sp, [0, 0, 0]) - pp for sp, pp in zip(_stage_pos, _parent_pos)]
 
         error = mapError(self.transform, stagePos, parentPos)
         for i in range(len(self.calibration["points"])):
@@ -307,7 +307,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
 
     @staticmethod
     def _hasSufficientPoints(axisPoints):
-        return all([len(axisPoints[ax]) > 2 for ax in (0, 1, 2)])
+        return all(len(axisPoints[ax]) > 2 for ax in (0, 1, 2))
 
     def _clearCalibration(self):
         for i in range(len(self.calibration["points"])):
