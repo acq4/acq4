@@ -25,11 +25,20 @@ class StageAxesCalibrationWindow(Qt.QWidget):
         self.setLayout(self._layout)
         self.resize(600, 300)
 
+        self._viewDocsButton = Qt.QPushButton("View Documentation (manual only)")
+        self._layout.addWidget(self._viewDocsButton, 0, 0)
+        self._viewDocsButton.clicked.connect(self._viewDocsButtonClicked)
+
+    def _viewDocsButtonClicked(self, *args):
+        # TODO point this at the real docs once they're done
+        url = "https://docs.google.com/document/d/1YtrAK3Gk8FvSrXxcjEd6sm7wyTAhjw4u5NtMXHhta3k/edit?usp=sharing"
+        Qt.QDesktopServices.openUrl(Qt.QUrl(url))
+
+    def _eventual_todo_init(self):
         # TODO what belongs in this window?
         #   * current orientation, scale and angle of stage
         #   * link to documentation
         #   * text which should be pasted into the devices.cfg to save this calibration :bleh:
-        #   * "Auto detect" button (see code below)
         #   * "Save" button that puts transform in config/devices/Stage_config/transform
         #       * pop up instructions to remove manual transform if that is in the way
         #       * pop that up at config-read time, too, in case things are in conflict
