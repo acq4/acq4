@@ -23,6 +23,7 @@ import clr
 
 from acq4.util.debug import printExc
 
+# DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.17.0.15\MTB Api\MTBApi.dll"
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
 
@@ -113,12 +114,15 @@ class ZeissMtbSdk(object):
 
     def getComponentByID(self, deviceClass, componentID):
         if componentID not in self._componentsByID:
-            self._componentsByID[componentID] = deviceClass(self, self.m_MTBRoot.GetComponent(componentID))
+            component = self.m_MTBRoot.GetComponent(componentID)
+            assert component is not None, f"No Zeiss component found with ID {componentID}. Components available: {self.getAllComponentsByDevice()}"
+            self._componentsByID[componentID] = deviceClass(self, component)
         return self._componentsByID[componentID]
 
 
 class ZeissMtbComponent(object):
     def __init__(self, sdk, component):
+        assert component is not None
         self._zeiss = sdk
         self._component = component
 

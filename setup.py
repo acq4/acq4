@@ -180,22 +180,19 @@ setup(
     data_files=dataFiles,
     classifiers = [
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
-        "Development Status :: 4 - Beta",
-        "Environment :: Other Environment",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.7",
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-        "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Scientific/Engineering",
-        ],
+    ],
     install_requires = [
         'numpy',
         'scipy',
         'h5py',
         'pillow',
-        ],
+    ],
     scripts = scripts,
     **setupOpts
 )
