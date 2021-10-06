@@ -19,8 +19,9 @@ class Sensapex(Stage):
 
     devices = {}
 
-    def __init__(self, man, config, name):
+    def __init__(self, man, config: dict, name):
         self.devid = config.get("deviceId")
+        config.setdefault("isManipulator", self.devid < 20)
         self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
         self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.pop("maxError", 1e-6)
