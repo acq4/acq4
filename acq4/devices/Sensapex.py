@@ -7,7 +7,7 @@ from pyqtgraph import ptime, Transform3D, solve3DTransform
 
 from acq4.util import Qt
 from acq4.drivers.sensapex import UMP
-from .Stage import Stage, MoveFuture, CalibrationWindow
+from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
 class Sensapex(Stage):
@@ -366,7 +366,10 @@ class SensapexInterface(Qt.QWidget):
 
     def calibrateClicked(self):
         if self.calibrateWindow is None:
-            self.calibrateWindow = CalibrationWindow(self.dev)
+            if self.dev.isManipulator:
+                self.calibrateWindow = ManipulatorAxesCalibrationWindow(self.dev)
+            else:
+                self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
         self.calibrateWindow.show()
         self.calibrateWindow.raise_()
 

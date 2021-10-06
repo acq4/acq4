@@ -10,7 +10,7 @@ from acq4.util import Qt, ptime
 import numpy as np
 from acq4.util.Mutex import Mutex
 import pyqtgraph as pg
-from .calibration import CalibrationWindow
+from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from six.moves import range
@@ -818,7 +818,10 @@ class StageInterface(Qt.QWidget):
 
     def calibrateClicked(self):
         if self.calibrateWindow is None:
-            self.calibrateWindow = CalibrationWindow(self.dev)
+            if self.dev.isManipulator:
+                self.calibrateWindow = ManipulatorAxesCalibrationWindow(self.dev)
+            else:
+                self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
         self.calibrateWindow.show()
         self.calibrateWindow.raise_()
 
