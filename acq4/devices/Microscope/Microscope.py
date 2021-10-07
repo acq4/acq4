@@ -55,11 +55,11 @@ class Microscope(Device, OptomechDevice):
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
 
-        for k1, objs in config['objectives'].items():  ## Set default values for each objective
-            self.objectives[k1] = collections.OrderedDict()
-            for k2, o in objs.items():
-                obj = Objective(o, self, (k1, k2))
-                self.objectives[k1][k2] = obj
+        for slot_name, objs in config['objectives'].items():  ## Set default values for each objective
+            self.objectives[slot_name] = collections.OrderedDict()
+            for obj_name, o in objs.items():
+                obj = Objective(o, self, (slot_name, obj_name))
+                self.objectives[slot_name][obj_name] = obj
                 # obj.sigTransformChanged.connect(self.objectiveTransformChanged)
 
         ## Keep track of the objective currently in use for each position
@@ -339,24 +339,23 @@ class ScopeGUI(Qt.QWidget):
         self.switchN = len(self.objList)
         self.objWidgets = {}
         self.blockSpinChange = False
-        row = 1
-        for i in self.objList:
+        for row, obj in enumerate(self.objList, start=1):
             ## For each objective, create a set of widgets for selecting and updating.
             c = Qt.QComboBox()
-            r = Qt.QRadioButton(i)
+            r = Qt.QRadioButton(obj)
 
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
 
-            xs.index = ys.index = zs.index = ss.index = i  ## used to determine which row has changed
+            xs.index = ys.index = zs.index = ss.index = obj  ## used to determine which row has changed
             widgets = (r, c, xs, ys, zs, ss)
             for col, w in enumerate(widgets):
                 self.ui.objectiveLayout.addWidget(w, row, col)
-            self.objWidgets[i] = widgets
+            self.objWidgets[obj] = widgets
 
-            for o in self.objList[i].values():
+            for o in self.objList[obj].values():
                 c.addItem(o.name(), o)
                 o.sigTransformChanged.connect(self.updateSpins)
 
@@ -371,7 +370,6 @@ class ScopeGUI(Qt.QWidget):
             ys.sigValueChanged.connect(self.offsetSpinChanged)
             zs.sigValueChanged.connect(self.offsetSpinChanged)
             ss.sigValueChanged.connect(self.scaleSpinChanged)
-            row += 1
         self.updateSpins()
 
     def objectiveChanged(self, obj):

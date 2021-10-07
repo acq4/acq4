@@ -321,7 +321,6 @@ class MultiClampTaskGui(TaskGui):
         self.mode = mode
         
     def setSignals(self, pri, sec):
-        #print "setSignals", pri, sec
         for c, s in [(self.ui.primarySignalCombo, pri), (self.ui.secondarySignalCombo, sec)]:
             if s is None:
                 continue
