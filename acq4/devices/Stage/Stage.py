@@ -2,16 +2,20 @@
 from __future__ import division, print_function
 
 import threading
+from typing import Tuple
+
 import time
 
 from acq4.util import Qt, ptime
 import numpy as np
 from acq4.util.Mutex import Mutex
 import pyqtgraph as pg
-from .calibration import CalibrationWindow
+from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from six.moves import range
+
+from ... import getManager
 
 
 class Stage(Device, OptomechDevice):
@@ -24,6 +28,12 @@ class Stage(Device, OptomechDevice):
 
     where *baseTransform* is defined in the configuration for the device, and *stageTransform* is
     defined by the hardware.
+
+    Additional config options::
+
+        isManipulator : bool
+            Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
+            as a stage.
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
@@ -41,6 +51,7 @@ class Stage(Device, OptomechDevice):
 
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
+        self.isManipulator = config.get("isManipulator", False)
 
         self.config = config
         self.lock = Mutex(Qt.QMutex.Recursive)
@@ -93,7 +104,7 @@ class Stage(Device, OptomechDevice):
     def quit(self):
         self.stop()
 
-    def axes(self):
+    def axes(self) -> Tuple[str]:
         """Return a tuple of axis names implemented by this device, like ('x', 'y', 'z').
 
         The axes described in the above data structure correspond to the mechanical
@@ -272,16 +283,15 @@ class Stage(Device, OptomechDevice):
         """Return the position of the stage as reported by the controller.
 
         If refresh==False, the last known position is returned. Otherwise, the
-        current position is requested from the controller. If request is True,
+        current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
         """
         if self._lastPos is None:
             refresh = True
-        if not refresh:
-            with self.lock:
-                return self._lastPos[:]
-        else:
+        if refresh:
             return self._getPosition()
+        with self.lock:
+            return self._lastPos[:]
 
     def globalPosition(self):
         """Return the position of the local coordinate system origin relative to 
@@ -448,6 +458,20 @@ class Stage(Device, OptomechDevice):
         self._progressDialog.setValue(done)
         if done == 100:
             self._progressTimer.stop()
+
+    def getPreferredImagingDevice(self):
+        manager = getManager()
+        camName = self.config.get("imagingDevice", None)
+        if camName is None:
+            cams = manager.listInterfaces("camera")
+            if len(cams) == 1:
+                camName = cams[0]
+            else:
+                raise Exception(
+                    f"Could not determine preferred camera (found {len(cams)}). Set 'imagingDevice' key in stage "
+                    f"configuration to specify."
+                )
+        return manager.getDevice(camName)
 
     def setLimits(self, x=None, y=None, z=None):
         """Set the (min, max) position limits to enforce for each axis.
@@ -678,7 +702,7 @@ class MovePathFuture(MoveFuture):
 
 
 class StageInterface(Qt.QWidget):
-    def __init__(self, dev, win):
+    def __init__(self, dev: Stage, win):
         Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
@@ -697,7 +721,10 @@ class StageInterface(Qt.QWidget):
 
         self.globalLabel = Qt.QLabel('global')
         self.positionLabelLayout.addWidget(self.globalLabel, 0, 1)
-        self.stageLabel = Qt.QLabel('stage')
+        if dev.isManipulator:
+            self.stageLabel = Qt.QLabel('manipulator')
+        else:
+            self.stageLabel = Qt.QLabel('stage')
         self.positionLabelLayout.addWidget(self.stageLabel, 0, 2)
 
         cap = dev.capabilities()
@@ -738,7 +765,7 @@ class StageInterface(Qt.QWidget):
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
         self.setHomeBtn.clicked.connect(self.setHomeClicked)
 
-        self.calibrateBtn = Qt.QPushButton('Calibrate')
+        self.calibrateBtn = Qt.QPushButton('Calibrate Axes')
         self.btnLayout.addWidget(self.calibrateBtn, 0, 2)
         self.calibrateBtn.clicked.connect(self.calibrateClicked)
 
@@ -791,7 +818,10 @@ class StageInterface(Qt.QWidget):
 
     def calibrateClicked(self):
         if self.calibrateWindow is None:
-            self.calibrateWindow = CalibrationWindow(self.dev)
+            if self.dev.isManipulator:
+                self.calibrateWindow = ManipulatorAxesCalibrationWindow(self.dev)
+            else:
+                self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
         self.calibrateWindow.show()
         self.calibrateWindow.raise_()
 

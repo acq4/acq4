@@ -427,20 +427,12 @@ class PatchPipetteCellDetectState(PatchPipetteState):
 
             # fast cell detection
             if ssr > initialResistance + config['fastDetectionThreshold']:
-                self.setState("cell detected (fast criteria)")
-                self._taskDone()
-                patchrec['detectedCell'] = True
-                return "seal"
-
+                return self._transition_to_seal("cell detected (fast criteria)", patchrec)
             # slow cell detection
             if len(recentTestPulses) > config['slowDetectionSteps']:
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
-                    self.setState("cell detected (slow criteria)")
-                    self._taskDone()
-                    patchrec['detectedCell'] = True
-                    return "seal"
-
+                    return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self._checkStop()
 
             if config['autoAdvance']:
@@ -452,9 +444,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                         self.startContinuousMove()
                     if self.contAdvanceFuture.isDone():
                         self.contAdvanceFuture.wait()  # check for move errors
-                        self._taskDone(interrupted=True, error="No cell found before end of search path")
-                        patchrec['detectedCell'] = False
-                        return config['fallbackState']
+                        return self._transition_to_fallback(patchrec)
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
@@ -462,10 +452,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                         print(len(self.advanceSteps))
                         print(self.advanceSteps)
                     if self.stepCount >= len(self.advanceSteps):
-                        self._taskDone(interrupted=True, error="No cell found before end of search path")
-                        patchrec['detectedCell'] = False
-                        return config['fallbackState']
-
+                        return self._transition_to_fallback(patchrec)
                     # make sure we obey advanceStepInterval
                     now = ptime.time()
                     if now - self.lastMove < config['advanceStepInterval']:
@@ -473,6 +460,17 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                     self.lastMove = now
 
                     self.singleStep()
+
+    def _transition_to_fallback(self, patchrec):
+        self._taskDone(interrupted=True, error="No cell found before end of search path")
+        patchrec['detectedCell'] = False
+        return self.config['fallbackState']
+
+    def _transition_to_seal(self, reason, patchrec):
+        self.setState(reason)
+        self._taskDone()
+        patchrec['detectedCell'] = True
+        return "seal"
 
     def getSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
