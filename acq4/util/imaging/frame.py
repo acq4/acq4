@@ -3,7 +3,7 @@ from pyqtgraph import Vector, SRTTransform3D
 
 
 class Frame(object):
-    """A single frame of imaging data including meta information.
+    """One or more frames of imaging data, including meta information.
 
     Expects *info* to be a dictionary with some minimal information:
 
@@ -20,7 +20,12 @@ class Frame(object):
         ## Complete transform maps from image coordinates to global.
         if 'transform' not in info:
             info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
-        
+
+    def asarray(self):
+        """Assuming this frame object represents multiple frames, return an array with one Frame per frame
+        """
+        return [Frame(frame, self.info().copy()) for frame in self.data()]
+
     def data(self):
         """Return raw imaging data.
         """
