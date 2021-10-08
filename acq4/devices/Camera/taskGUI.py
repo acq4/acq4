@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
-from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
-from acq4.devices.Device import TaskGui
-import numpy as np
 import pyqtgraph as pg
+from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
+from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 
@@ -23,18 +20,18 @@ class CameraTaskGui(DAQGenericTaskGui):
         self.ui.plotSplitter.setStretchFactor(0, 10)
         self.ui.plotSplitter.setStretchFactor(1, 1)
         self.ui.plotSplitter.setStretchFactor(2, 1)
-        
+        self.ui.fixedFrameEnabled.toggled.connect(self._setFixedFrameEnable)
+        self.ui.minFrames.setOpts(int=True, dec=True, step=0.1, minStep=1, compactHeight=False)
+
         ## plots should not be storing more than one trace at a time.
         for p in self.plots.values():
             p.plotItem.ctrl.maxTracesCheck.setChecked(True)
             p.plotItem.ctrl.maxTracesSpin.setValue(1)
             p.plotItem.ctrl.forgetTracesCheck.setChecked(True)
         
-        conf = self.dev.camConfig
-            
         tModes = self.dev.listParams('triggerMode')[0]
         for m in tModes:
-            item = self.ui.triggerModeCombo.addItem(m)
+            self.ui.triggerModeCombo.addItem(m)
         
         self.vLines = []
         if 'trigger' in self.plots:
@@ -52,7 +49,10 @@ class CameraTaskGui(DAQGenericTaskGui):
         self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
         
         self.taskRunner.sigTaskPaused.connect(self.taskPaused)
-        
+
+    def _setFixedFrameEnable(self, enable):
+        self.ui.minFrames.setEnabled(enable)
+
     def timeChanged(self, i, t):
         for l in self.vLines:
             l.setValue(t)
@@ -84,6 +84,8 @@ class CameraTaskGui(DAQGenericTaskGui):
         if state['releaseBetweenRadio']:
             task['pushState'] = None
             task['popState'] = None
+        if state['fixedFrameEnabled']:
+            task['minFrames'] = state['minFrames']
         return task
         
     def taskSequenceStarted(self):
@@ -126,4 +128,3 @@ class CameraTaskGui(DAQGenericTaskGui):
     def quit(self):
         self.ui.imageView.close()
         DAQGenericTaskGui.quit(self)
-        
