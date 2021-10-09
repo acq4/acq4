@@ -16,6 +16,10 @@ def handle_config(conf):
             UMP.set_debug_mode(val)
         elif key == "driverPath":
             UMP.set_library_path(val)
+        elif key == "address":
+            UMP.set_default_address(val)
+        elif key == "group":
+            UMP.set_default_group(val)
 
 
 handle_config(getManager().config.get("drivers", {}).get("sensapex", {}))

@@ -35,6 +35,14 @@ class MultiClamp(PatchClamp):
         # (especially with multiple channels)
         self._paramCache = {}
 
+        # device parameters that are expected to change when the clamp mode changes
+        self.mode_dependent_params = [
+            'PrimarySignal', 'SecondarySignal',
+            'PrimarySignalGain', 'SecondarySignalGain',
+            'Holding', 'HoldingEnable',
+            'PipetteOffset',
+        ]
+
         self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
         self.lastState = {}
         self.lastMode = None
@@ -187,7 +195,13 @@ class MultiClamp(PatchClamp):
         if self.config.get('enableParameterCache', False):
             if param in self._paramCache and self._paramCache[param] == value:
                 return
-            self.mc.setParam(param, value)
+            # use special setters for primary / secondary signals due to MCC bugs
+            if param == 'PrimarySignal':
+                self.mc.setPrimarySignal(value)
+            elif param == 'SecondarySignal':
+                self.mc.setSecondarySignal(value)
+            else:
+                self.mc.setParam(param, value)
             self._paramCache.pop(param)
             self.getParam(param)
         else:
@@ -244,7 +258,7 @@ class MultiClamp(PatchClamp):
                 return
             
             holding = self.holding[mode]
-            daq = self.config['commandChannel']['device']
+            daq = self.getDAQName('command')
             chan = self.config['commandChannel']['channel']
             daqDev = self.dm.getDevice(daq)
             s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
@@ -254,7 +268,6 @@ class MultiClamp(PatchClamp):
                 else:
                     raise Exception('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
             scale = 1.0 / s
-            #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
 
     def autoPipetteOffset(self):
@@ -282,6 +295,10 @@ class MultiClamp(PatchClamp):
         if mode not in ['VC', 'IC', 'I=0']:
             raise Exception('MultiClamp mode "%s" not recognized.' % mode)
 
+        # these parameters change with clamp mode; need to invalidate cache
+        for param in self.mode_dependent_params:
+            self._paramCache.pop(param, None)
+
         with self.dm.reserveDevices([self, self.config['commandChannel']['device']]):
             mcMode = self.mc.getMode()
             if mcMode == mode:  ## Mode is already correct
@@ -304,9 +321,9 @@ class MultiClamp(PatchClamp):
             # MC requires 200-400 ms to mode switch; don't allow anyone else to access during that time.
             time.sleep(0.5)
 
-    def getDAQName(self):
+    def getDAQName(self, channel):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
-        return self.config['commandChannel']['device']
+        return self.config[channel + 'Channel']['device']
 
 
 class MultiClampTask(DeviceTask):
@@ -355,7 +372,7 @@ class MultiClampTask(DeviceTask):
 
     def getConfigOrder(self):
         """return lists of devices that should be configured (before, after) this device"""
-        return ([], [self.dev.getDAQName()])
+        return ([], [self.dev.getDAQName("primary")])
 
     def configure(self):
         """Sets the state of a remote multiclamp to prepare for a program run."""
@@ -371,9 +388,9 @@ class MultiClampTask(DeviceTask):
         
         self.dev.setMode(self.cmd['mode'])
         if self.cmd['primary'] is not None:
-            self.dev.mc.setPrimarySignal(self.cmd['primary'])
+            self.dev.setPrimarySignal(self.cmd['primary'])
         if self.cmd['secondary'] is not None:
-            self.dev.mc.setSecondarySignal(self.cmd['secondary'])
+            self.dev.setSecondarySignal(self.cmd['secondary'])
 
         #prof.mark('    Multiclamp: set state')   ## ~300ms if the commander has to do a page-switch.
 

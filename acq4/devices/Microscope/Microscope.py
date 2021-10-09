@@ -347,10 +347,11 @@ class ScopeGUI(Qt.QWidget):
             xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
             zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
-            ss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
+            xyss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
+            zss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
 
-            xs.index = ys.index = zs.index = ss.index = obj  ## used to determine which row has changed
-            widgets = (r, c, xs, ys, zs, ss)
+            xs.index = ys.index = zs.index = xyss.index = zss.index = obj  ## used to determine which row has changed
+            widgets = (r, c, xs, ys, zs, xyss, zss)
             for col, w in enumerate(widgets):
                 self.ui.objectiveLayout.addWidget(w, row, col)
             self.objWidgets[obj] = widgets
@@ -369,7 +370,9 @@ class ScopeGUI(Qt.QWidget):
             xs.sigValueChanged.connect(self.offsetSpinChanged)
             ys.sigValueChanged.connect(self.offsetSpinChanged)
             zs.sigValueChanged.connect(self.offsetSpinChanged)
-            ss.sigValueChanged.connect(self.scaleSpinChanged)
+            xyss.sigValueChanged.connect(self.scaleSpinChanged)
+            zss.sigValueChanged.connect(self.scaleSpinChanged)
+
         self.updateSpins()
 
     def objectiveChanged(self, obj):
@@ -397,7 +400,7 @@ class ScopeGUI(Qt.QWidget):
         if self.blockSpinChange:
             return
         index = spin.index
-        (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
+        (r, combo, xs, ys, zs, xyss, zss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         if callable(getattr(obj, "toPyObject", None)):
             obj = obj.toPyObject()
@@ -411,27 +414,31 @@ class ScopeGUI(Qt.QWidget):
         if self.blockSpinChange:
             return
         index = spin.index
-        (r, combo, xs, ys, zs, ss) = self.objWidgets[index]
+        (r, combo, xs, ys, zs, xyss, zss) = self.objWidgets[index]
         obj = combo.itemData(combo.currentIndex())
         if callable(getattr(obj, "toPyObject", None)):
             obj = obj.toPyObject()
         obj.sigTransformChanged.disconnect(self.updateSpins)
         try:
-            obj.setScale(ss.value())
+            obj.setScale((xyss.value(), xyss.value(), zss.value()))
         finally:
             obj.sigTransformChanged.connect(self.updateSpins)
 
     def updateSpins(self):
         for k, w in self.objWidgets.items():
-            (r, combo, xs, ys, zs, ss) = w
+            (r, combo, xs, ys, zs, xyss, zss) = w
             obj = combo.itemData(combo.currentIndex())
             if callable(getattr(obj, "toPyObject", None)):
                 obj = obj.toPyObject()
+
             offset = obj.offset()
             xs.setValue(offset.x())
             ys.setValue(offset.y())
             zs.setValue(offset.z())
-            ss.setValue(obj.scale().x())
+
+            scale = obj.scale()
+            xyss.setValue(scale.x())
+            zss.setValue(scale.z())
 
 
 class ScopeCameraModInterface(CameraModuleInterface):

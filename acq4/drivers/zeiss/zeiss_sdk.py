@@ -14,7 +14,6 @@
 # Importing MTB.Api generated with makepy
 import atexit
 import inspect
-import threading
 from threading import Lock
 
 # in order to import clr, it is required to install python for .Net (pip install pythonnet) under windows
@@ -67,7 +66,6 @@ class ZeissMtbSdk(object):
         self.m_selected_device_index = 0
         self.m_selected_component_index = 0
         self.m_selected_element_index = 0
-        self.device_busy = threading.Event()
 
     def connect(self):
         self.m_MTBConnection = MTB.Api.MTBConnection()

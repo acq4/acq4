@@ -128,10 +128,7 @@ class SutterMPC200(Stage):
         # self._monitor.stop()  # this was never set to anything but None
         Stage.quit(self)
 
-    def _move(self, abs, rel, speed, linear):
-        # convert relative to absolute position, fill in Nones with current position.
-        pos = self._toAbsolutePosition(abs, rel)
-
+    def _move(self, pos, speed, linear):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
             speed = self.slowSpeed

@@ -312,6 +312,19 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
                 continue
             axisPoints[currentAxis].add(i - 1)
             axisPoints[currentAxis].add(i)
+
+        # Choose longest contiguous group of calibration points for each axis
+        for axis, pts in enumerate(axisPoints):
+            current_group = []
+            contig_groups = [current_group]
+            for p in sorted(pts):
+                if len(current_group) == 0 or current_group[-1] == p - 1:
+                    current_group.append(p)
+                else:
+                    current_group = [p]
+                    contig_groups.append(current_group)
+            idx_at_longest = np.argmax([len(g) for g in contig_groups])
+            axisPoints[axis] = contig_groups[idx_at_longest]
         return axisPoints
 
     @staticmethod
@@ -421,7 +434,7 @@ class AutomatedStageCalibration(object):
         # decide whether to move the stage
         finished = self._frame_index >= self._steps_per_axis * 2
         if not finished:
-            self._move = self._stage.moveTo(self._positions[axis_index, step_index], "slow")
+            self._move = self._stage.move(self.positions[self.index], "slow")
 
         self._offsets[axis_index, step_index] = self._calculate_offset(axis_index, step_index)
 

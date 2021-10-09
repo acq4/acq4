@@ -55,7 +55,7 @@ class TestPulseThread(Thread):
         self._lastTask = None
 
         self._clampDev = self.dev.clampDevice
-        self._daqName = self._clampDev.getDAQName()
+        self._daqName = self._clampDev.getDAQName("primary")
         self._clampName = self._clampDev.name()
         self._manager = getManager()
 

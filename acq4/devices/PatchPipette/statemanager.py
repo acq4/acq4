@@ -88,7 +88,7 @@ class PatchPipetteStateManager(Qt.QObject):
         Return the name of the state that has been chosen.
         """
         # state changes involve the construction of numerous QObjects with signal/slot connections;
-        # the indivudual state classes assume that they are owned by a thread with an event loop.
+        # the individual state classes assume that they are owned by a thread with an event loop.
         # SO: we need to process state transitions in the main thread. If this method is called
         # from the main thread, then the emit() below will be processed immediately. Otherwise,
         # we wait until the main thread processes the signal and sends back the result.
