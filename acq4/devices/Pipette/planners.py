@@ -1,6 +1,4 @@
 import numpy as np
-from acq4.devices.Sensapex import Sensapex
-from six.moves import range
 
 
 def defaultMotionPlanners():
@@ -42,7 +40,7 @@ class PipetteMotionPlanner(object):
         raise NotImplementedError()
 
     def shouldUseLinearMotion(self):
-        return not isinstance(self.pip.parentDevice(), Sensapex)
+        return self.pip._shouldUseLinearMovement()
 
 
 _LOCAL_ORIGIN = (0, 0, 0)

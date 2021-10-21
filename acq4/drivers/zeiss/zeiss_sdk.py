@@ -14,7 +14,6 @@
 # Importing MTB.Api generated with makepy
 import atexit
 import inspect
-import threading
 from threading import Lock
 
 # in order to import clr, it is required to install python for .Net (pip install pythonnet) under windows
@@ -23,6 +22,7 @@ import clr
 
 from acq4.util.debug import printExc
 
+# DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.17.0.15\MTB Api\MTBApi.dll"
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
 
@@ -66,7 +66,6 @@ class ZeissMtbSdk(object):
         self.m_selected_device_index = 0
         self.m_selected_component_index = 0
         self.m_selected_element_index = 0
-        self.device_busy = threading.Event()
 
     def connect(self):
         self.m_MTBConnection = MTB.Api.MTBConnection()
@@ -86,12 +85,16 @@ class ZeissMtbSdk(object):
 
     def getDevices(self):
         count = self.m_MTBRoot.GetDeviceCount()
-        return [self.m_MTBRoot.GetDevice(i) for i in range(0, count)]
+        return [self.m_MTBRoot.GetDevice(i) for i in range(count)]
 
     def getAllComponentsByDevice(self):
         return {
-            device: [device.GetComponentFullConfig(i) for i in range(0, device.GetComponentCount())]
-            for device in self.getDevices()}
+            device: [
+                device.GetComponentFullConfig(i)
+                for i in range(device.GetComponentCount())
+            ]
+            for device in self.getDevices()
+        }
 
     def getReflectorChanger(self):
         return self.getComponentByID(ZeissMtbReflectorChanger, "MTBReflectorChanger")
@@ -113,12 +116,15 @@ class ZeissMtbSdk(object):
 
     def getComponentByID(self, deviceClass, componentID):
         if componentID not in self._componentsByID:
-            self._componentsByID[componentID] = deviceClass(self, self.m_MTBRoot.GetComponent(componentID))
+            component = self.m_MTBRoot.GetComponent(componentID)
+            assert component is not None, f"No Zeiss component found with ID {componentID}. Components available: {self.getAllComponentsByDevice()}"
+            self._componentsByID[componentID] = deviceClass(self, component)
         return self._componentsByID[componentID]
 
 
 class ZeissMtbComponent(object):
     def __init__(self, sdk, component):
+        assert component is not None
         self._zeiss = sdk
         self._component = component
 

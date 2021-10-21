@@ -6,9 +6,6 @@ from acq4.drivers.zeiss import ZeissMtbSdk
 
 class ZeissMicroscope(Microscope):
     """Microscope subclass implementing control of a Zeiss objective changer
-
-    Note that this code is UNTESTED and UNVERIFIED; it was brought over with the rest of the Zeiss
-    code, but wasn't needed for the project at that time.
     """
 
     def __init__(self, dm, config, name):
@@ -22,6 +19,12 @@ class ZeissMicroscope(Microscope):
         self.zeiss.getObjectiveChanger().registerEventHandlers(self.zeissObjectivePosChanged, self.zeissObjectivePosSettled)
 
         self.objectiveIndexChanged(str(self.zeissCurrentPosition()))
+
+    def objectiveIndexChanged(self, index):
+        if str(index) == "-1":
+            # When changer is in between positions
+            return
+        return super(ZeissMicroscope, self).objectiveIndexChanged(index)
 
     def zeissObjectivePosChanged(self, position):
         self.currentSwitchPosition = None

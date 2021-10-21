@@ -3,6 +3,8 @@ from __future__ import print_function
 
 from collections import OrderedDict
 
+from pyqtgraph import SignalBlock
+
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
@@ -162,9 +164,13 @@ class LightSourceDevGui(Qt.QWidget):
 
     def _updateValuesToMatchDev(self):
         for name in self.dev.sourceConfigs:
-            self.sourceActivationButtons[name].setChecked(self.dev.sourceActive(name))
+            button = self.sourceActivationButtons[name]
+            with SignalBlock(button.clicked, self.dev.setSourceActiveFromNamedButton):
+                button.setChecked(self.dev.sourceActive(name))
             if name in self.sourceBrightnessSliders:
-                self.sourceBrightnessSliders[name].setValue(int(self.dev.getSourceBrightness(name) * 99))
+                slider = self.sourceBrightnessSliders[name]
+                with SignalBlock(slider.valueChanged, self._sliderChanged):
+                    slider.setValue(int(self.dev.getSourceBrightness(name) * 99))
 
 
 class LightSourceTaskGui(TaskGui):

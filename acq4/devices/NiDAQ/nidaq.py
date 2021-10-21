@@ -75,7 +75,7 @@ class NiDAQ(Device):
             if not ignoreLock:
                 self.release()
         return True
-        
+
     def release(self):
         ## take care of any channel-value-set requests that arrived while the device was locked
         try:

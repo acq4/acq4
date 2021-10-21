@@ -39,13 +39,6 @@ from .util.debug import logMsg, createLogWindow, logExc # logExc needed by debug
 from six.moves import map
 
 
-### All other modules can use this function to get the manager instance
-def getManager():
-    if Manager.single is None:
-        raise Exception("No manager created yet")
-    return Manager.single
-
-
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
@@ -520,7 +513,7 @@ class Manager(Qt.QObject):
         ## Find an unused name for this module
         baseName = name
         n = 0
-        while name in self.modules:
+        while name in self.listInterfaces().get("module", []):
             name = "%s_%d" % (baseName, n)
             n += 1
 
@@ -870,6 +863,13 @@ class Manager(Qt.QObject):
                 Qt.QApplication.instance().processEvents()
             print("\n    ciao.")
         Qt.QApplication.quit()
+
+
+# All other modules can use this function to get the manager instance
+def getManager() -> Manager:
+    if Manager.single is None:
+        raise Exception("No manager created yet")
+    return Manager.single
 
 
 class DeviceLocker(object):

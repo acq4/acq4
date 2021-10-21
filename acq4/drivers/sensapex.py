@@ -1,3 +1,5 @@
+from .. import getManager
+
 try:
     from sensapex import UMP
 except ImportError as err:
@@ -6,3 +8,18 @@ except ImportError as err:
         err.args = (msg,)
     err.args = err.args + (msg,)
     raise
+
+
+def handle_config(conf):
+    for key, val in conf.items():
+        if key == "debug":
+            UMP.set_debug_mode(val)
+        elif key == "driverPath":
+            UMP.set_library_path(val)
+        elif key == "address":
+            UMP.set_default_address(val)
+        elif key == "group":
+            UMP.set_default_group(val)
+
+
+handle_config(getManager().config.get("drivers", {}).get("sensapex", {}))

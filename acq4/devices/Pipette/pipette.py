@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import weakref
+from typing import List
 
 import numpy as np
 import pyqtgraph as pg
@@ -11,7 +12,6 @@ from six.moves import range
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.devices.Sensapex import Sensapex
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
@@ -19,6 +19,7 @@ from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners
 from .tracker import PipetteTracker
+from ..RecordingChamber import RecordingChamber
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -64,6 +65,7 @@ class Pipette(Device, OptomechDevice):
       Default is 1 mm.
     * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 mm.
+    * recordingChambers: list of names of RecordingChamber devices that this Pipette is meant to work with.
     """
 
     sigTargetChanged = Qt.Signal(object, object)
@@ -186,9 +188,7 @@ class Pipette(Device, OptomechDevice):
         return PipetteDeviceGui(self, win)
 
     def cameraModuleInterface(self, mod):
-        if self._opts['showCameraModuleUI'] is False:
-            return None
-        iface = PipetteCamModInterface(self, mod)
+        iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
 
@@ -381,7 +381,7 @@ class Pipette(Device, OptomechDevice):
             raise
 
     def _shouldUseLinearMovement(self):
-        return not isinstance(self.parentDevice(), Sensapex)
+        return 'Sensapex' not in str(type(self.parentDevice()))
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.
@@ -456,15 +456,23 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self.sigMoveFinished.emit(self, self.globalPosition())
 
+    def getRecordingChambers(self) -> List[RecordingChamber]:
+        """Return a list of RecordingChamber instances that are associated with this Pipette (see
+        'recordingChambers' config option).
+        """
+        man = getManager()
+        return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
+
 
 class PipetteCamModInterface(CameraModuleInterface):
     """Implements user interface for Pipette.
     """
     canImage = False
 
-    def __init__(self, dev, mod):
+    def __init__(self, dev, mod, showUi=True):
         CameraModuleInterface.__init__(self, dev, mod)
         self._haveTarget = False
+        self._showUi = showUi
 
         self.ui = CamModTemplate()
         self.ctrl = Qt.QWidget()
@@ -637,7 +645,10 @@ class PipetteCamModInterface(CameraModuleInterface):
         dev.resetGlobalPosition(pos)
 
     def controlWidget(self):
-        return self.ctrl
+        if self._showUi:
+            return self.ctrl
+        else:
+            return None
 
     def boundingRect(self):
         return None
@@ -681,7 +692,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep)
 
     def aboveTargetClicked(self):
-        self.getDevice().goAboveTarget(self.selectedSpeed())        
+        self.getDevice().goAboveTarget(self.selectedSpeed())
 
 
 class Axis(pg.ROI):

@@ -7,9 +7,22 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 from __future__ import print_function
 
 import six
-from pyqtgraph.util.mutex import Mutex, RecursiveMutex
+from pyqtgraph.util.mutex import Mutex as PGMutex
+from pyqtgraph.util.mutex import RecursiveMutex as PGRecursiveMutex
 
 from acq4.util import Qt
+
+
+class Mutex(PGMutex):
+    def __init__(self, *args, **kargs):
+        kargs['debug'] = False
+        PGMutex.__init__(self, *args, **kargs)
+
+
+class RecursiveMutex(PGRecursiveMutex):
+    def __init__(self, **kargs):
+        kargs['debug'] = False
+        PGRecursiveMutex.__init__(self, **kargs)
 
 
 class PriorityMutex(object):

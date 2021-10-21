@@ -134,9 +134,9 @@ class Future(Qt.QObject):
             err = self.errorMessage()
             if err is None:
                 # This would be a fantastic place to "raise from self._excInfo[1]" once we move to py3
-                raise RuntimeError("Task did not complete.")
+                raise RuntimeError(f"Task {self} did not complete (no error message).")
             else:
-                raise RuntimeError("Task did not complete: %s" % err)
+                raise RuntimeError(f"Task {self} did not complete: {err}")
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.

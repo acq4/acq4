@@ -1,6 +1,10 @@
 from __future__ import print_function
 
+import time
+from typing import Union
 from warnings import warn
+
+from pyqtgraph import ptime
 
 from acq4.devices.FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
 from acq4.drivers.zeiss import ZeissMtbSdk
@@ -16,13 +20,11 @@ class ZeissTurret(FilterWheel):
             self._dev = zeiss.getObjectiveChanger()
         self._dev.registerEventHandlers(onSettle=self._onPosSettled)
         self._isMoving = False
-        self._targetPosition = self._getPosition()
         FilterWheel.__init__(self, dm, config, name)
 
-    def _onPosSettled(self, position):
-        self._targetPosition = position
-        self.sigFilterChanged.emit(self, position)
-        self._isMoving = False
+    def _onPosSettled(self, position: int):
+        print("settled", position)
+        self._checkMoveFuture()
 
     def _setInitialPos(self):
         self._setPosition(self._initialSlot)
@@ -30,19 +32,24 @@ class ZeissTurret(FilterWheel):
     def getPositionCount(self):
         return self._dev.getElementCount()
 
-    def _getPosition(self):
+    def _getPosition(self) -> Union[None, int]:
+        position = self._dev.getPosition()
+        if position == 0:
+            return None
         # convert 1-based to 0-based index
-        return self._dev.getPosition() - 1
+        return position - 1
 
     def _setPosition(self, newPosition):
         self._isMoving = True
 
-        if self._targetPosition == newPosition:
-            self._onPosSettled(newPosition)
+        if self.getPosition() == newPosition:
+            fut = ZeissFilterWheelFuture(self, newPosition)
+            self._onPosSettled(newPosition + 1)
+            return fut
         else:
             # convert 0-based to 1-based index
             self._dev.setPosition(newPosition + 1)
-        return FilterWheelFuture(self, newPosition)
+            return ZeissFilterWheelFuture(self, newPosition)
 
     def _stop(self):
         warn("`stop` called, but is not supported by Zeiss changers")
@@ -58,6 +65,32 @@ class ZeissTurret(FilterWheel):
 
     def deviceInterface(self, win):
         return ZeissTurretDevGui(self)
+
+
+class ZeissFilterWheelFuture(FilterWheelFuture):
+    def isDone(self):
+        """Return True if the move has completed or was interrupted.
+        """
+        if self._wasInterrupted or self._done:
+            return True
+
+        if self._atTarget():
+            self._done = True
+            return True
+        else:
+            self._wasInterrupted = True
+            self._error = f"Filter wheel did not reach target while moving to {self.position} (got to {self.dev.getPosition()})"
+            return True
+
+    def _atTarget(self):
+        # sometimes we transiently return 0 at the end of a move; just wait a little longer
+        start = ptime.time()
+        while True:
+            pos = self.dev._getPosition()
+            if pos != 0 or ptime.time() - start > 1.0:
+                break
+
+        return pos == self.position
 
 
 class ZeissTurretDevGui(FilterWheelDevGui):

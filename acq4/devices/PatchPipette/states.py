@@ -5,6 +5,8 @@ import numpy as np
 import scipy.stats
 from six.moves import range, queue
 from pyqtgraph import ptime, disconnect
+
+from acq4 import getManager
 from acq4.util.future import Future
 from collections import deque
 from acq4.util.debug import printExc
@@ -62,10 +64,12 @@ class PatchPipetteState(Future):
             # set up test pulse monitoring
             self.testPulseResults = queue.Queue()
             
-            if self.run is not None and self.dev.active:
-                # start background thread if the device is "active" and the subclass has a run() method 
-                self._thread = threading.Thread(target=self._runJob)
-                self._thread.start()
+            if self.run is not None:
+                if self.dev.active:
+                    self._thread = threading.Thread(target=self._runJob)
+                    self._thread.start()
+                else:
+                    self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
             else:
                 # otherwise, just mark the task complete
                 self._taskDone(interrupted=False, error=None)
@@ -159,7 +163,8 @@ class PatchPipetteState(Future):
             # run must be reimplemented in subclass and call self._checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
-        except self.StopRequested:
+        except self.StopRequested as exc:
+            error = str(exc)
             # state was stopped early by calling stop()
             interrupted = True
         except Exception as exc:
@@ -179,7 +184,7 @@ class PatchPipetteState(Future):
     def _checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
-            raise self.StopRequested()
+            raise self.StopRequested("Stop state because device is not 'active'")
         Future._checkStop(self, delay)
 
     def __repr__(self):
@@ -387,14 +392,27 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         'slowDetectionThreshold': 0.2e6,
         'slowDetectionSteps': 3,
         'breakThreshold': -1e6,
+        'reserveDAQ': False,
+        'cellDetectTimeout': 30,
+        'DAQReservationTimeout': 30,
     }
 
     def run(self):
+        if self.config["reserveDAQ"]:
+            daq_name = self.dev.clampDevice.getDAQName("primary")
+            self.setState(f"cell detect: waiting for {daq_name} lock")
+            with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
+                self.setState(f"cell detect: {daq_name} lock acquired")
+                return self._do_cell_detect()
+        else:
+            return self._do_cell_detect()
 
-        self.monitorTestPulse()
-
+    def _do_cell_detect(self):
+        startTime = ptime.time()
         config = self.config
         dev = self.dev
+        self.monitorTestPulse()
+
         dev.clampDevice.autoPipetteOffset()
 
         patchrec = dev.patchRecord()
@@ -405,6 +423,9 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         patchrec['cellDetectInitialTarget'] = tuple(dev.pipetteDevice.targetPosition())
 
         while True:
+            if config['cellDetectTimeout'] is not None and ptime.time() - startTime > config['cellDetectTimeout']:
+                self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
+
             self._checkStop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
@@ -418,43 +439,35 @@ class PatchPipetteCellDetectState(PatchPipetteState):
             if initialResistance is None:
                 # take note of initial resistance
                 initialResistance = ssr
+                self.setState(f"cell detection: got initial resistance {ssr}")
 
             # check for pipette break
+            self.setState("cell detection: check for pipette break")
             if ssr < initialResistance + config['breakThreshold']:
                 self._taskDone(interrupted=True, error="Pipette broken")
                 patchrec['detectedCell'] = False
                 return 'broken'
 
             # fast cell detection
+            self.setState("cell detection: check for cell proximity")
             if ssr > initialResistance + config['fastDetectionThreshold']:
-                self.setState("cell detected (fast criteria)")
-                self._taskDone()
-                patchrec['detectedCell'] = True
-                return "seal"
-
+                return self._transition_to_seal("cell detected (fast criteria)", patchrec)
             # slow cell detection
             if len(recentTestPulses) > config['slowDetectionSteps']:
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
-                    self.setState("cell detected (slow criteria)")
-                    self._taskDone()
-                    patchrec['detectedCell'] = True
-                    return "seal"
-
+                    return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self._checkStop()
 
             if config['autoAdvance']:
+                self.setState("cell detection: advance pipette")
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self.contAdvanceFuture is None:
-                        print(initialPosition)
-                        print(self.getSearchEndpoint())
                         self.startContinuousMove()
                     if self.contAdvanceFuture.isDone():
                         self.contAdvanceFuture.wait()  # check for move errors
-                        self._taskDone(interrupted=True, error="No cell found before end of search path")
-                        patchrec['detectedCell'] = False
-                        return config['fallbackState']
+                        return self._transition_to_fallback(patchrec)
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
@@ -462,10 +475,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                         print(len(self.advanceSteps))
                         print(self.advanceSteps)
                     if self.stepCount >= len(self.advanceSteps):
-                        self._taskDone(interrupted=True, error="No cell found before end of search path")
-                        patchrec['detectedCell'] = False
-                        return config['fallbackState']
-
+                        return self._transition_to_fallback(patchrec)
                     # make sure we obey advanceStepInterval
                     now = ptime.time()
                     if now - self.lastMove < config['advanceStepInterval']:
@@ -473,6 +483,17 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                     self.lastMove = now
 
                     self.singleStep()
+
+    def _transition_to_fallback(self, patchrec):
+        self._taskDone(interrupted=True, error="No cell found before end of search path")
+        patchrec['detectedCell'] = False
+        return self.config['fallbackState']
+
+    def _transition_to_seal(self, reason, patchrec):
+        self.setState(reason)
+        self._taskDone()
+        patchrec['detectedCell'] = True
+        return "seal"
 
     def getSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
@@ -631,7 +652,7 @@ class PatchPipetteSealState(PatchPipetteState):
         'nSlopeSamples': 5,
         'autoSealTimeout': 30.0,
         'maxVacuum': -3e3, #changed from -7e3
-        'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)], #initially 1e6,150e6,None
+        'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)],
         'delayBeforePressure': 0.0,
         'delayAfterSeal': 5.0,
         'afterSealPressure': -1000,
@@ -1081,7 +1102,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         # first move back in x and up in z, leaving y unchanged
         approachPos1 = [pos[0], currentPos[1], pos[2] + self.config['approachHeight']]
         fut = dev.pipetteDevice._moveToGlobal(approachPos1, 'fast')
-        self.waitFor(fut)
+        self.waitFor(fut, timeout=30)
         if self.resetPos is None:
             self.resetPos = approachPos1
 

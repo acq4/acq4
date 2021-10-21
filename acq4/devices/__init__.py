@@ -9,7 +9,12 @@ from . import Device
 def getDeviceClass(name):
     """Return a device class given its name.
 
-    The class must have been defined already, or it must be importable from ``acq4.devices.name``.
+    The *name* argument can be one of:
+    - The name of a Device subclass that has already been imported
+    - The name of a built-in Device subclass
+      (for example name='Pipette' would return the Pipette class defined in acq4.devices.Pipette)
+    - The name of an importable module that defines a Device subclass
+      (for example name='mymodule.MyDevice' would attempt to import MyDevice from mymodule.MyDevice)
     """
     devClasses = getDeviceClasses()
 
@@ -17,15 +22,19 @@ def getDeviceClass(name):
     # Note: eventually it would be nice if all device classes can be safely/cheaply
     # imported at startup, rather than dynamically importing them.
     if name not in devClasses:
-        try:
-            import_module('acq4.devices.' + name)
-            devClasses = getDeviceClasses()
-        except ImportError as exc:
+        namesToCheck = [name, 'acq4.devices.' + name]
+        for name in namesToCheck:
             try:
                 import_module(name)
-                devClasses = getDeviceClasses()
-            except ImportError as exc:
-                print("Warning: error importing device class %s: %s" % (name, str(exc)))
+                break
+            except ModuleNotFoundError as exc:
+                if exc.name != name:
+                    raise
+                if name == namesToCheck[-1]:
+                    raise Exception(f"No module found from names: {namesToCheck}")
+                continue
+
+    devClasses = getDeviceClasses()
 
     try:
         clsName = name.split(".")[-1]

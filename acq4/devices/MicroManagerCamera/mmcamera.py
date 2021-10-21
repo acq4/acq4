@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, with_statement, print_function
 
-import time
 from collections import OrderedDict
 
 import numpy as np
 import six
-from pyqtgraph.debug import Profiler
+import time
 from six.moves import range
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
 from acq4.util import micromanager
 from acq4.util.Mutex import Mutex
+from acq4.util.debug import printExc
+from pyqtgraph.debug import Profiler
 
 try:
     from functools import lru_cache
@@ -94,13 +95,22 @@ class MicroManagerCamera(Camera):
         self.mmc.setCameraDevice(self.camName)
         self.mmc.startSequenceAcquisition(n, 0, True)
         frames = []
-        for i in range(n):
-            start = time.time()
-            while self.mmc.getRemainingImageCount() == 0:
-                time.sleep(0.005)
-                if time.time() - start > 10.0:
+        frameTimes = []
+        timeoutStart = ptime.time()
+        while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
+            if self.mmc.getRemainingImageCount() > 0:
+                frameTimes.append(ptime.time())
+                timeoutStart = frameTimes[-1]
+                frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+            else:
+                if ptime.time() - timeoutStart > 10.0:
                     raise Exception("Timed out waiting for camera frame.")
-            frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+                time.sleep(0.005)
+        if len(frames) < n:
+            printExc(
+                f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})",
+                msgType="warning"
+            )
         self.mmc.stopSequenceAcquisition()
         return np.concatenate(frames, axis=0)
 

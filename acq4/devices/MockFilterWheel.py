@@ -14,7 +14,7 @@ class MockFilterWheel(FilterWheel):
     def _getPosition(self):
         return self._position
 
-    def _isMoving(self):
+    def isMoving(self):
         return False
 
     def _stop(self):

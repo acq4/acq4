@@ -59,13 +59,13 @@ class MockStage(Stage):
     def axes(self):
         return ('x', 'y', 'z')
 
-    def _move(self, abs, rel, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         """Called by base stage class when the user requests to move to an
-        absolute or relative position.
+        posolute or relative position.
         """
         with self.lock:
             self._interruptMove()
-            pos = self._toAbsolutePosition(abs, rel)
+            pos = self._toAbsolutePosition(pos)
             speed = self._interpretSpeed(speed)
             self._lastMove = MockMoveFuture(self, pos, speed)
             return self._lastMove

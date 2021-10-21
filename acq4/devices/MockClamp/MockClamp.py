@@ -28,7 +28,7 @@ class MockClamp(PatchClamp):
         # Generate config to use for DAQ 
         self.devLock = Mutex(Mutex.Recursive)
 
-        daqConfig = {
+        self.daqConfig = {
             'command': config['Command'],
             'primary': config['ScaledSignal'],
         }
@@ -43,7 +43,7 @@ class MockClamp(PatchClamp):
         self.config = config
 
         # create a daq device under the hood
-        self.daqDev = DAQGeneric(dm, daqConfig, '{}Daq'.format(name))
+        self.daqDev = DAQGeneric(dm, self.daqConfig, '{}Daq'.format(name))
 
         try:
             self.setHolding()
@@ -168,9 +168,9 @@ class MockClamp(PatchClamp):
         self.process.close()
         self.daqDev.quit()
 
-    def getDAQName(self):
+    def getDAQName(self, channel):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
-        return self.config['Command']['device']
+        return self.daqConfig[channel]['device']
 
     def autoPipetteOffset(self):
         """Automatically set the pipette offset.
@@ -250,7 +250,7 @@ class MockClampTask(DAQGenericTask):
 
     def getResult(self):
         result = DAQGenericTask.getResult(self)
-        result._info[-1]['startTime'] = next(iter(result._info[-1][self.clampDev.getDAQName()].values()))['startTime']
+        result._info[-1]['startTime'] = next(iter(result._info[-1][self.clampDev.getDAQName("primary")].values()))['startTime']
         result._info[-1]['ClampState'] = self.ampState
         return result
 
