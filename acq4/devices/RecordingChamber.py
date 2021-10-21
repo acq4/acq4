@@ -38,13 +38,17 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
 
         x, y, z = self.dev().globalCenter()
         radius = self.dev().radius
-        self.boundingEllipse = Qt.QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
+        self.boundingEllipse = Qt.QGraphicsEllipseItem(-1, -1, 2, 2)
         self.boundingEllipse.setPen(pg.mkPen("y"))
+        self.boundingEllipse.setScale(radius)
+        self.boundingEllipse.setPos(x, y)
 
-        mod.window().addItem(self.boundingEllipse)
+        mod.window().addItem(self.boundingEllipse, ignoreBounds=True)
 
     def boundingRect(self):
-        return self.boundingEllipse.boundingRect()
+        return None
+        # we don't want the camera module to auto-range to this item.
+        # return self.boundingEllipse.boundingRect()
 
     def graphicsItems(self):
         return [self.boundingEllipse]
