@@ -12,7 +12,6 @@ from six.moves import range
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.devices.Sensapex import Sensapex
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
@@ -189,9 +188,7 @@ class Pipette(Device, OptomechDevice):
         return PipetteDeviceGui(self, win)
 
     def cameraModuleInterface(self, mod):
-        if self._opts['showCameraModuleUI'] is False:
-            return None
-        iface = PipetteCamModInterface(self, mod)
+        iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
 
@@ -384,7 +381,7 @@ class Pipette(Device, OptomechDevice):
             raise
 
     def _shouldUseLinearMovement(self):
-        return not isinstance(self.parentDevice(), Sensapex)
+        return 'Sensapex' not in str(type(self.parentDevice()))
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.
@@ -472,9 +469,10 @@ class PipetteCamModInterface(CameraModuleInterface):
     """
     canImage = False
 
-    def __init__(self, dev, mod):
+    def __init__(self, dev, mod, showUi=True):
         CameraModuleInterface.__init__(self, dev, mod)
         self._haveTarget = False
+        self._showUi = showUi
 
         self.ui = CamModTemplate()
         self.ctrl = Qt.QWidget()
@@ -647,7 +645,10 @@ class PipetteCamModInterface(CameraModuleInterface):
         dev.resetGlobalPosition(pos)
 
     def controlWidget(self):
-        return self.ctrl
+        if self._showUi:
+            return self.ctrl
+        else:
+            return None
 
     def boundingRect(self):
         return None
