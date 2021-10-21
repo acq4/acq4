@@ -145,12 +145,13 @@ class CameraWindow(Qt.QMainWindow):
         widget = iface.controlWidget()
         if widget is not None:
             dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
-            if len(self.docks) == 0:
+            docks = [d for d in self.docks.values() if d is not None]
+            if len(docks) == 0:
                 dock.hideTitleBar()
                 self.cw.addDock(dock, "left", self.gvDock)
             else:
-                list(self.docks.values())[0].showTitleBar()
-                self.cw.addDock(dock, "below", list(self.docks.values())[0])
+                docks[0].showTitleBar()
+                self.cw.addDock(dock, "below", docks[0])
             self.docks[name] = dock
         else:
             self.docks[name] = None
@@ -219,11 +220,11 @@ class CameraWindow(Qt.QMainWindow):
     def setRange(self, *args, **kargs):
         self.view.setRange(*args, **kargs)
 
-    def addItem(self, item, pos=(0, 0), scale=(1, 1), z=None):
+    def addItem(self, item, pos=(0, 0), scale=(1, 1), z=None, **kwds):
         """Adds an item into the scene. The item is placed in the global coordinate system;
         it will stay fixed on the subject even if the scope moves or changes objective."""
 
-        self.view.addItem(item)
+        self.view.addItem(item, **kwds)
 
         if pos is None:
             pos = self.view.viewRect().center()
