@@ -570,5 +570,5 @@ class MultiPatchWindow(Qt.QWidget):
         if self.storageFile is None:
             return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec) + ",\n")
+            self.storageFile.write((json.dumps(rec) + ",\n").encode("utf-8"))
         self.storageFile.flush()

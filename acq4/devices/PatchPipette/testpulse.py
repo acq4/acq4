@@ -300,7 +300,6 @@ class TestPulse(object):
                 analysis['peakResistance'] = params['amplitude'] / (peakValue - baseValue)
                 analysis['steadyStateResistance'] = np.abs(params['amplitude'] / (steadyValue - baseValue))
                 tauGuess = 3e-3
-                yOffsetBounds = [-10e-9, 10e-9]
             else:
                 bridge = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalResist']
                 bridgeOn = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalEnable']
@@ -311,7 +310,6 @@ class TestPulse(object):
                 analysis['peakResistance'] = bridge + (peakValue - baseValue) / params['amplitude']
                 analysis['steadyStateResistance'] = np.abs(bridge + (steadyValue - baseValue) / params['amplitude'])
                 tauGuess = 15e-3
-                yOffsetBounds = [-150e-3, 100e-3]
 
             analysis['peakResistance'] = np.clip(analysis['peakResistance'], 0, 20e9)
             analysis['steadyStateResistance'] = np.clip(analysis['steadyStateResistance'], 0, 20e9)
@@ -325,10 +323,6 @@ class TestPulse(object):
                 peakValue - steadyValue,  # amp
                 tauGuess,  # tau
                 steadyValue,  # yoffset
-            )
-            bounds = (
-                np.array([yOffsetBounds[0], 50e-6, yOffsetBounds[0]]),
-                np.array([yOffsetBounds[1], 500e-3, yOffsetBounds[1]])
             )
             xoffset = params['preDuration']
             pulseData = pulse.asarray()
@@ -353,22 +347,17 @@ class TestPulse(object):
                 Q = (pulseData - yoffset).sum() * dt
                 Rin = analysis['steadyStateResistance']
                 Vc = params['amplitude']
-                Rs_denom = (Q * Rin + tau * Vc)
+                Rs = analysis['peakResistance']
+                Rm = Rin - Rs
+                Rs_denom = (Rm**2 * abs(Vc))
                 if Rs_denom != 0.0:
-                    # Rs = (Rin * tau * Vc) / Rs_denom
-                    Rs = analysis['peakResistance']
-                    Rm = Rin - Rs
-                    Cm = (Rin**2 * Q) / (Rm**2 * abs(Vc))
+                    analysis['capacitance'] = (Rin**2 * Q) / Rs_denom
                 else:
-                    Rs = 0
-                    Rm = 0
-                    Cm = 0
-                analysis['capacitance'] = Cm
+                    analysis['capacitance'] = 0
+            elif analysis['steadyStateResistance'] > 0:
+                analysis['capacitance'] = tau / analysis['steadyStateResistance']
             else:
-                if analysis['steadyStateResistance'] > 0:
-                    analysis['capacitance'] = tau / analysis['steadyStateResistance']
-                else:
-                    analysis['capacitance'] = np.nan
+                analysis['capacitance'] = np.nan
 
             # # detect bad fits
             # noise = (pulseData - scipy.ndimage.gaussian_filter(pulseData, 3)).std()

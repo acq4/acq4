@@ -17,56 +17,57 @@ class MultiPatchLog(object):
             self.read(filename)
 
     def read(self, file):
-        for line in open(file, 'rb').readlines():
-            # parse line
-            if line.startswith('{'):
-                # json format
-                event = json.loads(line.rstrip(',\r\n'))
+        with open(file, 'rb') as fh:
+            for line in fh.readlines():
+                # parse line
+                if line.startswith(b'{'):
+                    # json format
+                    event = json.loads(line.rstrip(b',\r\n'))
 
-                # just to cover a bug; remove after updating legacy log files
-                if isinstance(event['event_time'], six.string_types):
-                    event['event_time'] = float(event['event_time'].rstrip(','))
-            else:
-                # this covers the original multipatch log format; remove after updating all legacy log files
-                fields = re.split(r',\s*', line.strip())
-                time, eventType, device = [eval(v) for v in fields[:3]]
-                data = fields[3:]
-                time = float(time)
+                    # just to cover a bug; remove after updating legacy log files
+                    if isinstance(event['event_time'], six.string_types):
+                        event['event_time'] = float(event['event_time'].rstrip(','))
+                else:
+                    # this covers the original multipatch log format; remove after updating all legacy log files
+                    fields = re.split(r',\s*', line.strip().decode("utf-8"))
+                    time, eventType, device = [eval(v) for v in fields[:3]]
+                    data = fields[3:]
+                    time = float(time)
 
-                event = {
-                    'event_time': time,
-                    'device': device,
-                    'event': eventType,
-                }
-                if eventType == 'move_stop':
-                    event['position'] = list(map(float, data))
+                    event = {
+                        'event_time': time,
+                        'device': device,
+                        'event': eventType,
+                    }
+                    if eventType == 'move_stop':
+                        event['position'] = list(map(float, data))
 
-            # keep track of min/max time values
-            time = event['event_time']
-            if self._minTime is None:
-                self._minTime = time
-                self._maxTime = time
-            else:
-                self._minTime = min(self._minTime, time)
-                self._maxTime = max(self._maxTime, time)
+                # keep track of min/max time values
+                time = event['event_time']
+                if self._minTime is None:
+                    self._minTime = time
+                    self._maxTime = time
+                else:
+                    self._minTime = min(self._minTime, time)
+                    self._maxTime = max(self._maxTime, time)
 
-            # initialize irregular time series if needed
-            device = event['device']
-            if device not in self._devices:
-                self._devices[device] = {
-                    'position': IrregularTimeSeries(interpolate=True)
-                }
-            
-            # Record event into irregular time series
-            dev = self._devices[device]
-            time = event['event_time']
-            if event['event'] == 'move_start':
-                posSeries = dev['position']
-                lastPos = posSeries.lastValue()
-                if lastPos is not None:
-                    posSeries[time] = lastPos
-            elif event['event'] == 'move_stop':
-                dev['position'][time] = event['position']
+                # initialize irregular time series if needed
+                device = event['device']
+                if device not in self._devices:
+                    self._devices[device] = {
+                        'position': IrregularTimeSeries(interpolate=True)
+                    }
+
+                # Record event into irregular time series
+                dev = self._devices[device]
+                time = event['event_time']
+                if event['event'] == 'move_start':
+                    posSeries = dev['position']
+                    lastPos = posSeries.lastValue()
+                    if lastPos is not None:
+                        posSeries[time] = lastPos
+                elif event['event'] == 'move_stop':
+                    dev['position'][time] = event['position']
 
     def devices(self):
         return list(self._devices.keys())
