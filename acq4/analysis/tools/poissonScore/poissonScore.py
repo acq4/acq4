@@ -406,9 +406,10 @@ class PoissonScore:
             count[count==0] = 1
             norm[0] = xVals.reshape(1, len(xVals))
             norm[1] = nev.reshape(len(nev), 1) / count
-            
-            open(cacheFile, 'wb').write(norm.tostring())
-        
+
+            with open(cacheFile, 'wb') as fh:
+                fh.write(norm.tobytes())
+
         return norm
         
     @classmethod
@@ -707,9 +708,10 @@ class PoissonRepeatScore:
             count[count==0] = 1
             norm[0] = xVals.reshape(1, 1, len(xVals))
             norm[1] = nev.reshape(1, len(nev), 1) / count
-            
-            open(cacheFile, 'wb').write(norm.tostring())
-        
+
+            with open(cacheFile, 'wb') as fh:
+                fh.write(norm.tobytes())
+
         return norm
 
     @classmethod

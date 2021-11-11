@@ -29,7 +29,8 @@ class PipetteTracker(object):
         self.dev = pipette
         fileName = self.dev.configFileName("ref_frames.pk")
         try:
-            self.reference = pickle.load(open(fileName, "rb"))
+            with open(fileName, "rb") as fh:
+                self.reference = pickle.load(fh)
         except Exception:
             self.reference = {}
 
@@ -299,7 +300,8 @@ class PipetteTracker(object):
         }
 
         # Store with pickle because configfile does not support arrays
-        pickle.dump(self.reference, open(self.dev.configFileName("ref_frames.pk"), "wb"))
+        with open(self.dev.configFileName("ref_frames.pk"), "wb") as fh:
+            pickle.dump(self.reference, fh)
 
     def measureTipPosition(
         self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False
@@ -539,14 +541,14 @@ class PipetteTracker(object):
         print("Manipulator missed target %d times" % misses)
 
         filename = self.dev.configFileName("error_map.np")
-        np.save(open(filename, "wb"), self.errorMap)
+        np.save(filename, self.errorMap)
 
         return self.errorMap
 
     def showErrorAnalysis(self):
         if not hasattr(self, "errorMap"):
             filename = self.dev.configFileName("error_map.np")
-            self.errorMap = np.load(open(filename, "rb"))[np.newaxis][0]
+            self.errorMap = np.load(filename)[np.newaxis][0]
 
         err = self.errorMap
         imx = pg.image(err["err"][..., 0].transpose(2, 0, 1), title="X error", axes={"t": 0, "x": 1, "y": 2})
