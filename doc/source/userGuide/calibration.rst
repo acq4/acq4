@@ -231,8 +231,7 @@ If your manipulator position meets these requirements, ..
     e. In 40x, move the pipette to the left edge of the view, vertical center. The tip should be in sharp focus. 
     f. Click "add point" in the calibration window, then click on the pipette tip. This should be done carefully -- zoom in and pick a specific feature of the pipette tip that you will be able to click on repeatedly. It may help to take a screenshot here as a reference to ensure that you can repeatedly achieve the same focus and point position. 
     g. Move the pipette ~50µm to the right using _only_ the manipulator X axis (do not move the manipulator y/z axes). Re-focus on the tip (using the microscope focus) and add another point.
-    Continue adding points until the pipette tip reaches the right side of the view. During this entire process, the manipulator Y and Z axes must remain unchanged.
-    To calibrate the orientation of each axis, you need a minimum of three calibration points per axis. However, it is recommended to collect several points per axis for better accuracy.
+    Continue adding points until the pipette tip reaches the right side of the view. During this entire process, the manipulator Y and Z axes must remain unchanged. To calibrate the orientation of each axis, you need a minimum of three calibration points per axis. However, it is recommended to collect several points per axis for better accuracy.
     h. Now repeat the process for the Y and Z axes -- start from the top edge / horizontal center and work your way downward in Y (leaving X and Z unchanged), then start in the center of the screen and work your way upward in Z (cover at least ~100 µm in Z range).
     i. Click "save calibration".
 
