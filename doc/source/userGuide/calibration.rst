@@ -202,11 +202,17 @@ In this step we tell acq4 how far apart the focal planes and objective centers a
 7. Verify after restarting acq4 that the offsets are working correctly by repeating steps 1-4.
 
 
-
 8. Initial manipulator calibration
 ----------------------------------
 
-This procedure should be performed any time a manipulator is physically reconfigured (like if the orientation of the manipulator or headstage is adjusted), or whenever it appears that the manipulator calibrations are no longer correct.
+This procedure should be performed any time a manipulator is physically reconfigured (like if the orientation of the manipulator or headstage is adjusted), or whenever it appears that the manipulator calibrations are no longer correct. Before starting this procedure, it is a good idea to make sure your manipulator is securely seated in a good position such that:
+
+* Pipette tips can reach a large enough area in the center of the recording chamber as well as any needed cleaning wells. To maximize available reach, it may help to orient the manipulator such that a cleaning well is at one corner of the manipulato's x/y range, and the center of the recording chamber is at the opposite x/y range
+* The headstage should be unlikely to collide with the microscope
+* Collisions with nearby manipulators are not possible
+
+
+If your manipulator position meets these requirements, ..
 
 1. Run calibrations recommended by the hardware manufacturer, if needed.
     - For Sensapex uMp: 
@@ -223,12 +229,12 @@ This procedure should be performed any time a manipulator is physically reconfig
     c. In the calibration window, remove all calibration points (if any) by selecting and clicking "remove".
     d. Move the stage to the center of the recording chamber and focus near the plane where you will normally be patching (if you're patching cultured cells, ~10µm above the glass is ok).
     e. In 40x, move the pipette to the left edge of the view, vertical center. The tip should be in sharp focus. 
-    g. Click "add point" in the calibration window, then click on the pipette tip. This should be done carefully -- zoom in and pick a specific feature of the pipette tip that you will be able to click on repeatedly. It may help to take a screenshot here as a reference to ensure that you can repeatedly achieve the same focus and point position. 
-    h. Move the pipette ~50µm to the right using _only_ the manipulator X axis (do not move the manipulator y/z axes). Re-focus on the tip (using the microscope focus) and add another point.
+    f. Click "add point" in the calibration window, then click on the pipette tip. This should be done carefully -- zoom in and pick a specific feature of the pipette tip that you will be able to click on repeatedly. It may help to take a screenshot here as a reference to ensure that you can repeatedly achieve the same focus and point position. 
+    g. Move the pipette ~50µm to the right using _only_ the manipulator X axis (do not move the manipulator y/z axes). Re-focus on the tip (using the microscope focus) and add another point.
     Continue adding points until the pipette tip reaches the right side of the view. During this entire process, the manipulator Y and Z axes must remain unchanged.
     To calibrate the orientation of each axis, you need a minimum of three calibration points per axis. However, it is recommended to collect several points per axis for better accuracy.
-    i. Now repeat the process for the Y and Z axes -- start from the top edge / horizontal center and work your way downward in Y (leaving X and Z unchanged), then start in the center of the screen and work your way upward in Z (cover at least ~100 µm in Z range).
-    j. Click "save calibration".
+    h. Now repeat the process for the Y and Z axes -- start from the top edge / horizontal center and work your way downward in Y (leaving X and Z unchanged), then start in the center of the screen and work your way upward in Z (cover at least ~100 µm in Z range).
+    i. Click "save calibration".
 
 3. Test axis orientation calibration:
     a. Under the multipatch module, enable the pipette by clicking on its numbered button (and disable all other pipettes)
@@ -251,3 +257,7 @@ This procedure should be performed any time a manipulator is physically reconfig
        Note: during automated pipette cleaning, the manipulator is programmed to move a certain distance above the cleaning position before entering the cleaning well. The default distance is 5 mm, but this can be set in the configuration for patch pipette states under "clean -> approachHeight". If the manipulator cannot move this distance above the selected cleaning position, then an error will occur. Now is a good time to make sure there is enough room to satisfy this constraint.
     b. In the manager window under the dock for the patch pipette device (e.g. "PatchPipette1"), click "Set Clean Pos".
     c. Repeat for rinse position if needed.
+
+
+10. Configure pipette approach angle
+------------------------------------
