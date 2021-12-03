@@ -61,7 +61,7 @@ Some microscopes may have extra optics to increase or reduce the total magnifica
 2. Verify the scale factor by imaging a micrometer slide and measuring the distance between lines using the ruler ROI tool in the camera module. Check that the scale is reported correctly for all objectives. ACQ4 should automatically keep track of which objective is currently in use and adjust accordingly. If the correct objective is not selected, then a device misconfiguration may be to blame. If your hardware does not support reporting the objective that is currently in use, then it is necessary to manually select the current objective via the Microscope dock in the main Manager window whenever it changes.
 
 
-2. Camera Orientation
+3. Camera Orientation
 ---------------------
 
 By convention, we say that the global X and Y axes are aligned with the rows and columns of the camera sensor. This is not strictly required (it's possible to use the camera at any angle); however, we also represent the global X and Y axes as rows and columns of pixels *on screen*. For image display, it's appealing to have the camera and screen perfectly aligned.
@@ -93,7 +93,7 @@ First we should ensure that the camera image is correctly rotated / mirrored suc
             angle: -90
 
 
-3. Stage Orientation
+4. Stage Orientation
 --------------------
 
 The next step is to ensure that acq4 understands how the stage's x,y,z axes are oriented and scaled relative to the global coordinate system.
@@ -135,7 +135,7 @@ The next step is to ensure that acq4 understands how the stage's x,y,z axes are 
     e. Repeat in the y direction.
 
 
-4. Fine Tuning the Stage Orientation
+5. Fine Tuning the Stage Orientation
 ------------------------------------
 
 We also find that it's helpful (but again not strictly required) to have the microscope stage's X and Y axes well-aligned with the camera. 
@@ -150,7 +150,7 @@ In this step we'll physically rotate the camera by a small angle until it is wel
 4. Repeat previous steps until the ROI maintains the same Y location as the feature on either side of the view.
 
 
-5. Set the global coordinate origin
+6. Set the global coordinate origin
 -----------------------------------
 
 In this step we configure position offsets such that the global coordinate origin lies at the center of the recording chamber, on the glass. This is not strictly required, but often makes our job easier when we need to make sense of those coordinate values.
@@ -170,7 +170,7 @@ In this step we configure position offsets such that the global coordinate origi
 5. After correcting these values, restart acq4 and confirm that the global origin is roughly where you expect it to be.
 
 
-6. Objective offset calibration
+7. Objective offset calibration
 -------------------------------
 
 In this step we tell acq4 how far apart the focal planes and objective centers are for your objectives. Note that some objective changers will attempt to automatically adjust the focal position when switching to compensate for parfocality; this calibration step does _not_ affect that behavior, and also is not affected by that behavior.
@@ -203,12 +203,12 @@ In this step we tell acq4 how far apart the focal planes and objective centers a
 
 
 
-7. Initial manipulator calibration
+8. Initial manipulator calibration
 ----------------------------------
 
 This procedure should be performed any time a manipulator is physically reconfigured (like if the orientation of the manipulator or headstage is adjusted), or whenever it appears that the manipulator calibrations are no longer correct.
 
-1. Run manipulator hardware calibrations, if needed.
+1. Run calibrations recommended by the hardware manufacturer, if needed.
     - For Sensapex uMp: 
         - Move manipulator to a safe position and remove the pipette+holder.
           NOTE: The manipulator will move over its full range of motion, so it is important
@@ -231,17 +231,23 @@ This procedure should be performed any time a manipulator is physically reconfig
     j. Click "save calibration".
 
 3. Test axis orientation calibration:
-Under the multipatch module, enable the pipette by clicking on its numbered button (and disable all other pipettes)
-Click "calibrate", then click on the pipette tip in the camera module
-Focus on a random x/y/z location, click "set target" in the multipatch module, then click any location in the camera module. A yellow target symbol should appear where you clicked.
-Click "to target" and wait for the pipette tip to move. If the calibration was successful, the pipette tip should come very close to the target. Otherwise, it's likely a mistake was made during the calibration procedure.
-Check the Z error by using the camera module's depth chart (compare the yellow focus line to the blue pipette triangle; you may need to zoom in using the mouse wheel). 
-Within the field of view where calibration was performed, errors should be very small (on the order of 1 µm). As you move farther from the original calibration site (the center of the recording chamber), you should expect some x/y error to accumulate but this is ok as long as the errors are within ~30 µm because we will use an automated procedure to correct for these errors later on.
-Set home position:
-Move manipulator to the center of its y range, almost to the top of its z range, and almost to the end of its x range away from the recording chamber.
-In the manager window, under the dock for the manipulator device (e.g. "Sensapex1"), click "Set Home"
-Set clean / rinse positions
-Move pipette tip into the cleaning well, at the desired depth for cleaning.
-Note: during automated pipette cleaning, the manipulator is programmed to move a certain distance above the cleaning position before entering the cleaning well. The default distance is 5 mm, but this can be set in the configuration for patch pipette states under "clean -> approachHeight". If the manipulator cannot move this distance above the selected cleaning position, then an error will occur. Now is a good time to make sure there is enough room to satisfy this constraint.
-In the manager window under the dock for the patch pipette device (e.g. "PatchPipette1"), click "Set Clean Pos".
-Repeat for rinse position.
+    a. Under the multipatch module, enable the pipette by clicking on its numbered button (and disable all other pipettes)
+    b. Click "calibrate", then click on the pipette tip in the camera module
+    c. Focus on a random x/y/z location, click "set target" in the multipatch module, then click any location in the camera module. A yellow target symbol should appear where you clicked.
+    d. Click "to target" and wait for the pipette tip to move. If the calibration was successful, the pipette tip should come very close to the target. Otherwise, it's likely a mistake was made during the calibration procedure.
+    e. Check the Z error by using the camera module's depth chart (compare the yellow focus line to the blue pipette triangle; you may need to zoom in using the mouse wheel). 
+    f. Within the field of view where calibration was performed, errors should be very small (on the order of 1 µm). As you move farther from the original calibration site (the center of the recording chamber), you should expect some x/y error to accumulate.
+
+
+9. Set home and cleaning positions for each manipulator
+-------------------------------------------------------
+
+1. Set home position
+    a. Move manipulator to the center of its y range, almost to the top of its z range, and almost to the end of its x range away from the recording chamber.
+    b. In the manager window, under the dock for the manipulator device (e.g. "Sensapex1"), click "Set Home"
+
+2. Set clean / rinse positions
+    a. Move pipette tip into the cleaning well, at the desired depth for cleaning.
+       Note: during automated pipette cleaning, the manipulator is programmed to move a certain distance above the cleaning position before entering the cleaning well. The default distance is 5 mm, but this can be set in the configuration for patch pipette states under "clean -> approachHeight". If the manipulator cannot move this distance above the selected cleaning position, then an error will occur. Now is a good time to make sure there is enough room to satisfy this constraint.
+    b. In the manager window under the dock for the patch pipette device (e.g. "PatchPipette1"), click "Set Clean Pos".
+    c. Repeat for rinse position if needed.
