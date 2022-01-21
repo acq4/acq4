@@ -189,6 +189,8 @@ class MultiClamp(PatchClamp):
             val = self.mc.getParam(param)
             if self.config.get('enableParameterCache', False):
                 self._paramCache[param] = val
+            else:
+                return val
         return self._paramCache[param]
 
     def setParam(self, param, value):
