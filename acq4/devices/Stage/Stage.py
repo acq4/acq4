@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
+import math
 import threading
 from typing import Tuple
 
@@ -213,6 +214,14 @@ class Stage(Device, OptomechDevice):
                 self._axisTransform.scale(*scale)
                 self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
         return pg.QtGui.QMatrix4x4(self._axisTransform)
+
+    def calculatedPitchRadians(self) -> float:
+        # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
+        a = self.axisTransform()
+        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2))
+
+    def calculatedPitchDegrees(self) -> float:
+        return self.calculatedPitchRadians() / math.pi * 180
 
     def inverseAxisTransform(self):
         if self._inverseAxisTransform is None:
