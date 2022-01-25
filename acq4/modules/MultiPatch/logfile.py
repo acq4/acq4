@@ -19,16 +19,16 @@ class MultiPatchLog(object):
     def read(self, file):
         for line in open(file, 'rb').readlines():
             # parse line
-            if line.startswith('{'):
+            if line.startswith(b'{'):
                 # json format
-                event = json.loads(line.rstrip(',\r\n'))
+                event = json.loads(line.rstrip(b',\r\n').decode("utf8"))
 
                 # just to cover a bug; remove after updating legacy log files
                 if isinstance(event['event_time'], six.string_types):
                     event['event_time'] = float(event['event_time'].rstrip(','))
             else:
                 # this covers the original multipatch log format; remove after updating all legacy log files
-                fields = re.split(r',\s*', line.strip())
+                fields = re.split(r',\s*', line.strip().decode("utf8"))
                 time, eventType, device = [eval(v) for v in fields[:3]]
                 data = fields[3:]
                 time = float(time)
