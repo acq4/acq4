@@ -13,7 +13,7 @@ microManagerPath = "C:\\Program Files\\Micro-Manager-2.0gamma"
 
 
 class MMCWrapper:
-    """Wraps MMCorePy to raise more helpfule exceptions
+    """Wraps MMCorePy to raise more helpful exceptions
     """
 
     def __init__(self, mmc):
@@ -32,7 +32,11 @@ class MMCWrapper:
             try:
                 return attr(*args, **kwds)
             except RuntimeError as exc:
-                raise RuntimeError(exc.args[0].getFullMsg() + " (calling mmc.%s)" % name)
+                if exc.args and hasattr(exc.args[0], 'getFullMsg'):
+                    msg = exc.args[0].getFullMsg()
+                else:
+                    msg = exc
+                raise RuntimeError(f"{msg} (calling mmc.{name})")
 
         fn.__name__ = name + "_wrapped"
         self.__wrapper_cache[name] = fn
@@ -51,6 +55,8 @@ def getMMCorePy(path=None):
 
             _mmc = MMCWrapper(pymmcore.CMMCore())
             _mmc.setDeviceAdapterSearchPaths([path])
+            sys.path.append(path)
+            os.environ["PATH"] = os.environ["PATH"] + ";" + path
         except ImportError:
 
             try:
@@ -59,7 +65,7 @@ def getMMCorePy(path=None):
                 if sys.platform != "win32":
                     raise
                 # MM does not install itself to standard path. User should take care of this,
-                # but we can make a guess..
+                # but we can make a guess...
                 sys.path.append(path)
                 os.environ["PATH"] = os.environ["PATH"] + ";" + path
                 try:

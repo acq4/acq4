@@ -101,7 +101,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
 
         waypointLocal = _extractionWaypoint(endPosLocal, pip.pitchRadians())
 
-        # sensapex manipulators shouldn't need a waypoint to perform correct extraction
+        # some manipulators won't need a waypoint to perform correct extraction
         if waypointLocal is None or not self.shouldUseLinearMotion():
             path = [(endPosGlobal, speed, False), ]
         else:
