@@ -398,6 +398,7 @@ class CParser:
         for i in range(len(lines)):
             line = lines[i]
             newLine = ''
+            macroName = None
             m = directive.match(line)
             if m is None:  # regular code line
                 if ifTrue[-1]:  # only include if we are inside the correct section of an IF block
@@ -482,7 +483,7 @@ class CParser:
                 elif d == 'pragma':  ## Check for changes in structure packing
                     if not ifTrue[-1]:
                         continue
-                    m = re.match(r'\s+pack\s*\(([^\)]+)\)', rest)
+                    m = re.match(r'\s+pack\s*\(([^)]+)\)', rest)
                     if m is None:
                         continue
                     opts = [s.strip() for s in m.groups()[0].split(',')]
@@ -506,9 +507,9 @@ class CParser:
                             packStack.pop()
                         else:
                             ind = None
-                            for i in range(len(packStack)):
-                                if packStack[i][1] == id:
-                                    ind = i
+                            for j in range(len(packStack)):
+                                if packStack[j][1] == id:
+                                    ind = j
                                     break
                             if ind is not None:
                                 packStack = packStack[:ind]
