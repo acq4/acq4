@@ -381,7 +381,7 @@ class CFunction:
                 self.sig[0].remove(conv)
         self.name = name
         self.restype = lib._ctype(self.sig[0])
-        #func.restype = self.restype
+        func.restype = self.restype
         self.argTypes = [lib._ctype(s[1]) for s in self.sig[1]]
         func.argtypes = self.argTypes
         self.reqArgs = [x[0] for x in self.sig[1] if x[2] is None]
