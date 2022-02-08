@@ -349,15 +349,16 @@ class TestPulse(object):
                 Vc = params['amplitude']
                 Rs = analysis['peakResistance']
                 Rm = Rin - Rs
-                Rs_denom = (Rm**2 * abs(Vc))
-                if Rs_denom != 0.0:
-                    analysis['capacitance'] = (Rin**2 * Q) / Rs_denom
+                Cm_denom = (Rm**2 * abs(Vc))
+                if Cm_denom != 0.0:
+                    analysis['capacitance'] = (Rin**2 * Q) / Cm_denom
                 else:
                     analysis['capacitance'] = 0
-            elif analysis['steadyStateResistance'] > 0:
-                analysis['capacitance'] = tau / analysis['steadyStateResistance']
-            else:
-                analysis['capacitance'] = np.nan
+            else:  # IC mode
+                if analysis['steadyStateResistance'] > 0:
+                    analysis['capacitance'] = tau / analysis['steadyStateResistance']
+                else:
+                    analysis['capacitance'] = np.nan
 
             # # detect bad fits
             # noise = (pulseData - scipy.ndimage.gaussian_filter(pulseData, 3)).std()
