@@ -57,7 +57,7 @@ class MultiClampTelegraph:
         self.devIndex = dict([(self.mkDevId(channels[k]), k) for k in channels])  
         #print "DEV index:", self.devIndex
         self.callback = callback
-        self.lock = threading.RLock(verbose=debug)
+        self.lock = threading.RLock()
         self.thread = threading.Thread(name="MultiClampTelegraph", target=self.messageLoop)
         self.thread.daemon = True
         self.startMessageThread()
@@ -80,10 +80,10 @@ class MultiClampTelegraph:
     def quit(self):
         if self.debug:
             print("MultiClampTelegraph.quit called.")
-        if self.thread.isAlive():
+        if self.thread.is_alive():
             self.stopMessageThread()
             self.thread.join(5.0)
-        if self.thread.isAlive():
+        if self.thread.is_alive():
             print("WARNING: Failed to stop MultiClamp telegraph thread.")
         
     def startMessageThread(self):
