@@ -19,7 +19,7 @@ import sys, os, platform
 import six
 
 
-def find_lib(name, paths=[], dirHints=[]):
+def find_lib(name, paths=None, dirHints=None):
     """Search through likely directories to find non-system dlls. Return the first filepath that is found. Currently only supported on Windows.
 
     **Arguments** 
@@ -31,6 +31,10 @@ def find_lib(name, paths=[], dirHints=[]):
     Directories are searched in the order specified in paths, then in 'ProgramFiles', then 'ProgramFiles(x86)'
     """
 
+    if dirHints is None:
+        dirHints = []
+    if paths is None:
+        paths = []
     if platform.system() != 'Windows':
         raise Exception("CLibrary.find_lib is currently only supported on Windows machines. Sorry.")
 
@@ -218,7 +222,7 @@ class CLibrary:
         try:
             func = getattr(self._lib_, funcName)
         except:
-            raise Exception("Function name '%s' appears in headers but not in library!" % func)
+            raise Exception("Function name '%s' appears in headers but not in library!" % funcName)
             
         #print "create function %s," % (funcName), self._defs_['functions'][funcName]
         return CFunction(self, func, self._defs_['functions'][funcName], funcName)
@@ -334,6 +338,8 @@ class CLibrary:
                 class s(Union):
                     def __repr__(self):
                         return "<ctypes union '%s'>" % strName
+            else:
+                raise ValueError("strType must be either 'structs' or 'unions'")
             
             
             ## must register struct here to allow recursive definitions.
@@ -375,7 +381,7 @@ class CFunction:
                 self.sig[0].remove(conv)
         self.name = name
         self.restype = lib._ctype(self.sig[0])
-        #func.restype = self.restype
+        func.restype = self.restype
         self.argTypes = [lib._ctype(s[1]) for s in self.sig[1]]
         func.argtypes = self.argTypes
         self.reqArgs = [x[0] for x in self.sig[1] if x[2] is None]
