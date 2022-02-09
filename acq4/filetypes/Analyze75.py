@@ -126,9 +126,9 @@ def parseA75(headerFH, imgFile):
     (cal_max, cal_min, compressed, verified, glmax, glmin) = img_dim[30:]
     dim = img_dim[:8]
     (datatype, bitpix, dim_un0) = img_dim[15:18]
-    with open(imgFile, 'r', encoding="utf-8") as fh:
+    with open(imgFile, 'rb') as fh:
         data = fh.read()
-    data = np.fromstring(data, dtype=dataTypes[datatype])
+    data = np.frombuffer(data, dtype=dataTypes[datatype])
     data.shape = dim[1:dim[0]]
 
     return data
@@ -220,7 +220,7 @@ def parseNii(headerFH, imgFile):
             data = headerFH.read(size)
         elif m.magic == 'nii\0':               ## data is in a separate .img file
             imgFile = os.path.splitext(imgFile)[0] + '.img'
-            with open(imgFile, 'r', encoding="utf-8") as fh:
+            with open(imgFile, 'rb') as fh:
                 fh.seek(m.vox_offset)
                 data = fh.read(size)
         headerFH.close()
@@ -228,7 +228,7 @@ def parseNii(headerFH, imgFile):
         if len(data) != size:
             raise Exception("Data size is incorrect. Expected %d, got %d" % (size, len(data)))
             
-        data = np.fromstring(data, dtype=dtype)
+        data = np.frombuffer(data, dtype=dtype)
         data.shape = m.dim[1:m.dim[0]+1]
     else:
         #print "Large file; loading by memmap"
