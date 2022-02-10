@@ -1,5 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+import os
+import struct
+
+import numpy as np
+import six
+from six.moves import range
+from six.moves import reduce
 
 from pyqtgraph.metaarray import MetaArray
 from .FileType import FileType
@@ -29,11 +34,6 @@ class Analyze75(FileType):
 
 
 ## Function for reading NiFTI-1 and ANALYZE 7.5 image formats  (.nii and .hdr/.img files)
-import numpy as np
-import os
-import six
-from six.moves import range
-from six.moves import reduce
 
 dataTypes = {
     0: None,
@@ -82,30 +82,28 @@ class Obj(object):
     #def __new__(cls, arr):
         #return arr.view(cls)
     
-import struct
+
 def readA75(hdrFile):
     """Read ANALYZE or NiFTI format. 
       hdrFile: name of header file (.hdr, .ni1, or .nii) to read"""
     
-    hdrFH = open(hdrFile, 'rb')
-    
-    ## determine if this is NiFTI or ANALYZE
-    hdrFH.seek(344)
-    nii = hdrFH.read(4)
-    
-    hdrFH = open(hdrFile, 'rb')
-    
-    if nii == 'n+1\0':
-        print("n+1 format; loading data from", hdrFile)
-        return parseNii(hdrFH, hdrFile)
-    elif nii == 'ni1\0':
-        imgFile = os.path.splitext(hdrFile)[0] + '.img'
-        print("ni1 format; loading data from", imgFile)
-        return parseNii(hdrFH, imgFile)
-    else:  ## assume ANALYZE75 format
-        imgFile = os.path.splitext(hdrFile)[0] + '.img'
-        print("ANALYZE75 format; loading data from", imgFile)
-        return parseA75(hdrFH, imgFile)
+    with open(hdrFile, 'rb') as hdrFH:
+        # determine if this is NiFTI or ANALYZE
+        hdrFH.seek(344)
+        nii = hdrFH.read(4)
+
+    with open(hdrFile, 'rb') as hdrFH:
+        if nii == b'n+1\0':
+            print("n+1 format; loading data from", hdrFile)
+            return parseNii(hdrFH, hdrFile)
+        elif nii == b'ni1\0':
+            imgFile = os.path.splitext(hdrFile)[0] + '.img'
+            print("ni1 format; loading data from", imgFile)
+            return parseNii(hdrFH, imgFile)
+        else:  ## assume ANALYZE75 format
+            imgFile = os.path.splitext(hdrFile)[0] + '.img'
+            print("ANALYZE75 format; loading data from", imgFile)
+            return parseA75(hdrFH, imgFile)
 
 
 def parseA75(headerFH, imgFile):
@@ -119,31 +117,22 @@ def parseA75(headerFH, imgFile):
     hdr_key = struct.unpack(order+'i10s18sihcc', hdr[:40])
     img_dim = struct.unpack(order+'18h16f2i', hdr[40:148])
     data_history = struct.unpack(order+'80s24sc10s10s10s10s10s10s3s8i', hdr[148:348])
-    
+
     ## pull variables from substructs
     (sizeof_hdr, data_type, db_name, extents, session_error, regular, hkey_un0) = hdr_key
     if regular != 'r':
         raise Exception("This function does not handle irregular arrays")
-    
+
     (cal_max, cal_min, compressed, verified, glmax, glmin) = img_dim[30:]
     dim = img_dim[:8]
     (datatype, bitpix, dim_un0) = img_dim[15:18]
-    #pixdim = img_dim[18:26]
-    #vox_offset = img_dim[26]
-    
-    #print "dims:", dim
-    #print "depth:", bitpix
-    #print "type:", datatype
-    
-    ## read data
-    fh = open(imgFile, 'rb')
-    data = fh.read()
-    fh.close()
-    data = np.fromstring(data, dtype=dataTypes[datatype])
+    with open(imgFile, 'rb') as fh:
+        data = fh.read()
+    data = np.frombuffer(data, dtype=dataTypes[datatype])
     data.shape = dim[1:dim[0]]
-    
+
     return data
-    
+
 
 def parseNii(headerFH, imgFile):
     m = Obj()
@@ -231,15 +220,15 @@ def parseNii(headerFH, imgFile):
             data = headerFH.read(size)
         elif m.magic == 'nii\0':               ## data is in a separate .img file
             imgFile = os.path.splitext(imgFile)[0] + '.img'
-            fh = open(imgFile, 'rb')
-            fh.seek(m.vox_offset)
-            data = fh.read(size)
+            with open(imgFile, 'rb') as fh:
+                fh.seek(m.vox_offset)
+                data = fh.read(size)
         headerFH.close()
-        
+
         if len(data) != size:
             raise Exception("Data size is incorrect. Expected %d, got %d" % (size, len(data)))
             
-        data = np.fromstring(data, dtype=dtype)
+        data = np.frombuffer(data, dtype=dtype)
         data.shape = m.dim[1:m.dim[0]+1]
     else:
         #print "Large file; loading by memmap"

@@ -262,9 +262,11 @@ class CParser:
             except ValueError:
                 import pickle
                 try:
-                    cache = pickle.load(open(cacheFile, 'r'))
+                    with open(cacheFile, 'r') as fh:
+                        cache = pickle.load(fh)
                 except (ValueError, TypeError):
-                    cache = pickle.load(open(cacheFile, 'rb'))
+                    with open(cacheFile, 'rb') as fh:
+                        cache = pickle.load(fh)
 
             ## make sure __init__ options match (unless we can't parse the headers anyway)
             if checkValidity:
