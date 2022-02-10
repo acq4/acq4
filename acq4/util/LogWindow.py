@@ -832,7 +832,7 @@ class LogWidget(Qt.QWidget):
                 )
 
         # doc = self.ui.logView.page().currentFrame().toHtml()
-        f = open(fileName, "w")
+        f = open(fileName, "wb")
         f.write(doc.encode("utf-8"))
         f.close()
 

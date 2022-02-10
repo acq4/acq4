@@ -28,8 +28,8 @@ def getDeviceClass(name):
                 import_module(name)
                 break
             except ModuleNotFoundError as exc:
-                if exc.name != name:
-                    raise
+                if exc.name not in name:
+                    raise  # some other missing module is a legitimate problem
                 if name == namesToCheck[-1]:
                     raise Exception(f"No module found from names: {namesToCheck}")
                 continue

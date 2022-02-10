@@ -54,8 +54,15 @@ class DataManager(Module):
         self.ui.logDock.hide()
         self.dialog = None
         self.ui.fileTreeWidget.setSelectionMode(Qt.QAbstractItemView.ExtendedSelection)
-        self.baseDirChanged()
-        self.currentDirChanged()
+        try:
+            self.baseDirChanged()
+        except Exception:
+            printExc("Could not set base directory:")
+        try:
+            self.currentDirChanged()
+        except Exception:
+            printExc("Could not set current directory:")
+
         self.selFile = None
         self.updateNewFolderList()
 

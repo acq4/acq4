@@ -270,7 +270,8 @@ class Manager(Qt.QObject):
         sys.path.insert(0, modDir)
         try:
             globs = {}
-            exec(open(pyfile, 'rb').read(), globs)
+            with open(pyfile, 'rb') as fh:
+                exec(fh.read(), globs)
         finally:
             sys.path.pop(0)
         return globs

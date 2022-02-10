@@ -318,7 +318,7 @@ class PoissonScore:
         ##path = os.path.dirname(__file__)
         ##cacheFile = os.path.join(path, 'poissonScoreNormTable_2x9x500_float64.dat')
         #if os.path.exists(cacheFile):
-            #norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(2,9,500)
+            #norm = np.fromfile(cacheFile, dtype=np.float64).reshape(2,9,500)
             
         #else:
             #count = np.zeros(tableShape[1:], dtype=float)
@@ -381,7 +381,7 @@ class PoissonScore:
         cacheFile = os.path.join(path, '%s_normTable_%s_float64.dat' % (cls.__name__, 'x'.join(map(str,tableShape))))
         
         if os.path.exists(cacheFile):
-            norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(tableShape)
+            norm = np.fromfile(cacheFile, dtype=np.float64).reshape(tableShape)
         else:
             print("Generating %s ..." % cacheFile)
             norm = np.empty(tableShape)
@@ -406,9 +406,10 @@ class PoissonScore:
             count[count==0] = 1
             norm[0] = xVals.reshape(1, len(xVals))
             norm[1] = nev.reshape(len(nev), 1) / count
-            
-            open(cacheFile, 'wb').write(norm.tostring())
-        
+
+            with open(cacheFile, 'wb') as fh:
+                fh.write(norm.tobytes())
+
         return norm
         
     @classmethod
@@ -683,7 +684,7 @@ class PoissonRepeatScore:
         cacheFile = os.path.join(path, '%s_normTable_%s_float64.dat' % (cls.__name__, 'x'.join(map(str,tableShape))))
         
         if os.path.exists(cacheFile):
-            norm = np.fromstring(open(cacheFile).read(), dtype=np.float64).reshape(tableShape)
+            norm = np.fromfile(cacheFile, dtype=np.float64).reshape(tableShape)
         else:
             print("Generating %s ..." % cacheFile)
             norm = np.empty(tableShape)
@@ -707,9 +708,10 @@ class PoissonRepeatScore:
             count[count==0] = 1
             norm[0] = xVals.reshape(1, 1, len(xVals))
             norm[1] = nev.reshape(1, len(nev), 1) / count
-            
-            open(cacheFile, 'wb').write(norm.tostring())
-        
+
+            with open(cacheFile, 'wb') as fh:
+                fh.write(norm.tobytes())
+
         return norm
 
     @classmethod
