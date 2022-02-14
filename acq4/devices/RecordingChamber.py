@@ -41,9 +41,8 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
         self.boundingEllipse = Qt.QGraphicsEllipseItem(-1, -1, 2, 2)
         self.boundingEllipse.setPen(pg.mkPen("y"))
         self.boundingEllipse.setScale(radius)
-        self.boundingEllipse.setPos(x, y)
-
         mod.window().addItem(self.boundingEllipse, ignoreBounds=True)
+        self.boundingEllipse.setPos(x, y)
 
     def boundingRect(self):
         return None
