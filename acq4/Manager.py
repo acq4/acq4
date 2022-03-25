@@ -381,17 +381,6 @@ class Manager(Qt.QObject):
                     # Let's start moving things out of the top level, but stay backwards compatible
                     self._loadConfig(cfg[key])
 
-                ## Copy in any other configurations.
-                ## dicts are extended, all others are overwritten.
-                else:
-                    if isinstance(cfg[key], dict):
-                        if key not in self.config:
-                            self.config[key] = {}
-                        for key2 in cfg[key]:
-                            self.config[key][key2] = cfg[key][key2]
-                    else:
-                        self.config[key] = cfg[key]
-
             except:
                 printExc("Error in ACQ4 configuration:")
                 if self.exitOnError:
@@ -812,8 +801,9 @@ class Manager(Qt.QObject):
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')
                     dt = info['dirType']
-                    if dt in self.config['folderTypes']:
-                        fields = self.config['folderTypes'][dt]['info']
+                    folderTypesConfig = self._foldlerTypesConfig()
+                    if dt in folderTypesConfig:
+                        fields = folderTypesConfig[dt]['info']
 
         if 'notes' not in fields:
             fields['notes'] = 'text', 5
@@ -821,6 +811,14 @@ class Manager(Qt.QObject):
             fields['important'] = 'bool'
 
         return fields
+
+    def _folderTypesConfig(self):
+        # handle folder types appearing in two different places
+        # (the correct place is in the config top-level)
+        if 'folderTypes' in self.config:
+            return self.config['folderTypes']
+        elif 'misc' in self.config and 'folderTypes' in self.config['misc']:
+            return self.config['misc']['folderTypes']
 
     def showDocumentation(self, label=None):
         self.documentation.show(label)
