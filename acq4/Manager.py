@@ -82,6 +82,7 @@ class Manager(Qt.QObject):
         self.disableAllDevs = False
         self.alreadyQuit = False
         self.taskLock = Mutex(Qt.QMutex.Recursive)
+        self._folderTypes = None
 
         try:
             if Manager.CREATED:
@@ -347,6 +348,9 @@ class Manager(Qt.QObject):
                     print("=== Setting default HDF5 compression: %s ===" % comp)
                     import pyqtgraph.metaarray as ma
                     ma.MetaArray.defaultCompression = comp
+
+                elif key == 'folderTypes':
+                    self._folderTypes = val
 
                 ## load stylesheet
                 elif key == 'stylesheet':
@@ -813,12 +817,7 @@ class Manager(Qt.QObject):
         return fields
 
     def _folderTypesConfig(self):
-        # handle folder types appearing in two different places
-        # (the correct place is in the config top-level)
-        if 'folderTypes' in self.config:
-            return self.config['folderTypes']
-        elif 'misc' in self.config and 'folderTypes' in self.config['misc']:
-            return self.config['misc']['folderTypes']
+        return self._folderTypes
 
     def showDocumentation(self, label=None):
         self.documentation.show(label)
