@@ -85,8 +85,7 @@ class DataManager(Module):
 
     def updateNewFolderList(self):
         self.ui.newFolderList.clear()
-        conf = self.manager.config['folderTypes']
-        # print "folderTypes:", self.manager.config['folderTypes'].keys()
+        conf = self.manager._folderTypesConfig()
         self.ui.newFolderList.clear()
         self.ui.newFolderList.addItems(['New...', 'Folder'] + list(conf.keys()))
 
@@ -203,7 +202,7 @@ class DataManager(Module):
             # item = self.model.handleIndex(nd)
             self.ui.fileTreeWidget.editItem(nd)
         else:
-            spec = self.manager.config['folderTypes'][ftype]
+            spec = self.manager._folderTypesConfig()[ftype]
             name = time.strftime(spec['name'])
 
             ## Determine where to put the new directory
