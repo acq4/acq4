@@ -7,16 +7,30 @@ class DAQPressureControl(PressureControl):
     """Pressure control device driven by DAQ analog/digital channels.
     The configuration for these devices might look like::
 
-    sources:
-        regulator:
-            valve_1: 1  # activate only valve 1 for regulator
-            valve_2: 0
-        atmosphere:
-            valve_1: 0  # deactivate all valves for atmosphere
-            valve_2: 0
-        user:
-            valve_1: 0  # activate only valve 2 for user
-            valve_2: 1
+    PressureChannels:
+        driver: 'DAQGeneric'
+        channels:
+            valve_1:
+                device: 'DAQ'
+                channel: '/Dev2/line0'
+                type: 'do'
+            valve_2:
+                device: 'DAQ'
+                channel: '/Dev2/line1'
+                type: 'do'
+
+    PressureController:
+        daqDev: 'PressureChannels'
+        sources:
+            regulator:
+                valve_1: 1  # activate only valve 1 for regulator
+                valve_2: 0
+            atmosphere:
+                valve_1: 0  # deactivate all valves for atmosphere
+                valve_2: 0
+            user:
+                valve_1: 0  # activate only valve 2 for user
+                valve_2: 1
     """
 
     def __init__(self, manager, config, name):
