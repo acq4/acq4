@@ -239,6 +239,7 @@ class Manager(Qt.QObject):
         print("============= Starting Manager configuration from %s =================" % configFile)
         logMsg("Starting Manager configuration from %s" % configFile)
         cfg = configfile.readConfigFile(configFile)
+        self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
         self.configure(cfg)
@@ -576,10 +577,7 @@ class Manager(Qt.QObject):
             conf = self.definedModules[name]
 
         mod = conf['module']
-        if 'config' in conf:
-            config = conf['config']
-        else:
-            config = {}
+        config = conf.get('config', {})
 
         # Allow mechanisms for importing custom modules
         execPath = conf.get('exec', None)
