@@ -494,6 +494,8 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         # decide how / whether to add a label for the target
         basename = dev.name().rstrip('0123456789')
+        self.pipetteNumber = dev.name()[len(basename):]
+
         showLabel = False
         if basename != dev.name():
             # If this device looks like "Name00" and another device has the same
@@ -503,8 +505,7 @@ class PipetteCamModInterface(CameraModuleInterface):
                     showLabel = True
                     break
         if showLabel:
-            num = dev.name()[len(basename):]
-            self.target.setLabel(num, {"angle": dev.yawAngle()})
+            self._updateTargetLabel()
 
         self.depthTarget = Target(movable=False)
         mod.getDepthView().addItem(self.depthTarget)
@@ -590,9 +591,14 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.depthArrow.setPos(0, pos[2])
 
         if self.target.label() is not None:
-            dev = self.getDevice()
-            yaw = dev.yawAngle()
-            self.target.label().setAngle(yaw)
+            self._updateTargetLabel()
+
+    def _updateTargetLabel(self):
+        num = self.pipetteNumber
+        dev = self.getDevice()
+        angle = dev.yawAngle() + 180
+        offset = 16 * np.cos(angle * np.pi / 180), 16 * np.sin(angle * np.pi / 180)
+        self.target.setLabel(num, {'offset': offset, 'anchor': (0.5, 0.5)})
 
     def analyzeTransform(self):
         """Return the position and yaw angle of the device transform
