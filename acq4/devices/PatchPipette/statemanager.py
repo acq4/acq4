@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 from six.moves import queue
 
+from acq4 import getManager
 from acq4.util import Qt
 from pyqtgraph import disconnect
 from acq4.util.debug import printExc
@@ -48,6 +49,10 @@ class PatchPipetteStateManager(Qt.QObject):
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
     _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
+    sigProfileChanged = Qt.Signal(object, object),  # self, profile_name
+
+    profiles = {}
+    _profilesLoadedFromConfig = False
 
     def __init__(self, dev):
         Qt.QObject.__init__(self)
@@ -61,6 +66,45 @@ class PatchPipetteStateManager(Qt.QObject):
 
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
+    @classmethod
+    def listProfiles(cls):
+        cls._loadGlobalProfilesOnce()
+        return list(cls.profiles.keys())
+
+    @classmethod
+    def _getProfileConfig(cls, name):
+        cls._loadGlobalProfilesOnce()
+        return cls.profiles[name]
+
+    @classmethod
+    def _loadGlobalProfilesOnce(cls):
+        if cls._profilesLoadedFromConfig:
+            return
+        cls._profilesLoadedFromConfig = True
+        man = getManager()
+        for k,v in man.config.get('misc', {}).get('patchProfiles', {}).items():
+            v = v.copy()
+            copyFrom = v.pop('copyFrom', None)
+            cls.addProfile(name=k, config=v, copyFrom=copyFrom)
+
+    @classmethod
+    def addProfile(cls, name, config, copyFrom=None, overwrite=False):
+        assert overwrite or name not in cls.profiles, f"Patch profile {name} already exists"
+        if copyFrom is not None:
+            # mix defaults in with selected profile
+            assert copyFrom in cls.profiles, f"Patch profile {copyFrom} does not exist (requested by {name})"
+            default = cls.profiles[copyFrom]
+            p = {}
+            for k in set(list(default.keys()) + list(config.keys())):
+                p[k] = default.get(k, {}).copy()
+                p[k].update(config.get(k, {}))
+            config = p
+        cls.profiles[name] = config
+
+    def setProfile(self, profile):
+        profile = self._getProfileConfig(profile)
+        self.setStateConfig(profile, profileName=profile)
+
     def getState(self):
         """Return the currently active state.
         """
@@ -69,12 +113,13 @@ class PatchPipetteStateManager(Qt.QObject):
     def listStates(self):
         return list(self.stateHandlers.keys())
 
-    def setStateConfig(self, config):
+    def setStateConfig(self, config, profileName=None):
         """Set configuration options to be used when initializing states.
 
         Must be a dict like {'statename': {'opt': value}, ...}.
         """
         self.stateConfig = config
+        self.sigProfileChanged.emit(self, profileName)
 
     def stateChanged(self, oldState, newState):
         """Called when state has changed (possibly by user)
