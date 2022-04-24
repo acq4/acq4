@@ -195,6 +195,21 @@ class Future(Qt.QObject):
             if timeout is not None and time.time() - start > timeout:
                 raise futures[0].Timeout("Timed out waiting for %r" % futures)
 
+    def raiseErrors(self, raiseErrors=True, raiseFrom=None, interval=1.0):
+        """Monitor this future for errors and raise if any occur.
+
+        This allows the caller to discard a future, but still expect errors to be delivered to the user.
+        """
+        # Futures need to declare whether errors are reported immediately, or only after a check
+
+
+        if self._monitorThread is not None:
+            if raiseErrors:
+                # already monitoring; ignore second request
+                return
+            else:
+                self._monitorThread.stop()
+
 
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures.

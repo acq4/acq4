@@ -1,6 +1,8 @@
 # coding: utf8
 from __future__ import print_function
 import os, re
+import sys
+
 import numpy as np
 import json
 from collections import OrderedDict
@@ -234,7 +236,8 @@ class MultiPatchWindow(Qt.QWidget):
     def moveApproach(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.pipetteDevice.goApproach(speed)
+            future = pip.pipetteDevice.goApproach(speed)
+            future.raiseErrors(raiseFrom=sys._getframe())
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
                 pip.clampDevice.autoPipetteOffset()
