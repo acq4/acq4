@@ -35,6 +35,10 @@ class Stage(Device, OptomechDevice):
         isManipulator : bool
             Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
             as a stage.
+        fastSpeed : float
+            Speed (m/s) to use when a movement is requested with speed='fast'
+        slowSpeed : float
+            Speed (m/s) to use when a movement is requested with speed='slow'
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
@@ -637,7 +641,7 @@ class MoveFuture(object):
                 raise self.Timeout("Timed out waiting for move to complete.")
 
         self._raiseError()
-    
+
     def _raiseError(self):
         """Raise an exception if the move did not complete, otherwise just return.
         """

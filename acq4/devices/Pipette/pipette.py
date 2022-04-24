@@ -53,7 +53,7 @@ class Pipette(Device, OptomechDevice):
     * pitch: The angle of the pipette (in degrees) relative to the horizontal plane,
       Positive values point downward. This option must be specified in the configuration.
     * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
-      should be about 1-2mm, emough to avoid collisions between the pipette tip and the sample during search.
+      should be about 1-2mm, enough to avoid collisions between the pipette tip and the sample during search.
       Default is 2 mm.
     * searchTipHeight: the distance above the sample surface to bring the (putative) pipette tip position
       when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
