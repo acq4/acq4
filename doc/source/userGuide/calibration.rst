@@ -212,7 +212,7 @@ This procedure should be performed any time a manipulator is physically reconfig
 * Collisions with nearby manipulators are not possible
 
 
-If your manipulator position meets these requirements, ..
+If your manipulator position meets these requirements,
 
 1. Run calibrations recommended by the hardware manufacturer, if needed.
     - For Sensapex uMp: 
@@ -221,7 +221,7 @@ If your manipulator position meets these requirements, ..
           that no collisions are possible during this calibration.
         - Run the position calibration from the sensapex touchpad (tap the manipulator icon [4th from left along the screen bottom], then expand the "Setup" group, then "Calibrate positions").
 
-2. Calibrate manipulator axis orientation. This step tells acq4 about the _direction_ that each manipulator axis points relative to the
+2. Calibrate manipulator axis orientation. This step tells acq4 about the *direction* that each manipulator axis points relative to the
    global coordinate system:
     a. Put a new pipette and the high-power objective in solution in the recording chamber. Watch via the camera for a few minutes to verify that the pipette is not drifting. 
        In case of drift, reduce any sources of temperature change -- especially block all air flow around the rig and microscope.
@@ -259,3 +259,9 @@ If your manipulator position meets these requirements, ..
 
 10. Configure pipette approach angle
 ------------------------------------
+
+ACQ4 needs to know the orientation of your patch pipette in order to do motion planning for automated actions. For example, when driving the pipette in and out of tissue we usually want it to move only along its axis; never laterally through the tissue. 
+
+Although some of this information may be related to your manipulator orientation, this is not always a reliable assumption so it is necessary to tell ACQ4 about your pipette orientation.
+
+1. Set the 
