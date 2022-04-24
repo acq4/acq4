@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 
-import time
+import time, sys, threading, traceback, functools
 
 from pyqtgraph import ptime
 
@@ -34,6 +34,8 @@ class Future(Qt.QObject):
         self._excInfo = None
         self._stopRequested = False
         self._state = 'starting'
+        self._errorMonitorThread = None
+        self.finishedEvent = threading.Event()
 
     def currentState(self):
         """Return the current state of this future.
@@ -90,6 +92,7 @@ class Future(Qt.QObject):
             self.setState(state or 'interrupted: %s' % error)
         else:
             self.setState(state or 'complete')
+        self.finishedEvent.set()
         self.sigFinished.emit(self)
 
     def wasInterrupted(self):
@@ -195,20 +198,55 @@ class Future(Qt.QObject):
             if timeout is not None and time.time() - start > timeout:
                 raise futures[0].Timeout("Timed out waiting for %r" % futures)
 
-    def raiseErrors(self, raiseErrors=True, raiseFrom=None, interval=1.0):
+    def raiseErrors(self, pollInterval=1.0):
         """Monitor this future for errors and raise if any occur.
 
         This allows the caller to discard a future, but still expect errors to be delivered to the user.
+
+        Parameters
+        ----------
+        pollInterval : float | None
+            Interval in seconds to poll for errors. This is only used with Futures that require a poller;
+            Futures that immediately report errors when they occur will not use a poller.
         """
-        # Futures need to declare whether errors are reported immediately, or only after a check
+        if self._errorMonitorThread is not None:
+            return
+        originalFrame = sys._getframe().f_back
+        monitorFn = functools.partial(self._monitorErrors, interval=pollInterval, originalFrame=originalFrame)
+        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
+
+    def _monitorErrors(self, pollInterval, originalFrame):
+        try:
+            self.wait(interval=pollInterval)
+        except Exception as exc:
+            stack = traceback.format_stack(originalFrame)
+            raise RuntimeError("A task failed that was requested from:\n{stack}") from exc
 
 
-        if self._monitorThread is not None:
-            if raiseErrors:
-                # already monitoring; ignore second request
-                return
-            else:
-                self._monitorThread.stop()
+
+class _FuturePollThread(threading.Thread):
+    """Thread used to poll the state of a future.
+    
+    Used when a Future subclass does not automatically call _taskDone, but instead requires
+    a periodic check. May
+    """
+    def __init__(self, future, pollInterval, originalFrame):
+        threading.Thread.__init__(self, daemon=True)
+        self.future = future
+        self.pollInterval = pollInterval
+        self._stop = False
+
+    def run(self):
+        while not self._stop:
+            if self.future.isDone():
+                break
+                if self.future._raiseErrors:
+                    raise
+            time.sleep(self.pollInterval)
+
+    def stop(self):
+        self._stop = True
+        self.join()
 
 
 class MultiFuture(Future):
