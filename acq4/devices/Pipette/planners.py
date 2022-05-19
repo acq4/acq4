@@ -208,11 +208,15 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
         targetToTip = last - ltarget
         targetToStby = stby - ltarget
         targetToStby /= np.linalg.norm(targetToStby)
-        closest = ltarget + np.dot(targetToTip, targetToStby) * targetToStby
+        intermediate = ltarget + np.dot(targetToTip, targetToStby) * targetToStby
+
+        # closest point may be behind the pipette (-x), in which case just go straight down instead
+        if intermediate[0] < 0:
+            intermediate = ltarget + targetToStby * (-ltarget[0] / targetToStby[0])
 
         if np.linalg.norm(stby - last) > 1e-6:
-            if (closest[2] > stby[2]) and (np.linalg.norm(stby - closest) > 1e-6):
-                path.append([pip.mapToGlobal(closest), speed, self.shouldUseLinearMotion()])
+            if (intermediate[2] > stby[2]) and (np.linalg.norm(stby - intermediate) > 1e-6):
+                path.append([pip.mapToGlobal(intermediate), speed, self.shouldUseLinearMotion()])
             path.append([pip.mapToGlobal(stby), speed, self.shouldUseLinearMotion()])
 
         return path
