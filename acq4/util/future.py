@@ -144,7 +144,7 @@ class Future(Qt.QObject):
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
         """
-        time.sleep(duration)
+        self.finishedEvent.wait(timeout=duration)
 
     def _checkStop(self, delay=0):
         """Raise self.StopRequested if self.stop() has been called.
@@ -198,13 +198,16 @@ class Future(Qt.QObject):
             if timeout is not None and time.time() - start > timeout:
                 raise futures[0].Timeout("Timed out waiting for %r" % futures)
 
-    def raiseErrors(self, pollInterval=1.0):
+    def raiseErrors(self, message, pollInterval=1.0):
         """Monitor this future for errors and raise if any occur.
 
-        This allows the caller to discard a future, but still expect errors to be delivered to the user.
+        This allows the caller to discard a future, but still expect errors to be delivered to the user. Note
+        that errors are raised from a background thread.
 
         Parameters
         ----------
+        message : str
+            Exception message to raise. May include "{stack}" to insert the stack trace of the caller.
         pollInterval : float | None
             Interval in seconds to poll for errors. This is only used with Futures that require a poller;
             Futures that immediately report errors when they occur will not use a poller.
@@ -212,15 +215,24 @@ class Future(Qt.QObject):
         if self._errorMonitorThread is not None:
             return
         originalFrame = sys._getframe().f_back
-        monitorFn = functools.partial(self._monitorErrors, interval=pollInterval, originalFrame=originalFrame)
+        monitorFn = functools.partial(self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame)
         self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
+        self._errorMonitorThread.start()
 
-    def _monitorErrors(self, pollInterval, originalFrame):
+    def _monitorErrors(self, message, pollInterval, originalFrame):
         try:
-            self.wait(interval=pollInterval)
+            self.wait(pollInterval=pollInterval)
         except Exception as exc:
-            stack = traceback.format_stack(originalFrame)
-            raise RuntimeError("A task failed that was requested from:\n{stack}") from exc
+            if '{stack}' in message:
+                stack = ''.join(traceback.format_stack(originalFrame))
+            else:
+                stack = None
+            try:
+                formattedMsg = message.format(stack=stack)
+            except Exception as exc2:
+                print("Could not format error message: ", message, exc2)
+                formattedMsg = message
+            raise RuntimeError(formattedMsg) from exc
 
 
 
