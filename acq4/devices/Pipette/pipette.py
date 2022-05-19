@@ -128,8 +128,11 @@ class Pipette(Device, OptomechDevice):
         if target is not None:
             self.setTarget(target)
 
-    def moveTo(self, position, speed, **kwds):
+    def moveTo(self, position, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
+
+        If *raiseErrors* is True, then an exception will be raised in a background
+        thread if the move fails.
         """
         # Select a motion planner based on the target position
         plannerClass = self.motionPlanners.get(position, self.defaultMotionPlanners.get(position, None))
@@ -141,7 +144,11 @@ class Pipette(Device, OptomechDevice):
             self.currentMotionPlanner.stop()
 
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
-        return self.currentMotionPlanner.move()
+        future = self.currentMotionPlanner.move()
+        if raiseErrors is not False:
+            future.raiseErrors(message="Move to " + position + " position failed; requested from:\n{stack}")
+
+        return future
 
     def savePosition(self, name, pos=None):
         """Store a position in global coordinates for later use.
@@ -275,7 +282,7 @@ class Pipette(Device, OptomechDevice):
         return self.pitchAngle() * np.pi / 180.    
 
     def goHome(self, speed='fast', **kwds):
-        """Extract pipette tip diagonally, then move stage to home position.
+        """Extract pipette tip diagonally, then move to home position.
         """
         return self.moveTo('home', speed=speed, **kwds)
 
@@ -437,13 +444,19 @@ class Pipette(Device, OptomechDevice):
         for iface in self._camInterfaces.keys():
             iface.hideMarkers(hide)
 
-    def focusTip(self, speed='slow'):
+    def focusTip(self, speed='slow', raiseErrors=False):
         pos = self.globalPosition()
-        self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        if raiseErrors:
+            future.raiseErrors("Focus on pipette tip failed; requested from:\n{stack})")
+        return future
 
-    def focusTarget(self, speed='slow'):
+    def focusTarget(self, speed='slow', raiseErrors=False):
         pos = self.targetPosition()
-        self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        if raiseErrors:
+            future.raiseErrors("Focus on pipette target failed; requested from:\n{stack})")
+        return future
 
     def positionChanged(self):
         self.moveTimer.start(500)
