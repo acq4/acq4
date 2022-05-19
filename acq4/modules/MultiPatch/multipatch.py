@@ -14,6 +14,7 @@ from .pipetteControl import PipetteControl
 from .mockPatch import MockPatch
 from six.moves import zip
 
+from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
@@ -103,8 +104,13 @@ class MultiPatchWindow(Qt.QWidget):
 
             self.pipCtrls.append(ctrl)
 
+
+        # load profile configurations from old location
+        for name, profile in module.config.get('patchProfiles', {}).items():
+            PatchPipetteStateManager.addProfile(name, profile, overwrite=True)
+
         # set up patch profile menu
-        profiles = list(module.config.get('patchProfiles', {}).keys())
+        profiles = PatchPipetteStateManager.listProfiles()
         if 'default' not in profiles:
             profiles.insert(0, 'default')
         for profile in profiles:
@@ -182,22 +188,9 @@ class MultiPatchWindow(Qt.QWidget):
             self.setPlotModes(config['plotModes'])
 
     def profileComboChanged(self):
-        default = self.module.config['patchProfiles'].get('default')
-        profile = self.module.config['patchProfiles'].get(self.ui.profileCombo.currentText(), {})
-
-        if default is not None:
-            # mix defaults in with selected profile
-            p = {}
-            for k in set(list(default.keys()) + list(profile.keys())):
-                p[k] = default.get(k, {}).copy()
-                p[k].update(profile.get(k, {}))
-            profile = p
-
-        from pprint import pprint
-        pprint(profile)
-
+        profile = self.ui.profileCombo.currentText()
         for pip in self.pips:
-            pip.stateManager().setStateConfig(profile)
+            pip.stateManager().setProfile(profile)
 
     def setPlotModes(self, modes):
         for ctrl in self.pipCtrls:

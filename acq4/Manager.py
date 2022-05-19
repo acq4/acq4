@@ -82,6 +82,7 @@ class Manager(Qt.QObject):
         self.disableAllDevs = False
         self.alreadyQuit = False
         self.taskLock = Mutex(Qt.QMutex.Recursive)
+        self._folderTypes = None
 
         try:
             if Manager.CREATED:
@@ -238,6 +239,7 @@ class Manager(Qt.QObject):
         print("============= Starting Manager configuration from %s =================" % configFile)
         logMsg("Starting Manager configuration from %s" % configFile)
         cfg = configfile.readConfigFile(configFile)
+        self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
         self.configure(cfg)
@@ -348,6 +350,9 @@ class Manager(Qt.QObject):
                     import pyqtgraph.metaarray as ma
                     ma.MetaArray.defaultCompression = comp
 
+                elif key == 'folderTypes':
+                    self._folderTypes = val
+
                 ## load stylesheet
                 elif key == 'stylesheet':
                     try:
@@ -380,17 +385,6 @@ class Manager(Qt.QObject):
                 elif key == 'misc':
                     # Let's start moving things out of the top level, but stay backwards compatible
                     self._loadConfig(cfg[key])
-
-                ## Copy in any other configurations.
-                ## dicts are extended, all others are overwritten.
-                else:
-                    if isinstance(cfg[key], dict):
-                        if key not in self.config:
-                            self.config[key] = {}
-                        for key2 in cfg[key]:
-                            self.config[key][key2] = cfg[key][key2]
-                    else:
-                        self.config[key] = cfg[key]
 
             except:
                 printExc("Error in ACQ4 configuration:")
@@ -583,10 +577,7 @@ class Manager(Qt.QObject):
             conf = self.definedModules[name]
 
         mod = conf['module']
-        if 'config' in conf:
-            config = conf['config']
-        else:
-            config = {}
+        config = conf.get('config', {})
 
         # Allow mechanisms for importing custom modules
         execPath = conf.get('exec', None)
@@ -812,8 +803,9 @@ class Manager(Qt.QObject):
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')
                     dt = info['dirType']
-                    if dt in self.config['folderTypes']:
-                        fields = self.config['folderTypes'][dt]['info']
+                    folderTypesConfig = self._foldlerTypesConfig()
+                    if dt in folderTypesConfig:
+                        fields = folderTypesConfig[dt]['info']
 
         if 'notes' not in fields:
             fields['notes'] = 'text', 5
@@ -821,6 +813,9 @@ class Manager(Qt.QObject):
             fields['important'] = 'bool'
 
         return fields
+
+    def _folderTypesConfig(self):
+        return self._folderTypes
 
     def showDocumentation(self, label=None):
         self.documentation.show(label)

@@ -46,6 +46,12 @@ def getDevices():
 
 class XKeys(Device):
     """P.I. Engineering X-Keys input device.
+
+    Configuration example::
+
+        PIKeyboard:
+            driver: 'XKeys'
+            index: 0
     """
     sigStateChanged = Qt.Signal(object, object)  # self, changes
 

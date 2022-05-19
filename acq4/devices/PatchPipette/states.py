@@ -284,6 +284,15 @@ class PatchPipetteBathState(PatchPipetteState):
     - monitor resistance to detect entry into bath
     - auto pipette offset and record initial resistance
     - monitor resistance for pipette break / clog
+
+    Parameters
+    ----------
+    bathThreshold : float
+        Resistance (Ohms) below which the tip is considered to be immersed in the bath.
+    breakThreshold : float
+        Threshold for change in resistance (Ohms) for detecting a broken pipette.
+    clogThreshold : float
+        Threshold for change in resistance (Ohms) for detecting a clogged pipette.
     """
     stateName = 'bath'
     def __init__(self, *args, **kwds):
@@ -298,7 +307,6 @@ class PatchPipetteBathState(PatchPipetteState):
         'bathThreshold': 50e6,
         'breakThreshold': -1e6,
         'clogThreshold': 1e6,
-        'targetDistanceThreshold': 10e-6
     }
     
     def run(self):
@@ -360,11 +368,58 @@ class PatchPipetteBathState(PatchPipetteState):
 class PatchPipetteCellDetectState(PatchPipetteState):
     """Handles cell detection:
 
-    - monitor resistance for cell proximity => seal mode
+    - monitor resistance for cell proximity and switch to seal mode
     - monitor resistance for pipette break
 
-    TODO: 
+    TODO:
     - Obstacle avoidance
+    - Cell tracking
+
+    Parameters
+    ----------
+    initialClampMode : str
+        Clamp mode to set when beginning this state--
+        'VC' or 'IC' (default 'VC')
+    initialClampHolding : float
+        Initial holding value to use when beginning this state (default 0)
+    autoAdvance : bool
+        If True, automatically advance the pipette while monitoring for cells (default True)
+    advanceMode : str
+        How to advance the pipette (default 'target'). Options are:
+        **target** : advance the pipette tip toward its target
+        **axial** : advance pipette along its axis
+        **vertical** : advance pipette straight downward in Z
+    advanceContinuous : bool
+        Whether to advance the pipette with continuous motion or in small steps (default True)
+    advanceStepInterval : float
+        Time duration (seconds) to wait between steps when advanceContinuous=False(default 0.1)
+    advanceStepDistance : float
+        Distance (m) per step when advanceContinuous=False (default 1 um)
+    maxAdvanceDistance : float | None
+        Maximum distance (m) to advance past starting point (default None)
+    maxAdvanceDistancePastTarget : float | None
+        Maximum distance (m) to advance past target (default 10 um)
+    maxAdvanceDepthBelowSurface : float | None
+        Maximum depth (m) to advance below the sample surface (default None)
+    advanceSpeed : float
+        Speed (m/s) to advance the pipette when advanceContinuous=True (default 2 um/s)
+    fastDetectionThreshold : float
+        Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
+    slowDetectionThreshold : float
+        Threshold for slow change in pipette resistance (Ohm) to trigger cell detection (default 200 kOhm)
+    slowDetectionSteps : int
+        Number of test pulses to integrate for slow change detection (default 3)
+    breakThreshold : float
+        Threshold for change in resistance (Ohm) to detect broken pipette (default -1 MOhm),
+    reserveDAQ : bool
+        If True, reserve the DAQ during the entire cell detection state. This is used in case multiple
+        channels are present an cannot be accessed simultaneously to ensure that cell detection is not interrupted.
+        (default False)
+    cellDetectTimeout : float
+        Maximum time (s) to wait for cell detection before switching to fallback state (default 30 s)
+    DAQReservationTimeout : float
+        Maximum time (s) to wait for DAQ reservation if reserveDAQ=True (defualt 30 s)
+
     """
     stateName = 'cell detect'
     def __init__(self, *args, **kwds):
@@ -1035,6 +1090,18 @@ class PatchPipetteCleanState(PatchPipetteState):
     """Pipette cleaning state.
 
     Cycles +/- pressure in a "clean" bath followed by an optional "rinse" bath.
+
+    Parameters
+    ----------
+    cleanSequence : list
+        List of (pressure (Pa), duration (s)) pairs specifying how to pulse pressure while the pipette tip is in the
+        cleaning well.
+    rinseSequence : list
+        List of (pressure (Pa), duration (s)) pairs specifying how to pulse pressure while the pipette tip is in the
+        rinse well.
+    approachHeight : float
+        Distance (m) above the clean/rinse wells to approach from. This is needed to ensure the pipette avoids the well
+        walls when approaching.
     """
     stateName = 'clean'
 

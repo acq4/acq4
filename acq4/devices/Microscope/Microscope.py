@@ -19,15 +19,20 @@ Ui_Form = Qt.importTemplate('.deviceTemplate')
 
 class Microscope(Device, OptomechDevice):
     """
-    The Microscope device class is used primarily to manage the transformation and calibration changes associated with multi-objective scopes.
-    
-    * Maintains list of objective positions (most scopes have 2-5 positions)
-    * For each position, maintains a list of possible objectives that may be found there
-      (this allows the experimenter to change the objective at a certain position 
-      during the experiment)
-    * Support for automatically selecting the correct objective position based on a Switch device
-    * Each objective has an offset and scale factor associated with it. This transormation is communicated
-      automatically to all rigidly-connected child devices.
+    The Microscope device class has several purposes:
+
+    * Acts as a parent for imaging and photostimulation devices
+    * Account for differences in magnification, focal plane, and xy offset between objectives
+        * Maintains list of objective slots (most scopes have 2-5 slots)
+        * For each slot, maintains a list of possible objectives that may be found there
+          (this allows the experimenter to change the objective at a certain slot
+          during the experiment)
+        * Support for automatically selecting the correct objective position based on a Switch device
+        * Each objective has an offset and scale factor associated with it. This transformation is communicated
+          automatically to all rigidly-connected child devices.
+    * Manage multiple parent stage devices (such as independent focus / xy stages)
+    * Manage attached light + filter devices
+    * Track the focus depth of sample surface
     """
 
     sigObjectiveChanged = Qt.Signal(object)  ## (objective, lastObjective)
@@ -507,7 +512,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
         sdepth = self.getDevice().getSurfaceDepth()
         if sdepth is not None:
-            depth = fpos[2] - sdepth
+            depth = focus - sdepth
             self.depthLabel.setValue(depth)
 
     def focusDragged(self):

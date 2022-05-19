@@ -22,7 +22,13 @@ except Exception as exc:
 
 @lru_cache()
 def shouldUseCuda():
-    if getManager().config.get("cudaImageProcessing", False) is not True:
+    config = getManager().config.copy()
+    config.update(config.get('misc', {}))  # cudaImageProcessing could appear in top-level or under 'misc' depending on config version
+    if "cudaImageProcessing" not in config:
+        print("CUDA acceleration disabled by default (to enable set misc: cudaImageProcessing=True in config)")
+        return False
+
+    if config.get('cudaImageProcessing', False) is not True:
         print("CUDA acceleration disabled by config key (cudaImageProcessing)")
         return False
 

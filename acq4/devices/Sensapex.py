@@ -65,7 +65,7 @@ class Sensapex(Stage):
         Sensapex.devices[self.devid] = self
 
     def axes(self):
-        return "x", "y", "z"
+        return ("x", "y", "z")[:self.dev.n_axes()]
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
