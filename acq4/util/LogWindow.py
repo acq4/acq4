@@ -122,6 +122,7 @@ class LogWindow(Qt.QMainWindow):
         importance: 0-9 (0 is low importance, 9 is high, 5 is default)
         other keywords:
           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          excInfo: an object with attributes exc_type, exc_value, exc_traceback, and thread
           docs: a list of strings where documentation related to the message can be found
           reasons: a list of reasons (as strings) for the message
           traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a
@@ -187,8 +188,17 @@ class LogWindow(Qt.QMainWindow):
 
         # convert exc_info to serializable dictionary
         if entry.get("exception", None) is not None:
-            exc_info = entry.pop("exception")
-            entry["exception"] = self.exceptionToDict(*exc_info, topTraceback=entry.get("traceback", []))
+            excInfo = entry.pop("exception")
+            entry["exception"] = self.exceptionToDict(*excInfo, thread=None, topTraceback=entry.get("traceback", []))
+        elif entry.get("excInfo", None) is not None:
+            excInfo = entry.pop("excInfo")
+            entry["exception"] = self.exceptionToDict(
+                excInfo.exc_type,
+                excInfo.exc_value,
+                excInfo.exc_traceback,
+                excInfo.thread,
+                topTraceback=entry.get("traceback", [])
+            )
         else:
             entry["exception"] = None
 
@@ -205,10 +215,11 @@ class LogWindow(Qt.QMainWindow):
         self.logMsg(msg, importance=8, msgType="user", currentDir=currentDir)
         self.wid.ui.input.clear()
 
-    def exceptionToDict(self, exType, exc, tb, topTraceback):
+    def exceptionToDict(self, exType, exc, tb, thread, topTraceback):
         excDict = {
             "message": traceback.format_exception(exType, exc, tb)[-1][:-1],
             "traceback": topTraceback + traceback.format_exception(exType, exc, tb)[:-1],
+            # "thread": thread,
         }
         if hasattr(exc, "docs") and len(exc.docs) > 0:
             excDict["docs"] = exc.docs
@@ -218,7 +229,7 @@ class LogWindow(Qt.QMainWindow):
             for k in exc.kwargs:
                 excDict[k] = exc.kwargs[k]
         if hasattr(exc, "oldExc"):
-            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, topTraceback=[])
+            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, thread=None, topTraceback=[])
         return excDict
 
     def flashButtons(self):
