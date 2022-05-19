@@ -275,11 +275,11 @@ class TestPulse(object):
         if self.taskParams.get('ignoreWarnings', True):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                return self._analysis()
+                return self._doAnalysis()
         else:
-            return self._analysis()
+            return self._doAnalysis()
 
-    def _analysis(self):
+    def _doAnalysis(self):
         with self._analysisLock:
             if self._analysis is not None:
                 return self._analysis
