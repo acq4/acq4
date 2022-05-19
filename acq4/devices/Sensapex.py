@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import threading
+
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph import ptime, Transform3D, solve3DTransform
@@ -170,7 +172,6 @@ class Sensapex(Stage):
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
     """
-
     def __init__(self, dev, pos, speed, linear):
         MoveFuture.__init__(self, dev, pos, speed)
         self._linear = linear
@@ -179,80 +180,34 @@ class SensapexMoveFuture(MoveFuture):
         self._finished = False
         self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6, simultaneous=linear, linear=linear)
         self._checked = False
+        self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True)
+        self._monitorThread.start()
 
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._moveReq.interrupted
+    def _watchForFinish(self):
+        moveReq = self._moveReq
+        moveReq.finished_event.wait()
+        self._taskDone(
+            interrupted=moveReq.interrupted,
+            error=self._generateErrorMessage(),
+            state=None,
+            excInfo=None,
+        )
 
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._moveReq.finished
-
-    def _checkError(self):
-        if self._checked or not self.isDone():
-            return
-
+    def _generateErrorMessage(self):
         # interrupted?
         if self._moveReq.interrupted:
-            self._errorMsg = self._moveReq.interrupt_reason
+            return self._moveReq.interrupt_reason
         else:
             # did we reach target?
             pos = self._moveReq.last_pos
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
             if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
                 # missed
-                self._errorMsg = "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
+                return "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
                     self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed
                 )
 
-        self._checked = True
-
-    def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, has been interrupted, or the
-        specified timeout has elapsed.
-
-        If *updates* is True, process Qt events while waiting.
-
-        If the move did not complete, raise an exception.
-        """
-        if updates is False:
-            # if we don't need gui updates, then block on the finished_event for better performance
-            if not self._moveReq.finished_event.wait(timeout=timeout):
-                raise self.Timeout("Timed out waiting for %s move to complete." % self.dev.name())
-            self._raiseError()
-        else:
-            return MoveFuture.wait(self, timeout=timeout, updates=updates)
-
-    def errorMessage(self):
-        self._checkError()
-        return self._errorMsg
-
-
-# class SensapexGUI(StageInterface):
-#     def __init__(self, dev, win):
-#         StageInterface.__init__(self, dev, win)
-#
-#         # Insert Sensapex-specific controls into GUI
-#         self.zeroBtn = Qt.QPushButton('Zero position')
-#         self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-#         self.nextRow += 1
-#
-#         self.psGroup = Qt.QGroupBox('Rotary Controller')
-#         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-#         self.nextRow += 1
-#
-#         self.psLayout = Qt.QGridLayout()
-#         self.psGroup.setLayout(self.psLayout)
-#         self.speedLabel = Qt.QLabel('Speed')
-#         self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
-#         self.psLayout.addWidget(self.speedLabel, 0, 0)
-#         self.psLayout.addWidget(self.speedSpin, 0, 1)
-#
-#         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-#         # UNSAFE lambdas with self prevent GC
-#         # self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
+        return None
 
 
 class SensapexInterface(Qt.QWidget):
