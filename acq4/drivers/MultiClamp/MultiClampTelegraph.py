@@ -221,12 +221,18 @@ class MultiClampTelegraph:
                     try:
                         priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
                     except IndexError:
-                        priSignal = "Auxiliary"  # some amps give signal=44 here, which is not in the list..
+                        # Some amps report signal 44 here when either auxiliary signal is selected.
+                        # This prevents errors, but unfortunately means we can't tell the difference between
+                        # aux1 and aux2.
+                        priSignal = "Auxiliary 1"
 
                     try:
                         secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
                     except IndexError:
-                        secSignal = "Auxiliary"  # some amps give signal=44 here, which is not in the list..
+                        # Some amps report signal 44 here when either auxiliary signal is selected.
+                        # This prevents errors, but unfortunately means we can't tell the difference between
+                        # aux1 and aux2.
+                        secSignal = "Auxiliary 1"
 
                 priUnits = UNIT_MAP[data.uScaleFactorUnits]
                 secUnits = UNIT_MAP[data.uRawScaleFactorUnits]

@@ -554,8 +554,8 @@ def initializeGlobals():
                     "Pipette Potential": "VC_PIPPOTENTIAL",
                     "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                     "External Command Potential": "VC_EXTCMDPOTENTIAL",
-                    "Auxiliaryl": "VC_AUXILIARY1",
-                    "Auxiliary2": "VC_AUXILIARY2",
+                    "Auxiliary 1": "VC_AUXILIARY1",
+                    "Auxiliary 2": "VC_AUXILIARY2",
                 },
                 'SEC': {
                     "Membrane Current":"VC_MEMBCURRENT" ,
@@ -563,8 +563,8 @@ def initializeGlobals():
                     "Pipette Potential": "VC_PIPPOTENTIAL",
                     "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                     "External Command Potential": "VC_EXTCMDPOTENTIAL",
-                    "Auxiliaryl": "VC_AUXILIARY1",
-                    "Auxiliary2": "VC_AUXILIARY2",
+                    "Auxiliary 1": "VC_AUXILIARY1",
+                    "Auxiliary 2": "VC_AUXILIARY2",
                 }
             },
             'IC': {
@@ -574,8 +574,8 @@ def initializeGlobals():
                     "Command Current": "IC_CMDCURRENT",
                     "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
                     "External Command Current": "IC_EXTCMDCURRENT",
-                    "Auxiliary1": "IC_AUXILIARY1",
-                    "Auxiliary2": "IC_AUXILIARY2",
+                    "Auxiliary 1": "IC_AUXILIARY1",
+                    "Auxiliary 2": "IC_AUXILIARY2",
                 },
                 'SEC': {
                     "Membrane Potential": "IC_MEMBPOTENTIAL",
@@ -583,8 +583,8 @@ def initializeGlobals():
                     "Pipette Potential": "IC_PIPPOTENTIAL",
                     "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
                     "External Command Current": "IC_EXTCMDCURRENT",
-                    "Auxiliary1": "IC_AUXILIARY1",
-                    "Auxiliary2": "IC_AUXILIARY2",
+                    "Auxiliary 1": "IC_AUXILIARY1",
+                    "Auxiliary 2": "IC_AUXILIARY2",
                 }
             }
         }
