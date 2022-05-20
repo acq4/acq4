@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from pyqtgraph import ptime, Transform3D, solve3DTransform
 
 from acq4.util import Qt
-from acq4.drivers.sensapex import UMP
+from acq4.drivers.sensapex import UMP, version_info
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
@@ -32,7 +32,9 @@ class Sensapex(Stage):
         group = config.pop("group", None)
         ump = UMP.get_ump(address=address, group=group)
         # create handle to this manipulator
-        self.dev = ump.get_device(self.devid)
+        if "nAxes" in config and version_info < (1, 22, 4):
+            raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
+        self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None))
 
         Stage.__init__(self, man, config, name)
         # Read position updates on a timer to rate-limit
@@ -42,9 +44,6 @@ class Sensapex(Stage):
 
         self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
-        # note: n_axes is used in cases where the device is not capable of answering this on its own
-        if "nAxes" in config:
-            self.dev.set_n_axes(config["nAxes"])
         if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
