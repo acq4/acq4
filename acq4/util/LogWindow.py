@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 import sys
 import traceback
 import weakref
@@ -603,6 +604,13 @@ class LogWidget(Qt.QWidget):
         text = re.sub(r">", "&gt;", text)
         text = re.sub(r"<", "&lt;", text)
         text = re.sub(r"\n", "<br/>\n", text)
+
+        # replace indenting spaces with &nbsp
+        lines = text.split('\n')
+        indents = ['&nbsp;' * (len(line) - len(line.lstrip())) for line in lines]
+        lines = [indent + line.lstrip() for indent, line in zip(indents, lines)]
+        text = ''.join(lines)
+
         return text
 
     def formatExceptionForHTML(self, entry, exception=None, count=1, entryId=None):
@@ -647,10 +655,21 @@ class LogWidget(Qt.QWidget):
     def formatTracebackForHTML(self, tb):
         try:
             tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
-        except:
+        except Exception:
             print("\n" + str(tb) + "\n")
             raise
-        return re.sub(" ", "&nbsp;", "".join(map(self.cleanText, tb)))[:-1]
+
+        cleanLines = []
+        for i, line in enumerate(tb):
+            line = self.cleanText(line)
+            m = re.match(r"(.*)File \"(.*)\", line (\d+)", line)
+            if m is not None:
+                # insert hyperlink for opening file in editor
+                indent, codeFile, lineNum = m.groups()
+                extra = line[m.end():]
+                line = f'{indent}File <a href="code:{lineNum}:{codeFile}">{codeFile}</a>, line {lineNum}{extra}'
+            cleanLines.append(line)
+        return ''.join(cleanLines)
 
     def formatReasonsStrForHTML(self, reasons):
         # indent = 6
@@ -716,21 +735,30 @@ class LogWidget(Qt.QWidget):
             )
 
     def linkClicked(self, url):
-        action, target = url.toString().split(":")
+        urlParts = url.toString().split(":")
+        action = urlParts[0]
+        target = urlParts[1:]
         if action == "doc":
-            self.manager.showDocumentation(target)
+            self.manager.showDocumentation(target[0])
         elif action == "exc":
-            cursor = self.ui.output.document().find(f"Show traceback {target}")
+            cursor = self.ui.output.document().find(f"Show traceback {target[0]}")
             try:
-                tb = self.entries[int(target) - 1]["tracebackHtml"]
+                tb = self.entries[int(target[0]) - 1]["tracebackHtml"]
             except IndexError:
                 try:
-                    matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(target)))]
+                    matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(target[0])))]
                     tb = self.entries[int(matchingEntry["index"])]["tracebackHtml"]
                 except IndexError:
-                    print("requested index %d, but only %d entries exist." % (int(target) - 1, len(self.entries)))
+                    print("requested index %d, but only %d entries exist." % (int(target[0]) - 1, len(self.entries)))
                     raise
             cursor.insertHtml(tb)
+        elif action == 'code':
+            lineNum, codeFile = target
+            codeCmd = self.manager.config.get('misc', {}).get('codeEditor', None)
+            if codeCmd is None:
+                raise Exception('No code editor configured (add misc:codeEditor to your configuration)')
+            subprocess.Popen(codeCmd.format(fileName=codeFile, lineNum=lineNum), shell=True)
+
 
     def clear(self):
         self.ui.output.clear()
