@@ -49,7 +49,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
     _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
-    sigProfileChanged = Qt.Signal(object, object),  # self, profile_name
+    sigProfileChanged = Qt.Signal(object, object)  # self, profile_name
 
     profiles = {}
     _profilesLoadedFromConfig = False

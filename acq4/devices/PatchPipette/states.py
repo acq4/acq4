@@ -480,6 +480,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         while True:
             if config['cellDetectTimeout'] is not None and ptime.time() - startTime > config['cellDetectTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
+                return config['fallbackState']
 
             self._checkStop()
 
