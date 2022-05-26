@@ -22,6 +22,7 @@ from acq4.util import Qt
 from acq4.util.DataManager import DirHandle
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.debug import printExc
+from acq4.util.codeEditor import invokeCodeEditor
 from pyqtgraph import FeedbackButton
 from pyqtgraph import FileDialog
 
@@ -735,29 +736,25 @@ class LogWidget(Qt.QWidget):
             )
 
     def linkClicked(self, url):
-        urlParts = url.toString().split(":")
-        action = urlParts[0]
-        target = urlParts[1:]
+        action = url.scheme()
+        target = url.path()
         if action == "doc":
-            self.manager.showDocumentation(target[0])
+            self.manager.showDocumentation(target)
         elif action == "exc":
-            cursor = self.ui.output.document().find(f"Show traceback {target[0]}")
+            cursor = self.ui.output.document().find(f"Show traceback {target}")
             try:
-                tb = self.entries[int(target[0]) - 1]["tracebackHtml"]
+                tb = self.entries[int(target) - 1]["tracebackHtml"]
             except IndexError:
                 try:
-                    matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(target[0])))]
+                    matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(target)))]
                     tb = self.entries[int(matchingEntry["index"])]["tracebackHtml"]
                 except IndexError:
-                    print("requested index %d, but only %d entries exist." % (int(target[0]) - 1, len(self.entries)))
+                    print("requested index %d, but only %d entries exist." % (int(target) - 1, len(self.entries)))
                     raise
             cursor.insertHtml(tb)
         elif action == 'code':
-            lineNum, codeFile = target
-            codeCmd = self.manager.config.get('misc', {}).get('codeEditor', None)
-            if codeCmd is None:
-                raise Exception('No code editor configured (add misc:codeEditor to your configuration)')
-            subprocess.Popen(codeCmd.format(fileName=codeFile, lineNum=lineNum), shell=True)
+            lineNum, _, codeFile = target.partition(':')
+            invokeCodeEditor(fileName=codeFile, lineNum=lineNum)
 
 
     def clear(self):
