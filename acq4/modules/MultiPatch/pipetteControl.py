@@ -235,11 +235,11 @@ class PipetteControl(Qt.QWidget):
 
     def focusTipBtnClicked(self, state):
         speed = self.mainWin.selectedSpeed(default='slow')
-        self.pip.focusOnTip(speed)
+        self.pip.focusOnTip(speed, raiseErrors=True)
 
     def focusTargetBtnClicked(self, state):
         speed = self.mainWin.selectedSpeed(default='slow')
-        self.pip.focusOnTarget(speed)
+        self.pip.focusOnTarget(speed, raiseErrors=True)
 
     def hideHeader(self):
         for col in range(self.ui.gridLayout.columnCount()):

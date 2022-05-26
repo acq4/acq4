@@ -1,6 +1,7 @@
 # coding: utf8
 from __future__ import print_function
 import os, re
+
 import numpy as np
 import json
 from collections import OrderedDict
@@ -214,45 +215,56 @@ class MultiPatchWindow(Qt.QWidget):
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
+        pipDevs = [p.pipetteDevice if isinstance(p, PatchPipette) else p for p in pips]
+
         if len(pips) == 1:
-            pips[0].pipetteDevice.goAboveTarget(speed=speed)
+            pips[0].pipetteDevice.goAboveTarget(speed=speed, raiseErrors=True)
             return
 
         fut = []
         wp = []
-        for pip in pips:
-            w1, w2 = pip.pipetteDevice.aboveTargetPath()
+        for pip in pipDevs:
+            w1, w2 = pip.aboveTargetPath()
             wp.append(w2)
-            fut.append(pip.pipetteDevice._moveToGlobal(w1, speed))
+            fut.append(pip._moveToGlobal(w1, speed))
         for f in fut:
             f.wait(updates=True)
-        for pip, waypoint in zip(pips, wp):
-            pip.pipetteDevice._moveToGlobal(waypoint, 'slow')
+        for pipDevs, waypoint in zip(pips, wp):
+            pip._moveToGlobal(waypoint, 'slow')
 
         self.calibrateWithStage(pips, wp)
 
     def moveApproach(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.pipetteDevice.goApproach(speed)
             if isinstance(pip, PatchPipette):
+                pip.pipetteDevice.goApproach(speed, raiseErrors=True)
                 pip.setState('bath')
                 pip.clampDevice.autoPipetteOffset()
+            else:
+                pip.goApproach(speed, raiseErrors=True)
 
     def moveToTarget(self):
         speed = self.selectedSpeed(default='slow')
         for pip in self.selectedPipettes():
-            pip.pipetteDevice.goTarget(speed)
+            if isinstance(pip, PatchPipette):
+                pip = pip.pipetteDevice
+            pip.goTarget(speed, raiseErrors=True)
 
     def moveHome(self):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
-            pip.goHome(speed)
+            if isinstance(pip, PatchPipette):
+                pip.setState('out')
+                pip = pip.pipetteDevice
+            pip.goHome(speed, raiseErrors=True)
 
     def moveIdle(self):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
-            pip.pipetteDevice.goIdle(speed)
+            if isinstance(pip, PatchPipette):
+                pip = pip.pipetteDevice
+            pip.goIdle(speed, raiseErrors=True)
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -282,7 +294,8 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in pips:
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
-            pip.pipetteDevice.goSearch(speed, distance=distance)
+                pip = pip.pipetteDevice
+            pip.goSearch(speed, distance=distance, raiseErrors=True)
 
     def calibrateWithStage(self, pipettes, positions):
         """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
@@ -334,10 +347,12 @@ class MultiPatchWindow(Qt.QWidget):
 
         # Set next pipette position from mouse click
         pip = self._calibratePips.pop(0)
+        if isinstance(pip, PatchPipette):
+            pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.pipetteDevice.resetGlobalPosition(pos)
+        pip.resetGlobalPosition(pos)
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
@@ -354,10 +369,12 @@ class MultiPatchWindow(Qt.QWidget):
 
         # Set next pipette position from mouse click
         pip = self._setTargetPips.pop(0)
+        if isinstance(pip, PatchPipette):
+            pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.pipetteDevice.setTarget(pos)
+        pip.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)
@@ -365,7 +382,9 @@ class MultiPatchWindow(Qt.QWidget):
 
     def hideBtnToggled(self, hide):
         for pip in self.pips:
-            pip.pipetteDevice.hideMarkers(hide)
+            if isinstance(pip, PatchPipette):
+                pip = pip.pipetteDevice
+            pip.hideMarkers(hide)
 
     def pipetteTestPulseEnabled(self, pip, enabled):
         self.updateSelectedPipControls()

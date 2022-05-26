@@ -383,9 +383,9 @@ class PatchPipette(Device):
         self.enableTestPulse(False, block=True)
         self._stateManager.quit()
 
-    def goHome(self, speed):
+    def goHome(self, speed, **kwds):
         self.setState('out')
-        return self.pipetteDevice.goHome(speed)
+        return self.pipetteDevice.goHome(speed, **kwds)
 
     def _pipetteMoveStarted(self, pip, pos):
         self.sigMoveStarted.emit(self)
