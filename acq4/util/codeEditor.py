@@ -69,6 +69,8 @@ def codeEditorCommand():
         return suggestCodeEditor()
     if cmd in suggestedEditorOrder:
         return generateEditorCommand(cmd)
+    else:
+        return cmd
 
 
 def suggestCodeEditor():
