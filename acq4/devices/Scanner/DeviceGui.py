@@ -163,17 +163,25 @@ class ScannerDeviceGui(Qt.QWidget):
         laser = str(self.ui.laserCombo.currentText())
         blurRadius = 5
         
-        ## Do fast scan of entire allowed command range
-        (background, cameraResult, positions) = self.scan()
+        cam = acq4.Manager.getManager().getDevice(camera)
+        if cam.getExposureChannel() is None:
+            # no exposure signal available; do slow scan
+            (background, cameraResult, positions) = self.sample()
+        else:
+            ## Do fast scan of entire allowed command range
+            (background, cameraResult, positions) = self.scan()
 
         with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
             dlg.show()
             dlg.raise_()  # Not sure why this is needed here..
 
-            ## Forget first 2 frames since some cameras can't seem to get these right.
-            frames = cameraResult.asArray()
-            frames = frames[2:]
-            positions = positions[2:]
+            if isinstance(cameraResult, list):
+                frames = np.concatenate([f.data() for f in cameraResult], axis=0)
+            else:
+                frames = cameraResult.asArray()
+                ## Forget first 2 frames since some cameras can't seem to get these right.
+                frames = frames[2:]
+                positions = positions[2:]
             
             ## Do background subtraction
             ## take out half the data until it can do the calculation without having a MemoryError.
@@ -204,7 +212,10 @@ class ScannerDeviceGui(Qt.QWidget):
             fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
             # convert sigma to full width at 1/e
             fit[3] = abs(2 * (2 ** 0.5) * fit[3]) ## sometimes the fit for width comes out negative. *shrug*
-            someFrame = cameraResult.frames()[0]
+            if isinstance(cameraResult, list):
+                someFrame = cameraResult[0]
+            else:
+                someFrame = cameraResult.frames()[0]
             frameTransform = pg.SRTTransform(someFrame.globalTransform())
             pixelSize = someFrame.info()['pixelSize'][0]
             spotAmplitude = fit[0]
@@ -336,6 +347,38 @@ class ScannerDeviceGui(Qt.QWidget):
         ss = (fr1 * mask).sum() / mask.sum()  ## integrate values within mask, divide by mask area
         assert(not np.isnan(ss))
         return ss
+
+    def sample(self):
+        """Sample a grid of x/y values and take a camera image at each location.
+        This is a slower alternative to the scan() method that does not require the use of a TTL exposure signal from the camera.        
+        """
+        man = acq4.Manager.getManager()
+        camera = man.getDevice(str(self.ui.cameraCombo.currentText()))
+        laser = man.getDevice(str(self.ui.laserCombo.currentText()))
+
+        xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
+        yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
+
+        background = camera.acquireFrames(1)
+
+        laser.setAlignmentMode()
+        try:
+            positions = []
+            images = []
+            n = 5
+            dx = (xRange[1]-xRange[0]) / (n-1)
+            dy = (yRange[1]-yRange[0]) / (n-1)
+
+            for i in range(n):
+                for j in range(n):
+                    x = xRange[0] + dx * i
+                    y = yRange[0] + dy * j
+                    positions.append([x, y])
+                    self.dev.setCommand([x, y])
+                    images.append(camera.acquireFrames(1))
+        finally:
+            laser.closeShutter()
+        return background.data(), images, positions
 
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""

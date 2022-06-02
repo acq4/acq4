@@ -199,12 +199,30 @@ class Laser(DAQGeneric, OptomechDevice):
             self.writeConfigFile(index, 'index')
             self.calibrationIndex = index
         
-    def setAlignmentMode(self, b):
+    def setAlignmentMode(self, b=True):
         """If true, configures the laser for low-power alignment mode. 
         Note: If the laser achieves low power solely through PWM, then
         alignment mode will only be available during tasks."""
-        
-        pass
+
+        alignConfig = self.config.get('alignmentMode', {})
+
+        if alignConfig.get('shutter', None) is False:
+            self.closeShutter()
+
+        if 'pCell' in alignConfig:
+            raise Exception("Alignment mode with pcell not implemented yet.")
+        elif 'power' in alignConfig:
+            raise Exception("Alignment mode by power not implemented yet.")
+
+        if 'qSwitch' in alignConfig:
+            if alignConfig['qSwitch'] is True:
+                self.openQSwitch()
+            else:
+                self.closeQSwitch()
+
+        if alignConfig.get('shutter', None) is True:
+            self.openShutter()
+            
     
     def setWavelength(self, wl):
         """Set the laser's wavelength (if tunable).
