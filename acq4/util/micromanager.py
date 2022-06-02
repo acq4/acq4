@@ -36,7 +36,7 @@ class MMCWrapper:
                     msg = exc.args[0].getFullMsg()
                 else:
                     msg = exc
-                raise RuntimeError(f"{msg} (calling mmc.{name})")
+                raise RuntimeError(f"{msg} (calling mmc.{name} with args {args} {kwds})")
 
         fn.__name__ = name + "_wrapped"
         self.__wrapper_cache[name] = fn
