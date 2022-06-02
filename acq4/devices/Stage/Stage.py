@@ -69,6 +69,7 @@ class Stage(Device, OptomechDevice):
         # convert from device position to translation vector
         self._axisTransform = None
         self._inverseAxisTransform = None
+        self._calculatedXAxisOrientation = None
 
         self._defaultSpeed = 'fast'
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
@@ -210,7 +211,12 @@ class Stage(Device, OptomechDevice):
         pos = pg.Vector(self.inverseAxisTransform().map(tr))
         return pos
 
-    def axisTransform(self):
+    def axisTransform(self) -> pg.Transform3D:
+        """Transformation matrix with columns that point in the direction that each manipulator axis moves.
+
+        This matrix is usually derived from calibration points. Before calibration, it provides only scale
+        factors.
+        """
         if self._axisTransform is None:
             self._axisTransform = pg.Transform3D()
             self._inverseAxisTransform = pg.Transform3D()
@@ -220,13 +226,30 @@ class Stage(Device, OptomechDevice):
                 self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
         return pg.QtGui.QMatrix4x4(self._axisTransform)
 
-    def calculatedPitchRadians(self) -> float:
+    def setAxisTransform(self, tr):
+        self._axisTransform = tr
+        self._inverseAxisTransform = None
+        self._calculatedXAxisOrientation = None
+        self._updateTransform()
+
+    def calculatedXAxisOrientation(self) -> float:
+        """Return the pitch and yaw of the X axis in degrees.
+        """
+        if self._calculatedXAxisOrientation is None:
+            m = self.axisTransform().matrix()
+            xaxis = pg.Vector(m[:3, 0])
+            globalz = pg.Vector([0, 0, 1])
+            pitch = xaxis.angle(globalz) - 90
+            yaw = np.arctan2(xaxis[1], xaxis[0]) * 180 / np.pi
+            self._calculatedXAxisOrientation = {'pitch': pitch, 'yaw': yaw}
+        return self._calculatedXAxisOrientation
+
+    def calculatedYaw(self) -> float:
+        """Return the X-axis pitch (angle relative to horizontal) in degrees
+        """
         # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
         a = self.axisTransform()
-        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2))
-
-    def calculatedPitchDegrees(self) -> float:
-        return self.calculatedPitchRadians() / math.pi * 180
+        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
 
     def inverseAxisTransform(self):
         if self._inverseAxisTransform is None:
@@ -239,18 +262,10 @@ class Stage(Device, OptomechDevice):
     def _solveAxisTransform(self, stagePos, parentPos, localPos):
         """Return an axis transform matrix that maps localPos to parentPos, given
         stagePos.
-
-
         """
         offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
         m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
         return m
-
-    # def mapToStage(self, obj):
-    #     return self._mapTransform(obj, self._stageTransform)
-
-    # def mapFromStage(self, obj):
-    #     return self._mapTransform(obj, self._invStageTransform)
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and

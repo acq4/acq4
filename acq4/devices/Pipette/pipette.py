@@ -50,8 +50,14 @@ class Pipette(Device, OptomechDevice):
 
     Configuration options:
 
-    * pitch: The angle of the pipette (in degrees) relative to the horizontal plane,
+    * pitch: The angle of the pipette (in degrees) relative to the horizontal plane.
       Positive values point downward. This option must be specified in the configuration.
+      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis pitch
+      (assumes that the X axis is parallel to the pipette)
+    * yaw: The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
+      when facing the microscope).
+      Positive values are clockwise from global +X. This option must be specified in the configuration.
+      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis yaw.
     * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
       should be about 1-2mm, enough to avoid collisions between the pipette tip and the sample during search.
       Default is 2 mm.
@@ -94,7 +100,7 @@ class Pipette(Device, OptomechDevice):
             'approachHeight': config.get('approachHeight', 100e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
-            'showCameraModuleUI': config.get('showCameraModuleUI', True),
+            'showCameraModuleUI': config.get('showCameraModuleUI', False),
         }
         parent = self.parentDevice()
         if not isinstance(parent, Stage):
@@ -109,8 +115,8 @@ class Pipette(Device, OptomechDevice):
         self.target = None
 
         cal = self.readConfigFile('calibration')
-
         self.offset = np.array(cal.get('offset', [0, 0, 0]))
+        # kept for backward compatibility
         self._calibratedPitch = cal.get('pitch', None)
         self._calibratedYaw = cal.get('yaw', cal.get('angle', None))  # backward support for old 'angle' config key
 
@@ -199,31 +205,6 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
-    def setCalibratedOrientation(self, yaw=None, pitch=None):
-        """Set the orientation of the pipette relative to its parent coordinate system.
-
-        The *yaw* angle specifies a rotation in degrees around the vertical (Z) axis, where 0 points
-        in the direction of the parent's +X axis.
-
-        The *pitch* angle specifies the downward angle (degrees) of the pipette relative to the horizontal plane.
-
-        Setting the pipette orientation has two effects:
-        * Motion planning uses this information to avoid dragging the pipette sideways through the sample
-        * The local coordinate system of the Pipette device is rotated such that +X points
-          in the direction of the pipette tip.
-
-        """
-        cal = self.readConfigFile('calibration')
-        if yaw is not None:
-            self._calibratedYaw = yaw
-            cal['yaw'] = yaw
-        if pitch is not None:
-            self._calibratedPitch = pitch
-            cal['pitch'] = pitch
-        self.writeConfigFile(cal, 'calibration')
-
-        self._updateTransform()
-
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
 
@@ -250,8 +231,13 @@ class Pipette(Device, OptomechDevice):
     def saveCalibration(self):
         cal = self.readConfigFile('calibration')
         cal['offset'] = list(self.offset)
-        cal['pitch'] = self._calibratedPitch
-        cal['yaw'] = self._calibratedYaw
+
+        # kept for backward compatibility
+        if self._calibratedPitch is not None:
+            cal['pitch'] = self._calibratedPitch
+        if self._calibratedYaw is not None:
+            cal['yaw'] = self._calibratedYaw
+
         self.writeConfigFile(cal, 'calibration')
 
     def yawAngle(self):
@@ -260,20 +246,33 @@ class Pipette(Device, OptomechDevice):
         Value is returned in degrees such that an angle of 0 indicate the tip points along the positive x axis,
         and 90 points along the positive y axis.
         """
-        if self._calibratedYaw is None:
-            return self.config.get('yaw', 0)
+        if 'yaw' not in self.config:
+            # for backward compatibility
+            if self._calibratedYaw is not None:
+                return self._calibratedYaw
+            raise Exception(f"Yaw angle is not configured for {self.name()}")
+        if self.config['yaw'] == 'auto':
+            return self._manipulatorOrientation()['yaw']
         else:
-            return self._calibratedYaw
+            return self.config['yaw']
 
     def pitchAngle(self):
         """Return the pitch of the electrode in degrees (angle relative to horizontal plane).
 
         For positive angles, the pipette tip points downward, toward -Z. 
         """
-        if self._calibratedPitch is None:
-            return self.config.get('pitch', 30)
+        if 'pitch' not in self.config:
+            # for backward compatibility
+            if self._calibratedPitch is not None:
+                return self._calibratedPitch
+            raise Exception(f"Pitch angle is not configured for {self.name()}")
+        if self.config['pitch'] == 'auto':
+            return self._manipulatorOrientation()['pitch']
         else:
-            return self._calibratedPitch
+            return self.config['pitch']
+
+    def _manipulatorOrientation(self) -> dict:
+        return self.parentDevice().calculatedXAxisOrientation()
 
     def yawRadians(self):
         return self.yawAngle() * np.pi / 180.
@@ -478,7 +477,9 @@ class Pipette(Device, OptomechDevice):
 
 
 class PipetteCamModInterface(CameraModuleInterface):
-    """Implements user interface for Pipette.
+    """**DEPRECATED** use MultiPatch module instead
+
+    Implements user interface for Pipette.
     """
     canImage = False
 
@@ -527,7 +528,8 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.depthArrow = pg.ArrowItem(angle=-dev.pitchAngle())
         mod.getDepthView().addItem(self.depthArrow)
 
-        self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
+        # self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
+        self.ui.setOrientationBtn.disable()
         mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
