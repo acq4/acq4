@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import annotations
 
 import os
 import traceback
 import weakref
 
+import acq4
 from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
@@ -17,7 +18,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
     # used to ensure devices are shut down in the correct order
     _deviceCreationOrder = []
 
-    def __init__(self, deviceManager, config, name):
+    def __init__(self, deviceManager: acq4.Manager.Manager, config: dict, name: str):
         Qt.QObject.__init__(self)
 
         # task reservation lock -- this is a recursive lock to allow a task to run its own subtasks
@@ -37,7 +38,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         """
         return self._name
     
-    def createTask(self, cmd, task):
+    def createTask(self, cmd: dict, task: acq4.Manager.Task):
         ### Read configuration, configure tasks
         ### Return a handle unique to this task
         pass
