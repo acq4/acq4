@@ -367,20 +367,18 @@ class ScannerDeviceGui(Qt.QWidget):
         daqName = self.dev.config['XAxis']['device']
 
         ## Record 10 camera frames with the shutter closed 
-        #print "parameters:", camParams
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
             camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
             #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
-        #print "\n\n====> Record background\n"
+
         task = acq4.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
         background = result[camera].asArray().astype(float).mean(axis=0)
-        #print "Background shape:", result[camera]['frames'].shape
-        
+
         ## Record full scan.
         cmd = {
             'protocol': {'duration': duration, 'timeout': duration+5.0},
@@ -392,7 +390,7 @@ class ScannerDeviceGui(Qt.QWidget):
             self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
-        #print "\n\n====> Scan\n"
+
         task = acq4.Manager.getManager().createTask(cmd)
         task.execute(block=False)
         with pg.ProgressDialog("Calibrating scanner: Running scan protocol..", 0, 100) as dlg:
@@ -409,9 +407,7 @@ class ScannerDeviceGui(Qt.QWidget):
         if frames._info[-1]['preciseTiming'] is not True:
             raise HelpfulException("Calibration could not accurately measure camera frame timing.",
                                    reasons=["The exposure signal from the camera was not recorded by the DAQ."])
-        #print "scan shape:", frames.shape
-        #print "parameters:", camParams
-        
+
         ## Generate a list of the scanner command values for each frame
         positions = []
         for i in range(frames.shape[0]):
