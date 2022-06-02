@@ -93,7 +93,6 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
-        self._stageOrientation = {'angle': 0, 'inverty': False}
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
@@ -124,6 +123,9 @@ class Pipette(Device, OptomechDevice):
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
         self.sigGlobalTransformChanged.connect(self.positionChanged)
+
+        # If parent orientation changes (probably due to being recalibrated), update pitch/yaw angles if needed.
+        parent.sigOrientationChanged.connect(self._updateTransform)
 
         self._updateTransform()
 

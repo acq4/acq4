@@ -43,6 +43,7 @@ class Stage(Device, OptomechDevice):
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
+    sigOrientationChanged = Qt.Signal(object)  # self
     sigLimitsChanged = Qt.Signal(object)
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
 
@@ -214,6 +215,9 @@ class Stage(Device, OptomechDevice):
     def axisTransform(self) -> pg.Transform3D:
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
 
+        This transform gives the relationship between the coordinates reported by the device and real world coordinates.
+        It assumes a 3-axis, linear stage, where the axes are not necessarily orthogonal to each other.
+
         This matrix is usually derived from calibration points. Before calibration, it provides only scale
         factors.
         """
@@ -231,6 +235,7 @@ class Stage(Device, OptomechDevice):
         self._inverseAxisTransform = None
         self._calculatedXAxisOrientation = None
         self._updateTransform()
+        self.sigOrientationChanged.emit(self)
 
     def calculatedXAxisOrientation(self) -> float:
         """Return the pitch and yaw of the X axis in degrees.
