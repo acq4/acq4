@@ -393,38 +393,32 @@ class Manager(Qt.QObject):
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
-        with self.lock:
-            if 'configurations' in self.config:
-                return list(self.config['configurations'].keys())
-            else:
-                return []
+        return list(self.config.get('configurations', {}).keys())
 
     def loadDefinedConfig(self, name):
         with self.lock:
             if name not in self.config['configurations']:
                 raise Exception("Could not find configuration named '%s'" % name)
-            cfg = self.config['configurations'].get(name, )
+            cfg = self.config['configurations'][name]
         self.configure(cfg)
 
     def readConfigFile(self, fileName, missingOk=True):
-        with self.lock:
-            fileName = self.configFileName(fileName)
-            if os.path.isfile(fileName):
-                return configfile.readConfigFile(fileName)
+        fileName = self.configFileName(fileName)
+        if os.path.isfile(fileName):
+            return configfile.readConfigFile(fileName)
+        else:
+            if missingOk:
+                return {}
             else:
-                if missingOk:
-                    return {}
-                else:
-                    raise Exception('Config file "%s" not found.' % fileName)
+                raise Exception('Config file "%s" not found.' % fileName)
 
     def writeConfigFile(self, data, fileName):
         """Write a file into the currently used config directory."""
-        with self.lock:
-            fileName = self.configFileName(fileName)
-            dirName = os.path.dirname(fileName)
-            if not os.path.exists(dirName):
-                os.makedirs(dirName)
-            return configfile.writeConfigFile(data, fileName)
+        fileName = self.configFileName(fileName)
+        dirName = os.path.dirname(fileName)
+        if not os.path.exists(dirName):
+            os.makedirs(dirName)
+        return configfile.writeConfigFile(data, fileName)
 
     def appendConfigFile(self, data, fileName):
         with self.lock:
@@ -435,8 +429,7 @@ class Manager(Qt.QObject):
                 raise Exception("Could not find file %s" % fileName)
 
     def configFileName(self, name):
-        with self.lock:
-            return os.path.join(self.configDir, name)
+        return os.path.join(self.configDir, name)
 
     def loadDevice(self, devClassName, conf, name):
         """Create a new instance of a device.
