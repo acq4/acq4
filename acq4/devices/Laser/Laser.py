@@ -30,58 +30,69 @@ class Laser(DAQGeneric, OptomechDevice):
        - Control of wavelength and dispersion tuning when available
 
     Configuration examples:
-    
+
     Laser-blue:
         driver: 'Laser'
         config:
             parentDevice: 'Microscope'
             shutter:
-                channel: 'DAQ', '/Dev3/line14'
+                device: 'DAQ'
+                channel: '/Dev3/line14'
+                type: 'do'
                 delay: 10*ms
             wavelength: 473*nm
             power: 10*mW
             alignmentMode:
                 shutter: True
-    
+
     Laser-UV:
         driver: 'Laser'
         config: 
             parentDevice: 'Microscope'
             pulseRate: 100*kHz                      ## Laser's pulse rate
             powerIndicator: 
-                channel: 'DAQ', '/Dev1/ai11'      ## photocell channel for immediate recalibration
+                device: 'DAQ'
+                channel: '/Dev1/ai11'      ## photocell channel for immediate recalibration
+                type: 'ai'
                 rate: 1.2*MHz
                 settlingTime: 1*ms
                 measurmentTime: 5*ms
             shutter:
-                channel: 'DAQ', '/Dev1/line10'    ## channel for triggering shutter
+                device: 'DAQ'
+                channel: '/Dev1/line10'    ## channel for triggering shutter
+                type: 'do'
                 delay: 10*ms                      ## how long it takes the shutter to fully open
             qSwitch:
-                channel: 'DAQ', '/Dev1/line11'    ## channel for triggering q-switch
+                device: 'DAQ'
+                channel: '/Dev1/line11'    ## channel for triggering q-switch
+                type: 'do'
             wavelength: 355*nm
             alignmentMode:
                 qSwitch: False                    ## For alignment, shutter is open but QS is off
                 shutter: True
-            
-    Laser-2p:
+            defaultPowerMeter: 'NewportMeter'
+
+    Laser-2P:
         driver: 'CoherentLaser'
-        config: 
-            serialPort: 6                         ## serial port connected to laser
-            parentDevice: 'Microscope'
-            pulseRate: 100*kHz                      ## Laser's pulse rate; limits minimum pulse duration
-            pCell:
-                channel: 'DAQ', '/Dev2/ao1'       ## channel for pockels cell control
-            namedWavelengths:
-                UV uncaging: 710*nm
-                AF488: 976*nm
-            alignmentMode:
-                pCellVoltage:
-                
-    Notes: 
-        must handle CW (continuous wave), QS (Q-switched), ML (modelocked) lasers
-        
-        
-        
+        port: 9                             # Laser serial port
+        baud: 19200
+        scope: 'Microscope'
+        pulseRate: 90*MHz                   # Laser's pulse rate
+        pCell:                              # channel for pockels cell control
+            device: 'DAQ'
+            channel: '/Dev1/ao1'
+            type: 'ao'
+        shutter:
+            device: 'DAQ'
+            channel: '/Dev1/line31'         # channel for triggering shutter
+            type: 'do'
+            delay: 30*ms                    # how long it takes the shutter to fully open
+        defaultPowerMeter: 'NewportMeter'
+        calibrationWarning: 'Filter in?'
+        alignmentMode:
+            pCell: 100*mV
+
+
     Task examples:
     
     { 'wavelength': 780*nm, 'powerWaveform': array([...]) }  ## calibrated; float array in W
@@ -358,16 +369,15 @@ class Laser(DAQGeneric, OptomechDevice):
                 a[:] = pCellVoltage
                 cmdOff[self.name()]['pCell'] = a
             else:
-                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.name())
+                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." % self.name())
             
         cmdOn = cmdOff.copy()
         wave = np.ones(nPts, dtype=np.byte)
         wave[-1] = 0
         shutterDelay = self.config.get('shutter', {}).get('delay', 0)
-        wave[:shutterDelay*rate] = 0
+        wave[:int(shutterDelay * rate)] = 0
         cmdOn[self.name()]={'shutterMode':'open', 'switchWaveform':wave}
         
-        #print "cmdOff: ", cmdOff
         taskOff = getManager().createTask(cmdOff)
         taskOff.execute()
         resultOff = taskOff.getResult()
@@ -376,7 +386,7 @@ class Laser(DAQGeneric, OptomechDevice):
         taskOn.execute()
         resultOn = taskOn.getResult()
             
-        measurementStart = (shutterDelay+settleTime)*rate
+        measurementStart = int((shutterDelay + settleTime) * rate)
             
         if self.hasPowerIndicator:
             powerOutOn = resultOn[powerInd[0]][0][measurementStart:].mean()
@@ -388,7 +398,7 @@ class Laser(DAQGeneric, OptomechDevice):
     
         t, prob = stats.ttest_ind(laserOn.asarray(), laserOff.asarray())
         if prob > 0.001:
-            raise Exception("Power meter device %s could not detect laser." %powerMeter)
+            raise Exception("Power meter device %s could not detect laser." % powerMeter)
         else:
             powerSampleOn = laserOn.mean()
             transmission = powerSampleOn/powerOutOn
@@ -461,7 +471,7 @@ class Laser(DAQGeneric, OptomechDevice):
             waveform = np.zeros(nPts, dtype=np.byte)
             #for i in range(reps):
                 #waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
-            waveform[0.1*rate:-2] = 1
+            waveform[int(0.1*rate):-2] = 1
             
             measureMode = self.measurementMode()
             cmd = {
@@ -484,8 +494,8 @@ class Laser(DAQGeneric, OptomechDevice):
             powerIndTrace = result[powerInd[0]]
             if powerIndTrace is None:
                 raise Exception("No data returned from power indicator")
-            laserOn = powerIndTrace[0][0.1*rate:-2].asarray()
-            laserOff = powerIndTrace[0][:0.1*rate].asarray()
+            laserOn = powerIndTrace[0][int(0.1 * rate):-2].asarray()
+            laserOff = powerIndTrace[0][:int(0.1 * rate)].asarray()
 
             t, prob = stats.ttest_ind(laserOn, laserOff)
             if prob < 0.01: ### if powerOn is statistically different from powerOff
@@ -607,14 +617,14 @@ class Laser(DAQGeneric, OptomechDevice):
             delay = self.config['shutter'].get('delay', 0.0) 
             shutterCmd[cmdWaveform != 0] = 1 ## open shutter when we expect power
             ## open shutter a little before we expect power because it has a delay
-            delayPts = int(delay*rate) 
-            a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)+1
+            delayPts = int(delay * rate)
+            a = np.argwhere(shutterCmd[1:] - shutterCmd[:-1] == 1)[:, 0] + 1
             for i in a:
-                start = i-delayPts
+                start = i - delayPts
                 if start < 0:
                     print(start, delayPts, i)
                     raise HelpfulException("Shutter takes %g seconds to open. Power pulse cannot be started before then." %delay)
-                shutterCmd[start:i+1] = 1
+                shutterCmd[int(start):i + 1] = 1
             daqCmd['shutter'] = shutterCmd
             
         return daqCmd
