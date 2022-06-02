@@ -76,11 +76,8 @@ class _NIDAQ:
             if "value" in sig.parameters and not func.startswith("Write"):
                 args += (dataType(ret),)
             if "reserved" in sig.parameters and len(args) < len(sig.parameters):
-                    args += (None,)
-            try:
-                fn(*args)
-            except:
-                print("Error drivers/nidaq/nidaq.py in setting args: args= ", args)
+                args += (None,)
+            fn(*args)
             return ret.value
         else:
             return fn(*args)

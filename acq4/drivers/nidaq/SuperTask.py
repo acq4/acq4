@@ -215,7 +215,8 @@ class SuperTask:
                     # Task does not support GetSampClkMaxRate
                     pass
             else:
-                if rate > maxrate:
+                # sometimes NI reports maximum rate is 0; not sure why..
+                if maxrate != 0 and rate > maxrate:
                     raise ValueError(
                         "Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate))
                     )
