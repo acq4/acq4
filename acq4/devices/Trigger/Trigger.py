@@ -5,12 +5,12 @@ from acq4.devices.Device import Device
 
 
 class Trigger(Device):
+    """A device only used to trigger a DAQ; for example, a foot switch.
+    """
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
 
-    def getTriggerChannel(self, daq):
-        if daq in self.config['channels']:
-            return self.config['channels'][daq]
-        return None
-        
+    def getTriggerChannels(self, daq: str) -> dict:
+        return {'input': self.config['channels'].get(daq, None), 'output': None}
+

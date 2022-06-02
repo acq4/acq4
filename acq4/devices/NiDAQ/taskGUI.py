@@ -158,7 +158,7 @@ class NiDAQTask(TaskGui):
         ## convert device names into device handles
         allDevs = [self.dev.dm.getDevice(d) for d in allDevNames]
         ## select out devices which have trigger channel to this DAQ
-        self.devs = [d.name() for d in allDevs if d.getTriggerChannel(self.dev.name()) is not None]
+        self.devs = [d.name() for d in allDevs if d.getTriggerChannels(self.dev.name())['input'] is not None]
             
         self.ui.triggerDevList.clear()
         self.ui.triggerDevList.addItem('No Trigger')

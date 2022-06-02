@@ -119,10 +119,22 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         except:
             printExc("WARNING: Failed to release device lock for %s" % self.name())
 
-    def getTriggerChannel(self, daq):
-        """Return the name of the channel on daq that this device raises when it starts.
-        Allows the DAQ to trigger off of this device."""
-        return None
+    def getTriggerChannels(self, daq: str) -> dict:
+        """Return the name of the channel(s) on *daq* can be used to synchronize between this device and a DAQ.
+
+        Parameters
+        ----------
+        daq : str
+            The name of the DAQ device to be synchronized with.
+
+        Returns
+        -------
+        channels : dict
+            Dictionary containing keys "input" (the name of a digital input on the DAQ that we can use to trigger the
+            DAQ) and "output" (the name of a digital output that can be used to trigger this device). Either value may
+            be None.
+        """
+        return {'input': None, 'output': None}
     
     def __repr__(self):
         return '<%s "%s">' % (self.__class__.__name__, self.name())

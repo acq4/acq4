@@ -164,12 +164,18 @@ class ScannerDeviceGui(Qt.QWidget):
         blurRadius = 5
         
         cam = acq4.Manager.getManager().getDevice(camera)
-        if cam.getExposureChannel() is None:
+        expChan = cam.getExposureChannel()
+        if expChan is None:
             # no exposure signal available; do slow scan
             (background, cameraResult, positions) = self.sample()
         else:
-            ## Do fast scan of entire allowed command range
-            (background, cameraResult, positions) = self.scan()
+            trigChans = cam.getTriggerChannels(expChan['device'])
+            if trigChans['input'] is None and trigChans['output'] is None:
+                # no trigger lines available; do slow scan
+                (background, cameraResult, positions) = self.sample()
+            else:
+                ## Do fast scan of entire allowed command range
+                (background, cameraResult, positions) = self.scan()
 
         with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
             dlg.show()
@@ -198,8 +204,8 @@ class ScannerDeviceGui(Qt.QWidget):
                     finished = False
                 
             ## Find a frame with a spot close to the center (within center 1/3)
-            cx = frames.shape[1] / 3
-            cy = frames.shape[2] / 3
+            cx = frames.shape[1] // 3
+            cy = frames.shape[2] // 3
             centerSlice = blur(frames[:, cx:cx*2, cy:cy*2], (0, 5, 5)).max(axis=1).max(axis=1)
             maxIndex = np.argmax(centerSlice)
             maxFrame = frames[maxIndex]
@@ -416,23 +422,49 @@ class ScannerDeviceGui(Qt.QWidget):
             #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
 
-        task = acq4.Manager.getManager().createTask(cmd)
+        manager = acq4.Manager.getManager()
+        task = manager.createTask(cmd)
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
         background = result[camera].asArray().astype(float).mean(axis=0)
 
-        ## Record full scan.
-        cmd = {
-            'protocol': {'duration': duration, 'timeout': duration+5.0},
-            camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
-                'exposure': {'record': True}, 
+        camDevice = manager.getDevice(camera)
+        expChan = camDevice.getExposureChannel()
+        trigChans = camDevice.getTriggerChannels(expChan['device'])
+        if trigChans['input'] is not None:
+            # Camera triggers DAQ
+            cmd = {
+                'protocol': {'duration': duration, 'timeout': duration+5.0},
+                camera: {
+                    'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
+                        'exposure': {'record': True},
+                    },
+                    'popState': 'scanProt'
                 },
-                'popState': 'scanProt'},
-            laser: {'alignMode': True},
-            self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
-            daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
-        }
+                laser: {'alignMode': True},
+                self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
+                daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
+            }
+        elif trigChans['output'] is not None:
+            # DAQ triggers camera
+            trigData = np.zeros(nPts, dtype='ubyte')
+            trigData[int(0.01 * rate):int(0.02 * rate)] = 1
+            camParams = camParams.copy()
+            camParams['triggerMode'] = 'TriggerStart'
+            cmd = {
+                'protocol': {'duration': duration, 'timeout': duration+5.0},
+                camera: {
+                    'record': True, 'triggerProtocol': False, 'params': camParams, 'channels': {
+                        'exposure': {'record': True},
+                        'trigger': {'command': trigData},
+                    },
+                    'popState': 'scanProt'
+                },
+                laser: {'alignMode': True},
+                self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
+                daqName: {'numPts': nPts, 'rate': rate}
+            }
 
         task = acq4.Manager.getManager().createTask(cmd)
         task.execute(block=False)
