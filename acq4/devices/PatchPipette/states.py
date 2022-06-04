@@ -1058,7 +1058,8 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         config = self.config
 
         fut = self.dev.pipetteDevice.retractFromSurface()
-        self.waitFor(fut)
+        if fut is not None:
+            self.waitFor(fut)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         self.sleep(config['blowoutDuration'])
@@ -1132,7 +1133,9 @@ class PatchPipetteCleanState(PatchPipetteState):
 
         self.setState('cleaning')
 
-        dev.pipetteDevice.retractFromSurface().wait()
+        fut = dev.pipetteDevice.retractFromSurface()
+        if fut is not None:
+            fut.wait()
 
         for stage in ('clean', 'rinse'):
             self._checkStop()
