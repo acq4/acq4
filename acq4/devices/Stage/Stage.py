@@ -600,7 +600,6 @@ class MoveFuture(Future):
         self.speed = speed
         self.targetPos = pos
         self.startPos = dev.getPosition()
-        self._wasStopped = False
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -620,12 +619,12 @@ class MoveFuture(Future):
             return 100
         return 100 * d1 / d2
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the move in progress.
         """
         if not self.isDone():
             self.dev.stop()
-            self._wasStopped = True
+            Future.stop(self, reason=reason)
 
 
 class MovePathFuture(MoveFuture):
@@ -637,7 +636,6 @@ class MovePathFuture(MoveFuture):
         self._done = False
         self._wasInterrupted = False
         self._errorMessage = None
-        self._stopped = False
 
         for step in self.path:
             if step.get("globalPos") is not None:
@@ -664,11 +662,11 @@ class MovePathFuture(MoveFuture):
     def errorMessage(self):
         return self._errorMessage
 
-    def stop(self):
+    def stop(self, reason=None):
         fut = self._currentFuture
         if fut is not None:
-            fut.stop()
-        self._stopped = True
+            fut.stop(reason=reason)
+        Future.stop(self, reason=reason)
 
     def _movePath(self):
         try:
@@ -682,11 +680,11 @@ class MovePathFuture(MoveFuture):
                         fut.wait(timeout=0.1)
                     except fut.Timeout:
                         pass
-                    if self._stopped:
+                    if self._stopRequested:
                         fut.stop()
                         break
                 
-                if self._stopped:
+                if self._stopRequested:
                     self._errorMessage = "Move was cancelled"
                     self._wasInterrupted = True
                     break
