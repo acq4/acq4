@@ -128,13 +128,17 @@ class PatchPipette(Device):
     def imagingDevice(self) -> Camera:
         return self.pipetteDevice.imagingDevice()
 
-    def focusOnTip(self, speed):
+    def focusOnTip(self, speed, raiseErrors=False):
         imdev = self.imagingDevice()
-        return imdev.moveCenterToGlobal(self.pipetteDevice.globalPosition(), speed=speed)
+        fut = imdev.moveCenterToGlobal(self.pipetteDevice.globalPosition(), speed=speed)
+        if raiseErrors:
+            fut.raiseErrors("Error while focusing on pipette tip: {error}")
 
-    def focusOnTarget(self, speed):
+    def focusOnTarget(self, speed, raiseErrors=False):
         imdev = self.imagingDevice()
-        return imdev.moveCenterToGlobal(self.pipetteDevice.targetPosition(), speed=speed)
+        fut = imdev.moveCenterToGlobal(self.pipetteDevice.targetPosition(), speed=speed)
+        if raiseErrors:
+            fut.raiseErrors("Error while focusing on pipette target: {error}")
 
     def newPipette(self):
         """A new physical pipette has been attached; reset any per-pipette state.
