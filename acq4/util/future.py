@@ -207,7 +207,8 @@ class Future(Qt.QObject):
         Parameters
         ----------
         message : str
-            Exception message to raise. May include "{stack}" to insert the stack trace of the caller.
+            Exception message to raise. May include "{stack}" to insert the stack trace of the caller, and "{error}"
+            to insert the original formatted exception.
         pollInterval : float | None
             Interval in seconds to poll for errors. This is only used with Futures that require a poller;
             Futures that immediately report errors when they occur will not use a poller.
@@ -227,11 +228,11 @@ class Future(Qt.QObject):
                 stack = ''.join(traceback.format_stack(originalFrame))
             else:
                 stack = None
+
             try:
-                formattedMsg = message.format(stack=stack)
+                formattedMsg = message.format(stack=stack, error=traceback.format_exception_only(type(exc), exc))
             except Exception as exc2:
-                print("Could not format error message: ", message, exc2)
-                formattedMsg = message
+                formattedMsg = message + f" [additional error formatting error message: {exc2}]"
             raise RuntimeError(formattedMsg) from exc
 
 
@@ -266,6 +267,7 @@ class MultiFuture(Future):
     """
     def __init__(self, futures):
         self.futures = futures
+        Future.__init__(self)
 
     def stop(self, reason="task stop requested"):
         for f in self.futures:
@@ -282,8 +284,8 @@ class MultiFuture(Future):
         return all([f.isDone() for f in self.futures])
 
     def errorMessage(self):
-        return "; ".join([f.errorMessage() for f in self.futures])
+        return "; ".join([f.errorMessage() or '' for f in self.futures])
 
     def currentState(self):
-        return "; ".join([f.currentState() for f in self.futures])
+        return "; ".join([f.currentState() or '' for f in self.futures])
 
