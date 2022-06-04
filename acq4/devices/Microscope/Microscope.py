@@ -13,6 +13,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
+from acq4.util.future import MultiFuture
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
 
@@ -229,26 +230,30 @@ class Microscope(Device, OptomechDevice):
         accordingly.
 
         Return a MoveFuture instance.
-
-        Note: If the xy positioning device is different from the z positioning
-        device, then the MoveFuture returned only corresponds to the xy motion.
         """
-        pd = self.positionDevice()
-        fd = self.focusDevice()
+        positionDevice = self.positionDevice()
+        focusDevice = self.focusDevice()
 
-        if len(pos) == 3 and fd is not pd:
+        if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            self.setFocusDepth(z)
+            zFuture = self.setFocusDepth(z)
             pos = pos[:2]
+        else:
+            zFuture = None
+
         if len(pos) == 2:
             pos = list(pos) + [self.getFocusDepth()]
 
         # Determine how to move the xy(z) stage to react the new center position
         gpos = self.globalPosition()
-        sgpos = pd.globalPosition()
+        sgpos = positionDevice.globalPosition()
         sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
         sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        return pd.moveToGlobal(sgpos2, speed)
+        xyFuture = positionDevice.moveToGlobal(sgpos2, speed)
+        if zFuture is None:
+            return xyFuture
+        else:
+            return MultiFuture([zFuture, xyFuture])
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
