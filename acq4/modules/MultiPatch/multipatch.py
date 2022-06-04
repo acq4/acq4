@@ -216,26 +216,11 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='fast')
         pips = self.selectedPipettes()
         pipDevs = [p.pipetteDevice if isinstance(p, PatchPipette) else p for p in pips]
-
-        if len(pips) == 1:
-            pips[0].pipetteDevice.goAboveTarget(speed=speed, raiseErrors=True)
-            return
-
-        fut = []
-        wp = []
         for pip in pipDevs:
-            w1, w2 = pip.aboveTargetPath()
-            wp.append(w2)
-            fut.append(pip._moveToGlobal(w1, speed))
-        for f in fut:
-            f.wait(updates=True)
-        for pipDevs, waypoint in zip(pips, wp):
-            pip._moveToGlobal(waypoint, 'slow')
-
-        self.calibrateWithStage(pips, wp)
+            pip.goAboveTarget(speed, raiseErrors=True)
 
     def moveApproach(self):
-        speed = self.selectedSpeed(default='slow')
+        speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
                 pip.pipetteDevice.goApproach(speed, raiseErrors=True)
@@ -245,7 +230,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.goApproach(speed, raiseErrors=True)
 
     def moveToTarget(self):
-        speed = self.selectedSpeed(default='slow')
+        speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
                 pip = pip.pipetteDevice
