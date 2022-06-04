@@ -35,18 +35,8 @@ class Pipette(Device, OptomechDevice):
 
     This device must be configured with a Stage as its parent.
 
-    The local coordinate system of the device is configured such that the electrode is in the 
-    x/z plane, pointing toward +x and -z (assuming the pitch is positive). The origin of the
-    local coordinate system is at the tip of the pipette.
-
-             \\ +z
-              \\ |
-         pitch \\|
-    -x  <-------\\------> +x
-                |\\
-                | \\
-               -z   \ - electrode tip
-
+    The local coordinate system of the device is configured such that the X axis points in the direction of the pipette
+    tip, the Z axis points upward (same as global +Z), and the Y axis is the vector perpendicular to both X and Z.
 
     Configuration options:
 
@@ -90,6 +80,7 @@ class Pipette(Device, OptomechDevice):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self.config = config
+        self.config = config
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
@@ -119,13 +110,15 @@ class Pipette(Device, OptomechDevice):
         self._calibratedPitch = cal.get('pitch', None)
         self._calibratedYaw = cal.get('yaw', cal.get('angle', None))  # backward support for old 'angle' config key
 
+        self._globalDirection = None
+
         # timer used to emit sigMoveFinished when no motion is detected for a certain period 
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
         self.sigGlobalTransformChanged.connect(self.positionChanged)
 
         # If parent orientation changes (probably due to being recalibrated), update pitch/yaw angles if needed.
-        parent.sigOrientationChanged.connect(self._updateTransform)
+        parent.sigOrientationChanged.connect(self._directionChanged)
 
         self._updateTransform()
 
@@ -224,11 +217,28 @@ class Pipette(Device, OptomechDevice):
         self.sigCalibrationChanged.emit(self)
 
     def _updateTransform(self):
-        tr = pg.Transform3D()
-        tr.rotate(self.yawAngle(), pg.Vector(0, 0, 1))
-        # tr.rotate(self.pitchAngle(), pg.Vector(1, 0, 0))
+        # matrix mapping from local to parent
+        x = self.globalDirection()
+        x[2] = 0
+        x = x / np.linalg.norm(x)
+        z = np.array([0, 0, 1])
+        y = np.cross(x, z)
+        y = y / np.linalg.norm(y)
+        m = np.array([
+            [x[0], y[0], z[0], 0],
+            [x[1], y[1], z[1], 0],
+            [x[2], y[2], z[2], 0],
+            [0, 0, 0, 1],
+        ])
+        tr = pg.Transform3D(m)
         tr.translate(*self.offset)
         self.setDeviceTransform(tr)
+
+    def _directionChanged(self):
+        """Orientation has changed
+        """
+        self._globalDirection = None
+        self._updateTransform()
 
     def saveCalibration(self):
         cal = self.readConfigFile('calibration')
@@ -338,23 +348,34 @@ class Pipette(Device, OptomechDevice):
         return surface - self.globalPosition()[2]
 
     def globalDirection(self):
-        """Return a global uinit vector pointing in the direction of the pipette axis.
+        """Return a global unit vector pointing in the direction of the pipette axis.
         """
-        o = np.array(self.globalPosition())
-        dz = -1.0
-        dx = -dz / np.tan(self.pitchRadians())
-        p = self.mapToGlobal(np.array([dx, 0, dz]))
-        v = p - o
-        return v / np.linalg.norm(v)
+        if self._globalDirection is None:
+            pitch = self.pitchRadians()
+            yaw = self.yawRadians()
+            s = np.cos(pitch)
+            self._globalDirection = np.array([s * np.cos(yaw), s * np.sin(yaw), -np.sin(pitch)])
+        return self._globalDirection.copy()
+
+    def positionAtDepth(self, depth, start=None):
+        """Return the global position at *depth* that lies along the axis of the pipette.
+
+        If *start* is given, then the pipette axis is assumed to go through this global position rather than
+        its current position.
+        """
+        if start is None:
+            start = self.globalPosition()
+        axis = self.globalDirection()
+        dz = depth - start[2]
+        dist = dz / axis[2]
+        return start + dist * axis
 
     def advance(self, depth, speed):
         """Move the electrode along its axis until it reaches the specified
         (global) depth.
         """
-        pos = self.globalPosition()
-        dz = depth - pos[2]
-        dx = -dz / np.tan(self.pitchRadians())
-        return self._moveToLocal([dx, 0, dz], speed, linear=self._shouldUseLinearMovement())
+        pos = self.positionAtDepth(depth)
+        return self._moveToGlobal(pos, speed)
 
     def retractFromSurface(self, speed='slow'):
         """Retract the pipette along its axis until it is above the slice surface.
@@ -363,9 +384,6 @@ class Pipette(Device, OptomechDevice):
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
-        else:
-            # just to make sure we always return a Future
-            return self.advance(depth, speed=speed)
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -378,7 +396,6 @@ class Pipette(Device, OptomechDevice):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
         """
-        kwds.setdefault('linear', self._shouldUseLinearMovement())
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
         stage = self.parentDevice()
@@ -387,9 +404,6 @@ class Pipette(Device, OptomechDevice):
         except Exception as exc:
             print("Error moving %s to global position %r:" % (self, pos))
             raise
-
-    def _shouldUseLinearMovement(self):
-        return 'Sensapex' not in str(type(self.parentDevice()))
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.
@@ -404,32 +418,6 @@ class Pipette(Device, OptomechDevice):
         This method does _not_ implement any motion planning.
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
-
-    def advanceTowardTarget(self, distance, speed='slow'):
-        target = self.targetPosition()
-        pos = self.globalPosition()
-        dif = target - pos
-        unit = dif / (dif**2).sum()**0.5
-        waypoint = pos + distance * unit
-        return self._moveToGlobal(waypoint, speed, linear=self._shouldUseLinearMovement())
-
-    def startAdvancing(self, speed):
-        """Begin moving the pipette at a constant speed along its axis.
-
-        Positive speeds advance, negative speeds retract.
-        """
-        stage = self.parentDevice()
-        vel = [speed * np.cos(self.pitchRadians()), 0, speed * -np.sin(self.pitchRadians())]
-        a = self.mapToParentDevice([0, 0, 0])
-        b = self.mapToParentDevice(vel)
-        stage.startMoving([b[0]-a[0], b[1]-a[1], b[2]-a[2]])
-
-    def retract(self, distance, speed='slow'):
-        """Retract the pipette a specified distance along its axis.
-        """
-        dz = distance * np.sin(self.pitchRadians())
-        dx = -distance * np.cos(self.pitchRadians())
-        return self._moveToLocal([dx, 0, dz], speed, linear=self._shouldUseLinearMovement())
 
     def setTarget(self, target):
         self.target = np.array(target)
@@ -531,7 +519,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         mod.getDepthView().addItem(self.depthArrow)
 
         # self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
-        self.ui.setOrientationBtn.disable()
+        self.ui.setOrientationBtn.setEnabled(False)
         mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
