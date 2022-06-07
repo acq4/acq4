@@ -66,6 +66,9 @@ class PatchPipetteStateManager(Qt.QObject):
 
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
+        if 'default' in self.listProfiles():
+            self.setProfile('default')
+
     @classmethod
     def listProfiles(cls):
         cls._loadGlobalProfilesOnce()
