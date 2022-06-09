@@ -1029,15 +1029,104 @@ class PatchPipetteBreakInState(PatchPipetteState):
 
 
 class PatchPipetteResealState(PatchPipetteState):
+    """State that retracts pipette slowly to attempt to reseal the cell.
+
+    Negative pressure may optionally be applied to attempt nucleus extraction
+
+    State name: "reseal"
+
+    Parameters
+    ----------
+    initialPressure : float
+        Initial pressure (Pa) to apply (default is -0.5 kPa)
+    maximumPressure : float
+        Maximum pressure (Pa) to apply (default is -4 kPa)
+    pressureChangeRate : float
+        Rate at which pressure should change during reseal (default is -0.5 kPa / min)
+    retractionSpeed : float
+        Speed in m/s to move pipette during retraction (default is 0.3 um / s)
+    resealTimeout : float
+        Seconds before reseal attempt exits
+    numTestPulseAverage : int
+        Number of test pulses to average when measuring resistance
+
+    """
+
     stateName = 'reseal'
 
     _defaultConfig = {
+        'initialClampMode': 'VC',
+        'initialClampHolding': -70e-3,
+        'initialTestPulseEnable': True,
+        'initialPressure': -0.5e3,
+        'initialPressureSource': 'regulator',
+        'retractionSpeed': 0.3e-6,
+        'resealTimeout': 10 * 60,
+        'numTestPulseAverage': 3,
         'fallbackState': 'whole cell',
+        'maxPressure': -4e3,
+        'pressureChangeRate': -0.5e-3 / 60,
     }
 
+    def __init__(self, *args, **kwds):
+        self.retractionFuture = None
+        PatchPipetteState.__init__(self, *args, **kwds)
+
     def run(self):
-        # move to approach position + auto pipette offset
-        pass
+        config = self.config
+        dev = self.dev
+        self.monitorTestPulse()
+
+        patchrec = dev.patchRecord()
+        initialResistance = None
+        recentTestPulses = deque(maxlen=config['numTestPulseAverage'])
+
+        pressure = config['initialPressure']
+
+        self.retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+
+        startTime = ptime.time()
+        lastTime = startTime
+        while True:
+            now = ptime.time()
+            dt = now - lastTime
+            totalDt = now - startTime
+            lastTime = now
+
+            # check for timeout
+            if config['resealTimeout'] is not None and totalDt > config['resealTimeout']:
+                self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
+                return config['fallbackState']
+
+            self._checkStop()
+
+            # update pressure
+            pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
+            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+
+            # pull in all new test pulses (hopefully only one since the last time we checked)
+            tps = self.getTestPulses(timeout=0.2)
+            if len(tps) == 0:
+                continue
+            recentTestPulses.extend(tps)
+
+            # take note of initial resistance
+            tp = tps[-1]
+            ssr = tp.analysis()['steadyStateResistance']
+            if initialResistance is None:
+                initialResistance = ssr
+                patchrec['resealInitialResistance'] = initialResistance
+
+            # check progress on resistance
+            if len(recentTestPulses) > config['numTestPulseAverage']:
+                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+                if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
+                    return self._transition_to_seal("cell detected (slow criteria)", patchrec)
+            self._checkStop()
+
+    def cleanup(self):
+        if self.retractionFuture is not None:
+            self.retractionFuture.stop()
 
 
 class PatchPipetteBlowoutState(PatchPipetteState):
