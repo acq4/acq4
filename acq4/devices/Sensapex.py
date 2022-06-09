@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import threading
+import time
 
 import numpy as np
 import pyqtgraph as pg
@@ -107,6 +108,10 @@ class Sensapex(Stage):
         """
         with self.lock:
             self.dev.stop()
+            # also stop the last move since it might be stepwise and just keep requesting more steps
+            lastMove = self._lastMove
+            if lastMove is not None:
+                lastMove.stop()
             self._lastMove = None
 
     def _getPosition(self):
@@ -173,13 +178,25 @@ class SensapexMoveFuture(MoveFuture):
     """
     def __init__(self, dev, pos, speed, linear):
         MoveFuture.__init__(self, dev, pos, speed)
+
+        # limit the speed so that no move is expected to take less than 200 ms
+        # (otherwise we get big move errors with uMp)
+        minimumMoveTime = 0.2
+        distance = np.linalg.norm(self.startPos - self.targetPos)
+        self.speed = min(speed, distance / minimumMoveTime)
+
         self._linear = linear
         self._interrupted = False
         self._errorMsg = None
-        self._finished = False
-        self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6, simultaneous=linear, linear=linear)
         self._checked = False
-        self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True)
+        if self.speed >= 1e-6:
+            assert linear
+            self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)
+            self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True)
+        else:
+            # uMp has trouble with very slow speeds, so we do this manually by looping over small steps
+            self._moveReq = None
+            self._monitorThread = threading.Thread(target=self._stepwiseMove, daemon=True)
         self._monitorThread.start()
 
     def _watchForFinish(self):
@@ -187,6 +204,45 @@ class SensapexMoveFuture(MoveFuture):
         moveReq.finished_event.wait()
         self._taskDone(
             interrupted=moveReq.interrupted,
+            error=self._generateErrorMessage(),
+            state=None,
+            excInfo=None,
+        )
+
+    def _stepwiseMove(self):
+        speed = self.speed * 1e6
+        delta = (self.targetPos - self.startPos)
+        distance = np.linalg.norm(delta)
+        duration = distance / speed
+        lastTarget = self.startPos
+        print(f"stepwise speed: {speed}  delta: {delta}  distance: {distance}  duration: {duration}")
+        while True:
+            # where should be be at this point?
+            elapsedTime = ptime.time() - self.startTime
+            fractionComplete = min(1.0, elapsedTime / duration)
+            currentTarget = self.startPos + delta * fractionComplete
+
+            # rate-limit move requests
+            minStepUm = 0.5
+            distanceToMove = np.linalg.norm(currentTarget - lastTarget)
+            if distanceToMove < minStepUm:
+                time.sleep((minStepUm - distanceToMove) / speed)
+                continue
+
+            # request the next step and wait
+            lastTarget = currentTarget
+            self._moveReq = self.dev.dev.goto_pos(currentTarget, speed=1.0, simultaneous=True, linear=True)
+            while not self._moveReq.finished_event.wait(0.2):
+                if self._stopRequested:
+                    self._moveReq.interrupt(reason=self._errorMessage)
+                if self._moveReq.interrupted:
+                    break
+
+            if fractionComplete == 1.0 or self._moveReq.interrupted:
+                break
+
+        self._taskDone(
+            interrupted=self._moveReq.interrupted or self._stopRequested,
             error=self._generateErrorMessage(),
             state=None,
             excInfo=None,
@@ -200,7 +256,7 @@ class SensapexMoveFuture(MoveFuture):
             # did we reach target?
             pos = self._moveReq.last_pos
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
-            if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
+            if dif > self.dev.maxMoveError * 1e6:  # require 1um accuracy
                 # missed
                 return "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
                     self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed

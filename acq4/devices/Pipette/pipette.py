@@ -129,6 +129,8 @@ class Pipette(Device, OptomechDevice):
         if target is not None:
             self.setTarget(target)
 
+        deviceManager.sigAbortAll.connect(self.stop)
+
     def moveTo(self, position, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
@@ -190,7 +192,12 @@ class Pipette(Device, OptomechDevice):
 
     def quit(self):
         pass
-    
+
+    def stop(self):
+        cmp = self.currentMotionPlanner
+        if cmp is not None:
+            cmp.stop()
+
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
         return PipetteDeviceGui(self, win)

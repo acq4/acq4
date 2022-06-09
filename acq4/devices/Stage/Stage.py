@@ -598,8 +598,8 @@ class MoveFuture(Future):
         self.startTime = pg.ptime.time()
         self.dev = dev
         self.speed = speed
-        self.targetPos = pos
-        self.startPos = dev.getPosition()
+        self.targetPos = np.asarray(pos)
+        self.startPos = np.asarray(dev.getPosition())
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -619,7 +619,7 @@ class MoveFuture(Future):
             return 100
         return 100 * d1 / d2
 
-    def stop(self, reason=None):
+    def stop(self, reason="stop requested"):
         """Stop the move in progress.
         """
         if not self.isDone():
