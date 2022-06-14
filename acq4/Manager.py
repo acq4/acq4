@@ -796,7 +796,7 @@ class Manager(Qt.QObject):
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')
                     dt = info['dirType']
-                    folderTypesConfig = self._foldlerTypesConfig()
+                    folderTypesConfig = self._folderTypesConfig()
                     if dt in folderTypesConfig:
                         fields = folderTypesConfig[dt]['info']
 
