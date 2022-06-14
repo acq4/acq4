@@ -327,7 +327,11 @@ class Objective(OptomechDevice):
 
     def scope(self):
         return self._scope
-        
+
+    @property
+    def radius(self):
+        return self._config.get('radius')
+
     def __repr__(self):
         return "<Objective %s.%s offset=%0.2g,%0.2g scale=%0.2g>" % (self._scope.name(), self.name(), self.offset().x(), self.offset().y(), self.scale().x())
 

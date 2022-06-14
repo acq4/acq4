@@ -5,7 +5,6 @@ from collections import OrderedDict
 from ..Camera import Camera
 from ..Device import Device
 from acq4.util import Qt
-from ...Manager import getManager
 from acq4.util.Mutex import Mutex
 from pyqtgraph import ptime
 from .devgui import PatchPipetteDeviceGui
@@ -53,6 +52,7 @@ class PatchPipette(Device):
     def __init__(self, deviceManager, config, name):
         pipName = config.pop('pipetteDevice', None)
         self.pipetteDevice = deviceManager.getDevice(pipName)
+
         clampName = config.pop('clampDevice', None)
         self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
 

@@ -1209,9 +1209,7 @@ class PatchPipetteCleanState(PatchPipetteState):
     }
 
     def __init__(self, *args, **kwds):
-        self.resetPos = None
-        self.lastApproachPos = None
-
+        self.currentFuture = None
         PatchPipetteState.__init__(self, *args, **kwds)
 
     def run(self):
@@ -1219,10 +1217,15 @@ class PatchPipetteCleanState(PatchPipetteState):
 
         config = self.config.copy()
         dev = self.dev
+        pip = dev.pipetteDevice
 
         self.setState('cleaning')
 
-        fut = dev.pipetteDevice.retractFromSurface()
+        # retract to safe position for visiting cleaning wells
+        startPos = pip.globalPosition()
+        safePos = pip.pathGenerator.safeYZPosition(startPos)
+        path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
+        fut = pip._movePath(path)
         if fut is not None:
             fut.wait()
 
@@ -1233,19 +1236,28 @@ class PatchPipetteCleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            pos = dev.pipetteDevice.loadPosition(stage)
-            if pos is None:
-                raise Exception("Device %s does not have a stored %s position." % (dev.pipetteDevice.name(), stage))
+            wellPos = pip.loadPosition(stage)
+            if wellPos is None:
+                raise Exception("Device %s does not have a stored %s position." % (pip.name(), stage))
 
-            self.gotoApproachPosition(pos)
+            # lift up, then sideways, then down into well
+            waypoint1 = safePos.copy()
+            waypoint1[2] = wellPos[2] + config['approachHeight']
+            waypoint2 = wellPos.copy()
+            waypoint2[2] = waypoint1[2]
+            path = [(waypoint1, 'fast', False), (waypoint2, 'fast', True), (wellPos, 'fast', False)]
+
+            self.currentFuture = pip._movePath(path)
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.waitFor([dev.pipetteDevice._moveToGlobal(pos, 'fast')])
+            self.waitFor([self.currentFuture])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self._checkStop(delay)
+
+            self.resetPosition()
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.clean = True
@@ -1253,32 +1265,12 @@ class PatchPipetteCleanState(PatchPipetteState):
         dev.newPatchAttempt()
         return 'out'          
 
-    def gotoApproachPosition(self, pos):
-        """
-        """
-        dev = self.dev
-        currentPos = dev.pipetteDevice.globalPosition()
-
-        # first move back in x and up in z, leaving y unchanged
-        approachPos1 = [pos[0], currentPos[1], pos[2] + self.config['approachHeight']]
-        fut = dev.pipetteDevice._moveToGlobal(approachPos1, 'fast')
-        self.waitFor(fut, timeout=30)
-        if self.resetPos is None:
-            self.resetPos = approachPos1
-
-        # now move y over the well
-        approachPos2 = [pos[0], pos[1], pos[2] + self.config['approachHeight']]
-        fut = dev.pipetteDevice._moveToGlobal(approachPos2, 'fast')
-        self.lastApproachPos = approachPos2
-        self.waitFor(fut)
-
     def resetPosition(self):
-        if self.lastApproachPos is not None:
-            self.dev.pipetteDevice._moveToGlobal(self.lastApproachPos, 'fast').wait()
-            self.lastApproachPos = None
-        if self.resetPos is not None:
-            self.dev.pipetteDevice._moveToGlobal(self.resetPos, 'fast').wait()
-            self.resetPos = None
+        if self.currentFuture is not None:
+            # play in reverse
+            fut = self.currentFuture
+            self.currentFuture = None
+            self.waitFor([fut.undo()])
 
     def cleanup(self):
         dev = self.dev
