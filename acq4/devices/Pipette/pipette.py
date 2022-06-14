@@ -17,7 +17,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.target import Target
 from pyqtgraph import Point
-from .planners import defaultMotionPlanners
+from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
 
@@ -75,6 +75,7 @@ class Pipette(Device, OptomechDevice):
 
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
+    pathGeneratorClass = PipettePathGenerator
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -99,6 +100,7 @@ class Pipette(Device, OptomechDevice):
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
+        self.pathGenerator = self.pathGeneratorClass(self)
 
         self._camInterfaces = weakref.WeakKeyDictionary()
 
@@ -111,6 +113,7 @@ class Pipette(Device, OptomechDevice):
         self._calibratedYaw = cal.get('yaw', cal.get('angle', None))  # backward support for old 'angle' config key
 
         self._globalDirection = None
+        self._localDirection = None
 
         # timer used to emit sigMoveFinished when no motion is detected for a certain period 
         self.moveTimer = Qt.QTimer()
@@ -245,6 +248,7 @@ class Pipette(Device, OptomechDevice):
         """Orientation has changed
         """
         self._globalDirection = None
+        self._localDirection = None
         self._updateTransform()
 
     def saveCalibration(self):
@@ -363,6 +367,14 @@ class Pipette(Device, OptomechDevice):
             s = np.cos(pitch)
             self._globalDirection = np.array([s * np.cos(yaw), s * np.sin(yaw), -np.sin(pitch)])
         return self._globalDirection.copy()
+
+    def localDirection(self):
+        """Return a local unit vector pointing in the direction of the pipette axis.
+        """
+        if self._localDirection is None:
+            pitch = self.pitchRadians()
+            self._localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
+        return self._localDirection.copy()
 
     def positionAtDepth(self, depth, start=None):
         """Return the global position at *depth* that lies along the axis of the pipette.

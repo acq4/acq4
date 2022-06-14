@@ -1,6 +1,5 @@
 from __future__ import annotations
 import numpy as np
-
 from acq4.util.future import MultiFuture
 
 import typing
@@ -15,36 +14,20 @@ def defaultMotionPlanners():
         'aboveTarget': AboveTargetMotionPlanner,
         'approach': ApproachMotionPlanner,
         'target': TargetMotionPlanner,
-        # 'clean': CleanMotionPlanner,
-        # 'rinse': RinseMotionPlanner,
         'idle': IdleMotionPlanner,
     }
 
 
-class PipetteMotionPlanner(object):
-    def __init__(self, pip: Pipette, position: np.ndarray, speed: float, **kwds):
+class PipettePathGenerator:
+    """Collection of methods for generating safe pipette paths.
+
+    These methods are used by motion planners for avoiding obstacles, determining safe movement speeds, etc.
+
+    The default implementation assumes an upright scope (requiring objective avoidance) and a thick sample
+    (requiring slow, axial motion).
+    """
+    def __init__(self, pip: Pipette):
         self.pip = pip
-        self.position = position
-        self.speed = speed
-        self.kwds = kwds
-
-        self.future = None
-
-    def move(self):
-        """Move the pipette to the requested named position and return a Future 
-        """
-        if self.future is not None:
-            self.stop()
-
-        self.future = self._move()
-        return self.future
-
-    def stop(self):
-        if self.future is not None:
-            self.future.stop()
-
-    def _move(self):
-        raise NotImplementedError()
 
     def safePath(self, globalStart, globalStop, speed):
         """Given global starting and stopping positions, return a list of global waypoints that avoid obstacles.
@@ -60,8 +43,9 @@ class PipetteMotionPlanner(object):
 
         The returned path does _not_ include the starting position.
         """
+        globalStart = np.asarray(globalStart)
+        globalStop = np.asarray(globalStop)
         path = [(globalStart,)]
-
 
         # retract first if we are doing a lateral movement inside the sample
         lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
@@ -101,10 +85,8 @@ class PipetteMotionPlanner(object):
             slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, linear=True)
             path += slowpath + [(globalStop, speed, False)]
 
-        print('-------------')
         for step in path:
             assert np.isfinite(step[0]).all()
-            print(step)
         return path[1:]
 
     def enforceSafeSpeed(self, start, stop, speed, linear):
@@ -130,11 +112,78 @@ class PipetteMotionPlanner(object):
             else:
                 return [(waypoint, speed, linear), (stop, 'slow', linear)]
 
+    def safeYZPosition(self, start, margin=2e-3):
+        """Return a position to travel to, beginning from *start*, where the pipette may freely move in the local YZ
+        plane without hitting obstacles (in particular the objective lens).
+        """
+        start = np.asarray(start)
+
+        # where is the objective?
+        scope = self.pip.scopeDevice()
+        obj = scope.currentObjective
+        objRadius = obj.radius
+        assert objRadius is not None, "Can't determine safe location; radius of objective lens is not configured."
+        localFocus = self.pip.mapFromGlobal(scope.globalPosition())
+
+        # safe position along local x axis
+        safeX = localFocus[0] - objRadius - margin
+
+        # return starting position if it is already safe
+        localStart = self.pip.mapFromGlobal(start)
+        if localStart[0] < safeX:
+            return start
+
+        # best way to get to safe position
+        dx = safeX - localStart[0]
+        localDir = self.pip.localDirection()
+        safePos = localStart + localDir * (dx / localDir[0])
+
+        return self.pip.mapToGlobal(safePos)
+
+
+class PipetteMotionPlanner:
+    """Pipette motion planners are responsible for safely executing movement of the pipette and (optionally) the microscope
+     focus to specific locations.
+
+    For example, moving to a pipette search position involves setting the focus to a certain height, followed by inserting
+    the pipette tip diagonally near the
+    """
+    def __init__(self, pip: Pipette, position: np.ndarray, speed: float, **kwds):
+        self.pip = pip
+        self.position = position
+        self.speed = speed
+        self.kwds = kwds
+
+        self.future = None
+
+        # wrap safePath for convenience
+        self.safePath = self.pip.pathGenerator.safePath
+
+    def move(self):
+        """Move the pipette to the requested named position and return a Future 
+        """
+        if self.future is not None:
+            self.stop()
+
+        self.future = self._move()
+        return self.future
+
+    def stop(self):
+        if self.future is not None:
+            self.future.stop()
+
+    def _move(self):
+        path = self.path()
+        return self.pip._movePath(path)
+
+    def path(self):
+        raise NotImplementedError()
+
 
 class HomeMotionPlanner(PipetteMotionPlanner):
     """Extract pipette tip diagonally, then move to home position.
     """
-    def _move(self):
+    def path(self):
         manipulator = self.pip.parentDevice()
         manipulatorHome = manipulator.homePosition()
         assert manipulatorHome is not None, "No home position defined for %s" % manipulator.name()
@@ -146,8 +195,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         endPosGlobal = np.asarray(startPosGlobal) + globalMove
 
         path = self.safePath(startPosGlobal, endPosGlobal, self.speed)
-
-        return self.pip._movePath(path)
+        return path
 
 
 class SearchMotionPlanner(PipetteMotionPlanner):
@@ -196,19 +244,19 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
-    def _move(self):
+    def path(self):
         pip = self.pip
         approachDepth = pip.approachDepth()
         approachPosition = pip.positionAtDepth(approachDepth, start=pip.targetPosition())
         path = self.safePath(pip.globalPosition(), approachPosition, self.speed)
-        return pip._movePath(path)
+        return path
 
 
 class TargetMotionPlanner(PipetteMotionPlanner):
-    def _move(self):
-        pip = self.pip
-        path = self.safePath(pip.globalPosition(), pip.targetPosition(), self.speed)
-        return pip._movePath(path)
+    def path(self):
+        start = self.pip.globalPosition()
+        stop = self.pip.targetPosition()
+        return self.safePath(start, stop, self.speed)
 
 
 class AboveTargetMotionPlanner(PipetteMotionPlanner):
