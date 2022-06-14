@@ -632,6 +632,7 @@ class MovePathFuture(MoveFuture):
         MoveFuture.__init__(self, dev, None, None)
 
         self.path = path
+        self.currentStep = 0
         self._currentFuture = None
         self._done = False
         self._wasInterrupted = False
@@ -640,8 +641,11 @@ class MovePathFuture(MoveFuture):
         for step in self.path:
             if step.get("globalPos") is not None:
                 step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
-        for step in self.path:
-            self.dev.checkMove(**step)
+        for i,step in enumerate(self.path):
+            try:
+                self.dev.checkMove(**step)
+            except Exception as exc:
+                raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
 
         self._moveThread = threading.Thread(target=self._movePath)
         self._moveThread.start()
@@ -671,13 +675,13 @@ class MovePathFuture(MoveFuture):
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
-                print("Move path step %d    %r" % (i, step))
                 fut = self.dev.move(**step)
                 fut._pathStep = i
                 self._currentFuture = fut
                 while not fut.isDone():
                     try:
                         fut.wait(timeout=0.1)
+                        self.currentStep = i + 1
                     except fut.Timeout:
                         pass
                     if self._stopRequested:
@@ -698,6 +702,17 @@ class MovePathFuture(MoveFuture):
             self._wasInterrupted = True
         finally:
             self._done = True
+
+    def undo(self):
+        """Reverse the moves generated in this future and return a new future.
+        """
+        fwdPath = [{'position': self.startPos}] + self.path[:]
+        revPath = []
+        for i in range(min(self.currentStep, len(self.path)-1), -1, -1):
+            step = fwdPath[i+1].copy()
+            step['position'] = fwdPath[i]['position']
+            revPath.append(step)
+        return self.dev.movePath(revPath)
 
 
 class StageInterface(Qt.QWidget):
