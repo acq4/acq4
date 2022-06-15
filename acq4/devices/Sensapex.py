@@ -183,12 +183,19 @@ class SensapexMoveFuture(MoveFuture):
         # (otherwise we get big move errors with uMp)
         minimumMoveTime = 0.2
         distance = np.linalg.norm(self.startPos - self.targetPos)
-        self.speed = min(speed, distance / minimumMoveTime)
+        if speed > 10e-6:
+            self.speed = min(speed, distance / minimumMoveTime)
 
         self._linear = linear
         self._interrupted = False
         self._errorMsg = None
         self._checked = False
+
+        # no move requested; just bail early
+        if distance == 0:
+            self._taskDone(interrupted=False)
+            return
+
         if self.speed >= 1e-6:
             assert linear
             self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)

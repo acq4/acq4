@@ -452,14 +452,14 @@ class Pipette(Device, OptomechDevice):
         for iface in self._camInterfaces.keys():
             iface.hideMarkers(hide)
 
-    def focusTip(self, speed='slow', raiseErrors=False):
+    def focusTip(self, speed='fast', raiseErrors=False):
         pos = self.globalPosition()
         future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
         if raiseErrors:
             future.raiseErrors("Focus on pipette tip failed; requested from:\n{stack})")
         return future
 
-    def focusTarget(self, speed='slow', raiseErrors=False):
+    def focusTarget(self, speed='fast', raiseErrors=False):
         pos = self.targetPosition()
         future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
         if raiseErrors:

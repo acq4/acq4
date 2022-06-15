@@ -3,6 +3,8 @@ from __future__ import print_function
 
 import collections
 
+import numpy as np
+
 import pyqtgraph as pg
 
 from acq4.Manager import getManager
@@ -221,7 +223,7 @@ class Microscope(Device, OptomechDevice):
     def globalPosition(self):
         """Return the global position of the scope's center axis at the focal plane.
         """
-        return self.mapToGlobal(Qt.QVector3D(0, 0, 0))
+        return self.mapToGlobal(pg.Vector(0, 0, 0))
 
     def setGlobalPosition(self, pos, speed='fast'):
         """Move the microscope such that its center axis is at a specified global position.
@@ -231,6 +233,7 @@ class Microscope(Device, OptomechDevice):
 
         Return a MoveFuture instance.
         """
+        pos = np.asarray(pos)
         positionDevice = self.positionDevice()
         focusDevice = self.focusDevice()
 
