@@ -165,7 +165,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def configureState(self, state, *args, **kwds):
         oldJob = self.currentJob
         allowReset = kwds.pop('_allowReset', True)
-        self.stopJob()
+        self.stopJob(allowNextState=False)
         try:
             stateHandler = self.stateHandlers[state]
 
@@ -209,9 +209,11 @@ class PatchPipetteStateManager(Qt.QObject):
 
     ## Background job handling
 
-    def stopJob(self):
+    def stopJob(self, allowNextState=True):
         job = self.currentJob
         if job is not None:
+            # disconnect; we'll call jobFinished directly
+            disconnect(job.sigFinished, self.jobFinished)
             job.stop()
             try:
                 job.wait(timeout=10)
@@ -220,16 +222,17 @@ class PatchPipetteStateManager(Qt.QObject):
             except Exception:
                 # hopefully someone else is watching this future for errors!
                 pass
+            self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
         self.dev.emitNewEvent("state_event", {'state': job.stateName, 'info': state})
 
-    def jobFinished(self, job):
+    def jobFinished(self, job, allowNextState=True):
         try:
             job.cleanup()
         except Exception:
             printExc("Error during %s cleanup:" % job.stateName)
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
-        if job.nextState is not None:
+        if allowNextState and job.nextState is not None:
             self.requestStateChange(job.nextState)
