@@ -33,7 +33,9 @@ from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
 from .util import DataManager, ptime, Qt
 from .util.HelpfulException import HelpfulException
-from .util.debug import logExc, logMsg, createLogWindow  # logExc needed by debug
+from .util.debug import logExc, logMsg, createLogWindow
+
+_ = logExc  # prevent cleanup of logExc; needed by debug
 
 
 def __reload__(old):
