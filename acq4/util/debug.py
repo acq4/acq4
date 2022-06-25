@@ -46,7 +46,7 @@ def printExc(msg="", indent=4, prefix="|", msgType="error"):
         if hasattr(acq4, "Manager"):
             acq4.Manager.logExc(msg=msg, msgType=msgType)
     except Exception:
-        pgdebug.printExc("[failed to log this error to manager]")
+        pgdebug.printExc(f"[failed to log this error to manager] {msgType}: {msg}")
 
 
 def logMsg(msg, **kwargs):
