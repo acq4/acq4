@@ -96,7 +96,8 @@ class Microscope(Device, OptomechDevice):
                 printExc("Could not set initial objective state:")
         else:
             self.switchDevice = None
-            self.objectiveIndexChanged(0)
+            firstObj = next(iter(self.objectives))
+            self.objectiveIndexChanged(firstObj)
 
         cal = self.readConfigFile('calibration')
         if 'surfaceDepth' in cal:
