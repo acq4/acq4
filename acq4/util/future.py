@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 
-import time
+import time, sys, threading, traceback, functools
 
 from pyqtgraph import ptime
 
@@ -34,6 +34,8 @@ class Future(Qt.QObject):
         self._excInfo = None
         self._stopRequested = False
         self._state = 'starting'
+        self._errorMonitorThread = None
+        self.finishedEvent = threading.Event()
 
     def currentState(self):
         """Return the current state of this future.
@@ -90,6 +92,7 @@ class Future(Qt.QObject):
             self.setState(state or 'interrupted: %s' % error)
         else:
             self.setState(state or 'complete')
+        self.finishedEvent.set()
         self.sigFinished.emit(self)
 
     def wasInterrupted(self):
@@ -141,7 +144,7 @@ class Future(Qt.QObject):
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
         """
-        time.sleep(duration)
+        self.finishedEvent.wait(timeout=duration)
 
     def _checkStop(self, delay=0):
         """Raise self.StopRequested if self.stop() has been called.
@@ -195,12 +198,76 @@ class Future(Qt.QObject):
             if timeout is not None and time.time() - start > timeout:
                 raise futures[0].Timeout("Timed out waiting for %r" % futures)
 
+    def raiseErrors(self, message, pollInterval=1.0):
+        """Monitor this future for errors and raise if any occur.
+
+        This allows the caller to discard a future, but still expect errors to be delivered to the user. Note
+        that errors are raised from a background thread.
+
+        Parameters
+        ----------
+        message : str
+            Exception message to raise. May include "{stack}" to insert the stack trace of the caller, and "{error}"
+            to insert the original formatted exception.
+        pollInterval : float | None
+            Interval in seconds to poll for errors. This is only used with Futures that require a poller;
+            Futures that immediately report errors when they occur will not use a poller.
+        """
+        if self._errorMonitorThread is not None:
+            return
+        originalFrame = sys._getframe().f_back
+        monitorFn = functools.partial(self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame)
+        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
+        self._errorMonitorThread.start()
+
+    def _monitorErrors(self, message, pollInterval, originalFrame):
+        try:
+            self.wait(pollInterval=pollInterval)
+        except Exception as exc:
+            if '{stack}' in message:
+                stack = ''.join(traceback.format_stack(originalFrame))
+            else:
+                stack = None
+
+            try:
+                formattedMsg = message.format(stack=stack, error=traceback.format_exception_only(type(exc), exc))
+            except Exception as exc2:
+                formattedMsg = message + f" [additional error formatting error message: {exc2}]"
+            raise RuntimeError(formattedMsg) from exc
+
+
+
+class _FuturePollThread(threading.Thread):
+    """Thread used to poll the state of a future.
+    
+    Used when a Future subclass does not automatically call _taskDone, but instead requires
+    a periodic check. May
+    """
+    def __init__(self, future, pollInterval, originalFrame):
+        threading.Thread.__init__(self, daemon=True)
+        self.future = future
+        self.pollInterval = pollInterval
+        self._stop = False
+
+    def run(self):
+        while not self._stop:
+            if self.future.isDone():
+                break
+                if self.future._raiseErrors:
+                    raise
+            time.sleep(self.pollInterval)
+
+    def stop(self):
+        self._stop = True
+        self.join()
+
 
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures.
     """
     def __init__(self, futures):
         self.futures = futures
+        Future.__init__(self)
 
     def stop(self, reason="task stop requested"):
         for f in self.futures:
@@ -217,8 +284,8 @@ class MultiFuture(Future):
         return all([f.isDone() for f in self.futures])
 
     def errorMessage(self):
-        return "; ".join([f.errorMessage() for f in self.futures])
+        return "; ".join([f.errorMessage() or '' for f in self.futures])
 
     def currentState(self):
-        return "; ".join([f.currentState() for f in self.futures])
+        return "; ".join([f.currentState() or '' for f in self.futures])
 

@@ -1,15 +1,13 @@
 from __future__ import print_function
 
 import os
-
 import numpy as np
-
 import pyqtgraph as pg
 import pyqtgraph.console as console
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.codeEditor import codeEditorCommand
 
-EDITOR = "pykate {fileName}:{lineNum}"
 
 class Console(Module):
     moduleDisplayName = "Console"
@@ -45,7 +43,7 @@ class Console(Module):
         mp = os.path.dirname(__file__)
         self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.win.resize(800,500)
-        self.cw = ConsoleWidget(namespace=self.localNamespace, text=msg, editor=EDITOR, module=self)
+        self.cw = ConsoleWidget(namespace=self.localNamespace, text=msg, editor=codeEditorCommand(), module=self)
         self.win.setCentralWidget(self.cw)
         self.win.setWindowTitle('ACQ4 Console')
 

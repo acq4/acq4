@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 import sys
 import traceback
 import weakref
@@ -21,6 +22,7 @@ from acq4.util import Qt
 from acq4.util.DataManager import DirHandle
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.debug import printExc
+from acq4.util.codeEditor import invokeCodeEditor
 from pyqtgraph import FeedbackButton
 from pyqtgraph import FileDialog
 
@@ -122,6 +124,7 @@ class LogWindow(Qt.QMainWindow):
         importance: 0-9 (0 is low importance, 9 is high, 5 is default)
         other keywords:
           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          excInfo: an object with attributes exc_type, exc_value, exc_traceback, and thread
           docs: a list of strings where documentation related to the message can be found
           reasons: a list of reasons (as strings) for the message
           traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a
@@ -167,7 +170,7 @@ class LogWindow(Qt.QMainWindow):
         if entry.get("exception", None) is not None and "msgType" in entry["exception"]:
             entry["msgType"] = entry["exception"]["msgType"]
 
-        self.saveEntries({saveName: entry | {"id": savedId}})
+        self.saveEntries({saveName: {**entry, "id": savedId}})
         self.wid.addEntry(entry)  # takes care of displaying the entry if it passes the current filters on the logWidget
 
         if entry["msgType"] == "error" and self.errorDialog.show(entry) is False:
@@ -187,8 +190,17 @@ class LogWindow(Qt.QMainWindow):
 
         # convert exc_info to serializable dictionary
         if entry.get("exception", None) is not None:
-            exc_info = entry.pop("exception")
-            entry["exception"] = self.exceptionToDict(*exc_info, topTraceback=entry.get("traceback", []))
+            excInfo = entry.pop("exception")
+            entry["exception"] = self.exceptionToDict(*excInfo, thread=None, topTraceback=entry.get("traceback", []))
+        elif entry.get("excInfo", None) is not None:
+            excInfo = entry.pop("excInfo")
+            entry["exception"] = self.exceptionToDict(
+                excInfo.exc_type,
+                excInfo.exc_value,
+                excInfo.exc_traceback,
+                excInfo.thread,
+                topTraceback=entry.get("traceback", [])
+            )
         else:
             entry["exception"] = None
 
@@ -205,10 +217,11 @@ class LogWindow(Qt.QMainWindow):
         self.logMsg(msg, importance=8, msgType="user", currentDir=currentDir)
         self.wid.ui.input.clear()
 
-    def exceptionToDict(self, exType, exc, tb, topTraceback):
+    def exceptionToDict(self, exType, exc, tb, thread, topTraceback):
         excDict = {
             "message": traceback.format_exception(exType, exc, tb)[-1][:-1],
             "traceback": topTraceback + traceback.format_exception(exType, exc, tb)[:-1],
+            # "thread": thread,
         }
         if hasattr(exc, "docs") and len(exc.docs) > 0:
             excDict["docs"] = exc.docs
@@ -218,7 +231,7 @@ class LogWindow(Qt.QMainWindow):
             for k in exc.kwargs:
                 excDict[k] = exc.kwargs[k]
         if hasattr(exc, "oldExc"):
-            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, topTraceback=[])
+            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, thread=None, topTraceback=[])
         return excDict
 
     def flashButtons(self):
@@ -592,6 +605,13 @@ class LogWidget(Qt.QWidget):
         text = re.sub(r">", "&gt;", text)
         text = re.sub(r"<", "&lt;", text)
         text = re.sub(r"\n", "<br/>\n", text)
+
+        # replace indenting spaces with &nbsp
+        lines = text.split('\n')
+        indents = ['&nbsp;' * (len(line) - len(line.lstrip())) for line in lines]
+        lines = [indent + line.lstrip() for indent, line in zip(indents, lines)]
+        text = ''.join(lines)
+
         return text
 
     def formatExceptionForHTML(self, entry, exception=None, count=1, entryId=None):
@@ -636,10 +656,21 @@ class LogWidget(Qt.QWidget):
     def formatTracebackForHTML(self, tb):
         try:
             tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
-        except:
+        except Exception:
             print("\n" + str(tb) + "\n")
             raise
-        return re.sub(" ", "&nbsp;", "".join(map(self.cleanText, tb)))[:-1]
+
+        cleanLines = []
+        for i, line in enumerate(tb):
+            line = self.cleanText(line)
+            m = re.match(r"(.*)File \"(.*)\", line (\d+)", line)
+            if m is not None:
+                # insert hyperlink for opening file in editor
+                indent, codeFile, lineNum = m.groups()
+                extra = line[m.end():]
+                line = f'{indent}File <a href="code:{lineNum}:{codeFile}">{codeFile}</a>, line {lineNum}{extra}'
+            cleanLines.append(line)
+        return ''.join(cleanLines)
 
     def formatReasonsStrForHTML(self, reasons):
         # indent = 6
@@ -705,7 +736,8 @@ class LogWidget(Qt.QWidget):
             )
 
     def linkClicked(self, url):
-        action, target = url.toString().split(":")
+        action = url.scheme()
+        target = url.path()
         if action == "doc":
             self.manager.showDocumentation(target)
         elif action == "exc":
@@ -720,6 +752,10 @@ class LogWidget(Qt.QWidget):
                     print("requested index %d, but only %d entries exist." % (int(target) - 1, len(self.entries)))
                     raise
             cursor.insertHtml(tb)
+        elif action == 'code':
+            lineNum, _, codeFile = target.partition(':')
+            invokeCodeEditor(fileName=codeFile, lineNum=lineNum)
+
 
     def clear(self):
         self.ui.output.clear()

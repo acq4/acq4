@@ -6,7 +6,7 @@ from ..FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWhee
 
 class FalconTurret(FilterWheel):
     def __init__(self, dm, config, name):
-        self.dev = falconoptics.Falcon(config_file=None)
+        self.dev = falconoptics.Falcon(config_file=config.get('configFile', None))
         logger = logging.getLogger('falconoptics')
         logger.setLevel(logging.CRITICAL)
 

@@ -17,7 +17,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.target import Target
 from pyqtgraph import Point
-from .planners import defaultMotionPlanners
+from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
 
@@ -35,25 +35,21 @@ class Pipette(Device, OptomechDevice):
 
     This device must be configured with a Stage as its parent.
 
-    The local coordinate system of the device is configured such that the electrode is in the 
-    x/z plane, pointing toward +x and -z (assuming the pitch is positive). The origin of the
-    local coordinate system is at the tip of the pipette.
-
-             \\ +z
-              \\ |
-         pitch \\|
-    -x  <-------\\------> +x
-                |\\
-                | \\
-               -z   \ - electrode tip
-
+    The local coordinate system of the device is configured such that the X axis points in the direction of the pipette
+    tip, the Z axis points upward (same as global +Z), and the Y axis is the vector perpendicular to both X and Z.
 
     Configuration options:
 
-    * pitch: The angle of the pipette (in degrees) relative to the horizontal plane,
+    * pitch: The angle of the pipette (in degrees) relative to the horizontal plane.
       Positive values point downward. This option must be specified in the configuration.
+      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis pitch
+      (assumes that the X axis is parallel to the pipette)
+    * yaw: The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
+      when facing the microscope).
+      Positive values are clockwise from global +X. This option must be specified in the configuration.
+      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis yaw.
     * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
-      should be about 1-2mm, emough to avoid collisions between the pipette tip and the sample during search.
+      should be about 1-2mm, enough to avoid collisions between the pipette tip and the sample during search.
       Default is 2 mm.
     * searchTipHeight: the distance above the sample surface to bring the (putative) pipette tip position
       when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
@@ -79,22 +75,23 @@ class Pipette(Device, OptomechDevice):
 
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
+    pathGeneratorClass = PipettePathGenerator
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self.config = config
+        self.config = config
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
-        self._stageOrientation = {'angle': 0, 'inverty': False}
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
-            'showCameraModuleUI': config.get('showCameraModuleUI', True),
+            'showCameraModuleUI': config.get('showCameraModuleUI', False),
         }
         parent = self.parentDevice()
         if not isinstance(parent, Stage):
@@ -103,21 +100,28 @@ class Pipette(Device, OptomechDevice):
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
+        self.pathGenerator = self.pathGeneratorClass(self)
 
         self._camInterfaces = weakref.WeakKeyDictionary()
 
         self.target = None
 
         cal = self.readConfigFile('calibration')
-
         self.offset = np.array(cal.get('offset', [0, 0, 0]))
+        # kept for backward compatibility
         self._calibratedPitch = cal.get('pitch', None)
         self._calibratedYaw = cal.get('yaw', cal.get('angle', None))  # backward support for old 'angle' config key
+
+        self._globalDirection = None
+        self._localDirection = None
 
         # timer used to emit sigMoveFinished when no motion is detected for a certain period 
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
         self.sigGlobalTransformChanged.connect(self.positionChanged)
+
+        # If parent orientation changes (probably due to being recalibrated), update pitch/yaw angles if needed.
+        parent.sigOrientationChanged.connect(self._directionChanged)
 
         self._updateTransform()
 
@@ -128,8 +132,13 @@ class Pipette(Device, OptomechDevice):
         if target is not None:
             self.setTarget(target)
 
-    def moveTo(self, position, speed, **kwds):
+        deviceManager.sigAbortAll.connect(self.stop)
+
+    def moveTo(self, position, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
+
+        If *raiseErrors* is True, then an exception will be raised in a background
+        thread if the move fails.
         """
         # Select a motion planner based on the target position
         plannerClass = self.motionPlanners.get(position, self.defaultMotionPlanners.get(position, None))
@@ -141,7 +150,11 @@ class Pipette(Device, OptomechDevice):
             self.currentMotionPlanner.stop()
 
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
-        return self.currentMotionPlanner.move()
+        future = self.currentMotionPlanner.move()
+        if raiseErrors is not False:
+            future.raiseErrors(message="Move to " + position + " position failed; requested from:\n{stack}")
+
+        return future
 
     def savePosition(self, name, pos=None):
         """Store a position in global coordinates for later use.
@@ -182,7 +195,12 @@ class Pipette(Device, OptomechDevice):
 
     def quit(self):
         pass
-    
+
+    def stop(self):
+        cmp = self.currentMotionPlanner
+        if cmp is not None:
+            cmp.stop()
+
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
         return PipetteDeviceGui(self, win)
@@ -191,31 +209,6 @@ class Pipette(Device, OptomechDevice):
         iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
-
-    def setCalibratedOrientation(self, yaw=None, pitch=None):
-        """Set the orientation of the pipette relative to its parent coordinate system.
-
-        The *yaw* angle specifies a rotation in degrees around the vertical (Z) axis, where 0 points
-        in the direction of the parent's +X axis.
-
-        The *pitch* angle specifies the downward angle (degrees) of the pipette relative to the horizontal plane.
-
-        Setting the pipette orientation has two effects:
-        * Motion planning uses this information to avoid dragging the pipette sideways through the sample
-        * The local coordinate system of the Pipette device is rotated such that +X points
-          in the direction of the pipette tip.
-
-        """
-        cal = self.readConfigFile('calibration')
-        if yaw is not None:
-            self._calibratedYaw = yaw
-            cal['yaw'] = yaw
-        if pitch is not None:
-            self._calibratedPitch = pitch
-            cal['pitch'] = pitch
-        self.writeConfigFile(cal, 'calibration')
-
-        self._updateTransform()
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
@@ -234,17 +227,40 @@ class Pipette(Device, OptomechDevice):
         self.sigCalibrationChanged.emit(self)
 
     def _updateTransform(self):
-        tr = pg.Transform3D()
-        tr.rotate(self.yawAngle(), pg.Vector(0, 0, 1))
-        # tr.rotate(self.pitchAngle(), pg.Vector(1, 0, 0))
+        # matrix mapping from local to parent
+        x = self.globalDirection()
+        x[2] = 0
+        x = x / np.linalg.norm(x)
+        z = np.array([0, 0, 1])
+        y = np.cross(x, z)
+        y = y / np.linalg.norm(y)
+        m = np.array([
+            [x[0], y[0], z[0], 0],
+            [x[1], y[1], z[1], 0],
+            [x[2], y[2], z[2], 0],
+            [0, 0, 0, 1],
+        ])
+        tr = pg.Transform3D(m)
         tr.translate(*self.offset)
         self.setDeviceTransform(tr)
+
+    def _directionChanged(self):
+        """Orientation has changed
+        """
+        self._globalDirection = None
+        self._localDirection = None
+        self._updateTransform()
 
     def saveCalibration(self):
         cal = self.readConfigFile('calibration')
         cal['offset'] = list(self.offset)
-        cal['pitch'] = self._calibratedPitch
-        cal['yaw'] = self._calibratedYaw
+
+        # kept for backward compatibility
+        if self._calibratedPitch is not None:
+            cal['pitch'] = self._calibratedPitch
+        if self._calibratedYaw is not None:
+            cal['yaw'] = self._calibratedYaw
+
         self.writeConfigFile(cal, 'calibration')
 
     def yawAngle(self):
@@ -253,20 +269,33 @@ class Pipette(Device, OptomechDevice):
         Value is returned in degrees such that an angle of 0 indicate the tip points along the positive x axis,
         and 90 points along the positive y axis.
         """
-        if self._calibratedYaw is None:
-            return self.config.get('yaw', 0)
+        if 'yaw' not in self.config:
+            # for backward compatibility
+            if self._calibratedYaw is not None:
+                return self._calibratedYaw
+            raise Exception(f"Yaw angle is not configured for {self.name()}")
+        if self.config['yaw'] == 'auto':
+            return self._manipulatorOrientation()['yaw']
         else:
-            return self._calibratedYaw
+            return self.config['yaw']
 
     def pitchAngle(self):
         """Return the pitch of the electrode in degrees (angle relative to horizontal plane).
 
         For positive angles, the pipette tip points downward, toward -Z. 
         """
-        if self._calibratedPitch is None:
-            return self.config.get('pitch', 30)
+        if 'pitch' not in self.config:
+            # for backward compatibility
+            if self._calibratedPitch is not None:
+                return self._calibratedPitch
+            raise Exception(f"Pitch angle is not configured for {self.name()}")
+        if self.config['pitch'] == 'auto':
+            return self._manipulatorOrientation()['pitch']
         else:
-            return self._calibratedPitch
+            return self.config['pitch']
+
+    def _manipulatorOrientation(self) -> dict:
+        return self.parentDevice().calculatedXAxisOrientation()
 
     def yawRadians(self):
         return self.yawAngle() * np.pi / 180.
@@ -275,7 +304,7 @@ class Pipette(Device, OptomechDevice):
         return self.pitchAngle() * np.pi / 180.    
 
     def goHome(self, speed='fast', **kwds):
-        """Extract pipette tip diagonally, then move stage to home position.
+        """Extract pipette tip diagonally, then move to home position.
         """
         return self.moveTo('home', speed=speed, **kwds)
 
@@ -330,23 +359,42 @@ class Pipette(Device, OptomechDevice):
         return surface - self.globalPosition()[2]
 
     def globalDirection(self):
-        """Return a global uinit vector pointing in the direction of the pipette axis.
+        """Return a global unit vector pointing in the direction of the pipette axis.
         """
-        o = np.array(self.globalPosition())
-        dz = -1.0
-        dx = -dz / np.tan(self.pitchRadians())
-        p = self.mapToGlobal(np.array([dx, 0, dz]))
-        v = p - o
-        return v / np.linalg.norm(v)
+        if self._globalDirection is None:
+            pitch = self.pitchRadians()
+            yaw = self.yawRadians()
+            s = np.cos(pitch)
+            self._globalDirection = np.array([s * np.cos(yaw), s * np.sin(yaw), -np.sin(pitch)])
+        return self._globalDirection.copy()
+
+    def localDirection(self):
+        """Return a local unit vector pointing in the direction of the pipette axis.
+        """
+        if self._localDirection is None:
+            pitch = self.pitchRadians()
+            self._localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
+        return self._localDirection.copy()
+
+    def positionAtDepth(self, depth, start=None):
+        """Return the global position at *depth* that lies along the axis of the pipette.
+
+        If *start* is given, then the pipette axis is assumed to go through this global position rather than
+        its current position.
+        """
+        if start is None:
+            start = self.globalPosition()
+        axis = self.globalDirection()
+        dz = depth - start[2]
+        dist = dz / axis[2]
+        return start + dist * axis
 
     def advance(self, depth, speed):
         """Move the electrode along its axis until it reaches the specified
         (global) depth.
         """
-        pos = self.globalPosition()
-        dz = depth - pos[2]
-        dx = -dz / np.tan(self.pitchRadians())
-        return self._moveToLocal([dx, 0, dz], speed, linear=self._shouldUseLinearMovement())
+        pos = self.positionAtDepth(depth)
+        return self._moveToGlobal(pos, speed)
 
     def retractFromSurface(self, speed='slow'):
         """Retract the pipette along its axis until it is above the slice surface.
@@ -355,9 +403,6 @@ class Pipette(Device, OptomechDevice):
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
-        else:
-            # just to make sure we always return a Future
-            return self.advance(depth, speed=speed)
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -370,7 +415,6 @@ class Pipette(Device, OptomechDevice):
         """Move the electrode tip directly to the given position in global coordinates.
         This method does _not_ implement any motion planning.
         """
-        kwds.setdefault('linear', self._shouldUseLinearMovement())
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
         stage = self.parentDevice()
@@ -379,9 +423,6 @@ class Pipette(Device, OptomechDevice):
         except Exception as exc:
             print("Error moving %s to global position %r:" % (self, pos))
             raise
-
-    def _shouldUseLinearMovement(self):
-        return 'Sensapex' not in str(type(self.parentDevice()))
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.
@@ -397,32 +438,6 @@ class Pipette(Device, OptomechDevice):
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
-    def advanceTowardTarget(self, distance, speed='slow'):
-        target = self.targetPosition()
-        pos = self.globalPosition()
-        dif = target - pos
-        unit = dif / (dif**2).sum()**0.5
-        waypoint = pos + distance * unit
-        return self._moveToGlobal(waypoint, speed, linear=self._shouldUseLinearMovement())
-
-    def startAdvancing(self, speed):
-        """Begin moving the pipette at a constant speed along its axis.
-
-        Positive speeds advance, negative speeds retract.
-        """
-        stage = self.parentDevice()
-        vel = [speed * np.cos(self.pitchRadians()), 0, speed * -np.sin(self.pitchRadians())]
-        a = self.mapToParentDevice([0, 0, 0])
-        b = self.mapToParentDevice(vel)
-        stage.startMoving([b[0]-a[0], b[1]-a[1], b[2]-a[2]])
-
-    def retract(self, distance, speed='slow'):
-        """Retract the pipette a specified distance along its axis.
-        """
-        dz = distance * np.sin(self.pitchRadians())
-        dx = -distance * np.cos(self.pitchRadians())
-        return self._moveToLocal([dx, 0, dz], speed, linear=self._shouldUseLinearMovement())
-
     def setTarget(self, target):
         self.target = np.array(target)
         self.writeConfigFile({'targetGlobalPosition': list(self.target)}, 'target')
@@ -437,13 +452,19 @@ class Pipette(Device, OptomechDevice):
         for iface in self._camInterfaces.keys():
             iface.hideMarkers(hide)
 
-    def focusTip(self, speed='slow'):
+    def focusTip(self, speed='fast', raiseErrors=False):
         pos = self.globalPosition()
-        self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        if raiseErrors:
+            future.raiseErrors("Focus on pipette tip failed; requested from:\n{stack})")
+        return future
 
-    def focusTarget(self, speed='slow'):
+    def focusTarget(self, speed='fast', raiseErrors=False):
         pos = self.targetPosition()
-        self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        if raiseErrors:
+            future.raiseErrors("Focus on pipette target failed; requested from:\n{stack})")
+        return future
 
     def positionChanged(self):
         self.moveTimer.start(500)
@@ -465,7 +486,9 @@ class Pipette(Device, OptomechDevice):
 
 
 class PipetteCamModInterface(CameraModuleInterface):
-    """Implements user interface for Pipette.
+    """**DEPRECATED** use MultiPatch module instead
+
+    Implements user interface for Pipette.
     """
     canImage = False
 
@@ -514,7 +537,8 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.depthArrow = pg.ArrowItem(angle=-dev.pitchAngle())
         mod.getDepthView().addItem(self.depthArrow)
 
-        self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
+        # self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
+        self.ui.setOrientationBtn.setEnabled(False)
         mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)

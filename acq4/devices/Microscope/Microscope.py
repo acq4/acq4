@@ -3,6 +3,8 @@ from __future__ import print_function
 
 import collections
 
+import numpy as np
+
 import pyqtgraph as pg
 
 from acq4.Manager import getManager
@@ -13,6 +15,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
+from acq4.util.future import MultiFuture
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
 
@@ -93,7 +96,8 @@ class Microscope(Device, OptomechDevice):
                 printExc("Could not set initial objective state:")
         else:
             self.switchDevice = None
-            self.objectiveIndexChanged(0)
+            firstObj = next(iter(self.objectives))
+            self.objectiveIndexChanged(firstObj)
 
         cal = self.readConfigFile('calibration')
         if 'surfaceDepth' in cal:
@@ -220,7 +224,7 @@ class Microscope(Device, OptomechDevice):
     def globalPosition(self):
         """Return the global position of the scope's center axis at the focal plane.
         """
-        return self.mapToGlobal(Qt.QVector3D(0, 0, 0))
+        return self.mapToGlobal(pg.Vector(0, 0, 0))
 
     def setGlobalPosition(self, pos, speed='fast'):
         """Move the microscope such that its center axis is at a specified global position.
@@ -229,26 +233,31 @@ class Microscope(Device, OptomechDevice):
         accordingly.
 
         Return a MoveFuture instance.
-
-        Note: If the xy positioning device is different from the z positioning
-        device, then the MoveFuture returned only corresponds to the xy motion.
         """
-        pd = self.positionDevice()
-        fd = self.focusDevice()
+        pos = np.asarray(pos)
+        positionDevice = self.positionDevice()
+        focusDevice = self.focusDevice()
 
-        if len(pos) == 3 and fd is not pd:
+        if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            self.setFocusDepth(z)
+            zFuture = self.setFocusDepth(z)
             pos = pos[:2]
+        else:
+            zFuture = None
+
         if len(pos) == 2:
             pos = list(pos) + [self.getFocusDepth()]
 
         # Determine how to move the xy(z) stage to react the new center position
         gpos = self.globalPosition()
-        sgpos = pd.globalPosition()
+        sgpos = positionDevice.globalPosition()
         sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
         sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        return pd.moveToGlobal(sgpos2, speed)
+        xyFuture = positionDevice.moveToGlobal(sgpos2, speed)
+        if zFuture is None:
+            return xyFuture
+        else:
+            return MultiFuture([zFuture, xyFuture])
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
@@ -322,7 +331,11 @@ class Objective(OptomechDevice):
 
     def scope(self):
         return self._scope
-        
+
+    @property
+    def radius(self):
+        return self._config.get('radius')
+
     def __repr__(self):
         return "<Objective %s.%s offset=%0.2g,%0.2g scale=%0.2g>" % (self._scope.name(), self.name(), self.offset().x(), self.offset().y(), self.scale().x())
 

@@ -272,6 +272,14 @@ class TestPulse(object):
         return self.taskParams['clampMode']
 
     def analysis(self):
+        if self.taskParams.get('ignoreWarnings', True):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                return self._doAnalysis()
+        else:
+            return self._doAnalysis()
+
+    def _doAnalysis(self):
         with self._analysisLock:
             if self._analysis is not None:
                 return self._analysis
@@ -327,9 +335,7 @@ class TestPulse(object):
             xoffset = params['preDuration']
             pulseData = pulse.asarray()
             try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    fit = scipy.optimize.curve_fit(exp, t-xoffset, pulseData, guess, maxfev=1000)  # uses leastsq
+                fit = scipy.optimize.curve_fit(exp, t-xoffset, pulseData, guess, maxfev=1000)  # uses leastsq
                 # fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, bounds=bounds, max_nfev=1000)  # uses least_squares
                 amp, tau, yoffset = fit[0]
             except RuntimeError:

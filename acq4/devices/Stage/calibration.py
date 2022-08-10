@@ -280,9 +280,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
 
         # send new transform to device
-        self.dev._axisTransform = self.transform
-        self.dev._inverseAxisTransform = None
-        self.dev._updateTransform()
+        self.dev.setAxisTransform(self.transform)
 
     def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])

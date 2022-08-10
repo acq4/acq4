@@ -234,12 +234,12 @@ class PipetteControl(Qt.QWidget):
             self.pip.setTestPulseParameters(clampMode='VC')
 
     def focusTipBtnClicked(self, state):
-        speed = self.mainWin.selectedSpeed(default='slow')
-        self.pip.focusOnTip(speed)
+        speed = self.mainWin.selectedSpeed(default='fast')
+        self.pip.focusOnTip(speed, raiseErrors=True)
 
     def focusTargetBtnClicked(self, state):
-        speed = self.mainWin.selectedSpeed(default='slow')
-        self.pip.focusOnTarget(speed)
+        speed = self.mainWin.selectedSpeed(default='fast')
+        self.pip.focusOnTarget(speed, raiseErrors=True)
 
     def hideHeader(self):
         for col in range(self.ui.gridLayout.columnCount()):

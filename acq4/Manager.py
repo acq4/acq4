@@ -2,7 +2,7 @@
 """
 Manager.py -  Defines main Manager class for ACQ4
 Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
+Distributed under MIT/X11 license. See license.txt for more information.
 
 This class must be invoked once to initialize the ACQ4 core system.
 The class is responsible for:
@@ -10,8 +10,6 @@ The class is responsible for:
     - Invoking/managing modules
     - Creating and executing acquisition tasks. 
 """
-from __future__ import print_function
-
 import atexit
 import gc
 import getopt
@@ -22,21 +20,22 @@ import weakref
 from collections import OrderedDict
 
 import six
+from six.moves import map
 
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
+from pyqtgraph import configfile
+from pyqtgraph.debug import printExc, Profiler
+from pyqtgraph.util.mutex import Mutex
 from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
-from pyqtgraph.debug import printExc, Profiler
-from pyqtgraph import configfile
-from pyqtgraph.util.mutex import Mutex
 from .util import DataManager, ptime, Qt
 from .util.HelpfulException import HelpfulException
+from .util.debug import logExc, logMsg, createLogWindow
 
-from .util.debug import logMsg, createLogWindow, logExc # logExc needed by debug
-from six.moves import map
+_ = logExc  # prevent cleanup of logExc; needed by debug
 
 
 def __reload__(old):
@@ -393,38 +392,32 @@ class Manager(Qt.QObject):
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
-        with self.lock:
-            if 'configurations' in self.config:
-                return list(self.config['configurations'].keys())
-            else:
-                return []
+        return list(self.config.get('configurations', {}).keys())
 
     def loadDefinedConfig(self, name):
         with self.lock:
             if name not in self.config['configurations']:
                 raise Exception("Could not find configuration named '%s'" % name)
-            cfg = self.config['configurations'].get(name, )
+            cfg = self.config['configurations'][name]
         self.configure(cfg)
 
     def readConfigFile(self, fileName, missingOk=True):
-        with self.lock:
-            fileName = self.configFileName(fileName)
-            if os.path.isfile(fileName):
-                return configfile.readConfigFile(fileName)
+        fileName = self.configFileName(fileName)
+        if os.path.isfile(fileName):
+            return configfile.readConfigFile(fileName)
+        else:
+            if missingOk:
+                return {}
             else:
-                if missingOk:
-                    return {}
-                else:
-                    raise Exception('Config file "%s" not found.' % fileName)
+                raise Exception('Config file "%s" not found.' % fileName)
 
     def writeConfigFile(self, data, fileName):
         """Write a file into the currently used config directory."""
-        with self.lock:
-            fileName = self.configFileName(fileName)
-            dirName = os.path.dirname(fileName)
-            if not os.path.exists(dirName):
-                os.makedirs(dirName)
-            return configfile.writeConfigFile(data, fileName)
+        fileName = self.configFileName(fileName)
+        dirName = os.path.dirname(fileName)
+        if not os.path.exists(dirName):
+            os.makedirs(dirName)
+        return configfile.writeConfigFile(data, fileName)
 
     def appendConfigFile(self, data, fileName):
         with self.lock:
@@ -435,8 +428,7 @@ class Manager(Qt.QObject):
                 raise Exception("Could not find file %s" % fileName)
 
     def configFileName(self, name):
-        with self.lock:
-            return os.path.join(self.configDir, name)
+        return os.path.join(self.configDir, name)
 
     def loadDevice(self, devClassName, conf, name):
         """Create a new instance of a device.
@@ -803,7 +795,7 @@ class Manager(Qt.QObject):
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')
                     dt = info['dirType']
-                    folderTypesConfig = self._foldlerTypesConfig()
+                    folderTypesConfig = self._folderTypesConfig()
                     if dt in folderTypesConfig:
                         fields = folderTypesConfig[dt]['info']
 

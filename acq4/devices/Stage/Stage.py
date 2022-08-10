@@ -17,6 +17,7 @@ from ..OptomechDevice import OptomechDevice
 from six.moves import range
 
 from ... import getManager
+from ...util.future import Future
 
 
 class Stage(Device, OptomechDevice):
@@ -35,9 +36,14 @@ class Stage(Device, OptomechDevice):
         isManipulator : bool
             Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
             as a stage.
+        fastSpeed : float
+            Speed (m/s) to use when a movement is requested with speed='fast'
+        slowSpeed : float
+            Speed (m/s) to use when a movement is requested with speed='slow'
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
+    sigOrientationChanged = Qt.Signal(object)  # self
     sigLimitsChanged = Qt.Signal(object)
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
 
@@ -64,6 +70,7 @@ class Stage(Device, OptomechDevice):
         # convert from device position to translation vector
         self._axisTransform = None
         self._inverseAxisTransform = None
+        self._calculatedXAxisOrientation = None
 
         self._defaultSpeed = 'fast'
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
@@ -205,7 +212,15 @@ class Stage(Device, OptomechDevice):
         pos = pg.Vector(self.inverseAxisTransform().map(tr))
         return pos
 
-    def axisTransform(self):
+    def axisTransform(self) -> pg.Transform3D:
+        """Transformation matrix with columns that point in the direction that each manipulator axis moves.
+
+        This transform gives the relationship between the coordinates reported by the device and real world coordinates.
+        It assumes a 3-axis, linear stage, where the axes are not necessarily orthogonal to each other.
+
+        This matrix is usually derived from calibration points. Before calibration, it provides only scale
+        factors.
+        """
         if self._axisTransform is None:
             self._axisTransform = pg.Transform3D()
             self._inverseAxisTransform = pg.Transform3D()
@@ -215,13 +230,31 @@ class Stage(Device, OptomechDevice):
                 self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
         return pg.QtGui.QMatrix4x4(self._axisTransform)
 
-    def calculatedPitchRadians(self) -> float:
+    def setAxisTransform(self, tr):
+        self._axisTransform = tr
+        self._inverseAxisTransform = None
+        self._calculatedXAxisOrientation = None
+        self._updateTransform()
+        self.sigOrientationChanged.emit(self)
+
+    def calculatedXAxisOrientation(self) -> float:
+        """Return the pitch and yaw of the X axis in degrees.
+        """
+        if self._calculatedXAxisOrientation is None:
+            m = self.axisTransform().matrix()
+            xaxis = pg.Vector(m[:3, 0])
+            globalz = pg.Vector([0, 0, 1])
+            pitch = xaxis.angle(globalz) - 90
+            yaw = np.arctan2(xaxis[1], xaxis[0]) * 180 / np.pi
+            self._calculatedXAxisOrientation = {'pitch': pitch, 'yaw': yaw}
+        return self._calculatedXAxisOrientation
+
+    def calculatedYaw(self) -> float:
+        """Return the X-axis pitch (angle relative to horizontal) in degrees
+        """
         # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
         a = self.axisTransform()
-        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2))
-
-    def calculatedPitchDegrees(self) -> float:
-        return self.calculatedPitchRadians() / math.pi * 180
+        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
 
     def inverseAxisTransform(self):
         if self._inverseAxisTransform is None:
@@ -234,18 +267,10 @@ class Stage(Device, OptomechDevice):
     def _solveAxisTransform(self, stagePos, parentPos, localPos):
         """Return an axis transform matrix that maps localPos to parentPos, given
         stagePos.
-
-
         """
         offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
         m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
         return m
-
-    # def mapToStage(self, obj):
-    #     return self._mapTransform(obj, self._stageTransform)
-
-    # def mapFromStage(self, obj):
-    #     return self._mapTransform(obj, self._invStageTransform)
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -561,7 +586,7 @@ class Stage(Device, OptomechDevice):
         self.setVelocity(vel)
 
 
-class MoveFuture(object):
+class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
     class Timeout(Exception):
@@ -569,12 +594,12 @@ class MoveFuture(object):
         """
 
     def __init__(self, dev, pos, speed):
+        Future.__init__(self)
         self.startTime = pg.ptime.time()
         self.dev = dev
         self.speed = speed
-        self.targetPos = pos
-        self.startPos = dev.getPosition()
-        self._wasStopped = False
+        self.targetPos = np.asarray(pos)
+        self.startPos = np.asarray(dev.getPosition())
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -594,58 +619,12 @@ class MoveFuture(object):
             return 100
         return 100 * d1 / d2
 
-    def stop(self):
+    def stop(self, reason="stop requested"):
         """Stop the move in progress.
         """
         if not self.isDone():
             self.dev.stop()
-            self._wasStopped = True
-
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        raise NotImplementedError()
-
-    def isDone(self):
-        """Return True if the move has completed or was interrupted.
-        """
-        return self.percentDone() == 100 or self.wasInterrupted()
-
-    def errorMessage(self):
-        """Return a string description of the reason for a move failure,
-        or None if there was no failure (or if the reason is unknown).
-        """
-        return None
-        
-    def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, has been interrupted, or the
-        specified timeout has elapsed.
-
-        If *updates* is True, process Qt events while waiting.
-
-        If the move did not complete, raise an exception.
-        """
-        start = ptime.time()
-        while True:
-            if self.isDone():
-                break
-            if updates is True:
-                Qt.QTest.qWait(100)
-            else:
-                time.sleep(0.1)
-            if (timeout is not None) and (ptime.time() > start + timeout):
-                raise self.Timeout("Timed out waiting for move to complete.")
-
-        self._raiseError()
-    
-    def _raiseError(self):
-        """Raise an exception if the move did not complete, otherwise just return.
-        """
-        err = self.errorMessage()
-        if err is not None:
-            raise RuntimeError("Move did not complete: %s" % err)
-        elif self.wasInterrupted():
-            raise RuntimeError("Move did not complete.")
+            Future.stop(self, reason=reason)
 
 
 class MovePathFuture(MoveFuture):
@@ -653,17 +632,20 @@ class MovePathFuture(MoveFuture):
         MoveFuture.__init__(self, dev, None, None)
 
         self.path = path
+        self.currentStep = 0
         self._currentFuture = None
         self._done = False
         self._wasInterrupted = False
         self._errorMessage = None
-        self._stopped = False
 
         for step in self.path:
             if step.get("globalPos") is not None:
                 step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
-        for step in self.path:
-            self.dev.checkMove(**step)
+        for i,step in enumerate(self.path):
+            try:
+                self.dev.checkMove(**step)
+            except Exception as exc:
+                raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
 
         self._moveThread = threading.Thread(target=self._movePath)
         self._moveThread.start()
@@ -684,29 +666,29 @@ class MovePathFuture(MoveFuture):
     def errorMessage(self):
         return self._errorMessage
 
-    def stop(self):
+    def stop(self, reason=None):
         fut = self._currentFuture
         if fut is not None:
-            fut.stop()
-        self._stopped = True
+            fut.stop(reason=reason)
+        Future.stop(self, reason=reason)
 
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
-                print("Move path step %d    %r" % (i, step))
                 fut = self.dev.move(**step)
                 fut._pathStep = i
                 self._currentFuture = fut
                 while not fut.isDone():
                     try:
                         fut.wait(timeout=0.1)
+                        self.currentStep = i + 1
                     except fut.Timeout:
                         pass
-                    if self._stopped:
+                    if self._stopRequested:
                         fut.stop()
                         break
                 
-                if self._stopped:
+                if self._stopRequested:
                     self._errorMessage = "Move was cancelled"
                     self._wasInterrupted = True
                     break
@@ -720,6 +702,17 @@ class MovePathFuture(MoveFuture):
             self._wasInterrupted = True
         finally:
             self._done = True
+
+    def undo(self):
+        """Reverse the moves generated in this future and return a new future.
+        """
+        fwdPath = [{'position': self.startPos}] + self.path[:]
+        revPath = []
+        for i in range(min(self.currentStep, len(self.path)-1), -1, -1):
+            step = fwdPath[i+1].copy()
+            step['position'] = fwdPath[i]['position']
+            revPath.append(step)
+        return self.dev.movePath(revPath)
 
 
 class StageInterface(Qt.QWidget):

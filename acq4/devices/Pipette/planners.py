@@ -1,4 +1,10 @@
+from __future__ import annotations
 import numpy as np
+from acq4.util.future import MultiFuture
+
+import typing
+if typing.TYPE_CHECKING:
+    from .pipette import Pipette
 
 
 def defaultMotionPlanners():
@@ -8,20 +14,150 @@ def defaultMotionPlanners():
         'aboveTarget': AboveTargetMotionPlanner,
         'approach': ApproachMotionPlanner,
         'target': TargetMotionPlanner,
-        # 'clean': CleanMotionPlanner,
-        # 'rinse': RinseMotionPlanner,
         'idle': IdleMotionPlanner,
     }
 
 
-class PipetteMotionPlanner(object):
-    def __init__(self, pip, position, speed, **kwds):
+class PipettePathGenerator:
+    """Collection of methods for generating safe pipette paths.
+
+    These methods are used by motion planners for avoiding obstacles, determining safe movement speeds, etc.
+
+    The default implementation assumes an upright scope (requiring objective avoidance) and a thick sample
+    (requiring slow, axial motion).
+    """
+    def __init__(self, pip: Pipette):
+        self.pip = pip
+
+    def safePath(self, globalStart, globalStop, speed):
+        """Given global starting and stopping positions, return a list of global waypoints that avoid obstacles.
+
+        Generally, movements are split into axes parallel and orthogonal to the pipette. When moving "inward", the
+        parallel axis moves last. When moving "outward", the parallel axis moves first. This avoids most opportunities
+        to collide with an objective lens / recording chamber, or to move laterally through tissue.
+
+        If the start and stop positions are both near or inside the sample and have a lateral offset, then the pipette
+        is first retracted away from the sample before proceeding to the final target.
+
+        Any segments of the path that are inside or close to the sample are forced to the 'slow' speed.
+
+        The returned path does _not_ include the starting position.
+        """
+        globalStart = np.asarray(globalStart)
+        globalStop = np.asarray(globalStop)
+        path = [(globalStart,)]
+
+        # retract first if we are doing a lateral movement inside the sample
+        lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
+        if lateralDist > 1e-6:
+            slowDepth = self.pip.approachDepth()
+            canMoveLaterally = globalStart[2] > slowDepth or globalStop[2] > slowDepth
+            if not canMoveLaterally:
+                # need to retract first
+                safePos = self.pip.positionAtDepth(slowDepth, start=globalStart)
+                path.append((safePos, 'slow', True))
+                # the rest of this method continues as if safePos is the starting point
+                globalStart = safePos
+
+        # ensure lateral motion occurs as far away from the recording chamber as possible
+        localStart = self.pip.mapFromGlobal(path[-1][0])
+        localStop = self.pip.mapFromGlobal(globalStop)
+
+        # sort endpoints into inner (closer to sample) and outer (farther from sample)
+        diff = localStop - localStart
+        inward = diff[0] > 0
+        innerPos, outerPos = (localStop, localStart) if inward else (localStart, localStop)
+
+        # consider two possible waypoints, pick the one closer to the inner position
+        pitch = self.pip.pitchRadians()
+        localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
+        waypoint1 = innerPos - localDirection * abs((diff[0] / localDirection[0]))
+        waypoint2 = innerPos - localDirection * abs((diff[2] / localDirection[2]))
+        dist1 = np.linalg.norm(waypoint1 - innerPos)
+        dist2 = np.linalg.norm(waypoint2-innerPos)
+        waypoint = self.pip.mapToGlobal(waypoint1 if dist1 < dist2 else waypoint2)
+
+        # break up the inner segment if part of it needs to be slower
+        if inward:
+            slowpath = self.enforceSafeSpeed(waypoint, globalStop, speed, linear=True)
+            path += [(waypoint, speed, False)] + slowpath
+        else:
+            slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, linear=True)
+            path += slowpath + [(globalStop, speed, False)]
+
+        for step in path:
+            assert np.isfinite(step[0]).all()
+        return path[1:]
+
+    def enforceSafeSpeed(self, start, stop, speed, linear):
+        """Given global start/stop positions and a desired speed, return a path that reduces the speed for segments that
+        are close to the sample.
+        """
+        if speed == 'slow':
+            # already slow; no need for extra steps
+            return [(stop, speed, linear)]
+
+        slowDepth = self.pip.approachDepth()
+        startSlow = start[2] < slowDepth
+        stopSlow = stop[2] < slowDepth
+        if startSlow and stopSlow:
+            # all slow
+            return [(stop, 'slow', linear)]
+        elif not startSlow and not stopSlow:
+            return [(stop, speed, linear)]
+        else:
+            waypoint = self.pip.positionAtDepth(slowDepth, start=start)
+            if startSlow:
+                return [(waypoint, 'slow', linear), (stop, speed, linear)]
+            else:
+                return [(waypoint, speed, linear), (stop, 'slow', linear)]
+
+    def safeYZPosition(self, start, margin=2e-3):
+        """Return a position to travel to, beginning from *start*, where the pipette may freely move in the local YZ
+        plane without hitting obstacles (in particular the objective lens).
+        """
+        start = np.asarray(start)
+
+        # where is the objective?
+        scope = self.pip.scopeDevice()
+        obj = scope.currentObjective
+        objRadius = obj.radius
+        assert objRadius is not None, "Can't determine safe location; radius of objective lens is not configured."
+        localFocus = self.pip.mapFromGlobal(scope.globalPosition())
+
+        # safe position along local x axis
+        safeX = localFocus[0] - objRadius - margin
+
+        # return starting position if it is already safe
+        localStart = self.pip.mapFromGlobal(start)
+        if localStart[0] < safeX:
+            return start
+
+        # best way to get to safe position
+        dx = safeX - localStart[0]
+        localDir = self.pip.localDirection()
+        safePos = localStart + localDir * (dx / localDir[0])
+
+        return self.pip.mapToGlobal(safePos)
+
+
+class PipetteMotionPlanner:
+    """Pipette motion planners are responsible for safely executing movement of the pipette and (optionally) the microscope
+     focus to specific locations.
+
+    For example, moving to a pipette search position involves setting the focus to a certain height, followed by inserting
+    the pipette tip diagonally near the
+    """
+    def __init__(self, pip: Pipette, position: np.ndarray, speed: float, **kwds):
         self.pip = pip
         self.position = position
         self.speed = speed
         self.kwds = kwds
 
         self.future = None
+
+        # wrap safePath for convenience
+        self.safePath = self.pip.pathGenerator.safePath
 
     def move(self):
         """Move the pipette to the requested named position and return a Future 
@@ -37,81 +173,29 @@ class PipetteMotionPlanner(object):
             self.future.stop()
 
     def _move(self):
+        path = self.path()
+        return self.pip._movePath(path)
+
+    def path(self):
         raise NotImplementedError()
-
-    def shouldUseLinearMotion(self):
-        return self.pip._shouldUseLinearMovement()
-
-
-_LOCAL_ORIGIN = (0, 0, 0)
-
-
-def _extractionWaypoint(destLocal, pipAngle):
-    """
-    Parameters
-    ----------
-    destLocal
-        Destination coordinates in pipette-local frame of reference. Extraction is only needed when +z and -x from the origin.
-    pipAngle
-        The angle of the pipette in radians, oriented to be between 0 and π/2.
-
-    Returns
-    -------
-    waypoint
-        Local coordinates of the extraction waypoint, or None if none is needed.
-    """
-    if pipAngle < 0 or pipAngle > np.pi / 2:
-        raise ValueError("Invalid pipette pitch; orient your measurement to put it between 0 and π/2")
-    destX = destLocal[0]
-    destZ = destLocal[2]
-    if destX > 0 or destZ < 0 or (destX, destZ) == (0, 0):
-        # no clear diagonal extraction to go forward or down
-        return None
-
-    destAngle = np.arctan2(destZ, -destX)  # `-x` to match the pipAngle orientation
-
-    if destAngle > pipAngle:
-        dz = destX * np.tan(pipAngle)
-        waypoint = (destX, 0, -dz)
-    else:
-        dx = destZ / np.tan(pipAngle)
-        waypoint = (-dx, 0, destZ)
-
-    # sanity check, floating point errors
-    return np.clip(waypoint, _LOCAL_ORIGIN, destLocal)
 
 
 class HomeMotionPlanner(PipetteMotionPlanner):
     """Extract pipette tip diagonally, then move to home position.
     """
-    def _move(self):
-        pip = self.pip
-        speed = self.speed
-        manipulator = pip.parentDevice()
+    def path(self):
+        manipulator = self.pip.parentDevice()
         manipulatorHome = manipulator.homePosition()
         assert manipulatorHome is not None, "No home position defined for %s" % manipulator.name()
         # how much should the pipette move in global coordinates
         globalMove = np.asarray(manipulatorHome) - np.asarray(manipulator.globalPosition())
 
-        startPosGlobal = pip.globalPosition()
+        startPosGlobal = self.pip.globalPosition()
         # where should the pipette tip end up in global coordinates
         endPosGlobal = np.asarray(startPosGlobal) + globalMove
-        # use local coordinates to make it easier to do the boundary intersections
-        endPosLocal = pip.mapFromGlobal(endPosGlobal)
 
-        waypointLocal = _extractionWaypoint(endPosLocal, pip.pitchRadians())
-
-        # some manipulators won't need a waypoint to perform correct extraction
-        if waypointLocal is None or not self.shouldUseLinearMotion():
-            path = [(endPosGlobal, speed, False), ]
-        else:
-            waypointGlobal = pip.mapToGlobal(waypointLocal)
-            path = [
-                (waypointGlobal, speed, True),
-                (endPosGlobal, speed, False),
-            ]
-
-        return pip._movePath(path)
+        path = self.safePath(startPosGlobal, endPosGlobal, self.speed)
+        return path
 
 
 class SearchMotionPlanner(PipetteMotionPlanner):
@@ -143,93 +227,36 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         # move scope such that camera will be focused at searchDepth
         if focusDepth < searchDepth:
             scopeFocus = scope.getFocusDepth()
-            scope.setFocusDepth(scopeFocus + searchDepth - focusDepth).wait(updates=True)
+            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth)
+            # wait for objective to lift before starting pipette motion
+            fut.wait(updates=True)
 
         # Here's where we want the pipette tip in global coordinates:
-        globalTarget = cam.globalCenterPosition('roi')
-        globalTarget[2] += pip._opts['searchTipHeight'] - pip._opts['searchHeight']
+        globalCenter = cam.globalCenterPosition('roi')
+        globalCenter[2] += pip._opts['searchTipHeight'] - pip._opts['searchHeight']
 
         # adjust for distance argument:
-        localTarget = pip.mapFromGlobal(globalTarget)
-        localTarget[0] -= distance
-        globalTarget = pip.mapToGlobal(localTarget)
+        globalTarget = globalCenter + pip.globalDirection() * distance
 
-        return pip._moveToGlobal(globalTarget, speed)
+        path = self.safePath(pip.globalPosition(), globalTarget, speed)
+
+        return pip._movePath(path)
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
-    def _move(self):
+    def path(self):
         pip = self.pip
-        speed = self.speed
-
-        target = pip.targetPosition()
-        return pip._movePath(self.approachPath(target, speed))
-    
-    def approachPath(self, target, speed):
-        """
-        Describe a path that puts the pipette in-line to do straight movement along the pipette pitch to the target
-
-        Parameters
-        ----------
-        target: coordinates
-        speed: m/s
-        """
-        pip = self.pip
-
-        # Return steps (in global coords) needed to move to approach position
-        stbyDepth = pip.approachDepth()
-        pos = pip.globalPosition()
-
-        # steps are in global coordinates.
-        path = []
-
-        # If tip is below the surface, then first pull out slowly along pipette axis
-        if pos[2] < stbyDepth:
-            dz = stbyDepth - pos[2]
-            dx = -dz / np.tan(pip.pitchRadians())
-            last = np.array([dx, 0., dz])
-            path.append([pip.mapToGlobal(last), 100e-6, self.shouldUseLinearMotion()])  # slow removal from sample
-        else:
-            last = np.array([0., 0., 0.])
-
-        # local vector pointing in direction of electrode tip
-        evec = np.array([1., 0., -np.tan(pip.pitchRadians())])
-        evec /= np.linalg.norm(evec)
-
-        # target in local coordinates
-        ltarget = pip.mapFromGlobal(target)
-
-        # compute approach position (axis aligned to target, at standby depth or higher)
-        dz2 = max(0, stbyDepth - target[2])
-        dx2 = -dz2 / np.tan(pip.pitchRadians())
-        stby = ltarget + np.array([dx2, 0., dz2])
-
-        # compute intermediate position (point along approach axis that is closest to the current position)
-        targetToTip = last - ltarget
-        targetToStby = stby - ltarget
-        targetToStby /= np.linalg.norm(targetToStby)
-        closest = ltarget + np.dot(targetToTip, targetToStby) * targetToStby
-
-        if np.linalg.norm(stby - last) > 1e-6:
-            if (closest[2] > stby[2]) and (np.linalg.norm(stby - closest) > 1e-6):
-                path.append([pip.mapToGlobal(closest), speed, self.shouldUseLinearMotion()])
-            path.append([pip.mapToGlobal(stby), speed, self.shouldUseLinearMotion()])
-
+        approachDepth = pip.approachDepth()
+        approachPosition = pip.positionAtDepth(approachDepth, start=pip.targetPosition())
+        path = self.safePath(pip.globalPosition(), approachPosition, self.speed)
         return path
 
 
-class TargetMotionPlanner(ApproachMotionPlanner):
-    def _move(self):
-        pip = self.pip
-        speed = self.speed
-
-        target = pip.targetPosition()
-        pos = pip.globalPosition()
-        if np.linalg.norm(np.asarray(target) - pos) < 1e-7:
-            return
-        path = self.approachPath(target, speed)
-        path.append([target, 100e-6, self.shouldUseLinearMotion()])
-        return pip._movePath(path)
+class TargetMotionPlanner(PipetteMotionPlanner):
+    def path(self):
+        start = self.pip.globalPosition()
+        stop = self.pip.targetPosition()
+        return self.safePath(start, stop, self.speed)
 
 
 class AboveTargetMotionPlanner(PipetteMotionPlanner):
@@ -245,12 +272,12 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
-        pfut = pip._moveToGlobal(waypoint1, speed)
+        path = self.safePath(pip.globalPosition(), waypoint1, speed)
+        path.append((waypoint2, 'slow', True))
+        pfut = pip._movePath(path)
         sfut = scope.setGlobalPosition(waypoint2)
-        pfut.wait(updates=True)
-        pip._moveToGlobal(waypoint2, 'slow').wait(updates=True)
-        sfut.wait(updates=True)
-        return sfut
+
+        return MultiFuture([pfut, sfut])
 
     def aboveTargetPath(self):
         """Return the path to the "above target" recalibration position.
@@ -271,11 +298,7 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         waypoint2[2] = surfaceDepth + 50e-6
 
         # Need to arrive at this point via approach angle to correct for hysteresis
-        lwp = pip.mapFromGlobal(waypoint2)
-        dz = 100e-6
-        lwp[2] += dz
-        lwp[0] -= dz / np.tan(pip.pitchRadians())
-        waypoint1 = pip.mapToGlobal(lwp)
+        waypoint1 = waypoint2 + pip.globalDirection() * -100e-6
 
         return waypoint1, waypoint2
 

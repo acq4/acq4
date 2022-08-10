@@ -266,7 +266,9 @@ class Task(DeviceTask):
         elif 'triggerDevice' in self.cmd:
             tDevName = self.cmd['triggerDevice']
             tDev = self.dev.dm.getDevice(tDevName)
-            self.st.setTrigger(tDev.getTriggerChannel(self.dev.name()))
+            triggerChan = tDev.getTriggerChannels(self.dev.name())['input']
+            assert triggerChan is not None, f"Task requests for {tDevName} to trigger {self.dev.name()}, but no trigger channel is configured between these devices."
+            self.st.setTrigger(triggerChan)
         
     def getStartOrder(self):
         before = []
