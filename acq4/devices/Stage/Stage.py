@@ -4,10 +4,9 @@ from __future__ import division, print_function
 import math
 import threading
 from typing import Tuple
+import functools
 
-import time
-
-from acq4.util import Qt, ptime
+from acq4.util import Qt
 import numpy as np
 from acq4.util.Mutex import Mutex
 import pyqtgraph as pg
@@ -237,24 +236,31 @@ class Stage(Device, OptomechDevice):
         self._updateTransform()
         self.sigOrientationChanged.emit(self)
 
-    def calculatedXAxisOrientation(self) -> float:
-        """Return the pitch and yaw of the X axis in degrees.
-        """
-        if self._calculatedXAxisOrientation is None:
-            m = self.axisTransform().matrix()
-            xaxis = pg.Vector(m[:3, 0])
-            globalz = pg.Vector([0, 0, 1])
-            pitch = xaxis.angle(globalz) - 90
-            yaw = np.arctan2(xaxis[1], xaxis[0]) * 180 / np.pi
-            self._calculatedXAxisOrientation = {'pitch': pitch, 'yaw': yaw}
-        return self._calculatedXAxisOrientation
+    @functools.lru_cache
+    def calculatedAxisOrientation(self, axis: str) -> float:
+        """Return the pitch and yaw of a stage axis.
 
-    def calculatedYaw(self) -> float:
-        """Return the X-axis pitch (angle relative to horizontal) in degrees
+        The pitch is returned in degrees relative to global horizontal (positive values point downward), 
+        whereas the yaw is returned in degrees around the global Z axis relative to the global +X direction.
+
+        The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
-        # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
-        a = self.axisTransform()
-        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
+        assert axis in ('+x', '-x', '+y', '-y', '+z', '-z')
+        m = self.axisTransform().matrix()
+        axis_index = {'x': 0, 'y': 1, 'z': 2}[axis[1]]
+        axis_sign = 1 if axis[0] == '+' else -1
+        selected_axis = pg.Vector(axis_sign * m[:3, axis_index])
+        globalz = pg.Vector([0, 0, 1])
+        pitch = selected_axis.angle(globalz) - 90
+        yaw = np.arctan2(selected_axis[1], selected_axis[0]) * 180 / np.pi
+        return {'pitch': pitch, 'yaw': yaw}
+
+    # def calculatedYaw(self) -> float:
+    #     """Return the X-axis pitch (angle relative to horizontal) in degrees
+    #     """
+    #     # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
+    #     a = self.axisTransform()
+    #     return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
 
     def inverseAxisTransform(self):
         if self._inverseAxisTransform is None:

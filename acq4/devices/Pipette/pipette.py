@@ -42,12 +42,17 @@ class Pipette(Device, OptomechDevice):
 
     * pitch: The angle of the pipette (in degrees) relative to the horizontal plane.
       Positive values point downward. This option must be specified in the configuration.
-      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis pitch
-      (assumes that the X axis is parallel to the pipette)
+      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis 
+      (or other specified by parentAutoAxis) pitch.
     * yaw: The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
       when facing the microscope).
       Positive values are clockwise from global +X. This option must be specified in the configuration.
-      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis yaw.
+      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis 
+      (or other specified by parentAutoAxis) yaw.
+    * parentAutoAxis: One of '+x' (default), '-x', '+y', '-y', '+z', or '-z' indicating the axis and direction in the
+      parent manipulator's coordinate system that points along the pipette and toward the tip. This axis
+      is used by the *pitch* and *yaw* options when they are set to 'auto'. If the pipette is not parallel
+      to one of these axes, then a numerical value must be provided for the pitch and/or yaw.
     * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
       should be about 1-2mm, enough to avoid collisions between the pipette tip and the sample during search.
       Default is 2 mm.
@@ -81,7 +86,6 @@ class Pipette(Device, OptomechDevice):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
         self.config = config
-        self.config = config
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
@@ -95,7 +99,7 @@ class Pipette(Device, OptomechDevice):
         }
         parent = self.parentDevice()
         if not isinstance(parent, Stage):
-            raise Exception("Pipette device requires some type of translation stage as its parent.")
+            raise Exception("Pipette device requires some type of translation stage as its parentDevice.")
 
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
@@ -295,7 +299,8 @@ class Pipette(Device, OptomechDevice):
             return self.config['pitch']
 
     def _manipulatorOrientation(self) -> dict:
-        return self.parentDevice().calculatedXAxisOrientation()
+        axis = self.config.get('parentAutoAxis', '+x')
+        return self.parentDevice().calculatedAxisOrientation(axis)
 
     def yawRadians(self):
         return self.yawAngle() * np.pi / 180.
