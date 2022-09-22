@@ -199,8 +199,10 @@ class PatchPipetteStateManager(Qt.QObject):
             self.configureState(self.getState().stateName)
         else:
             self.stopJob()
-            self.dev.enableTestPulse(False)
-            self.dev.pressureDevice.setPressure(source='atmosphere')
+            if self.dev.clampDevice is not None:
+                self.dev.enableTestPulse(False)
+            if self.dev.pressureDevice is not None:
+                self.dev.pressureDevice.setPressure(source='atmosphere')
 
     def quit(self):
         disconnect(self.dev.sigStateChanged, self.stateChanged)

@@ -78,6 +78,7 @@ class PatchPipette(Device):
         self.userPressure = False
         
         self._lastTestPulse = None
+        self._testPulseThread = None
         self._initTestPulse(config.get('testPulse', {}))
 
         self._initStateManager()
@@ -341,7 +342,7 @@ class PatchPipette(Device):
     def enableTestPulse(self, enable=True, block=False):
         if enable:
             self._testPulseThread.start()
-        else:
+        elif self._testPulseThread is not None:
             self._testPulseThread.stop(block=block)
 
     def testPulseEnabled(self):

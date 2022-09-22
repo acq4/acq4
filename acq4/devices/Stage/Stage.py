@@ -228,7 +228,7 @@ class Stage(Device, OptomechDevice):
             if scale is not None:
                 self._axisTransform.scale(*scale)
                 self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
-        return pg.QtGui.QMatrix4x4(self._axisTransform)
+        return pg.Transform3D(self._axisTransform)
 
     def setAxisTransform(self, tr):
         self._axisTransform = tr
