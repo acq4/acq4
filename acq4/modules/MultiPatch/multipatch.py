@@ -173,20 +173,30 @@ class MultiPatchWindow(Qt.QWidget):
         config = {
             'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
             'plotModes': self.pipCtrls[0].getPlotModes(),
+            "plots": {
+                (ctrl.pip.name(), plot.mode): plot.plot.saveState()
+                for ctrl in self.pipCtrls for plot in ctrl.plots
+            },
         }
-        configfile = os.path.join('modules', self.module.name + '.cfg')
-        man = getManager()
-        man.writeConfigFile(config, configfile)
+        getManager().writeConfigFile(config, self._configFileName())
 
     def loadConfig(self):
-        configfile = os.path.join('modules', self.module.name + '.cfg')
-        man = getManager()
-        config = man.readConfigFile(configfile)
+        config = getManager().readConfigFile(self._configFileName())
         if 'geometry' in config:
             geom = Qt.QRect(*config['geometry'])
             self.setGeometry(geom)
         if 'plotModes' in config:
             self.setPlotModes(config['plotModes'])
+        if "plots" in config:
+            for pipette, plotname in config["plots"]:
+                ctrl = next((ctrl for ctrl in self.pipCtrls if ctrl.pip.name() == pipette), None)
+                if ctrl is not None:
+                    plot = next((plot for plot in ctrl.plots if plot.mode == plotname), None)
+                    if plot is not None:
+                        plot.plot.restoreState(config["plots"][(pipette, plotname)])
+
+    def _configFileName(self):
+        return os.path.join('modules', f'{self.module.name}.cfg')
 
     def profileComboChanged(self):
         profile = self.ui.profileCombo.currentText()

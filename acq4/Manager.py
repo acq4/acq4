@@ -2,7 +2,7 @@
 """
 Manager.py -  Defines main Manager class for ACQ4
 Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
+Distributed under MIT/X11 license. See license.txt for more information.
 
 This class must be invoked once to initialize the ACQ4 core system.
 The class is responsible for:
@@ -10,8 +10,6 @@ The class is responsible for:
     - Invoking/managing modules
     - Creating and executing acquisition tasks. 
 """
-from __future__ import print_function
-
 import atexit
 import gc
 import getopt
@@ -22,21 +20,22 @@ import weakref
 from collections import OrderedDict
 
 import six
+from six.moves import map
 
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
+from pyqtgraph import configfile
+from pyqtgraph.debug import printExc, Profiler
+from pyqtgraph.util.mutex import Mutex
 from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
-from pyqtgraph.debug import printExc, Profiler
-from pyqtgraph import configfile
-from pyqtgraph.util.mutex import Mutex
 from .util import DataManager, ptime, Qt
 from .util.HelpfulException import HelpfulException
+from .util.debug import logExc, logMsg, createLogWindow
 
-from .util.debug import logMsg, createLogWindow, logExc # logExc needed by debug
-from six.moves import map
+_ = logExc  # prevent cleanup of logExc; needed by debug
 
 
 def __reload__(old):

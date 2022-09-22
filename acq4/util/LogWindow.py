@@ -170,7 +170,7 @@ class LogWindow(Qt.QMainWindow):
         if entry.get("exception", None) is not None and "msgType" in entry["exception"]:
             entry["msgType"] = entry["exception"]["msgType"]
 
-        self.saveEntries({saveName: entry | {"id": savedId}})
+        self.saveEntries({saveName: {**entry, "id": savedId}})
         self.wid.addEntry(entry)  # takes care of displaying the entry if it passes the current filters on the logWidget
 
         if entry["msgType"] == "error" and self.errorDialog.show(entry) is False:
