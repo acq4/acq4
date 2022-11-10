@@ -176,6 +176,8 @@ class MicroManagerCamera(Camera):
                     vals = list(vals)
                 if prop != 'Exposure': # again, workaround...
                     readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
+                else:
+                    readonly = False
                 
 
                 # translate standard properties to the names / formats that we expect
