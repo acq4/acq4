@@ -441,6 +441,7 @@ class MicroManagerCamera(Camera):
         with self.camLock:
             if paramTrans == 'Exposure':
                 val = self.mmc.getExposure(self.camName) # workaround for CellCam
+            else:
                 val = self.mmc.getProperty(self.camName, str(paramTrans))
 
         # coerce to int or float if possible
