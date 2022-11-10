@@ -441,7 +441,7 @@ class MicroManagerCamera(Camera):
             'bitDepth': 'PixelType',
         }.get(param, param)
         with self.camLock:
-            if paramTrans == 'Exposure':
+            if paramTrans == 'Exposure' and self.camName == "CellCam":
                 val = self.mmc.getExposure(self.camName) # workaround for CellCam
             else:
             else:
