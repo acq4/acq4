@@ -403,7 +403,7 @@ class MicroManagerCamera(Camera):
 
         with self.camLock:
             for param, value in setParams:
-                if param == 'Exposure': # workaround for CellCam - call to setExposure(), not getProperty()
+                if param == 'Exposure' and self.camName == "CellCam": # workaround for CellCam - call to setExposure(), not getProperty()
                     self.mmc.setExposure(self.camName, value)
                 else:
                     self.mmc.setProperty(self.camName, str(param), str(value))
