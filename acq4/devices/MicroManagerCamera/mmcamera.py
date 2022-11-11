@@ -161,24 +161,21 @@ class MicroManagerCamera(Camera):
             for prop in properties:
                 vals = self.mmc.getAllowedPropertyValues(self.camName, prop)
                 if vals == ():
-                    if prop != 'Exposure': # workaround for exposure working
-                        if self.mmc.hasPropertyLimits(self.camName, prop):
-                            vals = (
-                                self.mmc.getPropertyLowerLimit(self.camName, prop),
-                                self.mmc.getPropertyUpperLimit(self.camName, prop),
-                            )
-                        else:
-                            # just guess..
-                            vals = (1e-6, 1e3)
-                    else:
+                    if self.camName == 'CellCam' and prop == 'Exposure':
                         vals = (1, 100) # sensible range of exposure values...
+                    elif self.mmc.hasPropertyLimits(self.camName, prop):
+                        vals = (
+                            self.mmc.getPropertyLowerLimit(self.camName, prop),
+                            self.mmc.getPropertyUpperLimit(self.camName, prop),
+                        )
+                    else:
+                        # just guess..
+                        vals = (1e-6, 1e3)
+                vals = list(vals)
+                if self.camName == 'CellCam' and prop == 'Exposure':
+                    readonly = False  # again, workaround...
                 else:
-                    vals = list(vals)
-                if prop != 'Exposure': # again, workaround...
                     readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
-                else:
-                    readonly = False
-                
 
                 # translate standard properties to the names / formats that we expect
                 if prop == 'Exposure':
@@ -403,7 +400,8 @@ class MicroManagerCamera(Camera):
 
         with self.camLock:
             for param, value in setParams:
-                if param == 'Exposure' and self.camName == "CellCam": # workaround for CellCam - call to setExposure(), not getProperty()
+                if param == 'Exposure' and self.camName == "CellCam":
+                    # workaround for CellCam - call to setExposure(), not getProperty()
                     self.mmc.setExposure(self.camName, value)
                 else:
                     self.mmc.setProperty(self.camName, str(param), str(value))
@@ -443,7 +441,6 @@ class MicroManagerCamera(Camera):
         with self.camLock:
             if paramTrans == 'Exposure' and self.camName == "CellCam":
                 val = self.mmc.getExposure(self.camName) # workaround for CellCam
-            else:
             else:
                 val = self.mmc.getProperty(self.camName, str(paramTrans))
 
