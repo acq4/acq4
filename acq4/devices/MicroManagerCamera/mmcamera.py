@@ -69,8 +69,13 @@ class MicroManagerCamera(Camera):
         if deviceName not in allDevices:
             raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (
                 deviceName, adapterName, allDevices))
-
+        if deviceName == 'CellCam':
+            self.camName = 'CellCam' # load.Device() for CellCam needs to have 'CellCam' as device name
         self.mmc.loadDevice(self.camName, adapterName, deviceName)
+        
+        # the 'Camera ID' property is not prefilled after loadDevice(). Need to assign it:
+        if self.camName == 'CellCam':
+            self.mmc.setProperty(self.camName, 'Camera ID', ''.join(self.mmc.getAllowedPropertyValues('CellCam', 'Camera ID'))) 
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
@@ -152,11 +157,13 @@ class MicroManagerCamera(Camera):
         with self.camLock:
             params = OrderedDict([(n, None) for n in defaultParams])
 
-            properties = self.mmc.getDevicePropertyNames(self.camName)
+            properties = self.mmc.getDevicePropertyNames(self.camName) + ('Exposure',) # because the CellCam driver didn't present the exposure as a property, need to add it with a getExposure() call
             for prop in properties:
                 vals = self.mmc.getAllowedPropertyValues(self.camName, prop)
                 if vals == ():
-                    if self.mmc.hasPropertyLimits(self.camName, prop):
+                    if self.camName == 'CellCam' and prop == 'Exposure':
+                        vals = (1, 100) # sensible range of exposure values...
+                    elif self.mmc.hasPropertyLimits(self.camName, prop):
                         vals = (
                             self.mmc.getPropertyLowerLimit(self.camName, prop),
                             self.mmc.getPropertyUpperLimit(self.camName, prop),
@@ -164,9 +171,11 @@ class MicroManagerCamera(Camera):
                     else:
                         # just guess..
                         vals = (1e-6, 1e3)
+                vals = list(vals)
+                if self.camName == 'CellCam' and prop == 'Exposure':
+                    readonly = False  # again, workaround...
                 else:
-                    vals = list(vals)
-                readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
+                    readonly = self.mmc.isPropertyReadOnly(self.camName, prop)
 
                 # translate standard properties to the names / formats that we expect
                 if prop == 'Exposure':
@@ -391,7 +400,11 @@ class MicroManagerCamera(Camera):
 
         with self.camLock:
             for param, value in setParams:
-                self.mmc.setProperty(self.camName, str(param), str(value))
+                if param == 'Exposure' and self.camName == "CellCam":
+                    # workaround for CellCam - call to setExposure(), not getProperty()
+                    self.mmc.setExposure(self.camName, value)
+                else:
+                    self.mmc.setProperty(self.camName, str(param), str(value))
 
     def getParams(self, params=None):
         if params is None:
@@ -426,7 +439,10 @@ class MicroManagerCamera(Camera):
             'bitDepth': 'PixelType',
         }.get(param, param)
         with self.camLock:
-            val = self.mmc.getProperty(self.camName, str(paramTrans))
+            if paramTrans == 'Exposure' and self.camName == "CellCam":
+                val = self.mmc.getExposure(self.camName) # workaround for CellCam
+            else:
+                val = self.mmc.getProperty(self.camName, str(paramTrans))
 
         # coerce to int or float if possible
         try:
