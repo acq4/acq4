@@ -6,8 +6,7 @@ import time
 import numpy as np
 
 from acq4.devices.Stage import Stage, MoveFuture
-from pyqtgraph import ptime
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 

@@ -7,7 +7,13 @@ from acq4.util import Qt
 
 
 class RecordingChamber(Device, OptomechDevice):
-    """Describes the location and dimensions of a recording chamber.
+    """Describes the location and dimensions of a circular recording chamber.
+
+    Configuration options:
+
+    * radius: The radius of the recording chamber (m)
+    * transform: Transformtion setting the position/orientation of the chamber
+        pos: x,y,z position of recording chamber
     """
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
