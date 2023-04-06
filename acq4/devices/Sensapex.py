@@ -6,8 +6,9 @@ import time
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph import ptime, Transform3D, solve3DTransform
+from pyqtgraph import Transform3D, solve3DTransform
 
+from acq4.util import ptime
 from acq4.util import Qt
 from acq4.drivers.sensapex import UMP, version_info
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow

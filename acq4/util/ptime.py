@@ -2,7 +2,7 @@
 Defines a high-resolution time() function that works across platforms.
 
 - Like time.time(), but high resolution even on windows
-- Like time.perf_counter(), but returns unix timestamp
+- Like ptime.time(), but returns unix timestamp
 
 """
 

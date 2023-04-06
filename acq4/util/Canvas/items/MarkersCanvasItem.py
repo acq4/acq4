@@ -51,7 +51,7 @@ class MarkersCanvasItem(CanvasItem):
         target.setParentItem(self.graphicsItem())
         target.setPos(position[0], position[1])
         target.param = weakref.ref(param)
-        target.sigDragged.connect(self._targetMoved)
+        target.sigPositionChangeFinished.connect(self._targetMoved)
         param.target = target
     
     def removeMarker(self, name):
@@ -77,7 +77,7 @@ class MarkersCanvasItem(CanvasItem):
         for param, change, args in changes:
             if change == 'value' and isinstance(param, PointParameter):
                 target = param.parent().target
-                with pg.SignalBlock(target.sigDragged, self._targetMoved):
+                with pg.SignalBlock(target.sigPositionChangeFinished, self._targetMoved):
                     target.setPos(*param.value()[:2])
             elif change == 'name' and param in self.params.children():
                 param.target.setLabel(param.name())

@@ -64,3 +64,4 @@ dependencies:
     - sensapex==0.920.4
     - shiboken2==5.15.2
     - six==1.15.0
+    - MetaArray==2.0.3

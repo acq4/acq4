@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import os
 
-from pyqtgraph.metaarray import MetaArray as MA
+from MetaArray import MetaArray as MA
 from numpy import ndarray
 from .FileType import FileType
 

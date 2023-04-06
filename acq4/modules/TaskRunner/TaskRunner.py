@@ -1,25 +1,20 @@
-# -*- coding: utf-8 -*-
-from __future__ import division, print_function
+from collections import OrderedDict
 
 import gc
+import numpy as np
 import os
+import six
 import sys
 import time
-from collections import OrderedDict
-from functools import reduce
-
-import numpy as np
-import pyqtgraph as pg
-import pyqtgraph.configfile as configfile
-import six
 from six.moves import map
 from six.moves import range
 from six.moves import reduce
 
 import acq4.util.DirTreeWidget as DirTreeWidget
-import acq4.util.ptime as ptime
+import pyqtgraph as pg
+import pyqtgraph.configfile as configfile
 from acq4.Manager import getManager
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.StatusBar import StatusBar

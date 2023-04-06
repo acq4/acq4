@@ -1,15 +1,11 @@
 #!/cygdrive/c/Python25/python.exe
-# -*- coding: utf-8 -*-
-## Workaround for symlinks not working in windows
-from __future__ import print_function
-
+import numpy as np
+import os
+import sys
+import time
 from six.moves import range
 
-print("Starting up..")
-
-import sys, time, os
-import numpy as np
-
+# Workaround for symlinks not working in windows
 modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, "..", "..", ".."))
 utilPath = os.path.join(acq4Path, "lib", "util")
@@ -17,6 +13,7 @@ sys.path = [acq4Path, utilPath] + sys.path
 import acq4.util.ptime as ptime
 
 
+print("Starting up..")
 if sys.argv[-1] == "mock":
     from acq4.drivers.nidaq.mock import NIDAQ as n
 else:

@@ -1,9 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-import time
-
 import numpy as np
+import time
 from six.moves import range
 
 import acq4.util.ptime as ptime
@@ -12,10 +8,10 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.Mutex import Mutex
+from pyqtgraph.debug import Profiler
 from .DeviceGui import ScannerDeviceGui
 from .TaskGui import ScannerTaskGui
 from ..Device import Device, DeviceTask
-from pyqtgraph.debug import Profiler
 
 
 class Scanner(Device, OptomechDevice):

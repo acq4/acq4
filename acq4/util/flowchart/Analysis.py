@@ -1,20 +1,17 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from collections import OrderedDict
 
 import numpy as np
 import scipy
-
-import pyqtgraph as pg
-import acq4.util.functions as functions
-import pyqtgraph.metaarray as metaarray
-from acq4.analysis.tools.Fitting import Fitting
-from pyqtgraph.flowchart import Node
-from pyqtgraph.flowchart.library.common import CtrlNode
-from acq4.util import Qt
 from six.moves import map
 from six.moves import range
+
+import acq4.util.functions as functions
+import pyqtgraph as pg
+from MetaArray import MetaArray
+from acq4.analysis.tools.Fitting import Fitting
+from acq4.util import Qt
+from pyqtgraph.flowchart import Node
+from pyqtgraph.flowchart.library.common import CtrlNode
 
 
 class EventFitter(CtrlNode):
@@ -570,7 +567,7 @@ class Histogram(CtrlNode):
             units = In.axisUnits(1)
         y,x = np.histogram(data, bins=self.ctrls['numBins'].value())
         x = (x[1:] + x[:-1]) * 0.5
-        return metaarray.MetaArray(y, info=[{'name': 'bins', 'values': x, 'units': units}])
+        return MetaArray(y, info=[{'name': 'bins', 'values': x, 'units': units}])
         
 
 
@@ -1208,7 +1205,7 @@ class RemoveDirect(CtrlNode):
             )
             
         if self.ctrls['subtractDirect'].isChecked():
-            out = metaarray.MetaArray(data-y, info=data.infoCopy())
+            out = MetaArray(data-y, info=data.infoCopy())
             fitParams['directFitSubtracted'] = True
         else:
             out = data

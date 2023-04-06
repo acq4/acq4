@@ -1,13 +1,10 @@
-from __future__ import print_function
-
-import pickle
-import time
-
 import numpy as np
-import pyqtgraph as pg
+import pickle
 import scipy
+import time
 from six.moves import range
 
+import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
 from acq4.util.image_registration import imageTemplateMatch
@@ -63,8 +60,8 @@ class PipetteTracker(object):
 
         imager.sigNewFrame.connect(newFrame)
         try:
-            start = pg.ptime.time()
-            while pg.ptime.time() < start + 5.0:
+            start = ptime.time()
+            while ptime.time() < start + 5.0:
                 Qt.QApplication.processEvents()
                 frame = self.__nextFrame
                 if frame is not None:

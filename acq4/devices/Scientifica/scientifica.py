@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-import time
 import numpy as np
-from acq4.util import Qt
-from ..Stage import Stage, MoveFuture, StageInterface
+import time
+
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from pyqtgraph import debug, ptime, SpinBox
+from pyqtgraph import debug, SpinBox
+from ..Stage import Stage, MoveFuture, StageInterface
 
 
 class Scientifica(Stage):

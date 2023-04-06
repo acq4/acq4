@@ -554,7 +554,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
         self.ui.getRefBtn.clicked.connect(self.getRefFramesClicked)
         self.ui.aboveTargetBtn.clicked.connect(self.aboveTargetClicked)
-        self.target.sigDragged.connect(self.targetDragged)
+        self.target.sigPositionChangeFinished.connect(self.targetDragged)
 
         self.transformChanged()
         self.updateCalibrateAxis()

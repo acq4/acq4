@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 import time
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from ..Stage import Stage, MoveFuture
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from pyqtgraph import debug, ptime
+from pyqtgraph import debug
 from six.moves import range
 
 

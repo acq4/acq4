@@ -1,21 +1,16 @@
-# -*- coding: utf-8 -*-
-from __future__ import division, print_function
-
 import math
+import numpy as np
 import threading
+import time
+from six.moves import range
 from typing import Tuple
 
-import time
-
-from acq4.util import Qt, ptime
-import numpy as np
-from acq4.util.Mutex import Mutex
 import pyqtgraph as pg
+from acq4.util import Qt, ptime
+from acq4.util.Mutex import Mutex
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
-from six.moves import range
-
 from ... import getManager
 from ...util.future import Future
 
@@ -595,7 +590,7 @@ class MoveFuture(Future):
 
     def __init__(self, dev, pos, speed):
         Future.__init__(self)
-        self.startTime = pg.ptime.time()
+        self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
         self.targetPos = np.asarray(pos)

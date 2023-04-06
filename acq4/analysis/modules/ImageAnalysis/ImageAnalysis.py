@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+
 from collections import OrderedDict
-import pyqtgraph as pg
-from pyqtgraph.metaarray import MetaArray
+
 import numpy as np
 from six.moves import range
+
+import pyqtgraph as pg
+from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util import Qt
+
 
 class ImageAnalysis(AnalysisModule):
     def __init__(self, host):

@@ -1,14 +1,10 @@
-from __future__ import print_function
-
 import time
 from typing import Union
 from warnings import warn
 
-from pyqtgraph import ptime
-
 from acq4.devices.FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
 from acq4.drivers.zeiss import ZeissMtbSdk
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 
 
 class ZeissTurret(FilterWheel):

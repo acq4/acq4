@@ -1,27 +1,22 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
-import os
-import sys
-import time
-
 import numpy as np
+import os
 import scipy.optimize
 import six
+import sys
+import time
+from six.moves import range
 
 import acq4.Manager as Manager
-import acq4.util.ptime as ptime
-from pyqtgraph import PlotWidget, mkPen
-from pyqtgraph import WidgetGroup, MetaArray
-from pyqtgraph import siFormat
-from pyqtgraph.debug import Profiler
-from acq4.util import Qt
+from MetaArray import MetaArray
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
-from six.moves import range
+from pyqtgraph import PlotWidget, mkPen
+from pyqtgraph import WidgetGroup
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 

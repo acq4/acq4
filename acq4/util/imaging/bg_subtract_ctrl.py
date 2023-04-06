@@ -1,8 +1,8 @@
-from __future__ import print_function
-import scipy.ndimage
 import numpy as np
-from acq4.util import Qt
-import pyqtgraph as pg
+import scipy.ndimage
+import time
+
+from acq4.util import Qt, ptime
 
 Ui_Form = Qt.importTemplate('.bg_subtract_template')
 
@@ -64,13 +64,13 @@ class BgSubtractCtrl(Qt.QWidget):
                 # before the next frame arrives.
                 self.requestBgReset = True
                 self.bgFrameCount = 0
-                self.bgStartTime = pg.ptime.time()
+                self.bgStartTime = ptime.time()
             self.ui.collectBgBtn.setText("Collecting...")
         else:
             self.ui.collectBgBtn.setText("Collect Background")
 
     def newFrame(self, frame):
-        now = pg.ptime.time()
+        now = ptime.time()
         if self.lastFrameTime is None:
             dt = 0
         else:
@@ -84,7 +84,7 @@ class BgSubtractCtrl(Qt.QWidget):
             x = np.exp(-dt * 5 / max(self.ui.bgTimeSpin.value(), 0.01))
         else:
             ## stop collecting bg frames if we are in static mode and time is up
-            timeLeft = self.ui.bgTimeSpin.value() - (pg.ptime.time()-self.bgStartTime)
+            timeLeft = self.ui.bgTimeSpin.value() - (ptime.time()-self.bgStartTime)
             if timeLeft > 0:
                 self.ui.collectBgBtn.setText("Collecting... (%d)" % int(timeLeft+1))
             else:

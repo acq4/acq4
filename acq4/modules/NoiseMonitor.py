@@ -175,7 +175,7 @@ class ChannelRecorder(Qt.QSplitter):
         
         self.envLine = pg.InfiniteLine(movable=True)
         self.envelopePlot.addItem(self.envLine)
-        self.envLine.sigDragged.connect(self.lineDragged)
+        self.envLine.sigPositionChangeFinished.connect(self.lineDragged)
 
         if not self.writable:
             # Load previously collected data

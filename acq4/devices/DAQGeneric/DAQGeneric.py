@@ -13,7 +13,7 @@ from pyqtgraph.debug import Profiler
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from pyqtgraph.metaarray import MetaArray, axis
+from MetaArray import MetaArray, axis
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 

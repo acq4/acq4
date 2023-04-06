@@ -1,23 +1,22 @@
-from __future__ import print_function
+import time
+from collections import OrderedDict
+from ctypes import byref, sizeof, c_long, c_ulong, c_ulonglong
 
+import ctypes
 import os
+import six
 import sys
+from numpy import empty, uint16, ascontiguousarray
+from six.moves import range, zip
 
+from acq4.util.Mutex import Mutex
 from acq4.util.clibrary import CParser, CLibrary
-from six.moves import range
-from six.moves import zip
 
 if __name__ == '__main__':
     d = os.path.dirname(__file__)
     sys.path.append(os.path.join(d, '../../util'))
     
 import acq4.util.ptime as ptime
-import ctypes
-from ctypes import byref, sizeof, c_long, c_ulong, c_ulonglong
-from numpy import empty, uint16, ascontiguousarray
-from acq4.util.Mutex import Mutex
-from collections import OrderedDict
-import six
 modDir = os.path.dirname(__file__)
 sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
 
