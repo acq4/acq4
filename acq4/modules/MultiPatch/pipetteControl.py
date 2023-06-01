@@ -27,7 +27,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
             self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
-            self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
+            if self.pip.pressureDevice is not None:
+                self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
@@ -59,8 +60,9 @@ class PipetteControl(Qt.QWidget):
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
         self.stateMenu = Qt.QMenu()
-        for state in pipette.listStates():
-            self.stateMenu.addAction(state, self.stateActionClicked)
+        if isinstance(pipette, PatchPipette):
+            for state in pipette.listStates():
+                self.stateMenu.addAction(state, self.stateActionClicked)
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
         self._pc2 = MousePressCatch(self.ui.modeText, self.modeTextClicked)
@@ -73,14 +75,16 @@ class PipetteControl(Qt.QWidget):
             self.ui.plotLayout.addWidget(plt)
             plt.sigModeChanged.connect(self.plotModeChanged)
 
-        self.patchStateChanged(pipette)
-        self.pipActiveChanged()
+        if isinstance(self.pip, PatchPipette):
+            self.patchStateChanged(pipette)
+            self.pipActiveChanged()
         
-        if self.pip.clampDevice is not None:
+        if isinstance(self.pip, PatchPipette) and self.pip.clampDevice is not None:
             self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
             self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+            self.autoBiasChanged(self.pip, self.pip.autoBiasEnabled(), self.pip.autoBiasTarget())
 
     def active(self):
         return self.ui.activeBtn.isChecked()
@@ -141,18 +145,20 @@ class PipetteControl(Qt.QWidget):
         currentMode = str(self.ui.modeText.text()).upper()
         if mode != currentMode:
             return
-        # self.updateHoldingInfo()
-        hval = clamp.getHolding(mode)
-        if currentMode == 'IC':
-            if self.pip.autoBiasEnabled():
-                self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
-            else:
-                self._setHoldingSpin(hval, 'A')
-        elif currentMode == 'VC':
-            self._setHoldingSpin(hval, 'V')
+        self.updateHoldingInfo(mode=mode)
+        # hval = clamp.getHolding(mode)
+        # if currentMode == 'IC':
+        #     if self.pip.autoBiasEnabled():
+        #         self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
+        #     else:
+        #         self._setHoldingSpin(hval, 'A')
+        # elif currentMode == 'VC':
+        #     self._setHoldingSpin(hval, 'V')
 
     def autoBiasChanged(self, pip, enabled, target):
         self.updateAutoBiasSpin()
+        with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
+            self.ui.autoBiasBtn.setChecked(enabled)
 
     def updateAutoBiasSpin(self):
         if self.pip.autoBiasEnabled() and self.clampMode() == 'IC':
@@ -176,8 +182,6 @@ class PipetteControl(Qt.QWidget):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
         """
         return str(self.ui.modeText.text()).upper()
-
-    # def updateHoldingSpin(self):
 
     def updateHoldingInfo(self, mode=None):
         clamp = self.pip.clampDevice
