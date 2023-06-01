@@ -28,12 +28,6 @@ class MultiPatch(Module):
     enableMockPatch : bool
         Whether or not to allow mock patching.
 
-    patchProfiles : dict
-        Use this config block to override automated patching. Keyed by
-        state name, see acq4/devices/PatchPipette/states.py for the
-        list of states and their possible options E.g.::
-            cell detect:
-                advanceStepInterval: 0.06
     """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
@@ -207,20 +201,6 @@ class MultiPatchWindow(Qt.QWidget):
         for ctrl in self.pipCtrls:
             ctrl.setPlotModes(modes)
         self.saveConfig()
-
-    # def moveIn(self):
-    #     for pip in self.selectedPipettes():
-    #         pip.startAdvancing(10e-6)
-
-    # def stepIn(self):
-    #     speed = self.selectedSpeed(default='slow')
-    #     for pip in self.selectedPipettes():
-    #         pip.advanceTowardTarget(self.ui.stepSizeSpin.value(), speed)
-
-    # def stepOut(self):
-    #     speed = self.selectedSpeed(default='slow')
-    #     for pip in self.selectedPipettes():
-    #         pip.retract(self.ui.stepSizeSpin.value(), speed)
 
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
@@ -486,6 +466,7 @@ class MultiPatchWindow(Qt.QWidget):
     def xkeysAction(self, key):
         actions = {
             (0, 0): self.ui.sealBtn,
+            (1, 0): self.ui.cellDetectBtn,
             (1, 2): self.ui.hideMarkersBtn,
             (0, 2): self.ui.setTargetBtn,
             (2, 0): self.ui.coarseSearchBtn,
@@ -495,6 +476,7 @@ class MultiPatchWindow(Qt.QWidget):
             (3, 2): self.ui.approachBtn,
             (4, 1): self.ui.slowBtn,
             (4, 2): self.ui.fastBtn,
+            (5, 2): self.ui.cleanBtn,
             (6, 2): self.ui.homeBtn,
             (5, 0): self.ui.reSealBtn,
             (7, 2): self.ui.recordBtn,
