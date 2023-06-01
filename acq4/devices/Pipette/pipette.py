@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import division
-from __future__ import print_function
-
 import weakref
 from typing import List
 
 import numpy as np
 import pyqtgraph as pg
 from six.moves import range
+import json
 
 from acq4 import getManager
 from acq4.devices.Device import Device
@@ -16,7 +13,7 @@ from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.target import Target
-from pyqtgraph import Point
+from pyqtgraph import Point, ptime
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
@@ -488,6 +485,55 @@ class Pipette(Device, OptomechDevice):
         """
         man = getManager()
         return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
+
+    def startRecording(self):
+        """Return an object that records all motion updates from this pipette
+        """
+        return PipetteRecorder(self)
+
+
+class PipetteRecorder:
+    def __init__(self, pip):
+        self.pip = pip
+        self.events = []
+
+        self.pip.sigTransformChanged.connect(self.recordPos)
+        self.pip.sigMoveStarted.connect(self.recordMoveStarted)
+        self.pip.sigMoveFinished.connect(self.recordMoveFinished)
+        self.pip.sigMoveRequested.connect(self.recordMoveRequested)
+
+        self.newEvent('init', {'position': tuple(self.pip.globalPosition()), 'direction': tuple(self.pip.globalDirection())})
+
+    def recordPos(self):
+        self.newEvent('position_change', {'position': tuple(self.pip.globalPosition())})
+
+    def recordMoveStarted(self, pip, pos):
+        self.newEvent('move_start', {'position': tuple(pos)})
+
+    def recordMoveFinished(self, pip, pos):
+        self.newEvent('move_stop', {'position': tuple(pos)})
+
+    def recordMoveRequested(self, pip, pos, speed, opts):
+        self.newEvent('move_request', {'position': tuple(pos), 'speed': speed, 'opts': opts})
+
+    def newEvent(self, eventType, eventData):
+        newEv = dict([
+            ('device', self.pip.name()),
+            ('event_time', ptime.time()),
+            ('event', eventType),
+        ])
+        if eventData is not None:
+            newEv.update(eventData)
+        self.events.append(newEv)
+
+    def stop(self):
+        self.pip.sigTransformChanged.disconnect(self.recordPos)
+        self.pip.sigMoveStarted.disconnect(self.recordMoveStarted)
+        self.pip.sigMoveFinished.disconnect(self.recordMoveFinished)
+        self.pip.sigMoveRequested.disconnect(self.recordMoveRequested)
+
+    def store(self, filename):
+        json.dump(self.events, open(filename + '.json', 'w'))
 
 
 class PipetteCamModInterface(CameraModuleInterface):
