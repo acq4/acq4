@@ -1,15 +1,14 @@
-from __future__ import print_function
-
 import numpy as np
 import scipy.optimize
 import scipy.stats
+import time
 from six.moves import range
 from six.moves import zip
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.devices.Stage import Stage
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.target import Target
 
@@ -410,7 +409,7 @@ class AutomatedStageCalibration(object):
             if self._frame_delay is None:
                 # stage has stopped; ignore 2 more frames to be sure
                 # we get the right image.
-                self._frame_delay = pg.ptime.time() + 1.0 / frame.info()["fps"]
+                self._frame_delay = ptime.time() + 1.0 / frame.info()["fps"]
             elif self._frame_delay < frame.info()["time"]:
                 # now we are ready to keep this frame.
                 self._frame_delay = None

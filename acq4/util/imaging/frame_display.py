@@ -1,13 +1,12 @@
-from __future__ import print_function
+import time
 
 import pyqtgraph as pg
-
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.cuda import shouldUseCuda, cupy
 from acq4.util.debug import printExc
+from pyqtgraph.debug import Profiler
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
-
 
 
 class FrameDisplay(Qt.QObject):
@@ -100,7 +99,7 @@ class FrameDisplay(Qt.QObject):
             return
         try:
             # If we last drew a frame < 1/30s ago, return.
-            t = pg.ptime.time()
+            t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
                 return
             # if there is no new frame and no controls have changed, just exit
@@ -112,7 +111,7 @@ class FrameDisplay(Qt.QObject):
             if self.currentFrame is None and self.nextFrame is None:
                 return
 
-            prof = pg.debug.Profiler()
+            prof = Profiler()
             # We will now draw a new frame (even if the frame is unchanged)
             if self.lastDrawTime is not None:
                 fps = 1.0 / (t - self.lastDrawTime)

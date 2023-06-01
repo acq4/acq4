@@ -1,15 +1,16 @@
-from __future__ import print_function
-import numpy as np
 from collections import OrderedDict
 
-from ..Camera import Camera
-from ..Device import Device
+import numpy as np
+import time
+
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from pyqtgraph import ptime
+from acq4.util import ptime
 from .devgui import PatchPipetteDeviceGui
-from .testpulse import TestPulseThread
 from .statemanager import PatchPipetteStateManager
+from .testpulse import TestPulseThread
+from ..Camera import Camera
+from ..Device import Device
 
 
 class PatchPipette(Device):

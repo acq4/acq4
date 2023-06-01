@@ -13,7 +13,7 @@ labelFile = "../../atlas/CochlearNucleus/images/cochlear_nucleus_label.ma"
 from acq4.util import Qt
 import pyqtgraph as pg
 import numpy as np
-from pyqtgraph.metaarray import MetaArray
+from MetaArray import MetaArray
 
 
 Ui_Form = Qt.importTemplate('.builderTemplate')

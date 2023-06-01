@@ -1,37 +1,7 @@
 """Wrapper around Qt libraries to make it easier to swap out backends in the future
 """
-from __future__ import print_function
-
-import importlib
 import os
 import sys
-
-# try importing Qt libraries in order of preference
-qtLibs = ['PyQt5', 'PyQt4', 'PySide', 'PySide2', None]
-for mod in qtLibs:
-    if mod is None:
-        raise Exception("Could not import any Qt libraries (tried PyQt5, PyQt4, PySide, PySide2).")
-    try:
-        importlib.import_module(mod)
-        break
-    except ImportError:
-        pass
-
-# If we are using PyQt4, ACQ4 requires API version 2 for QString and QVariant.
-# Check for those here..
-if 'PyQt4' in sys.modules:
-    import sip
-
-    for api in ['QString', 'QVariant']:
-        try:
-            v = sip.getapi(api)
-            if v != 2:
-                print("WARNING: ACQ4 requires the use of API version 2 for QString and QVariant, but %s=%s. "
-                      "Correct this by calling \"import sip; sip.setapi('QString', 2); sip.setapi('QVariant', 2);\""
-                      " _before_ importing PyQt4." % (api, v))
-        except ValueError:
-            sip.setapi(api, 2)
-            print("SIP API", api)
 
 import pyqtgraph as pg
 
@@ -51,31 +21,20 @@ disconnect = pg.disconnect
 
 
 def loadUiType(uiFile, package=None):
-    """
-    PySide lacks a "loadUiType" command like PyQt4's, so we have to convert
-    the ui file to py code in-memory first and then execute it in a
-    special frame to retrieve the form_class.
-
-    The *package* argument must be specified if the ui file contains relative
-    imports.
-
-    from stackoverflow: http://stackoverflow.com/a/14195313/3781327
-    """
-    if QT_LIB == PYSIDE:
-        from pysideuic import compileUi
+    if QT_LIB == PYQT5:
+        from PyQt5 import uic
+    elif QT_LIB == PYQT6:
+        from PyQt6 import uic
     elif QT_LIB == PYSIDE2:
-        from pyside2uic import compileUi
-    elif QT_LIB == PYQT4:
-        from PyQt4.uic import compileUi
-    elif QT_LIB == PYQT5:
-        from PyQt5.uic import compileUi
-
+        from PySide2 import uic
+    else:
+        raise ImportError("compileUi could not be imported from PyQt5, PyQt6 or PySide2")
     import xml.etree.ElementTree as xml
-    
+
     parsed = xml.parse(uiFile)
     widget_class = parsed.find('widget').get('class')
     form_class = parsed.find('class').text
-    
+
     if package is None:
         globalns = {}
     else:
@@ -83,13 +42,13 @@ def loadUiType(uiFile, package=None):
 
     # load, compile, and execute ui code
     o = _StringIO()
-    compileUi(open(uiFile, 'r'), o, indent=0)
+    uic.compileUi(open(uiFile, 'r'), o, indent=0)
     pyc = compile(o.getvalue(), uiFile, 'exec')
     exec(pyc, globalns)
 
-    #Fetch the base_class and form class based on their type in the xml from designer
-    form_class = globalns['Ui_%s'%form_class]
-    base_class = getattr(QtGui, widget_class)
+    # Fetch the base_class and form class based on their type in the xml from designer
+    form_class = globalns[f'Ui_{form_class}']
+    base_class = getattr(QtWidgets, widget_class)
 
     return form_class, base_class
 
@@ -128,3 +87,98 @@ def importTemplate(templateName):
     if not os.path.isfile(uipath):
         raise ValueError("ui file not found: %r" % uipath)
     return loadUiType(uipath, package=pkg)[0]
+
+
+class FlowLayout(pg.QtWidgets.QLayout):
+    """From https://doc.qt.io/qtforpython/examples/example_widgets_layouts_flowlayout.html"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        if parent is not None:
+            self.setContentsMargins(QMargins(0, 0, 0, 0))
+
+        self._item_list = []
+
+    def __del__(self):
+        item = self.takeAt(0)
+        while item:
+            item = self.takeAt(0)
+
+    def addItem(self, item):
+        self._item_list.append(item)
+
+    def clear(self):
+        for i in reversed(range(self.count())):
+            self.itemAt(i).widget().setParent(None)
+        self._item_list = []
+
+    def count(self):
+        return len(self._item_list)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self._item_list):
+            return self._item_list[index]
+
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self._item_list):
+            return self._item_list.pop(index)
+
+        return None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), True)
+
+    def setGeometry(self, rect):
+        super(FlowLayout, self).setGeometry(rect)
+        self._do_layout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+
+        for item in self._item_list:
+            size = size.expandedTo(item.minimumSize())
+
+        size += QSize(2 * self.contentsMargins().top(), 2 * self.contentsMargins().top())
+        return size
+
+    def _do_layout(self, rect, test_only):
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+        spacing = self.spacing()
+
+        for item in self._item_list:
+            style = item.widget().style()
+            layout_spacing_x = style.layoutSpacing(
+                QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal
+            )
+            layout_spacing_y = style.layoutSpacing(
+                QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Vertical
+            )
+            space_x = spacing + layout_spacing_x
+            space_y = spacing + layout_spacing_y
+            next_x = x + item.sizeHint().width() + space_x
+            if next_x - space_x > rect.right() and line_height > 0:
+                x = rect.x()
+                y = y + line_height + space_y
+                next_x = x + item.sizeHint().width() + space_x
+                line_height = 0
+
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+
+            x = next_x
+            line_height = max(line_height, item.sizeHint().height())
+
+        return y + line_height - rect.y()

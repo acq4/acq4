@@ -346,8 +346,8 @@ class Manager(Qt.QObject):
                             "'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
 
                     print("=== Setting default HDF5 compression: %s ===" % comp)
-                    import pyqtgraph.metaarray as ma
-                    ma.MetaArray.defaultCompression = comp
+                    from MetaArray import MetaArray
+                    MetaArray.defaultCompression = comp
 
                 elif key == 'folderTypes':
                     self._folderTypes = val

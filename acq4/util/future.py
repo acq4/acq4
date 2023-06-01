@@ -1,10 +1,10 @@
-from __future__ import print_function, division
+import functools
+import sys
+import threading
+import time
+import traceback
 
-import time, sys, threading, traceback, functools
-
-from pyqtgraph import ptime
-
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 
 
 class Future(Qt.QObject):

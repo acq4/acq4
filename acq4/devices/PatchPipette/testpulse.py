@@ -1,16 +1,15 @@
-from __future__ import print_function, division
-import time, threading, functools
-import warnings
-
 import numpy as np
-import scipy.optimize, scipy.ndimage
-from pyqtgraph import ptime
-from ...Manager import getManager
-from acq4.util import Qt
-from acq4.util.Thread import Thread
-from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
+import scipy.ndimage
+import scipy.optimize
+import time
+import warnings
 from six.moves import range
+
+from acq4.util import Qt, ptime
+from acq4.util.Mutex import Mutex
+from acq4.util.Thread import Thread
+from acq4.util.debug import printExc
+from ...Manager import getManager
 
 
 class TestPulseThread(Thread):

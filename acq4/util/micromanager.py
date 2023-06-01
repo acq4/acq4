@@ -12,6 +12,10 @@ _mmc = None
 microManagerPaths = glob.glob("C:\\Program Files\Micro-Manager*")
 
 
+class MicroManagerError(Exception):
+    pass
+
+
 class MMCWrapper:
     """Wraps MMCorePy to raise more helpful exceptions
     """
@@ -36,7 +40,7 @@ class MMCWrapper:
                     msg = exc.args[0].getFullMsg()
                 else:
                     msg = exc
-                raise RuntimeError(f"{msg} (calling mmc.{name} with args {args} {kwds})")
+                raise MicroManagerError(f"{msg} (calling mmc.{name} with args {args} {kwds})") from exc
 
         fn.__name__ = name + "_wrapped"
         self.__wrapper_cache[name] = fn

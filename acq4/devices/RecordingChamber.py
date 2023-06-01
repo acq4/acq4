@@ -7,7 +7,13 @@ from acq4.util import Qt
 
 
 class RecordingChamber(Device, OptomechDevice):
-    """Describes the location and dimensions of a recording chamber.
+    """Describes the location and dimensions of a circular recording chamber.
+
+    Configuration options:
+
+    * radius: The radius of the recording chamber (m)
+    * transform: Transformtion setting the position/orientation of the chamber
+        pos: x,y,z position of recording chamber
     """
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -43,6 +49,9 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
         self.boundingEllipse.setScale(radius)
         mod.window().addItem(self.boundingEllipse, ignoreBounds=True)
         self.boundingEllipse.setPos(x, y)
+        self._name = pg.TextItem(text=dev.name(), color=pg.mkColor((255, 255, 0, 128)))
+        mod.window().addItem(self._name, ignoreBounds=True)
+        self._name.setPos(x + radius, y)
 
     def boundingRect(self):
         return None
@@ -50,4 +59,4 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
         # return self.boundingEllipse.boundingRect()
 
     def graphicsItems(self):
-        return [self.boundingEllipse]
+        return [self.boundingEllipse, self._name]

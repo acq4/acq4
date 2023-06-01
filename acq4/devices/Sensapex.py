@@ -6,8 +6,9 @@ import time
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph import ptime, Transform3D, solve3DTransform
+from pyqtgraph import Transform3D, solve3DTransform
 
+from acq4.util import ptime
 from acq4.util import Qt
 from acq4.drivers.sensapex import UMP, version_info
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
@@ -16,6 +17,12 @@ from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxe
 class Sensapex(Stage):
     """
     A Sensapex manipulator.
+
+    Extra configuration parameters this  device accepts:
+
+        linearMovementRule : "linear"|"nonlinear"|None
+            This causes the movement commands to always be either nonlinear or linear, regardless of what ACQ4 would
+            normally request.
     """
 
     _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
@@ -28,7 +35,12 @@ class Sensapex(Stage):
         self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
         self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.pop("maxError", 1e-6)
-        self._force_linear_movement = config.get("forceLinearMovement", False)
+        if "linearMovementRule" in config:
+            self._force_linear_movement = config["linearMovementRule"] == "linear"
+            self._force_nonlinear_movement = config["linearMovementRule"] == "nonlinear"
+        else:
+            self._force_linear_movement = config.get("forceLinearMovement", False)  # deprecated; use linearMovementRule
+            self._force_nonlinear_movement = False
 
         address = config.pop("address", None)
         address = None if address is None else address.encode()
@@ -164,9 +176,13 @@ class Sensapex(Stage):
         Stage.quit(self)
 
     def _move(self, pos, speed, linear):
+        if self._force_linear_movement:
+            linear = True
+        if self._force_nonlinear_movement:
+            linear = False
         with self.lock:
             speed = self._interpretSpeed(speed)
-            self._lastMove = SensapexMoveFuture(self, pos, speed, self._force_linear_movement or linear)
+            self._lastMove = SensapexMoveFuture(self, pos, speed, linear)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -197,7 +213,6 @@ class SensapexMoveFuture(MoveFuture):
             return
 
         if self.speed >= 1e-6:
-            assert linear
             self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)
             self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True)
         else:

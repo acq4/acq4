@@ -1,15 +1,17 @@
-from __future__ import print_function
-import threading
-import sys, time
+from collections import deque
+
 import numpy as np
 import scipy.stats
+import sys
+import threading
+import time
 from six.moves import range, queue
-from pyqtgraph import ptime, disconnect
 
 from acq4 import getManager
-from acq4.util.future import Future
-from collections import deque
 from acq4.util.debug import printExc
+from acq4.util.future import Future
+from acq4.util import ptime
+from pyqtgraph import disconnect
 
 
 class PatchPipetteState(Future):

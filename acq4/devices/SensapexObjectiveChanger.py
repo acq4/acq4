@@ -20,12 +20,15 @@ class SensapexObjectiveChanger(Device):
         self.dev = ump.get_device(config.get('deviceId'))
 
         self._lastPos = None
+        self._lensChangeFuture = None
         self.getLensPosition()
         self._pos_poller = _PositionPollThread(self, config.get("pollInterval", 2))
         self._pos_poller.start()
 
     def setLensPosition(self, pos):
-        return ObjectiveChangeFuture(self, pos)
+        if self._lensChangeFuture is None or self._lensChangeFuture.isDone():
+            self._lensChangeFuture = ObjectiveChangeFuture(self, pos)
+        return self._lensChangeFuture
 
     def getLensPosition(self):
         pos = self.dev.get_lens_position()
@@ -58,14 +61,18 @@ class _PositionPollThread(Thread):
 
 
 class ObjectiveChangeFuture(Future):
-    def __init__(self, dev, pos):
+    def __init__(self, dev: SensapexObjectiveChanger, pos):
         Future.__init__(self)
         self.dev = dev
         self.target = pos
-        self.dev.dev.set_lens_position(pos)
         self.pollThread = threading.Thread(target=self.poll)
         self.pollThread.daemon = True
-        self.pollThread.start()
+
+        if dev.getLensPosition() == pos:
+            self._taskDone()
+        else:
+            dev.dev.set_lens_position(pos)
+            self.pollThread.start()
 
     def poll(self):
         target = self.target

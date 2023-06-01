@@ -1,20 +1,16 @@
-# coding: utf8
-from __future__ import print_function
-import os, re
-
-import numpy as np
-import json
 from collections import OrderedDict
-from acq4.util import Qt
 
-from acq4.modules.Module import Module
+import json
+import os
+import re
+
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
-import pyqtgraph as pg
-from .pipetteControl import PipetteControl
+from acq4.modules.Module import Module
+from acq4.util import Qt, ptime
 from .mockPatch import MockPatch
-from six.moves import zip
-
+from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
@@ -529,7 +525,7 @@ class MultiPatchWindow(Qt.QWidget):
     def surfaceDepthChanged(self, depth):
         event = OrderedDict([
             ("device", str(self.microscope.name())),
-            ("event_time", pg.ptime.time()),
+            ("event_time", ptime.time()),
             ("event", "surface_depth_changed"),
             ("surface_depth", depth),
         ])

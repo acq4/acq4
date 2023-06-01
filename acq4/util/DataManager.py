@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+from collections import OrderedDict
+
 import weakref
 
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
@@ -26,7 +28,7 @@ if __name__ == '__main__':
 import re, shutil
 import time
 from acq4.util.Mutex import Mutex
-from pyqtgraph import SignalProxy, BusyCursor, OrderedDict
+from pyqtgraph import SignalProxy, BusyCursor
 from acq4.util import Qt
 if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal

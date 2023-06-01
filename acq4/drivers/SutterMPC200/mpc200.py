@@ -1,6 +1,6 @@
-from __future__ import print_function
-import serial, struct, time, collections
 import numpy as np
+import struct
+import time
 from six.moves import range
 
 try:
@@ -341,7 +341,6 @@ def measureSpeedTable(dev, drive, dist=3e-3):
     Warning: this function moves the stage to (0, 0, 0); do not 
     run this function unless you know it is safe for your setup!
     """
-    from pyqtgraph import ptime
     v = []
     for i in range(16):
         pos = (dist, 0, 0)

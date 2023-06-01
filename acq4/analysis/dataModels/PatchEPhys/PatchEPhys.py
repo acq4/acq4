@@ -6,7 +6,7 @@ import re
 
 import numpy as np
 
-from pyqtgraph.metaarray import MetaArray
+from MetaArray import MetaArray
 from six.moves import range
 
 protocolNames = {

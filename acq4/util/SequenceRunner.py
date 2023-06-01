@@ -9,7 +9,7 @@ from __future__ import print_function
 from collections import Iterable
 
 import numpy as np
-from pyqtgraph import MetaArray
+from MetaArray import MetaArray
 from six.moves import range
 
 

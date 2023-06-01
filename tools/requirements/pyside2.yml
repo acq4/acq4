@@ -81,3 +81,4 @@ dependencies:
     - pyqt5-sip==4.19.18
     - pyqtwebengine==5.12.1
     - git+https://github.com/acq4/pyqtgraph@30d5e0df#egg=pyqtgraph
+    - MetaArray==2.0.3

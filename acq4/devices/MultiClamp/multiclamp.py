@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 import time
 
 import numpy as np
@@ -10,7 +6,7 @@ from acq4.Manager import logMsg
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
 from acq4.util.Mutex import Mutex
-from pyqtgraph.metaarray import MetaArray, axis
+from MetaArray import MetaArray, axis
 from .DeviceGui import MCDeviceGui
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask

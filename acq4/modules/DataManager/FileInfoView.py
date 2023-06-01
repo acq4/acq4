@@ -1,14 +1,9 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
+import contextlib
 import time
-
-import six
 
 import acq4.Manager as Manager
 from acq4.util import Qt
 from acq4.util.DictView import DictView
-from six.moves import range
 
 Ui_Form = Qt.importTemplate('.FileInfoViewTemplate')
 
@@ -141,59 +136,73 @@ class FileInfoView(Qt.QWidget):
         self.ui.fileInfoLayout = self.ui.formLayout_2
         
     def setCurrentFile(self, file):
-        #print "=============== set current file ============"
         if file is self.current:
             return
-            
+
         if file is None:
             self.clear()
             self.current = None
             return
-        
+
         self.current = file
         self.clear()
-        
-        ## Decide on the list of fields to display
+
+        # Decide on the list of fields to display
         info = file.info()
         infoKeys = list(info.keys())
         fields = self.manager.suggestedDirFields(file)
-        
-        ## Generate fields, populate if data exists
+
+        # Generate fields, populate if data exists
 
         for fieldName, fieldOpts in fields.items():
             if fieldName in infoKeys:
                 infoKeys.remove(fieldName)
-            
+
             # a single value is interpreted as the first element of a tuple
             if not isinstance(fieldOpts, (dict, tuple)):
                 fieldOpts = (fieldOpts,)
-            
+
             fieldTyp = fieldOpts[0]
             value = info.get(fieldName, None)
             metadata_class = fieldTypes[fieldTyp]
             w = metadata_class(name=fieldName, value=value, config=fieldOpts)
             self.addRow(fieldName, metadataField=w)
-        
-        ## Add fields for any other keys that happen to be present
-        #print "Add %d rows.." % len(infoKeys)
-        for f in infoKeys:
-            if isinstance(info[f], dict):
-                w = DictView(info[f])
+
+        t0 = None
+        with contextlib.suppress(Exception):
+            t0 = file.parent().info()['__timestamp__']
+
+        if file.fileType() == "YamlFile":
+            data = file.read()
+            self._splatDataIntoRows(data, t0)
+
+        # Add fields for any other keys that happen to be present
+        self._splatDataIntoRows({f: info[f] for f in infoKeys}, t0)
+
+    def _splatDataIntoRows(self, data, t0: "float | None" = None):
+        if not isinstance(data, dict):
+            for value in data:
+                self._splatDataIntoRows(value, t0)
+            return
+        for key, value in data.items():
+            if isinstance(value, dict):
+                w = DictView(value)
             else:
-                s = str(info[f])
-                if isinstance(f, six.string_types) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
-                    try:
-                        t0 = file.parent().info()['__timestamp__']
-                        dt = " [elapsed = %0.3f s]" % (info[f] - t0)
-                    except:
+                if isinstance(key, str) and 'time' in key.lower() and 1e9 < value < 2e9:
+                    # probably this is a timestamp
+                    if t0:
+                        dt = f" [elapsed = {value - t0:0.3f} s]"
+                    else:
                         dt = ""
-                    s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(float(s))) + dt
-                    
+                    s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(value)) + dt
+                else:
+                    s = str(value)
+
+                if type(key) is tuple:
+                    key = '.'.join(key)
+                key = str(key).replace('__', '')
                 w = Qt.QLabel(s)
-            if type(f) is tuple:
-                f = '.'.join(f)
-            f = str(f).replace('__', '')
-            self.addRow(f, widget=w)
+            self.addRow(key, widget=w)
 
     def fieldChanged(self, field):
         info = self.current.info()

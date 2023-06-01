@@ -1,23 +1,21 @@
-from __future__ import print_function
-from acq4.util import Qt
-#import configfile
-from acq4.Manager import getManager, logExc, logMsg
-from acq4.util.Mutex import Mutex
+import numpy as np
+import time
+from scipy import stats
+from six.moves import range
+
+from MetaArray import MetaArray
+from acq4.Manager import getManager, logMsg
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.NiDAQ.nidaq import NiDAQ
 from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.util import Qt
+from acq4.util.HelpfulException import HelpfulException
+from acq4.util.Mutex import Mutex
+from pyqtgraph.functions import siFormat
+import acq4.util.ptime as ptime
+
 from .LaserDevGui import LaserDevGui
 from .LaserTaskGui import LaserTaskGui
-import os
-import time
-import numpy as np
-from scipy import stats
-from pyqtgraph.functions import siFormat
-from acq4.util.HelpfulException import HelpfulException
-import pyqtgraph as pg
-import pyqtgraph.metaarray as metaarray
-from acq4.devices.NiDAQ.nidaq import NiDAQ
-import acq4.util.ptime as ptime
-from six.moves import range
 
 
 class Laser(DAQGeneric, OptomechDevice):
@@ -874,7 +872,7 @@ class LaserTask(DAQGenericTask):
         
         result._info[-1]['Laser'] = info
         
-        result = metaarray.MetaArray(arr, info=result._info)
+        result = MetaArray(arr, info=result._info)
         self.dev.lastResult = result
        
         return result

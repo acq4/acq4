@@ -1,18 +1,15 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 from collections import OrderedDict
 
 import numpy as np
-import pyqtgraph as pg
 import scipy
 import six
+import time
 from six.moves import range
 from six.moves import zip
 
 import acq4.util.functions as fn
 import acq4.util.ptime as ptime
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera, CameraTask
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex

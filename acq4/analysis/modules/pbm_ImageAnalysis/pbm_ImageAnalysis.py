@@ -40,7 +40,7 @@ import pyqtgraph as pg
 import pyqtgraph.debug as debug
 import acq4.util.DatabaseGui as DatabaseGui
 import PIL as Image
-from pyqtgraph.metaarray import MetaArray
+from MetaArray import MetaArray
 import numpy as np
 import scipy
 from acq4.analysis.tools import Utility

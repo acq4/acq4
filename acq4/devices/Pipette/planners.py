@@ -291,11 +291,11 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         pip = self.pip
         target = pip.targetPosition()
 
-        # will recalibrate 50 um above surface
+        # will recalibrate 50 um above surface (or target)
         scope = pip.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
         waypoint2 = np.array(target)
-        waypoint2[2] = surfaceDepth + 50e-6
+        waypoint2[2] = max(surfaceDepth, target[2]) + 50e-6
 
         # Need to arrive at this point via approach angle to correct for hysteresis
         waypoint1 = waypoint2 + pip.globalDirection() * -100e-6
