@@ -5,6 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 from six.moves import range
 import json
+import acq4.util.ptime as ptime
 
 from acq4 import getManager
 from acq4.devices.Device import Device
@@ -13,7 +14,7 @@ from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.target import Target
-from pyqtgraph import Point, ptime
+from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
