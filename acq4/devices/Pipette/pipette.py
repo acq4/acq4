@@ -5,7 +5,6 @@ import numpy as np
 import pyqtgraph as pg
 from six.moves import range
 import json
-import acq4.util.ptime as ptime
 
 from acq4 import getManager
 from acq4.devices.Device import Device
