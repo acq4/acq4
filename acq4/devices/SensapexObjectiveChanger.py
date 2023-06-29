@@ -85,7 +85,7 @@ class ObjectiveChangeFuture(Future):
             if pos == target:
                 self._taskDone()
                 break
-            elif ptime.time() > self._start + 15_000:
+            elif ptime.time() > self._start + 15:
                 if self._retried:
                     self._taskDone(interrupted=True, error="Timed out waiting for objective changer to move (retried once)")
                     break
