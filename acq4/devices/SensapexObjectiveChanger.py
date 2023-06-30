@@ -4,6 +4,7 @@ from time import sleep
 import acq4.util.Qt as Qt
 from acq4.devices.Device import Device
 from acq4.drivers.sensapex import UMP
+from acq4.util import ptime
 from acq4.util.Thread import Thread
 from acq4.util.future import Future
 
@@ -65,6 +66,8 @@ class ObjectiveChangeFuture(Future):
         Future.__init__(self)
         self.dev = dev
         self.target = pos
+        self._start = ptime.time()
+        self._retried = False
         self.pollThread = threading.Thread(target=self.poll)
         self.pollThread.daemon = True
 
@@ -82,6 +85,14 @@ class ObjectiveChangeFuture(Future):
             if pos == target:
                 self._taskDone()
                 break
+            elif ptime.time() > self._start + 15:
+                if self._retried:
+                    self._taskDone(interrupted=True, error="Timed out waiting for objective changer to move (retried once)")
+                    break
+                else:
+                    self._retried = True
+                    self._start = ptime.time()
+                    dev.dev.set_lens_position(target)
             try:
                 self._checkStop(delay=0.2)
             except self.StopRequested:
