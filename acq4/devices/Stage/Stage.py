@@ -5,7 +5,7 @@ from typing import Tuple
 import functools
 
 import pyqtgraph as pg
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 import numpy as np
 from acq4.util.Mutex import Mutex
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
