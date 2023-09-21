@@ -328,6 +328,7 @@ class LogWindow(Qt.QMainWindow):
                 self.saveEntries(temp)
 
         self.logMsg(f"Moved log storage from {oldfName} to {self.fileName()}.")
+        self.logMsg(f"Current configuration: {self.manager.config}")
         self.wid.ui.dirLabel.setText("Current Storage Directory: " + self.fileName())
         self.manager.sigLogDirChanged.emit(dh)
 
