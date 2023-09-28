@@ -3,6 +3,7 @@ from collections import OrderedDict
 import json
 import os
 import re
+from typing import List
 
 import pyqtgraph as pg
 from acq4 import getManager
@@ -405,7 +406,7 @@ class MultiPatchWindow(Qt.QWidget):
         # tp = any([pip.testPulseEnabled() for pip in pips])
         # self.ui.testPulseBtn.setChecked(tp)
 
-    def selectedPipettes(self):
+    def selectedPipettes(self) -> List[PatchPipette]:
         sel = []
         for ctrl in self.pipCtrls:
             if ctrl.selected():
