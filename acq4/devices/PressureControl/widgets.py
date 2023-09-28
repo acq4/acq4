@@ -51,15 +51,12 @@ class PressureControlWidget(Qt.QWidget):
     def regulatorPressureClicked(self):
         # TODO this sleeps for 0.3s in the UI thread
         self.dev.setPressure(source='regulator')
-        self.ui.pressureSpin.setEnabled(True)
 
     def userPressureClicked(self):
         self.dev.setPressure(source='user')
-        self.ui.pressureSpin.setEnabled(False)
 
     def atmospherePressureClicked(self):
         self.dev.setPressure(source='atmosphere')
-        self.ui.pressureSpin.setEnabled(False)
 
     def pressureSpinChanged(self):
         self.dev.setPressure(pressure=self.ui.pressureSpin.value())
