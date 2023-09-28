@@ -201,10 +201,9 @@ class MultiPatchWindow(Qt.QWidget):
 
     def moveAboveTarget(self):
         speed = self.selectedSpeed(default='fast')
-        pips = self.selectedPipettes()
-        pipDevs = [p.pipetteDevice if isinstance(p, PatchPipette) else p for p in pips]
-        for pip in pipDevs:
-            pip.goAboveTarget(speed, raiseErrors=True)
+        for pip in self.selectedPipettes():
+            pip.pipetteDevice.goAboveTarget(speed, raiseErrors=True)
+            pip.setState('bath')
 
     def moveApproach(self):
         speed = self.selectedSpeed(default='fast')
