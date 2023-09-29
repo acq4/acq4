@@ -1,11 +1,12 @@
-# coding: utf8
-from __future__ import print_function
 import re
+from decimal import Decimal
+
 import pyqtgraph as pg
-from acq4.util import Qt
-from acq4.devices.PatchPipette import PatchPipette
 from six.moves import range
 from six.moves import zip
+
+from acq4.devices.PatchPipette import PatchPipette
+from acq4.util import Qt
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
@@ -32,7 +33,30 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
-        self.ui.holdingSpin.setOpts(bounds=[None, None], decimals=0, suffix='V', siPrefix=True, step=5e-3, format='{scaledValue:.3g} {siPrefix:s}{suffix:s}')
+
+        def start_low(s):
+            number, si_prefix, suffix = pg.siParse(self.ui.holdingSpin.lineEdit().text())
+            unscaled_num = Decimal(s)
+            if si_prefix:  # this spinner already has a scale, so don't set it
+                return unscaled_num
+            if abs(unscaled_num) > 1:
+                if self.clampMode() == "VC" or self.pip.autoBiasEnabled():
+                    return unscaled_num * Decimal("1e-3")  # anything > 1 must be mV
+                else:
+                    return unscaled_num * Decimal("1e-12")  # anything > 1 must be pA
+            else:
+                return unscaled_num
+        self.ui.holdingSpin.setOpts(
+            bounds=[None, None],
+            decimals=0,
+            suffix='V',
+            siPrefix=True,
+            step=5e-3,
+            dec=True,
+            minStep=1e-3,
+            format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
+            evalFunc=start_low,
+        )
         self.ui.autoOffsetBtn.clicked.connect(self.autoOffsetRequested)
         self.ui.autoPipCapBtn.clicked.connect(self.autoPipCapRequested)
 
@@ -233,9 +257,14 @@ class PipetteControl(Qt.QWidget):
         if self.clampMode() == 'VC':
             self.pip.clampDevice.setMode('IC')
             self.pip.setTestPulseParameters(clampMode='IC')
+            if self.pip.autoBiasEnabled():
+                self.ui.holdingSpin.setOpts(suffix="V")
+            else:
+                self.ui.holdingSpin.setOpts(suffix="A")
         else:
             self.pip.clampDevice.setMode('VC')
             self.pip.setTestPulseParameters(clampMode='VC')
+            self.ui.holdingSpin.setOpts(suffix="V")
 
     def focusTipBtnClicked(self, state):
         speed = self.mainWin.selectedSpeed(default='fast')
