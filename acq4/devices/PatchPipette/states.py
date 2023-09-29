@@ -1139,6 +1139,7 @@ class PatchPipetteResealState(PatchPipetteState):
         'fallbackState': {'type': 'str', 'value': 'bath'},
         'maxPressure': {'type': 'float', 'value': -4e3, 'suffix': 'Pa'},
         'pressureChangeRate': {'type': 'float', 'value': -0.5e-3 / 60, 'suffix': 'Pa/s'},
+        'slowDetectionThreshold': {'value': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1192,7 +1193,7 @@ class PatchPipetteResealState(PatchPipetteState):
                 patchrec['resealInitialResistance'] = initialResistance
 
             # check progress on resistance
-            if len(recentTestPulses) > config['numTestPulseAverage']:
+            if len(recentTestPulses) == config['numTestPulseAverage']:
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
                     return self._transition_to_seal("cell detected (slow criteria)", patchrec)
