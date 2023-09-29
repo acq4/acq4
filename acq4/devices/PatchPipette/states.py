@@ -196,6 +196,12 @@ class PatchPipetteState(Future):
         """
         pass
 
+    def _transition_to_seal(self, reason, patchrec):
+        self.setState(reason)
+        self._taskDone()
+        patchrec['detectedCell'] = True
+        return "seal"
+
     def _runJob(self):
         """Function invoked in background thread.
 
@@ -595,12 +601,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         self._taskDone(interrupted=True, error="No cell found before end of search path")
         patchrec['detectedCell'] = False
         return self.config['fallbackState']
-
-    def _transition_to_seal(self, reason, patchrec):
-        self.setState(reason)
-        self._taskDone()
-        patchrec['detectedCell'] = True
-        return "seal"
 
     def getSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
