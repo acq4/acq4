@@ -442,4 +442,3 @@ class PlotWidget(Qt.QWidget):
 
     def closeClicked(self):
         self.sigCloseClicked.emit(self)
-
