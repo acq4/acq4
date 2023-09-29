@@ -1110,12 +1110,12 @@ class PatchPipetteResealState(PatchPipetteState):
     ----------
     initialPressure : float
         Initial pressure (Pa) to apply (default is -0.5 kPa)
-    maximumPressure : float
+    maxPressure : float
         Maximum pressure (Pa) to apply (default is -4 kPa)
     pressureChangeRate : float
         Rate at which pressure should change during reseal (default is -0.5 kPa / min)
     retractionSpeed : float
-        Speed in m/s to move pipette during retraction (default is 0.3 um / s)
+        Speed in m/s to move pipette during retraction (default is 0.3e-6 (0.3 µm / s))
     resealTimeout : float
         Seconds before reseal attempt exits
     numTestPulseAverage : int
@@ -1169,6 +1169,7 @@ class PatchPipetteResealState(PatchPipetteState):
             # check for timeout
             if config['resealTimeout'] is not None and totalDt > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
+                # TODO determine if this pipette is still in the bath?
                 return config['fallbackState']
 
             self._checkStop()
@@ -1342,7 +1343,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         dev.clean = True
         self.resetPosition()
         dev.newPatchAttempt()
-        return 'out'          
+        return config['fallbackState']
 
     def resetPosition(self):
         if self.currentFuture is not None:
