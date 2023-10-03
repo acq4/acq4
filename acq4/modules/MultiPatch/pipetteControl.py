@@ -18,7 +18,7 @@ _vc_mode_opts = dict(
 )
 _ic_mode_opts = dict(
     suffix='A',
-    step=0.1,
+    step=0.5,
     dec=True,
     minStep=1e-12,
     scaleAtZero=1e-12,
