@@ -1,5 +1,4 @@
 import re
-from decimal import Decimal
 
 import pyqtgraph as pg
 from six.moves import range
@@ -9,6 +8,21 @@ from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
+
+_vc_mode_opts = dict(
+    suffix='V',
+    step=5e-3,
+    dec=False,
+    minStep=1e-3,
+    scaleAtZero=1e-3,
+)
+_ic_mode_opts = dict(
+    suffix='A',
+    step=0.1,
+    dec=True,
+    minStep=1e-12,
+    scaleAtZero=1e-12,
+)
 
 
 class PipetteControl(Qt.QWidget):
@@ -37,13 +51,9 @@ class PipetteControl(Qt.QWidget):
         self.ui.holdingSpin.setOpts(
             bounds=[None, None],
             decimals=0,
-            suffix='V',
             siPrefix=True,
-            step=5e-3,
-            dec=True,
-            minStep=1e-3,
             format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
-            scaleAtZero=1e-3,
+            **_vc_mode_opts,
         )
         self.ui.autoOffsetBtn.clicked.connect(self.autoOffsetRequested)
         self.ui.autoPipCapBtn.clicked.connect(self.autoPipCapRequested)
@@ -227,9 +237,10 @@ class PipetteControl(Qt.QWidget):
     def _setHoldingSpin(self, value, units):
         with pg.SignalBlock(self.ui.holdingSpin.valueChanged, self.holdingSpinChanged):
             self.ui.holdingSpin.setValue(value)
-            step = 5e-3 if units == 'V' else 50e-12
-            minStep = 1e-3 if units == 'V' else 1e-12
-            self.ui.holdingSpin.setOpts(suffix=units, step=step, minStep=minStep, scaleAtZero=step)
+            if units == 'V':
+                self.ui.holdingSpin.setOpts(**_vc_mode_opts)
+            else:
+                self.ui.holdingSpin.setOpts(**_ic_mode_opts)
 
     def stateActionClicked(self):
         state = str(self.sender().text())
@@ -247,13 +258,13 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.setMode('IC')
             self.pip.setTestPulseParameters(clampMode='IC')
             if self.pip.autoBiasEnabled():
-                self.ui.holdingSpin.setOpts(suffix="V", scaleAtZero=1e-3, step=5e-3, minStep=1e-3)
+                self.ui.holdingSpin.setOpts(**_vc_mode_opts)
             else:
-                self.ui.holdingSpin.setOpts(suffix="A", scaleAtZero=1e-12, step=50e-12, minStep=1e-12)
+                self.ui.holdingSpin.setOpts(**_ic_mode_opts)
         else:
             self.pip.clampDevice.setMode('VC')
             self.pip.setTestPulseParameters(clampMode='VC')
-            self.ui.holdingSpin.setOpts(suffix="V", scaleAtZero=1e-3, step=5e-3, minStep=1e-3)
+            self.ui.holdingSpin.setOpts(**_vc_mode_opts)
 
     def focusTipBtnClicked(self, state):
         speed = self.mainWin.selectedSpeed(default='fast')
