@@ -11,3 +11,4 @@ acq4.egg-info
 config/*
 !config/example/
 crash.log
+.vscode/
