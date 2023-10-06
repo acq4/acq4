@@ -1124,7 +1124,7 @@ class PatchPipetteResealState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'retractionSpeed': {'type': 'float', 'value': 0.3e-6, 'suffix': 'm/s'},
-        'resealTimeout': {'type': 'float', 'value': 10 * 60}, 'suffix': 's',
+        'resealTimeout': {'type': 'float', 'value': 10 * 60, 'suffix': 's'},
         'numTestPulseAverage': {'type': 'int', 'value': 3},
         'fallbackState': {'type': 'str', 'value': 'whole cell'},
         'maxPressure': {'type': 'float', 'value': -4e3, 'suffix': 'Pa'},
