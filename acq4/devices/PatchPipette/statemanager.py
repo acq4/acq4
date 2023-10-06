@@ -73,6 +73,10 @@ class PatchPipetteStateManager(Qt.QObject):
         return list(cls.profiles.keys())
 
     @classmethod
+    def getStateClass(cls, name):
+        return cls.stateHandlers[name]
+
+    @classmethod
     def getProfileConfig(cls, name):
         cls._loadGlobalProfilesOnce()
         if name not in cls.profiles:

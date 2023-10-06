@@ -58,9 +58,6 @@ class StateParameter(pg.Parameter):
     def __init__(self, name, config):
         super().__init__(name=name, type='group', children=[])
         stateClass = StateManager.getStateClass(name)
-        stateDefaults = stateClass.defaultConfig()
-        for paramName, value in stateDefaults:
-            
+        for param_config in stateClass.parameterTreeConfig():
+            self.addChild(pg.Parameter(**param_config))
 
-        for key, val in config.items():  # TODO this only covers the explicitly overridden params
-            self.addChild({'name': key, 'type': 'str', 'value': val})
