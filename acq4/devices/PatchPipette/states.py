@@ -12,7 +12,7 @@ from acq4 import getManager
 from acq4.util.debug import printExc
 from acq4.util.future import Future
 from acq4.util import ptime
-from pyqtgraph import disconnect
+from pyqtgraph import disconnect, units
 from pyqtgraph.units import pA, ms
 
 
@@ -759,7 +759,7 @@ class PatchPipetteSealState(PatchPipetteState):
         'nSlopeSamples': {'type': 'int', 'value': 5},
         'autoSealTimeout': {'type': 'float', 'value': 30.0, 'suffix': 's'},
         'maxVacuum': {'type': 'float', 'value': -3e3, 'suffix': 'Pa'},
-        'pressureChangeRates': {'type': 'list', 'value': [(0.5e6, -100), (100e6, 0), (-1e6, 200)]},  # TODO
+        'pressureChangeRates': {'type': 'str', 'value': "[(0.5e6, -100), (100e6, 0), (-1e6, 200)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'value': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'value': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'value': -1000, 'suffix': 'Pa'},
@@ -865,6 +865,8 @@ class PatchPipetteSealState(PatchPipetteState):
                 pressure = np.clip(pressure, config['maxVacuum'], 0)
                 
                 # decide how much to adjust pressure based on rate of change in seal resistance
+                if isinstance(str, config['pressureChangeRates']):
+                    config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
                 for max_slope, change in config['pressureChangeRates']:
                     if max_slope is None or slope < max_slope:
                         pressure += change
@@ -1270,8 +1272,8 @@ class PatchPipetteCleanState(PatchPipetteState):
         'finishPatchRecord': True,
     }
     _parameterTreeConfig = {
-        'cleanSequence': {'type': 'list', 'value': [(-35e3, 1.0), (100e3, 1.0)] * 5},  # TODO
-        'rinseSequence': {'type': 'list', 'value': [(-35e3, 3.0), (100e3, 10.0)], 'hint': [('Pa', 's')]},  # TODO
+        'cleanSequence': {'type': 'str', 'value': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
+        'rinseSequence': {'type': 'str', 'value': "[(-35e3, 3.0), (100e3, 10.0)]]"},  # TODO
         'approachHeight': {'type': 'float', 'value': 5e-3, 'suffix': 'm'},
     }
 
@@ -1300,6 +1302,8 @@ class PatchPipetteCleanState(PatchPipetteState):
             self._checkStop()
 
             sequence = config[stage + 'Sequence']
+            if isinstance(sequence, str):
+                sequence = eval(sequence, units.__dict__)
             if len(sequence) == 0:
                 continue
 
