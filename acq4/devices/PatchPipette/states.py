@@ -998,9 +998,9 @@ class PatchPipetteBreakInState(PatchPipetteState):
         #     'duration', 'type': 'float', 'suffix': 's'},
         #     'pressure', 'type': 'float', 'suffix': 'Pa'},
         # ]},
-        'nPulses': {'type': 'list', 'value': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5]},
-        'pulseDurations': {'type': 'list', 'value': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]},
-        'pulsePressures': {'type': 'list', 'value': [-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]},
+        'nPulses': {'type': 'string', 'value': "[1, 1, 1, 1, 1, 2, 2, 3, 3, 5]"},
+        'pulseDurations': {'type': 'string', 'value': "[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]"},
+        'pulsePressures': {'type': 'string', 'value': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
         'pulseInterval': {'type': 'float', 'value': 2},
         'resistanceThreshold': {'type': 'float', 'value': 650e6, 'suffix': 'Ω'},
         'capacitanceThreshold': {'type': 'float', 'value': 10e-12, 'suffix': 'F'},
@@ -1011,6 +1011,12 @@ class PatchPipetteBreakInState(PatchPipetteState):
         patchrec = self.dev.patchRecord()
         self.monitorTestPulse()
         config = self.config
+        if isinstance(config['nPulses'], str):
+            config['nPulses'] = eval(config['nPulses'])
+        if isinstance(config['pulseDurations'], str):
+            config['pulseDurations'] = eval(config['pulseDurations'])
+        if isinstance(config['pulsePressures'], str):
+            config['pulsePressures'] = eval(config['pulsePressures'])
         lastPulse = ptime.time()
         attempt = 0
 

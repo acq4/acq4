@@ -73,7 +73,11 @@ class PatchPipetteStateManager(Qt.QObject):
         return list(cls.profiles.keys())
 
     @classmethod
-    def getStateClass(cls, name):
+    def listStates(cls):
+        return list(cls.stateHandlers.keys())
+
+    @classmethod
+    def getStateClass(cls, name) -> states.PatchPipetteState:
         return cls.stateHandlers[name]
 
     @classmethod
@@ -124,9 +128,6 @@ class PatchPipetteStateManager(Qt.QObject):
         """Return the currently active state.
         """
         return self.currentJob
-
-    def listStates(self):
-        return list(self.stateHandlers.keys())
 
     def stateChanged(self, oldState, newState):
         """Called when state has changed (possibly by user)
