@@ -1,6 +1,7 @@
+import os
 import pyqtgraph as pg
 import acq4.util.Qt as qt
-from .statemanager import StateManager
+from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
 """
 Todo:
@@ -14,19 +15,17 @@ Todo:
 
 class ProfileEditor(qt.QWidget):
     def __init__(self, parent=None):
-        #initialize a parametertree widget to show the profiles
-        super().__init__(parent)
-        
-        # use StateManager.listProfiles() to get a list of profiles
-        # use StateManager.getProfile(profileName) to get a profile
-    
+        super().__init__()
+        self.setWindowTitle('Patch Pipette Profile Editor')
+        self.setWindowIcon(qt.QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
+
         self.layout = qt.QGridLayout()
         self.setLayout(self.layout)
         self.ptree = pg.parametertree.ParameterTree()
         self.layout.addWidget(self.ptree, 0, 0)
 
         params = []
-        for profile in StateManager.listProfiles():
+        for profile in PatchPipetteStateManager.listProfiles():
             params.append(ProfileParameter(profile))
             # childs = []
             # params.append({'name': profile, 'type': 'group', 'children': childs})
@@ -39,14 +38,14 @@ class ProfileEditor(qt.QWidget):
 
 
 
-class ProfileParameter(pg.Parameter):
+class ProfileParameter(pg.parametertree.Parameter):
     def __init__(self, profile):
 
         
         super().__init__(name=profile, type='group', children=[
             {'name': 'copyFrom', 'type': 'str', 'value': ''},
         ])
-        config = StateManager.getProfileConfig(profile)
+        config = PatchPipetteStateManager.getProfileConfig(profile)
         for key, val in config.items():
             if key == 'copyFrom':
                 self['copyFrom'] = config['copyFrom']
@@ -54,10 +53,10 @@ class ProfileParameter(pg.Parameter):
                 self.addChild(StateParameter(key, val))
 
 
-class StateParameter(pg.Parameter):
+class StateParameter(pg.parametertree.Parameter):
     def __init__(self, name, config):
         super().__init__(name=name, type='group', children=[])
-        stateClass = StateManager.getStateClass(name)
+        stateClass = PatchPipetteStateManager.getStateClass(name)
         for param_config in stateClass.parameterTreeConfig():
-            self.addChild(pg.Parameter(**param_config))
+            self.addChild(pg.parametertree.Parameter(**param_config))
 
