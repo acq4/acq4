@@ -7,7 +7,7 @@ from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 """
 Todo:
 - Each parameter is either a custom value or an indication of using the default value
-- Restoring a value to its default value should remove the parameter from the profile
+- Restoring a parameter to its default value should remove the parameter from the profile
 """
 
 
