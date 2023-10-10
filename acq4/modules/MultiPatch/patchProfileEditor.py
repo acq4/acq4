@@ -7,7 +7,6 @@ from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 """
 Todo:
 - Each parameter is either a custom value or an indication of using the default value
-- Restoring a parameter to its default value should remove the parameter from the profile
 """
 
 
@@ -29,17 +28,26 @@ class ProfileEditor(qt.QWidget):
         self.ptree.setParameters(self.param_root)
         self.param_root.sigTreeStateChanged.connect(self.paramTreeChanged)
 
-    def paramTreeChanged(self, param, changes):
+    def paramTreeChanged(self, root_param, changes):
         for param, change, data in changes:
             (profile_name, state_name, *param_name) = self.param_root.childPath(param)
             # using deepcopy pretends that the profile is immutable, but it is not
             profile = deepcopy(PatchPipetteStateManager.getProfileConfig(profile_name))
             if state_name == "copyFrom":
-                profile[state_name] = param.value()
+                profile[state_name] = data
             else:
                 profile.setdefault(state_name, {})
-                profile[state_name][param_name[0]] = param.value()
+                if profile.get("copyFrom", None):
+                    default = PatchPipetteStateManager.getStateConfig(state_name, profile["copyFrom"]).get(param_name[0], None)
+                else:
+                    default = param.defaultValue()
+                if data == default:
+                    if param_name[0] in profile[state_name]:
+                        del profile[state_name][param_name[0]]
+                else:
+                    profile[state_name][param_name[0]] = data
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
+            # TODO update copied-from-but-not-overridden profiles in the editor
 
 
 class ProfileParameter(pg.parametertree.Parameter):
