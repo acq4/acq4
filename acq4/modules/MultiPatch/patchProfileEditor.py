@@ -50,14 +50,7 @@ class ProfileEditor(qt.QWidget):
                     if profile_item.name() == profile_name:
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
-                        for state_item in profile_item:
-                            if state_item.name() == state_name:
-                                for param_item in state_item:
-                                    if param_item.name() == param_name[0]:
-                                        if param_item.valueIsDefault():
-                                            param_item.setValue(data)
-                                        param_item.setDefault(data)
-                                        break
+                        profile_item.applyDefaults({state_name: {param_name[0]: data}})
 
 
 class ProfileParameter(pg.parametertree.Parameter):
@@ -70,6 +63,11 @@ class ProfileParameter(pg.parametertree.Parameter):
             self['copyFrom'] = config['copyFrom']
         for state in PatchPipetteStateManager.listStates():
             self.addChild(StateParameter(state, profile))
+
+    def applyDefaults(self, defaults):
+        for state in self:
+            if state.name() in defaults:
+                state.applyDefaults(defaults[state.name()])
 
 
 class StateParameter(pg.parametertree.Parameter):
@@ -88,3 +86,10 @@ class StateParameter(pg.parametertree.Parameter):
             param = pg.parametertree.Parameter(**param_config)
             param.setValue(config.get(param.name(), param.defaultValue()))
             self.addChild(param)
+
+    def applyDefaults(self, defaults):
+        for param in self:
+            if param.name() in defaults:
+                if param.isDefaultValue():
+                    param.setValue(defaults[param.name()])
+                param.setDefault(defaults[param.name()])
