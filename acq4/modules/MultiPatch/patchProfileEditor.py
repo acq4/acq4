@@ -4,11 +4,6 @@ import pyqtgraph as pg
 import acq4.util.Qt as qt
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
-"""
-Todo:
-- Each parameter is either a custom value or an indication of using the default value
-"""
-
 
 class ProfileEditor(qt.QWidget):
     def __init__(self, parent=None):
@@ -47,7 +42,7 @@ class ProfileEditor(qt.QWidget):
                 else:
                     profile[state_name][param_name[0]] = data
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
-            # TODO update copied-from-but-not-overridden profiles in the editor
+            # TODO update copied-from profiles in the editor using setDefault
 
 
 class ProfileParameter(pg.parametertree.Parameter):
@@ -65,9 +60,16 @@ class ProfileParameter(pg.parametertree.Parameter):
 class StateParameter(pg.parametertree.Parameter):
     def __init__(self, name, profile):
         super().__init__(name=name, type='group', children=[])
+        profile_config = PatchPipetteStateManager.getProfileConfig(profile)
+        if profile_config.get('copyFrom', None):
+            defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
+        else:
+            defaults = {}
         stateClass = PatchPipetteStateManager.getStateClass(name)
         config = PatchPipetteStateManager.getStateConfig(name, profile)
         for param_config in stateClass.parameterTreeConfig():
+            if param_config['name'] in defaults:
+                param_config['default'] = defaults[param_config['name']]
             param = pg.parametertree.Parameter(**param_config)
             param.setValue(config.get(param.name(), param.defaultValue()))
             self.addChild(param)
