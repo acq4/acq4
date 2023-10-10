@@ -108,10 +108,10 @@ class PatchPipetteStateManager(Qt.QObject):
         """
         profileConfig = cls.getProfileConfig(profile)
         config = profileConfig.get(state, {}).copy()
-        copyFrom = profileConfig.get('copyFrom', None)
-        if copyFrom is not None:
+        copyFrom = profileConfig.get('copyFrom', '')
+        if copyFrom != '':
             # mix defaults in with selected profile
-            assert copyFrom in cls.profiles, f"Patch profile {copyFrom} does not exist (requested by {state})"
+            assert copyFrom in cls.profiles, f"Patch profile '{copyFrom}' does not exist (requested by {state})"
             default = cls.getStateConfig(state, copyFrom)
             p = {}
             for paramName in set(list(default.keys()) + list(config.keys())):
