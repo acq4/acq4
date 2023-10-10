@@ -42,9 +42,9 @@ class ProfileEditor(qt.QWidget):
                 else:
                     profile[state_name][param_name[0]] = data
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
-            # TODO update copied-from profiles in the editor using setDefault
+
             if state_name == "copyFrom":
-                pass  # TODO we'll need to update everything!
+                pass  # TODO we'll need to update everything! recursively! maybe just reload the whole thing?
             else:
                 for profile_item in self.param_root:
                     if profile_item.name() == profile_name:
