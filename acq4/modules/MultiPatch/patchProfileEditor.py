@@ -43,6 +43,21 @@ class ProfileEditor(qt.QWidget):
                     profile[state_name][param_name[0]] = data
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
             # TODO update copied-from profiles in the editor using setDefault
+            if state_name == "copyFrom":
+                pass  # TODO we'll need to update everything!
+            else:
+                for profile_item in self.param_root:
+                    if profile_item.name() == profile_name:
+                        continue
+                    if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
+                        for state_item in profile_item:
+                            if state_item.name() == state_name:
+                                for param_item in state_item:
+                                    if param_item.name() == param_name[0]:
+                                        if param_item.valueIsDefault():
+                                            param_item.setValue(data)
+                                        param_item.setDefault(data)
+                                        break
 
 
 class ProfileParameter(pg.parametertree.Parameter):
