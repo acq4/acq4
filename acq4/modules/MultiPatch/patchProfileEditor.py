@@ -43,14 +43,20 @@ class ProfileEditor(qt.QWidget):
                     profile[state_name][param_name[0]] = data
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
 
+            # update display of dependent parameters
             if state_name == "copyFrom":
-                pass  # TODO we'll need to update everything! recursively! maybe just reload the whole thing?
+                for profile_item in self.param_root:
+                    profile_item.reinitialize()
             else:
                 for profile_item in self.param_root:
                     if profile_item.name() == profile_name:
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
                         profile_item.applyDefaults({state_name: {param_name[0]: data}})
+
+    def setTopLevelWindow(self):
+        self.raise_()
+        self.activateWindow()
 
 
 class ProfileParameter(pg.parametertree.Parameter):
@@ -64,6 +70,11 @@ class ProfileParameter(pg.parametertree.Parameter):
         for state in PatchPipetteStateManager.listStates():
             self.addChild(StateParameter(state, profile))
 
+    def reinitialize(self):
+        for child in self:
+            if isinstance(child, StateParameter):
+                child.reinitialize()
+
     def applyDefaults(self, defaults):
         for state in self:
             if state.name() in defaults:
@@ -73,6 +84,8 @@ class ProfileParameter(pg.parametertree.Parameter):
 class StateParameter(pg.parametertree.Parameter):
     def __init__(self, name, profile):
         super().__init__(name=name, type='group', children=[])
+        self._profile = profile
+        self._state = name
         profile_config = PatchPipetteStateManager.getProfileConfig(profile)
         if profile_config.get('copyFrom', None):
             defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
@@ -87,9 +100,19 @@ class StateParameter(pg.parametertree.Parameter):
             param.setValue(config.get(param.name(), param.defaultValue()))
             self.addChild(param)
 
+    def reinitialize(self):
+        profile = self._profile
+        name = self._state
+        profile_config = PatchPipetteStateManager.getProfileConfig(profile)
+        if profile_config.get('copyFrom', None):
+            defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
+        else:
+            defaults = PatchPipetteStateManager.getStateConfig(name, None)
+        self.applyDefaults(defaults)
+
     def applyDefaults(self, defaults):
         for param in self:
             if param.name() in defaults:
-                if param.isDefaultValue():
+                if param.valueIsDefault():
                     param.setValue(defaults[param.name()])
                 param.setDefault(defaults[param.name()])

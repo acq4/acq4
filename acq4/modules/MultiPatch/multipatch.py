@@ -201,6 +201,8 @@ class MultiPatchWindow(Qt.QWidget):
             from .patchProfileEditor import ProfileEditor
             self._profileEditor = ProfileEditor()
             self._profileEditor.show()
+        else:
+            self._profileEditor.setTopLevelWindow()
 
     def setPlotModes(self, modes):
         for ctrl in self.pipCtrls:

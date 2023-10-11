@@ -60,7 +60,7 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
-        self._profileName = None
+        self._profile = None
 
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
@@ -103,10 +103,13 @@ class PatchPipetteStateManager(Qt.QObject):
         cls.profiles[name] = config
 
     @classmethod
-    def getStateConfig(cls, state: str, profile: str):
-        """Return the configuration options for the given state and profile.
+    def getStateConfig(cls, state: str, profile: str|None):
+        """Return the configuration options for the given state and profile, or just the defaults if no profile is specified.
         """
-        profileConfig = cls.getProfileConfig(profile)
+        if profile is None:
+            profileConfig = {}
+        else:
+            profileConfig = cls.getProfileConfig(profile)
         config = profileConfig.get(state, {}).copy()
         copyFrom = profileConfig.get('copyFrom', '')
         if copyFrom != '':
