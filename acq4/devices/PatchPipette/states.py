@@ -1120,6 +1120,8 @@ class PatchPipetteResealState(PatchPipetteState):
         Seconds before reseal attempt exits
     numTestPulseAverage : int
         Number of test pulses to average when measuring resistance
+    slowDetectionThreshold : float
+        Threshold for slow change in pipette resistance (Ohm) to trigger cell detection (default 200 kOhm)
 
     """
 
