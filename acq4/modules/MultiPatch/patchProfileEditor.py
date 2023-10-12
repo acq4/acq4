@@ -76,9 +76,8 @@ class ProfileParameter(pg.parametertree.Parameter):
                 child.reinitialize()
 
     def applyDefaults(self, defaults):
-        for state in self:
-            if state.name() in defaults:
-                state.applyDefaults(defaults[state.name()])
+        for key, val in defaults.items():
+            self.child(key).applyDefaults(val)
 
 
 class StateParameter(pg.parametertree.Parameter):

@@ -1359,3 +1359,4 @@ class PatchPipetteCleanState(PatchPipetteState):
         self.resetPosition()
             
         PatchPipetteState.cleanup(self)
+                                                                                                        
