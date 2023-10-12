@@ -110,8 +110,8 @@ class StateParameter(pg.parametertree.Parameter):
         self.applyDefaults(defaults)
 
     def applyDefaults(self, defaults):
-        for param in self:
-            if param.name() in defaults:
-                if param.valueIsDefault():
-                    param.setValue(defaults[param.name()])
-                param.setDefault(defaults[param.name()])
+        for key, val in defaults.items():
+            param = self.child(key)
+            if param.valueIsDefault():
+                param.setValue(defaults[param.name()])
+            param.setDefault(val)
