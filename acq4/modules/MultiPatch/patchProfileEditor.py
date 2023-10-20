@@ -32,15 +32,10 @@ class ProfileEditor(qt.QWidget):
                 profile[state_name] = data
             else:
                 profile.setdefault(state_name, {})
-                if profile.get("copyFrom", None):
-                    default = PatchPipetteStateManager.getStateConfig(state_name, profile["copyFrom"]).get(param_name[0], None)
-                else:
-                    default = param.defaultValue()
-                if data == default:
-                    if param_name[0] in profile[state_name]:
-                        del profile[state_name][param_name[0]]
-                else:
-                    profile[state_name][param_name[0]] = data
+                profile[state_name].setdefault(param_name[0], data)
+                if not param.valueModifiedSinceResetToDefault():
+                    del profile[state_name][param_name[0]]
+
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
 
             # update display of dependent parameters
