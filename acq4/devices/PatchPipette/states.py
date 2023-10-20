@@ -1,14 +1,16 @@
+import threading
 from collections import deque
 from copy import deepcopy
 
 import numpy as np
 import scipy.stats
 import sys
-import threading
 import time
+from pyqtgraph import disconnect
 from six.moves import range, queue
 
 from acq4 import getManager
+from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
 from acq4.util import ptime
