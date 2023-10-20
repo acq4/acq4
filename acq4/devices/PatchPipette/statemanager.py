@@ -110,12 +110,12 @@ class PatchPipetteStateManager(Qt.QObject):
             config = {}
         else:
             config = cls.getProfileConfig(profile)
-        config = config.get(state, {}).copy()
         copy_from = config.get('copyFrom', None)
         if copy_from:
             defaults = cls.getStateConfig(state, copy_from)
         else:
             defaults = cls.getStateClass(state).defaultConfig()
+        config = config.get(state, {})
         p = {}
         for param in set(list(defaults.keys()) + list(config.keys())):
             p[param] = config.get(param, defaults.get(param, None))
