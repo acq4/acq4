@@ -13,7 +13,6 @@ from acq4.util.debug import printExc
 from acq4.util.future import Future
 from acq4.util import ptime
 from pyqtgraph import disconnect, units
-from pyqtgraph.units import pA, ms
 
 
 class PatchPipetteState(Future):
@@ -64,10 +63,11 @@ class PatchPipetteState(Future):
                         config[c['name']] = c
         for name, c in config.items():
             c['name'] = name
-        # subclasses can decide whether to override default values
+        # subclasses can decide whether to override initial values
         overrides = cls.parameterValueOverrides()
         for name, val in overrides.items():
             config[name]['value'] = val
+            config[name]['default'] = val
 
         return list(config.values())
 

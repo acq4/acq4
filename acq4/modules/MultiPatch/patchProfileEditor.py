@@ -94,7 +94,9 @@ class StateParameter(pg.parametertree.Parameter):
         config = PatchPipetteStateManager.getStateConfig(name, profile)
         for param_config in stateClass.parameterTreeConfig():
             if param_config['name'] in defaults:
+                param_config['value'] = defaults[param_config['name']]
                 param_config['default'] = defaults[param_config['name']]
+            param_config['pinValueToDefault'] = True
             param = pg.parametertree.Parameter(**param_config)
             param.setValue(config.get(param.name(), param.defaultValue()))
             self.addChild(param)
@@ -111,7 +113,4 @@ class StateParameter(pg.parametertree.Parameter):
 
     def applyDefaults(self, defaults):
         for key, val in defaults.items():
-            param = self.child(key)
-            if param.valueIsDefault():
-                param.setValue(defaults[param.name()])
-            param.setDefault(val)
+            self.child(key).setDefault(val)

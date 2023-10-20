@@ -107,20 +107,19 @@ class PatchPipetteStateManager(Qt.QObject):
         """Return the configuration options for the given state and profile, or just the defaults if no profile is specified.
         """
         if profile is None:
-            profileConfig = {}
+            config = {}
         else:
-            profileConfig = cls.getProfileConfig(profile)
-        config = profileConfig.get(state, {}).copy()
-        copyFrom = profileConfig.get('copyFrom', '')
-        if copyFrom != '':
-            # mix defaults in with selected profile
-            assert copyFrom in cls.profiles, f"Patch profile '{copyFrom}' does not exist (requested by {state})"
-            default = cls.getStateConfig(state, copyFrom)
-            p = {}
-            for paramName in set(list(default.keys()) + list(config.keys())):
-                p[paramName] = config.get(paramName, default.get(paramName, None))
-            config = p
-        return config
+            config = cls.getProfileConfig(profile)
+        config = config.get(state, {}).copy()
+        copy_from = config.get('copyFrom', None)
+        if copy_from:
+            defaults = cls.getStateConfig(state, copy_from)
+        else:
+            defaults = cls.getStateClass(state).defaultConfig()
+        p = {}
+        for param in set(list(defaults.keys()) + list(config.keys())):
+            p[param] = config.get(param, defaults.get(param, None))
+        return p
 
     def setProfile(self, profile: str):
         """Set the current patch profile."""
