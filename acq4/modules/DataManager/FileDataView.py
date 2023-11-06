@@ -88,7 +88,7 @@ class FileDataView(Qt.QSplitter):
                 self.addWidget(w)
                 self.widgets.append(w)
                 h = self.size().height()
-                self.setSizes([h*0.8, h*0.2])
+                self.setSizes([int(h*0.8), int(h*0.2)])
             else:
                 self.dictWidget.setData(data._info)
             
