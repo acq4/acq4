@@ -1012,11 +1012,11 @@ class PatchPipetteBreakInState(PatchPipetteState):
         self.monitorTestPulse()
         config = self.config
         if isinstance(config['nPulses'], str):
-            config['nPulses'] = eval(config['nPulses'])
+            config['nPulses'] = eval(config['nPulses'], units.__dict__)
         if isinstance(config['pulseDurations'], str):
-            config['pulseDurations'] = eval(config['pulseDurations'])
+            config['pulseDurations'] = eval(config['pulseDurations'], units.__dict__)
         if isinstance(config['pulsePressures'], str):
-            config['pulsePressures'] = eval(config['pulsePressures'])
+            config['pulsePressures'] = eval(config['pulsePressures'], units.__dict__)
         lastPulse = ptime.time()
         attempt = 0
 
