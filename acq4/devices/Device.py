@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import os
 import traceback
-import weakref
 
 import acq4
 from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
+from acq4.util.optional_weakref import Weakref
 
 
 class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
@@ -30,7 +30,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
-        Device._deviceCreationOrder.append(weakref.ref(self))
+        Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
             
     def name(self):
@@ -160,7 +160,7 @@ class DeviceTask(object):
         operating synchronously.
         """
         self.dev = dev
-        self.__parentTask = weakref.ref(parentTask)
+        self.__parentTask = Weakref(parentTask)
         
     def parentTask(self):
         return self.__parentTask()
@@ -346,7 +346,7 @@ class TaskGui(Qt.QWidget):
         """
         return {}
         
-    def generateTask(self, params: "Dict | None" = None) -> dict:
+    def generateTask(self, params: "dict | None" = None) -> dict:
         """
         This method should convert params' index-values back into task-values, along with any default work non-sequenced
         tasks need. WARNING! Long sequences will not automatically lock the UI or preserve the state of your parameter

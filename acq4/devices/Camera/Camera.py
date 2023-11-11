@@ -409,6 +409,19 @@ class Camera(DAQGeneric, OptomechDevice):
         scopePos = scopeCenter + np.array(position) - camCenter
         return scope.setGlobalPosition(scopePos, speed=speed)
 
+    def getFocusDepth(self):
+        """Return the z-position of the focal plane.
+        """
+        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
+
+    def setFocusDepth(self, z, speed='fast'):
+        """Set the z-position of the focal plane by moving the parent focusing device.
+        """
+        # this is how much the focal plane needs to move (in the global frame)
+        dif = z - self.getFocusDepth()
+        scopez = self.scopeDev.getFocusDepth() + dif
+        return self.scopeDev.setFocusDepth(scopez)
+
     def objectiveChanged(self, obj=None):
         if obj is None:
             obj = self.scopeDev.getObjective()
