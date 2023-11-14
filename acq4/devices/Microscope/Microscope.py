@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import collections
 
 import numpy as np
+import scipy.ndimage
 
 import pyqtgraph as pg
+from pyqtgraph.units import µm
 
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
@@ -211,6 +210,49 @@ class Microscope(Device, OptomechDevice):
         fdpos[2] += dif
         return fd.moveToGlobal(fdpos, speed)
 
+    def acquireZStack(self, imager: "Camera", _range=(0, -100*µm), speed='slow') -> np.ndarray:
+        """Acquire a z-stack of images using the given imager.
+
+        The z-stack is returned as a 3D numpy array.
+        """
+        pass
+
+    def findSurfaceDepth(self, imager: "Camera") -> None:
+        """Set the surface of the sample based on how focused the images are."""
+
+        def center_area(img: np.ndarray) -> Tuple[slice, slice]:
+            """Return a slice that selects the center of the image."""
+            minimum = 50
+            center_w = img.shape[0] // 2
+            start_w = max(min(int(img.shape[0] * 0.4), center_w - minimum), 0)
+            end_w = max(min(int(img.shape[0] * 0.6), center_w + minimum), img.shape[0])
+            center_h = img.shape[1] // 2
+            start_h = max(min(int(img.shape[1] * 0.4), center_h - minimum), 0)
+            end_h = max(min(int(img.shape[1] * 0.6), center_h + minimum), img.shape[1])
+            return (slice(start_w, end_w), slice(start_h, end_h))
+
+        def downsample(arr, n):
+            new_shape = n * (np.array(arr.shape[1:]) / n).astype(int)
+            clipped = arr[:, :new_shape[0], :new_shape[1]]
+            mean1 = clipped.reshape(clipped.shape[0], clipped.shape[1], clipped.shape[2]//n, n).mean(axis=3)
+            mean2 = mean1.reshape(mean1.shape[0], mean1.shape[1]//n, n, mean1.shape[2]).mean(axis=2)
+            return mean2
+
+        def calculate_focus_score(image):
+            # image += np.random.normal(size=image.shape, scale=100)
+            image = scipy.ndimage.laplace(image) / np.mean(image)
+            return image.var()
+
+        z_stack = self.acquireZStack(imager)
+        # normalized = (255 * (z_stack - np.min(z_stack, axis=0)) / np.max(z_stack, axis=0)).astype(np.uint8)
+        filtered = downsample(z_stack, 5)
+        centers = filtered[..., *center_area(filtered[0])]
+        scored = np.array([calculate_focus_score(img) for img in centers])
+        surface = np.argmax(scored > 0.005)
+        if surface == 0:
+            return None
+        # TODO set the surface depth from the frame number
+
     def getSurfaceDepth(self):
         """Return the z-position of the sample surface as marked by the user.
         """
@@ -338,7 +380,6 @@ class Objective(OptomechDevice):
 
     def __repr__(self):
         return "<Objective %s.%s offset=%0.2g,%0.2g scale=%0.2g>" % (self._scope.name(), self.name(), self.offset().x(), self.offset().y(), self.scale().x())
-
 
 
 class ScopeGUI(Qt.QWidget):
