@@ -1,4 +1,5 @@
 import collections
+from typing import Tuple
 
 import numpy as np
 import scipy.ndimage
@@ -210,7 +211,7 @@ class Microscope(Device, OptomechDevice):
         fdpos[2] += dif
         return fd.moveToGlobal(fdpos, speed)
 
-    def acquireZStack(self, imager: "Camera", _range=(0, -100*µm), speed='slow') -> np.ndarray:
+    def acquireZStack(self, imager: "Camera", z_range=(0, -100*µm), speed='slow') -> np.ndarray:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as a 3D numpy array.
@@ -229,7 +230,7 @@ class Microscope(Device, OptomechDevice):
             center_h = img.shape[1] // 2
             start_h = max(min(int(img.shape[1] * 0.4), center_h - minimum), 0)
             end_h = max(min(int(img.shape[1] * 0.6), center_h + minimum), img.shape[1])
-            return (slice(start_w, end_w), slice(start_h, end_h))
+            return slice(start_w, end_w), slice(start_h, end_h)
 
         def downsample(arr, n):
             new_shape = n * (np.array(arr.shape[1:]) / n).astype(int)
@@ -243,15 +244,16 @@ class Microscope(Device, OptomechDevice):
             image = scipy.ndimage.laplace(image) / np.mean(image)
             return image.var()
 
-        z_stack = self.acquireZStack(imager)
-        # normalized = (255 * (z_stack - np.min(z_stack, axis=0)) / np.max(z_stack, axis=0)).astype(np.uint8)
+        z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm))
+        z_stack = self.acquireZStack(imager, z_range, 'fast')
         filtered = downsample(z_stack, 5)
-        centers = filtered[..., *center_area(filtered[0])]
+        centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])
-        surface = np.argmax(scored > 0.005)
+        surface = np.argmax(scored > 0.005)  # arbitrary threshold? seems about right on the test data
         if surface == 0:
             return None
-        # TODO set the surface depth from the frame number
+        # calculate how far the image is within the 400 µm stack depth. assumes linear relationship.
+        self.setSurfaceDepth(z_stack[0] - (400 * µm * surface / z_stack.shape[0]))
 
     def getSurfaceDepth(self):
         """Return the z-position of the sample surface as marked by the user.
@@ -528,8 +530,12 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
+        self.findSurfaceBtn = Qt.QPushButton('Find Surface')
+        self.layout.addWidget(self.findSurfaceBtn, 1, 0)
+        self.findSurfaceBtn.clicked.connect(self.findSurfaceClicked)
+
         self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
-        self.layout.addWidget(self.depthLabel, 1, 0)
+        self.layout.addWidget(self.depthLabel, 2, 0)
 
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
@@ -544,6 +550,9 @@ class ScopeCameraModInterface(CameraModuleInterface):
         focus = self.getDevice().getFocusDepth()
         self.getDevice().setSurfaceDepth(focus)
         self.transformChanged()
+
+    def findSurfaceClicked(self):
+        self.getDevice().findSurfaceDepth(self.mod().getDevice())
 
     def surfaceDepthChanged(self, depth):
         self.surfaceLine.setValue(depth)
