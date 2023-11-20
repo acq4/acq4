@@ -253,7 +253,7 @@ class Microscope(Device, OptomechDevice):
         if surface == 0:
             return None
         # calculate how far the image is within the 400 µm stack depth. assumes linear relationship.
-        self.setSurfaceDepth(z_stack[0] - (400 * µm * surface / z_stack.shape[0]))
+        self.setSurfaceDepth(float(z_range[0] - (400 * µm * surface / z_stack.shape[0])))
 
     def getSurfaceDepth(self):
         """Return the z-position of the sample surface as marked by the user.
