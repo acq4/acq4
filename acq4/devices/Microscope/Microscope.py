@@ -255,12 +255,16 @@ class Microscope(Device, OptomechDevice):
 
         z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm))
         z_stack = self.getZStack(imager, z_range, 'fast')
+        # TODO this will need to call .asarray() once we have CameraTaskResult objects
         filtered = downsample(z_stack, 5)
         centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])
         surface = np.argmax(scored > 0.005)  # arbitrary threshold? seems about right on the test data
         if surface == 0:
             return None
+        # TODO something like this is the correct way, but we don't have CameraTaskResult objects yet
+        # surface_frame = z_stack[surface]
+        # self.setSurfaceDepth(surface_frame.info()['z'])
         # calculate how far the image is within the 400 µm stack depth. assumes linear relationship.
         self.setSurfaceDepth(float(z_range[0] - (400 * µm * surface / z_stack.shape[0])))
 
