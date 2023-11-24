@@ -211,10 +211,19 @@ class Microscope(Device, OptomechDevice):
         fdpos[2] += dif
         return fd.moveToGlobal(fdpos, speed)
 
-    def acquireZStack(self, imager: "Camera", z_range=(0, -100*µm), speed='slow') -> np.ndarray:
+    def getDefaultImager(self):
+        name = self.config.get('defaultImager', None)
+        if name is None:
+            cameras = self.dm.listInterfaces("camera")
+            if len(cameras) == 0:
+                raise RuntimeError("No camera devices available.")
+            name = cameras[0]
+        return self.dm.getDevice(name)
+
+    def getZStack(self, imager: "Camera", z_range=(0, -100 * µm), speed='slow') -> "CameraTaskResult":
         """Acquire a z-stack of images using the given imager.
 
-        The z-stack is returned as a 3D numpy array.
+        The z-stack is returned as CameraTaskResult object.
         """
         pass
 
@@ -245,7 +254,7 @@ class Microscope(Device, OptomechDevice):
             return image.var()
 
         z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm))
-        z_stack = self.acquireZStack(imager, z_range, 'fast')
+        z_stack = self.getZStack(imager, z_range, 'fast')
         filtered = downsample(z_stack, 5)
         centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])
@@ -552,7 +561,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.transformChanged()
 
     def findSurfaceClicked(self):
-        self.getDevice().findSurfaceDepth(self.mod().getDevice())
+        self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
         self.surfaceLine.setValue(depth)
