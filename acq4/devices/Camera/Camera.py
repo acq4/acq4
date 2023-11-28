@@ -974,12 +974,10 @@ class FrameAcquisitionFuture(Future):
         self._frame_count = frame_count
         self._frames = []
         self._lock = threading.Lock()
-        print("connecting sigNewFrame up to future")
         camera.sigNewFrame.connect(self.handleNewFrame)
         self._camera.start(block=True)
 
     def handleNewFrame(self, frame):
-        print("new frame incoming to FrameAcquisitionFuture")
         with self._lock:
             self._frames.append(frame)
             if self._frame_count is not None and len(self._frames) == self._frame_count:
@@ -997,7 +995,6 @@ class FrameAcquisitionFuture(Future):
     def finishNow(self):
         if self.isDone():
             return
-        print("disconnecting sigNewFrame from future")
         self._camera.sigNewFrame.disconnect(self.handleNewFrame)
         self._camera.stop()
         self._taskDone()
