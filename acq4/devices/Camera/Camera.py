@@ -249,7 +249,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """Stop camera and acquisition thread"""
         self.acqThread.stop(block=block)
 
-    def acquireFramesAsync(self, n=1) -> Future:
+    def acquireFrames(self, n=1) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames asynchronously.
 
         This method returns immediately and the frames will be acquired in a background thread.
@@ -261,7 +261,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         return FrameAcquisitionFuture(self, n)
 
-    def acquireFrames(self, n=1, stack=True):
+    def _old_acquireFrames(self, n=1, stack=True):
         """Immediately acquire and return a specific number of frames.
 
         This method blocks until all frames are acquired and may not be supported by all camera
@@ -590,7 +590,7 @@ class CameraTask(DAQGenericTask):
     def fixedAcquisition(self):
         try:
             with self.lock:
-                self.frames = self.dev.acquireFrames(self.fixedFrameCount).asarray()
+                self.frames = self.dev.acquireFrames(self.fixedFrameCount).waitForResult()
         finally:
             if self._dev_needs_restart:
                 self.dev.start()
@@ -807,7 +807,6 @@ class CameraTaskResult:
 
 
 class AcquireThread(Thread):
-
     sigNewFrame = Qt.Signal(object)
     sigShowMessage = Qt.Signal(object)
 
@@ -968,36 +967,39 @@ class AcquireThread(Thread):
 
 
 class FrameAcquisitionFuture(Future):
-    def __init__(self, cam: Camera, n: int|None):
+    def __init__(self, camera: Camera, frame_count: int | None):
+        """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
         super().__init__()
-        self.cam = cam
-        self.n = n
+        self._camera = camera
+        self._frame_count = frame_count
         self._frames = []
         self._lock = threading.Lock()
-        cam.sigNewFrame.connect(self._handleNewFrame)
-        self.cam.start(block=False)
+        print("connecting sigNewFrame up to future")
+        camera.sigNewFrame.connect(self.handleNewFrame)
+        self._camera.start(block=True)
 
-    def _handleNewFrame(self, frame):
+    def handleNewFrame(self, frame):
+        print("new frame incoming to FrameAcquisitionFuture")
         with self._lock:
             self._frames.append(frame)
-            if self.n is not None and len(self._frames) == self.n:
+            if self._frame_count is not None and len(self._frames) == self._frame_count:
                 self.finishNow()
 
-    def result(self):
-        if self.n == 1:
-            return self._frames[0]
+    def waitForResult(self, timeout=None) -> list[Frame]:
+        self.wait(timeout)
         return self._frames
 
     def percentDone(self):
-        if self.n is None:
+        if self._frame_count is None:
             return 0
-        return len(self._frames) / self.n
+        return len(self._frames) / self._frame_count
 
     def finishNow(self):
         if self.isDone():
             return
-        self.cam.sigNewFrame.disconnect(self._handleNewFrame)
-        self.cam.stop()
+        print("disconnecting sigNewFrame from future")
+        self._camera.sigNewFrame.disconnect(self.handleNewFrame)
+        self._camera.stop()
         self._taskDone()
 
 

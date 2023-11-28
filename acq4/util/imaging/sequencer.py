@@ -55,56 +55,64 @@ class ImageSequencerThread(Thread):
             raise
 
     def runSequence(self):
+        # setup
         prot = self.prot
         maxIter = prot["timelapseCount"]
         interval = prot["timelapseInterval"]
         dev = self.prot["imager"].getDevice()
+        running = dev.isRunning()
+        dev.stop()
+        self.holdImagerFocus(True)
+        self.openShutter(True)  # don't toggle shutter between stack frames
+        frames = []
 
-        depths = prot["zStackValues"]
-        iter = 0
-        while True:
-            start = ptime.time()
+        # record
+        try:
+            if prot["zStack"]:
+                depths = prot["zStackValues"]
+                self.setFocusDepth(0, depths, speed='slow')
+                future = dev.acquireFrames(None)
+                print("future has been created")
+                time.sleep(1)
+                self.setFocusDepth(len(depths) - 1, depths, speed='slow')
+                future.finishNow()
+                frames = future.waitForResult()
+                print(f"Z-Stack: {len(frames)} frames captured")
+            else:  # timelapse
+                for _ in range(maxIter):
+                    start = ptime.time()
+                    frames.append(dev.acquireFrames(1).waitForResult()[0])
+                    self.sendStatusMessage(iter, maxIter)
+                    self.sleep(until=start + interval)
+        finally:
+            # cleanup
+            for i, frame in enumerate(frames):
+                self.recordFrame(frame, i)
+            self.openShutter(False)
+            self.holdImagerFocus(False)
+            if running:
+                dev.start()
 
-            running = dev.isRunning()
-            dev.stop()
-            self.holdImagerFocus(True)
-            self.openShutter(True)  # don't toggle shutter between stack frames
-            try:
-                for depthIndex in range(len(depths)):
-                    # Focus motor is unreliable; ask a few times if needed.
-                    for i in range(5):
-                        try:
-                            self.setFocusDepth(depthIndex, depths)
-                            break
-                        except RuntimeError:
-                            if i == 4:
-                                print(
-                                    "Did not reach focus after 5 iterations ({:g} != {:g})".format(
-                                        self.prot["imager"].getDevice().getFocusDepth(), depths[depthIndex]
-                                    )
-                                )
+        # TODO do we need any of this?
+        # while True:
+        #         for depthIndex in range(len(depths)):
+        #             # Focus motor is unreliable; ask a few times if needed.
+        #             for i in range(5):
+        #                 try:
+        #                     self.setFocusDepth(depthIndex, depths)
+        #                     break
+        #                 except RuntimeError:
+        #                     if i == 4:
+        #                         print(
+        #                             "Did not reach focus after 5 iterations ({:g} != {:g})".format(
+        #                                 self.prot["imager"].getDevice().getFocusDepth(), depths[depthIndex]
+        #                             )
+        #                         )
+        #             frame = self.getFrame()
+        #             # check for stop / pause
+        #             self.sleep(until=0)
 
-                    frame = self.getFrame()
-                    self.recordFrame(frame, iter, depthIndex)
-
-                    self.sendStatusMessage(iter, maxIter, depthIndex, depths)
-
-                    # check for stop / pause
-                    self.sleep(until=0)
-
-            finally:
-                self.openShutter(False)
-                self.holdImagerFocus(False)
-                if running:
-                    dev.start()
-
-            iter += 1
-            if maxIter != 0 and iter >= maxIter:
-                break
-
-            self.sleep(until=start + interval)
-
-    def sendStatusMessage(self, iter, maxIter, depthIndex, depths):
+    def sendStatusMessage(self, iter, maxIter, depthIndex=None, depths=None):
         if maxIter == 0:
             itermsg = "iter=%d" % (iter + 1)
         else:
@@ -118,7 +126,7 @@ class ImageSequencerThread(Thread):
 
         self.sigMessage.emit("[ running  %s  %s ]" % (itermsg, depthmsg))
 
-    def setFocusDepth(self, depthIndex, depths):
+    def setFocusDepth(self, depthIndex, depths, speed='fast'):
         imager = self.prot["imager"].getDevice()
         depth = depths[depthIndex]
         if depth is None:
@@ -129,10 +137,10 @@ class ImageSequencerThread(Thread):
         # Avoid hysteresis:
         if depths[0] > depths[-1] and dz > 0:
             # stack goes downward
-            imager.setFocusDepth(depth + 20e-6).wait()
+            imager.setFocusDepth(depth + 20e-6, speed).wait()
         elif depths[0] < depths[-1] and dz < 0:
             # stack goes upward
-            imager.setFocusDepth(depth - 20e-6).wait()
+            imager.setFocusDepth(depth - 20e-6, speed).wait()
 
         imager.setFocusDepth(depth).wait()
 
@@ -169,20 +177,20 @@ class ImageSequencerThread(Thread):
                 self._frame = None
         return frame
 
-    def recordFrame(self, frame, iter, depthIndex):
+    def recordFrame(self, frame, idx):
         # Handle new frame
         dh = self.prot["storageDir"]
-        name = "image_%03d" % iter
+        name = f"image_{idx:03d}"
 
         if self.prot["zStack"]:
             # start or append focus stack
             arrayInfo = [
-                {"name": "Depth", "values": [self.prot["zStackValues"][depthIndex]]},
+                {"name": "Depth", "values": [frame.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()]},
                 {"name": "X"},
                 {"name": "Y"},
             ]
             data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
-            if depthIndex == 0:
+            if idx == 0:
                 self.currentDepthStack = dh.writeFile(data, name, info=frame.info(), appendAxis="Depth")
             else:
                 data.write(self.currentDepthStack.name(), appendAxis="Depth")
