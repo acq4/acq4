@@ -9,8 +9,8 @@ import acq4.util.ptime as ptime
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.util import Qt
-from acq4.util import imaging
+from acq4.util import Qt, imaging
+from acq4.util.future import Future
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
@@ -249,6 +249,18 @@ class Camera(DAQGeneric, OptomechDevice):
         """Stop camera and acquisition thread"""
         self.acqThread.stop(block=block)
 
+    def acquireFramesAsync(self, n=1) -> Future:
+        """Acquire a specific number of frames asynchronously.
+
+        This method returns immediately and the frames will be acquired in a background thread.
+        The return value is a Future object that can be used to retrieve the frames once they
+        have been acquired.
+
+        If n==1, then the Future will return a single Frame object. If n>1, then the Future will
+        return a list of Frame objects.
+        """
+        return FrameAcquisitionFuture(self, n)
+
     def acquireFrames(self, n=1, stack=True):
         """Immediately acquire and return a specific number of frames.
 
@@ -270,11 +282,12 @@ class Camera(DAQGeneric, OptomechDevice):
 
         info = dict(self.getParams(["binning", "exposure", "region", "triggerMode"]))
         ss = self.getScopeState()
+        # TODO this work should not be duplicated here (is in AcquireThread)
         ps = ss["pixelSize"]  # size of CCD pixel
         info["pixelSize"] = [ps[0] * info["binning"][0], ps[1] * info["binning"][1]]
         info["objective"] = ss.get("objective", None)
         info["lightSource"] = ss.get("lightSourceState", None)
-        info["deviceTransform"] = pg.SRTTransform3D(ss["transform"])
+        info["deviceTransform"] = pg.SRTTransform3D(ss["transform"])  # TODO this fails to acconut for camera movement
         info["time"] = ptime.time()
 
         f = Frame(frames, info)
@@ -952,6 +965,40 @@ class AcquireThread(Thread):
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             self.start()
+
+
+class FrameAcquisitionFuture(Future):
+    def __init__(self, cam: Camera, n: int|None):
+        super().__init__()
+        self.cam = cam
+        self.n = n
+        self._frames = []
+        self._lock = threading.Lock()
+        cam.sigNewFrame.connect(self._handleNewFrame)
+        self.cam.start(block=False)
+
+    def _handleNewFrame(self, frame):
+        with self._lock:
+            self._frames.append(frame)
+            if self.n is not None and len(self._frames) == self.n:
+                self.finishNow()
+
+    def result(self):
+        if self.n == 1:
+            return self._frames[0]
+        return self._frames
+
+    def percentDone(self):
+        if self.n is None:
+            return 0
+        return len(self._frames) / self.n
+
+    def finishNow(self):
+        if self.isDone():
+            return
+        self.cam.sigNewFrame.disconnect(self._handleNewFrame)
+        self.cam.stop()
+        self._taskDone()
 
 
 class FixedAcqThread(Thread):
