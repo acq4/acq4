@@ -87,7 +87,7 @@ class ImageSequencerThread(Thread):
                 else:  # timelapse
                     for _ in range(maxIter):
                         start = ptime.time()
-                        frames.append(dev.acquireFrames(1, blocking=True)[0])
+                        frames.append(dev.acquireFrames(1, blocking=True, withBasicCameraControl=True)[0])
                         self.sendStatusMessage(iter, maxIter)
                         self.sleep(until=start + interval)
             finally:
@@ -156,6 +156,7 @@ class ImageSequencerThread(Thread):
             idev.openShutter(open)
 
     def getFrame(self):
+        # TODO this method is unused
         # request next frame
         imager = self.prot["imager"]
         with self.lock:

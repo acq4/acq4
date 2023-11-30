@@ -327,11 +327,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """Return the estimated frame rate of the camera.
         """
         with self.dm.reserveDevices([self]):
-            running = self.isRunning()
-            self.start()
-            frames = self.acquireFrames(10, blocking=True)
-            if not running:
-                self.stop()
+            frames = self.acquireFrames(10, blocking=True, withBasicCameraControl=True)
             frames = [f for f in frames if f.info()["fps"] is not None]
             return sum([f.info()["fps"] for f in frames]) / len(frames)
 
