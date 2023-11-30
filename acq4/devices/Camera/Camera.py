@@ -250,23 +250,23 @@ class Camera(DAQGeneric, OptomechDevice):
         """Stop camera and acquisition thread"""
         self.acqThread.stop(block=block)
 
-    def acquireFrames(self, n=None, blocking=False, with_basic_camera_control=False) -> "FrameAcquisitionFuture":
+    def acquireFrames(self, n=None, blocking=False, withBasicCameraControl=False) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames asynchronously or synchronously, depending on the
         value of *blocking*. If *n* is None, then frames will be acquired until stop() is called.
         """
         if n is None and blocking:
             raise ValueError("Cannot block indefinitely while acquiring unlimited frames.")
-        if with_basic_camera_control and not blocking:
+        if withBasicCameraControl and not blocking:
             raise ValueError("Cannot control camera while acquiring frames asynchronously.")
         running = self.isRunning()
-        if running and with_basic_camera_control:
+        if running and withBasicCameraControl:
             self.stop()
         future = FrameAcquisitionFuture(self, n)
-        if with_basic_camera_control:
+        if withBasicCameraControl:
             self.start()
         if blocking:
             result = future.getResult()
-            if with_basic_camera_control:
+            if withBasicCameraControl:
                 self.stop()
                 if running:
                     self.start()
@@ -991,15 +991,14 @@ class AcquireThread(Thread):
 
 
 class FrameAcquisitionFuture(Future):
-    def __init__(self, camera: Camera, frame_count: int | None, timeout: float = 10):
+    def __init__(self, camera: Camera, frameCount: int | None, timeout: float = 10):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
         super().__init__()
         self._camera = camera
-        self._frame_count = frame_count
+        self._frame_count = frameCount
         self._frames = []
         self._timeout = timeout
-        self._processing_queue = queue.Queue()
-        # TODO get rid of this
+        self._queue = queue.Queue()
         self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True)
         self._thread.start()
 
@@ -1011,7 +1010,7 @@ class FrameAcquisitionFuture(Future):
                 if self.isDone():
                     break
                 try:
-                    frame = self._processing_queue.get_nowait()
+                    frame = self._queue.get_nowait()
                     lastFrameTime = ptime.time()
                 except queue.Empty:
                     try:
@@ -1030,7 +1029,7 @@ class FrameAcquisitionFuture(Future):
             self._camera.acqThread.disconnectCallback(self.handleNewFrame)
 
     def handleNewFrame(self, frame):
-        self._processing_queue.put(frame)
+        self._queue.put(frame)
 
     def getResult(self, timeout=None) -> list[Frame]:
         self.wait(timeout)
