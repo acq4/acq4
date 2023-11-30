@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import traceback
+from contextlib import contextmanager
 
 import acq4
 from acq4.Interfaces import InterfaceMixin
@@ -85,6 +86,14 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         """
         fileName = os.path.join(self.configPath(), filename)
         return self.dm.appendConfigFile(data, fileName)
+
+    @contextmanager
+    def reserved(self):
+        self.reserve()
+        try:
+            yield
+        finally:
+            self.release()
 
     def reserve(self, block=True, timeout=20):
         """Reserve this device globally.

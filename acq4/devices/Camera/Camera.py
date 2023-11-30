@@ -2,6 +2,8 @@ import queue
 import numpy as np
 import threading
 import time
+
+from contextlib import contextmanager
 from six.moves import range
 
 import pyqtgraph as pg
@@ -250,27 +252,36 @@ class Camera(DAQGeneric, OptomechDevice):
         """Stop camera and acquisition thread"""
         self.acqThread.stop(block=block)
 
-    def acquireFrames(self, n=None, blocking=False, withBasicCameraControl=False) -> "FrameAcquisitionFuture":
+    @contextmanager
+    def run(self):
+        """Context manager for starting and stopping camera acquisition thread. If used
+        with non-blocking frame acquisition, this will still exit the context before
+        the frames are necessarily acquired.
+
+        Usage::
+            with camera.run():
+                frames = camera.acquireFrames(10, blocking=True)
+        """
+        running = self.isRunning()
+        if running:
+            self.stop()
+        self.start()
+        try:
+            yield
+        finally:
+            self.stop()
+            if running:
+                self.start()
+
+    def acquireFrames(self, n=None, blocking=False) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames asynchronously or synchronously, depending on the
         value of *blocking*. If *n* is None, then frames will be acquired until stop() is called.
         """
         if n is None and blocking:
             raise ValueError("Cannot block indefinitely while acquiring unlimited frames.")
-        if withBasicCameraControl and not blocking:
-            raise ValueError("Cannot control camera while acquiring frames asynchronously.")
-        running = self.isRunning()
-        if running and withBasicCameraControl:
-            self.stop()
         future = FrameAcquisitionFuture(self, n)
-        if withBasicCameraControl:
-            self.start()
         if blocking:
-            result = future.getResult()
-            if withBasicCameraControl:
-                self.stop()
-                if running:
-                    self.start()
-            return result
+            return future.getResult()
         return future
 
     def _old_acquireFrames(self, n=1, stack=True):
@@ -326,8 +337,9 @@ class Camera(DAQGeneric, OptomechDevice):
     def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera.
         """
-        with self.dm.reserveDevices([self]):
-            frames = self.acquireFrames(10, blocking=True, withBasicCameraControl=True)
+        with self.reserved():
+            with self.run():
+                frames = self.acquireFrames(10, blocking=True)
             frames = [f for f in frames if f.info()["fps"] is not None]
             return sum([f.info()["fps"] for f in frames]) / len(frames)
 
@@ -613,6 +625,7 @@ class CameraTask(DAQGenericTask):
                 self.frames = self.dev.acquireFrames(self.fixedFrameCount, blocking=True)
         finally:
             if self._dev_needs_restart:
+                # TODO does this need to stop then start?
                 self.dev.start()
                 self._dev_needs_restart = False
 
@@ -1028,6 +1041,8 @@ class FrameAcquisitionFuture(Future):
         self._queue.put(frame)
 
     def getResult(self, timeout=None) -> list[Frame]:
+        if timeout is None and self._frame_count is None and not self.isDone():
+            raise ValueError("Must specify a timeout when still acquiring an unlimited number of frames.")
         self.wait(timeout)
         return self._frames
 

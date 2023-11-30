@@ -51,7 +51,7 @@ class ImageSequencerThread(Thread):
         try:
             self.runSequence()
         except Exception as e:
-            if hasattr(e, 'message') and e.message == "stopped":
+            if hasattr(e, 'message') and e.message == "stopped":  # TODO this should be a unique exception
                 return
             raise
 
@@ -60,34 +60,34 @@ class ImageSequencerThread(Thread):
         prot = self.prot
         maxIter = prot["timelapseCount"]
         interval = prot["timelapseInterval"]
-        dev = self.prot["imager"].getDevice()
-        running = dev.isRunning()
-        dev.stop()
+        imager = self.prot["imager"].getDevice()
+        running = imager.isRunning()
+        imager.stop()
         self.holdImagerFocus(True)
         self.openShutter(True)  # don't toggle shutter between stack frames
         frames = []
 
         # record
-        with Manager.getManager().reserveDevices([dev, dev.parentDevice()]):
+        # TODO lock all the devices in this optical path
+        with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):
             try:
                 if prot["zStack"]:
                     depths = prot["zStackValues"]
-                    # TODO lock the devices in this optical path
                     self.setFocusDepth(0, depths, speed='fast')
-                    fps = dev.getEstimatedFrameRate()
+                    fps = imager.getEstimatedFrameRate()
                     meters_per_frame = abs(depths[0] - depths[-1]) / (len(depths) - 1)
                     speed = meters_per_frame * fps
-                    future = dev.acquireFrames()
-                    dev.start()
-                    self.setFocusDepth(len(depths) - 1, depths, speed=speed)
-                    future.stop()
-                    frames = future.getResult()
-                    dev.stop()
+                    future = imager.acquireFrames()
+                    with imager.run():
+                        self.setFocusDepth(len(depths) - 1, depths, speed=speed)
+                        future.stop()
+                        frames = future.getResult(timeout=10)
                     # TODO trim to get linear spacing?
                 else:  # timelapse
                     for _ in range(maxIter):
                         start = ptime.time()
-                        frames.append(dev.acquireFrames(1, blocking=True, withBasicCameraControl=True)[0])
+                        with imager.run():
+                            frames.append(imager.acquireFrames(1, blocking=True)[0])
                         self.sendStatusMessage(iter, maxIter)
                         self.sleep(until=start + interval)
             finally:
@@ -97,7 +97,7 @@ class ImageSequencerThread(Thread):
                 self.openShutter(False)
                 self.holdImagerFocus(False)
                 if running:
-                    dev.start()
+                    imager.start()
 
         # TODO do we need any of this?
         #                 except RuntimeError:
