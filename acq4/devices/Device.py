@@ -227,7 +227,6 @@ class DeviceTask(object):
         """
         return [], []
 
-    
     def start(self):
         """
         This method instructs the device to begin execution of the task.

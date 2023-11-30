@@ -194,7 +194,7 @@ class Camera(DAQGeneric, OptomechDevice):
         raise NotImplementedError("Function must be reimplemented in subclass.")
 
     def startCamera(self):
-        """Calls the camera driver to start the camera's acquisition."""
+        """Calls the camera driver to start the camera's acquisition. Call start instead of this to actually record frames."""
         raise NotImplementedError("Function must be reimplemented in subclass.")
 
     def stopCamera(self):
@@ -1025,7 +1025,7 @@ class FrameAcquisitionFuture(Future):
                 self._frames.append(frame)
                 if self._frame_count is not None and len(self._frames) >= self._frame_count:
                     self._taskDone()
-            
+
         finally:
             self._camera.acqThread.disconnectCallback(self.handleNewFrame)
 

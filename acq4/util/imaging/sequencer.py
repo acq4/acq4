@@ -6,6 +6,7 @@ from acq4.util import Qt, ptime
 from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
 import acq4.Manager as Manager
+from acq4.util.future import Future
 
 SequencerTemplate = Qt.importTemplate(".sequencerTemplate")
 
