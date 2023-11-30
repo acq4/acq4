@@ -347,7 +347,7 @@ class CameraInterface(CameraModuleInterface):
 
     def takeImage(self, closeShutter=None):
         # closeShutter is used for laser scanning devices; we can ignore it here.
-        return self.getDevice().acquireFrames(1).waitForResult()[0]
+        return self.getDevice().acquireFrames(1, blocking=True)[0]
 
             
 class CameraItemGroup(DeviceTreeItemGroup):

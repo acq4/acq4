@@ -67,40 +67,38 @@ class ImageSequencerThread(Thread):
         frames = []
 
         # record
-        try:
-            if prot["zStack"]:
-                depths = prot["zStackValues"]
-                self.setFocusDepth(0, depths, speed='slow')
-                future = dev.acquireFrames(None)
-                print("future has been created")
-                time.sleep(1)
-                self.setFocusDepth(len(depths) - 1, depths, speed='slow')
-                future.finishNow()
-                frames = future.waitForResult()
-                print(f"Z-Stack: {len(frames)} frames captured")
-            else:  # timelapse
-                for _ in range(maxIter):
-                    start = ptime.time()
-                    frames.append(dev.acquireFrames(1).waitForResult()[0])
-                    self.sendStatusMessage(iter, maxIter)
-                    self.sleep(until=start + interval)
-        finally:
-            # cleanup
-            for i, frame in enumerate(frames):
-                self.recordFrame(frame, i)
-            self.openShutter(False)
-            self.holdImagerFocus(False)
-            if running:
-                dev.start()
+        with Manager.getManager().reserveDevices([dev, dev.parentDevice()]):
+            try:
+                if prot["zStack"]:
+                    depths = prot["zStackValues"]
+                    # TODO lock the devices in this optical path
+                    self.setFocusDepth(0, depths, speed='fast')
+                    fps = dev.getEstimatedFrameRate()
+                    meters_per_frame = abs(depths[0] - depths[-1]) / (len(depths) - 1)
+                    speed = meters_per_frame * fps
+                    future = dev.acquireFrames()
+                    dev.start()
+                    self.setFocusDepth(len(depths) - 1, depths, speed=speed)
+                    future.stop()
+                    frames = future.getResult()
+                    dev.stop()
+                    # TODO trim to get linear spacing?
+                else:  # timelapse
+                    for _ in range(maxIter):
+                        start = ptime.time()
+                        frames.append(dev.acquireFrames(1, blocking=True)[0])
+                        self.sendStatusMessage(iter, maxIter)
+                        self.sleep(until=start + interval)
+            finally:
+                # cleanup
+                for i, frame in enumerate(frames):
+                    self.recordFrame(frame, i)
+                self.openShutter(False)
+                self.holdImagerFocus(False)
+                if running:
+                    dev.start()
 
         # TODO do we need any of this?
-        # while True:
-        #         for depthIndex in range(len(depths)):
-        #             # Focus motor is unreliable; ask a few times if needed.
-        #             for i in range(5):
-        #                 try:
-        #                     self.setFocusDepth(depthIndex, depths)
-        #                     break
         #                 except RuntimeError:
         #                     if i == 4:
         #                         print(
@@ -108,9 +106,6 @@ class ImageSequencerThread(Thread):
         #                                 self.prot["imager"].getDevice().getFocusDepth(), depths[depthIndex]
         #                             )
         #                         )
-        #             frame = self.getFrame()
-        #             # check for stop / pause
-        #             self.sleep(until=0)
 
     def sendStatusMessage(self, iter, maxIter, depthIndex=None, depths=None):
         if maxIter == 0:
