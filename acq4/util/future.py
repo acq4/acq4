@@ -288,4 +288,3 @@ class MultiFuture(Future):
 
     def currentState(self):
         return "; ".join([f.currentState() or '' for f in self.futures])
-

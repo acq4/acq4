@@ -15,7 +15,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from acq4.util.future import MultiFuture
+from acq4.util.future import Future, MultiFuture
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
 
@@ -220,14 +220,16 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Camera", z_range=(0, -100 * µm), speed='slow') -> "CameraTaskResult":
+    def getZStack(self, imager: "Device", z_range: tuple[float]) -> Future:
         """Acquire a z-stack of images using the given imager.
 
-        The z-stack is returned as CameraTaskResult object.
+        The z-stack is returned as frames.
         """
-        pass
+        from acq4.util.imaging.sequencer import runZStack
 
-    def findSurfaceDepth(self, imager: "Camera") -> None:
+        return runZStack(imager, z_range)
+
+    def findSurfaceDepth(self, imager: "Device") -> None:
         """Set the surface of the sample based on how focused the images are."""
 
         def center_area(img: np.ndarray) -> Tuple[slice, slice]:
@@ -253,20 +255,17 @@ class Microscope(Device, OptomechDevice):
             image = scipy.ndimage.laplace(image) / np.mean(image)
             return image.var()
 
-        z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm))
-        z_stack = self.getZStack(imager, z_range, 'fast')
-        # TODO this will need to call .asarray() once we have CameraTaskResult objects
-        filtered = downsample(z_stack, 5)
+        z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm), 1 * µm)
+        z_stack = self.getZStack(imager, z_range, 'fast').getResult()
+        filtered = downsample(np.array([f.data() for f in z_stack]), 5)
         centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])
         surface = np.argmax(scored > 0.005)  # arbitrary threshold? seems about right on the test data
         if surface == 0:
-            return None
-        # TODO something like this is the correct way, but we don't have CameraTaskResult objects yet
-        # surface_frame = z_stack[surface]
-        # self.setSurfaceDepth(surface_frame.info()['z'])
-        # calculate how far the image is within the 400 µm stack depth. assumes linear relationship.
-        self.setSurfaceDepth(float(z_range[0] - (400 * µm * surface / z_stack.shape[0])))
+            return
+
+        surface_frame = z_stack[surface]
+        self.setSurfaceDepth(surface_frame.info()['Depth'])
 
     def getSurfaceDepth(self):
         """Return the z-position of the sample surface as marked by the user.

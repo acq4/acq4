@@ -56,6 +56,9 @@ class ImageSequencerThread(Thread):
     Used for collecting Z stacks and tiled mosaics.
     """
 
+    class StopException(Exception):
+        pass
+
     sigMessage = Qt.Signal(object)  # message
 
     def __init__(self):
@@ -85,10 +88,8 @@ class ImageSequencerThread(Thread):
     def run(self):
         try:
             self.runSequence()
-        except Exception as e:
-            if hasattr(e, 'message') and e.message == "stopped":  # TODO this should be a unique exception
-                return
-            raise
+        except self.StopException:
+            return
 
     def runSequence(self):
         # setup
@@ -139,18 +140,13 @@ class ImageSequencerThread(Thread):
         #                             )
         #                         )
 
-    def sendStatusMessage(self, iteration, maxIter, depthIndex=None, depths=None):
+    def sendStatusMessage(self, iteration, maxIter):
         if maxIter == 0:
             itermsg = f"iter={iteration + 1}"
         else:
             itermsg = f"iter={iteration + 1}/{maxIter}"
 
-        if depthIndex is None or depths[depthIndex] is None:
-            depthmsg = ""
-        else:
-            depthmsg = f"depth={pg.siFormat(depths[depthIndex], suffix='m')} {depthIndex + 1}/{len(depths)}"
-
-        self.sigMessage.emit(f"[ running  {itermsg}  {depthmsg} ]")
+        self.sigMessage.emit(f"[ running  {itermsg} ]")
 
     def setFocusDepth(self, depth: float, direction: float, speed='fast'):
         imager = self.prot["imager"]
@@ -214,7 +210,7 @@ class ImageSequencerThread(Thread):
         while True:
             with self.lock:
                 if self._stop:
-                    raise Exception("stopped")
+                    raise self.StopException("stopped")
                 paused = self._paused
                 has_frames = len(self._frames) > 0
             if paused:
@@ -306,10 +302,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             start = self.ui.zStartSpin.value()
             end = self.ui.zEndSpin.value()
             spacing = self.ui.zSpacingSpin.value()
-            if end < start:
-                prot["zStackRangeArgs"] = start, end, -spacing
-            else:
-                prot["zStackRangeArgs"] = start, end, spacing
+            prot["zStackRangeArgs"] = (start, end, spacing)
         else:
             prot["zStackRangeArgs"] = None
 
@@ -373,13 +366,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         else:
             itermsg = "iter=0"
 
-        if prot["zStack"]:
-            start, end, step = prot['zStackRangeArgs']
-            depthmsg = f"depth=0/{int(np.round(abs((start - end) / step)))}"
-        else:
-            depthmsg = ""
-
-        msg = "[ stopped  %s %s ]" % (itermsg, depthmsg)
+        msg = f"[ stopped  {itermsg} ]"
         self.ui.statusLabel.setText(msg)
 
     def setStartClicked(self):
