@@ -11,6 +11,45 @@ from acq4.util.future import Future
 SequencerTemplate = Qt.importTemplate(".sequencerTemplate")
 
 
+def runZStack(imager, z_range_args) -> Future:
+    """Acquire a Z stack from the given imager.
+
+    Args:
+        imager: Imager instance
+        z_range_args: (start, end, step)
+
+    Returns:
+        Future: Future object that will contain the frames once the acquisition is complete.
+    """
+    return ImageSequencerFuture({
+        "imager": imager,
+        "zStack": True,
+        "zStackRangeArgs": z_range_args,
+        "timelapseCount": 1,
+        "timelapseInterval": 0,
+        "save": False,
+    })
+
+
+class ImageSequencerFuture(Future):
+    def __init__(self, protocol):
+        Future.__init__(self)
+        self._protocol = protocol
+        self._thread = ImageSequencerThread()
+        self._thread.finished.connect(self._threadFinished)
+        self._thread.start(protocol)
+
+    def percentDone(self):
+        return 100 if self.isDone() else 0
+
+    def _threadFinished(self):
+        self._taskDone()
+
+    def getResult(self, timeout=None):
+        self.wait(timeout)
+        return self._thread.getResult()
+
+
 class ImageSequencerThread(Thread):
     """Background thread that controls image acquisition / stage motion sequences.
 
@@ -23,7 +62,7 @@ class ImageSequencerThread(Thread):
         Thread.__init__(self)
         self.prot = None
         self._stop = False
-        self._frame = None
+        self._frames = None
         self._paused = False
         self.lock = Mutex(recursive=True)
 
@@ -43,10 +82,6 @@ class ImageSequencerThread(Thread):
         with self.lock:
             self._paused = p
 
-    def newFrame(self, frame):
-        with self.lock:
-            self._frame = frame
-
     def run(self):
         try:
             self.runSequence()
@@ -60,44 +95,40 @@ class ImageSequencerThread(Thread):
         prot = self.prot
         maxIter = prot["timelapseCount"]
         interval = prot["timelapseInterval"]
-        imager = self.prot["imager"].getDevice()
-        running = imager.isRunning()
-        imager.stop()
+        imager = self.prot["imager"]
         self.holdImagerFocus(True)
         self.openShutter(True)  # don't toggle shutter between stack frames
-        frames = []
+        self._frames = []
 
         # record
-        # TODO lock all the devices in this optical path
-        with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):
+        with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
             try:
                 if prot["zStack"]:
-                    depths = prot["zStackValues"]
-                    self.setFocusDepth(0, depths, speed='fast')
+                    start, end, step = prot["zStackRangeArgs"]
+                    direction = start - end
+                    self.setFocusDepth(start, direction)
                     fps = imager.getEstimatedFrameRate()
-                    meters_per_frame = abs(depths[0] - depths[-1]) / (len(depths) - 1)
+                    meters_per_frame = abs(step)
                     speed = meters_per_frame * fps
                     future = imager.acquireFrames()
                     with imager.run():
-                        self.setFocusDepth(len(depths) - 1, depths, speed=speed)
+                        self.setFocusDepth(end, direction, speed=speed)
                         future.stop()
-                        frames = future.getResult(timeout=10)
-                    # TODO trim to get linear spacing?
+                        self._frames = future.getResult(timeout=10)
+                    # TODO trim to get linear spacing? but the MockStage/Camera are so not giving me usable data T_T
                 else:  # timelapse
-                    for _ in range(maxIter):
+                    for i in range(maxIter):
                         start = ptime.time()
+                        # TODO oops; we need both at once. handle timelapse of zstacks
                         with imager.run():
-                            frames.append(imager.acquireFrames(1, blocking=True)[0])
-                        self.sendStatusMessage(iter, maxIter)
+                            self._frames.append(imager.acquireFrames(1, blocking=True)[0])
+                        self.sendStatusMessage(i, maxIter)
                         self.sleep(until=start + interval)
             finally:
-                # cleanup
-                for i, frame in enumerate(frames):
-                    self.recordFrame(frame, i)
+                if prot["save"]:
+                    self.saveResults()
                 self.openShutter(False)
                 self.holdImagerFocus(False)
-                if running:
-                    imager.start()
 
         # TODO do we need any of this?
         #                 except RuntimeError:
@@ -108,33 +139,31 @@ class ImageSequencerThread(Thread):
         #                             )
         #                         )
 
-    def sendStatusMessage(self, iter, maxIter, depthIndex=None, depths=None):
+    def sendStatusMessage(self, iteration, maxIter, depthIndex=None, depths=None):
         if maxIter == 0:
-            itermsg = "iter=%d" % (iter + 1)
+            itermsg = f"iter={iteration + 1}"
         else:
-            itermsg = "iter=%d/%s" % (iter + 1, maxIter)
+            itermsg = f"iter={iteration + 1}/{maxIter}"
 
         if depthIndex is None or depths[depthIndex] is None:
             depthmsg = ""
         else:
-            depthstr = pg.siFormat(depths[depthIndex], suffix="m")
-            depthmsg = "depth=%s %d/%d" % (depthstr, depthIndex + 1, len(depths))
+            depthmsg = f"depth={pg.siFormat(depths[depthIndex], suffix='m')} {depthIndex + 1}/{len(depths)}"
 
-        self.sigMessage.emit("[ running  %s  %s ]" % (itermsg, depthmsg))
+        self.sigMessage.emit(f"[ running  {itermsg}  {depthmsg} ]")
 
-    def setFocusDepth(self, depthIndex, depths, speed='fast'):
-        imager = self.prot["imager"].getDevice()
-        depth = depths[depthIndex]
+    def setFocusDepth(self, depth: float, direction: float, speed='fast'):
+        imager = self.prot["imager"]
         if depth is None:
             return
 
         dz = depth - imager.getFocusDepth()
 
         # Avoid hysteresis:
-        if depths[0] > depths[-1] and dz > 0:
+        if direction > 0 and dz > 0:
             # stack goes downward
             imager.setFocusDepth(depth + 20e-6, speed).wait()
-        elif depths[0] < depths[-1] and dz < 0:
+        elif direction < 0 and dz < 0:
             # stack goes upward
             imager.setFocusDepth(depth - 20e-6, speed).wait()
 
@@ -143,7 +172,7 @@ class ImageSequencerThread(Thread):
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.
         """
-        idev = self.prot["imager"].getDevice()
+        idev = self.prot["imager"]
         fdev = idev.getFocusDevice()
         if fdev is None:
             raise Exception("Device %s is not connected to a focus controller." % idev)
@@ -151,28 +180,9 @@ class ImageSequencerThread(Thread):
             fdev.setHolding(hold)
 
     def openShutter(self, open):
-        idev = self.prot["imager"].getDevice()
+        idev = self.prot["imager"]
         if hasattr(idev, "openShutter"):
             idev.openShutter(open)
-
-    def getFrame(self):
-        # TODO this method is unused
-        # request next frame
-        imager = self.prot["imager"]
-        with self.lock:
-            # clear out any previously received frames
-            self._frame = None
-
-        frame = imager.takeImage(closeShutter=False)  # we'll handle the shutter elsewhere
-
-        if frame is None:
-            # wait for frame to arrive by signal
-            # (camera and LSM imagers behave differently here; this behavior needs to be made consistent)
-            self.sleep(until="frame")
-            with self.lock:
-                frame = self._frame
-                self._frame = None
-        return frame
 
     def recordFrame(self, frame, idx):
         # Handle new frame
@@ -206,12 +216,12 @@ class ImageSequencerThread(Thread):
                 if self._stop:
                     raise Exception("stopped")
                 paused = self._paused
-                frame = self._frame
+                has_frames = len(self._frames) > 0
             if paused:
                 wait = 0.1
             else:
                 if until == "frame":
-                    if frame is not None:
+                    if has_frames:
                         return
                     wait = 0.1
                 else:
@@ -220,6 +230,13 @@ class ImageSequencerThread(Thread):
                     if wait <= 0:
                         return
             time.sleep(min(0.1, wait))
+
+    def getResult(self):
+        return self._frames
+
+    def saveResults(self):
+        for i, f in enumerate(self._frames):
+            self.recordFrame(f, i)
 
 
 class ImageSequencerCtrl(Qt.QWidget):
@@ -269,15 +286,11 @@ class ImageSequencerCtrl(Qt.QWidget):
             return None
         else:
             name = self.ui.deviceCombo.currentText()
-            return self.mod().interfaces[name]
+            return self.mod().interfaces[name].getDevice()
 
     def stateChanged(self, name, value):
         if name == "deviceCombo":
-            if self.imager is not None:
-                pg.disconnect(self.imager.sigNewFrame, self.newFrame)
             imager = self.selectedImager()
-            if imager is not None:
-                imager.sigNewFrame.connect(self.newFrame)
             self.imager = imager
         self.updateStatus()
 
@@ -294,11 +307,11 @@ class ImageSequencerCtrl(Qt.QWidget):
             end = self.ui.zEndSpin.value()
             spacing = self.ui.zSpacingSpin.value()
             if end < start:
-                prot["zStackValues"] = list(np.arange(start, end, -spacing))
+                prot["zStackRangeArgs"] = start, end, -spacing
             else:
-                prot["zStackValues"] = list(np.arange(start, end, spacing))
+                prot["zStackRangeArgs"] = start, end, spacing
         else:
-            prot["zStackValues"] = [None]
+            prot["zStackRangeArgs"] = None
 
         if prot["timelapse"]:
             prot["timelapseCount"] = self.ui.iterationsSpin.value()
@@ -329,6 +342,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             del dhinfo["imager"]
             dh.setInfo(dhinfo)
             prot["storageDir"] = dh
+            prot["save"] = True
             self.ui.startBtn.setText("Stop")
             self.ui.zStackGroup.setEnabled(False)
             self.ui.timelapseGroup.setEnabled(False)
@@ -355,32 +369,27 @@ class ImageSequencerCtrl(Qt.QWidget):
     def updateStatus(self):
         prot = self.makeProtocol()
         if prot["timelapse"]:
-            itermsg = "iter=0/%d" % prot["timelapseCount"]
+            itermsg = f"iter=0/{prot['timelapseCount']}"
         else:
             itermsg = "iter=0"
 
         if prot["zStack"]:
-            depthmsg = "depth=0/%d" % (len(prot["zStackValues"]))
+            start, end, step = prot['zStackRangeArgs']
+            depthmsg = f"depth=0/{int(np.round(abs((start - end) / step)))}"
         else:
             depthmsg = ""
 
         msg = "[ stopped  %s %s ]" % (itermsg, depthmsg)
         self.ui.statusLabel.setText(msg)
 
-    def newFrame(self, iface, frame):
-        self.thread.newFrame(frame)
-
     def setStartClicked(self):
         dev = self.selectedImager()
         if dev is None:
             raise Exception("Must select an imaging device first.")
-        dev = dev.getDevice()
         self.ui.zStartSpin.setValue(dev.getFocusDepth())
 
     def setEndClicked(self):
         dev = self.selectedImager()
         if dev is None:
             raise Exception("Must select an imaging device first.")
-        dev = dev.getDevice()
         self.ui.zEndSpin.setValue(dev.getFocusDepth())
-
