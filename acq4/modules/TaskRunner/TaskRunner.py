@@ -1026,7 +1026,6 @@ class TaskThread(Thread):
             gc.collect()
 
         prof = Profiler("TaskRunner.TaskThread.runOnce", disabled=True, delayed=False)
-        startTime = ptime.time()
         if params is None:
             params = {}
 

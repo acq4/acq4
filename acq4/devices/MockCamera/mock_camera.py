@@ -365,7 +365,7 @@ class MockCameraTask(CameraTask):
         sampleRate = cmd["rate"]
 
         data = np.zeros(cmd["numPts"], dtype=np.uint8)
-        for f in self.frames:
+        for f in self._future.peekAtResults():
             t = f.info()["time"]
             exp = f.info()["exposure"]
             i0 = int((t - start) * sampleRate)
