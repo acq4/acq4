@@ -23,6 +23,17 @@ class Future(Qt.QObject):
         """Raised by wait() if the timeout period elapses.
         """
 
+    @classmethod
+    def wrap(cls, func):
+        """Decorator to wrap a function in a future.
+        """
+        @functools.wraps(func)
+        def wrapper(*args, **kwds):
+            future = cls()
+            future.executeInThread(func, args, kwds)
+            return future
+        return wrapper
+
     def __init__(self):
         Qt.QObject.__init__(self)
         
@@ -35,7 +46,28 @@ class Future(Qt.QObject):
         self._stopRequested = False
         self._state = 'starting'
         self._errorMonitorThread = None
+        self._executingThread = None
+        self._returnVal = None
         self.finishedEvent = threading.Event()
+
+    def executeInThread(self, func, args, kwds):
+        """Execute the specified function in a separate thread.
+
+        The function should call _taskDone() when finished (or raise an exception).
+        """
+        self._executingThread = threading.Thread(target=self._executeInThread, args=(func, args, kwds), daemon=True)
+        self._executingThread.start()
+
+    def _executeInThread(self, func, args, kwds):
+        try:
+            self._returnVal = func(*args, **kwds)
+            self._taskDone()
+        except Exception as exc:
+            self._taskDone(error=str(exc), excInfo=sys.exc_info())
+
+    def getResult(self, timeout=None):
+        self.wait(timeout)
+        return self._returnVal
 
     def currentState(self):
         """Return the current state of this future.
@@ -234,7 +266,6 @@ class Future(Qt.QObject):
             except Exception as exc2:
                 formattedMsg = message + f" [additional error formatting error message: {exc2}]"
             raise RuntimeError(formattedMsg) from exc
-
 
 
 class _FuturePollThread(threading.Thread):

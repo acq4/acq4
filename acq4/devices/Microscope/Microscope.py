@@ -1,5 +1,5 @@
 import collections
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import scipy.ndimage
@@ -18,6 +18,7 @@ from acq4.util.debug import printExc
 from acq4.util.future import Future, MultiFuture
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
+Number = Union[int, float, np.number]
 
 
 class Microscope(Device, OptomechDevice):
@@ -220,7 +221,7 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range: tuple[float]) -> Future:
+    def getZStack(self, imager: "Device", z_range: tuple[Number]) -> Future:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
@@ -229,6 +230,7 @@ class Microscope(Device, OptomechDevice):
 
         return runZStack(imager, z_range)
 
+    @Future.wrap
     def findSurfaceDepth(self, imager: "Device") -> None:
         """Set the surface of the sample based on how focused the images are."""
 
@@ -256,7 +258,7 @@ class Microscope(Device, OptomechDevice):
             return image.var()
 
         z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm), 1 * µm)
-        z_stack = self.getZStack(imager, z_range, 'fast').getResult()
+        z_stack = self.getZStack(imager, z_range).getResult()
         filtered = downsample(np.array([f.data() for f in z_stack]), 5)
         centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])
@@ -267,7 +269,7 @@ class Microscope(Device, OptomechDevice):
         surface_frame = z_stack[surface]
         self.setSurfaceDepth(surface_frame.info()['Depth'])
 
-    def getSurfaceDepth(self):
+    def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.
         """
         return self._surfaceDepth
