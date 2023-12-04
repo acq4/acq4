@@ -9,6 +9,8 @@ from acq4.Manager import getManager
 from acq4.util import Qt
 from acq4.util.image_registration import imageTemplateMatch
 from .pipette_detection import TemplateMatchPipetteDetector
+from ...util.future import Future
+from ...util.imaging.sequencer import runZStack
 
 
 class PipetteTracker(object):
@@ -174,125 +176,41 @@ class PipetteTracker(object):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()["pixelSize"][0] * 100
 
+    @Future.wrap
     def takeReferenceFrames(
-        self, zRange=None, zStep=None, imager=None, average=4, tipLength=None, minFocusAccuracy=500e-9
+        self, _future: Future, zRange=None, zStep=None, imager=None, tipLength=None
     ):
         """Collect a series of images of the pipette tip at various focal depths.
 
         The collected images are used as reference templates for determining the most likely location 
         and focal depth of the tip after the calibration is no longer valid.
 
-        The focus first is moved in +z by half of *zRange*, then stepped downward by *zStep* until the
-        entire *zRange* is covered. Images of the pipette tip are acquired and stored at each step.
-
         This method assumes that the tip is in focus near the center of the camera frame, and that its
         position is well-calibrated. Ideally, the illumination is flat and the area surrounding the tip
         is free of any artifacts.
         """
         imager = self._getImager(imager)
-
-        # Take an initial frame with the tip in focus.
         centerFrame = self.takeFrame()
-
-        if tipLength is None:
-            tipLength = self.suggestTipLength(centerFrame)
-
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength * 0.15, tipLength=tipLength)
+        center = centerFrame.data()[0, minImgPos[0]: maxImgPos[0], minImgPos[1]: maxImgPos[1]]
         if zRange is None:
-            zRange = tipLength * 1.5
+            zRange = 80e-6
+        zStart = self.dev.tipPosition()[2] + zRange / 2
+        zEnd = self.dev.tipPosition()[2] - zRange / 2
         if zStep is None:
-            zStep = zRange / 30.0
-
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(
-            centerFrame, padding=tipLength * 0.15, tipLength=tipLength
-        )
-        center = centerFrame.data()[0, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
-
-        # Decide how many frames to collect and at what z depths
-        nFrames = (int(zRange / zStep) // 2) * 2
-        pos = self.dev.globalPosition()
-        zStart = pos[2] + zStep * (nFrames // 2)
-        frames = []
-        bg_frames = []
-        corr = []
-
-        print("Collecting %d frames of %0.2fum tip length at %0.2fum resolution." % (nFrames, tipLength*1e6, zStep*1e6))
-
-        # Stop camera if it is currently running
-        restart = False
-        if imager.isRunning():
-            restart = True
-            imager.stop()
-
-        scope = self.dev.scopeDevice()
-        try:
-            with pg.ProgressDialog("Acquiring reference frames...", 0, nFrames * 2 + 1) as dlg:
-                # collect 2 stacks of images (second stack is for background subtraction)
-                for j in range(2):
-                    # Set initial focus above start point to reduce hysteresis in focus mechanism
-                    scope.setFocusDepth(zStart + 10e-6).wait()
-
-                    # Acquire multiple frames at different depths
-                    for i in range(nFrames):
-                        # pos[2] = zStart - zStep * i
-                        # self.dev._moveToGlobal(pos, 'slow').wait()
-                        focus = zStart - zStep * i
-                        scope.setFocusDepth(focus, "slow").wait()
-                        # verify this worked!
-                        time.sleep(
-                            0.3
-                        )  # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
-                        focusError = abs(scope.getFocusDepth() - focus)
-                        if focusError > max(zStep * 0.2, minFocusAccuracy):
-                            raise Exception("Requested focus missed (%0.2f um error)" % (focusError * 1e6))
-
-                        frame = imager.acquireFrames(average)
-                        img = (
-                            frame.data()[:, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
-                            .astype(float)
-                            .mean(axis=0)
-                        )
-                        if j == 0:
-                            frames.append(img)
-                            corr.append(imageTemplateMatch(img, center)[1])
-                        else:
-                            bg_frames.append(img)
-                        dlg += 1
-                        if dlg.wasCanceled():
-                            return
-
-                    if j == 0:
-                        # move tip out-of-frame to collect background images
-                        self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow").wait()
-                    else:
-                        self.dev._moveToLocal([tipLength * 3, 0, 0], "slow")
-
-        finally:
-            # restart camera if it was running
-            if restart:
-                imager.start()
-            scope.setFocusDepth(pos[2])
-
-        # find the index of the frame that most closely matches the initial, tip-focused frame
-        maxInd = np.argmax(corr)
-
-        # stack all frames into a 3D array
-        frames = np.dstack(frames).transpose((2, 0, 1))
-        bg_frames = np.dstack(bg_frames).transpose((2, 0, 1))
-
-        # subtract background
-        # frames -= bg_frame.data()
-
-        # generate downsampled frame versions
-        # (for now we generate these on the fly..)
-        # ds = [frames] + [pg.downsample(pg.downsample(frames, n, axis=1), n, axis=2) for n in [2, 4, 8]]
-
+            zStep = 1e-6
+        frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
+        _future.waitFor(self.dev.moveToLocal([-tipLength * 3, 0, 0], "slow"))
+        bg_frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
+        _future.waitFor(self.dev.moveToLocal([tipLength * 3, 0, 0], "slow"))
         key = imager.getDeviceStateKey()
+        maxInd = np.argmax([imageTemplateMatch(f.data(), center) for f in frames])
         self.reference[key] = {
-            "frames": frames - bg_frames,
+        "frames": frames - bg_frames,
             "zStep": zStep,
             "centerInd": maxInd,
             "centerPos": tipRelPos,
-            "pixelSize": frame.info()["pixelSize"],
+            "pixelSize": frames[0].info()["pixelSize"],
             "tipLength": tipLength,
             # 'downsampledFrames' = ds,
         }
@@ -330,7 +248,7 @@ class PipetteTracker(object):
             # move pipette and take a background frame
             if pos is None:
                 pos = self.dev.globalPosition()
-            self.dev._moveToLocal([-tipLength * 3, 0, 0], "fast").wait()
+            self.dev.moveToLocal([-tipLength * 3, 0, 0], "fast").wait()
             bg_frame = self.takeFrame()
         else:
             bg_frame = None

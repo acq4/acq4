@@ -434,9 +434,9 @@ class Pipette(Device, OptomechDevice):
         spos = np.asarray(stage.globalPosition())
         return spos + dif
 
-    def _moveToLocal(self, pos, speed, linear=False):
+    def moveToLocal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in local coordinates.
-        This method does _not_ implement any motion planning.
+        WARNING: This method does _not_ implement any motion planning.
         """
         return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
 
