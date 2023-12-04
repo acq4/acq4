@@ -212,28 +212,19 @@ class Future(Qt.QObject):
             self._checkStop()
             time.sleep(interval)
 
-    def waitFor(self, futures, timeout=20.0):
-        """Wait for multiple futures to complete while also checking for stop requests on self.
+    def waitFor(self, future: 'Future', timeout=20.0) -> 'Future':
+        """Wait for another future to complete while also checking for stop requests on self.
         """
-        if not isinstance(futures, (list, tuple)):
-            futures = [futures]
-        if len(futures) == 0:
-            return
         start = time.time()
         while True:
             self._checkStop()
-            allDone = True
-            for fut in futures[:]:
-                try:
-                    fut.wait(0.1)
-                    futures.remove(fut)
-                except fut.Timeout:
-                    allDone = False
-                    break
-            if allDone:
+            try:
+                future.wait(0.1)
                 break
-            if timeout is not None and time.time() - start > timeout:
-                raise futures[0].Timeout("Timed out waiting for %r" % futures)
+            except future.Timeout:
+                if timeout is not None and time.time() - start > timeout:
+                    raise future.Timeout(f"Timed out waiting for {future!r}")
+        return future
 
     def raiseErrors(self, message, pollInterval=1.0):
         """Monitor this future for errors and raise if any occur.

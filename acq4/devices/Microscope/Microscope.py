@@ -258,9 +258,7 @@ class Microscope(Device, OptomechDevice):
             return image.var()
 
         z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm), 1 * µm)
-        z_stack_fut = self.getZStack(imager, z_range)
-        _future.waitFor(z_stack_fut)
-        z_stack = z_stack_fut.getResult()
+        z_stack = _future.waitFor(self.getZStack(imager, z_range)).getResult()
         filtered = downsample(np.array([f.data() for f in z_stack]), 5)
         centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])

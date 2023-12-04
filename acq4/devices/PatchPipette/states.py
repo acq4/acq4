@@ -1253,7 +1253,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.waitFor([self.currentFuture])
+            self.waitFor(self.currentFuture)
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -1272,7 +1272,7 @@ class PatchPipetteCleanState(PatchPipetteState):
             # play in reverse
             fut = self.currentFuture
             self.currentFuture = None
-            self.waitFor([fut.undo()])
+            self.waitFor(fut.undo())
 
     def cleanup(self):
         dev = self.dev
