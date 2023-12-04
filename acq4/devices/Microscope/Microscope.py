@@ -231,7 +231,7 @@ class Microscope(Device, OptomechDevice):
         return runZStack(imager, z_range)
 
     @Future.wrap
-    def findSurfaceDepth(self, imager: "Device", _checkStop: Callable) -> None:
+    def findSurfaceDepth(self, _future: Future, imager: "Device") -> None:
         """Set the surface of the sample based on how focused the images are."""
 
         def center_area(img: np.ndarray) -> Tuple[slice, slice]:
@@ -258,9 +258,9 @@ class Microscope(Device, OptomechDevice):
             return image.var()
 
         z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm), 1 * µm)
-        _checkStop()
-        z_stack = self.getZStack(imager, z_range).getResult()
-        _checkStop()
+        z_stack_fut = self.getZStack(imager, z_range)
+        _future.waitFor(z_stack_fut)
+        z_stack = z_stack_fut.getResult()
         filtered = downsample(np.array([f.data() for f in z_stack]), 5)
         centers = filtered[(..., *center_area(filtered[0]))]
         scored = np.array([calculate_focus_score(img) for img in centers])

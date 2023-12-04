@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 import traceback
+from typing import TypeVar, Callable, Concatenate, ParamSpec
 
 from acq4.util import Qt, ptime
 
@@ -23,13 +24,14 @@ class Future(Qt.QObject):
         """Raised by wait() if the timeout period elapses.
         """
 
-    @classmethod
-    def wrap(cls, func):
-        """Decorator to execute a function in a Thread wrapped in a future.
-        """
-        if "_checkStop" in func.__annotations__:
-            del func.__annotations__["_checkStop"]
+    R = TypeVar('R')
+    P = ParamSpec('P')
 
+    @classmethod
+    def wrap(cls, func: Callable[Concatenate['Future', P], R]) -> Callable[P, 'Future[R]']:
+        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future as its
+        first argument.
+        """
         @functools.wraps(func)
         def wrapper(*args, **kwds):
             future = cls()
@@ -63,7 +65,7 @@ class Future(Qt.QObject):
 
     def _executeInThread(self, func, args, kwds):
         try:
-            self._returnVal = func(*args, **kwds, _checkStop=self._checkStop)
+            self._returnVal = func(self, *args, **kwds)
             self._taskDone()
         except Exception as exc:
             self._taskDone(error=str(exc), excInfo=sys.exc_info())
@@ -198,7 +200,7 @@ class Future(Qt.QObject):
             if now > stop:
                 return
             
-            time.sleep(max(0, min(0.1, stop-now)))
+            time.sleep(max(0.0, min(0.1, stop-now)))
             if self._stopRequested:
                 raise self.StopRequested()
 
