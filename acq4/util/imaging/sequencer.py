@@ -104,27 +104,26 @@ class ImageSequencerThread(Thread):
         # record
         with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
             try:
-                if prot["zStack"]:
-                    start, end, step = prot["zStackRangeArgs"]
-                    direction = start - end
-                    self.setFocusDepth(start, direction)
-                    fps = imager.getEstimatedFrameRate()
-                    meters_per_frame = abs(step)
-                    speed = meters_per_frame * fps
-                    future = imager.acquireFrames()
-                    with imager.run():
-                        self.setFocusDepth(end, direction, speed=speed)
-                        future.stop()
-                        self._frames = future.getResult(timeout=10)
-                    # TODO trim to get linear spacing? but the MockStage/Camera are so not giving me usable data T_T
-                else:  # timelapse
-                    for i in range(maxIter):
-                        start = ptime.time()
-                        # TODO oops; we need both at once. handle timelapse of zstacks
+                for i in range(maxIter):
+                    start = ptime.time()
+                    if prot["zStack"]:
+                        start, end, step = prot["zStackRangeArgs"]
+                        direction = start - end
+                        self.setFocusDepth(start, direction)
+                        fps = imager.getEstimatedFrameRate()
+                        meters_per_frame = abs(step)
+                        speed = meters_per_frame * fps
+                        future = imager.acquireFrames()
+                        with imager.run():
+                            self.setFocusDepth(end, direction, speed=speed)
+                            future.stop()
+                            self._frames += future.getResult(timeout=10)
+                        # TODO trim to get linear spacing? but the MockStage/Camera are so not giving me usable data T_T
+                    else:  # timelapse
                         with imager.run():
                             self._frames.append(imager.acquireFrames(1, blocking=True)[0])
-                        self.sendStatusMessage(i, maxIter)
-                        self.sleep(until=start + interval)
+                    self.sendStatusMessage(i, maxIter)
+                    self.sleep(until=start + interval)
             finally:
                 if prot["save"]:
                     self.saveResults()
