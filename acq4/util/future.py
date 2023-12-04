@@ -273,31 +273,6 @@ class Future(Qt.QObject):
             raise RuntimeError(formattedMsg) from exc
 
 
-class _FuturePollThread(threading.Thread):
-    """Thread used to poll the state of a future.
-    
-    Used when a Future subclass does not automatically call _taskDone, but instead requires
-    a periodic check. May
-    """
-    def __init__(self, future, pollInterval, originalFrame):
-        threading.Thread.__init__(self, daemon=True)
-        self.future = future
-        self.pollInterval = pollInterval
-        self._stop = False
-
-    def run(self):
-        while not self._stop:
-            if self.future.isDone():
-                break
-                if self.future._raiseErrors:
-                    raise
-            time.sleep(self.pollInterval)
-
-    def stop(self):
-        self._stop = True
-        self.join()
-
-
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures.
     """
