@@ -25,8 +25,11 @@ class Future(Qt.QObject):
 
     @classmethod
     def wrap(cls, func):
-        """Decorator to wrap a function in a future.
+        """Decorator to execute a function in a Thread wrapped in a future.
         """
+        if "_checkStop" in func.__annotations__:
+            del func.__annotations__["_checkStop"]
+
         @functools.wraps(func)
         def wrapper(*args, **kwds):
             future = cls()
@@ -60,7 +63,7 @@ class Future(Qt.QObject):
 
     def _executeInThread(self, func, args, kwds):
         try:
-            self._returnVal = func(*args, **kwds)
+            self._returnVal = func(*args, **kwds, _checkStop=self._checkStop)
             self._taskDone()
         except Exception as exc:
             self._taskDone(error=str(exc), excInfo=sys.exc_info())
