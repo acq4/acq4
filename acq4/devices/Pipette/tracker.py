@@ -204,7 +204,7 @@ class PipetteTracker(object):
         bg_frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
         _future.waitFor(self.dev.moveToLocal([tipLength * 3, 0, 0], "slow"))
         key = imager.getDeviceStateKey()
-        maxInd = np.argmax([imageTemplateMatch(f.data(), center) for f in frames])
+        maxInd = np.argmax([imageTemplateMatch(f.data(), center)[1] for f in frames])
         self.reference[key] = {
         "frames": frames - bg_frames,
             "zStep": zStep,
