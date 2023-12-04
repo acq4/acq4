@@ -1,5 +1,3 @@
-import math
-import numpy as np
 import threading
 from typing import Tuple
 import functools
@@ -233,7 +231,7 @@ class Stage(Device, OptomechDevice):
         self.sigOrientationChanged.emit(self)
 
     @functools.lru_cache
-    def calculatedAxisOrientation(self, axis: str) -> float:
+    def calculatedAxisOrientation(self, axis: str):
         """Return the pitch and yaw of a stage axis.
 
         The pitch is returned in degrees relative to global horizontal (positive values point downward), 
@@ -388,7 +386,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, position, speed=None, progress=False, linear=False, **kwds):
+    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> Future:
         """Move the device to a new position.
         
         *position* specifies the absolute position in the stage coordinate system (as defined by the device)
@@ -434,7 +432,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, **kwds) -> Future:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
