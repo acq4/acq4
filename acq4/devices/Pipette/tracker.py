@@ -6,7 +6,7 @@ from six.moves import range
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.image_registration import imageTemplateMatch
 from .pipette_detection import TemplateMatchPipetteDetector
 from ...util.future import Future
@@ -206,13 +206,12 @@ class PipetteTracker(object):
         key = imager.getDeviceStateKey()
         maxInd = np.argmax([imageTemplateMatch(f.data(), center)[1] for f in frames])
         self.reference[key] = {
-        "frames": frames - bg_frames,
+            "frames": frames - bg_frames,
             "zStep": zStep,
             "centerInd": maxInd,
             "centerPos": tipRelPos,
             "pixelSize": frames[0].info()["pixelSize"],
             "tipLength": tipLength,
-            # 'downsampledFrames' = ds,
         }
 
         # Store with pickle because configfile does not support arrays
