@@ -14,17 +14,20 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.cleanBtn = Qt.QPushButton('Clean Pipette')
         self.setCleanBtn = Qt.QPushButton('Set Clean Pos')
         self.setRinseBtn = Qt.QPushButton('Set Rinse Pos')
-        self.cleanBtnLayout = Qt.QHBoxLayout()
-        self.cleanBtnLayout.addWidget(self.cleanBtn)
+        self.setCollectBtn = Qt.QPushButton('Set Collect Pos')
+        self.positionBtnLayout = Qt.QHBoxLayout()
+        self.positionBtnLayout.addWidget(self.cleanBtn)
         self.cleanBtn.setCheckable(True)
-        self.cleanBtnLayout.addWidget(self.setCleanBtn)
-        self.cleanBtnLayout.addWidget(self.setRinseBtn)
+        self.positionBtnLayout.addWidget(self.setCleanBtn)
+        self.positionBtnLayout.addWidget(self.setRinseBtn)
+        self.positionBtnLayout.addWidget(self.setCollectBtn)
         row = self.layout.rowCount()
-        self.layout.addLayout(self.cleanBtnLayout, row, 0)
+        self.layout.addLayout(self.positionBtnLayout, row, 0)
 
         self.cleanBtn.clicked.connect(self.cleanClicked)
         self.setCleanBtn.clicked.connect(self.setCleanClicked)
         self.setRinseBtn.clicked.connect(self.setRinseClicked)
+        self.setCollectBtn.clicked.connect(self.setCollectClicked)
 
     def cleanClicked(self):
         if self.cleanBtn.isChecked():
@@ -45,3 +48,6 @@ class PatchPipetteDeviceGui(Qt.QWidget):
 
     def setRinseClicked(self):
         self.dev.pipetteDevice.savePosition('rinse')
+
+    def setCollectClicked(self):
+        self.dev.pipetteDevice.savePosition('collect')

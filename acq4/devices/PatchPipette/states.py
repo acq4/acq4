@@ -1284,3 +1284,71 @@ class PatchPipetteCleanState(PatchPipetteState):
         self.resetPosition()
             
         PatchPipetteState.cleanup(self)
+
+
+class PatchPipetteNucleusCollectState(PatchPipetteState):
+    """Nucleus collection state.
+
+    Cycles +/- pressure in a nucleus collection tube.
+
+    Parameters
+    ----------
+    pressureSequence : list
+        List of (pressure (Pa), duration (s)) pairs specifying how to pulse pressure while the pipette tip is in the
+        cleaning well.
+    approachDistance : float
+        Distance (m) from collection location to approach from.
+    """
+    stateName = 'collect'
+
+    _defaultConfig = {
+        'initialPressureSource': 'atmosphere',
+        'initialTestPulseEnable': False,
+        'pressureSequence': [(100e3, 4.0), (-35e3, 1.0)] * 5,
+        'approachDistance': 30e-3,
+        'fallbackState': 'out',
+    }
+
+    def __init__(self, *args, **kwds):
+        self.currentFuture = None
+        PatchPipetteState.__init__(self, *args, **kwds)
+
+    def run(self):
+        config = self.config.copy()
+        dev = self.dev
+        pip = dev.pipetteDevice
+
+        self.setState('nucleus collection')
+
+        # move to top of collection tube
+        startPos = pip.globalPosition()
+        self.collectionPos = pip.loadPosition('collect')
+        self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
+
+        self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        self.waitFor([pip._moveToGlobal(self.collectionPos, speed='fast')])
+
+        sequence = config['pressureSequence']
+
+        for pressure, delay in sequence:
+            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            self._checkStop(delay)
+
+        dev.pipetteRecord()['expelled_nucleus'] = True
+        return 'out'          
+
+    def resetPosition(self):
+        pip = self.dev.pipetteDevice
+        self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        self.waitFor([pip._moveToGlobal(self.startPos, speed='fast')])
+
+    def cleanup(self):
+        dev = self.dev
+        try:
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        except Exception:
+            printExc("Error resetting pressure after collection")
+        
+        self.resetPosition()
+            
+        PatchPipetteState.cleanup(self)
