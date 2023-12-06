@@ -47,6 +47,7 @@ class MultiPatchWindow(Qt.QWidget):
         self._calibratePips = []
         self._calibrateStagePositions = []
         self._setTargetPips = []
+        self._profileEditor = None
 
         Qt.QWidget.__init__(self)
         self.module = module
@@ -109,6 +110,7 @@ class MultiPatchWindow(Qt.QWidget):
             self.ui.profileCombo.addItem(profile)
 
         self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
+        self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
         # self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
@@ -194,6 +196,14 @@ class MultiPatchWindow(Qt.QWidget):
         profile = self.ui.profileCombo.currentText()
         for pip in self.pips:
             pip.stateManager().setProfile(profile)
+
+    def openProfileEditor(self):
+        if self._profileEditor is None or not self._profileEditor.isVisible():
+            from .patchProfileEditor import ProfileEditor
+            self._profileEditor = ProfileEditor()
+            self._profileEditor.show()
+        else:
+            self._profileEditor.setTopLevelWindow()
 
     def setPlotModes(self, modes):
         for ctrl in self.pipCtrls:
