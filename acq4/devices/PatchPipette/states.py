@@ -1136,7 +1136,7 @@ class PatchPipetteResealState(PatchPipetteState):
         'numTestPulseAverage': {'type': 'int', 'value': 3},
         'fallbackState': {'type': 'str', 'value': 'whole cell'},
         'maxPressure': {'type': 'float', 'value': -4e3, 'suffix': 'Pa'},
-        'pressureChangeRate': {'type': 'float', 'value': -0.5e-3 / 60, 'suffix': 'Pa/s'},
+        'pressureChangeRate': {'type': 'float', 'value': -0.5e3 / 60, 'suffix': 'Pa/s'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1156,6 +1156,7 @@ class PatchPipetteResealState(PatchPipetteState):
 
         self.retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
 
+        attained_max_pressure = False
         startTime = ptime.time()
         lastTime = startTime
         while True:
@@ -1171,9 +1172,12 @@ class PatchPipetteResealState(PatchPipetteState):
 
             self._checkStop()
 
-            # update pressure
-            pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
-            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            if not attained_max_pressure:
+                # update pressure
+                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+                if pressure == config['maxPressure']:
+                    attained_max_pressure = True
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
