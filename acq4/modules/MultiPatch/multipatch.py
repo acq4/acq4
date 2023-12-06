@@ -127,7 +127,8 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.fineSearchBtn.clicked.connect(self.fineSearch)
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
         self.ui.cellDetectBtn.clicked.connect(self.cellDetectClicked)
-        self.ui.sealBtn.clicked.connect(self.sealClicked)
+        self.ui.sealBtn.clicked.connect(self.sealClicked)   
+        self.ui.collectBtn.clicked.connect(self.collectClicked)
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
         self.ui.cleanBtn.clicked.connect(self.cleanClicked)
@@ -499,6 +500,12 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('seal')
 
+    def collectClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('collect')
+                
     def breakInClicked(self):
         pips = self.selectedPipettes()
         for pip in pips:

@@ -1193,10 +1193,10 @@ class PatchPipetteResealState(PatchPipetteState):
                 patchrec['resealInitialResistance'] = initialResistance
 
             # check progress on resistance
-            if len(recentTestPulses) > config['numTestPulseAverage']:
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-                if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
-                    return self._transition_to_seal("cell detected (slow criteria)", patchrec)
+            # if len(recentTestPulses) > config['numTestPulseAverage']:
+            #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+            #     if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
+            #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self._checkStop()
 
     def cleanup(self):
@@ -1363,4 +1363,76 @@ class PatchPipetteCleanState(PatchPipetteState):
         self.resetPosition()
             
         PatchPipetteState.cleanup(self)
-                                                                                                        
+
+
+class PatchPipetteNucleusCollectState(PatchPipetteState):
+    """Nucleus collection state.
+
+    Cycles +/- pressure in a nucleus collection tube.
+
+    Parameters
+    ----------
+    pressureSequence : list
+        List of (pressure (Pa), duration (s)) pairs specifying how to pulse pressure while the pipette tip is in the
+        cleaning well.
+    approachDistance : float
+        Distance (m) from collection location to approach from.
+    """
+    stateName = 'collect'
+
+    _parameterValueOverrides = {
+         'initialPressureSource': 'atmosphere',
+         'initialTestPulseEnable': False,
+         'fallbackState': 'out',
+     }
+    _parameterTreeConfig = {
+        'pressureSequence': {'type': 'str', 'value': "[(60e3, 4.0), (-35e3, 1.0)] * 5"},
+        'approachDistance': {'type': 'float', 'value': 30e-3, 'suffix': 's'},
+    }
+
+
+    def __init__(self, *args, **kwds):
+        self.currentFuture = None
+        PatchPipetteState.__init__(self, *args, **kwds)
+
+    def run(self):
+        config = self.config.copy()
+        dev = self.dev
+        pip = dev.pipetteDevice
+
+        self.setState('nucleus collection')
+
+         # move to top of collection tube
+        self.startPos = pip.globalPosition()
+        self.collectionPos = pip.loadPosition('collect')
+        # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
+
+        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        self.waitFor([pip._moveToGlobal(self.collectionPos, speed='fast')])
+
+        sequence = config['pressureSequence']
+        if isinstance(sequence, str):
+            sequence = eval(sequence, units.__dict__)
+
+        for pressure, delay in sequence:
+            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            self._checkStop(delay)
+
+        dev.pipetteRecord()['expelled_nucleus'] = True
+        return 'out'          
+
+    def resetPosition(self):
+        pip = self.dev.pipetteDevice
+        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        self.waitFor([pip._moveToGlobal(self.startPos, speed='fast')])
+
+    def cleanup(self):
+        dev = self.dev
+        try:
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        except Exception:
+            printExc("Error resetting pressure after collection")
+        
+        self.resetPosition()
+            
+        PatchPipetteState.cleanup(self)
