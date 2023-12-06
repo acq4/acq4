@@ -39,15 +39,8 @@ class PipetteTracker(object):
         This method guarantees that the frame is exposed *after* this method is called.
         """
         imager = self._getImager(imager)
-        # TODO refactor this class to use the new z-stack sequencer
-
-        restart = False
-        if imager.isRunning():
-            restart = True
-            imager.stop()
-        frame = imager.acquireFrames(1, blocking=True)
-        if restart:
-            imager.start()
+        with imager.run():
+            frame = imager.acquireFrames(1, blocking=True)[0]
         return frame
 
     def getNextFrame(self, imager=None):
