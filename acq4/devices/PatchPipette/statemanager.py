@@ -51,7 +51,7 @@ class PatchPipetteStateManager(Qt.QObject):
     _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
     sigProfileChanged = Qt.Signal(object, object)  # self, profile_name
 
-    profiles = {}
+    profiles: dict[str: dict[str: dict[str: object]]] = {}  # {profile_name: {state_name: {config_options}}}
     _profilesLoadedFromConfig = False
 
     def __init__(self, dev):
@@ -60,9 +60,7 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
-
-        # default state configuration parameters
-        self.stateConfig = {}  # {state: {config options}}
+        self._profile = None
 
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
@@ -75,8 +73,18 @@ class PatchPipetteStateManager(Qt.QObject):
         return list(cls.profiles.keys())
 
     @classmethod
-    def _getProfileConfig(cls, name):
+    def listStates(cls):
+        return list(cls.stateHandlers.keys())
+
+    @classmethod
+    def getStateClass(cls, name) -> states.PatchPipetteState:
+        return cls.stateHandlers[name]
+
+    @classmethod
+    def getProfileConfig(cls, name):
         cls._loadGlobalProfilesOnce()
+        if name not in cls.profiles:
+            raise KeyError(f"Unknown patch profile {name}")
         return cls.profiles[name]
 
     @classmethod
@@ -87,42 +95,41 @@ class PatchPipetteStateManager(Qt.QObject):
         man = getManager()
         for k,v in man.config.get('misc', {}).get('patchProfiles', {}).items():
             v = v.copy()
-            copyFrom = v.pop('copyFrom', None)
-            cls.addProfile(name=k, config=v, copyFrom=copyFrom)
+            cls.addProfile(name=k, config=v)
 
     @classmethod
-    def addProfile(cls, name, config, copyFrom=None, overwrite=False):
+    def addProfile(cls, name: str, config: dict, overwrite=False):
         assert overwrite or name not in cls.profiles, f"Patch profile {name} already exists"
-        if copyFrom is not None:
-            # mix defaults in with selected profile
-            assert copyFrom in cls.profiles, f"Patch profile {copyFrom} does not exist (requested by {name})"
-            default = cls.profiles[copyFrom]
-            p = {}
-            for k in set(list(default.keys()) + list(config.keys())):
-                p[k] = default.get(k, {}).copy()
-                p[k].update(config.get(k, {}))
-            config = p
         cls.profiles[name] = config
 
-    def setProfile(self, profile):
-        profile = self._getProfileConfig(profile)
-        self.setStateConfig(profile, profileName=profile)
+    @classmethod
+    def getStateConfig(cls, state: str, profile: str|None):
+        """Return the configuration options for the given state and profile, or just the defaults if no profile is specified.
+        """
+        if profile is None:
+            config = {}
+        else:
+            config = cls.getProfileConfig(profile)
+        copy_from = config.get('copyFrom', None)
+        if copy_from:
+            defaults = cls.getStateConfig(state, copy_from)
+        else:
+            defaults = cls.getStateClass(state).defaultConfig()
+        config = config.get(state, {})
+        p = {}
+        for param in set(list(defaults.keys()) + list(config.keys())):
+            p[param] = config.get(param, defaults.get(param, None))
+        return p
+
+    def setProfile(self, profile: str):
+        """Set the current patch profile."""
+        self._profile = profile
+        self.sigProfileChanged.emit(self, profile)
 
     def getState(self):
         """Return the currently active state.
         """
         return self.currentJob
-
-    def listStates(self):
-        return list(self.stateHandlers.keys())
-
-    def setStateConfig(self, config, profileName=None):
-        """Set configuration options to be used when initializing states.
-
-        Must be a dict like {'statename': {'opt': value}, ...}.
-        """
-        self.stateConfig = config
-        self.sigProfileChanged.emit(self, profileName)
 
     def stateChanged(self, oldState, newState):
         """Called when state has changed (possibly by user)
@@ -170,7 +177,7 @@ class PatchPipetteStateManager(Qt.QObject):
             stateHandler = self.stateHandlers[state]
 
             # assemble state config from defaults and anything specified in args here
-            config = self.stateConfig.get(state, {}).copy()
+            config = self.getStateConfig(state, self._profile)
             config.update(kwds.pop('config', {}))
             kwds['config'] = config
 
@@ -179,7 +186,7 @@ class PatchPipetteStateManager(Qt.QObject):
             job.sigFinished.connect(self.jobFinished)
             oldState = None if oldJob is None else oldJob.stateName
             self.currentJob = job
-            self.dev._setState(state, oldState)
+            self.dev._setState(state, oldState)  # logging / accounting
             job.initialize()
             self.sigStateChanged.emit(self, job)
             return job
