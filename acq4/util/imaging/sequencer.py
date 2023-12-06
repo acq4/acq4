@@ -121,7 +121,7 @@ class ImageSequencerThread(Thread):
                         # TODO trim to get linear spacing? but the MockStage/Camera are so not giving me usable data T_T
                     else:  # timelapse
                         with imager.run(ensureFreshFrames=True):
-                            self._frames.append(imager.acquireFrames(1, blocking=True)[0])
+                            self._frames.append(imager.acquireFrames(1).getResult()[0])
                     self.sendStatusMessage(i, maxIter)
                     self.sleep(until=start + interval)
             finally:

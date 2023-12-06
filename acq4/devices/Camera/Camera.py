@@ -276,16 +276,11 @@ class Camera(DAQGeneric, OptomechDevice):
             if not running:
                 self.stop()
 
-    def acquireFrames(self, n=None, blocking=False) -> "FrameAcquisitionFuture":
+    def acquireFrames(self, n=None) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames asynchronously or synchronously, depending on the
         value of *blocking*. If *n* is None, then frames will be acquired until stop() is called.
         """
-        if n is None and blocking:
-            raise ValueError("Cannot block indefinitely while acquiring unlimited frames.")
-        future = FrameAcquisitionFuture(self, n)
-        if blocking:
-            return future.getResult()
-        return future
+        return FrameAcquisitionFuture(self, n)
 
     def driverSupportedFixedFrameAcquisition(self, n=1, stack=True):
         """This calls self._acquireFrames directly, bypassing the AcquireThread. This can be used to
@@ -336,7 +331,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         with self.reserved():
             with self.run():
-                frames = self.acquireFrames(10, blocking=True)
+                frames = self.acquireFrames(10).getResult()
             frames = [f for f in frames if f.info()["fps"] is not None]
             return sum([f.info()["fps"] for f in frames]) / len(frames)
 
@@ -597,7 +592,7 @@ class CameraTask(DAQGenericTask):
             self.dev.stop(block=True)
         prof.mark("stop")
 
-        self._future = self.dev.acquireFrames(n=self.fixedFrameCount, blocking=False)
+        self._future = self.dev.acquireFrames(n=self.fixedFrameCount)
 
         # Call the DAQ configure
         DAQGenericTask.configure(self)

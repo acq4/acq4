@@ -366,7 +366,7 @@ class ScannerDeviceGui(Qt.QWidget):
         yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
 
         with camera.run(ensureFreshFrames=True):
-            background = camera.acquireFrames(1, blocking=True)[0]
+            background = camera.acquireFrames(1).getResult()[0]
 
         laser.setAlignmentMode()
         try:
@@ -383,7 +383,7 @@ class ScannerDeviceGui(Qt.QWidget):
                     positions.append([x, y])
                     self.dev.setCommand([x, y])
                     with camera.run(ensureFreshFrames=True):
-                        images.append(camera.acquireFrames(1, blocking=True)[0])
+                        images.append(camera.acquireFrames(1)[0])
         finally:
             laser.closeShutter()
         return background.data(), images, positions
