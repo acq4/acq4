@@ -254,7 +254,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.stop(block=block)
 
     @contextmanager
-    def run(self):
+    def run(self, ensureFreshFrames=False):
         """Context manager for starting and stopping camera acquisition thread. If used
         with non-blocking frame acquisition, this will still exit the context before
         the frames are necessarily acquired.
@@ -264,15 +264,17 @@ class Camera(DAQGeneric, OptomechDevice):
                 frames = camera.acquireFrames(10, blocking=True)
         """
         running = self.isRunning()
-        if running:
-            self.stop()
-        self.start()
+        if ensureFreshFrames:
+            if running:
+                self.stop()
+            # todo sleep until all frames are cleared somehow
+        if not running:
+            self.start()
         try:
             yield
         finally:
-            self.stop()
-            if running:
-                self.start()
+            if not running:
+                self.stop()
 
     def acquireFrames(self, n=None, blocking=False) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames asynchronously or synchronously, depending on the
