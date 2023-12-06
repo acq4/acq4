@@ -287,6 +287,8 @@ class OutputChannelGui(DaqChannelGui):
         hv = self.getHoldingValue()
         if hv is not None:
             if not self.ui.holdingCheck.isChecked():
+                if self.config['type'] == 'do':
+                    hv = int(hv)
                 self.ui.holdingSpin.setValue(hv)
             self.ui.waveGeneratorWidget.setOffset(hv)
 
