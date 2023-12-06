@@ -1301,13 +1301,16 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
     """
     stateName = 'collect'
 
-    _defaultConfig = {
-        'initialPressureSource': 'atmosphere',
-        'initialTestPulseEnable': False,
-        'pressureSequence': [(100e3, 4.0), (-35e3, 1.0)] * 5,
-        'approachDistance': 30e-3,
-        'fallbackState': 'out',
+    _parameterValueOverrides = {
+         'initialPressureSource': 'atmosphere',
+         'initialTestPulseEnable': False,
+         'fallbackState': 'out',
+     }
+    _parameterTreeConfig = {
+        'pressureSequence': {'type': 'str', 'value': "[(60e3, 4.0), (-35e3, 1.0)] * 5"},
+        'approachDistance': {'type': 'float', 'value': 30e-3, 'suffix': 's'},
     }
+
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None
@@ -1320,15 +1323,17 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
 
         self.setState('nucleus collection')
 
-        # move to top of collection tube
-        startPos = pip.globalPosition()
+         # move to top of collection tube
+        self.startPos = pip.globalPosition()
         self.collectionPos = pip.loadPosition('collect')
-        self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
+        # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
-        self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
         self.waitFor([pip._moveToGlobal(self.collectionPos, speed='fast')])
 
         sequence = config['pressureSequence']
+        if isinstance(sequence, str):
+            sequence = eval(sequence, units.__dict__)
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -1339,7 +1344,7 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
 
     def resetPosition(self):
         pip = self.dev.pipetteDevice
-        self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
         self.waitFor([pip._moveToGlobal(self.startPos, speed='fast')])
 
     def cleanup(self):
