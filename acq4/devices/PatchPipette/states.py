@@ -1014,11 +1014,11 @@ class PatchPipetteBreakInState(PatchPipetteState):
         self.monitorTestPulse()
         config = self.config
         if isinstance(config['nPulses'], str):
-            config['nPulses'] = eval(config['nPulses'])
+            config['nPulses'] = eval(config['nPulses'], units.__dict__)
         if isinstance(config['pulseDurations'], str):
-            config['pulseDurations'] = eval(config['pulseDurations'])
+            config['pulseDurations'] = eval(config['pulseDurations'], units.__dict__)
         if isinstance(config['pulsePressures'], str):
-            config['pulsePressures'] = eval(config['pulsePressures'])
+            config['pulsePressures'] = eval(config['pulsePressures'], units.__dict__)
         lastPulse = ptime.time()
         attempt = 0
 
@@ -1140,7 +1140,7 @@ class PatchPipetteResealState(PatchPipetteState):
         'numTestPulseAverage': {'type': 'int', 'value': 3},
         'fallbackState': {'type': 'str', 'value': 'whole cell'},
         'maxPressure': {'type': 'float', 'value': -4e3, 'suffix': 'Pa'},
-        'pressureChangeRate': {'type': 'float', 'value': -0.5e-3 / 60, 'suffix': 'Pa/s'},
+        'pressureChangeRate': {'type': 'float', 'value': -0.5e3 / 60, 'suffix': 'Pa/s'},
         'slowDetectionThreshold': {'value': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
     }
 
@@ -1161,6 +1161,7 @@ class PatchPipetteResealState(PatchPipetteState):
 
         self.retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
 
+        attained_max_pressure = False
         startTime = ptime.time()
         lastTime = startTime
         while True:
@@ -1177,9 +1178,12 @@ class PatchPipetteResealState(PatchPipetteState):
 
             self._checkStop()
 
-            # update pressure
-            pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
-            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            if not attained_max_pressure:
+                # update pressure
+                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+                if pressure == config['maxPressure']:
+                    attained_max_pressure = True
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
