@@ -287,16 +287,10 @@ class Camera(DAQGeneric, OptomechDevice):
             return future.getResult()
         return future
 
-    def _old_acquireFrames(self, n=1, stack=True):
-        """Immediately acquire and return a specific number of frames.
-
-        This method blocks until all frames are acquired and may not be supported by all camera
-        types.
-
-        All frames are returned stacked within a single Frame instance, as a 3D or 4D array.
-
-        If *stack* is False, then the first axis is dropped and the resulting data will instead be
-        2D or 3D.
+    def driverSupportedFixedFrameAcquisition(self, n=1, stack=True):
+        """This calls self._acquireFrames directly, bypassing the AcquireThread. This can be used to
+        implement fixed-frame acquisition. The metadata construction here is bad, though, so use
+        *acquireFrames* instead if possible.
         """
         if n > 1 and not stack:
             raise ValueError("Using stack=False is only allowed when n==1.")
