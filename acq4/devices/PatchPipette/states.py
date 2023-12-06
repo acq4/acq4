@@ -1,4 +1,5 @@
 from collections import deque
+from copy import deepcopy
 
 import numpy as np
 import scipy.stats
@@ -11,7 +12,7 @@ from acq4 import getManager
 from acq4.util.debug import printExc
 from acq4.util.future import Future
 from acq4.util import ptime
-from pyqtgraph import disconnect
+from pyqtgraph import disconnect, units
 
 
 class PatchPipetteState(Future):
@@ -34,6 +35,51 @@ class PatchPipetteState(Future):
 
     # State classes may implement a run() method to be called in a background thread
     run = None
+
+    _parameterTreeConfig = {
+        'initialPressureSource': {'type': 'list', 'value': None, 'values': ['atmosphere', 'regulator', 'user'], 'optional': True},
+        'initialPressure': {'type': 'float', 'value': None, 'optional': True, 'suffix': 'Pa'},
+        'initialClampMode': {'type': 'list', 'value': None, 'values': ['VC', 'IC'], 'optional': True},
+        'initialClampHolding': {'type': 'float', 'value': None, 'optional': True},
+        'initialTestPulseEnable': {'type': 'bool', 'value': None, 'optional': True},
+        'initialTestPulseParameters': {'type': 'group', 'children': []},  # TODO
+        'initialAutoBiasEnable': {'type': 'bool', 'value': False, 'optional': True},
+        'initialAutoBiasTarget': {'type': 'float', 'value': 0, 'optional': True, 'suffix': 'V'},
+        'fallbackState': {'type': 'str', 'value': None, 'optional': True},
+        'finishPatchRecord': {'type': 'bool', 'value': False},
+        'newPipette': {'type': 'bool', 'value': False},
+    }
+
+    @classmethod
+    def parameterTreeConfig(cls) -> list[dict]:
+        # combine the superclass config with the state-specific config. state-specific config takes precedence.
+        if not hasattr(cls, '_parameterTreeConfig'):
+            cls._parameterTreeConfig = {}
+        config = deepcopy(cls._parameterTreeConfig)
+        for base in cls.__bases__:
+            if hasattr(base, 'parameterTreeConfig'):
+                for c in deepcopy(base.parameterTreeConfig()):
+                    if c['name'] not in config:
+                        config[c['name']] = c
+        for name, c in config.items():
+            c['name'] = name
+        # subclasses can decide whether to override initial values
+        overrides = cls.parameterValueOverrides()
+        for name, val in overrides.items():
+            config[name]['value'] = val
+            config[name]['default'] = val
+
+        return list(config.values())
+
+    @classmethod
+    def parameterValueOverrides(cls) -> dict[str, object]:
+        if not hasattr(cls, '_parameterValueOverrides'):
+            return {}
+        return cls._parameterValueOverrides
+
+    @classmethod
+    def defaultConfig(cls) -> dict[str, object]:
+        return {c['name']: c.get('value', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
         Future.__init__(self)
@@ -143,11 +189,6 @@ class PatchPipetteState(Future):
             pass
         return tps
 
-    def defaultConfig(self):
-        """Subclasses may reimplement this method to return a default configuration dict.
-        """
-        return self._defaultConfig
-
     def cleanup(self):
         """Called after job completes, whether it failed or succeeded.
         """
@@ -196,7 +237,7 @@ class PatchPipetteState(Future):
 class PatchPipetteOutState(PatchPipetteState):
     stateName = 'out'
 
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
@@ -208,9 +249,11 @@ class PatchPipetteOutState(PatchPipetteState):
 class PatchPipetteApproachState(PatchPipetteState):
     stateName = 'approach'
 
-    _defaultConfig = {
-        'nextState': 'cell detect',
+    _parameterValueOverrides = {
         'fallbackState': 'bath',
+    }
+    _parameterTreeConfig = {
+        'nextState': {'type': 'str', 'value': 'cell detect'},
     }
 
     def run(self):
@@ -224,7 +267,7 @@ class PatchPipetteApproachState(PatchPipetteState):
 
 class PatchPipetteWholeCellState(PatchPipetteState):
     stateName = 'whole cell'
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
@@ -254,7 +297,7 @@ class PatchPipetteWholeCellState(PatchPipetteState):
 
 class PatchPipetteBrokenState(PatchPipetteState):
     stateName = 'broken'
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
@@ -269,7 +312,7 @@ class PatchPipetteBrokenState(PatchPipetteState):
 
 class PatchPipetteFouledState(PatchPipetteState):
     stateName = 'fouled'
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
@@ -300,15 +343,17 @@ class PatchPipetteBathState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         PatchPipetteState.__init__(self, *args, **kwds)
 
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressure': 3500.,  # 0.5 PSI
         'initialPressureSource': 'regulator',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
-        'bathThreshold': 50e6,
-        'breakThreshold': -1e6,
-        'clogThreshold': 1e6,
+    }
+    _parameterTreeConfig = {
+        'bathThreshold': {'type': 'float', 'value': 50e6, 'suffix': 'Ω'},
+        'breakThreshold': {'type': 'float', 'value': -1e6, 'suffix': 'Ω'},
+        'clogThreshold': {'type': 'float', 'value': 1e6, 'suffix': 'Ω'},
     }
     
     def run(self):
@@ -431,27 +476,29 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         self.advanceSteps = None
         PatchPipetteState.__init__(self, *args, **kwds)
 
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
         'fallbackState': 'bath',
-        'autoAdvance': True,
-        'advanceMode': 'target',
-        'advanceContinuous': True,
-        'advanceStepInterval': 0.1,
-        'advanceStepDistance': 1e-6,
-        'maxAdvanceDistance': None,
-        'maxAdvanceDistancePastTarget': 10e-6,
-        'maxAdvanceDepthBelowSurface': None,
-        'advanceSpeed': 2e-6,
-        'fastDetectionThreshold': 1e6,
-        'slowDetectionThreshold': 0.2e6,
-        'slowDetectionSteps': 3,
-        'breakThreshold': -1e6,
-        'reserveDAQ': False,
-        'cellDetectTimeout': 30,
-        'DAQReservationTimeout': 30,
+    }
+    _parameterTreeConfig = {
+        'autoAdvance': {'value': True, 'type': 'bool'},
+        'advanceMode': {'value': 'target', 'type': 'str', 'values': ['target', 'axial', 'vertical']},
+        'advanceContinuous': {'value': True, 'type': 'bool'},
+        'advanceStepInterval': {'value': 0.1, 'type': 'float', 'suffix': 's'},
+        'advanceStepDistance': {'value': 1e-6, 'type': 'float', 'suffix': 'm'},
+        'maxAdvanceDistance': {'value': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
+        'maxAdvanceDistancePastTarget': {'value': 10e-6, 'type': 'float', 'suffix': 'm'},
+        'maxAdvanceDepthBelowSurface': {'value': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
+        'advanceSpeed': {'value': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'fastDetectionThreshold': {'value': 1e6, 'type': 'float', 'suffix': 'Ω'},
+        'slowDetectionThreshold': {'value': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
+        'slowDetectionSteps': {'value': 3, 'type': 'int'},
+        'breakThreshold': {'value': -1e6, 'type': 'float', 'suffix': 'Ω'},
+        'reserveDAQ': {'value': False, 'type': 'bool'},
+        'cellDetectTimeout': {'value': 30, 'type': 'float', 'suffix': 's'},
+        'DAQReservationTimeout': {'value': 30, 'type': 'float', 'suffix': 's'},
     }
 
     def run(self):
@@ -696,25 +743,27 @@ class PatchPipetteSealState(PatchPipetteState):
     """
     stateName = 'seal'
 
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
         'fallbackState': 'fouled',
-        'pressureMode': 'user',   # 'auto' or 'user'
-        'startingPressure': -1000,
-        'holdingThreshold': 100e6,
-        'holdingPotential': -70e-3,
-        'sealThreshold': 1e9,
-        'breakInThreshold': 10e-12,
-        'nSlopeSamples': 5,
-        'autoSealTimeout': 30.0,
-        'maxVacuum': -3e3, #changed from -7e3
-        'pressureChangeRates': [(0.5e6, -100), (100e6, 0), (-1e6, 200)],
-        'delayBeforePressure': 0.0,
-        'delayAfterSeal': 5.0,
-        'afterSealPressure': -1000,
-        'resetDelay': 5.0,
+    }
+    _parameterTreeConfig = {
+        'pressureMode': {'type': 'str', 'value': 'user', 'values': ['auto', 'user']},
+        'startingPressure': {'type': 'float', 'value': -1000},
+        'holdingThreshold': {'type': 'float', 'value': 100e6},
+        'holdingPotential': {'type': 'float', 'value': -70e-3},
+        'sealThreshold': {'type': 'float', 'value': 1e9},
+        'breakInThreshold': {'type': 'float', 'value': 10e-12, 'suffix': 'F'},
+        'nSlopeSamples': {'type': 'int', 'value': 5},
+        'autoSealTimeout': {'type': 'float', 'value': 30.0, 'suffix': 's'},
+        'maxVacuum': {'type': 'float', 'value': -3e3, 'suffix': 'Pa'},
+        'pressureChangeRates': {'type': 'str', 'value': "[(0.5e6, -100), (100e6, 0), (-1e6, 200)]"},  # TODO
+        'delayBeforePressure': {'type': 'float', 'value': 0.0, 'suffix': 's'},
+        'delayAfterSeal': {'type': 'float', 'value': 5.0, 'suffix': 's'},
+        'afterSealPressure': {'type': 'float', 'value': -1000, 'suffix': 'Pa'},
+        'resetDelay': {'type': 'float', 'value': 5.0, 'suffix': 's'},
     }
 
     def initialize(self):
@@ -816,6 +865,8 @@ class PatchPipetteSealState(PatchPipetteState):
                 pressure = np.clip(pressure, config['maxVacuum'], 0)
                 
                 # decide how much to adjust pressure based on rate of change in seal resistance
+                if isinstance(str, config['pressureChangeRates']):
+                    config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
                 for max_slope, change in config['pressureChangeRates']:
                     if max_slope is None or slope < max_slope:
                         pressure += change
@@ -861,15 +912,17 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
         is 'break in' so that partial break-ins will be completed. To disable, set to 'whole cell'.
     """
     stateName = 'cell attached'
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
-        'autoBreakInDelay': None,
-        'breakInThreshold': 10e-12,
-        'holdingCurrentThreshold': -1e-9,
-        'spontaneousBreakInState': 'break in',
+    }
+    _parameterTreeConfig = {
+        'autoBreakInDelay': {'type': 'float', 'value': None, 'optional': True, 'suffix': 's'},
+        'breakInThreshold': {'type': 'float', 'value': 10e-12, 'suffix': 'F'},
+        'holdingCurrentThreshold': {'type': 'float', 'value': -1e-9, 'suffix': 'A'},
+        'spontaneousBreakInState': {'type': 'str', 'value': 'break in'},
     }
 
     def run(self):
@@ -931,25 +984,39 @@ class PatchPipetteBreakInState(PatchPipetteState):
         Holding current (Amps) below which the cell is considered to be lost and the state fails.
     """
     stateName = 'break in'
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
-        'nPulses': [1, 1, 1, 1, 1, 2, 2, 3, 3, 5],
-        'pulseDurations': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5],
-        'pulsePressures': [-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3],
-        'pulseInterval': 2,
-        'resistanceThreshold': 650e6,
-        'capacitanceThreshold': 10e-12,
-        'holdingCurrentThreshold': -1e-9,
         'fallbackState': 'fouled',
+    }
+    _parameterTreeConfig = {
+        # idea!
+        # 'pulses', 'type': 'table', 'columns': [
+        #     'nPulses', 'type': 'int'},
+        #     'duration', 'type': 'float', 'suffix': 's'},
+        #     'pressure', 'type': 'float', 'suffix': 'Pa'},
+        # ]},
+        'nPulses': {'type': 'string', 'value': "[1, 1, 1, 1, 1, 2, 2, 3, 3, 5]"},
+        'pulseDurations': {'type': 'string', 'value': "[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]"},
+        'pulsePressures': {'type': 'string', 'value': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
+        'pulseInterval': {'type': 'float', 'value': 2},
+        'resistanceThreshold': {'type': 'float', 'value': 650e6, 'suffix': 'Ω'},
+        'capacitanceThreshold': {'type': 'float', 'value': 10e-12, 'suffix': 'F'},
+        'holdingCurrentThreshold': {'type': 'float', 'value': -1e-9, 'suffix': 'A'},
     }
 
     def run(self):
         patchrec = self.dev.patchRecord()
         self.monitorTestPulse()
         config = self.config
+        if isinstance(config['nPulses'], str):
+            config['nPulses'] = eval(config['nPulses'], units.__dict__)
+        if isinstance(config['pulseDurations'], str):
+            config['pulseDurations'] = eval(config['pulseDurations'], units.__dict__)
+        if isinstance(config['pulsePressures'], str):
+            config['pulsePressures'] = eval(config['pulsePressures'], units.__dict__)
         lastPulse = ptime.time()
         attempt = 0
 
@@ -1056,18 +1123,20 @@ class PatchPipetteResealState(PatchPipetteState):
 
     stateName = 'reseal'
 
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialClampMode': 'VC',
         'initialClampHolding': -70e-3,
         'initialTestPulseEnable': True,
         'initialPressure': -0.5e3,
         'initialPressureSource': 'regulator',
-        'retractionSpeed': 0.3e-6,
-        'resealTimeout': 10 * 60,
-        'numTestPulseAverage': 3,
-        'fallbackState': 'whole cell',
-        'maxPressure': -4e3,
-        'pressureChangeRate': -0.5e-3 / 60,
+    }
+    _parameterTreeConfig = {
+        'retractionSpeed': {'type': 'float', 'value': 0.3e-6, 'suffix': 'm/s'},
+        'resealTimeout': {'type': 'float', 'value': 10 * 60, 'suffix': 's'},
+        'numTestPulseAverage': {'type': 'int', 'value': 3},
+        'fallbackState': {'type': 'str', 'value': 'whole cell'},
+        'maxPressure': {'type': 'float', 'value': -4e3, 'suffix': 'Pa'},
+        'pressureChangeRate': {'type': 'float', 'value': -0.5e3 / 60, 'suffix': 'Pa/s'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1087,6 +1156,7 @@ class PatchPipetteResealState(PatchPipetteState):
 
         self.retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
 
+        attained_max_pressure = False
         startTime = ptime.time()
         lastTime = startTime
         while True:
@@ -1102,9 +1172,12 @@ class PatchPipetteResealState(PatchPipetteState):
 
             self._checkStop()
 
-            # update pressure
-            pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
-            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            if not attained_max_pressure:
+                # update pressure
+                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+                if pressure == config['maxPressure']:
+                    attained_max_pressure = True
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
@@ -1133,14 +1206,16 @@ class PatchPipetteResealState(PatchPipetteState):
 
 class PatchPipetteBlowoutState(PatchPipetteState):
     stateName = 'blowout'
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': True,
-        'blowoutPressure': 65e3,
-        'blowoutDuration': 2.0,
         'fallbackState': 'bath',
+    }
+    _parameterTreeConfig = {
+        'blowoutPressure': {'type': 'float', 'value': 65e3, 'suffix': 'Pa'},
+        'blowoutDuration': {'type': 'float', 'value': 2.0, 'suffix': 'Pa'},
     }
 
     def run(self):
@@ -1198,16 +1273,18 @@ class PatchPipetteCleanState(PatchPipetteState):
     """
     stateName = 'clean'
 
-    _defaultConfig = {
+    _parameterValueOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
         'initialClampHolding': 0,
         'initialTestPulseEnable': False,
-        'cleanSequence': [(-35e3, 1.0), (100e3, 1.0)] * 5,
-        'rinseSequence': [(-35e3, 3.0), (100e3, 10.0)],
-        'approachHeight': 5e-3,
         'fallbackState': 'out',
         'finishPatchRecord': True,
+    }
+    _parameterTreeConfig = {
+        'cleanSequence': {'type': 'str', 'value': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
+        'rinseSequence': {'type': 'str', 'value': "[(-35e3, 3.0), (100e3, 10.0)]]"},  # TODO
+        'approachHeight': {'type': 'float', 'value': 5e-3, 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1235,6 +1312,8 @@ class PatchPipetteCleanState(PatchPipetteState):
             self._checkStop()
 
             sequence = config[stage + 'Sequence']
+            if isinstance(sequence, str):
+                sequence = eval(sequence, units.__dict__)
             if len(sequence) == 0:
                 continue
 
@@ -1284,3 +1363,4 @@ class PatchPipetteCleanState(PatchPipetteState):
         self.resetPosition()
             
         PatchPipetteState.cleanup(self)
+                                                                                                        
