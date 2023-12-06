@@ -1193,10 +1193,10 @@ class PatchPipetteResealState(PatchPipetteState):
                 patchrec['resealInitialResistance'] = initialResistance
 
             # check progress on resistance
-            if len(recentTestPulses) > config['numTestPulseAverage']:
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-                if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
-                    return self._transition_to_seal("cell detected (slow criteria)", patchrec)
+            # if len(recentTestPulses) > config['numTestPulseAverage']:
+            #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+            #     if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
+            #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self._checkStop()
 
     def cleanup(self):
