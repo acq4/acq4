@@ -282,27 +282,15 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         return FrameAcquisitionFuture(self, n)
 
-    def driverSupportedFixedFrameAcquisition(self, n=1, stack=True):
+    def driverSupportedFixedFrameAcquisition(self, n=1):
         """This calls self._acquireFrames directly, bypassing the AcquireThread. This can be used to
         implement fixed-frame acquisition. The metadata construction here is bad, though, so use
         *acquireFrames* instead if possible.
         """
-        if n > 1 and not stack:
-            raise ValueError("Using stack=False is only allowed when n==1.")
-
         # TODO: Add a non-blocking mode that returns a Future.
         frames = self._acquireFrames(n)
-        if not stack:
-            frames = frames[0]
 
-        info = dict(self.getParams(["binning", "exposure", "region", "triggerMode"]))
-        ss = self.getScopeState()
-        # TODO this work should not be duplicated here (is in AcquireThread)
-        ps = ss["pixelSize"]  # size of CCD pixel
-        info["pixelSize"] = [ps[0] * info["binning"][0], ps[1] * info["binning"][1]]
-        info["objective"] = ss.get("objective", None)
-        info["lightSource"] = ss.get("lightSourceState", None)
-        info["deviceTransform"] = pg.SRTTransform3D(ss["transform"])  # TODO this fails to acconut for camera movement
+        info = self.acqThread.buildFrameInfo(self.getScopeState())
         info["time"] = ptime.time()
 
         f = Frame(frames, info)
@@ -834,12 +822,27 @@ class AcquireThread(Thread):
         with self._newFrameCallbacksMutex:
             if method in self._newFrameCallbacks:
                 self._newFrameCallbacks.remove(method)
-    
+
+    def buildFrameInfo(self, scopeState, camState: dict|None = None) -> dict:
+        ps = scopeState["pixelSize"]  # size of CCD pixel
+        transform = pg.SRTTransform3D(scopeState["transform"])  # TODO this is expensive; can we pull it out of the acq thread?
+        if camState is None:
+            info = dict(self.dev.getParams(["binning", "exposure", "region", "triggerMode"]))
+        else:
+            info = camState.copy()
+        binning = info["binning"]
+        info.update({
+            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
+            "objective": scopeState.get("objective", None),
+            "deviceTransform": transform,
+            "illumination": scopeState.get("illumination", None),
+        })
+        return info
+
     def run(self):
         lastFrameId = None
 
         camState = dict(self.dev.getParams(["binning", "exposure", "region", "triggerMode"]))
-        binning = camState["binning"]
         exposure = camState["exposure"]
         mode = camState["triggerMode"]
 
@@ -870,15 +873,7 @@ class AcquireThread(Thread):
                     if ss["id"] != scopeState:
                         scopeState = ss["id"]
                         # regenerate frameInfo here
-                        ps = ss["pixelSize"]  # size of CCD pixel
-                        transform = pg.SRTTransform3D(ss["transform"])
-
-                        frameInfo = {
-                            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
-                            "objective": ss.get("objective", None),
-                            "deviceTransform": transform,
-                            "illumination": ss.get("illumination", None),
-                        }
+                        frameInfo = self.buildFrameInfo(ss, camState=camState)
 
                     # Copy frame info to info array
                     info.update(frameInfo)
