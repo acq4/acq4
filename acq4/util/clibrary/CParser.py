@@ -332,7 +332,7 @@ class CParser:
             self.files[file] = None
             return False
 
-        fd = open(file, 'rU')  ## U causes all newline types to be converted to \n
+        fd = open(file, 'r')
         self.files[file] = fd.read()
         fd.close()
 
