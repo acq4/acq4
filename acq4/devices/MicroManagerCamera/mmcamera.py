@@ -94,12 +94,10 @@ class MicroManagerCamera(Camera):
         self.mmc.setCameraDevice(self.camName)
         self.mmc.startSequenceAcquisition(n, 0, True)
         frames = []
-        frameTimes = []
         timeoutStart = ptime.time()
         while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
             if self.mmc.getRemainingImageCount() > 0:
-                frameTimes.append(ptime.time())
-                timeoutStart = frameTimes[-1]
+                timeoutStart = ptime.time()
                 frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
             else:
                 if ptime.time() - timeoutStart > 10.0:
