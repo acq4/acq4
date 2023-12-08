@@ -231,7 +231,7 @@ class Microscope(Device, OptomechDevice):
         return runZStack(imager, z_range)
 
     @Future.wrap
-    def findSurfaceDepth(self, _future: Future, imager: "Device") -> None:
+    def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
         """Set the surface of the sample based on how focused the images are."""
 
         def center_area(img: np.ndarray) -> Tuple[slice, slice]:

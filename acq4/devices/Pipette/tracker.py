@@ -171,7 +171,7 @@ class PipetteTracker(object):
 
     @Future.wrap
     def takeReferenceFrames(
-        self, _future: Future, zRange=None, zStep=None, imager=None, tipLength=None
+        self, zRange=None, zStep=None, imager=None, tipLength=None, _future: Future = None
     ):
         """Collect a series of images of the pipette tip at various focal depths.
 

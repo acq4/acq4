@@ -85,7 +85,7 @@ class CameraTaskGui(DAQGenericTaskGui):
             task['pushState'] = None
             task['popState'] = None
         if state['fixedFrameEnabled']:
-            task['minFrames'] = state['minFrames']
+            task['minFrames'] = int(state['minFrames'])
         return task
         
     def taskSequenceStarted(self):

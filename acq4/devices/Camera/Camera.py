@@ -277,25 +277,33 @@ class Camera(DAQGeneric, OptomechDevice):
                 self.stop()
 
     def acquireFrames(self, n=None) -> "FrameAcquisitionFuture":
-        """Acquire a specific number of frames asynchronously or synchronously, depending on the
-        value of *blocking*. If *n* is None, then frames will be acquired until stop() is called.
+        """Acquire a specific number of frames and return a FrameAcquisitionFuture.
+
+        If *n* is None, then frames will be acquired until future.stop() is called.
+        Call future.getResult() to return the acquired Frame object.
+
+        This method works by collecting frames as they stream from the camera and does not
+        handle starting / stopping / configuring the camera.
         """
         return FrameAcquisitionFuture(self, n)
 
-    def driverSupportedFixedFrameAcquisition(self, n=1):
-        """This calls self._acquireFrames directly, bypassing the AcquireThread. This can be used to
-        implement fixed-frame acquisition. The metadata construction here is bad, though, so use
-        *acquireFrames* instead if possible.
+    @Future.wrap
+    def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list["Frame"]:
+        """Ask the camera driver to acquire a specific number of frames and return a Future.
+
+        Call future.getResult() to return the acquired Frame object.
+
+        Depending on the underlying camera driver, this method may cause the camera to restart.
         """
-        # TODO: Add a non-blocking mode that returns a Future.
-        frames = self._acquireFrames(n)
+        frames = self._acquireFrames(int(n))
 
         info = self.acqThread.buildFrameInfo(self.getScopeState())
         info["time"] = ptime.time()
-
-        f = Frame(frames, info)
-        self.newFrame(f)  # allow others access to this frame (for example, camera module can update)
-        return f
+        retval = []
+        for f in frames:
+            retval.append(Frame(f, info))
+            self.newFrame(retval[-1])  # allow others access to this frame (for example, camera module can update)
+        return retval
 
     def _acquireFrames(self, n):
         # todo: default implementation can use acquisition thread instead..
@@ -580,7 +588,8 @@ class CameraTask(DAQGenericTask):
             self.dev.stop(block=True)
         prof.mark("stop")
 
-        self._future = self.dev.acquireFrames(n=self.fixedFrameCount)
+        if self.fixedFrameCount is None:
+            self._future = self.dev.acquireFrames(n=self.fixedFrameCount)
 
         # Call the DAQ configure
         DAQGenericTask.configure(self)
@@ -598,7 +607,9 @@ class CameraTask(DAQGenericTask):
     def start(self):
         # arm recording
         self.stopRecording = False
-        if not self.dev.isRunning():
+        if self.fixedFrameCount is not None:
+            self._future = self.dev.driverSupportedFixedFrameAcquisition(n=self.fixedFrameCount)
+        elif not self.dev.isRunning():
             self.dev.start(block=True)
 
         # Last I checked, this does nothing. It should be here anyway, though..
@@ -676,7 +687,6 @@ class CameraTaskResult:
     def asArray(self):
         with self.lock:
             if self._arr is None:
-                # data = self._frames
                 if len(self._frames) > 0:
                     self._arr = np.concatenate([f.data()[np.newaxis, ...] for f in self._frames])
         return self._arr
@@ -711,7 +721,7 @@ class CameraTaskResult:
                         raise
                     times -= times[0]
                 else:
-                    return None
+                    return None, False
 
                 expose = None
                 daqResult = self._daqResult
@@ -992,7 +1002,7 @@ class FrameAcquisitionFuture(Future):
     def handleNewFrame(self, frame):
         self._queue.put(frame)
 
-    def peekAtResults(self) -> list[Frame]:
+    def peekAtResult(self) -> list[Frame]:
         return self._frames[:]
 
     def getResult(self, timeout=None) -> list[Frame]:

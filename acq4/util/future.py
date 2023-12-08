@@ -65,10 +65,11 @@ class Future(Qt.QObject):
 
     def _executeInThread(self, func, args, kwds):
         try:
-            self._returnVal = func(self, *args, **kwds)
+            kwds['_future'] = self
+            self._returnVal = func(*args, **kwds)
             self._taskDone()
         except Exception as exc:
-            self._taskDone(error=str(exc), excInfo=sys.exc_info())
+            self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
 
     def getResult(self, timeout=None):
         self.wait(timeout)
@@ -174,9 +175,13 @@ class Future(Qt.QObject):
             err = self.errorMessage()
             if err is None:
                 # This would be a fantastic place to "raise from self._excInfo[1]" once we move to py3
-                raise RuntimeError(f"Task {self} did not complete (no error message).")
+                msg = f"Task {self} did not complete (no error message)."
             else:
-                raise RuntimeError(f"Task {self} did not complete: {err}")
+                msg = f"Task {self} did not complete: {err}"
+            if self._excInfo is not None:
+                raise RuntimeError(msg) from self._excInfo[1]
+            else:
+                raise RuntimeError(msg)
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
