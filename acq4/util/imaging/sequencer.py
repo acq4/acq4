@@ -110,16 +110,18 @@ class ImageSequencerThread(Thread):
                         start, end, step = prot["zStackRangeArgs"]
                         direction = start - end
                         self.setFocusDepth(start, direction)
-                        fps = imager.getEstimatedFrameRate()
+                        fps = imager.getEstimatedFrameRate().getResult()
                         meters_per_frame = abs(step)
-                        speed = meters_per_frame * fps
+                        speed = meters_per_frame * fps * 0.9
                         future = imager.acquireFrames()
                         with imager.run(ensureFreshFrames=True):
+                            imager.acquireFrames(1).wait()  # just to be sure the camera's recording
                             self.setFocusDepth(end, direction, speed=speed)
+                            imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                             future.stop()
                             self._frames += future.getResult(timeout=10)
-                        # TODO trim to get linear spacing? but the MockStage/Camera are so not giving me usable data T_T
-                    else:  # timelapse
+                        # TODO trim to get linear spacing, once this data is at all useful
+                    else:  # single frame
                         with imager.run(ensureFreshFrames=True):
                             self._frames.append(imager.acquireFrames(1).getResult()[0])
                     self.sendStatusMessage(i, maxIter)

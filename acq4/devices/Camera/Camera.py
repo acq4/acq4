@@ -1,4 +1,6 @@
 import queue
+from collections import deque
+
 import numpy as np
 import threading
 import time
@@ -322,14 +324,15 @@ class Camera(DAQGeneric, OptomechDevice):
         # self.cam.close()
         DAQGeneric.quit(self)
 
-    def getEstimatedFrameRate(self):
+    @Future.wrap
+    def getEstimatedFrameRate(self, _future: Future):
         """Return the estimated frame rate of the camera.
         """
-        with self.reserved():
+        if not self.isRunning():
             with self.run():
-                frames = self.acquireFrames(10).getResult()
-            frames = [f for f in frames if f.info()["fps"] is not None]
-            return sum([f.info()["fps"] for f in frames]) / len(frames)
+                return _future.waitFor(self.acqThread.getEstimatedFrameRate()).getResult()
+        else:
+            return _future.waitFor(self.acqThread.getEstimatedFrameRate()).getResult()
 
     # @ftrace
     def createTask(self, cmd, parentTask):
@@ -804,6 +807,7 @@ class AcquireThread(Thread):
         self.bufferTime = 5.0
         self.tasks = []
         self.cameraStartEvent = threading.Event()
+        self._recentFPS = deque(maxlen=10)
 
         # This thread does not run an event loop,
         # so we may need to deliver frames manually to some places
@@ -892,6 +896,7 @@ class AcquireThread(Thread):
                     dt = (now - lastFrameTime) / len(frames)
                     if dt > 0:
                         info["fps"] = 1.0 / dt
+                        self._recentFPS.append(info["fps"])
                     else:
                         info["fps"] = None
 
@@ -942,12 +947,24 @@ class AcquireThread(Thread):
                 pass
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
+    @Future.wrap
+    def getEstimatedFrameRate(self, _future: Future = None):
+        """Return the estimated frame rate of the camera.
+        """
+        if not self.isRunning():
+            raise RuntimeError("Cannot get frame rate while camera is not running.")
+        while len(self._recentFPS) < self._recentFPS.maxlen:
+            time.sleep(0.01)
+            _future._checkStop()
+        return np.mean(self._recentFPS)
+
     def stop(self, block=False):
         with self.lock:
             self.stopThread = True
         if block:
             if not self.wait(10000):
                 raise Exception("Timed out waiting for thread exit!")
+        self._recentFPS.clear()
 
     def reset(self):
         if self.isRunning():
