@@ -109,14 +109,14 @@ class ImageSequencerThread(Thread):
                     if prot["zStack"]:
                         start, end, step = prot["zStackRangeArgs"]
                         direction = start - end
-                        self.setFocusDepth(start, direction)
+                        self.setFocusDepth(start, direction, 'fast')
                         fps = imager.getEstimatedFrameRate().getResult()
                         meters_per_frame = abs(step)
                         speed = meters_per_frame * fps * 0.9
                         future = imager.acquireFrames()
                         with imager.run(ensureFreshFrames=True):
                             imager.acquireFrames(1).wait()  # just to be sure the camera's recording
-                            self.setFocusDepth(end, direction, speed=speed)
+                            self.setFocusDepth(end, direction, speed)
                             imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                             future.stop()
                             self._frames += future.getResult(timeout=10)
@@ -149,7 +149,7 @@ class ImageSequencerThread(Thread):
 
         self.sigMessage.emit(f"[ running  {itermsg} ]")
 
-    def setFocusDepth(self, depth: float, direction: float, speed='fast'):
+    def setFocusDepth(self, depth: float, direction: float, speed: float|str):
         imager = self.prot["imager"]
         if depth is None:
             return
@@ -164,7 +164,7 @@ class ImageSequencerThread(Thread):
             # stack goes upward
             imager.setFocusDepth(depth - 20e-6, speed).wait()
 
-        imager.setFocusDepth(depth).wait()
+        imager.setFocusDepth(depth, speed=speed).wait()
 
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.

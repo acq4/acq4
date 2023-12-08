@@ -240,9 +240,8 @@ class MockStageThread(Thread):
                 target = self.target
                 speed = self.speed
                 velocity = self.velocity
-                currentMove = self.currentMove
                 pos = self.pos
-                
+
             now = ptime.time()
             dt = now - lastUpdate
             lastUpdate = now

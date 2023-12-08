@@ -456,7 +456,7 @@ class Camera(DAQGeneric, OptomechDevice):
         # this is how much the focal plane needs to move (in the global frame)
         dif = z - self.getFocusDepth()
         scopez = self.scopeDev.getFocusDepth() + dif
-        return self.scopeDev.setFocusDepth(scopez)
+        return self.scopeDev.setFocusDepth(scopez, speed)
 
     def objectiveChanged(self, obj=None):
         if obj is None:
@@ -866,7 +866,7 @@ class AcquireThread(Thread):
 
             lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
-            scopeState = None
+            lastFrameID = None
 
             while True:
                 now = ptime.time()
@@ -884,13 +884,13 @@ class AcquireThread(Thread):
 
                     ss = self.dev.getScopeState()
 
-                    if ss["id"] != scopeState:
-                        scopeState = ss["id"]
+                    if ss["id"] != lastFrameID:
+                        lastFrameID = ss["id"]
                         # regenerate frameInfo here
                         frameInfo = self.buildFrameInfo(ss, camState=camState)
 
                     # Copy frame info to info array
-                    info.update(frameInfo)
+                    info.update(frameInfo)  # TODO should this really be updating using last frame's info? (when ss["id"] was lastFrameID)
 
                     # Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)
