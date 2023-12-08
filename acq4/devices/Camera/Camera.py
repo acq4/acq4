@@ -955,7 +955,7 @@ class AcquireThread(Thread):
             raise RuntimeError("Cannot get frame rate while camera is not running.")
         while len(self._recentFPS) < self._recentFPS.maxlen:
             time.sleep(0.01)
-            _future._checkStop()
+            _future.checkStop()
         return np.mean(self._recentFPS)
 
     def stop(self, block=False):
@@ -999,7 +999,7 @@ class FrameAcquisitionFuture(Future):
                     lastFrameTime = ptime.time()
                 except queue.Empty:
                     try:
-                        self._checkStop(0.1)  # delay while checking for a stop request
+                        self.checkStop(0.1)  # delay while checking for a stop request
                     except self.StopRequested:
                         self._taskDone(interrupted=self._frame_count is not None)
                         break

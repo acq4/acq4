@@ -17,20 +17,26 @@ class Future(Qt.QObject):
     sigStateChanged = Qt.Signal(object, object)  # self, state
 
     class StopRequested(Exception):
-        """Raised by _checkStop if stop() has been invoked.
+        """Raised by checkStop if stop() has been invoked.
         """
 
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses.
         """
 
-    R = TypeVar('R')
-    P = ParamSpec('P')
-
     @classmethod
-    def wrap(cls, func: Callable[Concatenate['Future', P], R]) -> Callable[P, 'Future[R]']:
-        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future as its
-        first argument.
+    def wrap(cls, func: Callable) -> Callable[..., 'Future']:
+        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
+        named "_future" as a keyword argument. This Future can be variously used to checkStop() the
+        function, wait for other futures, and will be returned by the decorated function call.
+        Usage:
+            @Future.wrap
+            def myFunc(arg1, arg2, _future=None):
+                ...
+                _future.checkStop()
+                _future.waitFor(someOtherFuture)
+                ...
+            result = myFunc(arg1, arg2).getResult()
         """
         @functools.wraps(func)
         def wrapper(*args, **kwds):
@@ -105,7 +111,7 @@ class Future(Qt.QObject):
         This method may return another future if stopping the task is expected to
         take time.
 
-        Subclasses may extend this method and/or use _checkStop to determine whether
+        Subclasses may extend this method and/or use checkStop to determine whether
         stop() has been called.
         """
         if self.isDone():
@@ -188,7 +194,7 @@ class Future(Qt.QObject):
         """
         self.finishedEvent.wait(timeout=duration)
 
-    def _checkStop(self, delay=0):
+    def checkStop(self, delay=0):
         """Raise self.StopRequested if self.stop() has been called.
 
         This may be used by subclasses to periodically check for stop requests.
@@ -214,7 +220,7 @@ class Future(Qt.QObject):
         """
         start = time.time()
         while time.time() < start + duration:
-            self._checkStop()
+            self.checkStop()
             time.sleep(interval)
 
     def waitFor(self, future: 'Future', timeout=20.0) -> 'Future':
@@ -222,7 +228,7 @@ class Future(Qt.QObject):
         """
         start = time.time()
         while True:
-            self._checkStop()
+            self.checkStop()
             try:
                 future.wait(0.1)
                 break
