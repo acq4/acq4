@@ -127,6 +127,10 @@ class Scientifica(Stage):
         self.userSpeed = v
         self.dev.setSpeed(v * 1e6)  # requires um/s
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / self.monitor.interval
+
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:

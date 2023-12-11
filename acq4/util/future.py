@@ -3,7 +3,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import TypeVar, Callable, Concatenate, ParamSpec
+from typing import Callable
 
 from acq4.util import Qt, ptime
 
