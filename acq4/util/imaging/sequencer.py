@@ -1,14 +1,15 @@
 import time, weakref
+from typing import Union
+
 import numpy as np
 import pyqtgraph as pg
 from MetaArray import MetaArray
+
 from acq4.util import Qt, ptime
 from acq4.util.Thread import Thread
 from acq4.util.Mutex import Mutex
 import acq4.Manager as Manager
 from acq4.util.future import Future
-
-SequencerTemplate = Qt.importTemplate(".sequencerTemplate")
 
 
 def runZStack(imager, z_range_args) -> Future:
@@ -48,6 +49,74 @@ class ImageSequencerFuture(Future):
     def getResult(self, timeout=None):
         self.wait(timeout)
         return self._thread.getResult()
+
+
+def _enforce_linear_z_stack(frames: list["Frame"], step: float) -> list["Frame"]:
+    """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
+    grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
+    simultaneously, or just in the time it takes to get a new z value). This assumes the z
+    values of the first and last frames are correct, but not necessarily any of the other
+    frames."""
+    if len(frames) < 2:
+        return frames
+    if step == 0:
+        raise ValueError("Z stack step size must be non-zero.")
+    step = abs(step)
+    frames = [(f.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z(), f) for f in frames]
+    expected_size = abs(frames[-1][0] - frames[0][0]) / step
+    if len(frames) < expected_size:
+        raise ValueError("Insufficient frames to have one frame per step.")
+    # throw away frames that are nearly identical to the previous frame (hopefully this only
+    # happens at the endpoints)
+
+    def difference_is_significant(frame1, frame2):
+        """Returns whether the absolute difference between the two frames is significant. Frames are
+        tuples of (z, frame)."""
+        z1, frame1 = frame1
+        z2, frame2 = frame2
+        return z1 != z2  # for now
+        if z1 != z2:
+            return True
+        img1 = frame1.data()
+        img2 = frame2.data()
+        dmax = np.iinfo(img1.dtype).max
+        threshold = (dmax / 512)  # arbitrary
+        overflowed_diff = img1 - img2  # e.g. uint16: 4 - 1 = 3, 1 - 4 = 65532
+        if np.issubdtype(img1.dtype, np.unsignedinteger):
+            abs_adjust = (img1 < img2).astype(img1.dtype) * dmax + 1  # e.g. uint16: "-1" (65535) if img1 < img2, 1 otherwise
+            return np.mean(overflowed_diff * abs_adjust) > threshold
+        else:
+            return np.mean(np.abs(overflowed_diff)) > threshold
+    frames = [frames[0]] + [
+        f for i, f in enumerate(frames[1:], 1)
+        if difference_is_significant(f, frames[i - 1])
+    ]
+    if len(frames) < expected_size:
+        raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
+
+    return [f for _, f in sorted(frames, )]
+
+    # TODO do we want this?
+    # TODO interpolate first?
+    if frames[0][0] < frames[-1][0]:
+        ideal_z_values = np.arange(frames[0][0], frames[-1][0] + step, step)
+    else:
+        ideal_z_values = np.arange(frames[0][0], frames[-1][0] - step, -step)
+    # [(0, f1), (0, f2), (1, f3)] with ideal z's of [0, 1] should become [(0, f1), (1, f3)]
+    # [(0, f1), (2, f2), (2, f3), (2, f4)] with ideal z's of [0, 1, 2] should become [(0, f1), (1, f2), (2, f4)]
+    ideal_idx = 0
+    actual_idx = 0
+    actual_z_values = np.array([z for z, _ in frames])
+    new_frame_idxs = []
+    while ideal_idx < len(ideal_z_values) and actual_idx < len(frames):
+        next_closest = np.argmin(np.abs(actual_z_values - ideal_z_values[ideal_idx]))  # TODO this could be made faster if needed
+        next_closest = max(next_closest, actual_idx)  # don't go backwards
+        new_frame_idxs.append(next_closest)
+        ideal_idx += 1
+        actual_idx = next_closest + 1
+    if len(new_frame_idxs) < expected_size:
+        raise ValueError("Insufficient frames to have one frame per step (after collecting only ).")
+    return [frames[i][1] for i in new_frame_idxs]
 
 
 class ImageSequencerThread(Thread):
@@ -110,9 +179,11 @@ class ImageSequencerThread(Thread):
                         start, end, step = prot["zStackRangeArgs"]
                         direction = start - end
                         self.setFocusDepth(start, direction, 'fast')
-                        fps = imager.getEstimatedFrameRate().getResult()
+                        # fps = imager.getEstimatedFrameRate().getResult()
+                        stage = imager.scopeDev.getFocusDevice()
+                        z_per_second = stage.positionUpdatesPerSecond
                         meters_per_frame = abs(step)
-                        speed = meters_per_frame * fps * 0.9
+                        speed = meters_per_frame * z_per_second * 0.5
                         future = imager.acquireFrames()
                         with imager.run(ensureFreshFrames=True):
                             imager.acquireFrames(1).wait()  # just to be sure the camera's recording
@@ -120,7 +191,7 @@ class ImageSequencerThread(Thread):
                             imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                             future.stop()
                             self._frames += future.getResult(timeout=10)
-                        # TODO trim to get linear spacing, once this data is at all useful
+                        self._frames = _enforce_linear_z_stack(self._frames, step)
                     else:  # single frame
                         with imager.run(ensureFreshFrames=True):
                             self._frames.append(imager.acquireFrames(1).getResult()[0])
@@ -149,7 +220,7 @@ class ImageSequencerThread(Thread):
 
         self.sigMessage.emit(f"[ running  {itermsg} ]")
 
-    def setFocusDepth(self, depth: float, direction: float, speed: float|str):
+    def setFocusDepth(self, depth: float, direction: float, speed: Union[float, str]):
         imager = self.prot["imager"]
         if depth is None:
             return
@@ -246,7 +317,7 @@ class ImageSequencerCtrl(Qt.QWidget):
 
         self.imager = None
 
-        self.ui = SequencerTemplate()
+        self.ui = Qt.importTemplate(".sequencerTemplate")()
         self.ui.setupUi(self)
 
         self.ui.zStartSpin.setOpts(value=100e-6, suffix="m", siPrefix=True, step=10e-6, decimals=6)

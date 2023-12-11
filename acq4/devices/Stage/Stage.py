@@ -315,6 +315,12 @@ class Stage(Device, OptomechDevice):
         ## this informs rigidly-connected devices that they have moved
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
+    @property
+    def positionUpdatesPerSecond(self):
+        """Return the rate at which the device reports position updates.
+        """
+        raise NotImplementedError()
+
     def getPosition(self, refresh=False):
         """Return the position of the stage as reported by the controller.
 
