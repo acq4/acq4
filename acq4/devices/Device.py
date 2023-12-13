@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import traceback
 from contextlib import contextmanager
+from typing import Optional
 
 import acq4
 from acq4.Interfaces import InterfaceMixin
@@ -354,7 +355,7 @@ class TaskGui(Qt.QWidget):
         """
         return {}
         
-    def generateTask(self, params: "dict | None" = None) -> dict:
+    def generateTask(self, params: Optional[dict] = None) -> dict:
         """
         This method should convert params' index-values back into task-values, along with any default work non-sequenced
         tasks need. WARNING! Long sequences will not automatically lock the UI or preserve the state of your parameter

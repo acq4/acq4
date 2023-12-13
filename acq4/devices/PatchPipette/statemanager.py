@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import sys
 from collections import OrderedDict
+from typing import Optional
 
 from six.moves import queue
 
@@ -104,7 +105,7 @@ class PatchPipetteStateManager(Qt.QObject):
         cls.profiles[name] = config
 
     @classmethod
-    def getStateConfig(cls, state: str, profile: str|None):
+    def getStateConfig(cls, state: str, profile: Optional[str]):
         """Return the configuration options for the given state and profile, or just the defaults if no profile is specified.
         """
         if profile is None:

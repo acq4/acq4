@@ -5,7 +5,7 @@ import numpy as np
 import threading
 import time
 
-from typing import Callable
+from typing import Callable, Optional
 from contextlib import contextmanager
 from six.moves import range
 
@@ -837,7 +837,7 @@ class AcquireThread(Thread):
             if method in self._newFrameCallbacks:
                 self._newFrameCallbacks.remove(method)
 
-    def buildFrameInfo(self, scopeState, camState: dict|None = None) -> dict:
+    def buildFrameInfo(self, scopeState, camState: Optional[dict] = None) -> dict:
         ps = scopeState["pixelSize"]  # size of CCD pixel
         transform = pg.SRTTransform3D(scopeState["transform"])  # TODO this is expensive; can we pull it out of the acq thread?
         if camState is None:
@@ -975,7 +975,7 @@ class AcquireThread(Thread):
 
 
 class FrameAcquisitionFuture(Future):
-    def __init__(self, camera: Camera, frameCount: int | None, timeout: float = 10):
+    def __init__(self, camera: Camera, frameCount: Optional[int], timeout: float = 10):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
         super().__init__()
         self._camera = camera
