@@ -1,10 +1,11 @@
 import collections
-from typing import Tuple, Union, Callable
+from typing import Tuple
 
 import numpy as np
 import scipy.ndimage
 
 import pyqtgraph as pg
+from acq4.util.typing import Number
 from pyqtgraph.units import µm
 
 from acq4.Manager import getManager
@@ -18,7 +19,6 @@ from acq4.util.debug import printExc
 from acq4.util.future import Future, MultiFuture
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
-Number = Union[int, float, np.number]
 
 
 class Microscope(Device, OptomechDevice):
