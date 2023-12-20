@@ -5,15 +5,13 @@ dependencies:
   - h5py
   - numpy
   - pillow
-  - pip
   - pyparsing=2.4.7
   - pyqt>=5.12
-  - python=3.8
+  - python=3.9
   - scipy
-  - six
   - sqlite
   - pyserial
-  - numba
   - pyqtgraph>=0.12
   - pip:
     - MetaArray
+    - pyyaml

@@ -52,13 +52,12 @@ class NiDAQ(Device):
             res = True
         else:
             res = self.reserve(block=block)
-            
+
         if not block and not res:
             if delaySetIfBusy:
-                #print "  busy, schedule for later."
                 self.delayedSet[chan] = value
             return False
-        
+
         try:
             if 'ao' in chan:
                 self.n.writeAnalogSample(chan, value, vRange=self._defaultAORange)
@@ -69,7 +68,7 @@ class NiDAQ(Device):
                     value = 0
                 self.n.writeDigitalSample(chan, value)
         except:
-            printExc("Error while setting channel %s to %s:" % (chan, str(value)))
+            print(f"Error while setting channel {chan} to {value}:")
             raise
         finally:
             if not ignoreLock:
@@ -94,11 +93,10 @@ class NiDAQ(Device):
     def getChannelValue(self, chan, mode=None, block=True):
         if mode is None:
             mode = self.config.get('defaultAIMode', None)
-        
+
         res = self.reserve(block=block)
         if not res:  ## False means non-blocking lock attempt failed.
             return False
-        #print "Setting channel %s to %f" % (chan, value)
         try:
             if 'ai' in chan:
                 val = self.n.readAnalogSample(chan, mode=mode, vRange=self._defaultAIRange)
@@ -109,7 +107,7 @@ class NiDAQ(Device):
                 else:
                     val = 1
         except:
-            printExc("Error while getting channel value %s:" % str(chan))
+            print(f"Error while getting channel value {chan}:")
             raise
         finally:
             self.release()
