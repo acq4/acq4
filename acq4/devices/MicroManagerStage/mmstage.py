@@ -10,6 +10,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
+from ...util.debug import printExc
 
 
 class MicroManagerStage(Stage):
@@ -131,6 +132,10 @@ class MicroManagerStage(Stage):
             except:
                 printExc("Error stopping axis %s:" % ax)
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1 / self.monitor.minInterval
+
     def setUserSpeed(self, v):
         """Set the maximum speed of the stage (m/sec) when under manual control.
 
@@ -205,6 +210,7 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
+        self.minInterval = 100e-3
 
         Thread.__init__(self)
 
@@ -221,8 +227,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         lastPos = None
         while True:
             try:
@@ -234,7 +239,7 @@ class MonitorThread(Thread):
                 pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
                 if pos != lastPos:
                     # if there was a change, then loop more rapidly for a short time.
-                    interval = minInterval
+                    interval = self.minInterval
                     lastPos = pos
                 else:
                     interval = min(maxInterval, interval * 2)
