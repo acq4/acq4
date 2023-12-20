@@ -1,5 +1,5 @@
 import time, weakref
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 import pyqtgraph as pg
@@ -115,8 +115,54 @@ def _enforce_linear_z_stack(frames: list["Frame"], step: float) -> list["Frame"]
         ideal_idx += 1
         actual_idx = next_closest + 1
     if len(new_frame_idxs) < expected_size:
-        raise ValueError("Insufficient frames to have one frame per step (after collecting only ).")
+        raise ValueError("Insufficient frames to have one frame per step (after walking through).")
     return [frames[i][1] for i in new_frame_idxs]
+
+
+def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float, str], future: Optional[Future] = None):
+    if depth is None:
+        return
+
+    dz = depth - imager.getFocusDepth()
+
+    # Avoid hysteresis:
+    if direction > 0 and dz > 0:
+        # stack goes downward
+        f = imager.setFocusDepth(depth + 20e-6, speed)
+        if future is not None:
+            future.waitFor(f)
+        else:
+            f.wait()
+    elif direction < 0 and dz < 0:
+        # stack goes upward
+        f = imager.setFocusDepth(depth - 20e-6, speed)
+        if future is not None:
+            future.waitFor(f)
+        else:
+            f.wait()
+
+    f = imager.setFocusDepth(depth, speed=speed)
+    if future is not None:
+        future.waitFor(f)
+    else:
+        f.wait()
+
+
+@Future.wrap
+def _slow_z_stack(imager, start, end, step, _future) -> list["Frame"]:
+    sign = np.sign(end - start)
+    direction = sign * -1
+    step = sign * abs(step)
+    frames_fut = imager.acquireFrames()
+    _set_focus_depth(imager, start, direction, speed='fast', future=_future)
+    with imager.run(ensureFreshFrames=True):
+        for z in np.arange(start, end + step, step):
+            _future.waitFor(imager.acquireFrames(1))
+            _set_focus_depth(imager, z, direction, speed='slow', future=_future)
+        _future.waitFor(imager.acquireFrames(1))
+    frames_fut.stop()
+    _future.waitFor(frames_fut)
+    return frames_fut.getResult()
 
 
 class ImageSequencerThread(Thread):
@@ -178,7 +224,7 @@ class ImageSequencerThread(Thread):
                     if prot["zStack"]:
                         start, end, step = prot["zStackRangeArgs"]
                         direction = start - end
-                        self.setFocusDepth(start, direction, 'fast')
+                        _set_focus_depth(imager, start, direction, 'fast')
                         # fps = imager.getEstimatedFrameRate().getResult()
                         stage = imager.scopeDev.getFocusDevice()
                         z_per_second = stage.positionUpdatesPerSecond
@@ -187,11 +233,16 @@ class ImageSequencerThread(Thread):
                         future = imager.acquireFrames()
                         with imager.run(ensureFreshFrames=True):
                             imager.acquireFrames(1).wait()  # just to be sure the camera's recording
-                            self.setFocusDepth(end, direction, speed)
+                            _set_focus_depth(end, direction, speed)
                             imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                             future.stop()
                             self._frames += future.getResult(timeout=10)
-                        self._frames = _enforce_linear_z_stack(self._frames, step)
+                        try:
+                            self._frames = _enforce_linear_z_stack(self._frames, step)
+                        except ValueError:
+                            self.sigMessage.emit("Failed to enforce linear z stack. Retrying with stepwise movement.")
+                            self._frames = _slow_z_stack(imager, start, end, step).getResult()
+                            self._frames = _enforce_linear_z_stack(self._frames, step)
                     else:  # single frame
                         with imager.run(ensureFreshFrames=True):
                             self._frames.append(imager.acquireFrames(1).getResult()[0])
@@ -219,23 +270,6 @@ class ImageSequencerThread(Thread):
             itermsg = f"iter={iteration + 1}/{maxIter}"
 
         self.sigMessage.emit(f"[ running  {itermsg} ]")
-
-    def setFocusDepth(self, depth: float, direction: float, speed: Union[float, str]):
-        imager = self.prot["imager"]
-        if depth is None:
-            return
-
-        dz = depth - imager.getFocusDepth()
-
-        # Avoid hysteresis:
-        if direction > 0 and dz > 0:
-            # stack goes downward
-            imager.setFocusDepth(depth + 20e-6, speed).wait()
-        elif direction < 0 and dz < 0:
-            # stack goes upward
-            imager.setFocusDepth(depth - 20e-6, speed).wait()
-
-        imager.setFocusDepth(depth, speed=speed).wait()
 
     def holdImagerFocus(self, hold):
         """Tell the focus controller to lock or unlock.
