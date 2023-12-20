@@ -186,16 +186,19 @@ class Manager(Qt.QObject):
                         raise
 
             except:
-                printExc("\nError while acting on command line options: (but continuing on anyway..)")
                 if self.exitOnError:
                     raise
+                else:
+                    printExc("\nError while acting on command line options: (but continuing on anyway..)")
 
         except:
-            printExc("Error while configuring Manager:")
             Manager.CREATED = False
             Manager.single = None
             if self.exitOnError:
                 raise
+            else:
+                printExc("Error while configuring Manager:")
+
 
         finally:
             if len(self.modules) == 0:
@@ -315,9 +318,11 @@ class Manager(Qt.QObject):
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
                         except:
-                            printExc("Error configuring device %s:" % k)
+                            print(f"Error configuring device {k}:")
                             if self.exitOnError:
                                 raise
+                            else:
+                                printExc()
                     print("=== Device configuration complete ===")
                     logMsg("=== Device configuration complete ===")
 
@@ -354,11 +359,8 @@ class Manager(Qt.QObject):
 
                 ## load stylesheet
                 elif key == 'stylesheet':
-                    try:
-                        css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
-                        Qt.QApplication.instance().setStyleSheet(css)
-                    except:
-                        raise
+                    css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
+                    Qt.QApplication.instance().setStyleSheet(css)
 
                 elif key == 'disableErrorPopups':
                     if cfg[key] is True:
@@ -386,9 +388,10 @@ class Manager(Qt.QObject):
                     self._loadConfig(cfg[key])
 
             except:
-                printExc("Error in ACQ4 configuration:")
                 if self.exitOnError:
                     raise
+                else:
+                    printExc("Error in ACQ4 configuration:")
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
@@ -599,9 +602,11 @@ class Manager(Qt.QObject):
             self.getModule(name).quit()
             # print "    request quit done"
         except:
-            printExc("Error while requesting module '%s' quit." % name)
+            print(f"Error while requesting module '{name}' quit.")
             if self.exitOnError:
                 raise
+            else:
+                printExc()
 
         ## Module should have called moduleHasQuit already, but just in case:
         with self.lock:
@@ -629,9 +634,11 @@ class Manager(Qt.QObject):
             sh.setContext(Qt.Qt.ApplicationShortcut)
             sh.activated.connect(lambda *args: win.raise_())
         except:
-            printExc("Error creating shortcut '%s':" % keys)
+            print(f"Error creating shortcut '{keys}':")
             if self.exitOnError:
                 raise
+            else:
+                printExc()
 
         with self.lock:
             self.shortcuts.append((sh, keys, weakref.ref(win)))
@@ -841,9 +848,12 @@ class Manager(Qt.QObject):
                     try:
                         d.quit()
                     except:
-                        printExc("Error while requesting device '%s' quit." % d.name)
+                        print(f"Error while requesting device '{d.name}' quit.")
                         if self.exitOnError:
                             raise
+                        else:
+                            printExc()
+
                     dlg.setValue(lm + ld - len(devs))
 
                 print("Closing windows..")
@@ -1059,7 +1069,7 @@ class Task:
                         self.tasks[devName].start()
                     except:
                         self.startedDevs.remove(devName)
-                        print("Error starting device '%s'; aborting task." % devName)
+                        print(f"Error starting device '{devName}'; aborting task.")
                         raise
                     prof.mark('start %s' % devName)
                 self.startTime = ptime.time()
