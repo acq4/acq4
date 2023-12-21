@@ -233,7 +233,7 @@ class ImageSequencerThread(Thread):
                         future = imager.acquireFrames()
                         with imager.run(ensureFreshFrames=True):
                             imager.acquireFrames(1).wait()  # just to be sure the camera's recording
-                            _set_focus_depth(end, direction, speed)
+                            _set_focus_depth(imager, end, direction, speed)
                             imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                             future.stop()
                             self._frames += future.getResult(timeout=10)
