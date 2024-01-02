@@ -128,6 +128,7 @@ class Camera(DAQGeneric, OptomechDevice):
             key = preset["hotkey"]["key"]
             dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
 
+        self._multiprocessingHandler = MultiprocessCameraStreaming(self, config)
         dm.declareInterface(name, ["camera"], self)
 
     def setupCamera(self):
@@ -324,7 +325,7 @@ class Camera(DAQGeneric, OptomechDevice):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-        # self.cam.close()
+        self._multiprocessingHandler.quit()
         DAQGeneric.quit(self)
 
     @Future.wrap
@@ -792,6 +793,70 @@ class CameraTaskResult:
 
         return self._frameTimes, self._frameTimesPrecise
 
+
+class MultiprocessCameraStreaming(Qt.QObject):
+    """This class is used to connect the camera to the PyAcq acquisition system. The camera
+    should be configured with a 'multiprocessStream' parameter that specifies a list of
+    configurations for each process that will receive frames from the camera. Requires the
+    `pyacq` library to be installed. Configuration in devices.cfg looks like::
+
+    Camera:
+        ...
+        multiprocessStream:
+            handler1:
+                executable: "/alternate/python/executable"
+                class: "acq4.analysis.image.NoopCameraStreamHandler"
+                params:
+                    arg1: "value"
+    """
+    def __init__(self, dev: Camera, config: dict):
+        try:
+            import pyacq
+            self._pyacq = pyacq
+            HAS_PYACQ = True
+        except ImportError:
+            self._pyacq = None
+            HAS_PYACQ = False
+        self.dev = dev
+        self.dev.sigNewFrame.connect(self.onNewFrame)
+        self._config = config.get("multiprocessStream", None)
+        self._remote_procs = []
+        self._handlers = []
+        self._output = None
+        if HAS_PYACQ:
+            self._initPyAcq(config)
+
+    def _initPyAcq(self, config):
+        if self._pyacq.RPCServer.get_server() is None:
+            self._pyacq.RPCServer().run_lazy()
+        if self._config:
+            self._output = self._pyacq.OutputStream()
+            # TODO get shape and dtype from device
+            self._output.configure(transfermode="sharedmem", streamtype="image")
+            for name, stream_conf in self._config.items():
+                remote_proc = self._pyacq.ProcessSpawner(
+                    name=name, executable=stream_conf.get("executable"), qt=False)
+                time.sleep(5)
+                module = remote_proc.client._import(".".join(stream_conf.get("class").split(".")[:-1]))
+                cls = getattr(module, stream_conf.get("class").split(".")[-1])
+                handler = cls(name=name, config=stream_conf.get("params", {}))
+                handler.connect(self._output)
+                self._remote_procs.append(remote_proc)
+                self._handlers.append(handler)
+
+    def onNewFrame(self, frame):
+        if self._output is None:
+            return
+        self._output.send(frame)
+
+    def quit(self):
+        if self._output is None:
+            return
+        self._output.close()
+        for handler in self._handlers:
+            handler.close()
+        for proc in self._remote_procs:
+            proc.stop()
 
 class AcquireThread(Thread):
     sigNewFrame = Qt.Signal(object)
