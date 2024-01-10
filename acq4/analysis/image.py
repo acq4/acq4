@@ -1,59 +1,34 @@
-import time
+from typing import Optional
 
 import numpy as np
-from threading import Thread
 
-from pyacq import InputStream
-
-
-class BaseCameraStreamHandler(object):
-    def __init__(self, name: str, config: dict):
-        self._name = name
-        self._config = config
-        self._input = InputStream(name=name, spec=config.get('spec'))
-        self._poller = Thread(target=self._poll, daemon=True)
-
-    def _poll(self):
-        poll_interval = self._config.get('pollInterval', 0.1)
-        only_latest = self._config.get('onlyHandleLatestFrame', False)
-        while True:
-            start = time.time()
-            idx = None
-            while self._input.poll(0):
-                idx, _ = self._input.recv(return_data=False)
-                if not only_latest:
-                    break
-            if idx is not None:
-                self.handle_frame(self._input[idx:idx+1], idx)
-            time.sleep(max(0.0, poll_interval - (time.time() - start)))
-
-    def connect(self, output):
-        self._input.connect(output)
-        self._input.set_buffer(
-            size=self._config.get('buffer_size'),
-            axisorder=self._config.get('axisorder'),
-            double=self._config.get('double'),
-            fill=self._config.get('fill'),
-        )
-        if not self._poller.is_alive():
-            self._poller.start()
-
-    def close(self):
-        self._input.close()
-
-    def handle_frame(self, frame: np.ndarray, index: int):
-        raise NotImplementedError()
+from acq4.util.imaging import ImagingCtrl
+from pyqtgraph import Transform3D, TextItem
+from pyqtgraph.Qt import QtCore
 
 
-class NoopCameraStreamHandler(BaseCameraStreamHandler):
-    def __init__(self, **kwds):
-        super().__init__(**kwds)
-        self._fh = open('noop_log.txt', 'w')
+def detect_neurons(frame: np.ndarray, transform: Transform3D, model: Optional[str] = None) -> list[QtCore.QRectF]:
+    """Use a neural network to detect neurons in a frame."""
+    # TODO: Implement this
+    boxes_in_px = [QtCore.QRectF(0, 0, 20, 20), QtCore.QRectF(100, 200, 20, 25)]
+    return [transform.mapRect(box) for box in boxes_in_px]
 
-    def handle_frame(self, frame: np.ndarray, index=None):
-        self._fh.write(f'NoopCameraStreamHandler.handle_data(...{frame.size}, index={index}\n')
-        self._fh.flush()
 
-    def close(self):
-        super().close()
-        self._fh.close()
+def draw_bounding_boxes(
+    boxes: list[QtCore.QRectF],
+    img_ctrl: ImagingCtrl,
+    label: Optional[str] = None,
+    color=None,
+    decay=0.1,
+    delete_overlapping=False,
+) -> None:
+    # TODO decay and delete_overwrapping both need a persistent state
+    view = img_ctrl.frameDisplay.imageItem().getViewBox()
+    if color is None:
+        color = QtCore.Qt.white
+    for box in boxes:
+        box.setBrush(color)
+        if label:
+            text = TextItem(label)
+            text.setParentItem(box)
+        view.addItem(box)

@@ -128,7 +128,7 @@ class Camera(DAQGeneric, OptomechDevice):
             key = preset["hotkey"]["key"]
             dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
 
-        self._multiprocessingHandler = MultiprocessCameraStreaming(self, config)
+        self._multiprocessingHandler = MultiprocessCameraWorkers(self, config)
         dm.declareInterface(name, ["camera"], self)
 
     def setupCamera(self):
@@ -794,21 +794,21 @@ class CameraTaskResult:
         return self._frameTimes, self._frameTimesPrecise
 
 
-class MultiprocessCameraStreaming(Qt.QObject):
+class MultiprocessCameraWorkers(Qt.QObject):
     """This class is used to connect the camera feed to additional processes. Requires the
     `pyacq` library to be installed. The camera should be configured with a
-    'multiprocessStream' parameter that specifies a list of configurations for each process
+    'multiprocessing' parameter that specifies a list of configurations for each process
     that will receive frames from the camera. Configuration in devices.cfg looks like::
 
     Camera:
         ...
-        multiprocessStream:
+        multiprocessing:
             handler1:
                 executable: "/optional/alternate/python/executable"
                 class: "acq4.analysis.image.NoopCameraStreamHandler"
                 params:
                     pollInterval: 2.0
-                    onlyHandleLatestFrame: True
+                    onlyProcessLatestFrame: True
     """
     def __init__(self, camera: Camera, config: dict):
         super().__init__()
@@ -822,7 +822,7 @@ class MultiprocessCameraStreaming(Qt.QObject):
         self.camera = camera
         self._dtype = None
         self._shape = None
-        self._config = config.get("multiprocessStream", None)
+        self._config = config.get("multiprocessing", None)
         self._remote_procs = []
         self._handlers = []
         self._output = None
