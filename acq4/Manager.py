@@ -551,7 +551,7 @@ class Manager(Qt.QObject):
         with self.lock:
             name = str(name)
             if name not in self.modules:
-                raise Exception("No module named %s" % name)
+                self.loadModule(name)
             return self.modules[name]
 
     def getCurrentDatabase(self):
