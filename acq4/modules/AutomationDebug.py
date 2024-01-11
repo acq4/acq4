@@ -28,11 +28,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
         cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
         frame_image_item = cam_win.interfaces["Camera"].frameDisplay.imageItem()
         view = frame_image_item.getViewBox()
-        # painter = Qt.QPainter(frame_image_item.qimage)
-        # painter.setPen(mkPen('r', width=2))
-        for neuron in self._detectNeurons().getResult():
-            # painter.drawRect(neuron)
-            box = Qt.QGraphicsRectItem(neuron)
+        for start, end in self._detectNeurons().getResult():
+            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
             box.setPen(mkPen('r', width=2))
             box.setBrush(Qt.QBrush(Qt.QColor(255, 0, 0, 5)))
             view.addItem(box)
@@ -40,7 +37,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         # TODO add labels
 
     @Future.wrap
-    def _detectNeurons(self, _future: Future):
+    def _detectNeurons(self, _future: Future) -> list:
         cam: Camera = self.module.manager.getDevice('Camera')
         with cam.run():
             frame = _future.waitFor(cam.acquireFrames(1)).getResult()[0]
