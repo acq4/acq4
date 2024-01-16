@@ -1,5 +1,3 @@
-import time
-
 import os
 
 from acq4.devices.Camera import Camera
@@ -7,8 +5,7 @@ from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.future import Future
-from acq4.util.imaging.object_detection import detect_neurons
-from pyqtgraph import mkPen, TextItem
+from pyqtgraph import mkPen
 
 
 class AutomationDebugWindow(Qt.QMainWindow):
@@ -54,6 +51,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @Future.wrap
     def _detectNeurons(self, _future: Future) -> list:
+        from acq4.util.imaging.object_detection import detect_neurons
+
         cam: Camera = self.module.manager.getDevice('Camera')
         with cam.run():
             frame = _future.waitFor(cam.acquireFrames(1)).getResult()[0]
