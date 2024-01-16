@@ -77,8 +77,8 @@ class Future(Qt.QObject):
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
 
-    def getResult(self, timeout=None):
-        self.wait(timeout)
+    def getResult(self, **kwds):
+        self.wait(**kwds)
         return self._returnVal
 
     def currentState(self):
