@@ -31,23 +31,26 @@ class AutomationDebugWindow(Qt.QMainWindow):
         neurons_fut.sigFinished.connect(self._postDetectNeurons)
 
     def _postDetectNeurons(self, neurons_fut: Future):
-        cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
-        for widget in self._previousBoxWidgets:
-            cam_win.removeItem(widget)
-        self._previousBoxWidgets = []
-        for start, end in neurons_fut.getResult(updates=True):
-            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
-            box.setPen(mkPen('r', width=2))
-            box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
-            cam_win.addItem(box)
-            self._previousBoxWidgets.append(box)
-            # TODO
-            # label = TextItem('Neuron')
-            # label.setPen(mkPen('r', width=1))
-            # label.setPos(*end)
-            # cam_win.addItem(label)
-            # self._previousBoxWidgets.append(label)
-        self._neuronDetectBtn.setEnabled(True)
+        # TODO handle errors
+        try:
+            cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
+            for widget in self._previousBoxWidgets:
+                cam_win.removeItem(widget)
+            self._previousBoxWidgets = []
+            for start, end in neurons_fut.getResult():
+                box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
+                box.setPen(mkPen('r', width=2))
+                box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
+                cam_win.addItem(box)
+                self._previousBoxWidgets.append(box)
+                # TODO label boxes
+                # label = TextItem('Neuron')
+                # label.setPen(mkPen('r', width=1))
+                # label.setPos(*end)
+                # cam_win.addItem(label)
+                # self._previousBoxWidgets.append(label)
+        finally:
+            self._neuronDetectBtn.setEnabled(True)
 
     @Future.wrap
     def _detectNeurons(self, _future: Future) -> list:

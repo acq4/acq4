@@ -85,7 +85,7 @@ def detect_neurons(frame: Frame, _future: Future):
     with _lock:
         remote_process = _get_remote_process()
         rmt_array = remote_process.client.transfer(shared_array)
-        rmt_this = remote_process.client._import("acq4.util.imaging.object_detection")
+        rmt_this = remote_process.client._import("acq4.util.imaging.object_detection", timeout=15)
         _future.checkStop()
         return rmt_this._do_neuron_detection(rmt_array.data, transform)
 
