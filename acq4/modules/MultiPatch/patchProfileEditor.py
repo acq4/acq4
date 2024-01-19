@@ -1,6 +1,7 @@
 from copy import deepcopy
 import os
 import pyqtgraph as pg
+from pyqtgraph.parametertree import Parameter
 import acq4.util.Qt as qt
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
@@ -16,10 +17,8 @@ class ProfileEditor(qt.QWidget):
         self.ptree = pg.parametertree.ParameterTree()
         self.layout.addWidget(self.ptree, 0, 0)
 
-        params = []
-        for profile in PatchPipetteStateManager.listProfiles():
-            params.append(ProfileParameter(profile))
-        self.param_root = pg.parametertree.Parameter.create(name='profiles', type='group', children=params)
+        params = [ProfileParameter(profile) for profile in PatchPipetteStateManager.listProfiles()]
+        self.param_root = Parameter.create(name='profiles', type='group', children=params)
         self.ptree.setParameters(self.param_root)
         self.param_root.sigTreeStateChanged.connect(self.paramTreeChanged)
 
@@ -57,7 +56,7 @@ class ProfileEditor(qt.QWidget):
 class ProfileParameter(pg.parametertree.Parameter):
     def __init__(self, profile):
         super().__init__(name=profile, type='group', children=[
-            {'name': 'copyFrom', 'type': 'str', 'value': ''},
+            {'name': 'copyFrom', 'type': 'str', 'default': ''},
         ])
         config = PatchPipetteStateManager.getProfileConfig(profile)
         if 'copyFrom' in config:
@@ -89,11 +88,11 @@ class StateParameter(pg.parametertree.Parameter):
         config = PatchPipetteStateManager.getStateConfig(name, profile)
         for param_config in stateClass.parameterTreeConfig():
             if param_config['name'] in defaults:
-                param_config['value'] = defaults[param_config['name']]
                 param_config['default'] = defaults[param_config['name']]
             param_config['pinValueToDefault'] = True
             param = pg.parametertree.Parameter(**param_config)
-            param.setValue(config.get(param.name(), param.defaultValue()))
+            if param.name() in config:
+                param.setValue(config[param.name()])
             self.addChild(param)
 
     def reinitialize(self):
@@ -108,4 +107,4 @@ class StateParameter(pg.parametertree.Parameter):
 
     def applyDefaults(self, defaults):
         for key, val in defaults.items():
-            self.child(key).setDefault(val)
+            self.child(key).setDefault(val, updatePristineValues=True)
