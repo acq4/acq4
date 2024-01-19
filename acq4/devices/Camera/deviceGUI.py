@@ -64,13 +64,11 @@ class CameraDeviceGui(Qt.QWidget):
         self.dev.sigParamsChanged.connect(self.paramsChanged)
             
     def stateChanged(self, param, changes):
-        #print "tree state changed:"
-        ## called when state is changed by user
+        # called when state is changed by user
         vals = collections.OrderedDict()
         for param, change, data in changes:
             if change == 'value':
-                #print param.name(), param.value()
-                vals[param.name()] = param.value()
+                vals[param.name()] = param.value() if param.hasValue() else None
         
         self.dev.setParams(vals)    
         

@@ -1,14 +1,13 @@
-from __future__ import print_function
-
-import sys
 from collections import OrderedDict
 
+import sys
 from six.moves import queue
+from typing import Optional
 
 from acq4 import getManager
 from acq4.util import Qt
-from pyqtgraph import disconnect
 from acq4.util.debug import printExc
+from pyqtgraph import disconnect
 from . import states
 
 
@@ -104,23 +103,24 @@ class PatchPipetteStateManager(Qt.QObject):
         cls.profiles[name] = config
 
     @classmethod
-    def getStateConfig(cls, state: str, profile: str|None):
-        """Return the configuration options for the given state and profile, or just the defaults if no profile is specified.
+    def getStateConfig(cls, state: str, profile: Optional[str]):
+        """
+        Return the configuration options for the given state and profile, or just the defaults if no profile is
+        specified.
         """
         if profile is None:
             config = {}
         else:
             config = cls.getProfileConfig(profile)
-        copy_from = config.get('copyFrom', None)
-        if copy_from:
+        if copy_from := config.get('copyFrom', None):
             defaults = cls.getStateConfig(state, copy_from)
         else:
             defaults = cls.getStateClass(state).defaultConfig()
         config = config.get(state, {})
-        p = {}
-        for param in set(list(defaults.keys()) + list(config.keys())):
-            p[param] = config.get(param, defaults.get(param, None))
-        return p
+        return {
+            param: config.get(param, defaults.get(param, None))
+            for param in set(list(defaults.keys()) + list(config.keys()))
+        }
 
     def setProfile(self, profile: str):
         """Set the current patch profile."""
