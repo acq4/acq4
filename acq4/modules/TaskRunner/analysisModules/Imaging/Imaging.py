@@ -24,7 +24,7 @@ class ImagingModule(AnalysisModule):
         self.imageView = pg.ImageView()
         self.splitter.addWidget(self.imageView)
         
-        self.params = Parameter(name='imager', children=[
+        self.params = Parameter.create(name='imager', type='group', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
             dict(name='decomb', type='float', readonly=False, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[

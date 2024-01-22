@@ -55,7 +55,7 @@ class CameraDeviceGui(Qt.QWidget):
                     print("    Ignoring parameter '%s': %s" % (k, str(p)))
                     continue
         
-        self.paramSet = Parameter(name='cameraParams', type='group', children=params)
+        self.paramSet = Parameter.create(name='cameraParams', type='group', children=params)
         self.paramWidget = ParameterTree()
         self.paramWidget.setParameters(self.paramSet, showTop=False)
         self.layout.addWidget(self.paramWidget)
