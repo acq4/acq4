@@ -269,7 +269,8 @@ class Camera(DAQGeneric, OptomechDevice):
         if ensureFreshFrames:
             if running:
                 self.stop()
-            # todo sleep until all frames are cleared somehow
+                # todo sleep until all frames are cleared somehow?
+                self.start()
         if not running:
             self.start()
         try:
