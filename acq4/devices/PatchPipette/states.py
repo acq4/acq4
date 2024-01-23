@@ -1204,7 +1204,7 @@ class PatchPipetteResealState(PatchPipetteState):
 
 
 class MoveNucleusToHomeState(PatchPipetteState):
-    stateName = "nucleus to home"
+    stateName = "home with nucleus"
     _parameterDefaultOverrides = {
         'initialPressure': None,
         'initialPressureSource': 'regulator',
@@ -1434,12 +1434,12 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
             self.checkStop(delay)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
-        return 'out'          
+        return 'out'
 
     def resetPosition(self):
         pip = self.dev.pipetteDevice
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor([pip._moveToGlobal(self.startPos, speed='fast')])
+        self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'))
 
     def cleanup(self):
         dev = self.dev

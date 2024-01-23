@@ -129,6 +129,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.cellDetectBtn.clicked.connect(self.cellDetectClicked)
         self.ui.sealBtn.clicked.connect(self.sealClicked)   
         self.ui.collectBtn.clicked.connect(self.collectClicked)
+        self.ui.nucleusHomeBtn.clicked.connect(self.nucleusHomeClicked)
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
         self.ui.cleanBtn.clicked.connect(self.cleanClicked)
@@ -505,7 +506,13 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in pips:
             if isinstance(pip, PatchPipette):
                 pip.setState('collect')
-                
+
+    def nucleusHomeClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('home with nucleus')
+
     def breakInClicked(self):
         pips = self.selectedPipettes()
         for pip in pips:
