@@ -1203,6 +1203,23 @@ class PatchPipetteResealState(PatchPipetteState):
             self.retractionFuture.stop()
 
 
+class MoveNucleusToHomeState(PatchPipetteState):
+    stateName = "nucleus to home"
+    _parameterDefaultOverrides = {
+        'initialPressure': None,
+        'initialPressureSource': 'regulator',
+    }
+    _parameterTreeConfig = {
+        # for expected negative values, a maximum is the "smallest" magnitude:
+        'maxPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+    }
+
+    def run(self):
+        self.waitFor(self.dev.pressureDevice.attainPressure("regulator", maximum=self.config['maxPressure']))
+        self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+        self.sleep(float("inf"))
+
+
 class PatchPipetteBlowoutState(PatchPipetteState):
     stateName = 'blowout'
     _parameterDefaultOverrides = {
@@ -1388,7 +1405,6 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
         'pressureSequence': {'type': 'str', 'default': "[(60e3, 4.0), (-35e3, 1.0)] * 5"},
         'approachDistance': {'type': 'float', 'default': 30e-3, 'suffix': 's'},
     }
-
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None

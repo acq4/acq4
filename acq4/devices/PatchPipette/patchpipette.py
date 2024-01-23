@@ -1,16 +1,18 @@
 from collections import OrderedDict
 
 import numpy as np
-import time
+from typing import Optional
 
 from acq4.util import Qt
-from acq4.util.Mutex import Mutex
 from acq4.util import ptime
+from acq4.util.Mutex import Mutex
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
 from .testpulse import TestPulseThread
 from ..Camera import Camera
 from ..Device import Device
+from ..Pipette import Pipette
+from ..PressureControl import PressureControl
 
 
 class PatchPipette(Device):
@@ -52,7 +54,7 @@ class PatchPipette(Device):
 
     def __init__(self, deviceManager, config, name):
         pipName = config.pop('pipetteDevice', None)
-        self.pipetteDevice = deviceManager.getDevice(pipName)
+        self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
         self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
@@ -72,7 +74,7 @@ class PatchPipette(Device):
         self._patchRecord = None
         self._pipetteRecord = None
 
-        self.pressureDevice = None
+        self.pressureDevice: Optional[PressureControl] = None
         if 'pressureDevice' in config:
             self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
