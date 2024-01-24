@@ -27,13 +27,14 @@ class ProfileEditor(qt.QWidget):
             (profile_name, state_name, *param_name) = self.param_root.childPath(param)
             # using deepcopy pretends that the profile is immutable, but it is not
             profile = deepcopy(PatchPipetteStateManager.getProfileConfig(profile_name))
+            param_name = param_name[0]
             if state_name == "copyFrom":
                 profile[state_name] = data
             else:
                 profile.setdefault(state_name, {})
-                profile[state_name].setdefault(param_name[0], data)
+                profile[state_name].setdefault(param_name, data)
                 if not param.valueModifiedSinceResetToDefault():
-                    del profile[state_name][param_name[0]]
+                    del profile[state_name][param_name]
 
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
 
@@ -46,7 +47,7 @@ class ProfileEditor(qt.QWidget):
                     if profile_item.name() == profile_name:
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
-                        profile_item.applyDefaults({state_name: {param_name[0]: data}})
+                        profile_item.applyDefaults({state_name: {param_name: data}})
 
     def setTopLevelWindow(self):
         self.raise_()
