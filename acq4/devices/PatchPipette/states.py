@@ -762,9 +762,9 @@ class SealState(PatchPipetteState):
     }
 
     def initialize(self):
-        if self.config['maxVacuum'] != -3e3:
+        if self.config['maxVacuum'] != self.defaultConfig()['maxVacuum']:
             warnings.warn("maxVacuum parameter is deprecated; use pressureLimit instead", DeprecationWarning)
-            if self.config['pressureLimit'] != -3e3:
+            if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
                 self.config['pressureLimit'] = self.config['maxVacuum']
         self.dev.clean = False
         PatchPipetteState.initialize(self)
@@ -1142,9 +1142,9 @@ class ResealState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         self.retractionFuture = None
         PatchPipetteState.__init__(self, *args, **kwds)
-        if self.config['maxPressure'] != -4e3:
+        if self.config['maxPressure'] != self.defaultConfig()['maxPressure']:
             warnings.warn("maxPressure parameter is deprecated; use pressureLimit instead", DeprecationWarning)
-            if self.config['pressureLimit'] != -4e3:
+            if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
                 self.config['pressureLimit'] = self.config['maxPressure']
 
     def run(self):
