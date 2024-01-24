@@ -91,7 +91,7 @@ class StateParameter(pg.parametertree.Parameter):
                 param_config['default'] = defaults[param_config['name']]
             param_config['pinValueToDefault'] = True
             param = pg.parametertree.Parameter.create(**param_config)
-            if param.name() in config:
+            if config.get(param.name()) is not None:
                 param.setValue(config[param.name()])
             self.addChild(param)
 
