@@ -230,7 +230,7 @@ class PatchPipetteState(Future):
         return f'<{type(self).__name__} "{self.stateName}">'
 
 
-class PatchPipetteOutState(PatchPipetteState):
+class OutState(PatchPipetteState):
     stateName = 'out'
 
     _parameterDefaultOverrides = {
@@ -242,7 +242,7 @@ class PatchPipetteOutState(PatchPipetteState):
     }
 
 
-class PatchPipetteApproachState(PatchPipetteState):
+class ApproachState(PatchPipetteState):
     stateName = 'approach'
 
     _parameterDefaultOverrides = {
@@ -261,7 +261,7 @@ class PatchPipetteApproachState(PatchPipetteState):
         return self.config['nextState']
 
 
-class PatchPipetteWholeCellState(PatchPipetteState):
+class WholeCellState(PatchPipetteState):
     stateName = 'whole cell'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -291,7 +291,7 @@ class PatchPipetteWholeCellState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteBrokenState(PatchPipetteState):
+class BrokenState(PatchPipetteState):
     stateName = 'broken'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -306,7 +306,7 @@ class PatchPipetteBrokenState(PatchPipetteState):
         PatchPipetteState.initialize(self)
 
 
-class PatchPipetteFouledState(PatchPipetteState):
+class FouledState(PatchPipetteState):
     stateName = 'fouled'
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
@@ -319,7 +319,7 @@ class PatchPipetteFouledState(PatchPipetteState):
         PatchPipetteState.initialize(self)
 
 
-class PatchPipetteBathState(PatchPipetteState):
+class BathState(PatchPipetteState):
     """Handles detection of changes while in recording chamber
 
     - monitor resistance to detect entry into bath
@@ -408,7 +408,7 @@ class PatchPipetteBathState(PatchPipetteState):
                 return 'fouled'
 
 
-class PatchPipetteCellDetectState(PatchPipetteState):
+class CellDetectState(PatchPipetteState):
     """Handles cell detection:
 
     - monitor resistance for cell proximity and switch to seal mode
@@ -680,7 +680,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteSealState(PatchPipetteState):
+class SealState(PatchPipetteState):
     """Handles sealing onto cell
 
     State name: "seal"
@@ -887,7 +887,7 @@ class PatchPipetteSealState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteCellAttachedState(PatchPipetteState):
+class CellAttachedState(PatchPipetteState):
     """Pipette in cell-attached configuration
 
     State name: "cell attached"
@@ -955,7 +955,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
             patchrec['capacitanceBeforeBreakin'] = cap
 
 
-class PatchPipetteBreakInState(PatchPipetteState):
+class BreakInState(PatchPipetteState):
     """State using pressure pulses to rupture membrane for whole cell recording.
 
     State name: "break in"
@@ -1096,7 +1096,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteResealState(PatchPipetteState):
+class ResealState(PatchPipetteState):
     """State that retracts pipette slowly to attempt to reseal the cell.
 
     Negative pressure may optionally be applied to attempt nucleus extraction
@@ -1234,7 +1234,7 @@ class MoveNucleusToHomeState(PatchPipetteState):
         self.sleep(float("inf"))
 
 
-class PatchPipetteBlowoutState(PatchPipetteState):
+class BlowoutState(PatchPipetteState):
     stateName = 'blowout'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -1284,7 +1284,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteCleanState(PatchPipetteState):
+class CleanState(PatchPipetteState):
     """Pipette cleaning state.
 
     Cycles +/- pressure in a "clean" bath followed by an optional "rinse" bath.
@@ -1395,7 +1395,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteNucleusCollectState(PatchPipetteState):
+class NucleusCollectState(PatchPipetteState):
     """Nucleus collection state.
 
     Cycles +/- pressure in a nucleus collection tube.
