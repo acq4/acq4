@@ -1,12 +1,13 @@
-import queue
 from collections import deque
 
 import contextlib
 import numpy as np
+import queue
 import scipy.stats
 import sys
 import threading
 import time
+import warnings
 from copy import deepcopy
 
 from acq4 import getManager
@@ -716,8 +717,8 @@ class PatchPipetteSealState(PatchPipetteState):
     autoSealTimeout : float
         Maximum timeout (seconds) before the seal attempt is aborted, 
         transitioning to *fallbackState*.
-    maxVacuum : float
-        The largest vacuum pressure (pascals, negative value) to apply during sealing.
+    pressureLimit : float
+        The largest vacuum pressure (pascals, expected negative value) to apply during sealing.
         When this pressure is reached, the pressure is reset to 0 and the ramp starts over after a delay.
     pressureChangeRates : list
         A list of (seal_resistance_threshold, pressure_change) tuples that determine how much to
@@ -731,7 +732,7 @@ class PatchPipetteSealState(PatchPipetteState):
     afterSealPressure : float
         Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial formamtion.
     resetDelay : float
-        Wait time (seconds) after maxVacuum is reached, before restarting pressure ramp.
+        Wait time (seconds) after pressureLimit is reached, before restarting pressure ramp.
 
     """
     stateName = 'seal'
@@ -751,7 +752,8 @@ class PatchPipetteSealState(PatchPipetteState):
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'nSlopeSamples': {'type': 'int', 'default': 5},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
-        'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
         'pressureChangeRates': {'type': 'str', 'default': "[(0.5e6, -100), (100e6, 0), (-1e6, 200)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
@@ -760,6 +762,10 @@ class PatchPipetteSealState(PatchPipetteState):
     }
 
     def initialize(self):
+        if self.config['maxVacuum'] != -3e3:
+            warnings.warn("maxVacuum parameter is deprecated; use pressureLimit instead", DeprecationWarning)
+            if self.config['pressureLimit'] != -3e3:
+                self.config['pressureLimit'] = self.config['maxVacuum']
         self.dev.clean = False
         PatchPipetteState.initialize(self)
 
@@ -855,7 +861,7 @@ class PatchPipetteSealState(PatchPipetteState):
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 times = np.array([tp.startTime() for tp in recentTestPulses])
                 slope = scipy.stats.linregress(times, res).slope
-                pressure = np.clip(pressure, config['maxVacuum'], 0)
+                pressure = np.clip(pressure, config['pressureLimit'], 0)
                 
                 # decide how much to adjust pressure based on rate of change in seal resistance
                 if isinstance(str, config['pressureChangeRates']):
@@ -865,8 +871,8 @@ class PatchPipetteSealState(PatchPipetteState):
                         pressure += change
                         break
                 
-                # here, if the maxVacuum has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
-                if pressure <= config['maxVacuum']:
+                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
+                if pressure <= config['pressureLimit']:
                     dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                     self.sleep(config['resetDelay'])
                     pressure = 0
@@ -1101,8 +1107,8 @@ class PatchPipetteResealState(PatchPipetteState):
     ----------
     initialPressure : float
         Initial pressure (Pa) to apply (default is -0.5 kPa)
-    maximumPressure : float
-        Maximum pressure (Pa) to apply (default is -4 kPa)
+    pressureLimit : float
+        Largest vacuum pressure (pascals, expected negative) to apply (default is -4 kPa)
     pressureChangeRate : float
         Rate at which pressure should change during reseal (default is -0.5 kPa / min)
     retractionSpeed : float
@@ -1128,13 +1134,18 @@ class PatchPipetteResealState(PatchPipetteState):
         'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
         'numTestPulseAverage': {'type': 'int', 'default': 3},
         'fallbackState': {'type': 'str', 'default': 'whole cell'},
-        'maxPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
+        'pressureLimit': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
+        'maxPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
         'pressureChangeRate': {'type': 'float', 'default': -0.5e3 / 60, 'suffix': 'Pa/s'},
     }
 
     def __init__(self, *args, **kwds):
         self.retractionFuture = None
         PatchPipetteState.__init__(self, *args, **kwds)
+        if self.config['maxPressure'] != -4e3:
+            warnings.warn("maxPressure parameter is deprecated; use pressureLimit instead", DeprecationWarning)
+            if self.config['pressureLimit'] != -4e3:
+                self.config['pressureLimit'] = self.config['maxPressure']
 
     def run(self):
         config = self.config
@@ -1167,9 +1178,9 @@ class PatchPipetteResealState(PatchPipetteState):
 
             if not attained_max_pressure:
                 # update pressure
-                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
+                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['pressureLimit'], 0)
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                if pressure == config['maxPressure']:
+                if pressure == config['pressureLimit']:
                     attained_max_pressure = True
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
@@ -1198,6 +1209,15 @@ class PatchPipetteResealState(PatchPipetteState):
 
 
 class MoveNucleusToHomeState(PatchPipetteState):
+    """State that moves the pipette to its home position while applying negative pressure.
+
+    State name: home with nucleus
+
+    Parameters
+    ----------
+    pressureLimit : float
+        The smallest vacuum pressure (pascals, expected negative value) to allow during state.
+    """
     stateName = "home with nucleus"
     _parameterDefaultOverrides = {
         'initialPressure': None,
@@ -1205,11 +1225,11 @@ class MoveNucleusToHomeState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         # for expected negative values, a maximum is the "smallest" magnitude:
-        'maxPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
     }
 
     def run(self):
-        self.waitFor(self.dev.pressureDevice.attainPressure("regulator", maximum=self.config['maxPressure']))
+        self.waitFor(self.dev.pressureDevice.attainPressure("regulator", maximum=self.config['pressureLimit']))
         self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
         self.sleep(float("inf"))
 
