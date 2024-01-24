@@ -92,9 +92,9 @@ class MultiClampTaskGui(TaskGui):
         if not self.ui.holdingSpin.isEnabled():
             self.ui.holdingSpin.setValue(state['holding'])
         if not self.ui.primaryGainSpin.isEnabled():
-            self.ui.primaryGainSpin.setValue(state['primaryGain'])
+            self.ui.primaryGainSpin.setValue(int(state['primaryGain']))
         if not self.ui.secondaryGainSpin.isEnabled():
-            self.ui.secondaryGainSpin.setValue(state['secondaryGain'])
+            self.ui.secondaryGainSpin.setValue(int(state['secondaryGain']))
             
         psig = ssig = None
         if not self.ui.primarySignalCombo.isEnabled():
