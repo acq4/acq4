@@ -1,17 +1,18 @@
+import queue
 from collections import deque
-from copy import deepcopy
 
+import contextlib
 import numpy as np
 import scipy.stats
 import sys
 import threading
 import time
-from six.moves import range, queue
+from copy import deepcopy
 
 from acq4 import getManager
+from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
-from acq4.util import ptime
 from pyqtgraph import disconnect, units
 
 
@@ -110,16 +111,15 @@ class PatchPipetteState(Future):
 
             # set up test pulse monitoring
             self.testPulseResults = queue.Queue()
-            
-            if self.run is not None:
-                if self.dev.active:
-                    self._thread = threading.Thread(target=self._runJob)
-                    self._thread.start()
-                else:
-                    self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-            else:
-                # otherwise, just mark the task complete
+
+            if self.run is None:
+                # no work; just mark the task complete
                 self._taskDone(interrupted=False, error=None)
+            elif self.dev.active:
+                self._thread = threading.Thread(target=self._runJob)
+                self._thread.start()
+            else:
+                self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc))
             raise
@@ -179,13 +179,11 @@ class PatchPipetteState(Future):
         wait *timeout* seconds for one to arrive.
         """
         tps = []
-        try:
+        with contextlib.suppress(queue.Empty):
             if timeout is not None:
                 tps.append(self.testPulseResults.get(timeout=timeout))
             while not self.testPulseResults.empty():
                 tps.append(self.testPulseResults.get())
-        except queue.Empty:
-            pass
         return tps
 
     def cleanup(self):
@@ -201,6 +199,7 @@ class PatchPipetteState(Future):
         """
         error = None
         excInfo = None
+        interrupted = False
         try:
             # run must be reimplemented in subclass and call self.checkStop() frequently
             self.nextState = self.run()
@@ -212,12 +211,9 @@ class PatchPipetteState(Future):
         except Exception as exc:
             # state aborted due to an error
             interrupted = True
-            printExc("Error in %s state %s" % (self.dev.name(), self.stateName))
+            printExc(f"Error in {self.dev.name()} state {self.stateName}")
             error = str(exc)
             excInfo = sys.exc_info()
-        else:
-            # state completed successfully
-            interrupted = False
         finally:
             disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
@@ -230,7 +226,7 @@ class PatchPipetteState(Future):
         Future.checkStop(self, delay)
 
     def __repr__(self):
-        return '<%s "%s">' % (type(self).__name__, self.stateName)
+        return f'<{type(self).__name__} "{self.stateName}">'
 
 
 class PatchPipetteOutState(PatchPipetteState):
@@ -501,13 +497,12 @@ class PatchPipetteCellDetectState(PatchPipetteState):
     }
 
     def run(self):
-        if self.config["reserveDAQ"]:
-            daq_name = self.dev.clampDevice.getDAQName("primary")
-            self.setState(f"cell detect: waiting for {daq_name} lock")
-            with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
-                self.setState(f"cell detect: {daq_name} lock acquired")
-                return self._do_cell_detect()
-        else:
+        if not self.config["reserveDAQ"]:
+            return self._do_cell_detect()
+        daq_name = self.dev.clampDevice.getDAQName("primary")
+        self.setState(f"cell detect: waiting for {daq_name} lock")
+        with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
+            self.setState(f"cell detect: {daq_name} lock acquired")
             return self._do_cell_detect()
 
     def _do_cell_detect(self):
@@ -522,7 +517,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         patchrec['attemptedCellDetect'] = True
         initialResistance = None
         recentTestPulses = deque(maxlen=config['slowDetectionSteps'] + 1)
-        initialPosition = np.array(dev.pipetteDevice.globalPosition())
         patchrec['cellDetectInitialTarget'] = tuple(dev.pipetteDevice.targetPosition())
 
         while True:
