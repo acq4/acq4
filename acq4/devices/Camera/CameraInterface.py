@@ -345,13 +345,7 @@ class CameraInterface(CameraModuleInterface):
         """
         return self.cam.getBoundary().boundingRect()
 
-    def takeImage(self, closeShutter=None):
-        # TODO this is maybe unused
-        # closeShutter is used for laser scanning devices; we can ignore it here.
-        with self.getDevice().run():
-            return self.getDevice().acquireFrames(1).getResult()[0]
 
-            
 class CameraItemGroup(DeviceTreeItemGroup):
     def __init__(self, camera, includeSubdevices=True):
         DeviceTreeItemGroup.__init__(self, device=camera, includeSubdevices=includeSubdevices)

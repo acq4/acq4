@@ -193,9 +193,9 @@ class PipetteTracker(object):
         if zStep is None:
             zStep = 1e-6
         frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
-        _future.waitFor(self.dev.moveToLocal([-tipLength * 3, 0, 0], "slow"))
+        _future.waitFor(self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow"))
         bg_frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
-        _future.waitFor(self.dev.moveToLocal([tipLength * 3, 0, 0], "slow"))
+        _future.waitFor(self.dev._moveToLocal([tipLength * 3, 0, 0], "slow"))
         key = imager.getDeviceStateKey()
         maxInd = np.argmax([imageTemplateMatch(f.data(), center)[1] for f in frames])
         self.reference[key] = {
@@ -240,7 +240,7 @@ class PipetteTracker(object):
             # move pipette and take a background frame
             if pos is None:
                 pos = self.dev.globalPosition()
-            self.dev.moveToLocal([-tipLength * 3, 0, 0], "fast").wait()
+            self.dev._moveToLocal([-tipLength * 3, 0, 0], "fast").wait()
             bg_frame = self.takeFrame()
         else:
             bg_frame = None

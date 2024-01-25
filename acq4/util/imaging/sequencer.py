@@ -155,7 +155,7 @@ def _slow_z_stack(imager, start, end, step, _future) -> list["Frame"]:
     step = sign * abs(step)
     frames_fut = imager.acquireFrames()
     _set_focus_depth(imager, start, direction, speed='fast', future=_future)
-    with imager.run(ensureFreshFrames=True):
+    with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
             _future.waitFor(imager.acquireFrames(1))
             _set_focus_depth(imager, z, direction, speed='slow', future=_future)
@@ -231,7 +231,7 @@ class ImageSequencerThread(Thread):
                         meters_per_frame = abs(step)
                         speed = meters_per_frame * z_per_second * 0.5
                         future = imager.acquireFrames()
-                        with imager.run(ensureFreshFrames=True):
+                        with imager.ensureRunning(ensureFreshFrames=True):
                             imager.acquireFrames(1).wait()  # just to be sure the camera's recording
                             _set_focus_depth(imager, end, direction, speed)
                             imager.acquireFrames(1).wait()  # just to be sure the camera caught up
@@ -244,8 +244,7 @@ class ImageSequencerThread(Thread):
                             self._frames = _slow_z_stack(imager, start, end, step).getResult()
                             self._frames = _enforce_linear_z_stack(self._frames, step)
                     else:  # single frame
-                        with imager.run(ensureFreshFrames=True):
-                            self._frames.append(imager.acquireFrames(1).getResult()[0])
+                        self._frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
                     self.sendStatusMessage(i, maxIter)
                     self.sleep(until=start + interval)
             finally:
