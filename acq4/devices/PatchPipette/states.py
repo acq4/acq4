@@ -1120,7 +1120,7 @@ class ResealState(PatchPipetteState):
     pressureLimit : float
         Largest vacuum pressure (pascals, expected negative) to apply (default is -4 kPa)
     pressureChangeRate : float
-        Rate at which pressure should change during reseal (default is -0.5 kPa / min)
+        Rate at which pressure should change during reseal (default is 0.5 kPa / min)
     retractionSpeed : float
         Speed in m/s to move pipette during retraction (default is 0.3 um / s)
     resealTimeout : float
@@ -1146,7 +1146,7 @@ class ResealState(PatchPipetteState):
         'fallbackState': {'type': 'str', 'default': 'whole cell'},
         'pressureLimit': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
         'maxPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRate': {'type': 'float', 'default': -0.5e3 / 60, 'suffix': 'Pa/s'},
+        'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
     }
 
     def __init__(self, *args, **kwds):
