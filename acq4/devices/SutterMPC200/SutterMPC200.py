@@ -126,6 +126,10 @@ class SutterMPC200(Stage):
         # self._monitor.stop()  # this was never set to anything but None
         Stage.quit(self)
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / SutterMPC200._monitor.minInterval
+
     def _move(self, pos, speed, linear):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
@@ -163,7 +167,8 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
-        
+        self.minInterval = 100e-3
+
         self.nextMoveId = 0
         self.moveRequest = None
         self._moveStatus = {}
@@ -215,8 +220,7 @@ class MonitorThread(Thread):
             return start, stat
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         
         while True:
             try:
@@ -230,7 +234,7 @@ class MonitorThread(Thread):
                 if moveRequest is None:
                     # just check for position update
                     if self.dev._checkPositionChange() is not False:
-                        interval = minInterval
+                        interval = self.minInterval
                     else:
                         interval = min(maxInterval, interval*2)
                 else:

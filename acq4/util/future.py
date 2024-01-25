@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 import traceback
+from typing import Callable
 
 from acq4.util import Qt, ptime
 
@@ -16,12 +17,33 @@ class Future(Qt.QObject):
     sigStateChanged = Qt.Signal(object, object)  # self, state
 
     class StopRequested(Exception):
-        """Raised by _checkStop if stop() has been invoked.
+        """Raised by checkStop if stop() has been invoked.
         """
 
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses.
         """
+
+    @classmethod
+    def wrap(cls, func: Callable) -> Callable[..., 'Future']:
+        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
+        named "_future" as a keyword argument. This Future can be variously used to checkStop() the
+        function, wait for other futures, and will be returned by the decorated function call.
+        Usage:
+            @Future.wrap
+            def myFunc(arg1, arg2, _future=None):
+                ...
+                _future.checkStop()
+                _future.waitFor(someOtherFuture)
+                ...
+            result = myFunc(arg1, arg2).getResult()
+        """
+        @functools.wraps(func)
+        def wrapper(*args, **kwds):
+            future = cls()
+            future.executeInThread(func, args, kwds)
+            return future
+        return wrapper
 
     def __init__(self):
         Qt.QObject.__init__(self)
@@ -35,7 +57,29 @@ class Future(Qt.QObject):
         self._stopRequested = False
         self._state = 'starting'
         self._errorMonitorThread = None
+        self._executingThread = None
+        self._returnVal = None
         self.finishedEvent = threading.Event()
+
+    def executeInThread(self, func, args, kwds):
+        """Execute the specified function in a separate thread.
+
+        The function should call _taskDone() when finished (or raise an exception).
+        """
+        self._executingThread = threading.Thread(target=self._executeInThread, args=(func, args, kwds), daemon=True)
+        self._executingThread.start()
+
+    def _executeInThread(self, func, args, kwds):
+        try:
+            kwds['_future'] = self
+            self._returnVal = func(*args, **kwds)
+            self._taskDone()
+        except Exception as exc:
+            self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
+
+    def getResult(self, timeout=None):
+        self.wait(timeout)
+        return self._returnVal
 
     def currentState(self):
         """Return the current state of this future.
@@ -67,7 +111,7 @@ class Future(Qt.QObject):
         This method may return another future if stopping the task is expected to
         take time.
 
-        Subclasses may extend this method and/or use _checkStop to determine whether
+        Subclasses may extend this method and/or use checkStop to determine whether
         stop() has been called.
         """
         if self.isDone():
@@ -137,16 +181,20 @@ class Future(Qt.QObject):
             err = self.errorMessage()
             if err is None:
                 # This would be a fantastic place to "raise from self._excInfo[1]" once we move to py3
-                raise RuntimeError(f"Task {self} did not complete (no error message).")
+                msg = f"Task {self} did not complete (no error message)."
             else:
-                raise RuntimeError(f"Task {self} did not complete: {err}")
+                msg = f"Task {self} did not complete: {err}"
+            if self._excInfo is not None:
+                raise RuntimeError(msg) from self._excInfo[1]
+            else:
+                raise RuntimeError(msg)
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
         """
         self.finishedEvent.wait(timeout=duration)
 
-    def _checkStop(self, delay=0):
+    def checkStop(self, delay=0):
         """Raise self.StopRequested if self.stop() has been called.
 
         This may be used by subclasses to periodically check for stop requests.
@@ -163,7 +211,7 @@ class Future(Qt.QObject):
             if now > stop:
                 return
             
-            time.sleep(max(0, min(0.1, stop-now)))
+            time.sleep(max(0.0, min(0.1, stop-now)))
             if self._stopRequested:
                 raise self.StopRequested()
 
@@ -172,31 +220,22 @@ class Future(Qt.QObject):
         """
         start = time.time()
         while time.time() < start + duration:
-            self._checkStop()
+            self.checkStop()
             time.sleep(interval)
 
-    def waitFor(self, futures, timeout=20.0):
-        """Wait for multiple futures to complete while also checking for stop requests on self.
+    def waitFor(self, future: 'Future', timeout=20.0) -> 'Future':
+        """Wait for another future to complete while also checking for stop requests on self.
         """
-        if not isinstance(futures, (list, tuple)):
-            futures = [futures]
-        if len(futures) == 0:
-            return
         start = time.time()
         while True:
-            self._checkStop()
-            allDone = True
-            for fut in futures[:]:
-                try:
-                    fut.wait(0.1)
-                    futures.remove(fut)
-                except fut.Timeout:
-                    allDone = False
-                    break
-            if allDone:
+            self.checkStop()
+            try:
+                future.wait(0.1)
                 break
-            if timeout is not None and time.time() - start > timeout:
-                raise futures[0].Timeout("Timed out waiting for %r" % futures)
+            except future.Timeout:
+                if timeout is not None and time.time() - start > timeout:
+                    raise future.Timeout(f"Timed out waiting for {future!r}")
+        return future
 
     def raiseErrors(self, message, pollInterval=1.0):
         """Monitor this future for errors and raise if any occur.
@@ -236,32 +275,6 @@ class Future(Qt.QObject):
             raise RuntimeError(formattedMsg) from exc
 
 
-
-class _FuturePollThread(threading.Thread):
-    """Thread used to poll the state of a future.
-    
-    Used when a Future subclass does not automatically call _taskDone, but instead requires
-    a periodic check. May
-    """
-    def __init__(self, future, pollInterval, originalFrame):
-        threading.Thread.__init__(self, daemon=True)
-        self.future = future
-        self.pollInterval = pollInterval
-        self._stop = False
-
-    def run(self):
-        while not self._stop:
-            if self.future.isDone():
-                break
-                if self.future._raiseErrors:
-                    raise
-            time.sleep(self.pollInterval)
-
-    def stop(self):
-        self._stop = True
-        self.join()
-
-
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures.
     """
@@ -288,4 +301,3 @@ class MultiFuture(Future):
 
     def currentState(self):
         return "; ".join([f.currentState() or '' for f in self.futures])
-

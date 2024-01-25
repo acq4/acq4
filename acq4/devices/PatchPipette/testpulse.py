@@ -85,9 +85,9 @@ class TestPulseThread(Thread):
     def run(self):
         while True:
             try:
-                self._checkStop()
+                self.checkStop()
                 start = ptime.time()
-                self.runOnce(_checkStop=True)
+                self.runOnce(checkStop=True)
 
                 interval = self.params['interval']
                 if interval is None:
@@ -101,14 +101,14 @@ class TestPulseThread(Thread):
                     if now >= nextRun:
                         break
                     time.sleep(min(0.03, nextRun-now))
-                    self._checkStop()
+                    self.checkStop()
             except self.StopRequested:
                 break
             except Exception:
                 printExc("Error in test pulse thread (will try again):", msgType='warning')
                 time.sleep(2.0)
 
-    def runOnce(self, _checkStop=False):
+    def runOnce(self, checkStop=False):
         currentMode = self._clampDev.getMode()
         params = self.params
         runMode = currentMode if params['clampMode'] is None else params['clampMode']
@@ -150,8 +150,8 @@ class TestPulseThread(Thread):
             task.execute()
                 
             while not task.isDone():
-                if _checkStop:
-                    self._checkStop()
+                if checkStop:
+                    self.checkStop()
                 time.sleep(0.01)
         
             tp = None
@@ -205,7 +205,7 @@ class TestPulseThread(Thread):
 
         return self._manager.createTask(cmd)
 
-    def _checkStop(self):
+    def checkStop(self):
         if self._stop:
             raise self.StopRequested()
 

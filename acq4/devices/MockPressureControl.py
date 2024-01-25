@@ -2,6 +2,10 @@ from acq4.devices.PressureControl import PressureControl
 
 
 class MockPressureControl(PressureControl):
+    def __init__(self, manager, config, name):
+        super().__init__(manager, config, name)
+        self.pressure = 0
+
     def _setPressure(self, p):
         self.pressure = p
 

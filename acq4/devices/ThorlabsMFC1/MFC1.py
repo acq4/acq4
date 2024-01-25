@@ -75,6 +75,10 @@ class ThorlabsMFC1(Stage):
             pos[2] = min(pos[2], limits[1])
         return MFC1MoveFuture(self, pos, speed)
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1 / self._monitor.minInterval
+
     def targetPosition(self):
         return [0, 0, self.dev.target_position() * self.scale[2]]
 
@@ -120,6 +124,7 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
+        self.minInterval = 100e-3
         Thread.__init__(self)
 
     def start(self):
@@ -135,8 +140,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         lastPos = None
         while True:
             try:
@@ -147,7 +151,7 @@ class MonitorThread(Thread):
                 pos = self.dev._getPosition()[2]
                 if pos != lastPos:
                     # stage is moving; request more frequent updates
-                    interval = minInterval
+                    interval = self.minInterval
                 else:
                     interval = min(maxInterval, interval*2)
                 lastPos = pos

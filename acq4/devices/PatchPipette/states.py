@@ -202,7 +202,7 @@ class PatchPipetteState(Future):
         error = None
         excInfo = None
         try:
-            # run must be reimplemented in subclass and call self._checkStop() frequently
+            # run must be reimplemented in subclass and call self.checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
         except self.StopRequested as exc:
@@ -223,11 +223,11 @@ class PatchPipetteState(Future):
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
 
-    def _checkStop(self, delay=0):
+    def checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
             raise self.StopRequested("Stop state because device is not 'active'")
-        Future._checkStop(self, delay)
+        Future.checkStop(self, delay)
 
     def __repr__(self):
         return '<%s "%s">' % (type(self).__name__, self.stateName)
@@ -285,7 +285,7 @@ class PatchPipetteWholeCellState(PatchPipetteState):
 
         while True:
             # TODO: monitor for cell loss
-            self._checkStop()
+            self.checkStop()
             time.sleep(0.1)
 
     def cleanup(self):
@@ -363,7 +363,7 @@ class PatchPipetteBathState(PatchPipetteState):
         bathResistances = []
 
         while True:
-            self._checkStop()
+            self.checkStop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
@@ -530,7 +530,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                 self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
                 return config['fallbackState']
 
-            self._checkStop()
+            self.checkStop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
@@ -561,7 +561,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
                     return self._transition_to_seal("cell detected (slow criteria)", patchrec)
-            self._checkStop()
+            self.checkStop()
 
             if config['autoAdvance']:
                 self.setState("cell detection: advance pipette")
@@ -779,7 +779,7 @@ class PatchPipetteSealState(PatchPipetteState):
             initialTP = dev.lastTestPulse()
             if initialTP is not None:
                 break
-            self._checkStop()
+            self.checkStop()
             time.sleep(0.05)
         
         initialResistance = initialTP.analysis()['steadyStateResistance']
@@ -804,7 +804,7 @@ class PatchPipetteSealState(PatchPipetteState):
         holdingSet = False
 
         while True:
-            self._checkStop()
+            self.checkStop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)            
@@ -934,7 +934,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
             if delay is not None and ptime.time() - startTime > delay:
                 return 'break in'
 
-            self._checkStop()
+            self.checkStop()
 
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
@@ -1062,7 +1062,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
                 
     def checkBreakIn(self):
         while True:
-            self._checkStop()
+            self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) > 0:
                 break
@@ -1169,7 +1169,7 @@ class PatchPipetteResealState(PatchPipetteState):
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
                 return config['fallbackState']
 
-            self._checkStop()
+            self.checkStop()
 
             if not attained_max_pressure:
                 # update pressure
@@ -1196,11 +1196,28 @@ class PatchPipetteResealState(PatchPipetteState):
             #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
             #     if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
             #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
-            self._checkStop()
+            self.checkStop()
 
     def cleanup(self):
         if self.retractionFuture is not None:
             self.retractionFuture.stop()
+
+
+class MoveNucleusToHomeState(PatchPipetteState):
+    stateName = "home with nucleus"
+    _parameterDefaultOverrides = {
+        'initialPressure': None,
+        'initialPressureSource': 'regulator',
+    }
+    _parameterTreeConfig = {
+        # for expected negative values, a maximum is the "smallest" magnitude:
+        'maxPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+    }
+
+    def run(self):
+        self.waitFor(self.dev.pressureDevice.attainPressure("regulator", maximum=self.config['maxPressure']))
+        self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+        self.sleep(float("inf"))
 
 
 class PatchPipetteBlowoutState(PatchPipetteState):
@@ -1233,7 +1250,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         # wait until we have a test pulse that ran after blowout was finished.
         start = ptime.time()
         while True:
-            self._checkStop()
+            self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0 or tps[-1].startTime() < start:
                 continue
@@ -1308,7 +1325,7 @@ class PatchPipetteCleanState(PatchPipetteState):
             fut.wait()
 
         for stage in ('clean', 'rinse'):
-            self._checkStop()
+            self.checkStop()
 
             sequence = config[stage + 'Sequence']
             if isinstance(sequence, str):
@@ -1331,11 +1348,11 @@ class PatchPipetteCleanState(PatchPipetteState):
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.waitFor([self.currentFuture])
+            self.waitFor(self.currentFuture)
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                self._checkStop(delay)
+                self.checkStop(delay)
 
             self.resetPosition()
 
@@ -1350,7 +1367,7 @@ class PatchPipetteCleanState(PatchPipetteState):
             # play in reverse
             fut = self.currentFuture
             self.currentFuture = None
-            self.waitFor([fut.undo()])
+            self.waitFor(fut.undo())
 
     def cleanup(self):
         dev = self.dev
@@ -1389,7 +1406,6 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
         'approachDistance': {'type': 'float', 'default': 30e-3, 'suffix': 's'},
     }
 
-
     def __init__(self, *args, **kwds):
         self.currentFuture = None
         PatchPipetteState.__init__(self, *args, **kwds)
@@ -1415,15 +1431,15 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self._checkStop(delay)
+            self.checkStop(delay)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
-        return 'out'          
+        return 'out'
 
     def resetPosition(self):
         pip = self.dev.pipetteDevice
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor([pip._moveToGlobal(self.startPos, speed='fast')])
+        self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'))
 
     def cleanup(self):
         dev = self.dev

@@ -1,17 +1,15 @@
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
-from __future__ import print_function
-from __future__ import division
-import serial, struct, time, collections, re
-import numpy as np
+
+import contextlib
+import re
+from typing import Optional
 
 from acq4.util.Mutex import RecursiveMutex as RLock
 from acq4.util.debug import printExc
 from ..SerialDevice import SerialDevice
-from six.moves import map
-from six.moves import range
-
+from ...util.typing import Number
 
 # Data provided by Scientifica
 _device_types = """
@@ -93,11 +91,13 @@ class Scientifica(SerialDevice):
                     devs[s.getDescription()] = com
                     s.close()
                 except Exception:
-                    printExc("Error while initializing Scientifica device at %s (the device at this port will not be available):" % com)
+                    printExc(
+                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):"
+                    )
 
         cls.availableDevices = devs
 
-    def __init__(self, port=None, name=None, baudrate=None, ctrl_version=2):
+    def __init__(self, port=None, name=None, baudrate=None, ctrl_version: Optional[Number] = 2):
         self.lock = RLock()
 
         if name is not None:
@@ -107,16 +107,17 @@ class Scientifica(SerialDevice):
             if self.availableDevices is None:
                 self.enumerateDevices()
             if name not in self.availableDevices:
-                raise ValueError('Could not find Scientifica device with description "%s". Options are: %s' % 
-                    (name, list(self.availableDevices.keys())))
+                raise ValueError(
+                    f'Could not find Scientifica device with description "{name}". Options are: {list(self.availableDevices.keys())}'
+                )
             port = self.availableDevices[name]
 
         if port is None:
             raise ValueError("Must specify either name or port.")
-            
+
         self.port = self.normalizePortName(port)
         if self.port in self.openDevices:
-            raise RuntimeError("Port %s is already in use by %s" % (port, self.openDevices[self.port]))
+            raise RuntimeError(f"Port {port} is already in use by {self.openDevices[self.port]}")
 
         # try both baudrates, regardless of the requested rate
         # (but try the requested rate first)
@@ -126,12 +127,12 @@ class Scientifica(SerialDevice):
         elif baudrate == 38400:
             baudrates = [38400, 9600]
         else:
-            raise ValueError('invalid baudrate %s' % baudrate)
+            raise ValueError(f'invalid baudrate {baudrate}')
 
         # Attempt connection
         connected = False
         for baudrate in baudrates:
-            try:
+            with contextlib.suppress(TimeoutError):
                 SerialDevice.__init__(self, port=self.port, baudrate=baudrate)
                 try:
                     sci = self.send('scientifica', timeout=0.2)
@@ -141,14 +142,15 @@ class Scientifica(SerialDevice):
 
                 if sci != b'Y519':
                     # Device responded, not scientifica.
-                    raise ValueError("Received unexpected response from device at %s. (Is this a scientifica device?)" % port)
+                    raise ValueError(
+                        f"Received unexpected response from device at {port}. (Is this a scientifica device?)"
+                    )
                 connected = True
                 break
-            except TimeoutError:
-                pass
-
         if not connected:
-            raise RuntimeError("No response received from Scientifica device at %s. (tried baud rates: %s)" % (port, ', '.join(map(str, baudrates))))
+            raise RuntimeError(
+                f"No response received from Scientifica device at {port}. (tried baud rates: {', '.join(map(str, baudrates))})"
+            )
 
         Scientifica.openDevices[self.port] = self
         self._version = float(self.send('ver'))
@@ -166,7 +168,7 @@ class Scientifica(SerialDevice):
         SerialDevice.close(self)
         del Scientifica.openDevices[port]
 
-    def send(self, msg, timeout=5):
+    def send(self, msg, timeout=5.0):
         with self.lock:
             self.write(msg + '\r')
             try:
@@ -209,7 +211,7 @@ class Scientifica(SerialDevice):
     def setDescription(self, desc):
         """Set this device's description string.
         """
-        return self.send('desc %s' % desc)
+        return self.send(f'desc {desc}')
 
     def getPos(self, _tryagain=True):
         """Get current manipulator position reported by controller in micrometers.
@@ -381,7 +383,7 @@ class Scientifica(SerialDevice):
 
     def _readAxisScale(self):
         # read and record axis scale factors
-        self._axis_scale = tuple([self.getAxisScale(i) for i in (0, 1, 2)])
+        self._axis_scale = tuple(self.getAxisScale(i) for i in (0, 1, 2))
 
     def getSpeed(self):
         """Return the maximum speed of the stage along the X axis in um/sec.
@@ -430,9 +432,7 @@ class Scientifica(SerialDevice):
                 else:
                     pos[i] = int(pos[i] * 100)  # convert to units of 0.01 um
 
-            if speed is None:
-                speed = self.getSpeed()
-            else:
+            if speed is not None:
                 self.setSpeed(speed)
 
             # Send move command

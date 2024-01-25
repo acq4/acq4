@@ -124,6 +124,10 @@ class MockStage(Stage):
     def setUserSpeed(self, v):
         pass
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / self.stageThread.interval
+
     def _getPosition(self):
         return self.stageThread.getPosition()
 
@@ -240,9 +244,8 @@ class MockStageThread(Thread):
                 target = self.target
                 speed = self.speed
                 velocity = self.velocity
-                currentMove = self.currentMove
                 pos = self.pos
-                
+
             now = ptime.time()
             dt = now - lastUpdate
             lastUpdate = now

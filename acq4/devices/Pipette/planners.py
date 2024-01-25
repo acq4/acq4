@@ -186,7 +186,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
     def path(self):
         manipulator = self.pip.parentDevice()
         manipulatorHome = manipulator.homePosition()
-        assert manipulatorHome is not None, "No home position defined for %s" % manipulator.name()
+        assert manipulatorHome is not None, f"No home position defined for {manipulator.name()}"
         # how much should the pipette move in global coordinates
         globalMove = np.asarray(manipulatorHome) - np.asarray(manipulator.globalPosition())
 
@@ -194,8 +194,7 @@ class HomeMotionPlanner(PipetteMotionPlanner):
         # where should the pipette tip end up in global coordinates
         endPosGlobal = np.asarray(startPosGlobal) + globalMove
 
-        path = self.safePath(startPosGlobal, endPosGlobal, self.speed)
-        return path
+        return self.safePath(startPosGlobal, endPosGlobal, self.speed)
 
 
 class SearchMotionPlanner(PipetteMotionPlanner):

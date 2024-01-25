@@ -1,10 +1,9 @@
-from __future__ import print_function
-
 import time
 
 from acq4.util import Qt
 from .widgets import PressureControlWidget
 from ..Device import Device
+from ...util.future import Future
 
 
 class PressureControl(Device):
@@ -31,11 +30,24 @@ class PressureControl(Device):
         self.source = None
         self.sources = ("regulator", "user", "atmosphere")
 
+    @Future.wrap
+    def attainPressure(self, source, maximum=None, minimum=None, _future=None):
+        self.setPressure(source)
+        while True:
+            pressure = self.getPressure()
+            if minimum is not None and pressure < minimum:
+                self.setPressure(source, pressure=minimum)
+            elif maximum is not None and pressure > maximum:
+                self.setPressure(source, pressure=maximum)
+            else:
+                break
+            _future.sleep(self.regulatorSettlingTime)
+
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
         """
         if source is not None and source not in self.sources:
-            raise ValueError('Pressure source "%s" is not valid; available sources are: %s' % (source, self.sources))
+            raise ValueError(f'Pressure source "{source}" is not valid; available sources are: {self.sources}')
 
         # order of operations depends on the requested source
         if source is not None and source != 'regulator':

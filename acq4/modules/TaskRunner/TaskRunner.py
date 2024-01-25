@@ -473,7 +473,7 @@ class TaskRunner(Module):
             # print "Docks cleared."
 
             ## Update task parameters
-            self.protoStateGroup.setState(prot.conf['conf'])
+            self.protoStateGroup.setState({k: int(v) if k == "repetitions" else v for k, v in prot.conf['conf'].items()})
             prof.mark('set state')
 
             ## update dev list
@@ -1026,7 +1026,6 @@ class TaskThread(Thread):
             gc.collect()
 
         prof = Profiler("TaskRunner.TaskThread.runOnce", disabled=True, delayed=False)
-        startTime = ptime.time()
         if params is None:
             params = {}
 

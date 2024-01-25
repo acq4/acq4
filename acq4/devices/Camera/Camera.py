@@ -1,6 +1,12 @@
+import queue
+from collections import deque
+
 import numpy as np
 import threading
 import time
+
+from typing import Callable, Optional
+from contextlib import contextmanager
 from six.moves import range
 
 import pyqtgraph as pg
@@ -9,8 +15,8 @@ import acq4.util.ptime as ptime
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.util import Qt
-from acq4.util import imaging
+from acq4.util import Qt, imaging
+from acq4.util.future import Future
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
@@ -193,7 +199,7 @@ class Camera(DAQGeneric, OptomechDevice):
         raise NotImplementedError("Function must be reimplemented in subclass.")
 
     def startCamera(self):
-        """Calls the camera driver to start the camera's acquisition."""
+        """Calls the camera driver to start the camera's acquisition. Call start instead of this to actually record frames."""
         raise NotImplementedError("Function must be reimplemented in subclass.")
 
     def stopCamera(self):
@@ -212,7 +218,6 @@ class Camera(DAQGeneric, OptomechDevice):
             # push all writeable parameters
             params = [param for param, spec in self.listParams().items() if spec[1] is True]
 
-        # print("Camera: pushState", name, params)
         params = self.getParams(params)
         params["isRunning"] = self.isRunning()
         self.stateStack.append((name, params))
@@ -246,40 +251,62 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.start(block=block)
 
     def stop(self, block=True):
-        """Stop camera and acquisition thread"""
+        """Stop camera and acquisition thread. If block is True, this is not safe to call on an
+        already-stopped camera."""
         self.acqThread.stop(block=block)
 
-    def acquireFrames(self, n=1, stack=True):
-        """Immediately acquire and return a specific number of frames.
+    @contextmanager
+    def run(self, ensureFreshFrames=False):
+        """Context manager for starting and stopping camera acquisition thread. If used
+        with non-blocking frame acquisition, this will still exit the context before
+        the frames are necessarily acquired.
 
-        This method blocks until all frames are acquired and may not be supported by all camera
-        types.
-
-        All frames are returned stacked within a single Frame instance, as a 3D or 4D array.
-
-        If *stack* is False, then the first axis is dropped and the resulting data will instead be
-        2D or 3D.
+        Usage::
+            with camera.run():
+                frames = camera.acquireFrames(10, blocking=True)
         """
-        if n > 1 and not stack:
-            raise ValueError("Using stack=False is only allowed when n==1.")
+        running = self.isRunning()
+        if ensureFreshFrames:
+            if running:
+                self.stop()
+                # todo sleep until all frames are cleared somehow?
+                self.start()
+        if not running:
+            self.start()
+        try:
+            yield
+        finally:
+            if not running:
+                self.stop()
 
-        # TODO: Add a non-blocking mode that returns a Future.
-        frames = self._acquireFrames(n)
-        if not stack:
-            frames = frames[0]
+    def acquireFrames(self, n=None) -> "FrameAcquisitionFuture":
+        """Acquire a specific number of frames and return a FrameAcquisitionFuture.
 
-        info = dict(self.getParams(["binning", "exposure", "region", "triggerMode"]))
-        ss = self.getScopeState()
-        ps = ss["pixelSize"]  # size of CCD pixel
-        info["pixelSize"] = [ps[0] * info["binning"][0], ps[1] * info["binning"][1]]
-        info["objective"] = ss.get("objective", None)
-        info["lightSource"] = ss.get("lightSourceState", None)
-        info["deviceTransform"] = pg.SRTTransform3D(ss["transform"])
+        If *n* is None, then frames will be acquired until future.stop() is called.
+        Call future.getResult() to return the acquired Frame object.
+
+        This method works by collecting frames as they stream from the camera and does not
+        handle starting / stopping / configuring the camera.
+        """
+        return FrameAcquisitionFuture(self, n)
+
+    @Future.wrap
+    def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list["Frame"]:
+        """Ask the camera driver to acquire a specific number of frames and return a Future.
+
+        Call future.getResult() to return the acquired Frame object.
+
+        Depending on the underlying camera driver, this method may cause the camera to restart.
+        """
+        frames = self._acquireFrames(int(n))
+
+        info = self.acqThread.buildFrameInfo(self.getScopeState())
         info["time"] = ptime.time()
-
-        f = Frame(frames, info)
-        self.newFrame(f)  # allow others access to this frame (for example, camera module can update)
-        return f
+        retval = []
+        for f in frames:
+            retval.append(Frame(f, info))
+            self.newFrame(retval[-1])  # allow others access to this frame (for example, camera module can update)
+        return retval
 
     def _acquireFrames(self, n):
         # todo: default implementation can use acquisition thread instead..
@@ -297,6 +324,16 @@ class Camera(DAQGeneric, OptomechDevice):
                 raise Exception("Timed out while waiting for thread exit!")
         # self.cam.close()
         DAQGeneric.quit(self)
+
+    @Future.wrap
+    def getEstimatedFrameRate(self, _future: Future):
+        """Return the estimated frame rate of the camera.
+        """
+        if not self.isRunning():
+            with self.run():
+                return _future.waitFor(self.acqThread.getEstimatedFrameRate()).getResult()
+        else:
+            return _future.waitFor(self.acqThread.getEstimatedFrameRate()).getResult()
 
     # @ftrace
     def createTask(self, cmd, parentTask):
@@ -409,6 +446,19 @@ class Camera(DAQGeneric, OptomechDevice):
         scopePos = scopeCenter + np.array(position) - camCenter
         return scope.setGlobalPosition(scopePos, speed=speed)
 
+    def getFocusDepth(self):
+        """Return the z-position of the focal plane.
+        """
+        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
+
+    def setFocusDepth(self, z, speed='fast'):
+        """Set the z-position of the focal plane by moving the parent focusing device.
+        """
+        # this is how much the focal plane needs to move (in the global frame)
+        dif = z - self.getFocusDepth()
+        scopez = self.scopeDev.getFocusDepth() + dif
+        return self.scopeDev.setFocusDepth(scopez, speed)
+
     def objectiveChanged(self, obj=None):
         if obj is None:
             obj = self.scopeDev.getObjective()
@@ -467,11 +517,6 @@ class Frame(imaging.Frame):
 
 
 class CameraTask(DAQGenericTask):
-    """Default implementation of camera acquisition task.
-
-    Some of these methods may need to be reimplemented for subclasses.
-    """
-
     def __init__(self, dev: Camera, cmd, parentTask):
         daqCmd = {}
         if "channels" in cmd:
@@ -483,15 +528,10 @@ class CameraTask(DAQGenericTask):
         self.lock = Mutex()
         self.recordHandle = None
         self._dev_needs_restart = False
-        self.stopAfter = False
-        self.stoppedCam = False
-        self.returnState = {}
-        self.frames = []
-        self.recording = False
         self.stopRecording = False
         self._stopTime = 0
         self.resultObj = None
-        self._fixedAcqThread = FixedAcqThread(target=self.fixedAcquisition)
+        self._future = None
 
     def configure(self):
         # Merge command into default values:
@@ -543,14 +583,17 @@ class CameraTask(DAQGenericTask):
             self.__startOrder = [daqName], []
             prof.mark("conf 1")
 
+        if self.fixedFrameCount is not None:
+            restart = restart or self.dev.isRunning()
+
         # We want to avoid this if at all possible since it may be very expensive
-        if restart:
+        self._dev_needs_restart = restart
+        if restart and self.dev.isRunning():
             self.dev.stop(block=True)
         prof.mark("stop")
 
-        # connect using acqThread's connect method because there may be no event loop
-        # to deliver signals here.
-        self.dev.acqThread.connectCallback(self.newFrame)
+        if self.fixedFrameCount is None:
+            self._future = self.dev.acquireFrames(n=self.fixedFrameCount)
 
         # Call the DAQ configure
         DAQGenericTask.configure(self)
@@ -561,40 +604,15 @@ class CameraTask(DAQGenericTask):
     def fixedFrameCount(self):
         return self.camCmd.get("minFrames", None)
 
-    def fixedAcquisition(self):
-        try:
-            with self.lock:
-                self.frames = self.dev.acquireFrames(self.fixedFrameCount).asarray()
-        finally:
-            if self._dev_needs_restart:
-                self.dev.start()
-                self._dev_needs_restart = False
-
     def getStartOrder(self):
         order = DAQGenericTask.getStartOrder(self)
         return order[0] + self.__startOrder[0], order[1] + self.__startOrder[1]
 
-    def newFrame(self, frame):
-        disconnect = False
-        with self.lock:
-            if self.recording:
-                self.frames.append(frame)
-            if self.stopRecording and frame.info()["time"] > self._stopTime:
-                self.recording = False
-                disconnect = True
-        if disconnect:  # Must be done only after unlocking mutex
-            self.dev.acqThread.disconnectCallback(self.newFrame)
-
     def start(self):
         # arm recording
-        self.frames = []
         self.stopRecording = False
-        self.recording = True
         if self.fixedFrameCount is not None:
-            self._dev_needs_restart = self.dev.isRunning()
-            if self._dev_needs_restart:
-                self.dev.stop(block=True)
-            self._fixedAcqThread.start()
+            self._future = self.dev.driverSupportedFixedFrameAcquisition(n=self.fixedFrameCount)
         elif not self.dev.isRunning():
             self.dev.start(block=True)
 
@@ -603,28 +621,21 @@ class CameraTask(DAQGenericTask):
 
     def isDone(self):
         # If camera stopped, then probably there was a problem and we are finished.
-        if not self.dev.isRunning():
-            return True
-
-        # should return false if recording is required to run for a specific time.
-        if "minFrames" in self.camCmd:
-            with self.lock:
-                if len(self.frames) < self.camCmd["minFrames"]:
-                    return False
-        return DAQGenericTask.isDone(self)  # Should return True.
+        return self._future.isDone() or self._stopTime is not None or not self.dev.isRunning()
 
     def stop(self, abort=False):
+        """Warning: this won't stop everything and you'll also need to call *getResult* within the
+        containing device-reservation context to get the proper result.
+        """
         # Stop DAQ first
         DAQGenericTask.stop(self, abort=abort)
 
         with self.lock:
             self.stopRecording = True
             self._stopTime = time.time()
-            if self._fixedAcqThread.isRunning():
-                self.dev.stopCamera()
-                if self._dev_needs_restart:
-                    self.dev.start()
-                    self._dev_needs_restart = False
+            self.dev.stopCamera()
+            if self.fixedFrameCount is None:
+                self._future.stopWhen(lambda frame: frame.info()["time"] >= self._stopTime, blocking=False)
 
         if "popState" in self.camCmd:
             self.dev.popState(self.camCmd["popState"])  # restores previous settings, stops/restarts camera if needed
@@ -632,12 +643,16 @@ class CameraTask(DAQGenericTask):
     def getResult(self):
         if self.resultObj is None:
             daqResult = DAQGenericTask.getResult(self)
-            while self.recording and time.time() - self._stopTime < 1:
+            while time.time() - self._stopTime < 1 and not self._future.isDone():
                 # Wait up to 1 second for all frames to arrive from camera thread before returning results.
                 # In some cases, acquisition thread can get bogged down and we may need to wait for it
                 # to catch up.
                 time.sleep(0.05)
-            self.resultObj = CameraTaskResult(self, self.frames[:], daqResult)
+            self._future.stop()  # TODO this could error for fixedFrameCount!=None
+            self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
+            if self._dev_needs_restart:
+                self.dev.start(block=False)
+                self._dev_needs_restart = False
         return self.resultObj
 
     def storeResult(self, dirHandle):
@@ -676,7 +691,6 @@ class CameraTaskResult:
     def asArray(self):
         with self.lock:
             if self._arr is None:
-                # data = self._frames
                 if len(self._frames) > 0:
                     self._arr = np.concatenate([f.data()[np.newaxis, ...] for f in self._frames])
         return self._arr
@@ -711,7 +725,7 @@ class CameraTaskResult:
                         raise
                     times -= times[0]
                 else:
-                    return None
+                    return None, False
 
                 expose = None
                 daqResult = self._daqResult
@@ -781,7 +795,6 @@ class CameraTaskResult:
 
 
 class AcquireThread(Thread):
-
     sigNewFrame = Qt.Signal(object)
     sigShowMessage = Qt.Signal(object)
 
@@ -795,6 +808,7 @@ class AcquireThread(Thread):
         self.bufferTime = 5.0
         self.tasks = []
         self.cameraStartEvent = threading.Event()
+        self._recentFPS = deque(maxlen=10)
 
         # This thread does not run an event loop,
         # so we may need to deliver frames manually to some places
@@ -823,12 +837,27 @@ class AcquireThread(Thread):
         with self._newFrameCallbacksMutex:
             if method in self._newFrameCallbacks:
                 self._newFrameCallbacks.remove(method)
-    
+
+    def buildFrameInfo(self, scopeState, camState: Optional[dict] = None) -> dict:
+        ps = scopeState["pixelSize"]  # size of CCD pixel
+        transform = pg.SRTTransform3D(scopeState["transform"])  # TODO this is expensive; can we pull it out of the acq thread?
+        if camState is None:
+            info = dict(self.dev.getParams(["binning", "exposure", "region", "triggerMode"]))
+        else:
+            info = camState.copy()
+        binning = info["binning"]
+        info.update({
+            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
+            "objective": scopeState.get("objective", None),
+            "deviceTransform": transform,
+            "illumination": scopeState.get("illumination", None),
+        })
+        return info
+
     def run(self):
         lastFrameId = None
 
         camState = dict(self.dev.getParams(["binning", "exposure", "region", "triggerMode"]))
-        binning = camState["binning"]
         exposure = camState["exposure"]
         mode = camState["triggerMode"]
 
@@ -838,7 +867,7 @@ class AcquireThread(Thread):
 
             lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
-            scopeState = None
+            lastFrameID = None
 
             while True:
                 now = ptime.time()
@@ -856,26 +885,19 @@ class AcquireThread(Thread):
 
                     ss = self.dev.getScopeState()
 
-                    if ss["id"] != scopeState:
-                        scopeState = ss["id"]
+                    if ss["id"] != lastFrameID:
+                        lastFrameID = ss["id"]
                         # regenerate frameInfo here
-                        ps = ss["pixelSize"]  # size of CCD pixel
-                        transform = pg.SRTTransform3D(ss["transform"])
-
-                        frameInfo = {
-                            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
-                            "objective": ss.get("objective", None),
-                            "deviceTransform": transform,
-                            "illumination": ss.get("illumination", None),
-                        }
+                        frameInfo = self.buildFrameInfo(ss, camState=camState)
 
                     # Copy frame info to info array
-                    info.update(frameInfo)
+                    info.update(frameInfo)  # TODO should this really be updating using last frame's info? (when ss["id"] was lastFrameID)
 
                     # Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)
                     if dt > 0:
                         info["fps"] = 1.0 / dt
+                        self._recentFPS.append(info["fps"])
                     else:
                         info["fps"] = None
 
@@ -926,12 +948,24 @@ class AcquireThread(Thread):
                 pass
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
+    @Future.wrap
+    def getEstimatedFrameRate(self, _future: Future = None):
+        """Return the estimated frame rate of the camera.
+        """
+        if not self.isRunning():
+            raise RuntimeError("Cannot get frame rate while camera is not running.")
+        while len(self._recentFPS) < self._recentFPS.maxlen:
+            time.sleep(0.01)
+            _future.checkStop()
+        return np.mean(self._recentFPS)
+
     def stop(self, block=False):
         with self.lock:
             self.stopThread = True
         if block:
             if not self.wait(10000):
                 raise Exception("Timed out waiting for thread exit!")
+        self._recentFPS.clear()
 
     def reset(self):
         if self.isRunning():
@@ -941,10 +975,71 @@ class AcquireThread(Thread):
             self.start()
 
 
-class FixedAcqThread(Thread):
-    def __init__(self, target, *args, **kwds):
-        super(FixedAcqThread, self).__init__(*args, **kwds)
-        self._target = target
+class FrameAcquisitionFuture(Future):
+    def __init__(self, camera: Camera, frameCount: Optional[int], timeout: float = 10):
+        """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
+        super().__init__()
+        self._camera = camera
+        self._frame_count = frameCount
+        self._stop_when = None
+        self._frames = []
+        self._timeout = timeout
+        self._queue = queue.Queue()
+        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True)
+        self._thread.start()
 
-    def run(self):
-        self._target()
+    def _monitorAcquisition(self):
+        self._camera.acqThread.connectCallback(self.handleNewFrame)
+        try:
+            lastFrameTime = ptime.time()
+            while True:
+                if self.isDone():
+                    break
+                try:
+                    frame = self._queue.get_nowait()
+                    lastFrameTime = ptime.time()
+                except queue.Empty:
+                    try:
+                        self.checkStop(0.1)  # delay while checking for a stop request
+                    except self.StopRequested:
+                        self._taskDone(interrupted=self._frame_count is not None)
+                        break
+                    if ptime.time() - lastFrameTime > self._timeout:
+                        self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
+                    continue
+                self._frames.append(frame)
+                if self._stop_when is not None and self._stop_when(frame):
+                    self._taskDone()
+                    break
+                if self._frame_count is not None and len(self._frames) >= self._frame_count:
+                    self._taskDone()
+
+        finally:
+            self._camera.acqThread.disconnectCallback(self.handleNewFrame)
+
+    def handleNewFrame(self, frame):
+        self._queue.put(frame)
+
+    def peekAtResult(self) -> list[Frame]:
+        return self._frames[:]
+
+    def getResult(self, timeout=None) -> list[Frame]:
+        if timeout is None and self._frame_count is None and not self.isDone():
+            raise ValueError("Must specify a timeout when still acquiring an unlimited number of frames.")
+        self.wait(timeout)
+        return self._frames
+
+    def stopWhen(self, condition: Callable[[Frame], bool], blocking=True) -> None:
+        """Stop acquiring frames when the given condition returns True.
+        If blocking is True, then this method will not return until the condition is met.
+        """
+        if self._frame_count is not None:
+            raise ValueError("Cannot stopWhen() when acquiring a fixed number of frames.")
+        self._stop_when = condition
+        if blocking:
+            self.wait()
+
+    def percentDone(self):
+        if self._frame_count is None:
+            return 0
+        return len(self._frames) / self._frame_count

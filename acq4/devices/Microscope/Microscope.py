@@ -1,11 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import collections
+from typing import Tuple
 
 import numpy as np
+import scipy.ndimage
 
 import pyqtgraph as pg
+from acq4.util.typing import Number
+from pyqtgraph.units import µm
 
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
@@ -15,7 +16,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from acq4.util.future import MultiFuture
+from acq4.util.future import Future, MultiFuture
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
 
@@ -211,7 +212,64 @@ class Microscope(Device, OptomechDevice):
         fdpos[2] += dif
         return fd.moveToGlobal(fdpos, speed)
 
-    def getSurfaceDepth(self):
+    def getDefaultImager(self):
+        name = self.config.get('defaultImager', None)
+        if name is None:
+            cameras = self.dm.listInterfaces("camera")
+            if len(cameras) == 0:
+                raise RuntimeError("No camera devices available.")
+            name = cameras[0]
+        return self.dm.getDevice(name)
+
+    def getZStack(self, imager: "Device", z_range: tuple[Number]) -> Future:
+        """Acquire a z-stack of images using the given imager.
+
+        The z-stack is returned as frames.
+        """
+        from acq4.util.imaging.sequencer import runZStack
+
+        return runZStack(imager, z_range)
+
+    @Future.wrap
+    def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
+        """Set the surface of the sample based on how focused the images are."""
+
+        def center_area(img: np.ndarray) -> Tuple[slice, slice]:
+            """Return a slice that selects the center of the image."""
+            minimum = 50
+            center_w = img.shape[0] // 2
+            start_w = max(min(int(img.shape[0] * 0.4), center_w - minimum), 0)
+            end_w = max(min(int(img.shape[0] * 0.6), center_w + minimum), img.shape[0])
+            center_h = img.shape[1] // 2
+            start_h = max(min(int(img.shape[1] * 0.4), center_h - minimum), 0)
+            end_h = max(min(int(img.shape[1] * 0.6), center_h + minimum), img.shape[1])
+            return slice(start_w, end_w), slice(start_h, end_h)
+
+        def downsample(arr, n):
+            new_shape = n * (np.array(arr.shape[1:]) / n).astype(int)
+            clipped = arr[:, :new_shape[0], :new_shape[1]]
+            mean1 = clipped.reshape(clipped.shape[0], clipped.shape[1], clipped.shape[2]//n, n).mean(axis=3)
+            mean2 = mean1.reshape(mean1.shape[0], mean1.shape[1]//n, n, mean1.shape[2]).mean(axis=2)
+            return mean2
+
+        def calculate_focus_score(image):
+            # image += np.random.normal(size=image.shape, scale=100)
+            image = scipy.ndimage.laplace(image) / np.mean(image)
+            return image.var()
+
+        z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm), 1 * µm)
+        z_stack = _future.waitFor(self.getZStack(imager, z_range)).getResult()
+        filtered = downsample(np.array([f.data() for f in z_stack]), 5)
+        centers = filtered[(..., *center_area(filtered[0]))]
+        scored = np.array([calculate_focus_score(img) for img in centers])
+        surface = np.argmax(scored > 0.005)  # arbitrary threshold? seems about right on the test data
+        if surface == 0:
+            return
+
+        surface_frame = z_stack[surface]
+        self.setSurfaceDepth(surface_frame.info()['Depth'])
+
+    def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.
         """
         return self._surfaceDepth
@@ -338,7 +396,6 @@ class Objective(OptomechDevice):
 
     def __repr__(self):
         return "<Objective %s.%s offset=%0.2g,%0.2g scale=%0.2g>" % (self._scope.name(), self.name(), self.offset().x(), self.offset().y(), self.scale().x())
-
 
 
 class ScopeGUI(Qt.QWidget):
@@ -487,8 +544,12 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
+        self.findSurfaceBtn = Qt.QPushButton('Find Surface')
+        self.layout.addWidget(self.findSurfaceBtn, 1, 0)
+        self.findSurfaceBtn.clicked.connect(self.findSurfaceClicked)
+
         self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
-        self.layout.addWidget(self.depthLabel, 1, 0)
+        self.layout.addWidget(self.depthLabel, 2, 0)
 
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
@@ -503,6 +564,9 @@ class ScopeCameraModInterface(CameraModuleInterface):
         focus = self.getDevice().getFocusDepth()
         self.getDevice().setSurfaceDepth(focus)
         self.transformChanged()
+
+    def findSurfaceClicked(self):
+        self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
         self.surfaceLine.setValue(depth)

@@ -126,6 +126,10 @@ class Sensapex(Stage):
                 lastMove.stop()
             self._lastMove = None
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / self.dev.ump.poller.interval
+
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
