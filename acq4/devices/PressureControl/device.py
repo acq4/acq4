@@ -1,3 +1,6 @@
+import numpy as np
+from typing import Optional
+
 import time
 
 from acq4.util import Qt
@@ -31,17 +34,40 @@ class PressureControl(Device):
         self.sources = ("regulator", "user", "atmosphere")
 
     @Future.wrap
-    def attainPressure(self, source, maximum=None, minimum=None, _future=None):
-        self.setPressure(source)
-        while True:
-            pressure = self.getPressure()
-            if minimum is not None and pressure < minimum:
-                self.setPressure(source, pressure=minimum)
-            elif maximum is not None and pressure > maximum:
-                self.setPressure(source, pressure=maximum)
+    def attainPressure(
+        self,
+        source: str = "regulator",
+        maximum: Optional[float] = None,
+        minimum: Optional[float] = None,
+        rate: Optional[float] = None,
+        _future: Optional[Future] = None,
+    ) -> None:
+        def value_is_out_of_bounds(val):
+            if minimum is not None and val < minimum:
+                return True
+            if maximum is not None and val > maximum:
+                return True
+            return False
+
+        start = time.time()
+        measured = self.getPressure()
+        if minimum is not None and measured < minimum:
+            target = minimum
+            prevent_overshoot = lambda x: np.clip(x, None, target)
+        elif maximum is not None and measured > maximum:
+            target = maximum
+            prevent_overshoot = lambda x: np.clip(x, target, None)
+
+        while value_is_out_of_bounds(measured):
+            dt = time.time() - start
+            if rate is None:
+                step = target
             else:
-                break
+                step = prevent_overshoot(measured + abs(rate) * dt * np.sign(target - measured))
+            self.setPressure(source=source, pressure=step)
             _future.sleep(self.regulatorSettlingTime)
+            measured = self.getPressure()
+        # TODO do we need to guarantee that the source is set?
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).

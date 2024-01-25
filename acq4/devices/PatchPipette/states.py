@@ -788,6 +788,8 @@ class SealState(PatchPipetteState):
         patchrec['capacitanceBeforeSeal'] = initialTP.analysis()['capacitance']
         startTime = ptime.time()
         pressure = config['startingPressure']
+        if isinstance(config['pressureChangeRates'], str):
+            config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
 
         mode = config['pressureMode']
         self.setState('beginning seal (mode: %r)' % mode)
@@ -796,7 +798,7 @@ class SealState(PatchPipetteState):
         elif mode == 'auto':
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         else:
-            raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
+            raise ValueError(f"pressureMode must be 'auto' or 'user' (got {mode}')")
 
         dev.setTipClean(False)
 
@@ -864,8 +866,6 @@ class SealState(PatchPipetteState):
                 pressure = np.clip(pressure, config['pressureLimit'], 0)
                 
                 # decide how much to adjust pressure based on rate of change in seal resistance
-                if isinstance(str, config['pressureChangeRates']):
-                    config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
                 for max_slope, change in config['pressureChangeRates']:
                     if max_slope is None or slope < max_slope:
                         pressure += change
@@ -1140,7 +1140,8 @@ class ResealState(PatchPipetteState):
     }
 
     def __init__(self, *args, **kwds):
-        self.retractionFuture = None
+        self._retractionFuture = None
+        self._pressureFuture = None
         PatchPipetteState.__init__(self, *args, **kwds)
         if self.config['maxPressure'] != self.defaultConfig()['maxPressure']:
             warnings.warn("maxPressure parameter is deprecated; use pressureLimit instead", DeprecationWarning)
@@ -1156,18 +1157,16 @@ class ResealState(PatchPipetteState):
         initialResistance = None
         recentTestPulses = deque(maxlen=config['numTestPulseAverage'])
 
-        pressure = config['initialPressure']
+        dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
 
-        self.retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+        self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+        self._pressureFuture = dev.presureDevice.attainPressure(
+            'regulator', minimum=config['pressureLimit'], maximum=0, rate=config['pressureChangeRate'])
 
-        attained_max_pressure = False
         startTime = ptime.time()
-        lastTime = startTime
         while True:
             now = ptime.time()
-            dt = now - lastTime
             totalDt = now - startTime
-            lastTime = now
 
             # check for timeout
             if config['resealTimeout'] is not None and totalDt > config['resealTimeout']:
@@ -1175,13 +1174,6 @@ class ResealState(PatchPipetteState):
                 return config['fallbackState']
 
             self.checkStop()
-
-            if not attained_max_pressure:
-                # update pressure
-                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['pressureLimit'], 0)
-                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                if pressure == config['pressureLimit']:
-                    attained_max_pressure = True
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
@@ -1204,8 +1196,10 @@ class ResealState(PatchPipetteState):
             self.checkStop()
 
     def cleanup(self):
-        if self.retractionFuture is not None:
-            self.retractionFuture.stop()
+        if self._retractionFuture is not None:
+            self._retractionFuture.stop()
+        if self._pressureFuture is not None:
+            self._pressureFuture.stop()
 
 
 class MoveNucleusToHomeState(PatchPipetteState):
