@@ -1,4 +1,5 @@
 from collections import deque
+from typing import Union, Tuple, Any, Optional
 
 import contextlib
 import numpy as np
@@ -186,6 +187,17 @@ class PatchPipetteState(Future):
             while not self.testPulseResults.empty():
                 tps.append(self.testPulseResults.get())
         return tps
+
+    @Future.wrap
+    def averageTestPulseValue(self, value: str, duration: float, _future: Optional[Future]) -> tuple[float, float]:
+        """Return the mean and variance of the given value over *duration* seconds of test pulses.
+        """
+        working = []
+        start = ptime.time()
+        while ptime.time() - start < duration:
+            working.extend([tp.analysis()[value] for tp in self.getTestPulses(timeout=0.2)])
+            _future.checkStop()
+        return np.mean(working), np.var(working)
 
     def cleanup(self):
         """Called after job completes, whether it failed or succeeded.
@@ -1114,7 +1126,7 @@ class ResealState(PatchPipetteState):
     retractionSpeed : float
         Speed in m/s to move pipette during retraction (default is 0.3 um / s)
     resealTimeout : float
-        Seconds before reseal attempt exits
+        Seconds before reseal attempt exits, not including 20s to measure baseline resistance (default is 10 min)
     numTestPulseAverage : int
         Number of test pulses to average when measuring resistance
 
@@ -1152,46 +1164,46 @@ class ResealState(PatchPipetteState):
         config = self.config
         dev = self.dev
         self.monitorTestPulse()
-
-        patchrec = dev.patchRecord()
-        initialResistance = None
-        recentTestPulses = deque(maxlen=config['numTestPulseAverage'])
-
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
-
-        self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+        self.checkStop()
         self._pressureFuture = dev.presureDevice.attainPressure(
             'regulator', minimum=config['pressureLimit'], maximum=0, rate=config['pressureChangeRate'])
+        res_baseline, res_variance = self.waitFor(
+            self.averageTestPulseValue('steadyStateResistance', duration=20)
+        ).getResult()
+        res_min = res_baseline - np.sqrt(res_variance)
+        res_max = res_baseline + np.sqrt(res_variance)
+        start_time = ptime.time()  # getting the baseline didn't count
 
-        startTime = ptime.time()
+        patchrec = dev.patchRecord()
+        initial_resistance = None
+        recent_test_pulses = deque(maxlen=config['numTestPulseAverage'])  # to measure dR/dt
+
+        self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+
         while True:
-            now = ptime.time()
-            totalDt = now - startTime
-
-            # check for timeout
-            if config['resealTimeout'] is not None and totalDt > config['resealTimeout']:
+            self.checkStop()
+            if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
                 return config['fallbackState']
 
-            self.checkStop()
-
             # pull in all new test pulses (hopefully only one since the last time we checked)
-            tps = self.getTestPulses(timeout=0.2)
-            if len(tps) == 0:
+            test_pulses = self.getTestPulses(timeout=0.2)
+            if len(test_pulses) == 0:
                 continue
-            recentTestPulses.extend(tps)
+            recent_test_pulses.extend(test_pulses)
 
-            # take note of initial resistance
-            tp = tps[-1]
+            tp = test_pulses[-1]
             ssr = tp.analysis()['steadyStateResistance']
-            if initialResistance is None:
-                initialResistance = ssr
-                patchrec['resealInitialResistance'] = initialResistance
+            # take note of initial resistance
+            if initial_resistance is None:
+                initial_resistance = ssr
+                patchrec['resealInitialResistance'] = initial_resistance
 
             # check progress on resistance
-            # if len(recentTestPulses) > config['numTestPulseAverage']:
-            #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-            #     if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
+            # if len(recent_test_pulses) > config['numTestPulseAverage']:
+            #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recent_test_pulses])
+            #     if np.all(np.diff(res) > 0) and ssr - initial_resistance > config['slowDetectionThreshold']:
             #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self.checkStop()
 
