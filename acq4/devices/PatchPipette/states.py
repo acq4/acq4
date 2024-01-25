@@ -285,7 +285,6 @@ class WholeCellState(PatchPipetteState):
     }
 
     def run(self):
-        config = self.config
         patchrec = self.dev.patchRecord()
         patchrec['wholeCellStartTime'] = ptime.time()
         patchrec['wholeCellPosition'] = tuple(self.dev.pipetteDevice.globalPosition())
@@ -294,8 +293,7 @@ class WholeCellState(PatchPipetteState):
 
         while True:
             # TODO: monitor for cell loss
-            self.checkStop()
-            time.sleep(0.1)
+            self.sleep(0.1)
 
     def cleanup(self):
         patchrec = self.dev.patchRecord()
