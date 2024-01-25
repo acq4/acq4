@@ -1161,23 +1161,24 @@ class ResealState(PatchPipetteState):
     def run(self):
         config = self.config
         dev = self.dev
+        patchrec = dev.patchRecord()
         self.monitorTestPulse()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.checkStop()
-        self._pressureFuture = dev.presureDevice.attainPressure(
-            'regulator', minimum=config['pressureLimit'], maximum=0, rate=config['pressureChangeRate'])
         res_baseline, res_variance = self.waitFor(
             self.averageTestPulseValue('steadyStateResistance', duration=20)
         ).getResult()
+        patchrec['resealInitialResistanceMean'] = res_baseline
+        patchrec['resealInitialResistanceVariance'] = res_variance
         res_min = res_baseline - np.sqrt(res_variance)
         res_max = res_baseline + np.sqrt(res_variance)
         start_time = ptime.time()  # getting the baseline didn't count
 
-        patchrec = dev.patchRecord()
-        initial_resistance = None
         recent_test_pulses = deque(maxlen=config['numTestPulseAverage'])  # to measure dR/dt
 
         self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+        self._pressureFuture = dev.presureDevice.attainPressure(
+            'regulator', minimum=config['pressureLimit'], maximum=0, rate=config['pressureChangeRate'])
 
         while True:
             self.checkStop()
@@ -1191,12 +1192,14 @@ class ResealState(PatchPipetteState):
                 continue
             recent_test_pulses.extend(test_pulses)
 
-            tp = test_pulses[-1]
+            tp = recent_test_pulses[-1]
             ssr = tp.analysis()['steadyStateResistance']
-            # take note of initial resistance
-            if initial_resistance is None:
-                initial_resistance = ssr
-                patchrec['resealInitialResistance'] = initial_resistance
+            if ssr < res_min:
+                # TODO membrane is tearing. Pause, retract, and wait for resistance to recover. Potentially retract as far as the original start location.
+                pass
+            if ssr > res_max:
+                # TODO membrane is stretching. Pause, advance pipette a few microns, and wait for resistance to stabilize before continuing retraction
+                pass
 
             # check progress on resistance
             # if len(recent_test_pulses) > config['numTestPulseAverage']:
