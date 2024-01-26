@@ -1150,25 +1150,27 @@ class ResealState(PatchPipetteState):
         'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
         'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
         'nuzzlePressureChangeRate': {'type': 'float', 'default': 0.2e3, 'suffix': 'Pa/s'},
-        'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 2e-6, 'suffix': 'm'},
-        'nuzzleSpeed': {'type': 'float', 'default': 0.1e-6, 'suffix': 'm/s'},
-        'nuzzleDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
+        'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
+        'nuzzleSpeed': {'type': 'float', 'default': 3e-6, 'suffix': 'm/s'},
+        'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
         'nuzzleRepetitions': {'type': 'int', 'default': 3},
         'maxAccessResistanceIncreaseRateBeforeStretch': {'type': 'float', 'default': 1, 'suffix': '%/s'},
+        'maxStretchRecoveryTime': {'type': 'float', 'default': 30, 'suffix': 's'},
+        'maxTearRecoveryTime': {'type': 'float', 'default': 60, 'suffix': 's'},
     }
 
     def __init__(self, *args, **kwds):
+        PatchPipetteState.__init__(self, *args, **kwds)
         self._retractionFuture = None
         self._pressureFuture = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        self._startPosition = self.dev.pipetteDevice.globalPosition()
         if self.config['maxPressure'] != self.defaultConfig()['maxPressure']:
             warnings.warn("maxPressure parameter is deprecated; use pressureLimit instead", DeprecationWarning)
             if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
                 self.config['pressureLimit'] = self.config['maxPressure']
 
     def nuzzle(self):
-        """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted.
-        """
+        """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
         if self._retractionFuture is not None:
             self._retractionFuture.stop()
@@ -1177,49 +1179,63 @@ class ResealState(PatchPipetteState):
         pos = self.dev.pipetteDevice.globalPosition()
         pipette_direction = self.dev.pipetteDevice.globalDirection()
 
-        def random_perpendicular_vector():
-            """pick a random point on the surface of a circle perpendicular to the pipette axis"""
+        def random_wiggle_point():
+            """pick a random point on a circle perpendicular to the pipette axis"""
             while np.linalg.norm(vec := np.random.uniform(-1, 1, size=3)) == 0:
                 pass  # prevent division by zero
             vec = np.cross(pipette_direction, vec)
             return pos + (self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec))
 
-        prev_dest = random_perpendicular_vector()
+        prev_dest = random_wiggle_point()
         for _ in range(self.config['nuzzleRepetitions']):
             self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
             self._pressureFuture = self.dev.pressureDevice.attainPressure(
                 target=self.config['nuzzlePressureLimit'], rate=self.config['nuzzlePressureChangeRate'])
             start = ptime.time()
             while ptime.time() - start < self.config['nuzzleDuration']:
-                while np.dot(dest := random_perpendicular_vector(), prev_dest) > 0:
+                while np.dot(dest := random_wiggle_point(), prev_dest) > 0:
                     pass  # ensure different direction from previous
                 self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=dest, speed=self.config['nuzzleSpeed']))
+                prev_dest = dest
             self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed']))
             self.waitFor(self._pressureFuture)
 
     def handleTear(self):
-        """Handle a tear in the membrane by retracting the pipette and waiting for the resistance to recover.
-        """
+        """Handle a tearing membrane by retracting the pipette and waiting for the resistance to recover."""
         self.setState("handling tear")
         self._retractionFuture.stop()
-        # TODO membrane is tearing. Pause, back up, and wait for resistance to recover. Potentially back up as far as
-        #  the original start location.
+        self.freezeRollingResistanceThresholds()
+        recovery_future = self.dev.pipetteDevice._moveToGlobal(
+            pos=self._startPosition, speed=self.config['retractionSpeed'] * 10)
+        start = ptime.time()
+        while self.isTearing() and ptime.time() - start < self.config['maxTearRecoveryTime']:
+            self.sleep(0.2)
+        recovery_future.stop()
+        self.unfreezeRollingResistanceThresholds()
 
     def handleStretch(self):
+        """Handle a stretching membrane by pausing and waiting for the resistance to stabilize."""
         self.setState("handling stretch")
         self._retractionFuture.stop()
-        # TODO membrane is stretching. Pause, and wait for resistance to stabilize before continuing retraction
+        self.freezeRollingResistanceThresholds()
+        start = ptime.time()
+        while (self.isStretching() and not self.isTearing()
+               and ptime.time() - start < self.config['maxStretchRecoveryTime']):
+            self.sleep(0.2)
+        self.unfreezeRollingResistanceThresholds()
 
     def run(self):
         config = self.config
         dev = self.dev
         patchrec = dev.patchRecord()
+        # TODO when should nuzzling happen?
         self.nuzzle()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.monitorTestPulse()
         self.checkStop()
         self.setState("measuring baseline resistance")
-        # TODO this needs to be a constant running average. also the max value. also the access resistance.
+        # TODO this needs to be a constant running average. also, the max value. also also, for both access (peak)
+        #  and input (ssr-peak) resistance.
         res_mean, res_variance = self.waitFor(
             self.averageTestPulseValue('steadyStateResistance', duration=20)
         ).getResult()
@@ -1231,11 +1247,13 @@ class ResealState(PatchPipetteState):
 
         recent_test_pulses = deque(maxlen=config['numTestPulseAverage'])  # to measure dR/dt
 
-        self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
         self._pressureFuture = dev.presureDevice.attainPressure(
             minimum=config['pressureLimit'], maximum=0, rate=config['pressureChangeRate'])
 
         while True:
+            self.setState("retracting")
+            if self._retractionFuture is None or self._retractionFuture.isDone():
+                self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
             self.checkStop()
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
