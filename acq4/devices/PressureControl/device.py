@@ -37,26 +37,39 @@ class PressureControl(Device):
     def attainPressure(
         self,
         source: str = "regulator",
+        target: Optional[float] = None,
+        target_tolerance: float = 10,
         maximum: Optional[float] = None,
         minimum: Optional[float] = None,
         rate: Optional[float] = None,
         _future: Optional[Future] = None,
     ) -> None:
+        if target is None and maximum is None and minimum is None:
+            raise ValueError("Must specify at least one of target, maximum, or minimum")
+        if target is not None and (maximum is not None or minimum is not None):
+            raise ValueError("Cannot specify both target and maximum/minimum")
+        # TODO do we need to guarantee that the source gets set?
+
         def value_is_out_of_bounds(val):
             if minimum is not None and val < minimum:
                 return True
             if maximum is not None and val > maximum:
                 return True
+            if target is not None and abs(val - target) > target_tolerance:
+                return True
             return False
 
         start = time.time()
         measured = self.getPressure()
+        prevent_overshoot = lambda x: x  # default no-op for "target" mode, which can overshoot
         if minimum is not None and measured < minimum:
             target = minimum
             prevent_overshoot = lambda x: np.clip(x, None, target)
         elif maximum is not None and measured > maximum:
             target = maximum
             prevent_overshoot = lambda x: np.clip(x, target, None)
+        elif target is None:
+            return  # we're already in range
 
         while value_is_out_of_bounds(measured):
             dt = time.time() - start
@@ -67,7 +80,6 @@ class PressureControl(Device):
             self.setPressure(source=source, pressure=step)
             _future.sleep(self.regulatorSettlingTime)
             measured = self.getPressure()
-        # TODO do we need to guarantee that the source is set?
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
