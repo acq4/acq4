@@ -80,7 +80,7 @@ class PatchPipetteState(Future):
         return cls._parameterDefaultOverrides
 
     @classmethod
-    def defaultConfig(cls) -> dict[str, object]:
+    def defaultConfig(cls) -> dict[str, Any]:
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
@@ -1061,7 +1061,7 @@ class BreakInState(PatchPipetteState):
                 return config['fallbackState']
 
     def attemptBreakIn(self, nPulses, duration, pressure):
-        for i in range(nPulses):
+        for _ in range(nPulses):
             # get the next test pulse
             status = self.checkBreakIn()
             if status is not None:
@@ -1124,9 +1124,10 @@ class ResealState(PatchPipetteState):
     retractionSpeed : float
         Speed in m/s to move pipette during retraction (default is 0.3 um / s)
     resealTimeout : float
-        Seconds before reseal attempt exits, not including 20s to measure baseline resistance (default is 10 min)
-    numTestPulseAverage : int
-        Number of test pulses to average when measuring resistance
+        Seconds before reseal attempt exits, not including grabbing the nucleus and baseline measurements (default is
+        10 min)
+    secondsTestPulseAverage : int
+        Number of seconds to average when measuring resistance (default 20s)
 
     """
 
@@ -1142,16 +1143,17 @@ class ResealState(PatchPipetteState):
     _parameterTreeConfig = {
         'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
         'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
-        'numTestPulseAverage': {'type': 'int', 'default': 3},
+        'secondsTestPulseAverage': {'type': 'float', 'default': 20, 'suffix': 's'},
         'fallbackState': {'type': 'str', 'default': 'whole cell'},
-        'pressureLimit': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
+        'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
         'maxPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
         'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
+        'extractNucleus': {'type': 'bool', 'default': True},
         'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
         'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
         'nuzzlePressureChangeRate': {'type': 'float', 'default': 0.2e3, 'suffix': 'Pa/s'},
         'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
-        'nuzzleSpeed': {'type': 'float', 'default': 3e-6, 'suffix': 'm/s'},
+        'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
         'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
         'nuzzleRepetitions': {'type': 'int', 'default': 3},
         'maxAccessResistanceIncreaseRateBeforeStretch': {'type': 'float', 'default': 1, 'suffix': '%/s'},
@@ -1163,11 +1165,14 @@ class ResealState(PatchPipetteState):
         PatchPipetteState.__init__(self, *args, **kwds)
         self._retractionFuture = None
         self._pressureFuture = None
+        self._updateRollingResistanceThresholds = False
+        self._rollingLongTermTestPulses = deque()
+        self._rollingRecentTestPulses = deque()
         self._startPosition = self.dev.pipetteDevice.globalPosition()
         if self.config['maxPressure'] != self.defaultConfig()['maxPressure']:
-            warnings.warn("maxPressure parameter is deprecated; use pressureLimit instead", DeprecationWarning)
-            if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
-                self.config['pressureLimit'] = self.config['maxPressure']
+            warnings.warn("maxPressure parameter is deprecated; use retractionPressure instead", DeprecationWarning)
+            if self.config['retractionPressure'] != self.defaultConfig()['retractionPressure']:
+                self.config['retractionPressure'] = self.config['maxPressure']
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
@@ -1177,13 +1182,13 @@ class ResealState(PatchPipetteState):
         if self._pressureFuture is not None:
             self._pressureFuture.stop()
         pos = self.dev.pipetteDevice.globalPosition()
+        # TODO move back a little?
         pipette_direction = self.dev.pipetteDevice.globalDirection()
 
         def random_wiggle_point():
             """pick a random point on a circle perpendicular to the pipette axis"""
-            while np.linalg.norm(vec := np.random.uniform(-1, 1, size=3)) == 0:
+            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
                 pass  # prevent division by zero
-            vec = np.cross(pipette_direction, vec)
             return pos + (self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec))
 
         prev_dest = random_wiggle_point()
@@ -1200,6 +1205,14 @@ class ResealState(PatchPipetteState):
             self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed']))
             self.waitFor(self._pressureFuture)
 
+    def sealToNucleus(self):
+        """Attempt to seal onto a nucleus."""
+        self.nuzzle()
+        self.setState("sealing to nucleus")
+        self.dev.pressureDevice.setPressure(source='regulator', pressure=0)
+        # TODO move forward a little?
+        self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['initialPressure'])
+
     def handleTear(self):
         """Handle a tearing membrane by retracting the pipette and waiting for the resistance to recover."""
         self.setState("handling tear")
@@ -1209,7 +1222,7 @@ class ResealState(PatchPipetteState):
             pos=self._startPosition, speed=self.config['retractionSpeed'] * 10)
         start = ptime.time()
         while self.isTearing() and ptime.time() - start < self.config['maxTearRecoveryTime']:
-            self.sleep(0.2)
+            self.processAtLeastOneTestPulse()
         recovery_future.stop()
         self.unfreezeRollingResistanceThresholds()
 
@@ -1221,72 +1234,149 @@ class ResealState(PatchPipetteState):
         start = ptime.time()
         while (self.isStretching() and not self.isTearing()
                and ptime.time() - start < self.config['maxStretchRecoveryTime']):
-            self.sleep(0.2)
+            self.processAtLeastOneTestPulse()
+        if self.isTearing():
+            self.handleTear()
         self.unfreezeRollingResistanceThresholds()
+
+    def startRollingResistanceThresholds(self):
+        """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
+        self._updateRollingResistanceThresholds = True
+        self.monitorTestPulse()
+        start = ptime.time()
+        while ptime.time() - start < self.config['secondsTestPulseAverage']:
+            self.processAtLeastOneTestPulse()
+
+    def isStretching(self) -> bool:
+        """Return True if the resistance is increasing too quickly."""
+        change_ratio = self._recentAverageAccessResistance / self._longTermAccessResistanceMean
+        max_ratio = 1 + (self.config['maxAccessResistanceIncreaseRateBeforeStretch'] / 100)
+        return change_ratio > max_ratio
+
+    def isTearing(self) -> bool:
+        """Return True if the resistance is decreasing."""
+        min_input_res = self._longTermInputResistanceMean - np.sqrt(self._longTermInputResistanceVariance)
+        return self._recentAverageInputResistance < min_input_res
+
+    def processAtLeastOneTestPulse(self):
+        """Wait for at least one test pulse to be processed."""
+        while True:
+            self.checkStop()
+            tps = self.getTestPulses(timeout=0.2)
+            if len(tps) > 0:
+                break
+            self.sleep(0.2)
+        tps = [(tp.startTime(), tp.analysis()) for tp in tps]
+        self._rollingRecentTestPulses.extend(tps)
+
+        last_second = tps[-1][0] - 1
+        while self._rollingRecentTestPulses[0][0] < last_second:
+            self._rollingRecentTestPulses.popleft()
+        self.analyseRecentTestPulses()
+
+        self._rollingLongTermTestPulses.extend(tps)
+        last_20_seconds = tps[-1][0] - 20
+        while self._rollingLongTermTestPulses[0][0] < last_20_seconds:
+            self._rollingLongTermTestPulses.popleft()
+        if self._updateRollingResistanceThresholds:
+            self.analyseLongTermTestPulses()
+
+    def analyseLongTermTestPulses(self):
+        too_recent = self._rollingLongTermTestPulses[-1][0] - 1
+        access_res = np.fromiter(
+            (a[1]['peakResistance']
+             for a in self._rollingLongTermTestPulses if a[0] < too_recent),
+            dtype=float,
+        )
+        input_res = np.fromiter(
+            (a[1]['steadyStateResistance'] - a[1]['peakResistance']
+             for a in self._rollingLongTermTestPulses if a[0] < too_recent),
+            dtype=float,
+        )
+        self._longTermInputResistanceMean = np.mean(input_res)
+        self._longTermInputResistanceVariance = np.var(input_res)
+        self._longTermAccessResistanceMean = np.mean(access_res)
+        self._longTermAccessResistanceVariance = np.var(access_res)
+
+    def analyseRecentTestPulses(self):
+        analysis = [tp.analysis() for tp in self._rollingRecentTestPulses]
+        access_res = np.fromiter((a['peakResistance'] for a in analysis), dtype=float)
+        input_res = np.fromiter((a['steadyStateResistance'] - a['peakResistance'] for a in analysis), dtype=float)
+        self._recentInputResistanceMean = np.mean(input_res)
+        self._recentInputResistanceVariance = np.var(input_res)
+        self._recentAccessResistanceMean = np.mean(access_res)
+        self._recentAccessResistanceVariance = np.var(access_res)
+
+    def freezeRollingResistanceThresholds(self):
+        """Stop updating the rolling averages"""
+        self._updateRollingResistanceThresholds = False
+
+    def unfreezeRollingResistanceThresholds(self):
+        self._updateRollingResistanceThresholds = True
 
     def run(self):
         config = self.config
         dev = self.dev
-        patchrec = dev.patchRecord()
-        # TODO when should nuzzling happen?
-        self.nuzzle()
+        if config['extractNucleus']:
+            self.sealToNucleus()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
-        self.monitorTestPulse()
         self.checkStop()
         self.setState("measuring baseline resistance")
-        # TODO this needs to be a constant running average. also, the max value. also also, for both access (peak)
-        #  and input (ssr-peak) resistance.
-        res_mean, res_variance = self.waitFor(
-            self.averageTestPulseValue('steadyStateResistance', duration=20)
-        ).getResult()
-        patchrec['resealInitialResistanceMean'] = res_mean
-        patchrec['resealInitialResistanceVariance'] = res_variance
-        res_min = res_mean - 3 * np.sqrt(res_variance)
-        res_max = res_mean + 3 * np.sqrt(res_variance)
-        start_time = ptime.time()  # getting the baseline didn't count
-
-        recent_test_pulses = deque(maxlen=config['numTestPulseAverage'])  # to measure dR/dt
+        self.startRollingResistanceThresholds()
 
         self._pressureFuture = dev.presureDevice.attainPressure(
-            minimum=config['pressureLimit'], maximum=0, rate=config['pressureChangeRate'])
+            minimum=config['retractionPressure'], maximum=0, rate=config['pressureChangeRate'])
+        # TODO do we need to wait for this pressure?
 
+        start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
         while True:
-            self.setState("retracting")
-            if self._retractionFuture is None or self._retractionFuture.isDone():
-                self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
             self.checkStop()
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
                 return config['fallbackState']
 
-            # pull in all new test pulses (hopefully only one since the last time we checked)
-            test_pulses = self.getTestPulses(timeout=0.2)
-            if len(test_pulses) == 0:
-                continue
-            recent_test_pulses.extend(test_pulses)
+            if self._retractionFuture is None or self._retractionFuture.wasInterrupted():
+                self.setState("retracting")
+                self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
 
-            tp = recent_test_pulses[-1]
-            ssr = tp.analysis()['steadyStateResistance']
-            peak = tp.analysis()['peakResistance']
+            self.processAtLeastOneTestPulse()
+            if self.isStretching():
+                self.handleStretch()
+            elif self.isTearing():
+                self.handleTear()
+
+            # TODO this needs to be a constant running average. also, the max value. also also, for both access (peak)
+            #  and input (ssr-peak) resistance.
+            # res_mean, res_variance = self.waitFor(
+            #     self.averageTestPulseValue('steadyStateResistance', duration=20)
+            # ).getResult()
+            # patchrec['resealInitialResistanceMean'] = res_mean
+            # patchrec['resealInitialResistanceVariance'] = res_variance
+            # res_min = res_mean - 3 * np.sqrt(res_variance)
+            # res_max = res_mean + 3 * np.sqrt(res_variance)
+
+            # pull in all new test pulses (hopefully only one since the last time we checked)
+            # test_pulses = self.getTestPulses(timeout=0.2)
+            # if len(test_pulses) == 0:
+            #     continue
+            # recent_test_pulses.extend(test_pulses)
+
+            # tp = recent_test_pulses[-1]
+            # ssr = tp.analysis()['steadyStateResistance']
+            # peak = tp.analysis()['peakResistance']
             # access slope negative: freak out? maybe it's just gunk coming out of the pipette tip
             # input slope negative: freak out!
-            # if the max access is exceeded by more than x%, is that a stretch?
-            # slope positive: great
             # slope too positive: pause and hope for no tear
             # track last "good" resistance avg
             # difference between "input resistance" and "access"
             # sometimes repairing a tear won't get resistance all the way back to previous levels, so have a max wait time param.
-            if ssr < res_min:
-                self.handleTear()
-            if ssr > res_max:
-                self.handleStretch()
 
             # check progress on resistance
-            # if len(recent_test_pulses) > config['numTestPulseAverage']:
+            # if len(recent_test_pulses) > config['secondsTestPulseAverage']:
             #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recent_test_pulses])
             #     if np.all(np.diff(res) > 0) and ssr - initial_resistance > config['slowDetectionThreshold']:
             #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
-            self.checkStop()
+            self.sleep(0.2)
 
     def cleanup(self):
         if self._retractionFuture is not None:

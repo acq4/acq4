@@ -61,15 +61,17 @@ class PressureControl(Device):
 
         start = time.time()
         measured = self.getPressure()
-        prevent_overshoot = lambda x: x  # default no-op for "target" mode, which can overshoot
         if minimum is not None and measured < minimum:
             target = minimum
-            prevent_overshoot = lambda x: np.clip(x, None, target)
         elif maximum is not None and measured > maximum:
             target = maximum
-            prevent_overshoot = lambda x: np.clip(x, target, None)
         elif target is None:
             return  # we're already in range
+
+        if measured < target:
+            prevent_overshoot = lambda x: np.clip(x, None, target)
+        else:
+            prevent_overshoot = lambda x: np.clip(x, target, None)
 
         while value_is_out_of_bounds(measured):
             dt = time.time() - start

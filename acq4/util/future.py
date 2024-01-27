@@ -125,7 +125,7 @@ class Future(Qt.QObject):
         """Called by subclasses when the task is done (regardless of the reason)
         """
         if self._isDone:
-            raise Exception("_taskDone has already been called.")
+            raise ValueError("_taskDone has already been called.")
         self._isDone = True
         if error is not None:
             # error message may have been set earlier
@@ -133,7 +133,7 @@ class Future(Qt.QObject):
         self._excInfo = excInfo
         self._wasInterrupted = interrupted
         if interrupted:
-            self.setState(state or 'interrupted: %s' % error)
+            self.setState(state or f'interrupted: {error}')
         else:
             self.setState(state or 'complete')
         self.finishedEvent.set()
@@ -271,7 +271,7 @@ class Future(Qt.QObject):
             try:
                 formattedMsg = message.format(stack=stack, error=traceback.format_exception_only(type(exc), exc))
             except Exception as exc2:
-                formattedMsg = message + f" [additional error formatting error message: {exc2}]"
+                formattedMsg = f"{message} [additional error formatting error message: {exc2}]"
             raise RuntimeError(formattedMsg) from exc
 
 
@@ -288,13 +288,13 @@ class MultiFuture(Future):
         return Future.stop(self, reason)
 
     def percentDone(self):
-        return min([f.percentDone() for f in self.futures])
+        return min(f.percentDone() for f in self.futures)
 
     def wasInterrupted(self):
-        return any([f.wasInterrupted() for f in self.futures])
+        return any(f.wasInterrupted() for f in self.futures)
 
     def isDone(self):
-        return all([f.isDone() for f in self.futures])
+        return all(f.isDone() for f in self.futures)
 
     def errorMessage(self):
         return "; ".join([f.errorMessage() or '' for f in self.futures])
