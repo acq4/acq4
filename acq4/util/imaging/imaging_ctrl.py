@@ -17,14 +17,15 @@ class ImagingCtrl(Qt.QWidget):
     * Save frame, pin frame
     * Record stack
     * FPS display
-    * Internal FrameDisplay that handles image display, contrast, and
-      background subtraction.
+    * Internal FrameDisplay that handles rendering the image.
+    * Contrast controls
+    * Background subtraction controls
 
     Basic usage:
     
     * Place self.frameDisplay.imageItem() in a ViewBox.
-    * Display this widget along with self.frameDisplay.contrastCtrl and .bgCtrl
-      to provide the user interface.
+    * Display this widget along with self.contrastCtrl and .bgCtrl to provide
+      the user interface.
     * Connect to sigAcquireVideoClicked and sigAcquireFrameClicked to handle
       user requests for acquisition.
     * Call acquisitionStarted() and acquisitionStopped() to provide feedback
@@ -214,7 +215,7 @@ class ImagingCtrl(Qt.QWidget):
         self.recordThread.quit()
         self.frameDisplay.quit()
         if not self.recordThread.wait(10000):
-            raise Exception("Timed out while waiting for rec. thread exit!")
+            raise TimeoutError("Timed out while waiting for rec. thread exit!")
 
     def acquisitionStopped(self):
         # self.toggleRecord(False)
@@ -276,7 +277,9 @@ class ImagingCtrl(Qt.QWidget):
         fr.sigRemoveRequested.disconnect(self.removePinnedFrame)
 
     def clearPinnedFramesClicked(self):
-        if Qt.QMessageBox.question(self, "Really?", "Clear all pinned frames?", Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel) == Qt.QMessageBox.Ok:
+        query = Qt.QMessageBox.question(
+            self, "Really?", "Clear all pinned frames?", Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel)
+        if query == Qt.QMessageBox.Ok:
             self.clearPinnedFrames()
 
     def clearPinnedFrames(self):

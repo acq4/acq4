@@ -1,5 +1,4 @@
-from __future__ import print_function
-from pyqtgraph import Vector, SRTTransform3D
+from pyqtgraph import SRTTransform3D
 
 
 class Frame(object):
@@ -9,7 +8,7 @@ class Frame(object):
 
     * 'frameTransform' maps from the image coordinates (0,0 at top-left) to
       the coordinate system of the imaging device.
-    * 'deviceTransform' maps from the coordiante system of the imaging device to
+    * 'deviceTransform' maps from the coordinate system of the imaging device to
       global coordinates.
     """
 
@@ -17,7 +16,7 @@ class Frame(object):
         object.__init__(self)
         self._data = data
         self._info = info        
-        ## Complete transform maps from image coordinates to global.
+        # Complete transform maps from image coordinates to global.
         if 'transform' not in info:
             info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
 
@@ -68,7 +67,7 @@ class Frame(object):
     def saveImage(self, dh, filename):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
-        The file name must endwith ".ma" (for MetaArray) or any supported image file extension.
+        The file name must end with ".ma" (for MetaArray) or any supported image file extension.
         """
         data = self.getImage()
         info = self.info()

@@ -1,40 +1,32 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-
-from collections import OrderedDict
-
-import weakref
-
-from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
-from acq4.util.debug import printExc
-from six.moves import map
-
 """
-DataManager.py - DataManager, FileHandle, and DirHandle classes 
+DataManager.py - DataManager, FileHandle, and DirHandle classes
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 
 These classes implement a data management system that allows modules
-to easily store and retrieve data files along with meta data. The objects
+to easily store and retrieve data files along with metadata. The objects
 probably only need to be created via functions in the Manager class.
 """
+from collections import OrderedDict
 
-import os, sys
-
-if __name__ == '__main__':
-    path = os.path.dirname(os.path.abspath(__file__))
-    sys.path.append(os.path.join(path, '..', '..'))
-
-import re, shutil
+import os
+import re
+import shutil
 import time
-from acq4.util.Mutex import Mutex
-from pyqtgraph import SignalProxy, BusyCursor
+import weakref
+
+import acq4.filetypes as filetypes
+import acq4.util.advancedTypes as advancedTypes
 from acq4.util import Qt
+from acq4.util.Mutex import Mutex
+from acq4.util.debug import printExc
+from pyqtgraph import SignalProxy, BusyCursor
+from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
+
 if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal
     Qt.Slot = Qt.pyqtSlot
-import acq4.filetypes as filetypes
-import acq4.util.advancedTypes as advancedTypes
 
 
 def abspath(fileName):
@@ -45,7 +37,7 @@ def abspath(fileName):
 def getDataManager():
     inst = DataManager.INSTANCE
     if inst is None:
-        raise Exception('No DataManger created yet!')
+        raise ValueError('No DataManger created yet!')
     return inst
 
 
@@ -71,8 +63,8 @@ def cleanup():
 
 
 class DataManager(Qt.QObject):
-    """Class for creating and caching DirHandle objects to make sure there is only one manager object per file/directory. 
-    This class is (supposedly) thread-safe.
+    """Class for creating and caching DirHandle objects to make sure there is only one manager object per
+    file/directory. This class is (supposedly) thread-safe.
     """
     
     INSTANCE = None
@@ -80,7 +72,7 @@ class DataManager(Qt.QObject):
     def __init__(self):
         Qt.QObject.__init__(self)
         if DataManager.INSTANCE is not None:
-            raise Exception("Attempted to create more than one DataManager!")
+            raise ValueError("Attempted to create more than one DataManager!")
         DataManager.INSTANCE = self
         self.cache = {}
         self.lock = Mutex(Qt.QMutex.Recursive)
@@ -130,7 +122,7 @@ class DataManager(Qt.QObject):
         
     def _handleChanged(self, handle, change, *args):
         with self.lock:
-            if change == 'renamed' or change == 'moved':
+            if change in ['renamed', 'moved']:
                 oldName = args[0]
                 newName = args[1]
                 ## Inform all children that they have been moved and update cache
@@ -139,12 +131,12 @@ class DataManager(Qt.QObject):
                     ## Update key to cached handle
                     newh = os.path.abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
                     self._setCache(newh, self._getCache(h))
-                    
+
                     ## If the change originated from h's parent, inform it that this change has occurred.
                     if h != oldName:
                         self._getCache(h)._parentMoved(oldName, newName)
                     self._delCache(h)
-                
+
             elif change == 'deleted':
                 oldName = args[0]
 
@@ -178,7 +170,6 @@ class DataManager(Qt.QObject):
         
     def _cacheHasName(self, name):
         return abspath(name) in self.cache
-        
 
 
 class FileHandle(Qt.QObject):
@@ -221,20 +212,20 @@ class FileHandle(Qt.QObject):
                 while True:
                     if self is commonParent or self.isGrandchildOf(commonParent):
                         break
-                    else:
-                        pcount += 1
-                        commonParent = commonParent.parent()
-                        if commonParent is None:
-                            raise Exception("No relative path found from %s to %s." % (relativeTo.name(), self.name()))
+                    pcount += 1
+                    commonParent = commonParent.parent()
+                    if commonParent is None:
+                        raise Exception(
+                            f"No relative path found from {relativeTo.name()} to {self.name()}."
+                        )
                 rpath = path[len(os.path.join(commonParent.name(), '')):]
                 if pcount == 0:
                     return rpath
+                ppath = os.path.join(*(['..'] * pcount))
+                if rpath == '':
+                    return ppath
                 else:
-                    ppath = os.path.join(*(['..'] * pcount))
-                    if rpath != '':
-                        return os.path.join(ppath, rpath)
-                    else:
-                        return ppath
+                    return os.path.join(ppath, rpath)
             return path
         
     def shortName(self):
@@ -279,27 +270,26 @@ class FileHandle(Qt.QObject):
             name = self.shortName()
             fn2 = os.path.join(newDir.name(), name)
             if os.path.exists(fn2):
-                raise Exception("Destination file %s already exists." % fn2)
+                raise FileExistsError(f"Destination file {fn2} already exists.")
 
             if oldDir.isManaged() and not newDir.isManaged():
-                raise Exception("Not moving managed file to unmanaged location--this would cause loss of meta info.")
-            
+                raise ValueError("Not moving managed file to unmanaged location--this would cause loss of meta info.")
 
             os.rename(fn1, fn2)
             self.path = fn2
             self.parentDir = None
             self.manager._handleChanged(self, 'moved', fn1, fn2)
-            
+
             if oldDir.isManaged() and newDir.isManaged():
                 newDir.indexFile(name, info=oldDir._fileInfo(name))
             elif newDir.isManaged():
                 newDir.indexFile(name)
-                
+
             if oldDir.isManaged() and oldDir.isManaged(name):
                 oldDir.forget(name)
-                
+
             self.emitChanged('moved', fn1, fn2)
-                
+
             oldDir._childChanged()
             newDir._childChanged()
         
@@ -315,7 +305,7 @@ class FileHandle(Qt.QObject):
             oldName = self.shortName()
             fn2 = os.path.join(parent.name(), newName)
             if os.path.exists(fn2):
-                raise Exception("Destination file %s already exists." % fn2)
+                raise FileExistsError(f"Destination file {fn2} already exists.")
             info = {}
             managed = parent.isManaged(oldName)
             if managed:
@@ -326,7 +316,7 @@ class FileHandle(Qt.QObject):
             self.manager._handleChanged(self, 'renamed', fn1, fn2)
             if managed:
                 parent.indexFile(newName, info=info)
-                
+
             self.emitChanged('renamed', fn1, fn2)
             self.parent()._childChanged()
         
@@ -351,15 +341,14 @@ class FileHandle(Qt.QObject):
         self.checkExists()
         with self.lock:
             typ = self.fileType()
-            
+
             if typ is None:
-                fd = open(self.name(), 'r')
-                data = fd.read()
-                fd.close()
+                with open(self.name(), 'r') as fd:
+                    data = fd.read()
             else:
                 cls = filetypes.getFileType(typ)
                 data = cls.read(self, *args, **kargs)
-            
+
             return data
         
     def fileType(self):
@@ -568,7 +557,7 @@ class DirHandle(FileHandle):
             self.emitChanged('children', newDir)
             return ndm
         
-    def getDir(self, subdir, create=False, autoIncrement=False):
+    def getDir(self, subdir, create=False, autoIncrement=False) -> "DirHandle":
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
         with self.lock:
             ndir = os.path.join(self.path, subdir)

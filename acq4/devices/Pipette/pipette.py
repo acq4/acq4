@@ -533,7 +533,7 @@ class PipetteRecorder:
         self.pip.sigMoveRequested.disconnect(self.recordMoveRequested)
 
     def store(self, filename):
-        json.dump(self.events, open(filename + '.json', 'w'))
+        json.dump(self.events, open(f'{filename}.json', 'w'))
 
 
 class PipetteCamModInterface(CameraModuleInterface):
@@ -543,7 +543,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     """
     canImage = False
 
-    def __init__(self, dev, mod, showUi=True):
+    def __init__(self, dev: "Pipette", mod, showUi=True):
         CameraModuleInterface.__init__(self, dev, mod)
         self._haveTarget = False
         self._showUi = showUi

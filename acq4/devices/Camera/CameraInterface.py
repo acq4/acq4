@@ -33,7 +33,7 @@ class CameraInterface(CameraModuleInterface):
         self.hasQuit = False
         self.boundaryItems = {}
 
-        ## setup UI
+        # setup UI
         self.ui = CameraInterfaceTemplate()
         self.widget = dockarea.DockArea()
         w = Qt.QWidget()
@@ -44,7 +44,7 @@ class CameraInterface(CameraModuleInterface):
         self.imagingCtrl = ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
 
-        ## Move control panels into docks
+        # Move control panels into docks
         recDock = dockarea.Dock(name="Recording", widget=self.imagingCtrl, size=(100, 10), autoOrientation=False)
         devDock = dockarea.Dock(name="Device Control", widget=self.ui.devCtrlWidget, size=(100, 10), autoOrientation=False)
         dispDock = dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(100, 600), autoOrientation=False)
@@ -54,14 +54,14 @@ class CameraInterface(CameraModuleInterface):
         self.widget.addDock(dispDock, 'bottom', devDock)
         self.widget.addDock(bgDock, 'bottom', dispDock)
         
-        ## Camera state variables
+        # Camera state variables
         self.cam = camera
         self.roi = None
         self.exposure = 0.001
         self.binning = 1
         self.region = None
 
-        ## set up item groups
+        # set up item groups
         self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
         self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
         self.view.addItem(self.imageItemGroup)
@@ -69,28 +69,28 @@ class CameraInterface(CameraModuleInterface):
         self.cameraItemGroup.setZValue(0)
         self.imageItemGroup.setZValue(-2)
 
-        ## video image item
+        # video image item
         self.imageItem = self.frameDisplay.imageItem()
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.imageItemGroup)
         self.imageItem.setZValue(-10)
 
-        ## open camera, determine bit depth and sensor area
-        self.openCamera()
+        # open camera, determine bit depth and sensor area
+        self.camSize, self.scope = self.openCamera()
 
-        ## Initialize values
+        # Initialize values
         self.lastCameraPosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
         self.lastCameraScale = Point(1.0, 1.0)
         self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
 
-        ## Camera region-of-interest control
+        # Camera region-of-interest control
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
         self.roi.setZValue(-1)
         self.setRegion()
 
-        ## Set up microscope objective borders
+        # Set up microscope objective borders
         self.borders = CameraItemGroup(self.cam)
         self.module.addItem(self.borders)
         self.borders.setZValue(-1)
@@ -102,17 +102,17 @@ class CameraInterface(CameraModuleInterface):
         # initially set binning and exposure from camera state
         self.exposure = self.cam.getParam('exposure')
         self.binning = self.cam.getParam('binning')[0]
-        ## Initialize values/connections in Camera Dock
+        # Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
-        #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
+        # Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(self._setRegionToNone)
         self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
-        self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from acq4.util.SpinBox) is delayed.
+        self.ui.spinExposure.valueChanged.connect(self.setExposure)  # note that this signal (from acq4.util.SpinBox) is delayed.
 
-        ## Signals from Camera device
+        # Signals from Camera device
         self.cam.sigNewFrame.connect(self.newFrame)
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
@@ -141,22 +141,23 @@ class CameraInterface(CameraModuleInterface):
         
     def openCamera(self, ind=0):
         try:
-            self.camSize = self.cam.getParam('sensorSize')
-            self.showMessage("Opened camera %s" % self.cam, 5000)
-            self.scope = self.cam.getScopeDevice()
+            camSize = self.cam.getParam('sensorSize')
+            self.showMessage(f"Opened camera {self.cam}", 5000)
+            scope = self.cam.getScopeDevice()
 
             try:
                 bins = self.cam.listParams('binning')[0][0]
-            except:
+            except Exception:
                 bins = self.cam.listParams('binningX')[0]
             bins.sort()
             bins.reverse()
             for b in bins:
                 self.ui.binningCombo.addItem(str(b))
 
-        except:
+        except Exception:
             self.showMessage("Error opening camera")
             raise
+        return camSize, scope
     
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.

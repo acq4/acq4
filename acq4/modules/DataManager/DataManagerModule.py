@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import os
 import time
-
-import six
-from pyqtgraph import FileDialog
-from six.moves import range
 
 from acq4.Manager import logMsg
 from acq4.modules.Module import Module
@@ -14,6 +8,7 @@ from acq4.util import Qt
 from acq4.util.DataManager import getDataManager, getHandle, DirHandle
 from acq4.util.StatusBar import StatusBar
 from acq4.util.debug import printExc
+from pyqtgraph import FileDialog
 from . import FileAnalysisView
 from . import FileLogView
 
@@ -102,7 +97,7 @@ class DataManager(Module):
         pass
 
     def selectFile(self, path):
-        if isinstance(path, six.string_types):
+        if isinstance(path, str):
             path = getHandle(path)
         self.ui.fileTreeWidget.select(path)
 
@@ -129,7 +124,7 @@ class DataManager(Module):
         if change in [None, 'moved', 'renamed', 'parent']:
             try:
                 newDir = self.manager.getCurrentDir()
-            except:
+            except Exception:
                 newDir = None
                 dirName = ""
             else:
