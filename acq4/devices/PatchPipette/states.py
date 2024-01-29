@@ -84,9 +84,11 @@ class PatchPipetteState(Future):
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
+        from acq4.devices.PatchPipette import PatchPipette
+
         Future.__init__(self)
 
-        self.dev = dev
+        self.dev: PatchPipette = dev
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -1173,6 +1175,14 @@ class ResealState(PatchPipetteState):
             warnings.warn("maxPressure parameter is deprecated; use retractionPressure instead", DeprecationWarning)
             if self.config['retractionPressure'] != self.defaultConfig()['retractionPressure']:
                 self.config['retractionPressure'] = self.config['maxPressure']
+        self._longTermInputResistanceMean = None
+        self._longTermInputResistanceVariance = None
+        self._longTermAccessResistanceMean = None
+        self._longTermAccessResistanceVariance = None
+        self._recentInputResistanceMean = None
+        self._recentInputResistanceVariance = None
+        self._recentAccessResistanceMean = None
+        self._recentAccessResistanceVariance = None
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
@@ -1185,23 +1195,23 @@ class ResealState(PatchPipetteState):
         # TODO move back a little?
         pipette_direction = self.dev.pipetteDevice.globalDirection()
 
-        def random_wiggle_point():
+        def random_wiggle_direction():
             """pick a random point on a circle perpendicular to the pipette axis"""
             while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
                 pass  # prevent division by zero
-            return pos + (self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec))
+            return self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec)
 
-        prev_dest = random_wiggle_point()
+        prev_dir = random_wiggle_direction()
         for _ in range(self.config['nuzzleRepetitions']):
             self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
             self._pressureFuture = self.dev.pressureDevice.attainPressure(
                 target=self.config['nuzzlePressureLimit'], rate=self.config['nuzzlePressureChangeRate'])
             start = ptime.time()
             while ptime.time() - start < self.config['nuzzleDuration']:
-                while np.dot(dest := random_wiggle_point(), prev_dest) > 0:
+                while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
                     pass  # ensure different direction from previous
-                self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=dest, speed=self.config['nuzzleSpeed']))
-                prev_dest = dest
+                self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=self.config['nuzzleSpeed']))
+                prev_dir = direction
             self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed']))
             self.waitFor(self._pressureFuture)
 
@@ -1209,7 +1219,6 @@ class ResealState(PatchPipetteState):
         """Attempt to seal onto a nucleus."""
         self.nuzzle()
         self.setState("sealing to nucleus")
-        self.dev.pressureDevice.setPressure(source='regulator', pressure=0)
         # TODO move forward a little?
         self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['initialPressure'])
 
@@ -1249,14 +1258,14 @@ class ResealState(PatchPipetteState):
 
     def isStretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
-        change_ratio = self._recentAverageAccessResistance / self._longTermAccessResistanceMean
+        change_ratio = self._recentAccessResistanceMean / self._longTermAccessResistanceMean
         max_ratio = 1 + (self.config['maxAccessResistanceIncreaseRateBeforeStretch'] / 100)
         return change_ratio > max_ratio
 
     def isTearing(self) -> bool:
         """Return True if the resistance is decreasing."""
         min_input_res = self._longTermInputResistanceMean - np.sqrt(self._longTermInputResistanceVariance)
-        return self._recentAverageInputResistance < min_input_res
+        return self._recentInputResistanceMean < min_input_res
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
@@ -1272,16 +1281,16 @@ class ResealState(PatchPipetteState):
         last_second = tps[-1][0] - 1
         while self._rollingRecentTestPulses[0][0] < last_second:
             self._rollingRecentTestPulses.popleft()
-        self.analyseRecentTestPulses()
+        self.analyzeRecentTestPulses()
 
         self._rollingLongTermTestPulses.extend(tps)
         last_20_seconds = tps[-1][0] - 20
         while self._rollingLongTermTestPulses[0][0] < last_20_seconds:
             self._rollingLongTermTestPulses.popleft()
         if self._updateRollingResistanceThresholds:
-            self.analyseLongTermTestPulses()
+            self.analyzeLongTermTestPulses()
 
-    def analyseLongTermTestPulses(self):
+    def analyzeLongTermTestPulses(self):
         too_recent = self._rollingLongTermTestPulses[-1][0] - 1
         access_res = np.fromiter(
             (a[1]['peakResistance']
@@ -1293,13 +1302,14 @@ class ResealState(PatchPipetteState):
              for a in self._rollingLongTermTestPulses if a[0] < too_recent),
             dtype=float,
         )
+        # TODO this may need to be optimized not to recalculate the mean and variance every time
         self._longTermInputResistanceMean = np.mean(input_res)
         self._longTermInputResistanceVariance = np.var(input_res)
         self._longTermAccessResistanceMean = np.mean(access_res)
         self._longTermAccessResistanceVariance = np.var(access_res)
 
-    def analyseRecentTestPulses(self):
-        analysis = [tp.analysis() for tp in self._rollingRecentTestPulses]
+    def analyzeRecentTestPulses(self):
+        analysis = [tp[1] for tp in self._rollingRecentTestPulses]
         access_res = np.fromiter((a['peakResistance'] for a in analysis), dtype=float)
         input_res = np.fromiter((a['steadyStateResistance'] - a['peakResistance'] for a in analysis), dtype=float)
         self._recentInputResistanceMean = np.mean(input_res)
@@ -1317,14 +1327,14 @@ class ResealState(PatchPipetteState):
     def run(self):
         config = self.config
         dev = self.dev
-        if config['extractNucleus']:
+        if config['extractNucleus'] is True:
             self.sealToNucleus()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.checkStop()
         self.setState("measuring baseline resistance")
         self.startRollingResistanceThresholds()
 
-        self._pressureFuture = dev.presureDevice.attainPressure(
+        self._pressureFuture = dev.pressureDevice.attainPressure(
             minimum=config['retractionPressure'], maximum=0, rate=config['pressureChangeRate'])
         # TODO do we need to wait for this pressure?
 
