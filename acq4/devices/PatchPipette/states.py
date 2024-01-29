@@ -1355,37 +1355,6 @@ class ResealState(PatchPipetteState):
             elif self.isTearing():
                 self.handleTear()
 
-            # TODO this needs to be a constant running average. also, the max value. also also, for both access (peak)
-            #  and input (ssr-peak) resistance.
-            # res_mean, res_variance = self.waitFor(
-            #     self.averageTestPulseValue('steadyStateResistance', duration=20)
-            # ).getResult()
-            # patchrec['resealInitialResistanceMean'] = res_mean
-            # patchrec['resealInitialResistanceVariance'] = res_variance
-            # res_min = res_mean - 3 * np.sqrt(res_variance)
-            # res_max = res_mean + 3 * np.sqrt(res_variance)
-
-            # pull in all new test pulses (hopefully only one since the last time we checked)
-            # test_pulses = self.getTestPulses(timeout=0.2)
-            # if len(test_pulses) == 0:
-            #     continue
-            # recent_test_pulses.extend(test_pulses)
-
-            # tp = recent_test_pulses[-1]
-            # ssr = tp.analysis()['steadyStateResistance']
-            # peak = tp.analysis()['peakResistance']
-            # access slope negative: freak out? maybe it's just gunk coming out of the pipette tip
-            # input slope negative: freak out!
-            # slope too positive: pause and hope for no tear
-            # track last "good" resistance avg
-            # difference between "input resistance" and "access"
-            # sometimes repairing a tear won't get resistance all the way back to previous levels, so have a max wait time param.
-
-            # check progress on resistance
-            # if len(recent_test_pulses) > config['secondsTestPulseAverage']:
-            #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recent_test_pulses])
-            #     if np.all(np.diff(res) > 0) and ssr - initial_resistance > config['slowDetectionThreshold']:
-            #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self.sleep(0.2)
 
     def cleanup(self):
