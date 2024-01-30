@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Union, Tuple, Any, Optional
+from typing import Any
 
 import contextlib
 import numpy as np
@@ -1106,19 +1106,48 @@ class ResealState(PatchPipetteState):
 
     Parameters
     ----------
+    extractNucleus : bool
+        Whether to attempt nucleus extraction during reseal (default True)
+    nuzzlePressureLimit : float
+        Largest vacuum pressure (pascals, expected negative) to apply during nuzzling (default is -4 kPa)
+    nuzzlePressureChangeRate : float
+        Rate at which pressure should change during nuzzling (default is 0.2 kPa/s, treated as absolute value)
+    nuzzleDuration : float
+        Duration (seconds) to spend nuzzling (default is 15s)
+    nuzzleInitialPressure : float
+        Initial pressure (Pa) to apply during nuzzling (default is 0 Pa)
+    nuzzleLateralWiggleRadius : float
+        Radius of lateral wiggle during nuzzling (default is 5 µm)
+    nuzzleRepetitions : int
+        Number of times to repeat the nuzzling sequence (default is 3)
+    nuzzleSpeed : float
+        Speed to move pipette during nuzzling (default is 5 µm / s)
     initialPressure : float
-        Initial pressure (Pa) to apply (default is -0.5 kPa)
-    pressureLimit : float
-        Largest vacuum pressure (pascals, expected negative) to apply (default is -4 kPa)
+        Initial pressure (Pa) to apply after nucleus nuzzling, before retraction (default is -0.5 kPa)
+    retractionPressure : float
+        Pressure (Pa) to apply during retraction (default is -4 kPa)
     pressureChangeRate : float
-        Rate at which pressure should change during reseal (default is 0.5 kPa / min)
+        Rate at which pressure should change from initial to retraction (default is 0.5 kPa / min)
     retractionSpeed : float
         Speed in m/s to move pipette during retraction (default is 0.3 um / s)
     resealTimeout : float
         Seconds before reseal attempt exits, not including grabbing the nucleus and baseline measurements (default is
         10 min)
-    secondsTestPulseAverage : int
+    secondsTestPulseAverage : float
         Number of seconds to average when measuring resistance (default 20s)
+    fallbackState : str
+        State to transition to if reseal fails (default is 'whole cell')
+    maxAccessResistanceIncreaseRateBeforeStretch : float
+        Maximum rate at which access resistance can increase before the pipette is considered to be stretching the
+        membrane (default is 1%/s)
+    maxStretchRecoveryTime : float
+        Maximum time (seconds) to wait for access resistance to recover after stretching (default is 30s)
+    maxTearRecoveryTime : float
+        Maximum time (seconds) to wait for access resistance to recover after tearing (default is 60s)
+    retractionSuccessDistance : float
+        Distance (meters) to retract before checking for successful reseal (default is 200 µm)
+    retractionSuccessState : str
+        State to transition to if reseal is successful (default is 'home with nucleus')
 
     """
 
@@ -1132,24 +1161,25 @@ class ResealState(PatchPipetteState):
         'initialPressureSource': 'regulator',
     }
     _parameterTreeConfig = {
-        'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
-        'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
-        'secondsTestPulseAverage': {'type': 'float', 'default': 20, 'suffix': 's'},
-        'fallbackState': {'type': 'str', 'default': 'whole cell'},
-        'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
-        'maxPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
         'extractNucleus': {'type': 'bool', 'default': True},
-        'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
-        'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
-        'nuzzlePressureChangeRate': {'type': 'float', 'default': 0.2e3, 'suffix': 'Pa/s'},
-        'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
-        'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
-        'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
-        'nuzzleRepetitions': {'type': 'int', 'default': 3},
+        'fallbackState': {'type': 'str', 'default': 'whole cell'},
         'maxAccessResistanceIncreaseRateBeforeStretch': {'type': 'float', 'default': 1, 'suffix': '%/s'},
         'maxStretchRecoveryTime': {'type': 'float', 'default': 30, 'suffix': 's'},
         'maxTearRecoveryTime': {'type': 'float', 'default': 60, 'suffix': 's'},
+        'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
+        'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
+        'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
+        'nuzzlePressureChangeRate': {'type': 'float', 'default': 0.2e3, 'suffix': 'Pa/s'},
+        'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
+        'nuzzleRepetitions': {'type': 'int', 'default': 3},
+        'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
+        'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
+        'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
+        'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
+        'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
+        'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
+        'retractionSuccessState': {'type': 'str', 'default': 'home with nucleus'},
+        'secondsTestPulseAverage': {'type': 'float', 'default': 20, 'suffix': 's'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1160,10 +1190,6 @@ class ResealState(PatchPipetteState):
         self._rollingLongTermTestPulses = deque()
         self._rollingRecentTestPulses = deque()
         self._startPosition = self.dev.pipetteDevice.globalPosition()
-        if self.config['maxPressure'] != self.defaultConfig()['maxPressure']:
-            warnings.warn("maxPressure parameter is deprecated; use retractionPressure instead", DeprecationWarning)
-            if self.config['retractionPressure'] != self.defaultConfig()['retractionPressure']:
-                self.config['retractionPressure'] = self.config['maxPressure']
         self._longTermInputResistanceMean = None
         self._longTermInputResistanceVariance = None
         self._longTermAccessResistanceMean = None
@@ -1338,6 +1364,10 @@ class ResealState(PatchPipetteState):
                 self.setState("retracting")
                 self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
 
+            if self.retractionDistance() > self.config['retractionSuccessDistance']:
+                self._taskDone()
+                return config['retractionSuccessState']
+
             self.processAtLeastOneTestPulse()
             if self.isStretching():
                 self.handleStretch()
@@ -1345,6 +1375,9 @@ class ResealState(PatchPipetteState):
                 self.handleTear()
 
             self.sleep(0.2)
+
+    def retractionDistance(self):
+        return np.linalg.norm(self.dev.manipulatorDevice.getPosition() - self._startPosition)
 
     def cleanup(self):
         if self._retractionFuture is not None:
