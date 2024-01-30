@@ -131,6 +131,8 @@ class DataManager(Module):
                 dirName = newDir.name(relativeTo=self.baseDir)
             self.ui.currentDirText.setText(str(dirName))
             self.ui.fileTreeWidget.setCurrentDir(newDir)
+            has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
+            self.ui.loadPinnedImagesBtn.setEnabled(has_images)
         elif change == 'log':
             self.updateLogView(*args)
         if change == None:
@@ -153,11 +155,11 @@ class DataManager(Module):
 
     def baseDirTextChanged(self):
         path = str(self.ui.baseDirText.text())
-        if path.strip() == '':
+        if not path.strip():
             self.baseDirChanged()
             return
         if not os.path.isdir(path):
-            raise ValueError("Path %s does not exist" % path)
+            raise ValueError(f"Path {path} does not exist")
         self.setBaseDir(path)
 
     def setBaseDir(self, dirName):
@@ -165,13 +167,13 @@ class DataManager(Module):
             if len(dirName) == 1:
                 dirName = dirName[0]
             else:
-                raise Exception("Caught. Please to be examined: %s" % str(dirName))
+                raise ValueError(f"Invalid dirName: {dirName}")
         if dirName is None:
             return
         if os.path.isdir(dirName):
             self.manager.setBaseDir(dirName)
         else:
-            raise Exception("Storage directory is invalid")
+            raise ValueError("Storage directory is invalid")
 
     def selectedFile(self):
         """Return the currently selected file"""

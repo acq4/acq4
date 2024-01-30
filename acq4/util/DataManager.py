@@ -8,7 +8,9 @@ These classes implement a data management system that allows modules
 to easily store and retrieve data files along with metadata. The objects
 probably only need to be created via functions in the Manager class.
 """
+
 from collections import OrderedDict
+from typing import Callable
 
 import os
 import re
@@ -18,6 +20,7 @@ import weakref
 
 import acq4.filetypes as filetypes
 import acq4.util.advancedTypes as advancedTypes
+import contextlib
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
@@ -191,7 +194,6 @@ class FileHandle(Qt.QObject):
         
     def getFile(self, fn):
         return getFileHandle(os.path.join(self.name(), fn))
-        
 
     def __repr__(self):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
@@ -201,7 +203,6 @@ class FileHandle(Qt.QObject):
 
     def name(self, relativeTo=None):
         """Return the full name of this file with its absolute path"""
-        #self.checkExists()
         with self.lock:
             path = self.path
             if relativeTo == self:
@@ -209,9 +210,7 @@ class FileHandle(Qt.QObject):
             elif relativeTo is not None:
                 commonParent = relativeTo
                 pcount = 0
-                while True:
-                    if self is commonParent or self.isGrandchildOf(commonParent):
-                        break
+                while not (self is commonParent or self.isGrandchildOf(commonParent)):
                     pcount += 1
                     commonParent = commonParent.parent()
                     if commonParent is None:
@@ -230,7 +229,6 @@ class FileHandle(Qt.QObject):
         
     def shortName(self):
         """Return the name of this file without its path"""
-        #self.checkExists()
         return os.path.split(self.name())[1]
 
     def ext(self):
@@ -435,12 +433,11 @@ class DirHandle(FileHandle):
         self.cTimeCache = {}
         self._indexFileExists = False
         
-        if not os.path.isdir(self.path):
-            if create:
-                os.mkdir(self.path)
-                self.createIndex()
+        if not os.path.isdir(self.path) and create:
+            os.mkdir(self.path)
+            self.createIndex()
         
-        ## Let's avoid reading the index unless we really need to.
+        # Let's avoid reading the index unless we really need to.
         self._indexFileExists = os.path.isfile(self._indexFile())
     
     def _indexFile(self):
@@ -522,14 +519,14 @@ class DirHandle(FileHandle):
         files = [f for f in files if regex.match(f)]
         if len(files) > 0:
             files.sort()
-            maxVal = int(regex.match(files[-1]).group(1)) + 1
+            maxVal = int(regex.match(files[-1])[1]) + 1
         else:
             maxVal = 0
-        ret = fileName + ('_%03d' % maxVal) + ext
-        return ret
+        return f'{fileName}_{maxVal:03d}{ext}'
     
     def mkdir(self, name, autoIncrement=False, info=None):
-        """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the end of the dir name if it already exists."""
+        """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the 
+        end of the dir name if it already exists."""
         if info is None:
             info = {}
         with self.lock:
@@ -539,18 +536,18 @@ class DirHandle(FileHandle):
                 fullName = name
             newDir = os.path.join(self.path, fullName)
             if os.path.isdir(newDir):
-                raise Exception("Directory %s already exists." % newDir)
-            
+                raise Exception(f"Directory {newDir} already exists.")
+
             ## Create directory
             ndm = self.manager.getDirHandle(newDir, create=True)
             t = time.time()
             self._childChanged()
-            
+
             if self.isManaged():
                 ## Mark the creation time in the parent directory so it can sort its full list of files without 
                 ## going into each subdir
                 self._setFileInfo(fullName, {'__timestamp__': t})
-            
+
             ## create the index file in the new directory
             info['__timestamp__'] = t
             ndm.setInfo(info)
@@ -558,16 +555,16 @@ class DirHandle(FileHandle):
             return ndm
         
     def getDir(self, subdir, create=False, autoIncrement=False) -> "DirHandle":
-        """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
+        """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only 
+        if create==True"""
         with self.lock:
             ndir = os.path.join(self.path, subdir)
-            if not create or os.path.isdir(ndir):
+            if os.path.isdir(ndir):
                 return self.manager.getDirHandle(ndir)
+            elif create:
+                return self.mkdir(subdir, autoIncrement=autoIncrement)
             else:
-                if create:
-                    return self.mkdir(subdir, autoIncrement=autoIncrement)
-                else:
-                    raise Exception('Directory %s does not exist.' % ndir)
+                raise FileNotFoundError(f'Directory {ndir} does not exist.')
         
     def getFile(self, fileName):
         """return a File handle for the named file."""
@@ -588,65 +585,56 @@ class DirHandle(FileHandle):
             if (not useCache) or (sortMode not in self.lsCache):
                 self._updateLsCache(sortMode)
             files = self.lsCache[sortMode]
-            
+
             if normcase:
-                ret = list(map(os.path.normcase, files))
-                return ret
+                return list(map(os.path.normcase, files))
             else:
-                ret = files[:]
-                return ret
+                return files[:]
     
     def _updateLsCache(self, sortMode):
         try:
             files = os.listdir(self.name())
-        except:
-            printExc("Error while listing files in %s:" % self.name())
+        except Exception:
+            printExc(f"Error while listing files in {self.name()}:")
             files = []
         for i in ['.index', '.log']:
             if i in files:
                 files.remove(i)
-        
+
         if sortMode == 'date':
-            ## Sort files by creation time
+            # Sort files by creation time
             with BusyCursor():
                 for f in files:
                     if f not in self.cTimeCache:
                         self.cTimeCache[f] = self._getFileCTime(f)
             files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
-            ## show directories first when sorting alphabetically.
+            # show directories first when sorting alphabetically.
             files.sort(key=lambda a: (os.path.isdir(os.path.join(self.name(), a)), a))
         elif sortMode is None:
             pass
         else:
-            raise Exception('Unrecognized sort mode "%s"' % str(sortMode))
-            
+            raise ValueError(f'Unrecognized sort mode "{sortMode}"')
+
         self.lsCache[sortMode] = files
     
     def _getFileCTime(self, fileName):
         if self.isManaged():
             index = self._readIndex()
-            try:
-                t = index[fileName]['__timestamp__']
-                return t
-            except KeyError:
-                pass
-            
-            ## try getting time directly from file
-            try:
-                t = self[fileName].info()['__timestamp__']
-            except:
-                pass
-                    
-        ## if the file has an obvious date in it, use that
+            with contextlib.suppress(KeyError):
+                return index[fileName]['__timestamp__']
+            # try getting time directly from file
+            with contextlib.suppress(Exception):
+                return self[fileName].info()['__timestamp__']
+        # if the file has an obvious date in it, use that
         m = re.search(r'(20\d\d\.\d\d?\.\d\d?)', fileName)
         if m is not None:
             return time.mktime(time.strptime(m.groups()[0], "%Y.%m.%d"))
-        
-        ## if all else fails, just ask the file system
+
+        # if all else fails, just ask the file system
         try:
             return os.path.getctime(os.path.join(self.name(), fileName))
-        except:
+        except Exception:
             return 0
     
     def isGrandparentOf(self, child):
@@ -808,6 +796,11 @@ class DirHandle(FileHandle):
                 print(self.path, name)
                 raise
             return os.path.exists(fn)
+
+    def hasMatchingChildren(self, test: Callable[[FileHandle], bool]):
+        """Returns True if any child of this directory matches the given test function."""
+        with self.lock:
+            return any(test(self[f]) for f in self.ls())
 
     def _setFileInfo(self, fileName, info=None, **args):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
