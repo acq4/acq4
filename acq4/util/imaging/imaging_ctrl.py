@@ -150,7 +150,7 @@ class ImagingCtrl(Qt.QWidget):
 
     def saveFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
-            self.addPinnedFrame()
+            self.pinCurrentFrame()
         self.recordThread.saveFrame()
 
     def recordStackToggled(self, b):
@@ -246,9 +246,9 @@ class ImagingCtrl(Qt.QWidget):
     def pinFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
             self.recordThread.saveFrame()
-        self.addPinnedFrame()
+        self.pinCurrentFrame()
 
-    def addPinnedFrame(self):
+    def pinCurrentFrame(self):
         """Make a copy of the current camera frame and pin it to the view background"""
 
         data = self.frameDisplay.visibleImage()
@@ -257,18 +257,21 @@ class ImagingCtrl(Qt.QWidget):
 
         hist = self.frameDisplay.contrastCtrl.ui.histogram
         im = pg.ImageItem(data, levels=hist.getLevels(), lut=hist.getLookupTable(img=data), removable=True)
-        im.sigRemoveRequested.connect(self.removePinnedFrame)
+        im.setTransform(self.frameDisplay.currentFrame.globalTransform().as2D())
+
+        self.addPinnedFrame(im)
+
+    def addPinnedFrame(self, im: pg.ImageItem):
         if len(self.pinnedFrames) == 0:
             z = -10000
         else:
             z = self.pinnedFrames[-1].zValue() + 1
         im.setZValue(z)
-
+        im.sigRemoveRequested.connect(self.removePinnedFrame)
         self.pinnedFrames.append(im)
         view = self.frameDisplay.imageItem().getViewBox()
         if view is not None:
             view.addItem(im)
-        im.setTransform(self.frameDisplay.currentFrame.globalTransform().as2D())
 
     def removePinnedFrame(self, fr):
         self.pinnedFrames.remove(fr)

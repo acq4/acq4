@@ -201,7 +201,7 @@ class FileHandle(Qt.QObject):
     def __reduce__(self):
         return (getHandle, (self.name(),))
 
-    def name(self, relativeTo=None):
+    def name(self, relativeTo=None) -> str:
         """Return the full name of this file with its absolute path"""
         with self.lock:
             path = self.path

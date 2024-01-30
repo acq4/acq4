@@ -1,14 +1,12 @@
-from __future__ import print_function
-
 import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
-from pyqtgraph import SignalProxy, Point
 from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.imaging import ImagingCtrl
+from pyqtgraph import SignalProxy, Point
 
 CameraInterfaceTemplate = Qt.importTemplate('.CameraInterfaceTemplate')
 
@@ -169,17 +167,17 @@ class CameraInterface(CameraModuleInterface):
             self.updateTransform(tr)
 
     def imageUpdated(self, frame):
-        ## New image is displayed; update image transform
+        # New image is displayed; update image transform
         self.imageItem.setTransform(frame.frameTransform().as2D())
         
-        ## Update viewport to correct for scope movement/scaling
+        # Update viewport to correct for scope movement/scaling
         tr = pg.SRTTransform(frame.deviceTransform())
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
             
     def updateTransform(self, tr):
-        ## update view for new transform such that sensor bounds remain stationary on screen.
+        # update view for new transform such that sensor bounds remain stationary on screen.
         pos = tr.getTranslation()
         
         scale = tr.getScale()

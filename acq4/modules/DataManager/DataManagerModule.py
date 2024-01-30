@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+import contextlib
 import os
 import time
 
@@ -11,6 +11,8 @@ from acq4.util.debug import printExc
 from pyqtgraph import FileDialog
 from . import FileAnalysisView
 from . import FileLogView
+from ...devices.Camera import Frame
+from ...util.HelpfulException import HelpfulException
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 
@@ -18,7 +20,7 @@ Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 class Window(Qt.QMainWindow):
     sigClosed = Qt.Signal()
 
-    def closeEvent(self, ev):
+    def closeEvent(self, ev, **kwargs):
         ev.accept()
         self.sigClosed.emit()
 
@@ -61,7 +63,6 @@ class DataManager(Module):
         self.selFile = None
         self.updateNewFolderList()
 
-        ## Make all connections needed
         self.manager.sigBaseDirChanged.connect(self.baseDirChanged)
         self.manager.sigConfigChanged.connect(self.updateNewFolderList)
         self.manager.sigCurrentDirChanged.connect(self.currentDirChanged)
@@ -74,6 +75,7 @@ class DataManager(Module):
         self.ui.selectDirBtn.clicked.connect(self.showFileDialog)
         self.ui.setCurrentDirBtn.clicked.connect(self.setCurrentClicked)
         self.ui.setLogDirBtn.clicked.connect(self.setLogDir)
+        self.ui.loadPinnedImagesBtn.clicked.connect(self.loadPinnedImages)
         self.win.sigClosed.connect(self.quit)
 
         self.win.setStatusBar(StatusBar())
@@ -93,9 +95,6 @@ class DataManager(Module):
             self.ui.baseDirText.setText(dh.name())
         self.ui.fileTreeWidget.setBaseDirHandle(dh)
 
-    def loadLog(self, *args, **kwargs):
-        pass
-
     def selectFile(self, path):
         if isinstance(path, str):
             path = getHandle(path)
@@ -106,6 +105,16 @@ class DataManager(Module):
         if not isinstance(d, DirHandle):
             d = d.parent()
         self.manager.setLogDir(d)
+
+    def loadPinnedImages(self):
+        cam_mod = self.manager.getModule("Camera")
+        # TODO clear old pinned frames first?
+        current_dir = self.manager.getCurrentDir()
+        for f in current_dir.ls():
+            if f.endswith('.tif'):
+                f = current_dir[f]
+                frame = Frame(f.read(), f.info().deepcopy())
+                cam_mod.displayPinnedFrame(frame)
 
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
@@ -124,24 +133,16 @@ class DataManager(Module):
         if change in [None, 'moved', 'renamed', 'parent']:
             try:
                 newDir = self.manager.getCurrentDir()
-            except Exception:
+                dirName = newDir.name(relativeTo=self.baseDir)
+            except HelpfulException:
                 newDir = None
                 dirName = ""
-            else:
-                dirName = newDir.name(relativeTo=self.baseDir)
-            self.ui.currentDirText.setText(str(dirName))
+            self.ui.currentDirText.setText(dirName)
             self.ui.fileTreeWidget.setCurrentDir(newDir)
             has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
             self.ui.loadPinnedImagesBtn.setEnabled(has_images)
         elif change == 'log':
             self.updateLogView(*args)
-        if change == None:
-            try:
-                newDir = self.manager.getCurrentDir()
-            except:
-                newDir = None
-            else:
-                self.loadLog(newDir, self.ui.logView)
 
     def showFileDialog(self):
         bd = self.manager.getBaseDir()

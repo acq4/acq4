@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import os
 
 from acq4.modules.Module import Module
@@ -19,6 +16,10 @@ class Camera(Module):
         self.ui.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         manager.declareInterface(name, ['cameraModule'], self)
         
+    def displayPinnedFrame(self, frame: "Frame"):
+        imaging_ctrl = next(i for name, i in self.ui.interfaces.items() if name == "Camera").imagingCtrl
+        imaging_ctrl.addPinnedFrame(frame.imageItem())
+
     def window(self):
         return self.ui
         

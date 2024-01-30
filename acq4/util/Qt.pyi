@@ -50,6 +50,7 @@ except ImportError:
             except ImportError as e:
                 raise ImportError("No suitable qt binding found") from e
 
+Signal = QtCore.pyqtSignal
 App: QtWidgets.QApplication
 VERSION_INFO: str
 QT_LIB: str
