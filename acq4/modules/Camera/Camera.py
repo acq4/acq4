@@ -17,7 +17,8 @@ class Camera(Module):
         manager.declareInterface(name, ['cameraModule'], self)
         
     def displayPinnedFrame(self, frame: "Frame"):
-        imaging_ctrl = next(i for name, i in self.ui.interfaces.items() if name == "Camera").imagingCtrl
+        device_name = frame.info().get('deviceName', 'Camera')
+        imaging_ctrl = self.ui.getInterfaceForDevice(device_name).imagingCtrl
         imaging_ctrl.addPinnedFrame(frame.imageItem())
 
     def window(self):

@@ -185,6 +185,9 @@ class CameraWindow(Qt.QMainWindow):
     def getView(self):
         return self.view
 
+    def getInterfaceForDevice(self, name: str):
+        return self.interfaces[name]
+
     def getDepthView(self):
         self.depthDock.show()
         return self.depthPlot

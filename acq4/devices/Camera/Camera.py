@@ -851,6 +851,7 @@ class AcquireThread(Thread):
             info = camState.copy()
         binning = info["binning"]
         info.update({
+            "deviceName": self.dev.name(),
             "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
             "objective": scopeState.get("objective", None),
             "deviceTransform": transform,
