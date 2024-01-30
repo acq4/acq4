@@ -190,17 +190,6 @@ class PatchPipetteState(Future):
                 tps.append(self.testPulseResults.get())
         return tps
 
-    @Future.wrap
-    def averageTestPulseValue(self, value: str, duration: float, _future: Optional[Future]) -> tuple[float, float]:
-        """Return the mean and variance of the given value over *duration* seconds of test pulses.
-        """
-        working = []
-        start = ptime.time()
-        while ptime.time() - start < duration:
-            working.extend([tp.analysis()[value] for tp in self.getTestPulses(timeout=0.2)])
-            _future.checkStop()
-        return np.mean(working), np.var(working)
-
     def cleanup(self):
         """Called after job completes, whether it failed or succeeded.
         """
