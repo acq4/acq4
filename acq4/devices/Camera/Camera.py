@@ -263,7 +263,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
         Usage::
             with camera.run():
-                frames = camera.acquireFrames(10, blocking=True)
+                frames = camera.acquireFrames(10).getResult()
         """
         running = self.isRunning()
         if ensureFreshFrames:
@@ -324,7 +324,6 @@ class Camera(DAQGeneric, OptomechDevice):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-        # self.cam.close()
         DAQGeneric.quit(self)
 
     @Future.wrap
