@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
+import numpy as np
 import threading
 import time
+from typing import Optional
 
-import numpy as np
 import pyqtgraph as pg
-from pyqtgraph import Transform3D, solve3DTransform
-
-from acq4.util import ptime
-from acq4.util import Qt
 from acq4.drivers.sensapex import UMP, version_info
+from acq4.util import Qt
+from acq4.util import ptime
+from pyqtgraph import Transform3D, solve3DTransform
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
@@ -68,7 +65,7 @@ class Sensapex(Stage):
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
 
-        self._lastMove = None
+        self._lastMove: Optional[SensapexMoveFuture] = None
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
@@ -122,9 +119,9 @@ class Sensapex(Stage):
             self.dev.stop()
             # also stop the last move since it might be stepwise and just keep requesting more steps
             lastMove = self._lastMove
+            self._lastMove = None  # prevent recursion, since lastMove.stop() will call this method again
             if lastMove is not None:
                 lastMove.stop()
-            self._lastMove = None
 
     @property
     def positionUpdatesPerSecond(self):
