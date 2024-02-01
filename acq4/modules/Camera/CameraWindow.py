@@ -264,6 +264,11 @@ class CameraWindow(Qt.QMainWindow):
         # update ROI plots
         self.roiWidget.newFrame(iface, frame)
 
+    def displayPinnedFrame(self, frame: "Frame"):
+        device_name = frame.info().get('deviceName', 'Camera')
+        imaging_ctrl = self.getInterfaceForDevice(device_name).imagingCtrl
+        imaging_ctrl.addPinnedFrame(frame.imageItem())
+
     def ifaceTransformChanged(self, iface):
         # imaging device moved; update viewport and tracked group.
         # This is only used when the camera is not running--

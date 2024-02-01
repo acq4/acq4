@@ -515,8 +515,7 @@ class Frame(imaging.Frame):
     def imageItem(self) -> ImageItem:
         item = ImageItem(self.getImage(), removable=True)
         # TODO bgCtrl and contrastCtrl need to be tracked in here
-        # TODO binning
-        item.setTransform(self.deviceTransform().as2D())
+        item.setTransform(self.globalTransform().as2D())
         return item
 
 

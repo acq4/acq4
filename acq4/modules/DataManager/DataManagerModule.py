@@ -108,22 +108,19 @@ class DataManager(Module):
 
     def loadPinnedImages(self):
         cam_mod = self.manager.getModule("Camera")
-        # TODO clear old pinned frames first?
         current_dir = self.manager.getCurrentDir()
         for f in current_dir.ls():
             if f.endswith('.tif'):
                 f = current_dir[f]
                 frame = Frame(f.read(), f.info().deepcopy())
-                cam_mod.displayPinnedFrame(frame)
+                cam_mod.ui.displayPinnedFrame(frame)
 
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
 
     def setCurrentClicked(self):
-        # print "click"
         handle = self.selectedFile()
         if handle is None:
-            # print "no selection"
             return
         if not handle.isDir():
             handle = handle.parent()

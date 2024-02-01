@@ -16,11 +16,6 @@ class Camera(Module):
         self.ui.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         manager.declareInterface(name, ['cameraModule'], self)
         
-    def displayPinnedFrame(self, frame: "Frame"):
-        device_name = frame.info().get('deviceName', 'Camera')
-        imaging_ctrl = self.ui.getInterfaceForDevice(device_name).imagingCtrl
-        imaging_ctrl.addPinnedFrame(frame.imageItem())
-
     def window(self):
         return self.ui
         
