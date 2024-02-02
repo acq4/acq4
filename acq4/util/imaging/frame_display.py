@@ -1,5 +1,3 @@
-import time
-
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.cuda import shouldUseCuda, cupy
@@ -129,7 +127,7 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # Set new levels if auto gain is enabled
-            self.contrastCtrl.processImage(data)
+            self.contrastCtrl.updateWithImage(data)
             prof()
 
             if shouldUseCuda():

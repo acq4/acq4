@@ -64,13 +64,20 @@ class Frame(object):
         """
         return self.globalTransform().map(obj)
     
-    def saveImage(self, dh, filename):
+    def saveImage(self, dh, filename, backgroundControl=None, contrastControl=None):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
+
+        If either the backgroundControl or contrastControl arguments are provided, they will be saved in a way that they can be
+        applied later.
         """
         data = self.getImage()
         info = self.info()
+        if backgroundControl is not None:
+            info['backgroundControl'] = backgroundControl.saveState()
+        if contrastControl is not None:
+            info['contrastControl'] = contrastControl.saveState(data)
 
         if filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
