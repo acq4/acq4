@@ -704,24 +704,24 @@ class DirHandle(FileHandle):
             info = {}   ## never put {} in the function default
         else:
             info = info.copy()  ## we modify this later; need to copy first
-        
+
         t = time.time()
         with self.lock:
             if fileType is None:
                 fileType = filetypes.suggestWriteType(obj, fileName)
-                
+
             if fileType is None:
-                raise Exception("Can not create file from object of type %s" % str(type(obj)))
+                raise TypeError(f"Can not create file from object of type {type(obj)}")
 
             fileClass = filetypes.getFileType(fileType)
 
             ## Increment file name
             if autoIncrement:
                 fileName = self.incrementFileName(fileName)
-            
+
             ## Write file
             fileName = fileClass.write(obj, self, fileName, **kwargs)
-            
+
             self._childChanged()
             ## Write meta-info
             if '__object_type__' not in info:
@@ -731,7 +731,7 @@ class DirHandle(FileHandle):
             self._setFileInfo(fileName, info)
             self.emitChanged('children', fileName)
             return self[fileName]
-    
+
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
         #print "DirHandle: Adding file %s to index" % fileName

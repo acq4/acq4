@@ -1,8 +1,9 @@
 import numpy as np
 import scipy.ndimage
-from typing import Optional
+from typing import Optional, Union
 
 from acq4.util import Qt, ptime
+from acq4.util.DataManager import DirHandle
 
 Ui_Form = Qt.importTemplate(".bg_subtract_template")
 
@@ -28,6 +29,7 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self.lastFrameTime = None
         self.requestBgReset = False
+        self._cachedSaveName = None
 
         # Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -39,10 +41,12 @@ class BgSubtractCtrl(Qt.QWidget):
     def divideClicked(self):
         self.needFrameUpdate.emit()
         self.ui.subtractBgBtn.setChecked(False)
+        self._cachedSaveName = None
 
     def subtractClicked(self):
         self.needFrameUpdate.emit()
         self.ui.divideBgBtn.setChecked(False)
+        self._cachedSaveName = None
 
     def getBackgroundFrame(self):
         if self.backgroundFrame is None:
@@ -103,14 +107,22 @@ class BgSubtractCtrl(Qt.QWidget):
         else:
             self.backgroundFrame = x * self.backgroundFrame + (1 - x) * img
         self.blurredBackgroundFrame = None
+        self._cachedSaveName = None
 
-    def saveState(self):
-        return {
-            "bg": self.backgroundFrame.tolist() if self.backgroundFrame is not None else None,
-            "subtract": self.ui.subtractBgBtn.isChecked(),
-            "divide": self.ui.divideBgBtn.isChecked(),
-            "blur": self.ui.bgBlurSpin.value(),
-        }
+    def save(self, dh: DirHandle) -> Union[None, str]:
+        if self._cachedSaveName is None:
+            if self.backgroundFrame is None or not (
+                    self.ui.subtractBgBtn.isChecked() or self.ui.divideBgBtn.isChecked()
+            ):
+                return None
+            info = {
+                "subtract": self.ui.subtractBgBtn.isChecked(),
+                "divide": self.ui.divideBgBtn.isChecked(),
+                "blur": self.ui.bgBlurSpin.value(),
+            }
+            fh = dh.writeFile(self.backgroundFrame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
+            self._cachedSaveName = fh.shortName()
+        return self._cachedSaveName
 
     def processImage(self, data: np.ndarray) -> np.ndarray:
         return remove_background_from_image(

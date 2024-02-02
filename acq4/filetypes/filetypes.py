@@ -32,28 +32,25 @@ def suggestReadType(fileHandle):
                 maxType = typ
     return maxType
 
+
 def suggestWriteType(data, fileName=None):
     """Guess which fileType class should be used to write data.
     If fileName is specified, this may influence the guess.
     Return the name of the class."""
     maxVal = None
     maxType = None
-    #print "Suggest for type %s, name %s" % (type(data), str(fileName))
     for typ in listFileTypes():
         try:
             cls = getFileType(typ)
-        except:
-            debug.printExc("ignoring filetype %s" % typ)
+        except Exception:
+            debug.printExc(f"ignoring filetype {typ}")
             continue
         priority = cls.acceptsData(data, fileName)
-        #print "filetype %s has priority %d" %(typ, int(priority))
         if priority is False:
             continue
-        else:
-            if maxVal is None or priority > maxVal:
-                maxVal = priority
-                maxType = typ
-    #print "Suggesting", maxType
+        if maxVal is None or priority > maxVal:
+            maxVal = priority
+            maxType = typ
     return maxType
 
 
@@ -88,10 +85,10 @@ def getFileType(typName):
     (this is generally only for internal use)"""
     global KNOWN_FILE_TYPES
     if typName not in KNOWN_FILE_TYPES:
-        mod = __import__('acq4.filetypes.' + typName, fromlist=['*'])
+        mod = __import__(f'acq4.filetypes.{typName}', fromlist=['*'])
         cls = getattr(mod, typName)
         registerFileType(typName, cls)
-        
+
     return KNOWN_FILE_TYPES[typName]
     
     

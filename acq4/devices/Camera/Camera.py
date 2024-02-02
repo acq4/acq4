@@ -19,8 +19,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from acq4.util.future import Future
-from acq4.util.imaging.bg_subtract_ctrl import remove_background_from_image
-from pyqtgraph import Vector, SRTTransform3D, ImageItem
+from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
@@ -512,20 +511,6 @@ class Frame(imaging.Frame):
         info["frameTransform"] = tr
 
         super().__init__(data, info)
-
-    def imageItem(self) -> ImageItem:
-        """
-        Return an ImageItem suitable for pinning.
-        """
-        data = self.getImage()
-        bg_removal = self.info().get("backgroundControl", None)
-        if bg_removal is not None:
-            data = remove_background_from_image(data, **bg_removal)
-        levels = self.info().get("contrastControl", {}).get("levels", None)
-        lut = self.info().get("contrastControl", {}).get("lut", None)
-        item = ImageItem(data, levels=levels, lut=lut, removable=True)
-        item.setTransform(self.globalTransform().as2D())
-        return item
 
 
 class CameraTask(DAQGenericTask):

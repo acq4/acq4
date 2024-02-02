@@ -1,4 +1,5 @@
-from pyqtgraph import SRTTransform3D
+from acq4.util.imaging.bg_subtract_ctrl import remove_background_from_image
+from pyqtgraph import SRTTransform3D, ImageItem
 
 
 class Frame(object):
@@ -15,7 +16,9 @@ class Frame(object):
     def __init__(self, data, info):
         object.__init__(self)
         self._data = data
-        self._info = info        
+        self._info = info
+        self._bg_removal = None
+        self._contrast = None
         # Complete transform maps from image coordinates to global.
         if 'transform' not in info:
             info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
@@ -68,18 +71,40 @@ class Frame(object):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
-
-        If either the backgroundControl or contrastControl arguments are provided, they will be saved in a way that they can be
-        applied later.
         """
         data = self.getImage()
         info = self.info()
         if backgroundControl is not None:
-            info['backgroundControl'] = backgroundControl.saveState()
+            info['backgroundControl'] = backgroundControl.save(dh)
         if contrastControl is not None:
-            info['contrastControl'] = contrastControl.saveState(data)
+            info['contrastControl'] = contrastControl.save(data, dh)
 
         if filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
         else:
             return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)
+
+    def loadLinkedFiles(self, dh):
+        """Load linked files from the same directory as the main file."""
+        bg_removal = self.info().get("backgroundControl", None)
+        if bg_removal is not None:
+            self._bg_removal = dh[bg_removal]
+        contrast = self.info().get("contrastControl", None)
+        if contrast is not None:
+            self._contrast = dh[contrast]
+
+    def imageItem(self) -> ImageItem:
+        """
+        Return an ImageItem suitable for pinning.
+        """
+        data = self.getImage()
+        if self._bg_removal is not None:
+            data = remove_background_from_image(data, self._bg_removal.read(), **self._bg_removal.info().deepcopy())
+        levels = None
+        lut = None
+        if self._contrast is not None:
+            levels = self._contrast.info()["levels"]
+            lut = self._contrast.read()
+        item = ImageItem(data, levels=levels, lut=lut, removable=True)
+        item.setTransform(self.globalTransform().as2D())
+        return item

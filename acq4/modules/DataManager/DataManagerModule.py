@@ -113,6 +113,7 @@ class DataManager(Module):
             if f.endswith('.tif'):
                 f = current_dir[f]
                 frame = Frame(f.read(), f.info().deepcopy())
+                frame.loadLinkedFiles(current_dir)
                 cam_mod.ui.displayPinnedFrame(frame)
 
     def updateLogDir(self, d):
