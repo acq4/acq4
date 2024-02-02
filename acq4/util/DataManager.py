@@ -352,14 +352,12 @@ class FileHandle(Qt.QObject):
     def fileType(self):
         with self.lock:
             info = self.info()
-            
-            ## Use the recorded object_type to read the file if possible.
-            ## Otherwise, ask the filetypes to choose the type for us.
+            # Use the recorded object_type to read the file if possible.
+            # Otherwise, ask the filetypes to choose the type for us.
             if '__object_type__' not in info:
-                typ = filetypes.suggestReadType(self)
+                return filetypes.suggestReadType(self)
             else:
-                typ = info['__object_type__']
-            return typ
+                return info['__object_type__']
 
     def emitChanged(self, change, *args):
         self.delayedChanges.append(change)
@@ -378,11 +376,11 @@ class FileHandle(Qt.QObject):
         """Inform this object that it has been moved as a result of its (grand)parent having moved."""
         prefix = os.path.join(oldDir, '')
         if self.path[:len(prefix)] != prefix:
-            raise Exception("File %s is not in moved tree %s, should not update!" % (self.path, oldDir))
+            raise ValueError(f"File {self.path} is not in moved tree {oldDir}, should not update!")
         subName = self.path[len(prefix):]
         newName = os.path.join(newDir, subName)
         if not os.path.exists(newName):
-            raise Exception("File %s does not exist." % newName)
+            raise FileNotFoundError(f"File {newName} does not exist.")
         self.path = newName
         self.parentDir = None
         self.emitChanged('parent')
@@ -391,7 +389,7 @@ class FileHandle(Qt.QObject):
         if self.path is None:
             return False
         if name is not None:
-            raise Exception("Cannot check for subpath existence on FileHandle.")
+            raise TypeError("Cannot check for subpath existence on FileHandle.")
         return os.path.exists(self.path)
 
     def checkExists(self):

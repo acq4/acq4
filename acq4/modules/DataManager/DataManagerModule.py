@@ -139,8 +139,11 @@ class DataManager(Module):
             self.ui.fileTreeWidget.setCurrentDir(newDir)
             has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
             self.ui.loadPinnedImagesBtn.setEnabled(has_images)
-        elif change == 'log':
-            self.updateLogView(*args)
+        elif change == 'children':
+            with contextlib.suppress(HelpfulException):
+                newDir = self.manager.getCurrentDir()
+                has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
+                self.ui.loadPinnedImagesBtn.setEnabled(has_images)
 
     def showFileDialog(self):
         bd = self.manager.getBaseDir()
@@ -237,11 +240,8 @@ class DataManager(Module):
     def fileSelectionChanged(self):
         # print "file selection changed"
         if self.selFile is not None:
-            try:
+            with contextlib.suppress(TypeError):
                 self.selFile.sigChanged.disconnect(self.selectedFileAltered)
-            except TypeError:
-                pass
-
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.
         self.loadFile(fh)
