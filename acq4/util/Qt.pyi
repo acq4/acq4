@@ -2,7 +2,7 @@
 This stub file is to aid in the PyCharm auto-completion of the Qt imports.
 """
 
-from typing import Union
+from typing import Union, Any
 
 try:
     from PyQt5 import QtCore, QtGui, QtWidgets, QtTest
@@ -50,6 +50,7 @@ except ImportError:
             except ImportError as e:
                 raise ImportError("No suitable qt binding found") from e
 
+Signal = QtCore.pyqtSignal
 App: QtWidgets.QApplication
 VERSION_INFO: str
 QT_LIB: str
@@ -57,3 +58,4 @@ QtVersion: str
 def exec_() -> QtWidgets.QApplication: ...
 def mkQApp(name: Union[str, None] = None) -> QtWidgets.QApplication: ...
 def isQObjectAlive(obj: QtCore.QObject) -> bool: ...
+def importTemplate(templateName: str) -> Any: ...

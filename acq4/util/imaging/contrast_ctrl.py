@@ -1,9 +1,7 @@
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 
 from acq4.util import Qt
+from acq4.util.DataManager import DirHandle
 
 Ui_Form = Qt.importTemplate(".contrast_ctrl_template")
 
@@ -31,10 +29,11 @@ class ContrastCtrl(Qt.QWidget):
         self.ignoreLevelChange = False
         self.alpha = 1.0
         self.lastAGCMax = None
+        self._cachedSaveName = None
 
         # Connect DisplayGain dock
-        self.ui.histogram.sigLookupTableChanged.connect(self.levelsChanged)
-        self.ui.histogram.sigLevelsChanged.connect(self.levelsChanged)
+        self.ui.histogram.sigLookupTableChanged.connect(self.levelsOrLUTChanged)
+        self.ui.histogram.sigLevelsChanged.connect(self.levelsOrLUTChanged)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
         self.ui.zoomLiveBtn.clicked.connect(self.zoomToImage)
@@ -52,24 +51,32 @@ class ContrastCtrl(Qt.QWidget):
         """
         self.imageItem.getViewBox().autoRange(items=[self.imageItem])
 
-    def levelsChanged(self):
-        if self.ui.btnAutoGain.isChecked() and not self.ignoreLevelChange:
-            if self.lastMinMax is None:
-                return
-            bl, wl = self.getLevels()
-            mn, mx = self.lastMinMax
-            rng = float(mx - mn)
-            if rng == 0:
-                return
-            newLevels = [(bl - mn) / rng, (wl - mn) / rng]
-            self.autoGainLevels = newLevels
+    def levelsOrLUTChanged(self):
+        if self.lastMinMax is None or not self.ui.btnAutoGain.isChecked() or self.ignoreLevelChange:
+            return
+        bl, wl = self.getLevels()
+        mn, mx = self.lastMinMax
+        rng = float(mx - mn)
+        if rng == 0:
+            return
+        newLevels = [(bl - mn) / rng, (wl - mn) / rng]
+        self.autoGainLevels = newLevels
+        self._cachedSaveName = None
 
     def alphaChanged(self, val):
-        self.alpha = val / self.ui.alphaSlider.maximum()  # slider only works in integers and we need a 0 to 1 value
+        self.alpha = val / self.ui.alphaSlider.maximum()  # slider only works in integers, and we need a 0 to 1 value
         self.imageItem.setOpacity(self.alpha)
 
     def getLevels(self):
         return self.ui.histogram.getLevels()
+
+    def save(self, img, dh: DirHandle) -> str:
+        if self._cachedSaveName is None:
+            lut = self.ui.histogram.getLookupTable(img)
+            info = {'levels': self.getLevels()}
+            fh = dh.writeFile(lut, "contrast_lut", info, autoIncrement=True)
+            self._cachedSaveName = fh.shortName()
+        return self._cachedSaveName
 
     def toggleAutoGain(self, b):
         if b:
@@ -84,7 +91,7 @@ class ContrastCtrl(Qt.QWidget):
         """
         self.lastMinMax = None
 
-    def processImage(self, data):
+    def updateWithImage(self, data: np.ndarray) -> None:
         # Update auto gain for new image
         # Note that histogram is linked to image item; this is what determines
         # the final appearance of the image.
@@ -122,6 +129,7 @@ class ContrastCtrl(Qt.QWidget):
                 maxVal = self.lastMinMax[1] * s + maxVal * (1.0 - s)
 
             self.lastMinMax = [minVal, maxVal]
+            self._cachedSaveName = None
 
             # and convert fraction of previous range into new levels
             bl = self.autoGainLevels[0] * (maxVal - minVal) + minVal

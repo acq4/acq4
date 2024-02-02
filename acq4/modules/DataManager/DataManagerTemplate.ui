@@ -57,6 +57,13 @@
         </property>
        </widget>
       </item>
+      <item row="1" column="3">
+       <widget class="QPushButton" name="loadPinnedImagesBtn">
+        <property name="text">
+         <string>Load pinned images</string>
+        </property>
+       </widget>
+      </item>
       <item row="2" column="1">
        <widget class="QLineEdit" name="logDirText"/>
       </item>
