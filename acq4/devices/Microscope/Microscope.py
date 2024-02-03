@@ -395,7 +395,9 @@ class Objective(OptomechDevice):
         return self._config.get('radius')
 
     def __repr__(self):
-        return "<Objective %s.%s offset=%0.2g,%0.2g scale=%0.2g>" % (self._scope.name(), self.name(), self.offset().x(), self.offset().y(), self.scale().x())
+        return (f"<Objective {self._scope.name()}.{self.name()} "
+                f"offset={self.offset().x():0.2g},{self.offset().y():0.2g} "
+                f"scale={self.scale().x():0.2g}>")
 
 
 class ScopeGUI(Qt.QWidget):

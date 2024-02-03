@@ -9,7 +9,7 @@ import json
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.devices.Stage import Stage
+from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.target import Target
@@ -328,10 +328,14 @@ class Pipette(Device, OptomechDevice):
     def goAboveTarget(self, speed, **kwds):
         return self.moveTo('aboveTarget', speed=speed, **kwds)
 
-    def _movePath(self, path):
-        # move along a path defined in global coordinates. 
-        # Format is [(pos, speed, linear), ...]
-        # returns the movefuture of the last move.
+    def _movePath(self, path) -> MovePathFuture:
+        """
+        move along a path defined in global coordinates.
+        Format is [(pos, speed, linear), ...]
+        returns the movefuture of the last move.
+        WARNING: This method does _not_ implement any motion planning.
+        """
+
         self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path})
         stagePath = []
         for pos, speed, linear in path:
