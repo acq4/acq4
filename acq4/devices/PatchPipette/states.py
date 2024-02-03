@@ -1549,7 +1549,7 @@ class CleanState(PatchPipetteState):
             self.resetPosition()
 
         dev.pipetteRecord()['cleanCount'] += 1
-        dev.clean = True
+        dev.setTipClean(True)
         self.resetPosition()
         dev.newPatchAttempt()
         return 'out'
