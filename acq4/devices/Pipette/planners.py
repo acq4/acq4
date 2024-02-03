@@ -1,8 +1,9 @@
 from __future__ import annotations
 import numpy as np
+import typing
+
 from acq4.util.future import MultiFuture
 
-import typing
 if typing.TYPE_CHECKING:
     from .pipette import Pipette
 
