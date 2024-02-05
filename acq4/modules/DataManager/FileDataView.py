@@ -17,12 +17,15 @@ class FileDataView(Qt.QSplitter):
         if file is self.current:
             return
         if file is None:
+            self.clear()
             self.current = None
             return
         if file.isDir():
+            self.clear()
             return
         typ = file.fileType()
         if typ is None:
+            self.clear()
             return
 
         image = False
@@ -69,15 +72,13 @@ class FileDataView(Qt.QSplitter):
         self.widgets.append(w)
 
     def displayDataAsImage(self, data):
-        if self.currentType == 'image' and self._imageWidget is not None:
-            self._imageWidget.setImage(data, autoRange=False)
-        else:
+        if self._imageWidget is None:
             self.clear()
             w = pg.ImageView(self)
             self._imageWidget = w
             self.addWidget(w)
-            w.setImage(data)
             self.widgets.append(w)
+        self._imageWidget.setImage(data, autoRange=False)
         self.currentType = 'image'
 
     def clear(self):
