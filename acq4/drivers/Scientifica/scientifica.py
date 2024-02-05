@@ -415,6 +415,7 @@ class Scientifica(SerialDevice):
         try:
             self.setParam('maxZSpeed', speed)
         except RuntimeError as exc:
+            # some devices do not support Z axis speed. errno 3 is for unrecognized params.
             if getattr(exc, 'errno', 0) != 3:
                 raise exc
 
