@@ -63,7 +63,7 @@ class Scientifica(SerialDevice):
     availableDevices = None
 
     @classmethod
-    def enumerateDevices(cls):
+    def enumerateDevices(cls) -> dict[str, str]:
         """Generate a list of all Scientifica devices found in the system.
 
         Sets Scientifica.availableDevices to a dict of {name: port} pairs.
@@ -96,6 +96,7 @@ class Scientifica(SerialDevice):
                     )
 
         cls.availableDevices = devs
+        return devs
 
     def __init__(self, port=None, name=None, baudrate=None, ctrl_version: Optional[Number] = 2):
         self.lock = RLock()
@@ -411,8 +412,11 @@ class Scientifica(SerialDevice):
         if self._version < 3:
             speed = speed * 2 * abs(self._axis_scale[0])
         self.setParam('maxSpeed', speed)
-        with contextlib.suppress(RuntimeError):
+        try:
             self.setParam('maxZSpeed', speed)
+        except RuntimeError as exc:
+            if getattr(exc, 'errno', 0) != 3:
+                raise exc
 
     def moveTo(self, pos, speed=None):
         """Set the position of the manipulator.
