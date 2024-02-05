@@ -1,102 +1,89 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import pyqtgraph as pg
 from acq4.util import Qt
 from acq4.util.DictView import DictView
-from six.moves import map
 
 
 class FileDataView(Qt.QSplitter):
     def __init__(self, parent):
         Qt.QSplitter.__init__(self, parent)
-        #self.manager = Manager.getManager()
         self.setOrientation(Qt.Qt.Vertical)
         self.current = None
         self.currentType = None
         self.widgets = []
         self.dictWidget = None
-        #self.plots = []
+        self._imageWidget = None
 
     def setCurrentFile(self, file):
-        #print "=============== set current file ============"
         if file is self.current:
             return
-            
-        ## What if we just want to update the data display?
-        #self.clear()
-        
         if file is None:
             self.current = None
             return
-            
         if file.isDir():
-            ## Sequence or not?
             return
+        typ = file.fileType()
+        if typ is None:
+            return
+
+        image = False
+        with pg.BusyCursor():
+            data = file.read()
+        if typ == 'ImageFile': 
+            image = True
+        elif typ == 'MetaArray':
+            if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
+                image = True
+            elif data.ndim > 2:
+                image = True
         else:
-            typ = file.fileType()
-            if typ is None:
-                return
-            else:
-                image = False
-                with pg.BusyCursor():
-                    data = file.read()
-                if typ == 'ImageFile': 
-                    image = True
-                elif typ == 'MetaArray':
-                    if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
-                        image = True
-                    elif data.ndim > 2:
-                        image = True
-                else:
-                    return
-                        
-        
+            return
+
         with pg.BusyCursor():
             if image:
-                if self.currentType == 'image' and len(self.widgets) > 0:
-                    try:
-                        self.widgets[0].setImage(data, autoRange=False)
-                    except:
-                        print("widget types:", list(map(type, self.widgets)))
-                        raise
-                else:
-                    self.clear()
-                    w = pg.ImageView(self)
-                    #print "add image:", w.ui.roiPlot.plotItem
-                    #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
-                    self.addWidget(w)
-                    w.setImage(data)
-                    self.widgets.append(w)
-                self.currentType = 'image'
+                self.displayDataAsImage(data)
             else:
-                self.clear()
-                w = pg.MultiPlotWidget(self)
-                self.addWidget(w)
-                w.plot(data)
-                self.currentType = 'plot'
-                self.widgets.append(w)
-                #print "add mplot:", w.mPlotItem.plots
-                
-                #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
-        
-        if (hasattr(data, 'implements') and data.implements('MetaArray')):
-            if self.dictWidget is None:
-                w = DictView(data._info)
-                self.dictWidget = w
-                #w.setText(str(data._info[-1]))
-                self.addWidget(w)
-                self.widgets.append(w)
-                h = self.size().height()
-                self.setSizes([int(h*0.8), int(h*0.2)])
-            else:
-                self.dictWidget.setData(data._info)
-            
-        
+                self.displayDataAsPlot(data)
+
+        self.displayMetaInfoForData(data)
+
+    def displayMetaInfoForData(self, data):
+        if not hasattr(data, 'implements') or not data.implements('MetaArray'):
+            return
+        info = data.infoCopy()
+        if self.dictWidget is None:
+            w = DictView(info)
+            self.dictWidget = w
+            self.addWidget(w)
+            self.widgets.append(w)
+            h = self.size().height()
+            self.setSizes([int(h * 0.8), int(h * 0.2)])
+        else:
+            self.dictWidget.setData(info)
+
+    def displayDataAsPlot(self, data):
+        self.clear()
+        w = pg.MultiPlotWidget(self)
+        self.addWidget(w)
+        w.plot(data)
+        self.currentType = 'plot'
+        self.widgets.append(w)
+
+    def displayDataAsImage(self, data):
+        if self.currentType == 'image' and self._imageWidget is not None:
+            self._imageWidget.setImage(data, autoRange=False)
+        else:
+            self.clear()
+            w = pg.ImageView(self)
+            self._imageWidget = w
+            self.addWidget(w)
+            w.setImage(data)
+            self.widgets.append(w)
+        self.currentType = 'image'
+
     def clear(self):
         for w in self.widgets:
             w.close()
             w.setParent(None)
         self.widgets = []
         self.dictWidget = None
-                
+        self._imageWidget = None
