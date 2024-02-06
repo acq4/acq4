@@ -66,6 +66,19 @@ class FileDataView(Qt.QSplitter):
             self._widgets.append(w)
         self._imageWidget.setImage(data, autoRange=False)
 
+    def displayMultiPatchLog(self, data):
+        self.clear()
+        # TODO look at mosaic editor
+        # TODO make a graphics view
+        # TODO load pinned images from parent directory
+        # TODO add plot of events on timeline (tags?)
+        #    selectable event types to display?
+        # TODO images saved in this directory should be displayed as the timeline matches?
+        # TODO option to add plots for anything else
+        # TODO add target position
+        # TODO add pipette position (and paths?)
+        #    we don't poll the position, so the movement requests are all we have
+
     def clear(self):
         for w in self._widgets:
             w.close()
