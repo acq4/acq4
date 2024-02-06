@@ -7,69 +7,55 @@ class FileDataView(Qt.QSplitter):
     def __init__(self, parent):
         Qt.QSplitter.__init__(self, parent)
         self.setOrientation(Qt.Qt.Vertical)
-        self.current = None
-        self.currentType = None
-        self.widgets = []
-        self.dictWidget = None
+        self._current = None
+        self._widgets = []
+        self._dictWidget = None
         self._imageWidget = None
 
-    def setCurrentFile(self, file):
-        if file is self.current:
+    def setCurrentFile(self, fh):
+        if fh is self._current:
             return
-        if file is None:
-            self.clear()
-            self.current = None
-            return
-        if file.isDir():
-            self.clear()
-            return
-        typ = file.fileType()
-        if typ is None:
+        self._current = fh
+        if fh is None or fh.isDir() or (typ := fh.fileType()) is None:
             self.clear()
             return
 
-        image = False
         with pg.BusyCursor():
-            data = file.read()
-        if typ == 'ImageFile': 
-            image = True
-        elif typ == 'MetaArray':
-            if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
-                image = True
-            elif data.ndim > 2:
-                image = True
-        else:
-            return
-
-        with pg.BusyCursor():
-            if image:
+            data = fh.read()
+            if typ == 'ImageFile':
                 self.displayDataAsImage(data)
-            else:
-                self.displayDataAsPlot(data)
-
-        self.displayMetaInfoForData(data)
+                self.displayMetaInfoForData(data)
+            elif typ == 'MetaArray':
+                if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
+                    self.displayDataAsImage(data)
+                elif data.ndim > 2:
+                    self.displayDataAsImage(data)
+                else:
+                    self.displayDataAsPlot(data)
+                self.displayMetaInfoForData(data)
+            elif typ == 'MultiPatchLog':
+                self.displayMultiPatchLog(data)
 
     def displayMetaInfoForData(self, data):
         if not hasattr(data, 'implements') or not data.implements('MetaArray'):
             return
         info = data.infoCopy()
-        if self.dictWidget is None:
+        if self._dictWidget is None:
             w = DictView(info)
-            self.dictWidget = w
+            self._dictWidget = w
             self.addWidget(w)
-            self.widgets.append(w)
+            self._widgets.append(w)
             h = self.size().height()
             self.setSizes([int(h * 0.8), int(h * 0.2)])
         else:
-            self.dictWidget.setData(info)
+            self._dictWidget.setData(info)
 
     def displayDataAsPlot(self, data):
         self.clear()
         w = pg.MultiPlotWidget(self)
         self.addWidget(w)
         w.plot(data)
-        self.currentType = 'plot'
-        self.widgets.append(w)
+        self._widgets.append(w)
 
     def displayDataAsImage(self, data):
         if self._imageWidget is None:
@@ -77,14 +63,13 @@ class FileDataView(Qt.QSplitter):
             w = pg.ImageView(self)
             self._imageWidget = w
             self.addWidget(w)
-            self.widgets.append(w)
+            self._widgets.append(w)
         self._imageWidget.setImage(data, autoRange=False)
-        self.currentType = 'image'
 
     def clear(self):
-        for w in self.widgets:
+        for w in self._widgets:
             w.close()
             w.setParent(None)
-        self.widgets = []
-        self.dictWidget = None
+        self._widgets = []
+        self._dictWidget = None
         self._imageWidget = None

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 fileio.py -  FileType helper functions
 Copyright 2010  Luke Campagnola
@@ -12,7 +10,8 @@ import os
 import acq4.util.debug as debug
 
 KNOWN_FILE_TYPES = None
-    
+
+
 def suggestReadType(fileHandle):
     """Guess which fileType class should be used to read fileName.
     Return the name of the class."""
@@ -21,15 +20,14 @@ def suggestReadType(fileHandle):
     for typ in listFileTypes():
         try:
             cls = getFileType(typ)
-        except:
+        except Exception:
             continue
         priority = cls.acceptsFile(fileHandle)
         if priority is False:
             continue
-        else:
-            if maxVal is None or priority > maxVal:
-                maxVal = priority
-                maxType = typ
+        if maxVal is None or priority > maxVal:
+            maxVal = priority
+            maxType = typ
     return maxType
 
 
@@ -105,9 +103,10 @@ def listFileTypes():
         for typ in typs:
             try:
                 getFileType(typ)
-            except:
-                debug.printExc("Error loading file type library '%s':" % typ)
+            except Exception:
+                debug.printExc(f"Error loading file type library '{typ}':")
     return list(KNOWN_FILE_TYPES.keys())
 
-## initialize:
+
+# initialize:
 listFileTypes()

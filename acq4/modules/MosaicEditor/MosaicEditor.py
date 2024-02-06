@@ -1,27 +1,22 @@
-# -*- coding: utf-8 -*-
+from collections import OrderedDict
 
-from __future__ import print_function
-import os
+import contextlib
 import glob
 import json
-import weakref
-from collections import OrderedDict
 import numpy as np
+import os
 import scipy
 import scipy.stats
-from six import iteritems
+import weakref
 
-import pyqtgraph as pg
-
-from acq4.modules.Module import Module
-from acq4.analysis.AnalysisModule import AnalysisModule
-import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
-from acq4.util.Canvas.Canvas import Canvas
-from acq4.util.Canvas import items
+import acq4.util.DataManager as DataManager
+import pyqtgraph as pg
+from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.modules.Module import Module
 from acq4.util import Qt
-import six
-from six.moves import range
+from acq4.util.Canvas import items
+from acq4.util.Canvas.Canvas import Canvas
 
 Ui_Form = Qt.importTemplate('.MosaicEditorTemplate')
 
@@ -60,7 +55,6 @@ class MosaicEditorModule(Module):
         return self.manager.getModule("Data Manager")
         
 
-
 class MosaicEditorWindow(Qt.QWidget):
     def __init__(self, mod, name):
         Qt.QWidget.__init__(self)
@@ -74,7 +68,7 @@ class MosaicEditorWindow(Qt.QWidget):
         self.mod = mod
 
         elems = self.mod.listElements()
-        for name, el in iteritems(elems):
+        for name, el in elems.items():
             w = self.mod.getElement(name, create=True)
             d = pg.dockarea.Dock(name=name, size=el.size())
             if w is not None:
@@ -82,8 +76,7 @@ class MosaicEditorWindow(Qt.QWidget):
             pos = el.pos()
             if pos is None:
                 pos = ()
-            #print d, pos
-            if isinstance(pos, six.string_types):
+            if isinstance(pos, str):
                 pos = (pos,)
             self.dockarea.addDock(d, *pos)
         self.elements = elems
@@ -152,14 +145,11 @@ class MosaicEditor(AnalysisModule):
         self.ui.fileLoader = self.getElement('File Loader', create=True)
         self.ui.fileLoader.ui.fileTree.hide()
 
-        try:
-            self.ui.fileLoader.setBaseClicked() # get the currently selected directory in the DataManager
-        except:
-            pass
-
+        with contextlib.suppress(Exception):
+            self.ui.fileLoader.setBaseClicked()  # get the currently selected directory in the DataManager
         for a in atlas.listAtlases():
             self.ui.atlasCombo.addItem(a)
-        
+
         # Add buttons to the canvas control panel    
         self.btnBox = Qt.QWidget()
         self.btnLayout = Qt.QGridLayout()
@@ -190,7 +180,7 @@ class MosaicEditor(AnalysisModule):
         self.ui.mosaicFlipUDBtn.clicked.connect(self.flipUD)
 
         self.imageMax = 0.0
-        
+
         for menuString in self._addTypes:
             self.addCombo.addItem(menuString)
 
@@ -558,7 +548,6 @@ MosaicEditor.registerItemType(items.getItemType('CellCanvasItem'))
 MosaicEditor.registerItemType(items.getItemType('AtlasCanvasItem'))
 
 
-
 class Encoder(json.JSONEncoder):
     """Used to clean up state for JSON export.
     """
@@ -566,4 +555,4 @@ class Encoder(json.JSONEncoder):
         if isinstance(o, np.integer):
             return int(o)
         
-        return json.JSONEncoder.default(o)
+        return super().default(o)
