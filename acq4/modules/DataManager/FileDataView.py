@@ -1,5 +1,7 @@
 import pyqtgraph as pg
+from acq4.filetypes.MultiPatchLog import MultiPatchLogWidget
 from acq4.util import Qt
+from acq4.util.DataManager import FileHandle
 from acq4.util.DictView import DictView
 
 
@@ -11,8 +13,9 @@ class FileDataView(Qt.QSplitter):
         self._widgets = []
         self._dictWidget = None
         self._imageWidget = None
+        self._multiPatchLogWidget = None
 
-    def setCurrentFile(self, fh):
+    def setCurrentFile(self, fh: FileHandle):
         if fh is self._current:
             return
         self._current = fh
@@ -21,6 +24,10 @@ class FileDataView(Qt.QSplitter):
             return
 
         with pg.BusyCursor():
+            if typ == 'MultiPatchLog':
+                self.displayMultiPatchLog(fh)
+                return
+
             data = fh.read()
             if typ == 'ImageFile':
                 self.displayDataAsImage(data)
@@ -33,8 +40,6 @@ class FileDataView(Qt.QSplitter):
                 else:
                     self.displayDataAsPlot(data)
                 self.displayMetaInfoForData(data)
-            elif typ == 'MultiPatchLog':
-                self.displayMultiPatchLog(data)
 
     def displayMetaInfoForData(self, data):
         if not hasattr(data, 'implements') or not data.implements('MetaArray'):
@@ -66,18 +71,14 @@ class FileDataView(Qt.QSplitter):
             self._widgets.append(w)
         self._imageWidget.setImage(data, autoRange=False)
 
-    def displayMultiPatchLog(self, data):
-        self.clear()
-        # TODO look at mosaic editor
-        # TODO make a graphics view
-        # TODO load pinned images from parent directory
-        # TODO add plot of events on timeline (tags?)
-        #    selectable event types to display?
-        # TODO images saved in this directory should be displayed as the timeline matches?
-        # TODO option to add plots for anything else
-        # TODO add target position
-        # TODO add pipette position (and paths?)
-        #    we don't poll the position, so the movement requests are all we have
+    def displayMultiPatchLog(self, fh):
+        if self._multiPatchLogWidget is None:
+            self.clear()
+            self._multiPatchLogWidget = MultiPatchLogWidget(self)
+            self.addWidget(self._multiPatchLogWidget)
+            self._widgets.append(self._multiPatchLogWidget)
+        self._multiPatchLogWidget.clear()
+        self._multiPatchLogWidget.addLog(fh)
 
     def clear(self):
         for w in self._widgets:

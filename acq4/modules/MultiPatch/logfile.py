@@ -1,89 +1,163 @@
-from __future__ import print_function
-import re, json
+from typing import Any
+
+import json
+import numpy as np
+from MetaArray import MetaArray
 
 
-import six
-from six.moves import map
-from six.moves import range
+TEST_PULSE_METAARRAY_INFO = [
+    {'name': 'event_time', 'type': 'float', 'units': 's'},
+    {'name': 'baselinePotential', 'type': 'float', 'units': 'V'},
+    {'name': 'baselineCurrent', 'type': 'float', 'units': 'A'},
+    {'name': 'peakResistance', 'type': 'float', 'units': 'ohm'},
+    {'name': 'steadyStateResistance', 'type': 'float', 'units': 'ohm'},
+    {'name': 'fitExpAmp', 'type': 'float'},
+    {'name': 'fitExpTau', 'type': 'float'},
+    {'name': 'fitExpYOffset', 'type': 'float'},
+    {'name': 'fitExpXOffset', 'type': 'float', 'units': 's'},
+    {'name': 'capacitance', 'type': 'float', 'units': 'F'},
+]
 
 
 class MultiPatchLog(object):
     def __init__(self, filename=None):
+        self._filename = filename
         self._devices = {}
         self._minTime = None
         self._maxTime = None
-        
+
         if filename is not None:
-            self.read(filename)
+            self.process(filename)
 
-    def read(self, file):
-        with open(file, 'rb') as fh:
-            for line in fh.readlines():
-                # parse line
-                if line.startswith(b'{'):
-                    # json format
-                    event = json.loads(line.rstrip(b',\r\n'))
+    def process(self, filename) -> None:
+        def possible_uses_for_type(event_type: str) -> list[str]:
+            uses = ['event']
+            if event_type in {'move_start', 'move_stop'}:
+                uses.append('position')
+            if event_type in {'pressure_changed'}:
+                uses.append('pressure')
+            if event_type in {'pipette_transform_changed'}:
+                uses.append('pipette_transform')
+            if event_type in {'state_change'}:
+                uses.append('state_change')
+            if event_type in {'auto_bias_enabled', 'auto_bias_target_changed'}:
+                uses.append('auto_bias_target')
+            if event_type in {'target_changed'}:
+                uses.append('target')
+            # if event_type in {'move_requested'}:
+            #     uses.append('move_request')
+            if event_type in {'test_pulse'}:
+                uses.append('test_pulse')
+            return uses
 
-                    # just to cover a bug; remove after updating legacy log files
-                    if isinstance(event['event_time'], six.string_types):
-                        event['event_time'] = float(event['event_time'].rstrip(','))
-                else:
-                    # this covers the original multipatch log format; remove after updating all legacy log files
-                    fields = re.split(r',\s*', line.strip().decode("utf-8"))
-                    time, eventType, device = [eval(v) for v in fields[:3]]
-                    data = fields[3:]
-                    time = float(time)
+        with open(filename, 'rb') as fh:
+            events: list[dict[str, Any]] = [json.loads(line.rstrip(b',\r\n')) for line in fh]
 
-                    event = {
-                        'event_time': time,
-                        'device': device,
-                        'event': eventType,
-                    }
-                    if eventType == 'move_stop':
-                        event['position'] = list(map(float, data))
+            events_by_dev_and_use = {}
+            bool_fields = ('clean', 'broken', 'active', 'enabled')
+            for ev in events:
+                is_true = [ev[f] for f in bool_fields if f in ev]
+                ev["is_true"] = not is_true or any(is_true)  # empty should mean True
+                for use in possible_uses_for_type(ev['event']):
+                    events_by_dev_and_use.setdefault(ev['device'], {}).setdefault(use, [])
+                    events_by_dev_and_use[ev['device']][use].append(ev)
+            for dev in events_by_dev_and_use:
+                self._devices[dev] = self._initial_data_structures(events_by_dev_and_use[dev])
+                for use in events_by_dev_and_use[dev]:
+                    for i, event in enumerate(events_by_dev_and_use[dev][use]):
+                        self._devices[dev][use][i] = self._prepare_event_for_use(event, use)
+                        if use == 'position':
+                            time, *pos = self._prepare_event_for_use(event, use)
+                            self._devices[dev]['position_ITS'][time] = pos
 
-                # keep track of min/max time values
-                time = event['event_time']
-                if self._minTime is None:
-                    self._minTime = time
-                    self._maxTime = time
-                else:
-                    self._minTime = min(self._minTime, time)
-                    self._maxTime = max(self._maxTime, time)
-
-                # initialize irregular time series if needed
-                device = event['device']
-                if device not in self._devices:
-                    self._devices[device] = {
-                        'position': IrregularTimeSeries(interpolate=True)
-                    }
-
-                # Record event into irregular time series
-                dev = self._devices[device]
-                time = event['event_time']
-                if event['event'] == 'move_start':
-                    posSeries = dev['position']
-                    lastPos = posSeries.lastValue()
-                    if lastPos is not None:
-                        posSeries[time] = lastPos
-                elif event['event'] == 'move_stop':
-                    dev['position'][time] = event['position']
-
-    def devices(self):
+    def devices(self) -> list[str]:
         return list(self._devices.keys())
 
     def state(self, time):
-        state = {}
-        for dev in self.devices():
-            state[dev] = {'position': self._devices[dev]['position'][time]}
-        return state
+        # Used by MultiPatchLogCanvasItem
+        return {
+            dev: {'position': self._devices[dev]['position_ITS'][time]}
+            for dev in self.devices()
+        }
 
     def firstTime(self):
         return self._minTime
 
     def lastTime(self):
         return self._maxTime
-        
+
+    @staticmethod
+    def _initial_data_structures(events_by_use: dict[str, list]) -> dict[str, Any]:
+        def count_for_use(use: str):
+            return len(events_by_use[use]) if use in events_by_use else 0
+
+        return {
+            # 'position_ITS' is a special case, to support Canvas
+            'position_ITS': IrregularTimeSeries(interpolate=True),
+            'position': np.zeros(
+                (count_for_use('position'), 4),
+                dtype=float,
+            ),
+            'event': np.zeros(
+                count_for_use('event'),
+                dtype=[('time', float), ('event', 'U32'), ('bool', 'bool')],
+            ),
+            'pressure': np.zeros(
+                count_for_use('pressure'),
+                dtype=[('time', float), ('pressure', float), ('source', 'U32')],
+            ),
+            'pipette_transform': np.zeros(
+                (count_for_use('pipette_transform'), 4),
+                dtype=float,
+            ),
+            'state_change': np.zeros(
+                count_for_use('state_change'),
+                dtype=[('time', float), ('state', 'U32'), ('old_state', 'U32')],
+            ),
+            'auto_bias_target': np.zeros(
+                (count_for_use('auto_bias_target'), 2),
+                dtype=float,
+            ),
+            'target': np.zeros(
+                (count_for_use('target'), 4),
+                dtype=float,
+            ),
+            # TODO how do I want to structure move_request?
+            # 'move_request': np.zeros(
+            #     count_for_use('move_request'),
+            #     dtype=[('time', float), ('path', 'U32')],
+            # ),
+            'test_pulse': np.zeros(
+                (count_for_use('test_pulse'), len(TEST_PULSE_METAARRAY_INFO)),
+                dtype=float,
+            ),
+            # 'test_pulse': MetaArray(
+            #     np.zeros(
+            #         (count_for_use('test_pulse'), len(TEST_PULSE_METAARRAY_INFO)),
+            #         dtype=float),
+            #     info=TEST_PULSE_METAARRAY_INFO),
+        }
+
+    @staticmethod
+    def _prepare_event_for_use(event: dict, use: str) -> tuple[float, ...]:
+        if use == 'event':
+            return event['event_time'], event['event'], event['is_true']
+        if use == 'position':
+            return event['event_time'], *event['position']
+        if use == 'pressure':
+            return event['event_time'], event['pressure'], event['source']
+        if use == 'pipette_transform':
+            return event['event_time'], *event['globalPosition']
+        if use == 'state_change':
+            return event['event_time'], event['state'], event['old_state']
+        if use == 'auto_bias_target':
+            return event['event_time'], event['target'] if event.get('enabled', True) else np.nan
+        if use == 'target':
+            return event['event_time'], *event['target_position']
+        # if use == 'move_request':
+        #     return event['event_time'], event['opts']
+        if use == 'test_pulse':
+            return tuple(event[info['name']] for info in TEST_PULSE_METAARRAY_INFO)
 
 
 class IrregularTimeSeries(object):
