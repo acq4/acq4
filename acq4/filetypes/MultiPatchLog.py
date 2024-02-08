@@ -1,5 +1,7 @@
+import pyqtgraph as pg
 from acq4.util import Qt
-from .FileType import FileType
+from acq4.filetypes.FileType import FileType
+from acq4.util.MultiPatchLog import MultiPatchLog as MultiPatchLogData
 
 
 class MultiPatchLog(FileType):
@@ -10,10 +12,9 @@ class MultiPatchLog(FileType):
     priority = 0      # priority for this class when multiple classes support the same file types
     
     @classmethod
-    def read(cls, fileHandle):
+    def read(cls, fileHandle) -> MultiPatchLogData:
         """Read a file, return a data object"""
-        from ..modules.MultiPatch.logfile import MultiPatchLog
-        return MultiPatchLog(fileHandle.name())
+        return MultiPatchLogData(fileHandle.name())
         
     @classmethod
     def acceptsFile(cls, fileHandle):
@@ -48,18 +49,46 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO don't try to display position Z
     def __init__(self, parent=None):
         Qt.QWidget.__init__(self, parent)
-        self._layout = Qt.QVBoxLayout()
-        self.setLayout(self._layout)
         self._logFiles = []
         self._pipettes = []
         self._cells = []
         self._events = []
+        self._widgets = []
+        self._pinned_image_z = -10000
+        self._layout = Qt.QVBoxLayout()
+        self.setLayout(self._layout)
+        self._visual_field = pg.GraphicsLayoutWidget()
+        self._widgets.append(self._visual_field)
+        self._layout.addWidget(self._visual_field)
+        self._plot = self._visual_field.addPlot(title="")
 
-    def addLog(self, log):
+    def addLog(self, log: "FileHandle"):
         self._logFiles.append(log)
-        log_file = log.read()
-        self._pipettes.extend(log_file.devices())
-        # TODO
+        log_data = log.read()
+        self._pipettes.extend(log_data.devices())
+        if log.parent():
+            self.loadImagesFromDir(log.parent().parent())
+        self.loadImagesFromDir(log.parent())
+        for dev in log_data.devices():
+            path = log_data[dev]['position'][:, 1:3]  # TODO time as color
+            self._plot.plot(path[:, 0], path[:, 1], pen=pg.mkPen('r', width=2))
+
+    def loadImagesFromDir(self, directory: "DirHandle"):
+        # TODO images associated with the correct slice and cell only
+        # TODO integrate with time-slider to set the Z values
+        from acq4.util.imaging import Frame
+
+        for f in directory.ls():
+            if f.endswith('.tif'):
+                f = directory[f]
+                frame = Frame(f.read(), f.info().deepcopy())
+                frame.loadLinkedFiles(directory)
+                img = frame.imageItem()
+                img.setZValue(self._pinned_image_z)
+                self._pinned_image_z += 1
+                self._plot.addItem(img)
 
     def clear(self):
-        pass  # TODO
+        for w in self._widgets:
+            w.setParent(None)
+            w.deleteLater()
