@@ -1377,7 +1377,7 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
     def retractionDistance(self):
-        return np.linalg.norm(self.dev.manipulatorDevice.getPosition() - self._startPosition)
+        return np.linalg.norm(self.dev.pipetteDevice.globalPosition() - self._startPosition)
 
     def cleanup(self):
         if self._retractionFuture is not None:
