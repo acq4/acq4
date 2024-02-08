@@ -73,6 +73,9 @@ class MultiPatchLog(object):
     def devices(self) -> list[str]:
         return list(self._devices.keys())
 
+    def __getitem__(self, dev: str) -> dict[str, Any]:
+        return self._devices[dev]
+
     def state(self, time):
         # Used by MultiPatchLogCanvasItem
         return {
