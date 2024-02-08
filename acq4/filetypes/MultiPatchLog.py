@@ -3,9 +3,8 @@ import numpy as np
 from typing import Any
 
 import pyqtgraph as pg
-from acq4.util import Qt
 from acq4.filetypes.FileType import FileType
-
+from acq4.util import Qt
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
