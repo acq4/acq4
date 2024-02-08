@@ -186,8 +186,8 @@ class MultiPatchLogData(object):
                 uses.append('pressure')
             if event_type in {'pipette_transform_changed'}:
                 uses.append('pipette_transform')
-            if event_type in {'state_change'}:
-                uses.append('state_change')
+            if event_type in {'state_change', 'state_event'}:
+                uses.append('state')
             if event_type in {'auto_bias_enabled', 'auto_bias_target_changed'}:
                 uses.append('auto_bias_target')
             if event_type in {'target_changed'}:
@@ -213,6 +213,10 @@ class MultiPatchLogData(object):
                 self._devices[dev] = self._initial_data_structures(events_by_dev_and_use[dev])
                 for use in events_by_dev_and_use[dev]:
                     for i, event in enumerate(events_by_dev_and_use[dev][use]):
+                        if self._minTime is None or event['event_time'] < self._minTime:
+                            self._minTime = event['event_time']
+                        if self._maxTime is None or event['event_time'] > self._maxTime:
+                            self._maxTime = event['event_time']
                         self._devices[dev][use][i] = self._prepare_event_for_use(event, use)
                         if use == 'position':
                             time, *pos = self._prepare_event_for_use(event, use)
@@ -261,9 +265,9 @@ class MultiPatchLogData(object):
                 (count_for_use('pipette_transform'), 4),
                 dtype=float,
             ),
-            'state_change': np.zeros(
-                count_for_use('state_change'),
-                dtype=[('time', float), ('state', 'U32'), ('old_state', 'U32')],
+            'state': np.zeros(
+                count_for_use('state'),
+                dtype=[('time', float), ('state', 'U32'), ('info', 'U128')],  # TODO maybe not numpy?
             ),
             'auto_bias_target': np.zeros(
                 (count_for_use('auto_bias_target'), 2),
@@ -299,8 +303,8 @@ class MultiPatchLogData(object):
             return event['event_time'], event['pressure'], event['source']
         if use == 'pipette_transform':
             return event['event_time'], *event['globalPosition']
-        if use == 'state_change':
-            return event['event_time'], event['state'], event['old_state']
+        if use == 'state':
+            return event['event_time'], event['state'], event.get('info', '')
         if use == 'auto_bias_target':
             return event['event_time'], event['target'] if event.get('enabled', True) else np.nan
         if use == 'target':
@@ -334,10 +338,37 @@ class MultiPatchLog(FileType):
         return False
 
 
+class PipettePathWidget(Qt.QWidget):
+    def __init__(self, name: str, parent=None, path: np.ndarray=None):
+        super().__init__(parent)
+        self._name = name
+        self._path = path
+        # TODO time as color
+        self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
+        self._arrow = pg.ArrowItem(pen=pg.mkPen('b', width=2))
+        self._arrow.setPos(self._path[0, 1], self._path[0, 2])
+        self._label = pg.TextItem(text=name, color=pg.mkColor('b'))
+        self._label.setParentItem(self._arrow)
+
+    def getPlot(self) -> pg.PlotDataItem:
+        return self._plot
+
+    def setTime(self, time: float):
+        """Move the arrow to the interpolated position at the given time."""
+        pos = self._path[self._path[:, 0] <= time][-1]
+        self._arrow.setPos(pos[1], pos[2])
+
+    def getPosLabel(self) -> pg.ArrowItem:
+        return self._arrow
+
+    def deleteLater(self):
+        self._plot.setParent(None)
+        self._plot.deleteLater()
+        super().deleteLater()
+
+
 class MultiPatchLogWidget(Qt.QWidget):
-    # TODO look at mosaic editor
-    # TODO make a graphics view
-    # TODO load pinned images from parent directory
+    # TODO look at canvas
     # TODO add plot of events on timeline (tags?)
     #    selectable event types to display?
     # TODO images saved in this directory should be displayed as the timeline matches?
@@ -355,13 +386,14 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO raw log? just events on the time plot may be enough
     # TODO don't try to display position Z
     def __init__(self, parent=None):
-        Qt.QWidget.__init__(self, parent)
+        super().__init__(parent)
         self._logFiles = []
-        self._pipettes = []
+        self._pipettes: list[PipettePathWidget] = []
         self._cells = []
         self._events = []
         self._widgets = []
         self._pinned_image_z = -10000
+        self._timeSliderResolution = 10.  # 10 ticks per second on the time slider
         self._layout = Qt.QVBoxLayout()
         self.setLayout(self._layout)
         self._visual_field = pg.GraphicsLayoutWidget()
@@ -369,16 +401,42 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._layout.addWidget(self._visual_field)
         self._plot = self._visual_field.addPlot(title="")
 
+        self._timeSlider = Qt.QSlider()
+        self._layout.addWidget(self._timeSlider)
+        self._timeSlider.setOrientation(Qt.Qt.Horizontal)
+        self._timeSlider.setMinimum(0)
+        self._timeLabel = Qt.QLabel()
+        self._layout.addWidget(self._timeLabel)
+        self._timeSlider.valueChanged.connect(self.timeChanged)
+
+    def timeChanged(self, time: int):
+        time = self._sliderToTime(time)
+        self._timeLabel.setText(f"{time} s")
+        for p in self._pipettes:
+            p.setTime(time)
+
+    def _sliderToTime(self, slider: int) -> float:
+        return (slider / self._timeSliderResolution) + self.startTime()
+
+    def startTime(self) -> float:
+        return min(log.firstTime() for log in self._logFiles) or 0
+
+    def endTime(self) -> float:
+        return max(log.lastTime() for log in self._logFiles) or 0
+
     def addLog(self, log: "FileHandle"):
-        self._logFiles.append(log)
         log_data = log.read()
-        self._pipettes.extend(log_data.devices())
+        self._logFiles.append(log_data)
         if log.parent():
             self.loadImagesFromDir(log.parent().parent())
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
-            path = log_data[dev]['position'][:, 1:3]  # TODO time as color
-            self._plot.plot(path[:, 0], path[:, 1], pen=pg.mkPen('r', width=2))
+            path = log_data[dev]['position']
+            widget = PipettePathWidget(dev, path=path)
+            self._pipettes.append(widget)
+            self._plot.addItem(widget.getPlot())
+            self._plot.addItem(widget.getPosLabel())
+        self._timeSlider.setMaximum(int((self.endTime() - self.startTime()) * self._timeSliderResolution))
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
@@ -399,3 +457,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         for w in self._widgets:
             w.setParent(None)
             w.deleteLater()
+        self._widgets = []
+        for p in self._pipettes:
+            p.deleteLater()
+        self._pipettes = []
