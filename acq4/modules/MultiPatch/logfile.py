@@ -115,14 +115,15 @@ class IrregularTimeSeries(object):
     def __init__(self, data=None, interpolate=False, resolution=1.0):
         self.interpolate = interpolate
         self._resolution = resolution
-        
+
         self.events = []
-        self.index = []  # each value maps a time in seconds to the index of the value recorded immediately after the time
+        # each value maps a time in seconds to the index of the value recorded immediately after the time
+        self.index = []
         self._startTime = None
-        
+
         if data is not None:
             self.extend(data)
-    
+
     def __setitem__(self, time, value):
         """Set the value of this series at a specific time.
 
@@ -141,13 +142,13 @@ class IrregularTimeSeries(object):
         if dif > 0:
             self.index.extend([len(self.events)] * dif)
         self.index[i] = len(self.events)
-        
+
         self.events.append((float(time), value))
-       
+
     def extend(self, data):
-        for t,v in data:
+        for t, v in data:
             self[t] = v
-       
+
     def __getitem__(self, time):
         """Return the value of this series at the given time.
         """
@@ -158,10 +159,10 @@ class IrregularTimeSeries(object):
             return None
         if time >= events[-1][0]:
             return events[-1][1]
-        
+
         # Use index to find a nearby event
         i = self.index[min(self._getIndex(time), len(self.index)-1)]
-        
+
         if events[i][0] > time:
             # walk backward to the requested event
             while self.events[i][0] > time:
@@ -172,26 +173,26 @@ class IrregularTimeSeries(object):
                 i += 1
         else:
             return events[i][1]
-        
+
         # interpolate if requested
-        if self.interpolate:
-            t1, v1 = events[i]
-            t2, v2 = events[i+1]
-            return self._interpolate(time, v1, v2, t1, t2)
-        else:
+        if not self.interpolate:
             return events[i][1]
+        t1, v1 = events[i]
+        t2, v2 = events[i+1]
+        return self._interpolate(time, v1, v2, t1, t2)
 
     def _getIndex(self, t):
         return int((t - self._startTime) / self._resolution)
 
-    def _interpolate(self, t, v1, v2, t1, t2):
+    @staticmethod
+    def _interpolate(t, v1, v2, t1, t2):
         s = (t - t1) / (t2 - t1)
-        assert s >= 0.0 and s <= 1.0
+        assert 0.0 <= s <= 1.0
         if isinstance(v1, (tuple, list)):
-            return tuple([v1[k] * (1.0 - s) + v2[k] * s for k in range(len(v1))])
+            return tuple(v1[k] * (1.0 - s) + v2[k] * s for k in range(len(v1)))
         else:
             return v1 * (1.0 - s) + v2 * s
-    
+
     def times(self):
         """Return a list of the time points in the series.
         """

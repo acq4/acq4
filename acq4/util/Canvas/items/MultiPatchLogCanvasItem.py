@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-import time, re
+import re
+import time
+
+import pyqtgraph as pg
 from acq4.util import Qt
 from .CanvasItem import CanvasItem
-import acq4.Manager
-import pyqtgraph as pg
-import numpy as np
 from .MarkersCanvasItem import MarkersCanvasItem
 from .itemtypes import registerItemType
 
@@ -45,8 +43,8 @@ class MultiPatchLogCanvasItem(CanvasItem):
     def timeSliderChanged(self, v):
         t = self.currentTime()
         pos = self.data.state(t)
-        for dev,arrow in self.pipettes.items():
-            p = pos.get(dev, {'position':None})['position']
+        for dev, arrow in self.pipettes.items():
+            p = pos.get(dev, {'position': None})['position']
             if p is None:
                 arrow.hide()
             else:
@@ -80,20 +78,20 @@ class MultiPatchLogCanvasItem(CanvasItem):
         for k,v in state.items():
             if v.get('position') is None:
                 continue
-            
+
             # Extract marker number from pipette name
             m = re.match(r'\D+(\d+)', k)
             if m is not None:
-                n = int(m.group(1))
+                n = int(m[1])
                 name = fmt % n
             else:
                 name = k
-            
+
             pips.append((name, v['position']))
         pips.sort()
 
         # create new canvas item and add markers
-        markers = MarkersCanvasItem(name=self.name + '_markers')
+        markers = MarkersCanvasItem(name=f'{self.name}_markers')
         for name, pos in pips:
             markers.addMarker(name=name, position=pos)
         self.canvas.addItem(markers)
@@ -115,8 +113,8 @@ class MultiPatchLogCanvasItem(CanvasItem):
         self.setCurrentTime(state.pop('currentTime'))
         CanvasItem.restoreState(self, state)
 
-registerItemType(MultiPatchLogCanvasItem)
 
+registerItemType(MultiPatchLogCanvasItem)
 
 
 class MultiPatchLogCtrlWidget(Qt.QWidget):
