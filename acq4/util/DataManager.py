@@ -55,8 +55,8 @@ def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
 
 
-def getFileInfo(fileName) -> dict:
-    return getDataManager().getFileHandle(fileName).info().deepcopy()
+def getInfo(name) -> dict:
+    return getDataManager().getHandle(name).info().deepcopy()
 
 
 def cleanup():
