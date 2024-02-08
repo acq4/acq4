@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 DataManager.py - DataManager, FileHandle, and DirHandle classes
 Copyright 2010  Luke Campagnola
@@ -10,17 +9,17 @@ probably only need to be created via functions in the Manager class.
 """
 
 from collections import OrderedDict
-from typing import Callable
 
+import contextlib
 import os
 import re
 import shutil
 import time
 import weakref
+from typing import Callable
 
 import acq4.filetypes as filetypes
 import acq4.util.advancedTypes as advancedTypes
-import contextlib
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
@@ -54,6 +53,10 @@ def getDirHandle(fileName, create=False):
 
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
+
+
+def getFileInfo(fileName) -> dict:
+    return getDataManager().getFileHandle(fileName).info().deepcopy()
 
 
 def cleanup():

@@ -1,7 +1,7 @@
 """
 fileio.py -  FileType helper functions
 Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
+Distributed under MIT/X11 license. See license.txt for more information.
 
 Functions for accessing available fileTypes. Generally these are used by DataManager
 and should not be accessed directly.
