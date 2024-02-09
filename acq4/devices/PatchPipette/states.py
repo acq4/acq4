@@ -1189,7 +1189,7 @@ class ResealState(PatchPipetteState):
         self._updateRollingResistanceThresholds = False
         self._rollingLongTermTestPulses = deque()
         self._rollingRecentTestPulses = deque()
-        self._startPosition = self.dev.pipetteDevice.globalPosition()
+        self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
         self._longTermInputResistanceMean = None
         self._longTermInputResistanceVariance = None
         self._longTermAccessResistanceMean = None
@@ -1206,7 +1206,7 @@ class ResealState(PatchPipetteState):
             self._retractionFuture.stop()
         if self._pressureFuture is not None:
             self._pressureFuture.stop()
-        pos = self.dev.pipetteDevice.globalPosition()
+        pos = np.array(self.dev.pipetteDevice.globalPosition())
         # TODO move back a little?
         pipette_direction = self.dev.pipetteDevice.globalDirection()
 
@@ -1377,7 +1377,7 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
     def retractionDistance(self):
-        return np.linalg.norm(self.dev.pipetteDevice.globalPosition() - self._startPosition)
+        return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
 
     def cleanup(self):
         if self._retractionFuture is not None:
