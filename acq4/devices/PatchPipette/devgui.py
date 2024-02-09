@@ -1,5 +1,5 @@
-from __future__ import print_function
 from acq4.util import Qt
+import pyqtgraph as pg
 
 
 class PatchPipetteDeviceGui(Qt.QWidget):
@@ -12,22 +12,22 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.setLayout(self.layout)
 
         self.cleanBtn = Qt.QPushButton('Clean Pipette')
-        self.setCleanBtn = Qt.QPushButton('Set Clean Pos')
-        self.setRinseBtn = Qt.QPushButton('Set Rinse Pos')
-        self.setCollectBtn = Qt.QPushButton('Set Collect Pos')
+        self.cleanBtn.setCheckable(True)
         self.positionBtnLayout = Qt.QHBoxLayout()
         self.positionBtnLayout.addWidget(self.cleanBtn)
-        self.cleanBtn.setCheckable(True)
-        self.positionBtnLayout.addWidget(self.setCleanBtn)
-        self.positionBtnLayout.addWidget(self.setRinseBtn)
-        self.positionBtnLayout.addWidget(self.setCollectBtn)
+        self.cleanBtn.clicked.connect(self.cleanClicked)
+
+        positions = ['clean', 'rinse', 'extract', 'collect']
+        self.positionBtns = {}
+        for pos in positions:
+            btn = pg.FeedbackButton(f'Set {pos.capitalize()} Pos')
+            btn.positionName = pos
+            self.positionBtns[pos] = btn
+            btn.clicked.connect(self.setPositionClicked)
+            self.positionBtnLayout.addWidget(btn)
+
         row = self.layout.rowCount()
         self.layout.addLayout(self.positionBtnLayout, row, 0)
-
-        self.cleanBtn.clicked.connect(self.cleanClicked)
-        self.setCleanBtn.clicked.connect(self.setCleanClicked)
-        self.setRinseBtn.clicked.connect(self.setRinseClicked)
-        self.setCollectBtn.clicked.connect(self.setCollectClicked)
 
     def cleanClicked(self):
         if self.cleanBtn.isChecked():
@@ -43,11 +43,7 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.cleanBtn.setText("Clean Pipette")
         self.cleanBtn.setChecked(False)
 
-    def setCleanClicked(self):
-        self.dev.pipetteDevice.savePosition('clean')
-
-    def setRinseClicked(self):
-        self.dev.pipetteDevice.savePosition('rinse')
-
-    def setCollectClicked(self):
-        self.dev.pipetteDevice.savePosition('collect')
+    def setPositionClicked(self):
+        btn = self.sender()
+        self.dev.pipetteDevice.savePosition(btn.positionName)
+        btn.success()

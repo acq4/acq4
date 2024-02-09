@@ -143,6 +143,10 @@ class Pipette(Device, OptomechDevice):
         """
         # Select a motion planner based on the target position
         plannerClass = self.motionPlanners.get(position, self.defaultMotionPlanners.get(position, None))
+        if plannerClass is None:
+            savedPos = self.loadPosition(position)
+            if savedPos is not None:
+                plannerClass = self.motionPlanners.get('saved', self.defaultMotionPlanners.get('saved', None))
 
         if plannerClass is None:
             raise ValueError("Unknown pipette move position %r" % position)

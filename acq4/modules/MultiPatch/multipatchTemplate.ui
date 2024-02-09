@@ -261,16 +261,6 @@
      </layout>
     </widget>
    </item>
-   <item row="2" column="0" colspan="2">
-    <widget class="QPushButton" name="recordBtn">
-     <property name="text">
-      <string>Record</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
    <item row="2" column="1" colspan="2">
     <widget class="QPushButton" name="resetBtn">
      <property name="text">
@@ -282,6 +272,16 @@
     <widget class="QPushButton" name="hideMarkersBtn">
      <property name="text">
       <string>Hide Markers</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QPushButton" name="recordBtn">
+     <property name="text">
+      <string>Record</string>
      </property>
      <property name="checkable">
       <bool>true</bool>
