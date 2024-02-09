@@ -257,7 +257,7 @@ class Microscope(Device, OptomechDevice):
             image = scipy.ndimage.laplace(image) / np.mean(image)
             return image.var()
 
-        z_range = (self.getSurfaceDepth() + 200 * µm, max(0, self.getSurfaceDepth() - 200 * µm), 1 * µm)
+        z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack = _future.waitFor(self.getZStack(imager, z_range)).getResult()
         filtered = downsample(np.array([f.data() for f in z_stack]), 5)
         centers = filtered[(..., *center_area(filtered[0]))]
