@@ -1350,8 +1350,7 @@ class ResealState(PatchPipetteState):
         self.startRollingResistanceThresholds()
 
         self._pressureFuture = dev.pressureDevice.attainPressure(
-            minimum=config['retractionPressure'], maximum=0, rate=config['pressureChangeRate'])
-        # TODO do we need to wait for this pressure?
+            target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
         while True:
