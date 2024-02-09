@@ -1404,11 +1404,12 @@ class MoveNucleusToHomeState(PatchPipetteState):
     _parameterTreeConfig = {
         # for expected negative values, a maximum is the "smallest" magnitude:
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'positionName': {'type': 'str', 'default': 'extract'},
     }
 
     def run(self):
         self.waitFor(self.dev.pressureDevice.attainPressure(maximum=self.config['pressureLimit']), timeout=None)
-        self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'), timeout=None)
+        self.waitFor(self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast'), timeout=None)
         self.sleep(float("inf"))
 
 
@@ -1615,7 +1616,7 @@ class NucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor([pip._moveToGlobal(self.collectionPos, speed='fast')], timeout=None)
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
