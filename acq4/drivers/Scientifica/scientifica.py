@@ -302,6 +302,8 @@ class Scientifica(SerialDevice):
             * approachMode: Boolean indicating whether the manipulator is in approach mode. This can be
               set programmatically or by toggling the approach switch on the input device (but to
               prevent user confusion, setting this value programmatically is discouraged).
+            * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
+            * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
 
         Notes
         -----
