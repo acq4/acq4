@@ -356,11 +356,14 @@ class PipettePathWidget(Qt.QWidget):
         return self._plot
 
     def setTime(self, time: float):
-        """Move the arrow to the interpolated position at the given time."""
-        pos_x = np.interp(time, self._path[:, 0], self._path[:, 1])
-        pos_y = np.interp(time, self._path[:, 0], self._path[:, 2])
-        self._arrow.setPos(pos_x, pos_y)
-        self._label.setPos(pos_x, pos_y)
+        next_index = min(np.searchsorted(self._path[:, 0], time), len(self._path) - 1)
+        if next_index == 0:
+            pos = self._path[0, 1:]
+        else:
+            part = (time - self._path[next_index - 1, 0]) / (self._path[next_index, 0] - self._path[next_index - 1, 0])
+            pos = (1 - part) * self._path[next_index - 1, 1:] + self._path[next_index, 1:] * part
+        self._arrow.setPos(pos[0], pos[1])
+        self._label.setPos(pos[0], pos[1])
 
         state = self._states[0]
         for s in self._states:
