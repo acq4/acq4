@@ -264,10 +264,7 @@ class MultiPatchLogData(object):
                 (count_for_use('pipette_transform'), 4),
                 dtype=float,
             ),
-            'state': np.zeros(
-                count_for_use('state'),
-                dtype=[('time', float), ('state', 'U32'), ('info', 'U128')],  # TODO maybe not numpy?
-            ),
+            'state': list(range(count_for_use('state'))),
             'auto_bias_target': np.zeros(
                 (count_for_use('auto_bias_target'), 2),
                 dtype=float,
@@ -294,22 +291,23 @@ class MultiPatchLogData(object):
 
     @staticmethod
     def _prepare_event_for_use(event: dict, use: str) -> tuple[float, ...]:
+        event_time = float(event['event_time'])
         if use == 'event':
-            return event['event_time'], event['event'], event['is_true']
+            return event_time, event['event'], event['is_true']
         if use == 'position':
-            return event['event_time'], *event['position']
+            return event_time, *event['position']
         if use == 'pressure':
-            return event['event_time'], event['pressure'], event['source']
+            return event_time, event['pressure'], event['source']
         if use == 'pipette_transform':
-            return event['event_time'], *event['globalPosition']
+            return event_time, *event['globalPosition']
         if use == 'state':
-            return event['event_time'], event['state'], event.get('info', '')
+            return event_time, event['state'], event.get('info', '')
         if use == 'auto_bias_target':
-            return event['event_time'], event['target'] if event.get('enabled', True) else np.nan
+            return event_time, event['target'] if event.get('enabled', True) else np.nan
         if use == 'target':
-            return event['event_time'], *event['target_position']
+            return event_time, *event['target_position']
         # if use == 'move_request':
-        #     return event['event_time'], event['opts']
+        #     return event_time, event['opts']
         if use == 'test_pulse':
             return tuple(event[info['name']] for info in TEST_PULSE_METAARRAY_INFO)
 
@@ -338,24 +336,41 @@ class MultiPatchLog(FileType):
 
 
 class PipettePathWidget(Qt.QWidget):
-    def __init__(self, name: str, parent=None, path: np.ndarray=None):
+    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], parent=None):
         super().__init__(parent)
         self._name = name
         self._path = path
+        self._states = states
+        # TODO handle empty states, path
         # TODO time as color
         self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
+        plot.addItem(self._plot)
         self._arrow = pg.ArrowItem(pen=pg.mkPen('b', width=2))
         self._arrow.setPos(self._path[0, 1], self._path[0, 2])
-        self._label = pg.TextItem(text=name, color=pg.mkColor('b'))
-        self._label.setParentItem(self._arrow)
+        plot.addItem(self._arrow)
+        self._label = pg.TextItem(text=f"{name}: {states[0][1]}\n {states[0][2]}", color=pg.mkColor('w'))
+        self._label.setPos(self._path[0, 1], self._path[0, 2])
+        plot.addItem(self._label)
 
     def getPlot(self) -> pg.PlotDataItem:
         return self._plot
 
     def setTime(self, time: float):
         """Move the arrow to the interpolated position at the given time."""
-        pos = self._path[self._path[:, 0] <= time][-1]
+        history = self._path[self._path[:, 0] <= time]
+        if len(history) == 0:
+            pos = self._path[0]
+        else:
+            pos = history[-1]
         self._arrow.setPos(pos[1], pos[2])
+        self._label.setPos(pos[1], pos[2])
+
+        state = self._states[0]
+        for s in self._states:
+            if s[0] >= time:
+                break
+            state = s
+        self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
 
     def getPosLabel(self) -> pg.ArrowItem:
         return self._arrow
@@ -431,10 +446,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             path = log_data[dev]['position']
-            widget = PipettePathWidget(dev, path=path)
+            widget = PipettePathWidget(dev, path=path, plot=self._plot, states=log_data[dev]['state'])
             self._pipettes.append(widget)
-            self._plot.addItem(widget.getPlot())
-            self._plot.addItem(widget.getPosLabel())
         self._timeSlider.setMaximum(int((self.endTime() - self.startTime()) * self._timeSliderResolution))
 
     def loadImagesFromDir(self, directory: "DirHandle"):
