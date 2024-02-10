@@ -357,13 +357,10 @@ class PipettePathWidget(Qt.QWidget):
 
     def setTime(self, time: float):
         """Move the arrow to the interpolated position at the given time."""
-        history = self._path[self._path[:, 0] <= time]
-        if len(history) == 0:
-            pos = self._path[0]
-        else:
-            pos = history[-1]
-        self._arrow.setPos(pos[1], pos[2])
-        self._label.setPos(pos[1], pos[2])
+        pos_x = np.interp(time, self._path[:, 0], self._path[:, 1])
+        pos_y = np.interp(time, self._path[:, 0], self._path[:, 2])
+        self._arrow.setPos(pos_x, pos_y)
+        self._label.setPos(pos_x, pos_y)
 
         state = self._states[0]
         for s in self._states:
@@ -407,7 +404,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._events = []
         self._widgets = []
         self._pinned_image_z = -10000
-        self._timeSliderResolution = 10.  # 10 ticks per second on the time slider
+        self._timeSliderResolution = 20
         self._layout = Qt.QVBoxLayout()
         self.setLayout(self._layout)
         self._visual_field = pg.GraphicsLayoutWidget()
