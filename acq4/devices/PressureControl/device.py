@@ -1,9 +1,7 @@
-import numpy as np
+import time
 from typing import Optional
 
-import time
-
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from .widgets import PressureControlWidget
 from ..Device import Device
 from ...util.future import Future
@@ -36,7 +34,6 @@ class PressureControl(Device):
     @Future.wrap
     def attainPressure(
         self,
-        source: str = "regulator",
         target: Optional[float] = None,
         target_tolerance: float = 10,
         maximum: Optional[float] = None,
@@ -48,40 +45,25 @@ class PressureControl(Device):
             raise ValueError("Must specify at least one of target, maximum, or minimum")
         if target is not None and (maximum is not None or minimum is not None):
             raise ValueError("Cannot specify both target and maximum/minimum")
-        # TODO do we need to guarantee that the source gets set?
 
-        def value_is_out_of_bounds(val):
-            if minimum is not None and val < minimum:
-                return True
-            if maximum is not None and val > maximum:
-                return True
-            if target is not None and abs(val - target) > target_tolerance:
-                return True
-            return False
+        if target is not None:
+            minimum = target - target_tolerance
+            maximum = target + target_tolerance
 
-        start = time.time()
-        measured = self.getPressure()
-        if minimum is not None and measured < minimum:
-            target = minimum
-        elif maximum is not None and measured > maximum:
-            target = maximum
-        elif target is None:
-            return  # we're already in range
+        start_pressure = end_pressure = self.getPressure()
+        if minimum is not None:
+            end_pressure = max(minimum, end_pressure)
+        if maximum is not None:
+            end_pressure = min(maximum, end_pressure)
 
-        if measured < target:
-            prevent_overshoot = lambda x: np.clip(x, None, target)
-        else:
-            prevent_overshoot = lambda x: np.clip(x, target, None)
-
-        while value_is_out_of_bounds(measured):
-            dt = time.time() - start
-            if rate is None:
-                step = target
-            else:
-                step = prevent_overshoot(measured + abs(rate) * dt * np.sign(target - measured))
-            self.setPressure(source=source, pressure=step)
+        start_time = ptime.time()
+        end_time = start_time + abs(end_pressure - start_pressure) / rate
+        frac_done = 0
+        while frac_done < 1:
+            frac_done = min((ptime.time() - start_time) / (end_time - start_time), 1)
+            print(frac_done)
+            self.setPressure("regulator", start_pressure + frac_done * (end_pressure - start_pressure))
             _future.sleep(self.regulatorSettlingTime)
-            measured = self.getPressure()
 
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
