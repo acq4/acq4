@@ -290,7 +290,7 @@ class MultiPatchLogData(object):
         }
 
     @staticmethod
-    def _prepare_event_for_use(event: dict, use: str) -> tuple[float, ...]:
+    def _prepare_event_for_use(event: dict, use: str) -> tuple[Any, ...]:
         event_time = float(event['event_time'])
         if use == 'event':
             return event_time, event['event'], event['is_true']
@@ -343,6 +343,7 @@ class PipettePathWidget(Qt.QWidget):
         self._states = states
         # TODO handle empty states, path
         # TODO time as color
+        # TODO z as alpha?
         self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
         plot.addItem(self._plot)
         self._arrow = pg.ArrowItem(pen=pg.mkPen('b', width=2))
@@ -385,7 +386,7 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO look at canvas
     # TODO add plot of events on timeline (tags?)
     #    selectable event types to display?
-    # TODO images saved in this directory should be displayed as the timeline matches?
+    # TODO images should be displayed as the timeline matches?
     # TODO option to add plots for anything else
     # TODO add target position
     # TODO add pipette position (and paths?)
