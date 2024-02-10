@@ -61,7 +61,6 @@ class PressureControl(Device):
         frac_done = 0
         while frac_done < 1:
             frac_done = min((ptime.time() - start_time) / (end_time - start_time), 1)
-            print(frac_done)
             self.setPressure("regulator", start_pressure + frac_done * (end_pressure - start_pressure))
             _future.sleep(self.regulatorSettlingTime)
 
