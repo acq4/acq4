@@ -342,7 +342,7 @@ class PipettePathWidget(Qt.QWidget):
         self._path = path
         self._states = states
         # TODO handle empty states, path
-        # TODO time as color
+        # TODO time as color. twilight_shifted is maybe a good colormap
         # TODO z as alpha?
         self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
         plot.addItem(self._plot)
@@ -400,6 +400,7 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO filter log messages by type
     # TODO raw log? just events on the time plot may be enough
     # TODO don't try to display position Z
+    # TODO scale markers with si units
     def __init__(self, parent=None):
         super().__init__(parent)
         self._logFiles = []
@@ -453,7 +454,7 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        # TODO integrate with time-slider to set the Z values
+        # TODO integrate with time-slider to display and set the qt Z values
         from acq4.util.imaging import Frame
 
         for f in directory.ls():
