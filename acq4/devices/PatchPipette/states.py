@@ -1110,8 +1110,6 @@ class ResealState(PatchPipetteState):
         Whether to attempt nucleus extraction during reseal (default True)
     nuzzlePressureLimit : float
         Largest vacuum pressure (pascals, expected negative) to apply during nuzzling (default is -4 kPa)
-    nuzzlePressureChangeRate : float
-        Rate at which pressure should change during nuzzling (default is 0.2 kPa/s, treated as absolute value)
     nuzzleDuration : float
         Duration (seconds) to spend nuzzling (default is 15s)
     nuzzleInitialPressure : float
@@ -1169,7 +1167,6 @@ class ResealState(PatchPipetteState):
         'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
         'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
         'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
-        'nuzzlePressureChangeRate': {'type': 'float', 'default': 0.2e3, 'suffix': 'Pa/s'},
         'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
         'nuzzleRepetitions': {'type': 'int', 'default': 3},
         'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
@@ -1219,8 +1216,8 @@ class ResealState(PatchPipetteState):
         prev_dir = random_wiggle_direction()
         for _ in range(self.config['nuzzleRepetitions']):
             self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
-            self._pressureFuture = self.dev.pressureDevice.attainPressure(
-                target=self.config['nuzzlePressureLimit'], rate=self.config['nuzzlePressureChangeRate'])
+            self._pressureFuture = self.dev.pressureDevice.rampPressure(
+                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'])
             start = ptime.time()
             while ptime.time() - start < self.config['nuzzleDuration']:
                 while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
@@ -1236,6 +1233,7 @@ class ResealState(PatchPipetteState):
         self.setState("sealing to nucleus")
         # TODO move forward a little?
         self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['initialPressure'])
+        # TODO wait here? ramp up pressure? how do we know when to start the retraction?
 
     def handleTear(self):
         """Handle a tearing membrane by retracting the pipette and waiting for the resistance to recover."""
@@ -1263,12 +1261,14 @@ class ResealState(PatchPipetteState):
             self.handleTear()
         self.unfreezeRollingResistanceThresholds()
 
-    def startRollingResistanceThresholds(self):
+    @Future.wrap
+    def startRollingResistanceThresholds(self, _future: Future):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self._updateRollingResistanceThresholds = True
         self.monitorTestPulse()
         start = ptime.time()
         while ptime.time() - start < self.config['secondsTestPulseAverage']:
+            _future.checkStop()
             self.processAtLeastOneTestPulse()
 
     def isStretching(self) -> bool:
@@ -1342,14 +1342,14 @@ class ResealState(PatchPipetteState):
     def run(self):
         config = self.config
         dev = self.dev
+        baseline_future = self.startRollingResistanceThresholds()
         if config['extractNucleus'] is True:
             self.sealToNucleus()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.checkStop()
         self.setState("measuring baseline resistance")
-        self.startRollingResistanceThresholds()
-
-        self._pressureFuture = dev.pressureDevice.attainPressure(
+        self.waitFor(baseline_future, timeout=self.config['secondsTestPulseAverage'])
+        self._pressureFuture = dev.pressureDevice.rampPressure(
             target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
@@ -1407,7 +1407,7 @@ class MoveNucleusToHomeState(PatchPipetteState):
     }
 
     def run(self):
-        self.waitFor(self.dev.pressureDevice.attainPressure(maximum=self.config['pressureLimit']), timeout=None)
+        self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']), timeout=None)
         self.waitFor(self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast'), timeout=None)
         self.sleep(float("inf"))
 
