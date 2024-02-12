@@ -1219,7 +1219,7 @@ class ResealState(PatchPipetteState):
         prev_dir = random_wiggle_direction()
         for _ in range(self.config['nuzzleRepetitions']):
             self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
-            self._pressureFuture = self.dev.pressureDevice.attainPressure(
+            self._pressureFuture = self.dev.pressureDevice.rampPressure(
                 target=self.config['nuzzlePressureLimit'], rate=self.config['nuzzlePressureChangeRate'])
             start = ptime.time()
             while ptime.time() - start < self.config['nuzzleDuration']:
@@ -1349,7 +1349,7 @@ class ResealState(PatchPipetteState):
         self.setState("measuring baseline resistance")
         self.startRollingResistanceThresholds()
 
-        self._pressureFuture = dev.pressureDevice.attainPressure(
+        self._pressureFuture = dev.pressureDevice.rampPressure(
             target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
@@ -1406,7 +1406,7 @@ class MoveNucleusToHomeState(PatchPipetteState):
     }
 
     def run(self):
-        self.waitFor(self.dev.pressureDevice.attainPressure(maximum=self.config['pressureLimit']))
+        self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']))
         self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
         self.sleep(float("inf"))
 

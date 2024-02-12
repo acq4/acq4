@@ -32,7 +32,7 @@ class PressureControl(Device):
         self.sources = ("regulator", "user", "atmosphere")
 
     @Future.wrap
-    def attainPressure(
+    def rampPressure(
         self,
         target: Optional[float] = None,
         target_tolerance: float = 10,
