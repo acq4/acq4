@@ -1263,12 +1263,14 @@ class ResealState(PatchPipetteState):
             self.handleTear()
         self.unfreezeRollingResistanceThresholds()
 
-    def startRollingResistanceThresholds(self):
+    @Future.wrap
+    def startRollingResistanceThresholds(self, _future: Future):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self._updateRollingResistanceThresholds = True
         self.monitorTestPulse()
         start = ptime.time()
         while ptime.time() - start < self.config['secondsTestPulseAverage']:
+            _future.checkStop()
             self.processAtLeastOneTestPulse()
 
     def isStretching(self) -> bool:
@@ -1342,13 +1344,13 @@ class ResealState(PatchPipetteState):
     def run(self):
         config = self.config
         dev = self.dev
+        baseline_future = self.startRollingResistanceThresholds()
         if config['extractNucleus'] is True:
             self.sealToNucleus()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.checkStop()
         self.setState("measuring baseline resistance")
-        self.startRollingResistanceThresholds()
-
+        self.waitFor(baseline_future, timeout=self.config['secondsTestPulseAverage'])
         self._pressureFuture = dev.pressureDevice.rampPressure(
             target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
