@@ -39,12 +39,15 @@ class PressureControl(Device):
         maximum: Optional[float] = None,
         minimum: Optional[float] = None,
         rate: Optional[float] = None,
+        duration: Optional[float] = None,
         _future: Optional[Future] = None,
     ) -> None:
         if target is None and maximum is None and minimum is None:
             raise ValueError("Must specify at least one of target, maximum, or minimum")
         if target is not None and (maximum is not None or minimum is not None):
             raise ValueError("Cannot specify both target and maximum/minimum")
+        if rate is not None and duration is not None:
+            raise ValueError("Cannot specify both rate and duration")
 
         if target is not None:
             minimum = target - target_tolerance
@@ -55,12 +58,16 @@ class PressureControl(Device):
             end_pressure = max(minimum, end_pressure)
         if maximum is not None:
             end_pressure = min(maximum, end_pressure)
+        if duration is None:
+            if rate is None:
+                duration = self.regulatorSettlingTime
+            else:
+                duration = abs(end_pressure - start_pressure) / rate
 
         start_time = ptime.time()
-        end_time = start_time + abs(end_pressure - start_pressure) / rate
         frac_done = 0
         while frac_done < 1:
-            frac_done = min((ptime.time() - start_time) / (end_time - start_time), 1)
+            frac_done = min((ptime.time() - start_time) / duration, 1)
             self.setPressure("regulator", start_pressure + frac_done * (end_pressure - start_pressure))
             _future.sleep(self.regulatorSettlingTime)
 
