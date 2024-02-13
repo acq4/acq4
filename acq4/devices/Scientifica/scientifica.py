@@ -38,7 +38,10 @@ class Scientifica(Stage):
             self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
         except RuntimeError as err:
             if hasattr(err, 'dev_version'):
-                raise RuntimeError(err.message + " You must add `version=%d` to the configuration for this device and double-check any speed/acceleration parameters." % int(err.dev_version))
+                raise RuntimeError(
+                    f"You must add `version={int(err.dev_version)}` to the configuration for this "
+                    f"device and double-check any speed/acceleration parameters."
+                ) from err
             else:
                 raise
 
@@ -75,7 +78,7 @@ class Scientifica(Stage):
                 self.dev.setParam(param, val)
 
         self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * 1e-6))
-        
+
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get('monitorObjective', False)
         if self.monitorObj is True:
@@ -88,7 +91,7 @@ class Scientifica(Stage):
         self.monitor.start()
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return 'x', 'y', 'z'
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -158,7 +161,7 @@ class Scientifica(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwargs):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
@@ -173,7 +176,7 @@ class Scientifica(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """
-        s = [int(1e8 * v) for i,v in enumerate(vel)]
+        s = [int(1e8 * v) for v in vel]
         self.dev.send('VJ -%d %d %d' % tuple(s))
 
     def _checkObjective(self):
@@ -237,7 +240,7 @@ class MonitorThread(Thread):
                     self.dev._checkObjective()
 
                 time.sleep(interval)
-            except:
+            except Exception:
                 debug.printExc('Error in Scientifica monitor thread:')
                 time.sleep(maxInterval)
                 
@@ -268,8 +271,10 @@ class ScientificaMoveFuture(MoveFuture):
         return self._getStatus() != 0
 
     def _getStatus(self):
-        # check status of move unless we already know it is complete.
-        # 0: still moving; 1: finished successfully; -1: finished unsuccessfully
+        """Check status of move unless we already know it is complete.
+        Return:
+            0: still moving; 1: finished successfully; -1: finished unsuccessfully
+        """
         if self._finished:
             if self._interrupted:
                 return -1
@@ -281,15 +286,12 @@ class ScientificaMoveFuture(MoveFuture):
         # did we reach target?
         pos = self.dev._getPosition()
         dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
-        if dif < 1.0:
-            # reached target
-            self._finished = True
+        self._finished = True
+        if dif < 1.0:  # reached target
             return 1
-        else:
-            # missed
-            self._finished = True
+        else:  # missed
             self._interrupted = True
-            self._errorMsg = "Move did not complete (target=%s, position=%s, dif=%s)." % (self.targetPos, pos, dif)
+            self._errorMsg = f"Move did not complete (target={self.targetPos}, position={pos}, dif={dif})."
             return -1
 
     def _stopped(self):
@@ -310,11 +312,10 @@ class ScientificaMoveFuture(MoveFuture):
                 # not actually stopped! This should not happen.
                 raise RuntimeError("Interrupted move but manipulator is still running!")
             else:
-                raise Exception("Unknown status: %s" % status)
+                raise ValueError(f"Unknown status: {status}")
 
     def errorMessage(self):
         return self._errorMsg
-
 
 
 class ScientificaGUI(StageInterface):
