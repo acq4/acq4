@@ -63,7 +63,7 @@ class Scientifica(SerialDevice):
     availableDevices = None
 
     @classmethod
-    def enumerateDevices(cls):
+    def enumerateDevices(cls) -> dict[str, str]:
         """Generate a list of all Scientifica devices found in the system.
 
         Sets Scientifica.availableDevices to a dict of {name: port} pairs.
@@ -96,6 +96,7 @@ class Scientifica(SerialDevice):
                     )
 
         cls.availableDevices = devs
+        return devs
 
     def __init__(self, port=None, name=None, baudrate=None, ctrl_version: Optional[Number] = 2):
         self.lock = RLock()
@@ -156,8 +157,10 @@ class Scientifica(SerialDevice):
         self._version = float(self.send('ver'))
         if ctrl_version is not None and ((self._version >= 3) != (ctrl_version >= 3)):
             name = self.getDescription()
-            err = RuntimeError("Scientifica device %s uses controller version %s, but version %s was requested. Warning: speed and acceleration"
-                               " parameter values are NOT compatible between controller versions." % (name, self._version, ctrl_version))
+            err = RuntimeError(
+                f"Scientifica device {name} uses controller version {self._version}, but version {ctrl_version}"
+                f" was requested. Warning: speed and acceleration parameter values are NOT compatible between"
+                f" controller versions.")
             err.dev_version = self._version
             raise err
 
@@ -179,7 +182,7 @@ class Scientifica(SerialDevice):
                 raise
             if result.startswith(b'E,'):
                 errno = int(result.strip()[2:])
-                exc = RuntimeError("Received error %d from Scientifica controller (request: %r)" % (errno, msg))
+                exc = RuntimeError(f"Received error {errno:d} from Scientifica controller (request: {msg!r})")
                 exc.errno = errno
                 raise exc
             return result
@@ -241,6 +244,8 @@ class Scientifica(SerialDevice):
     _param_commands = {
         'maxSpeed': ('TOP', 'TOP %f', float),
         'minSpeed': ('FIRST', 'FIRST %f', float),
+        'maxZSpeed': ('TOPZ', 'TOPZ %f', float),
+        'minZSpeed': ('FIRSTZ', 'FIRSTZ %f', float),
         'accel': ('ACC', 'ACC %f', float),
         'joyAccel': ('JACC', 'JACC %f', float),
         'joyFastScale': ('JSPEED', 'JSPEED %f', float),
@@ -256,8 +261,7 @@ class Scientifica(SerialDevice):
 
     @staticmethod
     def boolToInt(v):
-        v = bool(v)
-        return 0 if v is False else 1
+        return 1 if bool(v) else 0
 
     @staticmethod
     def intToBool(v):
@@ -281,6 +285,8 @@ class Scientifica(SerialDevice):
             * minSpeed: Initial speed for stage movement under both programmatic and manual control.
               This value is equal to `max_speed (um/sec) * 2 * userScale[axis]`. Must be between 1000
               and 50,000.
+            * maxZSpeed: As per `maxSpeed`, but for the distinct Z axis on some devices.
+            * minZSpeed: As per `minSpeed`, but for the distinct Z axis on some devices.
             * accel: Acceleration for stage movement under both programmatic and manual control.
               This value is equal to `accel (um^2/sec) * userScale[axis] / 250`. Must be between
               10 and 1,000.
@@ -296,6 +302,8 @@ class Scientifica(SerialDevice):
             * approachMode: Boolean indicating whether the manipulator is in approach mode. This can be
               set programmatically or by toggling the approach switch on the input device (but to
               prevent user confusion, setting this value programmatically is discouraged).
+            * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
+            * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
 
         Notes
         -----
@@ -404,9 +412,14 @@ class Scientifica(SerialDevice):
         speed will also be different.
         """
         if self._version < 3:
-            self.setParam('maxSpeed', speed * 2 * abs(self._axis_scale[0]))
-        else:
-            self.setParam('maxSpeed', speed)
+            speed = speed * 2 * abs(self._axis_scale[0])
+        self.setParam('maxSpeed', speed)
+        try:
+            self.setParam('maxZSpeed', speed)
+        except RuntimeError as exc:
+            # some devices do not support Z axis speed. errno 3 is for unrecognized params.
+            if getattr(exc, 'errno', 0) != 3:
+                raise exc
 
     def moveTo(self, pos, speed=None):
         """Set the position of the manipulator.

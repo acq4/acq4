@@ -79,7 +79,7 @@ class MultiClamp(PatchClamp):
             try:
                 import acq4.drivers.MultiClamp as MultiClampDriver
             except RuntimeError as exc:
-                if "32-bit" in exc.message:
+                if exc.args and "32-bit" in exc.args[0]:
                     raise Exception("MultiClamp commander does not support access by 64-bit processes. To circumvent this problem, "
                                     "Use the 'pythonExecutable' device configuration option to connect via a 32-bit python instead.")
                 else:
