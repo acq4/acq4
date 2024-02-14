@@ -39,15 +39,11 @@ class FileType:
         Otherwise, return False.
         The default implementation just checks for the correct name extensions."""
         name = fileHandle.name()
-        return next(
-            (
-                cls.priority
-                for ext in cls.extensions
-                if name[-len(ext) :].lower() == ext.lower()
-            ),
-            False,
-        )
-        
+        for ext in cls.extensions:
+            if name[-len(ext):].lower() == ext.lower():
+                return cls.priority
+        return False
+
     @classmethod
     def acceptsData(cls, data, fileName):
         """Return priority value if the data can be written by this class.
