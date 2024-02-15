@@ -557,13 +557,13 @@ class DirHandle(FileHandle):
         if create==True"""
         with self.lock:
             ndir = os.path.join(self.path, subdir)
-            if os.path.isdir(ndir):
-                return self.manager.getDirHandle(ndir)
-            elif create:
+            if create:
                 return self.mkdir(subdir, autoIncrement=autoIncrement)
+            elif os.path.isdir(ndir):
+                return self.manager.getDirHandle(ndir)
             else:
                 raise FileNotFoundError(f'Directory {ndir} does not exist.')
-        
+
     def getFile(self, fileName):
         """return a File handle for the named file."""
         fullName = os.path.join(self.name(), fileName)
