@@ -557,10 +557,10 @@ class DirHandle(FileHandle):
         if create==True"""
         with self.lock:
             ndir = os.path.join(self.path, subdir)
-            if create:
-                return self.mkdir(subdir, autoIncrement=autoIncrement)
-            elif os.path.isdir(ndir):
+            if os.path.isdir(ndir):
                 return self.manager.getDirHandle(ndir)
+            elif create:
+                return self.mkdir(subdir, autoIncrement=autoIncrement)
             else:
                 raise FileNotFoundError(f'Directory {ndir} does not exist.')
 

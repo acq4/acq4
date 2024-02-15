@@ -133,8 +133,6 @@ class DataManager(Module):
                 newDir = self.manager.getCurrentDir()
                 dirName = newDir.name(relativeTo=self.baseDir)
             except Exception:
-                pass
-            else:
                 newDir = None
                 dirName = ""
             self.ui.currentDirText.setText(dirName)
