@@ -116,10 +116,10 @@ class BgSubtractCtrl(Qt.QWidget):
                 "divide": self.ui.divideBgBtn.isChecked(),
                 "blur": self.ui.bgBlurSpin.value(),
             }
-            frame = self.backgroundFrame
+            frame = self.backgroundFrame  # TODO copy? mutex? both?
             def do_save(dh: DirHandle):
                 pass
-            # TODO
+            # TODO thread safety, caching
 
     def save(self, dh: DirHandle) -> Union[None, str]:
         if self._cachedSaveName is None:
