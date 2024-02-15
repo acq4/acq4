@@ -1,4 +1,7 @@
+import numpy as np
+
 from acq4.util.imaging.bg_subtract_ctrl import remove_background_from_image
+import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D, ImageItem
 
 
@@ -75,9 +78,9 @@ class Frame(object):
         data = self.getImage()
         info = self.info()
         if backgroundControl is not None:
-            info['backgroundControl'] = backgroundControl.save(dh)
+            info['backgroundControl'] = backgroundControl(dh)
         if contrastControl is not None:
-            info['contrastControl'] = contrastControl.save(data, dh)
+            info['contrastControl'] = contrastControl
 
         if filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
@@ -89,9 +92,7 @@ class Frame(object):
         bg_removal = self.info().get("backgroundControl", None)
         if bg_removal is not None:
             self._bg_removal = dh[bg_removal]
-        contrast = self.info().get("contrastControl", None)
-        if contrast is not None:
-            self._contrast = dh[contrast]
+        self._contrast = self.info().get("contrastControl", None)
 
     def imageItem(self) -> ImageItem:
         """
@@ -103,8 +104,10 @@ class Frame(object):
         levels = None
         lut = None
         if self._contrast is not None:
-            levels = self._contrast.info()["levels"]
-            lut = self._contrast.read()
+            levels = self._contrast["levels"]
+            gradient = pg.GradientEditorItem()
+            gradient.restoreState(self._contrast["gradient"])
+            lut = gradient.getLookupTable(256 if data.dtype == np.uint8 else 512)
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as2D())
         return item

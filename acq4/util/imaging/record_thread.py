@@ -75,6 +75,7 @@ class RecordThread(Thread):
 
     def saveFrame(self, bgCtrl, contrastCtrl):
         """Ask the recording thread to save the most recently acquired frame."""
+        # TODO get the bg and contrast metadata instead of teaching the Frame to do so
         with self.lock:
             self.newFrames.append(
                 {
