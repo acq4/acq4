@@ -344,9 +344,10 @@ class PipettePathWidget(Qt.QWidget):
     def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], parent=None):
         super().__init__(parent)
         self._name = name
-        path[:, 0] -= path[0, 0]
+        start_time = path[0, 0]
+        path[:, 0] -= start_time
         self._path = path
-        self._states = states
+        self._states = [[s[0] - start_time, *s[1:]] for s in states]
         # TODO handle empty states, path
         # TODO time as color. twilight_shifted is maybe a good colormap
         # TODO z as alpha?
