@@ -273,14 +273,19 @@ class MultiPatchLogData(object):
                 (count_for_use('target'), 4),
                 dtype=float,
             ),
+            # TODO save field of view dimensions to show stage (camera) position
+            # TODO save objective
+            # TODO save lighting
+            # TODO save clamp mode changes, holding voltage, current
+            # TODO save entire test pulse
             # TODO how do I want to structure move_request?
             # 'move_request': np.zeros(
             #     count_for_use('move_request'),
             #     dtype=[('time', float), ('path', 'U32')],
             # ),
             'test_pulse': np.zeros(
-                (count_for_use('test_pulse'), len(TEST_PULSE_METAARRAY_INFO)),
-                dtype=float,
+                count_for_use('test_pulse'),
+                dtype=[(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO],
             ),
             # 'test_pulse': MetaArray(
             #     np.zeros(
@@ -382,6 +387,17 @@ class PipettePathWidget(Qt.QWidget):
         super().deleteLater()
 
 
+def exp_average(time, data, tau=4.0):
+    # calculate exponential moving average using irregularly sampled time values
+    out_data = np.zeros_like(data)
+    out_data[0] = data[0]
+    dt = np.diff(time)
+    for i in range(1, len(dt)):
+        alpha = 1 - np.exp(-dt[i] / tau)
+        out_data[i] = (1 - alpha) * out_data[i - 1] + alpha * data[i]
+    return out_data
+
+
 class MultiPatchLogWidget(Qt.QWidget):
     # TODO look at canvas
     # TODO add plot of events on timeline (tags?)
@@ -401,6 +417,7 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO raw log? just events on the time plot may be enough
     # TODO don't try to display position Z
     # TODO scale markers with si units
+    # TODO make sure all the time values start at 0
     def __init__(self, parent=None):
         super().__init__(parent)
         self._logFiles = []
@@ -409,30 +426,34 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._events = []
         self._widgets = []
         self._pinned_image_z = -10000
-        self._timeSliderResolution = 20
         self._layout = Qt.QVBoxLayout()
         self.setLayout(self._layout)
-        self._visual_field = pg.GraphicsLayoutWidget()
-        self._widgets.append(self._visual_field)
-        self._layout.addWidget(self._visual_field)
-        self._plot = self._visual_field.addPlot(title="")
+        self._plots_widget = pg.GraphicsLayoutWidget()
+        self._widgets.append(self._plots_widget)
+        self._layout.addWidget(self._plots_widget)
+        self._visual_field = self._plots_widget.addPlot()
+        self._visual_field.setAspectLocked(ratio=1.0001)
+        self._resistance_plot = self._plots_widget.addPlot(name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
+        self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
+        self._analysis_plot.setXLink(self._resistance_plot)
+        self._timeSlider = pg.InfiniteLine(
+            movable=True,
+            angle=90,
+            pen=pg.mkPen('r'),
+            label='t={value:0.2f}s',
+            labelOpts={'position': 0.1, 'color': pg.mkColor('r'), 'movable': True},
+        )
+        self._timeSlider.sigPositionChanged.connect(self.timeChanged)
+        self._resistance_plot.addItem(self._timeSlider)
 
-        self._timeSlider = Qt.QSlider()
-        self._layout.addWidget(self._timeSlider)
-        self._timeSlider.setOrientation(Qt.Qt.Horizontal)
-        self._timeSlider.setMinimum(0)
         self._timeLabel = Qt.QLabel()
         self._layout.addWidget(self._timeLabel)
-        self._timeSlider.valueChanged.connect(self.timeChanged)
 
-    def timeChanged(self, time: int):
-        time = self._sliderToTime(time)
+    def timeChanged(self, slider: pg.InfiniteLine):
+        time = slider.getXPos()
         self._timeLabel.setText(f"{time} s")
         for p in self._pipettes:
             p.setTime(time)
-
-    def _sliderToTime(self, slider: int) -> float:
-        return (slider / self._timeSliderResolution) + self.startTime()
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
@@ -448,9 +469,31 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             path = log_data[dev]['position']
-            widget = PipettePathWidget(dev, path=path, plot=self._plot, states=log_data[dev]['state'])
+            widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=log_data[dev]['state'])
             self._pipettes.append(widget)
-        self._timeSlider.setMaximum(int((self.endTime() - self.startTime()) * self._timeSliderResolution))
+            # TODO colors?
+            time = log_data[dev]['test_pulse']['event_time'] - self.startTime()
+            self._resistance_plot.plot(time, log_data[dev]['test_pulse']['steadyStateResistance'], pen=pg.mkPen('b'))
+            self._resistance_plot.plot(time, log_data[dev]['test_pulse']['peakResistance'], pen=pg.mkPen('g'))
+            # plot the exponential average as is used by the reseal logic
+            ratios = log_data[dev]['test_pulse']['peakResistance'][1:] / log_data[dev]['test_pulse']['peakResistance'][:-1]
+            self._analysis_plot.plot(time[1:], exp_average(time[1:], ratios, tau=10), pen=pg.mkPen('b'))
+            last_time = None
+            last_state = None
+            for state in log_data[dev]['state']:
+                if state[2] != '':
+                    continue  # only show full state-change events
+                if last_time is not None:
+                    region = pg.LinearRegionItem([last_time - self.startTime(), state[0] - self.startTime()], movable=False)
+                    self._resistance_plot.addItem(region)
+                    # region.mouseDoubleClickEvent.connect(self._regionDoubleClicked)
+                    pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
+                last_time = state[0]
+                last_state = state[1]
+            if last_time is not None:
+                region = pg.LinearRegionItem([last_time - self.startTime(), self.endTime() - self.startTime()], movable=False)
+                self._resistance_plot.addItem(region)
+                pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
@@ -465,7 +508,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 img = frame.imageItem()
                 img.setZValue(self._pinned_image_z)
                 self._pinned_image_z += 1
-                self._plot.addItem(img)
+                self._visual_field.addItem(img)
 
     def clear(self):
         for w in self._widgets:
