@@ -344,6 +344,7 @@ class PipettePathWidget(Qt.QWidget):
     def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], parent=None):
         super().__init__(parent)
         self._name = name
+        path[:, 0] -= path[0, 0]
         self._path = path
         self._states = states
         # TODO handle empty states, path
@@ -365,6 +366,8 @@ class PipettePathWidget(Qt.QWidget):
         next_index = min(np.searchsorted(self._path[:, 0], time), len(self._path) - 1)
         if next_index == 0:
             pos = self._path[0, 1:]
+        elif next_index == len(self._path) - 1:
+            pos = self._path[-1, 1:]
         else:
             part = (time - self._path[next_index - 1, 0]) / (self._path[next_index, 0] - self._path[next_index - 1, 0])
             pos = (1 - part) * self._path[next_index - 1, 1:] + self._path[next_index, 1:] * part
@@ -440,6 +443,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             movable=True,
             angle=90,
             pen=pg.mkPen('r'),
+            hoverPen=pg.mkPen('w', width=2),
             label='t={value:0.2f}s',
             labelOpts={'position': 0.1, 'color': pg.mkColor('r'), 'movable': True},
         )
@@ -494,6 +498,8 @@ class MultiPatchLogWidget(Qt.QWidget):
                 region = pg.LinearRegionItem([last_time - self.startTime(), self.endTime() - self.startTime()], movable=False)
                 self._resistance_plot.addItem(region)
                 pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
+
+        self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
