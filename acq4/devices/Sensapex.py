@@ -251,7 +251,7 @@ class SensapexMoveFuture(MoveFuture):
             # rate-limit move requests
             minStepUm = 0.5
             distanceToMove = np.linalg.norm(currentTarget - lastTarget)
-            if distanceToMove < minStepUm:
+            if fractionComplete < 1 and distanceToMove < minStepUm:
                 time.sleep((minStepUm - distanceToMove) / speed)
                 continue
 
