@@ -12,6 +12,7 @@ import warnings
 from copy import deepcopy
 
 from acq4 import getManager
+from acq4.devices.PatchPipette.testpulse import TestPulse
 from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
@@ -1097,6 +1098,77 @@ class BreakInState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
+class ResealAnalysis(object):
+    """Class to analyze test pulses and determine reseal behavior."""
+    def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
+        self._stretch_threshold = stretch_threshold
+        self._tear_threshold = tear_threshold
+        self._detection_tau = detection_tau
+        self._repair_tau = repair_tau
+        self._last_measurement = None
+
+    def is_stretching(self) -> bool:
+        """Return True if the resistance is increasing too quickly."""
+        return self._last_measurement and self._last_measurement['stretching']
+
+    def is_tearing(self) -> bool:
+        """Return True if the resistance is decreasing."""
+        return self._last_measurement and self._last_measurement['tearing']
+
+    def process_test_pulses(self, tps: list[TestPulse]) -> np.ndarray:
+        return self.process_measurements(
+            np.array([(tp.startTime(), tp.analysis()['steadyStateResistance']) for tp in tps]))
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(
+            len(measurements),
+            dtype=[
+                ('time', float),
+                ('resistance', float),
+                ('detection', float),
+                ('repair', float),
+                ('stretching', bool),
+                ('tearing', bool),
+            ])
+        for i, measurement in enumerate(measurements):
+            start_time, resistance = measurement
+            if i == 0:
+                if self._last_measurement is None:
+                    ret_array[i] = (start_time, resistance, 1, 1, False, False)
+                    self._last_measurement = ret_array[i]
+                    continue
+                else:
+                    last_measurement = self._last_measurement
+            else:
+                last_measurement = ret_array[i - 1]
+
+            dt = start_time - last_measurement['time']
+            ratio = resistance / last_measurement['resistance']
+
+            detection_alpha = 1 - np.exp(-dt / self._detection_tau)
+            detection_ratio = (
+                    last_measurement['detection'] * (1 - detection_alpha)
+                    + ratio * detection_alpha
+            )
+            repair_alpha = 1 - np.exp(-dt / self._repair_tau)
+            repair_ratio = (
+                    last_measurement['repair'] * (1 - repair_alpha)
+                    + ratio * repair_alpha
+            )
+            is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
+            is_tearing = detection_ratio < self._tear_threshold or repair_ratio < self._tear_threshold
+            ret_array[i] = (
+                start_time,
+                resistance,
+                detection_ratio,
+                repair_ratio,
+                is_stretching,
+                is_tearing,
+            )
+            self._last_measurement = ret_array[i]
+        return ret_array
+
+
 class ResealState(PatchPipetteState):
     """State that retracts pipette slowly to attempt to reseal the cell.
 
@@ -1190,10 +1262,12 @@ class ResealState(PatchPipetteState):
         self._retractionFuture = None
         self._pressureFuture = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
-        self._detectionResistanceRatio = 1
-        self._repairResistanceRatio = 1
-        self._lastTestPulseTime = None
-        self._lastTestPulseSSResist = None
+        self._analysis = ResealAnalysis(
+            stretch_threshold=self.config['stretchDetectionRatio'],
+            tear_threshold=self.config['tearDetectionRatio'],
+            detection_tau=self.config['detectionTau'],
+            repair_tau=self.config['repairTau'],
+        )
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
@@ -1259,17 +1333,11 @@ class ResealState(PatchPipetteState):
 
     def isStretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
-        return (
-            self._detectionResistanceRatio > self.config['stretchDetectionRatio']
-            or self._repairResistanceRatio > self.config['stretchDetectionRatio']
-        )
+        return self._analysis.is_stretching()
 
     def isTearing(self) -> bool:
         """Return True if the resistance is decreasing."""
-        return (
-            self._detectionResistanceRatio < self.config['tearDetectionRatio']
-            or self._repairResistanceRatio < self.config['tearDetectionRatio']
-        )
+        return self._analysis.is_tearing()
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
@@ -1279,28 +1347,7 @@ class ResealState(PatchPipetteState):
             if len(tps) > 0:
                 break
             self.sleep(0.2)
-        for test_pulse in tps:
-            resistance = test_pulse.analysis()['steadyStateResistance']
-            if self._lastTestPulseTime is None:
-                self._lastTestPulseTime = test_pulse.startTime()
-                self._lastTestPulseSSResist = resistance
-                continue
-
-            dt = test_pulse.startTime() - self._lastTestPulseTime
-            ratio = resistance / self._lastTestPulseSSResist
-            self._lastTestPulseTime = test_pulse.startTime()
-            self._lastTestPulseSSResist = resistance
-
-            detection_alpha = 1 - np.exp(-dt / self.config['detectionTau'])
-            self._detectionResistanceRatio = (
-                self._detectionResistanceRatio * (1 - detection_alpha)
-                + ratio * detection_alpha
-            )
-            repair_alpha = 1 - np.exp(-dt / self.config['repairTau'])
-            self._repairResistanceRatio = (
-                self._repairResistanceRatio * (1 - repair_alpha)
-                + ratio * repair_alpha
-            )
+        self._analysis.process_test_pulses(tps)
 
     def run(self):
         config = self.config
