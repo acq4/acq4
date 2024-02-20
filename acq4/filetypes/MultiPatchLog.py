@@ -342,9 +342,8 @@ class MultiPatchLog(FileType):
 
 
 class PipettePathWidget(object):
-    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]]):
+    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], start_time: float):
         self._name = name
-        start_time = path[0, 0]
         path[:, 0] -= start_time
         self._path = path
         self._states = [[s[0] - start_time, *s[1:]] for s in states]
@@ -468,7 +467,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             states = log_data[dev]['state']
             test_pulses = log_data[dev]['test_pulse']
             if len(path) > 0:
-                widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=states)
+                widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=states, start_time=self.startTime())
                 self._pipettes.append(widget)
             self.plotTestPulses(test_pulses, states)
 
