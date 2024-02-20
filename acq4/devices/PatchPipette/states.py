@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any
+from typing import Any, Optional
 
 import contextlib
 import numpy as np
@@ -1105,7 +1105,7 @@ class ResealAnalysis(object):
         self._tear_threshold = tear_threshold
         self._detection_tau = detection_tau
         self._repair_tau = repair_tau
-        self._last_measurement = None
+        self._last_measurement: Optional[np.void] = None
 
     def is_stretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
