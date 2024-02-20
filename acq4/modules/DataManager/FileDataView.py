@@ -72,12 +72,11 @@ class FileDataView(Qt.QSplitter):
         self._imageWidget.setImage(data, autoRange=False)
 
     def displayMultiPatchLog(self, fh):
-        if self._multiPatchLogWidget is None:
-            self.clear()
-            self._multiPatchLogWidget = MultiPatchLogWidget(self)
-            self.addWidget(self._multiPatchLogWidget)
-            self._widgets.append(self._multiPatchLogWidget)
-        self._multiPatchLogWidget.clear()
+        self.clear()
+        self._multiPatchLogWidget = MultiPatchLogWidget(self)
+        self.addWidget(self._multiPatchLogWidget)
+        self._widgets.append(self._multiPatchLogWidget)
+        self._multiPatchLogWidget.show()
         self._multiPatchLogWidget.addLog(fh)
 
     def clear(self):
@@ -87,3 +86,4 @@ class FileDataView(Qt.QSplitter):
         self._widgets = []
         self._dictWidget = None
         self._imageWidget = None
+        self._multiPatchLogWidget = None

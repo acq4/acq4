@@ -341,9 +341,8 @@ class MultiPatchLog(FileType):
         return False
 
 
-class PipettePathWidget(Qt.QWidget):
-    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], parent=None):
-        super().__init__(parent)
+class PipettePathWidget(object):
+    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]]):
         self._name = name
         start_time = path[0, 0]
         path[:, 0] -= start_time
@@ -386,31 +385,16 @@ class PipettePathWidget(Qt.QWidget):
     def getPosLabel(self) -> pg.ArrowItem:
         return self._arrow
 
-    def setParent(self, parent, **kwargs):
+    def setParent(self, parent):
         self._plot.setParent(parent)
-        self._arrow.setParent(parent)
         self._label.setParent(parent)
-        super().setParent(parent)
 
     def deleteLater(self):
         self._plot.deleteLater()
-        self._arrow.deleteLater()
+        self._plot = None
+        self._arrow = None
         self._label.deleteLater()
-        super().deleteLater()
-
-
-def exp_average(time, data, tau=4.0):
-    # calculate exponential moving average using irregularly sampled time values
-    out_data = np.zeros_like(data)
-    out_data[0] = data[0]
-    dt = np.diff(time)
-    for i in range(1, len(dt)):
-        alpha = 1 - np.exp(-dt[i] / tau)
-        out_data[i] = (1 - alpha) * out_data[i - 1] + alpha * data[i]
-        # alpha = (1 - np.exp(-dt / tau))
-        # return previous * (1 - alpha) + data * alpha
-
-    return out_data
+        self._label = None
 
 
 class MultiPatchLogWidget(Qt.QWidget):
@@ -442,10 +426,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._widgets.append(self._plots_widget)
         self._layout.addWidget(self._plots_widget)
         self._visual_field = self._plots_widget.addPlot()
-        self._visual_field.setAspectLocked(ratio=1.0001)
+        self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
         self._resistance_plot = self._plots_widget.addPlot(name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        self._analysis_plot.addItem(pg.InfiniteLine(movable=True, pos=1, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(pg.InfiniteLine(movable=True, pos=0.9998, angle=0, pen=pg.mkPen('w')))
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -474,8 +458,6 @@ class MultiPatchLogWidget(Qt.QWidget):
         return max(log.lastTime() for log in self._logFiles) or 0
 
     def addLog(self, log: "FileHandle"):
-        from acq4.devices.PatchPipette.states import ResealAnalysis
-
         log_data = log.read()
         self._logFiles.append(log_data)
         if log.parent():
@@ -483,48 +465,64 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             path = log_data[dev]['position']
+            states = log_data[dev]['state']
+            test_pulses = log_data[dev]['test_pulse']
             if len(path) > 0:
-                widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=log_data[dev]['state'])
+                widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=states)
                 self._pipettes.append(widget)
-            # TODO better colors?
-            time = log_data[dev]['test_pulse']['event_time'] - self.startTime()
-            if len(time) > 0:
-                self._resistance_plot.plot(
-                    time, log_data[dev]['test_pulse']['steadyStateResistance'], pen=pg.mkPen('b'))
-                self._resistance_plot.plot(
-                    time, log_data[dev]['test_pulse']['peakResistance'], pen=pg.mkPen('g'))
-                # plot the exponential average as is used by the reseal logic
-                analyzer = ResealAnalysis(1.01, 0.9998, 5, 10)
-                measurements = np.concatenate(
-                    (time[:, np.newaxis], log_data[dev]['test_pulse']['steadyStateResistance'][:, np.newaxis]), axis=1)
-                if len(measurements) > 0:
-                    analysis = analyzer.process_measurements(measurements)
-                    self._analysis_plot.plot(analysis["time"], analysis["detection"], pen=pg.mkPen('b'))
-                    self._analysis_plot.plot(analysis["time"], analysis["tearing"], pen=pg.mkPen('r'))
-                for i, state in enumerate(log_data[dev]['state']):
-                    if state[2] == '':
-                        continue
-                    line = pg.InfiniteLine(movable=False, pos=state[0] - self.startTime(), angle=90, pen=pg.mkPen('w'))
-                    self._analysis_plot.addItem(line)
-                    line.label = pg.InfLineLabel(line, state[2], position=0.75, rotateAxis=(1, 0), anchor=(1, 1))
-                last_time = None
-                last_state = None
-                for state in log_data[dev]['state']:
-                    if state[2] != '':
-                        continue  # only show full state-change events
-                    if last_time is not None:
-                        region = pg.LinearRegionItem([last_time - self.startTime(), state[0] - self.startTime()], movable=False)
-                        self._resistance_plot.addItem(region)
-                        # TODO connect double-click to zoom to region
-                        pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
-                    last_time = state[0]
-                    last_state = state[1]
-                if last_time is not None:
-                    region = pg.LinearRegionItem([last_time - self.startTime(), self.endTime() - self.startTime()], movable=False)
-                    self._resistance_plot.addItem(region)
-                    pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
+            self.plotTestPulses(test_pulses, states)
 
         self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
+
+    def plotTestPulses(self, test_pulses, states):
+        from acq4.devices.PatchPipette.states import ResealAnalysis
+
+        # TODO better colors?
+        time = test_pulses['event_time'] - self.startTime()
+        if len(time) > 0:
+            self._resistance_plot.plot(
+                time, test_pulses['steadyStateResistance'], pen=pg.mkPen('b'))
+            self._resistance_plot.plot(
+                time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
+            # plot the exponential average as is used by the reseal logic
+            analyzer = ResealAnalysis(1.005, 0.9998, 5, 10)
+            measurements = np.concatenate(
+                (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
+            if len(measurements) > 0:
+                analysis = analyzer.process_measurements(measurements)
+                self._analysis_plot.plot(analysis["time"], analysis["detection"], pen=pg.mkPen('b'))
+                tearing = analysis["tearing"].astype(float)
+                tearing[analysis["tearing"] < 1] = np.nan
+                self._analysis_plot.plot(analysis["time"], tearing, pen=pg.mkPen('r'))
+
+            last_time = None
+            last_state = None
+            region_idx = 0
+            for state in states:
+                if state[2] == '':  # full state change
+                    if last_time is not None:
+                        brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
+                        region_idx += 1
+                        self._addRegion(last_time - self.startTime(), state[0] - self.startTime(), brush, last_state)
+                    last_time = state[0]
+                    last_state = state[1]
+                else:  # status update
+                    color = pg.mkColor(255, 255, 255, 80)
+                    line = pg.InfiniteLine(movable=False, pos=state[0] - self.startTime(), angle=90,
+                                           pen=pg.mkPen(color))
+                    self._analysis_plot.addItem(line)
+                    line.label = pg.InfLineLabel(
+                        line, state[2], position=0.75, rotateAxis=(1, 0), anchor=(1, 1), color=color)
+            if last_time is not None:
+                brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
+                self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
+
+    def _addRegion(self, start, end, brush, label):
+        # cycle colors
+        region = pg.LinearRegionItem([start, end], movable=False, brush=brush)
+        self._resistance_plot.addItem(region)
+        # TODO connect double-click to zoom to region
+        pg.InfLineLabel(region.lines[0], label, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
@@ -541,7 +539,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 self._pinned_image_z += 1
                 self._visual_field.addItem(img)
 
-    def clear(self):
+    def close(self):
         for w in self._widgets:
             w.setParent(None)
             w.deleteLater()
@@ -550,3 +548,4 @@ class MultiPatchLogWidget(Qt.QWidget):
             p.setParent(None)
             p.deleteLater()
         self._pipettes = []
+        return super().close()
