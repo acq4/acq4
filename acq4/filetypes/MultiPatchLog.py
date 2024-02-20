@@ -274,6 +274,7 @@ class MultiPatchLogData(object):
                 dtype=float,
             ),
             # TODO save field of view dimensions to show stage (camera) position
+            # TODO save position polling
             # TODO save objective
             # TODO save lighting
             # TODO save clamp mode changes, holding voltage, current
@@ -385,9 +386,16 @@ class PipettePathWidget(Qt.QWidget):
     def getPosLabel(self) -> pg.ArrowItem:
         return self._arrow
 
+    def setParent(self, parent, **kwargs):
+        self._plot.setParent(parent)
+        self._arrow.setParent(parent)
+        self._label.setParent(parent)
+        super().setParent(parent)
+
     def deleteLater(self):
-        self._plot.setParent(None)
         self._plot.deleteLater()
+        self._arrow.deleteLater()
+        self._label.deleteLater()
         super().deleteLater()
 
 
@@ -399,26 +407,24 @@ def exp_average(time, data, tau=4.0):
     for i in range(1, len(dt)):
         alpha = 1 - np.exp(-dt[i] / tau)
         out_data[i] = (1 - alpha) * out_data[i - 1] + alpha * data[i]
+        # alpha = (1 - np.exp(-dt / tau))
+        # return previous * (1 - alpha) + data * alpha
+
     return out_data
 
 
 class MultiPatchLogWidget(Qt.QWidget):
-    # TODO look at canvas
-    # TODO add plot of events on timeline (tags?)
-    #    selectable event types to display?
+    # TODO selectable event types to display?
     # TODO images should be displayed as the timeline matches?
     # TODO option to add plots for anything else
     # TODO add target position
-    # TODO add pipette position (and paths?)
-    #    we don't poll the position, so the movement requests are all we have
+    # TODO we don't poll the position, so the movement requests are all we have
     # TODO investigate what logging autopatch module does
     # TODO associate all images and recordings with the cell
     # TODO multipatch logs are one-per-cell
     # TODO they can reference each other?
-    # TODO widget should be able to handle multiple log files
     # TODO selectable cells, pipettes
     # TODO filter log messages by type
-    # TODO raw log? just events on the time plot may be enough
     # TODO don't try to display position Z
     # TODO scale markers with si units
     # TODO make sure all the time values start at 0
@@ -439,6 +445,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._visual_field.setAspectLocked(ratio=1.0001)
         self._resistance_plot = self._plots_widget.addPlot(name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
+        self._analysis_plot.addItem(pg.InfiniteLine(movable=True, pos=1, angle=0, pen=pg.mkPen('w')))
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -467,6 +474,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         return max(log.lastTime() for log in self._logFiles) or 0
 
     def addLog(self, log: "FileHandle"):
+        from acq4.devices.PatchPipette.states import ResealAnalysis
+
         log_data = log.read()
         self._logFiles.append(log_data)
         if log.parent():
@@ -474,31 +483,46 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             path = log_data[dev]['position']
-            widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=log_data[dev]['state'])
-            self._pipettes.append(widget)
-            # TODO colors?
+            if len(path) > 0:
+                widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=log_data[dev]['state'])
+                self._pipettes.append(widget)
+            # TODO better colors?
             time = log_data[dev]['test_pulse']['event_time'] - self.startTime()
-            self._resistance_plot.plot(time, log_data[dev]['test_pulse']['steadyStateResistance'], pen=pg.mkPen('b'))
-            self._resistance_plot.plot(time, log_data[dev]['test_pulse']['peakResistance'], pen=pg.mkPen('g'))
-            # plot the exponential average as is used by the reseal logic
-            ratios = log_data[dev]['test_pulse']['peakResistance'][1:] / log_data[dev]['test_pulse']['peakResistance'][:-1]
-            self._analysis_plot.plot(time[1:], exp_average(time[1:], ratios, tau=10), pen=pg.mkPen('b'))
-            last_time = None
-            last_state = None
-            for state in log_data[dev]['state']:
-                if state[2] != '':
-                    continue  # only show full state-change events
+            if len(time) > 0:
+                self._resistance_plot.plot(
+                    time, log_data[dev]['test_pulse']['steadyStateResistance'], pen=pg.mkPen('b'))
+                self._resistance_plot.plot(
+                    time, log_data[dev]['test_pulse']['peakResistance'], pen=pg.mkPen('g'))
+                # plot the exponential average as is used by the reseal logic
+                analyzer = ResealAnalysis(1.01, 0.9998, 5, 10)
+                measurements = np.concatenate(
+                    (time[:, np.newaxis], log_data[dev]['test_pulse']['steadyStateResistance'][:, np.newaxis]), axis=1)
+                if len(measurements) > 0:
+                    analysis = analyzer.process_measurements(measurements)
+                    self._analysis_plot.plot(analysis["time"], analysis["detection"], pen=pg.mkPen('b'))
+                    self._analysis_plot.plot(analysis["time"], analysis["tearing"], pen=pg.mkPen('r'))
+                for i, state in enumerate(log_data[dev]['state']):
+                    if state[2] == '':
+                        continue
+                    line = pg.InfiniteLine(movable=False, pos=state[0] - self.startTime(), angle=90, pen=pg.mkPen('w'))
+                    self._analysis_plot.addItem(line)
+                    line.label = pg.InfLineLabel(line, state[2], position=0.75, rotateAxis=(1, 0), anchor=(1, 1))
+                last_time = None
+                last_state = None
+                for state in log_data[dev]['state']:
+                    if state[2] != '':
+                        continue  # only show full state-change events
+                    if last_time is not None:
+                        region = pg.LinearRegionItem([last_time - self.startTime(), state[0] - self.startTime()], movable=False)
+                        self._resistance_plot.addItem(region)
+                        # TODO connect double-click to zoom to region
+                        pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
+                    last_time = state[0]
+                    last_state = state[1]
                 if last_time is not None:
-                    region = pg.LinearRegionItem([last_time - self.startTime(), state[0] - self.startTime()], movable=False)
+                    region = pg.LinearRegionItem([last_time - self.startTime(), self.endTime() - self.startTime()], movable=False)
                     self._resistance_plot.addItem(region)
-                    # region.mouseDoubleClickEvent.connect(self._regionDoubleClicked)
                     pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
-                last_time = state[0]
-                last_state = state[1]
-            if last_time is not None:
-                region = pg.LinearRegionItem([last_time - self.startTime(), self.endTime() - self.startTime()], movable=False)
-                self._resistance_plot.addItem(region)
-                pg.InfLineLabel(region.lines[1], last_state, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
 
         self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
 
@@ -523,5 +547,6 @@ class MultiPatchLogWidget(Qt.QWidget):
             w.deleteLater()
         self._widgets = []
         for p in self._pipettes:
+            p.setParent(None)
             p.deleteLater()
         self._pipettes = []
