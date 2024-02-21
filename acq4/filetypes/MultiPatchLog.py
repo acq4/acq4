@@ -396,6 +396,25 @@ class PipettePathWidget(object):
         self._label = None
 
 
+class PipetteStateRegion(pg.LinearRegionItem):
+    clicked = Qt.Signal(object)
+    doubleclicked = Qt.Signal(object)
+
+    def mouseClickEvent(self, ev: Qt.QGraphicsSceneMouseEvent):
+        if ev.button() == Qt.Qt.LeftButton:
+            self.clicked.emit(ev.pos())
+            ev.accept()
+        else:
+            super().mouseClickEvent(ev)
+
+    def mouseDoubleClickEvent(self, ev):
+        if ev.button() == Qt.Qt.LeftButton:
+            self.doubleclicked.emit(self)
+            ev.accept()
+        else:
+            super().mouseDoubleClickEvent(ev)
+
+
 class MultiPatchLogWidget(Qt.QWidget):
     # TODO selectable event types to display?
     # TODO images should be displayed as the timeline matches?
@@ -467,7 +486,8 @@ class MultiPatchLogWidget(Qt.QWidget):
             states = log_data[dev]['state']
             test_pulses = log_data[dev]['test_pulse']
             if len(path) > 0:
-                widget = PipettePathWidget(dev, path=path, plot=self._visual_field, states=states, start_time=self.startTime())
+                widget = PipettePathWidget(
+                    dev, path=path, plot=self._visual_field, states=states, start_time=self.startTime())
                 self._pipettes.append(widget)
             self.plotTestPulses(test_pulses, states)
 
@@ -518,10 +538,18 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def _addRegion(self, start, end, brush, label):
         # cycle colors
-        region = pg.LinearRegionItem([start, end], movable=False, brush=brush)
+        region = PipetteStateRegion([start, end], movable=False, brush=brush)
+        region.doubleclicked.connect(self._zoomToRegion)
+        region.clicked.connect(self._setTimeFromClick)
         self._resistance_plot.addItem(region)
         # TODO connect double-click to zoom to region
         pg.InfLineLabel(region.lines[0], label, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
+
+    def _zoomToRegion(self, region: PipetteStateRegion):
+        self._resistance_plot.setXRange(*region.getRegion(), padding=0)
+
+    def _setTimeFromClick(self, pos: Qt.QPointF):
+        self._timeSlider.setValue(pos.x())
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
