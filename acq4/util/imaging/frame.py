@@ -103,7 +103,7 @@ class Frame(object):
             data = remove_background_from_image(data, self._bg_removal.read(), **self._bg_removal.info().deepcopy())
         levels = None
         lut = None
-        if self._contrast is not None:
+        if self._contrast is not None and not isinstance(self._contrast, str):
             levels = self._contrast["levels"]
             gradient = pg.GradientEditorItem()
             gradient.restoreState(self._contrast["gradient"])
