@@ -566,7 +566,7 @@ class DirHandle(FileHandle):
                 return self.mkdir(subdir, autoIncrement=autoIncrement)
             else:
                 raise FileNotFoundError(f'Directory {ndir} does not exist.')
-        
+
     def getFile(self, fileName):
         """return a File handle for the named file."""
         fullName = os.path.join(self.name(), fileName)

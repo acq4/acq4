@@ -29,7 +29,6 @@ class ContrastCtrl(Qt.QWidget):
         self.ignoreLevelChange = False
         self.alpha = 1.0
         self.lastAGCMax = None
-        self._cachedSaveName = None
 
         # Connect DisplayGain dock
         self.ui.histogram.sigLookupTableChanged.connect(self.levelsOrLUTChanged)
@@ -61,7 +60,6 @@ class ContrastCtrl(Qt.QWidget):
             return
         newLevels = [(bl - mn) / rng, (wl - mn) / rng]
         self.autoGainLevels = newLevels
-        self._cachedSaveName = None
 
     def alphaChanged(self, val):
         self.alpha = val / self.ui.alphaSlider.maximum()  # slider only works in integers, and we need a 0 to 1 value
@@ -70,13 +68,11 @@ class ContrastCtrl(Qt.QWidget):
     def getLevels(self):
         return self.ui.histogram.getLevels()
 
-    def save(self, img, dh: DirHandle) -> str:
-        if self._cachedSaveName is None:
-            lut = self.ui.histogram.getLookupTable(img)
-            info = {'levels': self.getLevels()}
-            fh = dh.writeFile(lut, "contrast_lut", info, autoIncrement=True)
-            self._cachedSaveName = fh.shortName()
-        return self._cachedSaveName
+    def saveState(self):
+        return {
+            'levels': self.getLevels(),
+            'gradient': self.ui.histogram.gradient.saveState()
+        }
 
     def toggleAutoGain(self, b):
         if b:
@@ -129,7 +125,6 @@ class ContrastCtrl(Qt.QWidget):
                 maxVal = self.lastMinMax[1] * s + maxVal * (1.0 - s)
 
             self.lastMinMax = [minVal, maxVal]
-            self._cachedSaveName = None
 
             # and convert fraction of previous range into new levels
             bl = self.autoGainLevels[0] * (maxVal - minVal) + minVal

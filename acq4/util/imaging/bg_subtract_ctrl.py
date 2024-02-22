@@ -109,6 +109,18 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self._cachedSaveName = None
 
+    def makeStandaloneSaveCallable(self):
+        if self._cachedSaveName is None:
+            info = {
+                "subtract": self.ui.subtractBgBtn.isChecked(),
+                "divide": self.ui.divideBgBtn.isChecked(),
+                "blur": self.ui.bgBlurSpin.value(),
+            }
+            frame = self.backgroundFrame  # TODO copy? mutex? both?
+            def do_save(dh: DirHandle):
+                pass
+            # TODO thread safety, caching
+
     def save(self, dh: DirHandle) -> Union[None, str]:
         if self._cachedSaveName is None:
             if self.backgroundFrame is None or not (
