@@ -1143,25 +1143,25 @@ class ResealAnalysis(object):
                 last_measurement = ret_array[i - 1]
 
             dt = start_time - last_measurement['time']
-            ratio = resistance / last_measurement['resistance']
+            ratio = np.log10(resistance / last_measurement['resistance'])
 
             detection_alpha = 1 - np.exp(-dt / self._detection_tau)
-            detection_ratio = (
+            detection_avg = (
                     last_measurement['detection'] * (1 - detection_alpha)
                     + ratio * detection_alpha
             )
             repair_alpha = 1 - np.exp(-dt / self._repair_tau)
-            repair_ratio = (
+            repair_avg = (
                     last_measurement['repair'] * (1 - repair_alpha)
                     + ratio * repair_alpha
             )
-            is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
-            is_tearing = detection_ratio < self._tear_threshold or repair_ratio < self._tear_threshold
+            is_stretching = detection_avg > self._stretch_threshold or repair_avg > self._stretch_threshold
+            is_tearing = detection_avg < self._tear_threshold or repair_avg < self._tear_threshold
             ret_array[i] = (
                 start_time,
                 resistance,
-                detection_ratio,
-                repair_ratio,
+                detection_avg,
+                repair_avg,
                 is_stretching,
                 is_tearing,
             )
@@ -1210,9 +1210,9 @@ class ResealState(PatchPipetteState):
         (default 10s)
     fallbackState : str
         State to transition to if reseal fails (default is 'whole cell')
-    stretchDetectionRatio : float
+    stretchDetectionThreshold : float
         Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
-    tearDetectionRatio : float
+    tearDetectionThreshold : float
         Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
@@ -1247,8 +1247,8 @@ class ResealState(PatchPipetteState):
         'retractionSuccessState': {'type': 'str', 'default': 'home with nucleus'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
-        'stretchDetectionRatio': {'type': 'float', 'default': 1.05},
-        'tearDetectionRatio': {'type': 'float', 'default': 1},
+        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
+        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
     }
 
     def __init__(self, *args, **kwds):
@@ -1257,8 +1257,8 @@ class ResealState(PatchPipetteState):
         self._pressureFuture = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
         self._analysis = ResealAnalysis(
-            stretch_threshold=self.config['stretchDetectionRatio'],
-            tear_threshold=self.config['tearDetectionRatio'],
+            stretch_threshold=self.config['stretchDetectionThreshold'],
+            tear_threshold=self.config['tearDetectionThreshold'],
             detection_tau=self.config['detectionTau'],
             repair_tau=self.config['repairTau'],
         )

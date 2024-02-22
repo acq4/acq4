@@ -438,6 +438,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._events = []
         self._widgets = []
         self._pinned_image_z = -10000
+        self._stretch_threshold = 0.005
+        self._tear_threshold = -0.00128
         self._layout = Qt.QVBoxLayout()
         self.setLayout(self._layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
@@ -447,7 +449,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
         self._resistance_plot = self._plots_widget.addPlot(name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        self._analysis_plot.addItem(pg.InfiniteLine(movable=True, pos=0.9998, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -504,15 +507,21 @@ class MultiPatchLogWidget(Qt.QWidget):
             self._resistance_plot.plot(
                 time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
             # plot the exponential average as is used by the reseal logic
-            analyzer = ResealAnalysis(1.005, 0.9998, 5, 10)
+            analyzer = ResealAnalysis(self._stretch_threshold, self._tear_threshold, 4, 10)
             measurements = np.concatenate(
                 (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
             if len(measurements) > 0:
                 analysis = analyzer.process_measurements(measurements)
                 self._analysis_plot.plot(analysis["time"], analysis["detection"], pen=pg.mkPen('b'))
+                self._analysis_plot.plot(analysis["time"], analysis["repair"], pen=pg.mkPen(90, 140, 255))
+                stretching = analysis["stretching"].astype(float)
+                stretching[analysis["stretching"] < 1] = np.nan
+                stretching -= 1
+                self._analysis_plot.plot(analysis["time"], stretching, pen=pg.mkPen('g'), symbol='x')
                 tearing = analysis["tearing"].astype(float)
                 tearing[analysis["tearing"] < 1] = np.nan
-                self._analysis_plot.plot(analysis["time"], tearing, pen=pg.mkPen('r'))
+                tearing -= 1
+                self._analysis_plot.plot(analysis["time"], tearing, pen=pg.mkPen('r'), symbol='o')
 
             last_time = None
             last_state = None
@@ -537,12 +546,10 @@ class MultiPatchLogWidget(Qt.QWidget):
                 self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
 
     def _addRegion(self, start, end, brush, label):
-        # cycle colors
         region = PipetteStateRegion([start, end], movable=False, brush=brush)
         region.doubleclicked.connect(self._zoomToRegion)
         region.clicked.connect(self._setTimeFromClick)
         self._resistance_plot.addItem(region)
-        # TODO connect double-click to zoom to region
         pg.InfLineLabel(region.lines[0], label, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
 
     def _zoomToRegion(self, region: PipetteStateRegion):
