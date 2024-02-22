@@ -245,12 +245,7 @@ class PatchWindow(Qt.QMainWindow):
                 
     def storageDir(self):
         return self.manager.getCurrentDir().getDir('Patch', create=True)
-                
-    #def storageFile(self):
-        #sd = self.storageDir()
-        #return sd.getFile(self.clampName, create=True)
-            
-        
+
     def resetClicked(self):
         self.ui.recordBtn.setChecked(False)
         self.recordClicked()

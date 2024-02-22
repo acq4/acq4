@@ -320,7 +320,7 @@ class TestPulse(object):
             analysis['steadyStateResistance'] = np.clip(analysis['steadyStateResistance'], 0, 20e9)
 
             # do curve fitting
-            pulseStart = params['preDuration'] #+ 150e-6
+            pulseStart = params['preDuration']  # + 150e-6
             pulseStop = params['preDuration'] + params['pulseDuration']
             pulse = pri['Time': pulseStart:pulseStop]
             t = pulse.xvals('Time')
@@ -333,7 +333,6 @@ class TestPulse(object):
             pulseData = pulse.asarray()
             try:
                 fit = scipy.optimize.curve_fit(exp, t-xoffset, pulseData, guess, maxfev=1000)  # uses leastsq
-                # fit = scipy.optimize.curve_fit(exp, t-xoffset, pulse.asarray(), guess, bounds=bounds, max_nfev=1000)  # uses least_squares
                 amp, tau, yoffset = fit[0]
             except RuntimeError:
                 amp = tau = yoffset = np.nan

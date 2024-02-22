@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any
+from typing import Any, Optional
 
 import contextlib
 import numpy as np
@@ -12,6 +12,7 @@ import warnings
 from copy import deepcopy
 
 from acq4 import getManager
+from acq4.devices.PatchPipette.testpulse import TestPulse
 from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
@@ -1097,6 +1098,77 @@ class BreakInState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
+class ResealAnalysis(object):
+    """Class to analyze test pulses and determine reseal behavior."""
+    def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
+        self._stretch_threshold = stretch_threshold
+        self._tear_threshold = tear_threshold
+        self._detection_tau = detection_tau
+        self._repair_tau = repair_tau
+        self._last_measurement: Optional[np.void] = None
+
+    def is_stretching(self) -> bool:
+        """Return True if the resistance is increasing too quickly."""
+        return self._last_measurement and self._last_measurement['stretching']
+
+    def is_tearing(self) -> bool:
+        """Return True if the resistance is decreasing."""
+        return self._last_measurement and self._last_measurement['tearing']
+
+    def process_test_pulses(self, tps: list[TestPulse]) -> np.ndarray:
+        return self.process_measurements(
+            np.array([(tp.startTime(), tp.analysis()['steadyStateResistance']) for tp in tps]))
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(
+            len(measurements),
+            dtype=[
+                ('time', float),
+                ('resistance', float),
+                ('detection', float),
+                ('repair', float),
+                ('stretching', bool),
+                ('tearing', bool),
+            ])
+        for i, measurement in enumerate(measurements):
+            start_time, resistance = measurement
+            if i == 0:
+                if self._last_measurement is None:
+                    ret_array[i] = (start_time, resistance, 1, 1, False, False)
+                    self._last_measurement = ret_array[i]
+                    continue
+                else:
+                    last_measurement = self._last_measurement
+            else:
+                last_measurement = ret_array[i - 1]
+
+            dt = start_time - last_measurement['time']
+            ratio = np.log10(resistance / last_measurement['resistance'])
+
+            detection_alpha = 1 - np.exp(-dt / self._detection_tau)
+            detection_avg = (
+                    last_measurement['detection'] * (1 - detection_alpha)
+                    + ratio * detection_alpha
+            )
+            repair_alpha = 1 - np.exp(-dt / self._repair_tau)
+            repair_avg = (
+                    last_measurement['repair'] * (1 - repair_alpha)
+                    + ratio * repair_alpha
+            )
+            is_stretching = detection_avg > self._stretch_threshold or repair_avg > self._stretch_threshold
+            is_tearing = detection_avg < self._tear_threshold or repair_avg < self._tear_threshold
+            ret_array[i] = (
+                start_time,
+                resistance,
+                detection_avg,
+                repair_avg,
+                is_stretching,
+                is_tearing,
+            )
+            self._last_measurement = ret_array[i]
+        return ret_array
+
+
 class ResealState(PatchPipetteState):
     """State that retracts pipette slowly to attempt to reseal the cell.
 
@@ -1138,14 +1210,10 @@ class ResealState(PatchPipetteState):
         (default 10s)
     fallbackState : str
         State to transition to if reseal fails (default is 'whole cell')
-    stretchDetectionRatio : float
+    stretchDetectionThreshold : float
         Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
-    stretchRecoveryTime : float
-        Maximum time (seconds) to wait for access resistance to recover after stretching (default is 30s)
-    tearDetectionRatio : float
+    tearDetectionThreshold : float
         Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
-    tearRecoveryTime : float
-        Maximum time (seconds) to wait for access resistance to recover after tearing (default is 60s)
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
     retractionSuccessState : str
@@ -1179,29 +1247,25 @@ class ResealState(PatchPipetteState):
         'retractionSuccessState': {'type': 'str', 'default': 'home with nucleus'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
-        'stretchDetectionRatio': {'type': 'float', 'default': 1.05},
-        'stretchRecoveryTime': {'type': 'float', 'default': 30, 'suffix': 's'},
-        'tearDetectionRatio': {'type': 'float', 'default': 1},
-        'tearRecoveryTime': {'type': 'float', 'default': 60, 'suffix': 's'},
+        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
+        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
     }
 
     def __init__(self, *args, **kwds):
         PatchPipetteState.__init__(self, *args, **kwds)
-        self._retractionFuture = None
+        self._moveFuture = None
         self._pressureFuture = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
-        self._detectionResistanceRatio = 1
-        self._repairResistanceRatio = 1
-        self._lastTestPulseTime = None
-        self._lastTestPulseSSResist = None
+        self._analysis = ResealAnalysis(
+            stretch_threshold=self.config['stretchDetectionThreshold'],
+            tear_threshold=self.config['tearDetectionThreshold'],
+            detection_tau=self.config['detectionTau'],
+            repair_tau=self.config['repairTau'],
+        )
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
-        if self._retractionFuture is not None:
-            self._retractionFuture.stop()
-        if self._pressureFuture is not None:
-            self._pressureFuture.stop()
         pos = np.array(self.dev.pipetteDevice.globalPosition())
         # TODO move back a little?
         pipette_direction = self.dev.pipetteDevice.globalDirection()
@@ -1226,28 +1290,6 @@ class ResealState(PatchPipetteState):
             self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed']))
             self.waitFor(self._pressureFuture)
 
-    def handleTear(self):
-        """Handle a tearing membrane by retracting the pipette and waiting for the resistance to recover."""
-        self.setState("handling tear")
-        self._retractionFuture.stop()
-        recovery_future = self.dev.pipetteDevice._moveToGlobal(
-            pos=self._startPosition, speed=self.config['retractionSpeed'])
-        start = ptime.time()
-        while self.isTearing() and ptime.time() - start < self.config['tearRecoveryTime']:
-            self.processAtLeastOneTestPulse()
-        recovery_future.stop()
-
-    def handleStretch(self):
-        """Handle a stretching membrane by pausing and waiting for the resistance to stabilize."""
-        self.setState("handling stretch")
-        self._retractionFuture.stop()
-        start = ptime.time()
-        while (self.isStretching() and not self.isTearing()
-               and ptime.time() - start < self.config['stretchRecoveryTime']):
-            self.processAtLeastOneTestPulse()
-        if self.isTearing():
-            self.handleTear()
-
     @Future.wrap
     def startRollingResistanceThresholds(self, _future: Future):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
@@ -1259,17 +1301,11 @@ class ResealState(PatchPipetteState):
 
     def isStretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
-        return (
-            self._detectionResistanceRatio > self.config['stretchDetectionRatio']
-            or self._repairResistanceRatio > self.config['stretchDetectionRatio']
-        )
+        return self._analysis.is_stretching()
 
     def isTearing(self) -> bool:
         """Return True if the resistance is decreasing."""
-        return (
-            self._detectionResistanceRatio < self.config['tearDetectionRatio']
-            or self._repairResistanceRatio < self.config['tearDetectionRatio']
-        )
+        return self._analysis.is_tearing()
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
@@ -1279,28 +1315,7 @@ class ResealState(PatchPipetteState):
             if len(tps) > 0:
                 break
             self.sleep(0.2)
-        for test_pulse in tps:
-            resistance = test_pulse.analysis()['steadyStateResistance']
-            if self._lastTestPulseTime is None:
-                self._lastTestPulseTime = test_pulse.startTime()
-                self._lastTestPulseSSResist = resistance
-                continue
-
-            dt = test_pulse.startTime() - self._lastTestPulseTime
-            ratio = resistance / self._lastTestPulseSSResist
-            self._lastTestPulseTime = test_pulse.startTime()
-            self._lastTestPulseSSResist = resistance
-
-            detection_alpha = 1 - np.exp(-dt / self.config['detectionTau'])
-            self._detectionResistanceRatio = (
-                self._detectionResistanceRatio * (1 - detection_alpha)
-                + ratio * detection_alpha
-            )
-            repair_alpha = 1 - np.exp(-dt / self.config['repairTau'])
-            self._repairResistanceRatio = (
-                self._repairResistanceRatio * (1 - repair_alpha)
-                + ratio * repair_alpha
-            )
+        self._analysis.process_test_pulses(tps)
 
     def run(self):
         config = self.config
@@ -1316,25 +1331,35 @@ class ResealState(PatchPipetteState):
             target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
+        recovery_future = None
+        retraction_future = None
         while True:
-            self.checkStop()
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
                 return config['fallbackState']
-
-            if self._retractionFuture is None or self._retractionFuture.wasInterrupted():
-                self.setState("retracting")
-                self._retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
-
             if self.retractionDistance() > self.config['retractionSuccessDistance']:
                 self._taskDone()
                 return config['retractionSuccessState']
 
             self.processAtLeastOneTestPulse()
+
             if self.isStretching():
-                self.handleStretch()
+                if retraction_future and not retraction_future.isDone():
+                    self.setState("handling stretch")
+                    retraction_future.stop()
             elif self.isTearing():
-                self.handleTear()
+                if retraction_future and not retraction_future.isDone():
+                    self.setState("handling tear")
+                    retraction_future.stop()
+                    recovery_future = self.dev.pipetteDevice._moveToGlobal(
+                        pos=self._startPosition, speed=self.config['retractionSpeed'])
+                    self._moveFuture = recovery_future
+            elif retraction_future is None or retraction_future.wasInterrupted():
+                if recovery_future is not None and not recovery_future.isDone():
+                    recovery_future.stop()
+                self.setState("retracting")
+                retraction_future = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
+                self._moveFuture = retraction_future
             # TODO what if it is totally torn?
 
             self.sleep(0.2)
@@ -1343,8 +1368,8 @@ class ResealState(PatchPipetteState):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
 
     def cleanup(self):
-        if self._retractionFuture is not None:
-            self._retractionFuture.stop()
+        if self._moveFuture is not None:
+            self._moveFuture.stop()
         if self._pressureFuture is not None:
             self._pressureFuture.stop()
 
