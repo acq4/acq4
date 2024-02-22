@@ -21,7 +21,6 @@ class Frame(object):
         self._data = data
         self._info = info
         self._bg_removal = None
-        self._contrast = None
         # Complete transform maps from image coordinates to global.
         if 'transform' not in info:
             info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
@@ -92,7 +91,6 @@ class Frame(object):
         bg_removal = self.info().get("backgroundControl", None)
         if bg_removal is not None:
             self._bg_removal = dh[bg_removal]
-        self._contrast = self.info().get("contrastControl", None)
 
     def imageItem(self) -> ImageItem:
         """
@@ -103,10 +101,11 @@ class Frame(object):
             data = remove_background_from_image(data, self._bg_removal.read(), **self._bg_removal.info().deepcopy())
         levels = None
         lut = None
-        if self._contrast is not None and not isinstance(self._contrast, str):
-            levels = self._contrast["levels"]
+        contrast = self.info().get("contrastControl", None)
+        if contrast is not None and not isinstance(contrast, str):  # str was old format
+            levels = contrast["levels"]
             gradient = pg.GradientEditorItem()
-            gradient.restoreState(self._contrast["gradient"])
+            gradient.restoreState(contrast["gradient"])
             lut = gradient.getLookupTable(256 if data.dtype == np.uint8 else 512)
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as2D())
