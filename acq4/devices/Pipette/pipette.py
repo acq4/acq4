@@ -135,7 +135,7 @@ class Pipette(Device, OptomechDevice):
 
         deviceManager.sigAbortAll.connect(self.stop)
 
-    def moveTo(self, position, speed, raiseErrors=False, **kwds):
+    def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
         If *raiseErrors* is True, then an exception will be raised in a background
@@ -149,7 +149,7 @@ class Pipette(Device, OptomechDevice):
                 plannerClass = self.motionPlanners.get('saved', self.defaultMotionPlanners.get('saved', None))
 
         if plannerClass is None:
-            raise ValueError("Unknown pipette move position %r" % position)
+            raise ValueError(f"Unknown pipette move position {position!r}")
 
         if self.currentMotionPlanner is not None:
             self.currentMotionPlanner.stop()
@@ -157,7 +157,7 @@ class Pipette(Device, OptomechDevice):
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
         future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
-            future.raiseErrors(message="Move to " + position + " position failed; requested from:\n{stack}")
+            future.raiseErrors(message=f"Move to {position} position failed; requested from:\n{{stack}}")
 
         return future
 

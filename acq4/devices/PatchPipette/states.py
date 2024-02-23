@@ -1218,7 +1218,10 @@ class ResealState(PatchPipetteState):
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
     retractionSuccessState : str
         State to transition to if reseal is successful (default is 'home with nucleus')
-
+    slurpPressure : float
+        Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
+    slurpDuration : float
+        Duration (seconds) to apply suction when trying to get the nucleus into the pipette (default is 10s)
     """
 
     stateName = 'reseal'
@@ -1249,6 +1252,8 @@ class ResealState(PatchPipetteState):
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
+        'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
+        'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1333,13 +1338,10 @@ class ResealState(PatchPipetteState):
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
         recovery_future = None
         retraction_future = None
-        while True:
+        while not self.retractionSuccessful():
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
                 return config['fallbackState']
-            if self.retractionDistance() > self.config['retractionSuccessDistance']:
-                self._taskDone()
-                return config['retractionSuccessState']
 
             self.processAtLeastOneTestPulse()
 
@@ -1360,9 +1362,24 @@ class ResealState(PatchPipetteState):
                 self.setState("retracting")
                 retraction_future = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
                 self._moveFuture = retraction_future
-            # TODO what if it is totally torn?
 
             self.sleep(0.2)
+
+        self.setState("slurping in nucleus")
+        self.dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
+        self._moveFuture = self.dev.pipetteDevice.moveTo('approach', 'slow')
+        self.sleep(config['slurpDuration'])
+        self.waitFor(self._moveFuture)
+        self._taskDone()
+        return config['retractionSuccessState']
+        # What should a successful autoreseal look like? This last experiment was a dream...reached and
+        # maintained a gigaseal with a nice nucleus and right at the surface the state switched to whole cell
+        # and turned off the regulator, causing a loss in the seal.
+        # Some things to consider:
+        #  * Do we want to increase the retraction speed when a gigareseal is reached?
+
+    def retractionSuccessful(self):
+        return self.retractionDistance() > self.config['retractionSuccessDistance']
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
