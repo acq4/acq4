@@ -179,12 +179,10 @@ class MultiPatchLogData(object):
     def process(self, filename) -> None:
         def possible_uses_for_type(event_type: str) -> list[str]:
             uses = ['event']
-            if event_type in {'move_start', 'move_stop'}:
+            if event_type in {'pipette_transform_changed', 'move_start', 'move_stop'}:
                 uses.append('position')
             if event_type in {'pressure_changed'}:
                 uses.append('pressure')
-            if event_type in {'pipette_transform_changed'}:
-                uses.append('pipette_transform')
             if event_type in {'state_change', 'state_event'}:
                 uses.append('state')
             if event_type in {'auto_bias_enabled', 'auto_bias_target_changed'}:
@@ -301,7 +299,7 @@ class MultiPatchLogData(object):
         if use == 'event':
             return event_time, event['event'], event['is_true']
         if use == 'position':
-            return event_time, *event['position']
+            return event_time, *event.get('position', event.get('globalPosition', (np.nan, np.nan, np.nan)))
         if use == 'pressure':
             return event_time, event['pressure'], event['source']
         if use == 'pipette_transform':
@@ -352,10 +350,14 @@ class PipettePathWidget(object):
         # TODO z as alpha?
         self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
         plot.addItem(self._plot)
-        self._arrow = pg.ArrowItem(pen=pg.mkPen('b', width=2))
+        self._arrow = pg.ArrowItem(pen=pg.mkPen('w', width=2))
         self._arrow.setPos(self._path[0, 1], self._path[0, 2])
         plot.addItem(self._arrow)
-        self._label = pg.TextItem(text=f"{name}: {states[0][1]}\n {states[0][2]}", color=pg.mkColor('w'))
+        if len(states) > 0:
+            label_text = f"{name}: {states[0][1]}\n {states[0][2]}"
+        else:
+            label_text = name
+        self._label = pg.TextItem(text=label_text, color=pg.mkColor('w'))
         self._label.setPos(self._path[0, 1], self._path[0, 2])
         plot.addItem(self._label)
 
@@ -495,6 +497,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             self.plotTestPulses(test_pulses, states)
 
         self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
+        self._resistance_plot.setXRange(0, self.endTime() - self.startTime())
 
     def plotTestPulses(self, test_pulses, states):
         from acq4.devices.PatchPipette.states import ResealAnalysis
