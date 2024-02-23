@@ -539,8 +539,9 @@ class MultiPatchLogWidget(Qt.QWidget):
                     line = pg.InfiniteLine(movable=False, pos=state[0] - self.startTime(), angle=90,
                                            pen=pg.mkPen(color))
                     self._analysis_plot.addItem(line)
+                    status = state[2].replace('{', '{{').replace('}', '}}')
                     line.label = pg.InfLineLabel(
-                        line, state[2], position=0.75, rotateAxis=(1, 0), anchor=(1, 1), color=color)
+                        line, status, position=0.75, rotateAxis=(1, 0), anchor=(1, 1), color=color)
             if last_time is not None:
                 brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
                 self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
