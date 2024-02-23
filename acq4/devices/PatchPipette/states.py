@@ -708,7 +708,7 @@ class SealState(PatchPipetteState):
         becomes greater than *holdingThreshold*.
     sealThreshold : float
         Seal resistance (ohms) above which the pipette is considered sealed and
-        transitions to the 'cell attached' state.
+        transitions to the 'cell attached' state.  Default 1e9
     breakInThreshold : float
         Capacitance (Farads) above which the pipette is considered to be whole-cell and 
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
@@ -1218,6 +1218,8 @@ class ResealState(PatchPipetteState):
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
     retractionSuccessState : str
         State to transition to if reseal is successful (default is 'home with nucleus')
+    resealSuccessResistance : float
+        Resistance (Ohms) above which the reseal is considered successful (default is 1e9)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
     slurpDuration : float
@@ -1248,6 +1250,7 @@ class ResealState(PatchPipetteState):
         'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
         'retractionSuccessState': {'type': 'str', 'default': 'home with nucleus'},
+        'resealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
@@ -1260,6 +1263,7 @@ class ResealState(PatchPipetteState):
         PatchPipetteState.__init__(self, *args, **kwds)
         self._moveFuture = None
         self._pressureFuture = None
+        self._lastResistance = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
         self._analysis = ResealAnalysis(
             stretch_threshold=self.config['stretchDetectionThreshold'],
@@ -1312,6 +1316,11 @@ class ResealState(PatchPipetteState):
         """Return True if the resistance is decreasing."""
         return self._analysis.is_tearing()
 
+    def isRetractionSuccessful(self):
+        return self.retractionDistance() > self.config['retractionSuccessDistance'] or (
+                self._lastResistance is not None and self._lastResistance > self.config['resealSuccessResistance']
+        )
+
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
         while True:
@@ -1320,7 +1329,7 @@ class ResealState(PatchPipetteState):
             if len(tps) > 0:
                 break
             self.sleep(0.2)
-        self._analysis.process_test_pulses(tps)
+        self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
 
     def run(self):
         config = self.config
@@ -1338,7 +1347,7 @@ class ResealState(PatchPipetteState):
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
         recovery_future = None
         retraction_future = None
-        while not self.retractionSuccessful():
+        while not self.isRetractionSuccessful():
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
                 self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
                 return config['fallbackState']
@@ -1372,14 +1381,6 @@ class ResealState(PatchPipetteState):
         self.waitFor(self._moveFuture)
         self._taskDone()
         return config['retractionSuccessState']
-        # What should a successful autoreseal look like? This last experiment was a dream...reached and
-        # maintained a gigaseal with a nice nucleus and right at the surface the state switched to whole cell
-        # and turned off the regulator, causing a loss in the seal.
-        # Some things to consider:
-        #  * Do we want to increase the retraction speed when a gigareseal is reached?
-
-    def retractionSuccessful(self):
-        return self.retractionDistance() > self.config['retractionSuccessDistance']
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
