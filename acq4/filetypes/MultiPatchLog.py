@@ -5,6 +5,7 @@ from typing import Any
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
+from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -189,6 +190,7 @@ class MultiPatchLogData(object):
                 uses.append('auto_bias_target')
             if event_type in {'target_changed'}:
                 uses.append('target')
+            # currently ignored:
             # if event_type in {'move_requested'}:
             #     uses.append('move_request')
             if event_type in {'test_pulse'}:
@@ -272,25 +274,15 @@ class MultiPatchLogData(object):
                 dtype=float,
             ),
             # TODO save field of view dimensions to show stage (camera) position
-            # TODO save position polling
             # TODO save objective
             # TODO save lighting
             # TODO save clamp mode changes, holding voltage, current
             # TODO save entire test pulse
-            # TODO how do I want to structure move_request?
-            # 'move_request': np.zeros(
-            #     count_for_use('move_request'),
-            #     dtype=[('time', float), ('path', 'U32')],
-            # ),
+            # 'move_request': is currently ignored
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),
                 dtype=[(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO],
             ),
-            # 'test_pulse': MetaArray(
-            #     np.zeros(
-            #         (count_for_use('test_pulse'), len(TEST_PULSE_METAARRAY_INFO)),
-            #         dtype=float),
-            #     info=TEST_PULSE_METAARRAY_INFO),
         }
 
     @staticmethod
@@ -340,12 +332,26 @@ class MultiPatchLog(FileType):
 
 
 class PipettePathWidget(object):
-    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], start_time: float):
+    def __init__(
+            self,
+            name: str,
+            plot: pg.PlotItem,
+            log_data: MultiPatchLogData,
+            start_time: float,
+    ):
         self._name = name
+        self._parentPlot = plot
+        path = log_data[name]['position'][:]
         path[:, 0] -= start_time
         self._path = path
+        states = log_data[name]['state']
         self._states = [[s[0] - start_time, *s[1:]] for s in states]
-        # TODO handle empty states, path
+        self._targets = log_data[name]['target'][:]
+        self._targets[:, 0] -= start_time
+        print(self._targets)
+        self._target = None
+        self._targetIndex = None
+        self._displayTargetAtTime(0)
         # TODO time as color. twilight_shifted is maybe a good colormap
         # TODO z as alpha?
         self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
@@ -382,6 +388,28 @@ class PipettePathWidget(object):
                 break
             state = s
         self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
+        self._displayTargetAtTime(time, pos[2])
+
+    def _displayTargetAtTime(self, time: float, depth: float = 0.0):
+        if len(self._targets) == 0:
+            return
+        index = np.searchsorted(self._targets[:, 0], time) - 1
+        if self._targetIndex != index:
+            self._targetIndex = index
+            if self._target is not None:
+                self._parentPlot.removeItem(self._target)
+                self._target.setParent(None)
+                self._target.deleteLater()
+                self._target = None
+            if index < 0:
+                return
+            self._target = Target(
+                self._targets[index, 1:3], movable=False, pen=pg.mkPen('r'), label=f"Target: {self._name}")
+            self._target.setDepth(self._targets[index, 3])
+            self._target.setVisible(True)
+            self._parentPlot.addItem(self._target)
+        if self._target is not None:
+            self._target.setFocusDepth(depth)
 
     def getPosLabel(self) -> pg.ArrowItem:
         return self._arrow
@@ -421,14 +449,15 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO selectable event types to display?
     # TODO images should be displayed as the timeline matches?
     # TODO option to add plots for anything else
-    # TODO add target position
-    # TODO we don't poll the position, so the movement requests are all we have
+    # TODO save initial target when log starts
+    # TODO save device positions, orientation when log starts
     # TODO investigate what logging autopatch module does
     # TODO associate all images and recordings with the cell
     # TODO multipatch logs are one-per-cell
     # TODO they can reference each other?
     # TODO selectable cells, pipettes
     # TODO filter log messages by type
+    # TODO record the patch profile params and any changes thereof
     # TODO don't try to display position Z
     # TODO scale markers with si units
     # TODO make sure all the time values start at 0
@@ -492,7 +521,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             test_pulses = log_data[dev]['test_pulse']
             if len(path) > 0:
                 widget = PipettePathWidget(
-                    dev, path=path, plot=self._visual_field, states=states, start_time=self.startTime())
+                    dev, plot=self._visual_field, log_data=log_data, start_time=self.startTime())
                 self._pipettes.append(widget)
             self.plotTestPulses(test_pulses, states)
 
