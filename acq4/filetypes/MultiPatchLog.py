@@ -352,10 +352,16 @@ class PipettePathWidget(object):
         self._target = None
         self._targetIndex = None
         self._displayTargetAtTime(0)
-        # TODO time as color. twilight_shifted is maybe a good colormap
         # TODO z as alpha?
-        self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
-        plot.addItem(self._plot)
+        self._futurePlot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen((80, 150, 255), width=2))
+        self._futurePlot.setZValue(-1)
+        plot.addItem(self._futurePlot)
+        self._presentPlot = pg.PlotDataItem([], [], pen=pg.mkPen('y', width=2))
+        self._presentPlot.setZValue(1)
+        plot.addItem(self._presentPlot)
+        self._pastPlot = pg.PlotDataItem([], [], pen=pg.mkPen((160, 20, 185), width=2))
+        self._pastPlot.setZValue(-2)
+        plot.addItem(self._pastPlot)
         self._arrow = pg.ArrowItem(pen=pg.mkPen('w', width=2))
         self._arrow.setPos(self._path[0, 1], self._path[0, 2])
         plot.addItem(self._arrow)
@@ -374,11 +380,17 @@ class PipettePathWidget(object):
         next_index = min(np.searchsorted(self._path[:, 0], time), len(self._path) - 1)
         if next_index == 0:
             pos = self._path[0, 1:]
+            self._presentPlot.setData([], [])
         elif next_index == len(self._path) - 1:
             pos = self._path[-1, 1:]
+            self._presentPlot.setData([], [])
         else:
             part = (time - self._path[next_index - 1, 0]) / (self._path[next_index, 0] - self._path[next_index - 1, 0])
             pos = (1 - part) * self._path[next_index - 1, 1:] + self._path[next_index, 1:] * part
+            self._presentPlot.setData([self._path[next_index - 1, 1], self._path[next_index, 1]],
+                                      [self._path[next_index - 1, 2], self._path[next_index, 2]])
+        self._pastPlot.setData(self._path[:next_index, 1], self._path[:next_index, 2])
+        self._futurePlot.setData(self._path[next_index:, 1], self._path[next_index:, 2])
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
@@ -510,7 +522,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         return max(log.lastTime() for log in self._logFiles) or 0
 
     def addLog(self, log: "FileHandle"):
-        log_data = log.read()
+        log_data: MultiPatchLogData = log.read()
         self._logFiles.append(log_data)
         if log.parent():
             self.loadImagesFromDir(log.parent().parent())
