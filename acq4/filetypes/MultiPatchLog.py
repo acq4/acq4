@@ -483,6 +483,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._cells = []
         self._events = []
         self._widgets = []
+        self._frames = []
         self._pinned_image_z = -10000
         self._stretch_threshold = 0.005
         self._tear_threshold = -0.00128
@@ -517,6 +518,13 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._timeLabel.setText(f"{time} s")
         for p in self._pipettes:
             p.setTime(time)
+        self._pinned_image_z = -10000
+        for frame, img in self._frames:
+            if frame <= time:
+                img.setZValue(self._pinned_image_z)
+                self._pinned_image_z += 1
+            else:
+                img.setZValue(-10000)
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
@@ -617,7 +625,6 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        # TODO integrate with time-slider to display and set the qt Z values
         from acq4.util.imaging import Frame
 
         for f in directory.ls():
@@ -629,6 +636,8 @@ class MultiPatchLogWidget(Qt.QWidget):
                 img.setZValue(self._pinned_image_z)
                 self._pinned_image_z += 1
                 self._visual_field.addItem(img)
+                self._frames.append((frame.info().get('time', 0) - self.startTime(), img))
+        self._frames = sorted(self._frames, key=lambda x: x[0])
 
     def close(self):
         for w in self._widgets:
