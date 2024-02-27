@@ -373,9 +373,6 @@ class PipettePathWidget(object):
         self._label.setPos(self._path[0, 1], self._path[0, 2])
         plot.addItem(self._label)
 
-    def getPlot(self) -> pg.PlotDataItem:
-        return self._plot
-
     def setTime(self, time: float):
         next_index = min(np.searchsorted(self._path[:, 0], time), len(self._path) - 1)
         if next_index == 0:
@@ -427,15 +424,21 @@ class PipettePathWidget(object):
         return self._arrow
 
     def setParent(self, parent):
-        self._plot.setParent(parent)
+        self._pastPlot.setParent(parent)
+        self._presentPlot.setParent(parent)
+        self._futurePlot.setParent(parent)
         self._label.setParent(parent)
 
     def deleteLater(self):
-        self._plot.deleteLater()
-        self._plot = None
         self._arrow = None
         self._label.deleteLater()
         self._label = None
+        self._presentPlot.deleteLater()
+        self._presentPlot = None
+        self._futurePlot.deleteLater()
+        self._futurePlot = None
+        self._pastPlot.deleteLater()
+        self._pastPlot = None
 
 
 class PipetteStateRegion(pg.LinearRegionItem):
