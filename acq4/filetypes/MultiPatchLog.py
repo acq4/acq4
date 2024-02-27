@@ -348,7 +348,6 @@ class PipettePathWidget(object):
         self._states = [[s[0] - start_time, *s[1:]] for s in states]
         self._targets = log_data[name]['target'][:]
         self._targets[:, 0] -= start_time
-        print(self._targets)
         self._target = None
         self._targetIndex = None
         self._displayTargetAtTime(0)
@@ -487,17 +486,20 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._pinned_image_z = -10000
         self._stretch_threshold = 0.005
         self._tear_threshold = -0.00128
-        self._layout = Qt.QVBoxLayout()
-        self.setLayout(self._layout)
+        layout = Qt.QGridLayout()
+        self.setLayout(layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
         self._widgets.append(self._plots_widget)
-        self._layout.addWidget(self._plots_widget)
+        layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
-        self._resistance_plot = self._plots_widget.addPlot(name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
+        self._resistance_plot = self._plots_widget.addPlot(
+            name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        self._analysis_plot.addItem(pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
-        self._analysis_plot.addItem(pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(
+            pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(
+            pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -509,13 +511,62 @@ class MultiPatchLogWidget(Qt.QWidget):
         )
         self._timeSlider.sigPositionChanged.connect(self.timeChanged)
         self._resistance_plot.addItem(self._timeSlider)
+        ctrl_widget = Qt.QWidget()
+        self._ctrl_layout = Qt.QVBoxLayout()
+        ctrl_widget.setLayout(self._ctrl_layout)
+        self._buildCtrlUi()
+        layout.addWidget(ctrl_widget, 0, 1)
 
-        self._timeLabel = Qt.QLabel()
-        self._layout.addWidget(self._timeLabel)
+    def _buildCtrlUi(self):
+        self._ctrl_layout.addWidget(Qt.QLabel('Events:'))
+        states = Qt.QCheckBox('State Changes')
+        states.stateChanged.connect(self._toggleStateChanges)
+        self._ctrl_layout.addWidget(states)
+        status = Qt.QCheckBox('Status Messages')
+        status.stateChanged.connect(self._toggleStatusMessages)
+        self._ctrl_layout.addWidget(status)
+        self._ctrl_layout.addWidget(Qt.QLabel('Plots:'))
+        peak_resistance = Qt.QCheckBox('Peak Resistance')
+        peak_resistance.stateChanged.connect(self._togglePeakResistance)
+        self._ctrl_layout.addWidget(peak_resistance)
+        steady_resistance = Qt.QCheckBox('Steady State Resistance')
+        steady_resistance.stateChanged.connect(self._toggleSteadyResistance)
+        self._ctrl_layout.addWidget(steady_resistance)
+        analysis = Qt.QCheckBox('Analysis')
+        analysis.stateChanged.connect(self._toggleAnalysis)
+        self._ctrl_layout.addWidget(analysis)
+        self._ctrl_layout.addWidget(Qt.QLabel('Stretch threshold:'))
+        stretch_threshold_input = Qt.QLineEdit(f"{self._stretch_threshold:.6f}")
+        stretch_threshold_input.editingFinished.connect(self._stretchThresholdChanged)
+        self._ctrl_layout.addWidget(stretch_threshold_input)
+        self._ctrl_layout.addWidget(Qt.QLabel('Tear threshold:'))
+        tear_threshold_input = Qt.QLineEdit(f"{self._tear_threshold:.6f}")
+        tear_threshold_input.editingFinished.connect(self._tearThresholdChanged)
+        self._ctrl_layout.addWidget(tear_threshold_input)
+
+    def _toggleStateChanges(self):
+        pass
+
+    def _toggleStatusMessages(self):
+        pass
+
+    def _stretchThresholdChanged(self):
+        pass
+
+    def _tearThresholdChanged(self):
+        pass
+
+    def _togglePeakResistance(self):
+        pass
+
+    def _toggleSteadyResistance(self):
+        pass
+
+    def _toggleAnalysis(self):
+        pass
 
     def timeChanged(self, slider: pg.InfiniteLine):
         time = slider.getXPos()
-        self._timeLabel.setText(f"{time} s")
         for p in self._pipettes:
             p.setTime(time)
         self._pinned_image_z = -10000
