@@ -5,6 +5,7 @@ from typing import Any
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
+from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -179,18 +180,17 @@ class MultiPatchLogData(object):
     def process(self, filename) -> None:
         def possible_uses_for_type(event_type: str) -> list[str]:
             uses = ['event']
-            if event_type in {'move_start', 'move_stop'}:
+            if event_type in {'pipette_transform_changed', 'move_start', 'move_stop'}:
                 uses.append('position')
             if event_type in {'pressure_changed'}:
                 uses.append('pressure')
-            if event_type in {'pipette_transform_changed'}:
-                uses.append('pipette_transform')
             if event_type in {'state_change', 'state_event'}:
                 uses.append('state')
             if event_type in {'auto_bias_enabled', 'auto_bias_target_changed'}:
                 uses.append('auto_bias_target')
             if event_type in {'target_changed'}:
                 uses.append('target')
+            # currently ignored:
             # if event_type in {'move_requested'}:
             #     uses.append('move_request')
             if event_type in {'test_pulse'}:
@@ -274,25 +274,15 @@ class MultiPatchLogData(object):
                 dtype=float,
             ),
             # TODO save field of view dimensions to show stage (camera) position
-            # TODO save position polling
             # TODO save objective
             # TODO save lighting
             # TODO save clamp mode changes, holding voltage, current
             # TODO save entire test pulse
-            # TODO how do I want to structure move_request?
-            # 'move_request': np.zeros(
-            #     count_for_use('move_request'),
-            #     dtype=[('time', float), ('path', 'U32')],
-            # ),
+            # 'move_request': is currently ignored
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),
                 dtype=[(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO],
             ),
-            # 'test_pulse': MetaArray(
-            #     np.zeros(
-            #         (count_for_use('test_pulse'), len(TEST_PULSE_METAARRAY_INFO)),
-            #         dtype=float),
-            #     info=TEST_PULSE_METAARRAY_INFO),
         }
 
     @staticmethod
@@ -301,7 +291,7 @@ class MultiPatchLogData(object):
         if use == 'event':
             return event_time, event['event'], event['is_true']
         if use == 'position':
-            return event_time, *event['position']
+            return event_time, *event.get('position', event.get('globalPosition', (np.nan, np.nan, np.nan)))
         if use == 'pressure':
             return event_time, event['pressure'], event['source']
         if use == 'pipette_transform':
@@ -342,35 +332,61 @@ class MultiPatchLog(FileType):
 
 
 class PipettePathWidget(object):
-    def __init__(self, name: str, path: np.ndarray, plot: pg.PlotItem, states: list[tuple[float, str, str]], start_time: float):
+    def __init__(
+            self,
+            name: str,
+            plot: pg.PlotItem,
+            log_data: MultiPatchLogData,
+            start_time: float,
+    ):
         self._name = name
+        self._parentPlot = plot
+        path = log_data[name]['position'][:]
         path[:, 0] -= start_time
         self._path = path
+        states = log_data[name]['state']
         self._states = [[s[0] - start_time, *s[1:]] for s in states]
-        # TODO handle empty states, path
-        # TODO time as color. twilight_shifted is maybe a good colormap
+        self._targets = log_data[name]['target'][:]
+        self._targets[:, 0] -= start_time
+        self._target = None
+        self._targetIndex = None
+        self._displayTargetAtTime(0)
         # TODO z as alpha?
-        self._plot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen('b', width=2))
-        plot.addItem(self._plot)
-        self._arrow = pg.ArrowItem(pen=pg.mkPen('b', width=2))
+        self._futurePlot = pg.PlotDataItem(self._path[:, 1], self._path[:, 2], pen=pg.mkPen((80, 150, 255), width=2))
+        self._futurePlot.setZValue(-1)
+        plot.addItem(self._futurePlot)
+        self._presentPlot = pg.PlotDataItem([], [], pen=pg.mkPen('y', width=2))
+        self._presentPlot.setZValue(1)
+        plot.addItem(self._presentPlot)
+        self._pastPlot = pg.PlotDataItem([], [], pen=pg.mkPen((160, 20, 185), width=2))
+        self._pastPlot.setZValue(-2)
+        plot.addItem(self._pastPlot)
+        self._arrow = pg.ArrowItem(pen=pg.mkPen('w', width=2))
         self._arrow.setPos(self._path[0, 1], self._path[0, 2])
         plot.addItem(self._arrow)
-        self._label = pg.TextItem(text=f"{name}: {states[0][1]}\n {states[0][2]}", color=pg.mkColor('w'))
+        if len(states) > 0:
+            label_text = f"{name}: {states[0][1]}\n {states[0][2]}"
+        else:
+            label_text = name
+        self._label = pg.TextItem(text=label_text, color=pg.mkColor('w'))
         self._label.setPos(self._path[0, 1], self._path[0, 2])
         plot.addItem(self._label)
-
-    def getPlot(self) -> pg.PlotDataItem:
-        return self._plot
 
     def setTime(self, time: float):
         next_index = min(np.searchsorted(self._path[:, 0], time), len(self._path) - 1)
         if next_index == 0:
             pos = self._path[0, 1:]
+            self._presentPlot.setData([], [])
         elif next_index == len(self._path) - 1:
             pos = self._path[-1, 1:]
+            self._presentPlot.setData([], [])
         else:
             part = (time - self._path[next_index - 1, 0]) / (self._path[next_index, 0] - self._path[next_index - 1, 0])
             pos = (1 - part) * self._path[next_index - 1, 1:] + self._path[next_index, 1:] * part
+            self._presentPlot.setData([self._path[next_index - 1, 1], self._path[next_index, 1]],
+                                      [self._path[next_index - 1, 2], self._path[next_index, 2]])
+        self._pastPlot.setData(self._path[:next_index, 1], self._path[:next_index, 2])
+        self._futurePlot.setData(self._path[next_index:, 1], self._path[next_index:, 2])
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
@@ -380,20 +396,48 @@ class PipettePathWidget(object):
                 break
             state = s
         self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
+        self._displayTargetAtTime(time, pos[2])
+
+    def _displayTargetAtTime(self, time: float, depth: float = 0.0):
+        if len(self._targets) == 0:
+            return
+        index = np.searchsorted(self._targets[:, 0], time) - 1
+        if self._targetIndex != index:
+            self._targetIndex = index
+            if self._target is not None:
+                self._parentPlot.removeItem(self._target)
+                self._target.setParent(None)
+                self._target.deleteLater()
+                self._target = None
+            if index < 0:
+                return
+            self._target = Target(
+                self._targets[index, 1:3], movable=False, pen=pg.mkPen('r'), label=f"Target: {self._name}")
+            self._target.setDepth(self._targets[index, 3])
+            self._target.setVisible(True)
+            self._parentPlot.addItem(self._target)
+        if self._target is not None:
+            self._target.setFocusDepth(depth)
 
     def getPosLabel(self) -> pg.ArrowItem:
         return self._arrow
 
     def setParent(self, parent):
-        self._plot.setParent(parent)
+        self._pastPlot.setParent(parent)
+        self._presentPlot.setParent(parent)
+        self._futurePlot.setParent(parent)
         self._label.setParent(parent)
 
     def deleteLater(self):
-        self._plot.deleteLater()
-        self._plot = None
         self._arrow = None
         self._label.deleteLater()
         self._label = None
+        self._presentPlot.deleteLater()
+        self._presentPlot = None
+        self._futurePlot.deleteLater()
+        self._futurePlot = None
+        self._pastPlot.deleteLater()
+        self._pastPlot = None
 
 
 class PipetteStateRegion(pg.LinearRegionItem):
@@ -419,14 +463,15 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO selectable event types to display?
     # TODO images should be displayed as the timeline matches?
     # TODO option to add plots for anything else
-    # TODO add target position
-    # TODO we don't poll the position, so the movement requests are all we have
+    # TODO save initial target when log starts
+    # TODO save device positions, orientation when log starts
     # TODO investigate what logging autopatch module does
     # TODO associate all images and recordings with the cell
     # TODO multipatch logs are one-per-cell
     # TODO they can reference each other?
     # TODO selectable cells, pipettes
     # TODO filter log messages by type
+    # TODO record the patch profile params and any changes thereof
     # TODO don't try to display position Z
     # TODO scale markers with si units
     # TODO make sure all the time values start at 0
@@ -437,20 +482,24 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._cells = []
         self._events = []
         self._widgets = []
+        self._frames = []
         self._pinned_image_z = -10000
         self._stretch_threshold = 0.005
         self._tear_threshold = -0.00128
-        self._layout = Qt.QVBoxLayout()
-        self.setLayout(self._layout)
+        layout = Qt.QGridLayout()
+        self.setLayout(layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
         self._widgets.append(self._plots_widget)
-        self._layout.addWidget(self._plots_widget)
+        layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
-        self._resistance_plot = self._plots_widget.addPlot(name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
+        self._resistance_plot = self._plots_widget.addPlot(
+            name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        self._analysis_plot.addItem(pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
-        self._analysis_plot.addItem(pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(
+            pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(
+            pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -462,15 +511,71 @@ class MultiPatchLogWidget(Qt.QWidget):
         )
         self._timeSlider.sigPositionChanged.connect(self.timeChanged)
         self._resistance_plot.addItem(self._timeSlider)
+        ctrl_widget = Qt.QWidget()
+        self._ctrl_layout = Qt.QVBoxLayout()
+        ctrl_widget.setLayout(self._ctrl_layout)
+        self._buildCtrlUi()
+        layout.addWidget(ctrl_widget, 0, 1)
 
-        self._timeLabel = Qt.QLabel()
-        self._layout.addWidget(self._timeLabel)
+    def _buildCtrlUi(self):
+        self._ctrl_layout.addWidget(Qt.QLabel('Events:'))
+        states = Qt.QCheckBox('State Changes')
+        states.stateChanged.connect(self._toggleStateChanges)
+        self._ctrl_layout.addWidget(states)
+        status = Qt.QCheckBox('Status Messages')
+        status.stateChanged.connect(self._toggleStatusMessages)
+        self._ctrl_layout.addWidget(status)
+        self._ctrl_layout.addWidget(Qt.QLabel('Plots:'))
+        peak_resistance = Qt.QCheckBox('Peak Resistance')
+        peak_resistance.stateChanged.connect(self._togglePeakResistance)
+        self._ctrl_layout.addWidget(peak_resistance)
+        steady_resistance = Qt.QCheckBox('Steady State Resistance')
+        steady_resistance.stateChanged.connect(self._toggleSteadyResistance)
+        self._ctrl_layout.addWidget(steady_resistance)
+        analysis = Qt.QCheckBox('Analysis')
+        analysis.stateChanged.connect(self._toggleAnalysis)
+        self._ctrl_layout.addWidget(analysis)
+        self._ctrl_layout.addWidget(Qt.QLabel('Stretch threshold:'))
+        stretch_threshold_input = Qt.QLineEdit(f"{self._stretch_threshold:.6f}")
+        stretch_threshold_input.editingFinished.connect(self._stretchThresholdChanged)
+        self._ctrl_layout.addWidget(stretch_threshold_input)
+        self._ctrl_layout.addWidget(Qt.QLabel('Tear threshold:'))
+        tear_threshold_input = Qt.QLineEdit(f"{self._tear_threshold:.6f}")
+        tear_threshold_input.editingFinished.connect(self._tearThresholdChanged)
+        self._ctrl_layout.addWidget(tear_threshold_input)
+
+    def _toggleStateChanges(self):
+        pass
+
+    def _toggleStatusMessages(self):
+        pass
+
+    def _stretchThresholdChanged(self):
+        pass
+
+    def _tearThresholdChanged(self):
+        pass
+
+    def _togglePeakResistance(self):
+        pass
+
+    def _toggleSteadyResistance(self):
+        pass
+
+    def _toggleAnalysis(self):
+        pass
 
     def timeChanged(self, slider: pg.InfiniteLine):
         time = slider.getXPos()
-        self._timeLabel.setText(f"{time} s")
         for p in self._pipettes:
             p.setTime(time)
+        self._pinned_image_z = -10000
+        for frame, img in self._frames:
+            if frame <= time:
+                img.setZValue(self._pinned_image_z)
+                self._pinned_image_z += 1
+            else:
+                img.setZValue(-10000)
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
@@ -479,7 +584,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         return max(log.lastTime() for log in self._logFiles) or 0
 
     def addLog(self, log: "FileHandle"):
-        log_data = log.read()
+        log_data: MultiPatchLogData = log.read()
         self._logFiles.append(log_data)
         if log.parent():
             self.loadImagesFromDir(log.parent().parent())
@@ -490,11 +595,12 @@ class MultiPatchLogWidget(Qt.QWidget):
             test_pulses = log_data[dev]['test_pulse']
             if len(path) > 0:
                 widget = PipettePathWidget(
-                    dev, path=path, plot=self._visual_field, states=states, start_time=self.startTime())
+                    dev, plot=self._visual_field, log_data=log_data, start_time=self.startTime())
                 self._pipettes.append(widget)
             self.plotTestPulses(test_pulses, states)
 
         self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
+        self._resistance_plot.setXRange(0, self.endTime() - self.startTime())
 
     def plotTestPulses(self, test_pulses, states):
         from acq4.devices.PatchPipette.states import ResealAnalysis
@@ -504,25 +610,28 @@ class MultiPatchLogWidget(Qt.QWidget):
         if len(time) > 0:
             self._resistance_plot.plot(
                 time, test_pulses['steadyStateResistance'], pen=pg.mkPen('b'))
-            self._resistance_plot.plot(
-                time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
+            # self._resistance_plot.plot(
+            #     time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
             # plot the exponential average as is used by the reseal logic
             analyzer = ResealAnalysis(self._stretch_threshold, self._tear_threshold, 4, 10)
             measurements = np.concatenate(
                 (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
-            if len(measurements) > 0:
-                analysis = analyzer.process_measurements(measurements)
-                self._analysis_plot.plot(analysis["time"], analysis["detection"], pen=pg.mkPen('b'))
-                self._analysis_plot.plot(analysis["time"], analysis["repair"], pen=pg.mkPen(90, 140, 255))
-                stretching = analysis["stretching"].astype(float)
-                stretching[analysis["stretching"] < 1] = np.nan
-                stretching -= 1
-                self._analysis_plot.plot(analysis["time"], stretching, pen=pg.mkPen('g'), symbol='x')
-                tearing = analysis["tearing"].astype(float)
-                tearing[analysis["tearing"] < 1] = np.nan
-                tearing -= 1
-                self._analysis_plot.plot(analysis["time"], tearing, pen=pg.mkPen('r'), symbol='o')
-
+            # break the analysis up by state changes
+            state_times = [s[0] - self.startTime() for s in states if s[2] == '']
+            start_indexes = np.searchsorted(time, state_times)
+            start_indexes = np.concatenate(([0], start_indexes, [len(states)]))
+            for i in range(len(start_indexes) - 1):
+                start = start_indexes[i]
+                end = start_indexes[i + 1]
+                if start >= end - 1:
+                    continue
+                analysis = analyzer.process_measurements(measurements[start:end])
+                self._analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
+                self._analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
+                self._resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen(80, 255, 120))
+                self._resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(110, 255, 190))
+                self._plotCenteredBooleans(analysis["time"], analysis["stretching"], 'g', 'x')
+                self._plotCenteredBooleans(analysis["time"], analysis["tearing"], 'r', 'o')
             last_time = None
             last_state = None
             region_idx = 0
@@ -546,6 +655,12 @@ class MultiPatchLogWidget(Qt.QWidget):
                 brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
                 self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
 
+    def _plotCenteredBooleans(self, time, data, color, symbol):
+        data = data.astype(float)
+        data[data < 1] = np.nan
+        data -= 1
+        self._analysis_plot.plot(time, data, pen=pg.mkPen(color), symbol=symbol)
+
     def _addRegion(self, start, end, brush, label):
         region = PipetteStateRegion([start, end], movable=False, brush=brush)
         region.doubleclicked.connect(self._zoomToRegion)
@@ -561,7 +676,6 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        # TODO integrate with time-slider to display and set the qt Z values
         from acq4.util.imaging import Frame
 
         for f in directory.ls():
@@ -573,6 +687,8 @@ class MultiPatchLogWidget(Qt.QWidget):
                 img.setZValue(self._pinned_image_z)
                 self._pinned_image_z += 1
                 self._visual_field.addItem(img)
+                self._frames.append((frame.info().get('time', 0) - self.startTime(), img))
+        self._frames = sorted(self._frames, key=lambda x: x[0])
 
     def close(self):
         for w in self._widgets:
