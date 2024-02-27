@@ -536,25 +536,28 @@ class MultiPatchLogWidget(Qt.QWidget):
         if len(time) > 0:
             self._resistance_plot.plot(
                 time, test_pulses['steadyStateResistance'], pen=pg.mkPen('b'))
-            self._resistance_plot.plot(
-                time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
+            # self._resistance_plot.plot(
+            #     time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
             # plot the exponential average as is used by the reseal logic
             analyzer = ResealAnalysis(self._stretch_threshold, self._tear_threshold, 4, 10)
             measurements = np.concatenate(
                 (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
-            if len(measurements) > 0:
-                analysis = analyzer.process_measurements(measurements)
-                self._analysis_plot.plot(analysis["time"], analysis["detection"], pen=pg.mkPen('b'))
-                self._analysis_plot.plot(analysis["time"], analysis["repair"], pen=pg.mkPen(90, 140, 255))
-                stretching = analysis["stretching"].astype(float)
-                stretching[analysis["stretching"] < 1] = np.nan
-                stretching -= 1
-                self._analysis_plot.plot(analysis["time"], stretching, pen=pg.mkPen('g'), symbol='x')
-                tearing = analysis["tearing"].astype(float)
-                tearing[analysis["tearing"] < 1] = np.nan
-                tearing -= 1
-                self._analysis_plot.plot(analysis["time"], tearing, pen=pg.mkPen('r'), symbol='o')
-
+            # break the analysis up by state changes
+            state_times = [s[0] - self.startTime() for s in states if s[2] == '']
+            start_indexes = np.searchsorted(time, state_times)
+            start_indexes = np.concatenate(([0], start_indexes, [len(states)]))
+            for i in range(len(start_indexes) - 1):
+                start = start_indexes[i]
+                end = start_indexes[i + 1]
+                if start >= end - 1:
+                    continue
+                analysis = analyzer.process_measurements(measurements[start:end])
+                self._analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
+                self._analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
+                self._resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen(80, 255, 120))
+                self._resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(110, 255, 190))
+                self._plotCenteredBooleans(analysis["time"], analysis["stretching"], 'g', 'x')
+                self._plotCenteredBooleans(analysis["time"], analysis["tearing"], 'r', 'o')
             last_time = None
             last_state = None
             region_idx = 0
@@ -577,6 +580,12 @@ class MultiPatchLogWidget(Qt.QWidget):
             if last_time is not None:
                 brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
                 self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
+
+    def _plotCenteredBooleans(self, time, data, color, symbol):
+        data = data.astype(float)
+        data[data < 1] = np.nan
+        data -= 1
+        self._analysis_plot.plot(time, data, pen=pg.mkPen(color), symbol=symbol)
 
     def _addRegion(self, start, end, brush, label):
         region = PipetteStateRegion([start, end], movable=False, brush=brush)

@@ -1125,8 +1125,10 @@ class ResealAnalysis(object):
             dtype=[
                 ('time', float),
                 ('resistance', float),
-                ('detection', float),
-                ('repair', float),
+                ('detect_avg', float),
+                ('repair_avg', float),
+                ('detect_ratio', float),
+                ('repair_ratio', float),
                 ('stretching', bool),
                 ('tearing', bool),
             ])
@@ -1134,7 +1136,7 @@ class ResealAnalysis(object):
             start_time, resistance = measurement
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, 1, 1, False, False)
+                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False)
                     self._last_measurement = ret_array[i]
                     continue
                 else:
@@ -1143,25 +1145,29 @@ class ResealAnalysis(object):
                 last_measurement = ret_array[i - 1]
 
             dt = start_time - last_measurement['time']
-            ratio = np.log10(resistance / last_measurement['resistance'])
 
             detection_alpha = 1 - np.exp(-dt / self._detection_tau)
             detection_avg = (
-                    last_measurement['detection'] * (1 - detection_alpha)
-                    + ratio * detection_alpha
+                    last_measurement['detect_avg'] * (1 - detection_alpha)
+                    + resistance * detection_alpha
             )
+            detection_ratio = np.log10(detection_avg / last_measurement['detect_avg'])
             repair_alpha = 1 - np.exp(-dt / self._repair_tau)
             repair_avg = (
-                    last_measurement['repair'] * (1 - repair_alpha)
-                    + ratio * repair_alpha
+                    last_measurement['repair_avg'] * (1 - repair_alpha)
+                    + resistance * repair_alpha
             )
-            is_stretching = detection_avg > self._stretch_threshold or repair_avg > self._stretch_threshold
-            is_tearing = detection_avg < self._tear_threshold or repair_avg < self._tear_threshold
+            repair_ratio = np.log10(repair_avg / last_measurement['repair_avg'])
+
+            is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
+            is_tearing = detection_ratio < self._tear_threshold or repair_ratio < self._tear_threshold
             ret_array[i] = (
                 start_time,
                 resistance,
                 detection_avg,
                 repair_avg,
+                detection_ratio,
+                repair_ratio,
                 is_stretching,
                 is_tearing,
             )
