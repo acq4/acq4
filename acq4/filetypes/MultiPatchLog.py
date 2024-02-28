@@ -484,6 +484,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._widgets = []
         self._frames = []
         self._pinned_image_z = -10000
+        self._detection_τ = 5
+        self._repair_τ = 10
         self._stretch_threshold = 0.005
         self._tear_threshold = -0.00128
         layout = Qt.QGridLayout()
@@ -497,10 +499,12 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._resistance_plot = self._plots_widget.addPlot(
             name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        self._analysis_plot.addItem(
-            pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
-        self._analysis_plot.addItem(
-            pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
+        stretch = pg.InfiniteLine(movable=True, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w'))
+        self._analysis_plot.addItem(stretch)
+        stretch.sigPositionChanged.connect(self._analysisParamsChanged)
+        tear = pg.InfiniteLine(movable=True, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w'))
+        self._analysis_plot.addItem(tear)
+        tear.sigPositionChanged.connect(self._analysisParamsChanged)
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -512,7 +516,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         )
         self._timeSlider.sigPositionChanged.connect(self.timeChanged)
         self._resistance_plot.addItem(self._timeSlider)
-        ctrl_widget = Qt.QWidget()
+        ctrl_widget = Qt.QWidget(self)
         ctrl_widget.setMaximumWidth(200)
         self._ctrl_layout = Qt.QVBoxLayout()
         ctrl_widget.setLayout(self._ctrl_layout)
@@ -520,6 +524,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         layout.addWidget(ctrl_widget, 0, 1)
 
     def _buildCtrlUi(self):
+        # TODO color picker for each plot
         self._ctrl_layout.addWidget(Qt.QLabel('Events:'))
         states = Qt.QCheckBox('State Changes')
         states.stateChanged.connect(self._toggleStateChanges)
@@ -537,14 +542,14 @@ class MultiPatchLogWidget(Qt.QWidget):
         analysis = Qt.QCheckBox('Analysis')
         analysis.stateChanged.connect(self._toggleAnalysis)
         self._ctrl_layout.addWidget(analysis)
-        self._ctrl_layout.addWidget(Qt.QLabel('Stretch threshold:'))
-        stretch_threshold_input = Qt.QLineEdit(f"{self._stretch_threshold:.6f}")
-        stretch_threshold_input.editingFinished.connect(self._stretchThresholdChanged)
-        self._ctrl_layout.addWidget(stretch_threshold_input)
-        self._ctrl_layout.addWidget(Qt.QLabel('Tear threshold:'))
-        tear_threshold_input = Qt.QLineEdit(f"{self._tear_threshold:.6f}")
-        tear_threshold_input.editingFinished.connect(self._tearThresholdChanged)
-        self._ctrl_layout.addWidget(tear_threshold_input)
+        self._ctrl_layout.addWidget(Qt.QLabel('Detection τ'))
+        detection_τ = Qt.QLineEdit(f"{self._detection_τ:.6f}")
+        detection_τ.editingFinished.connect(self._analysisParamsChanged)
+        self._ctrl_layout.addWidget(detection_τ)
+        self._ctrl_layout.addWidget(Qt.QLabel('Repair τ'))
+        repair_τ = Qt.QLineEdit(f"{self._repair_τ:.6f}")
+        repair_τ.editingFinished.connect(self._analysisParamsChanged)
+        self._ctrl_layout.addWidget(repair_τ)
 
     def _toggleStateChanges(self):
         pass
@@ -552,10 +557,7 @@ class MultiPatchLogWidget(Qt.QWidget):
     def _toggleStatusMessages(self):
         pass
 
-    def _stretchThresholdChanged(self):
-        pass
-
-    def _tearThresholdChanged(self):
+    def _analysisParamsChanged(self):
         pass
 
     def _togglePeakResistance(self):
@@ -611,11 +613,11 @@ class MultiPatchLogWidget(Qt.QWidget):
         time = test_pulses['event_time'] - self.startTime()
         if len(time) > 0:
             self._resistance_plot.plot(
-                time, test_pulses['steadyStateResistance'], pen=pg.mkPen('b'))
+                time, test_pulses['steadyStateResistance'], pen=pg.mkPen('g'))
             # self._resistance_plot.plot(
             #     time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
             # plot the exponential average as is used by the reseal logic
-            analyzer = ResealAnalysis(self._stretch_threshold, self._tear_threshold, 4, 10)
+            analyzer = ResealAnalysis(self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
             measurements = np.concatenate(
                 (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
             # break the analysis up by state changes
@@ -629,10 +631,10 @@ class MultiPatchLogWidget(Qt.QWidget):
                     continue
                 analysis = analyzer.process_measurements(measurements[start:end])
                 self._analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
+                self._resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
                 self._analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
-                self._resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen(80, 255, 120))
-                self._resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(110, 255, 190))
-                self._plotCenteredBooleans(analysis["time"], analysis["stretching"], 'g', 'x')
+                self._resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
+                self._plotCenteredBooleans(analysis["time"], analysis["stretching"], 'y', 'x')
                 self._plotCenteredBooleans(analysis["time"], analysis["tearing"], 'r', 'o')
             last_time = None
             last_state = None
@@ -657,11 +659,11 @@ class MultiPatchLogWidget(Qt.QWidget):
                 brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
                 self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
 
-    def _plotCenteredBooleans(self, time, data, color, symbol):
+    def _plotCenteredBooleans(self, time, data, color, symbol) -> pg.PlotDataItem:
         data = data.astype(float)
         data[data < 1] = np.nan
         data -= 1
-        self._analysis_plot.plot(time, data, pen=pg.mkPen(color), symbol=symbol)
+        return self._analysis_plot.plot(time, data, pen=pg.mkPen(color), symbol=symbol)
 
     def _addRegion(self, start, end, brush, label):
         region = PipetteStateRegion([start, end], movable=False, brush=brush)
