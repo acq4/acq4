@@ -355,7 +355,7 @@ class Pipette(Device, OptomechDevice):
         scope = self.scopeDevice()
         surface = scope.getSurfaceDepth()
         if surface is None:
-            raise Exception("Surface depth has not been set.")
+            raise ValueError("Surface depth has not been set.")
         return surface + self._opts['approachHeight']
 
     def depthBelowSurface(self):
@@ -453,7 +453,7 @@ class Pipette(Device, OptomechDevice):
 
     def targetPosition(self):
         if self.target is None:
-            raise RuntimeError("No target defined for %s" % self.name())
+            raise RuntimeError(f"No target defined for {self.name()}")
         return self.target
 
     def hideMarkers(self, hide):

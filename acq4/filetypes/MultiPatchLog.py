@@ -487,6 +487,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._stretch_threshold = 0.005
         self._tear_threshold = -0.00128
         layout = Qt.QGridLayout()
+        # TODO my layout skills suuuuuck
         self.setLayout(layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
         self._widgets.append(self._plots_widget)

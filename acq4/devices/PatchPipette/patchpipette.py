@@ -286,7 +286,7 @@ class PatchPipette(Device):
         self.emitNewEvent('pipette_calibrated')
 
     def _pipetteTransformChanged(self, pip, movedDevice):
-        pos = pip.globalPosition()
+        pos = np.array(pip.globalPosition())
         if self._lastPos is None or np.linalg.norm(pos - self._lastPos) > 1e-6:
             self._lastPos = pos
             self.emitNewEvent('pipette_transform_changed', {'globalPosition': pos})
