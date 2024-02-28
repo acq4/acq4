@@ -513,6 +513,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._timeSlider.sigPositionChanged.connect(self.timeChanged)
         self._resistance_plot.addItem(self._timeSlider)
         ctrl_widget = Qt.QWidget()
+        ctrl_widget.setMaximumWidth(200)
         self._ctrl_layout = Qt.QVBoxLayout()
         ctrl_widget.setLayout(self._ctrl_layout)
         self._buildCtrlUi()
