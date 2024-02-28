@@ -57,7 +57,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         from acq4.util.imaging.object_detection import detect_neurons
 
         cam: Camera = self.module.manager.getDevice('Camera')
-        with cam.run():
+        with cam.ensureRunning():
             frame = _future.waitFor(cam.acquireFrames(1)).getResult()[0]
         return _future.waitFor(detect_neurons(frame)).getResult()
 
