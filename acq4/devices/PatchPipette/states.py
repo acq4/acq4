@@ -1400,7 +1400,7 @@ class ResealState(PatchPipetteState):
         self.sleep(config['slurpDuration'])
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
-        dev.pipetteDevice.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
+        dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
         self.sleep(np.inf)
 
     def retractionDistance(self):
