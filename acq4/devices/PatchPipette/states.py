@@ -1222,14 +1222,18 @@ class ResealState(PatchPipetteState):
         Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
-    retractionSuccessState : str
-        State to transition to if reseal is successful (default is 'home with nucleus')
     resealSuccessResistance : float
         Resistance (Ohms) above which the reseal is considered successful (default is 1e9)
+    resealSuccessDuration : float
+        Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
+    slurpRetractionSpeed : float
+        Speed in m/s to move pipette during nucleus slurping (default is 10 µm / s)
     slurpDuration : float
         Duration (seconds) to apply suction when trying to get the nucleus into the pipette (default is 10s)
+    slurpHeight : float
+        Height (meters) above the surface to conduct nucleus slurping and visual check (default is 50 µm)
     """
 
     stateName = 'reseal'
@@ -1255,14 +1259,16 @@ class ResealState(PatchPipetteState):
         'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
         'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
-        'retractionSuccessState': {'type': 'str', 'default': 'home with nucleus'},
         'resealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
+        'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
+        'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
@@ -1270,6 +1276,7 @@ class ResealState(PatchPipetteState):
         self._moveFuture = None
         self._pressureFuture = None
         self._lastResistance = None
+        self._firstSuccessTime = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
         self._analysis = ResealAnalysis(
             stretch_threshold=self.config['stretchDetectionThreshold'],
@@ -1322,9 +1329,16 @@ class ResealState(PatchPipetteState):
         return self._analysis.is_tearing()
 
     def isRetractionSuccessful(self):
-        return self.retractionDistance() > self.config['retractionSuccessDistance'] or (
+        if self.retractionDistance() > self.config['retractionSuccessDistance'] or (
                 self._lastResistance is not None and self._lastResistance > self.config['resealSuccessResistance']
-        )
+        ):
+            if self._firstSuccessTime is None:
+                self._firstSuccessTime = ptime.time()
+            elif ptime.time() - self._firstSuccessTime > self.config['resealSuccessDuration']:
+                return True
+        else:
+            self._firstSuccessTime = None
+        return False
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
@@ -1380,12 +1394,14 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
         self.setState("slurping in nucleus")
-        self.dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
-        self._moveFuture = self.dev.pipetteDevice.moveTo('approach', 'slow')
+        self.cleanup()
+        dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
+        self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
         self.sleep(config['slurpDuration'])
-        self.waitFor(self._moveFuture)
-        self._taskDone()
-        return config['retractionSuccessState']
+        self.waitFor(self._moveFuture, timeout=90)
+        dev.pipetteDevice.focusTip()
+        dev.pipetteDevice.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
+        self.sleep(np.inf)
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
