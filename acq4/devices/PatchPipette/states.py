@@ -1306,9 +1306,11 @@ class ResealState(PatchPipetteState):
             while ptime.time() - start < self.config['nuzzleDuration']:
                 while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
                     pass  # ensure different direction from previous
-                self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=self.config['nuzzleSpeed']))
+                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=self.config['nuzzleSpeed'])
                 prev_dir = direction
-            self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed']))
+                self.waitFor(self._moveFuture)
+            self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed'])
+            self.waitFor(self._moveFuture)
             self.waitFor(self._pressureFuture)
 
     @Future.wrap
@@ -1368,7 +1370,7 @@ class ResealState(PatchPipetteState):
         retraction_future = None
         while not self.isRetractionSuccessful():
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
-                self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
+                self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
                 return config['fallbackState']
 
             self.processAtLeastOneTestPulse()
@@ -1381,15 +1383,14 @@ class ResealState(PatchPipetteState):
                 if retraction_future and not retraction_future.isDone():
                     self.setState("handling tear")
                     retraction_future.stop()
-                    recovery_future = self.dev.pipetteDevice._moveToGlobal(
+                    self._moveFuture = recovery_future = self.dev.pipetteDevice._moveToGlobal(
                         pos=self._startPosition, speed=self.config['retractionSpeed'])
-                    self._moveFuture = recovery_future
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if recovery_future is not None and not recovery_future.isDone():
                     recovery_future.stop()
                 self.setState("retracting")
-                retraction_future = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
-                self._moveFuture = retraction_future
+                self._moveFuture = retraction_future = dev.pipetteDevice.retractFromSurface(
+                    speed=config['retractionSpeed'])
 
             self.sleep(0.2)
 

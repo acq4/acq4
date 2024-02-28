@@ -229,7 +229,7 @@ class PatchPipetteStateManager(Qt.QObject):
             try:
                 job.wait(timeout=10)
             except job.Timeout:
-                printExc("Timed out waiting for job %s to complete" % job)
+                printExc(f"Timed out waiting for job {job} to complete")
             except Exception:
                 # hopefully someone else is watching this future for errors!
                 pass
@@ -242,7 +242,7 @@ class PatchPipetteStateManager(Qt.QObject):
         try:
             job.cleanup()
         except Exception:
-            printExc("Error during %s cleanup:" % job.stateName)
+            printExc(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
         if allowNextState and job.nextState is not None:
