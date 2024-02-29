@@ -1,21 +1,11 @@
 from __future__ import annotations
 import numpy as np
+import typing
+
 from acq4.util.future import MultiFuture
 
-import typing
 if typing.TYPE_CHECKING:
     from .pipette import Pipette
-
-
-def defaultMotionPlanners():
-    return {
-        'home': HomeMotionPlanner,
-        'search': SearchMotionPlanner,
-        'aboveTarget': AboveTargetMotionPlanner,
-        'approach': ApproachMotionPlanner,
-        'target': TargetMotionPlanner,
-        'idle': IdleMotionPlanner,
-    }
 
 
 class PipettePathGenerator:
@@ -180,6 +170,15 @@ class PipetteMotionPlanner:
         raise NotImplementedError()
 
 
+class SavedPositionMotionPlanner(PipetteMotionPlanner):
+    """Move to a saved position
+    """
+    def path(self):
+        startPosGlobal = self.pip.globalPosition()
+        endPosGlobal = self.pip.loadPosition(self.position)
+        return self.safePath(startPosGlobal, endPosGlobal, self.speed)
+
+
 class HomeMotionPlanner(PipetteMotionPlanner):
     """Extract pipette tip diagonally, then move to home position.
     """
@@ -217,7 +216,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         scope = pip.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
         if surfaceDepth is None:
-            raise Exception("Cannot determine search position; surface depth is not defined.")
+            raise ValueError("Cannot determine search position; surface depth is not defined.")
         searchDepth = surfaceDepth + pip._opts['searchHeight']
 
         cam = pip.imagingDevice()
@@ -247,8 +246,7 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
         pip = self.pip
         approachDepth = pip.approachDepth()
         approachPosition = pip.positionAtDepth(approachDepth, start=pip.targetPosition())
-        path = self.safePath(pip.globalPosition(), approachPosition, self.speed)
-        return path
+        return self.safePath(pip.globalPosition(), approachPosition, self.speed)
 
 
 class TargetMotionPlanner(PipetteMotionPlanner):
@@ -331,3 +329,15 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
         
         return pip._moveToGlobal(globalIdlePos, speed)
+
+
+def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
+    return {
+        'home': HomeMotionPlanner,
+        'search': SearchMotionPlanner,
+        'aboveTarget': AboveTargetMotionPlanner,
+        'approach': ApproachMotionPlanner,
+        'target': TargetMotionPlanner,
+        'idle': IdleMotionPlanner,
+        'saved': SavedPositionMotionPlanner,
+    }

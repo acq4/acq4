@@ -1,13 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from collections import OrderedDict
 
-import six
-
-import pyqtgraph as pg
 import acq4.util.Canvas as Canvas
 import acq4.util.FileLoader as FileLoader
+import pyqtgraph as pg
 from acq4.util import Qt
 
 
@@ -67,11 +62,9 @@ class AnalysisModule(Qt.QObject):
               when getElement(..., create=True) is called.
         """
         for name, el in self._elements_.items():
-            if isinstance(el, tuple):
+            if isinstance(el, (tuple, dict)):
                 self._elements_[name] = Element(name, args=el)
-            elif isinstance(el, dict):
-                self._elements_[name] = Element(name, args=el)
-            elif isinstance(el, six.string_types):
+            elif isinstance(el, str):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
@@ -86,8 +79,7 @@ class AnalysisModule(Qt.QObject):
                 el.close()
         #self.logBtn.close()
         return True
-    
-    
+
     def processData(self, data):
         pass
     
@@ -112,7 +104,6 @@ class AnalysisModule(Qt.QObject):
         for name in self.listElements():
             el[name] = self.getElement(name)
         return el
-        
 
     def createElement(self, name):
         """Instruct the module to create its own element.
@@ -140,6 +131,7 @@ class AnalysisModule(Qt.QObject):
 
     def sizeHint(self):
         return self._sizeHint
+
 
 class Element(Qt.QObject):
     """Simple class for holding options and attributes for elements"""
@@ -193,8 +185,6 @@ class Element(Qt.QObject):
             obj = Canvas.Canvas(**args)
         elif typ == 'fileInput':
             obj = FileLoader.FileLoader(host.dataManager(), **args)
-        #elif typ == 'database':
-            #obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
             obj = pg.TableWidget(**args)
         elif typ == 'dataTree':
@@ -209,6 +199,5 @@ class Element(Qt.QObject):
             obj = pg.GraphicsView()
             obj.setCentralItem(pg.ViewBox(**args))
         else:
-            raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
-        #self.setObject(obj)  ## handled indirectly..
+            raise TypeError(f"Cannot automatically create element '{self.name}' (type={typ})")
         return obj

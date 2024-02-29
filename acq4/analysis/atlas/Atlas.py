@@ -215,8 +215,3 @@ class AtlasCtrlWidget(Qt.QWidget):
             prof.mark("added %s data to db" %dirType)
             
         prof.finish()
-            
-    
-            
-    
-    

@@ -1,17 +1,21 @@
 from collections import deque
-from copy import deepcopy
+from typing import Any, Optional
 
+import contextlib
 import numpy as np
+import queue
 import scipy.stats
 import sys
 import threading
 import time
-from six.moves import range, queue
+import warnings
+from copy import deepcopy
 
 from acq4 import getManager
+from acq4.devices.PatchPipette.testpulse import TestPulse
+from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
-from acq4.util import ptime
 from pyqtgraph import disconnect, units
 
 
@@ -77,13 +81,15 @@ class PatchPipetteState(Future):
         return cls._parameterDefaultOverrides
 
     @classmethod
-    def defaultConfig(cls) -> dict[str, object]:
+    def defaultConfig(cls) -> dict[str, Any]:
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
+        from acq4.devices.PatchPipette import PatchPipette
+
         Future.__init__(self)
 
-        self.dev = dev
+        self.dev: PatchPipette = dev
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -110,16 +116,15 @@ class PatchPipetteState(Future):
 
             # set up test pulse monitoring
             self.testPulseResults = queue.Queue()
-            
-            if self.run is not None:
-                if self.dev.active:
-                    self._thread = threading.Thread(target=self._runJob)
-                    self._thread.start()
-                else:
-                    self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-            else:
-                # otherwise, just mark the task complete
+
+            if self.run is None:
+                # no work; just mark the task complete
                 self._taskDone(interrupted=False, error=None)
+            elif self.dev.active:
+                self._thread = threading.Thread(target=self._runJob)
+                self._thread.start()
+            else:
+                self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc))
             raise
@@ -179,13 +184,11 @@ class PatchPipetteState(Future):
         wait *timeout* seconds for one to arrive.
         """
         tps = []
-        try:
+        with contextlib.suppress(queue.Empty):
             if timeout is not None:
                 tps.append(self.testPulseResults.get(timeout=timeout))
             while not self.testPulseResults.empty():
                 tps.append(self.testPulseResults.get())
-        except queue.Empty:
-            pass
         return tps
 
     def cleanup(self):
@@ -201,6 +204,7 @@ class PatchPipetteState(Future):
         """
         error = None
         excInfo = None
+        interrupted = False
         try:
             # run must be reimplemented in subclass and call self.checkStop() frequently
             self.nextState = self.run()
@@ -212,12 +216,9 @@ class PatchPipetteState(Future):
         except Exception as exc:
             # state aborted due to an error
             interrupted = True
-            printExc("Error in %s state %s" % (self.dev.name(), self.stateName))
+            printExc(f"Error in {self.dev.name()} state {self.stateName}")
             error = str(exc)
             excInfo = sys.exc_info()
-        else:
-            # state completed successfully
-            interrupted = False
         finally:
             disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
@@ -230,10 +231,10 @@ class PatchPipetteState(Future):
         Future.checkStop(self, delay)
 
     def __repr__(self):
-        return '<%s "%s">' % (type(self).__name__, self.stateName)
+        return f'<{type(self).__name__} "{self.stateName}">'
 
 
-class PatchPipetteOutState(PatchPipetteState):
+class OutState(PatchPipetteState):
     stateName = 'out'
 
     _parameterDefaultOverrides = {
@@ -245,7 +246,7 @@ class PatchPipetteOutState(PatchPipetteState):
     }
 
 
-class PatchPipetteApproachState(PatchPipetteState):
+class ApproachState(PatchPipetteState):
     stateName = 'approach'
 
     _parameterDefaultOverrides = {
@@ -260,11 +261,11 @@ class PatchPipetteApproachState(PatchPipetteState):
         fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.resetTestPulseHistory()
-        self.waitFor(fut)
+        self.waitFor(fut, timeout=None)
         return self.config['nextState']
 
 
-class PatchPipetteWholeCellState(PatchPipetteState):
+class WholeCellState(PatchPipetteState):
     stateName = 'whole cell'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -276,7 +277,6 @@ class PatchPipetteWholeCellState(PatchPipetteState):
     }
 
     def run(self):
-        config = self.config
         patchrec = self.dev.patchRecord()
         patchrec['wholeCellStartTime'] = ptime.time()
         patchrec['wholeCellPosition'] = tuple(self.dev.pipetteDevice.globalPosition())
@@ -285,8 +285,7 @@ class PatchPipetteWholeCellState(PatchPipetteState):
 
         while True:
             # TODO: monitor for cell loss
-            self.checkStop()
-            time.sleep(0.1)
+            self.sleep(0.1)
 
     def cleanup(self):
         patchrec = self.dev.patchRecord()
@@ -294,7 +293,7 @@ class PatchPipetteWholeCellState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteBrokenState(PatchPipetteState):
+class BrokenState(PatchPipetteState):
     stateName = 'broken'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -309,7 +308,7 @@ class PatchPipetteBrokenState(PatchPipetteState):
         PatchPipetteState.initialize(self)
 
 
-class PatchPipetteFouledState(PatchPipetteState):
+class FouledState(PatchPipetteState):
     stateName = 'fouled'
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
@@ -322,7 +321,7 @@ class PatchPipetteFouledState(PatchPipetteState):
         PatchPipetteState.initialize(self)
 
 
-class PatchPipetteBathState(PatchPipetteState):
+class BathState(PatchPipetteState):
     """Handles detection of changes while in recording chamber
 
     - monitor resistance to detect entry into bath
@@ -411,7 +410,7 @@ class PatchPipetteBathState(PatchPipetteState):
                 return 'fouled'
 
 
-class PatchPipetteCellDetectState(PatchPipetteState):
+class CellDetectState(PatchPipetteState):
     """Handles cell detection:
 
     - monitor resistance for cell proximity and switch to seal mode
@@ -501,13 +500,12 @@ class PatchPipetteCellDetectState(PatchPipetteState):
     }
 
     def run(self):
-        if self.config["reserveDAQ"]:
-            daq_name = self.dev.clampDevice.getDAQName("primary")
-            self.setState(f"cell detect: waiting for {daq_name} lock")
-            with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
-                self.setState(f"cell detect: {daq_name} lock acquired")
-                return self._do_cell_detect()
-        else:
+        if not self.config["reserveDAQ"]:
+            return self._do_cell_detect()
+        daq_name = self.dev.clampDevice.getDAQName("primary")
+        self.setState(f"cell detect: waiting for {daq_name} lock")
+        with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
+            self.setState(f"cell detect: {daq_name} lock acquired")
             return self._do_cell_detect()
 
     def _do_cell_detect(self):
@@ -522,7 +520,6 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         patchrec['attemptedCellDetect'] = True
         initialResistance = None
         recentTestPulses = deque(maxlen=config['slowDetectionSteps'] + 1)
-        initialPosition = np.array(dev.pipetteDevice.globalPosition())
         patchrec['cellDetectInitialTarget'] = tuple(dev.pipetteDevice.targetPosition())
 
         while True:
@@ -685,7 +682,7 @@ class PatchPipetteCellDetectState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteSealState(PatchPipetteState):
+class SealState(PatchPipetteState):
     """Handles sealing onto cell
 
     State name: "seal"
@@ -711,7 +708,7 @@ class PatchPipetteSealState(PatchPipetteState):
         becomes greater than *holdingThreshold*.
     sealThreshold : float
         Seal resistance (ohms) above which the pipette is considered sealed and
-        transitions to the 'cell attached' state.
+        transitions to the 'cell attached' state.  Default 1e9
     breakInThreshold : float
         Capacitance (Farads) above which the pipette is considered to be whole-cell and 
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
@@ -722,8 +719,8 @@ class PatchPipetteSealState(PatchPipetteState):
     autoSealTimeout : float
         Maximum timeout (seconds) before the seal attempt is aborted, 
         transitioning to *fallbackState*.
-    maxVacuum : float
-        The largest vacuum pressure (pascals, negative value) to apply during sealing.
+    pressureLimit : float
+        The largest vacuum pressure (pascals, expected negative value) to apply during sealing.
         When this pressure is reached, the pressure is reset to 0 and the ramp starts over after a delay.
     pressureChangeRates : list
         A list of (seal_resistance_threshold, pressure_change) tuples that determine how much to
@@ -737,7 +734,7 @@ class PatchPipetteSealState(PatchPipetteState):
     afterSealPressure : float
         Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial formamtion.
     resetDelay : float
-        Wait time (seconds) after maxVacuum is reached, before restarting pressure ramp.
+        Wait time (seconds) after pressureLimit is reached, before restarting pressure ramp.
 
     """
     stateName = 'seal'
@@ -757,7 +754,8 @@ class PatchPipetteSealState(PatchPipetteState):
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'nSlopeSamples': {'type': 'int', 'default': 5},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
-        'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
         'pressureChangeRates': {'type': 'str', 'default': "[(0.5e6, -100), (100e6, 0), (-1e6, 200)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
@@ -766,6 +764,10 @@ class PatchPipetteSealState(PatchPipetteState):
     }
 
     def initialize(self):
+        if self.config['maxVacuum'] != self.defaultConfig()['maxVacuum']:
+            warnings.warn("maxVacuum parameter is deprecated; use pressureLimit instead", DeprecationWarning)
+            if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
+                self.config['pressureLimit'] = self.config['maxVacuum']
         self.dev.clean = False
         PatchPipetteState.initialize(self)
 
@@ -788,6 +790,8 @@ class PatchPipetteSealState(PatchPipetteState):
         patchrec['capacitanceBeforeSeal'] = initialTP.analysis()['capacitance']
         startTime = ptime.time()
         pressure = config['startingPressure']
+        if isinstance(config['pressureChangeRates'], str):
+            config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
 
         mode = config['pressureMode']
         self.setState('beginning seal (mode: %r)' % mode)
@@ -796,7 +800,7 @@ class PatchPipetteSealState(PatchPipetteState):
         elif mode == 'auto':
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         else:
-            raise ValueError("pressureMode must be 'auto' or 'user' (got %r')" % mode)
+            raise ValueError(f"pressureMode must be 'auto' or 'user' (got {mode}')")
 
         dev.setTipClean(False)
 
@@ -861,18 +865,16 @@ class PatchPipetteSealState(PatchPipetteState):
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
                 times = np.array([tp.startTime() for tp in recentTestPulses])
                 slope = scipy.stats.linregress(times, res).slope
-                pressure = np.clip(pressure, config['maxVacuum'], 0)
+                pressure = np.clip(pressure, config['pressureLimit'], 0)
                 
                 # decide how much to adjust pressure based on rate of change in seal resistance
-                if isinstance(str, config['pressureChangeRates']):
-                    config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
                 for max_slope, change in config['pressureChangeRates']:
                     if max_slope is None or slope < max_slope:
                         pressure += change
                         break
                 
-                # here, if the maxVacuum has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
-                if pressure <= config['maxVacuum']:
+                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
+                if pressure <= config['pressureLimit']:
                     dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                     self.sleep(config['resetDelay'])
                     pressure = 0
@@ -887,7 +889,7 @@ class PatchPipetteSealState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteCellAttachedState(PatchPipetteState):
+class CellAttachedState(PatchPipetteState):
     """Pipette in cell-attached configuration
 
     State name: "cell attached"
@@ -955,7 +957,7 @@ class PatchPipetteCellAttachedState(PatchPipetteState):
             patchrec['capacitanceBeforeBreakin'] = cap
 
 
-class PatchPipetteBreakInState(PatchPipetteState):
+class BreakInState(PatchPipetteState):
     """State using pressure pulses to rupture membrane for whole cell recording.
 
     State name: "break in"
@@ -1051,7 +1053,7 @@ class PatchPipetteBreakInState(PatchPipetteState):
                 return config['fallbackState']
 
     def attemptBreakIn(self, nPulses, duration, pressure):
-        for i in range(nPulses):
+        for _ in range(nPulses):
             # get the next test pulse
             status = self.checkBreakIn()
             if status is not None:
@@ -1096,7 +1098,84 @@ class PatchPipetteBreakInState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteResealState(PatchPipetteState):
+class ResealAnalysis(object):
+    """Class to analyze test pulses and determine reseal behavior."""
+    def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
+        self._stretch_threshold = stretch_threshold
+        self._tear_threshold = tear_threshold
+        self._detection_tau = detection_tau
+        self._repair_tau = repair_tau
+        self._last_measurement: Optional[np.void] = None
+
+    def is_stretching(self) -> bool:
+        """Return True if the resistance is increasing too quickly."""
+        return self._last_measurement and self._last_measurement['stretching']
+
+    def is_tearing(self) -> bool:
+        """Return True if the resistance is decreasing."""
+        return self._last_measurement and self._last_measurement['tearing']
+
+    def process_test_pulses(self, tps: list[TestPulse]) -> np.ndarray:
+        return self.process_measurements(
+            np.array([(tp.startTime(), tp.analysis()['steadyStateResistance']) for tp in tps]))
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(
+            len(measurements),
+            dtype=[
+                ('time', float),
+                ('resistance', float),
+                ('detect_avg', float),
+                ('repair_avg', float),
+                ('detect_ratio', float),
+                ('repair_ratio', float),
+                ('stretching', bool),
+                ('tearing', bool),
+            ])
+        for i, measurement in enumerate(measurements):
+            start_time, resistance = measurement
+            if i == 0:
+                if self._last_measurement is None:
+                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False)
+                    self._last_measurement = ret_array[i]
+                    continue
+                else:
+                    last_measurement = self._last_measurement
+            else:
+                last_measurement = ret_array[i - 1]
+
+            dt = start_time - last_measurement['time']
+
+            detection_alpha = 1 - np.exp(-dt / self._detection_tau)
+            detection_avg = (
+                    last_measurement['detect_avg'] * (1 - detection_alpha)
+                    + resistance * detection_alpha
+            )
+            detection_ratio = np.log10(detection_avg / last_measurement['detect_avg'])
+            repair_alpha = 1 - np.exp(-dt / self._repair_tau)
+            repair_avg = (
+                    last_measurement['repair_avg'] * (1 - repair_alpha)
+                    + resistance * repair_alpha
+            )
+            repair_ratio = np.log10(repair_avg / last_measurement['repair_avg'])
+
+            is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
+            is_tearing = detection_ratio < self._tear_threshold or repair_ratio < self._tear_threshold
+            ret_array[i] = (
+                start_time,
+                resistance,
+                detection_avg,
+                repair_avg,
+                detection_ratio,
+                repair_ratio,
+                is_stretching,
+                is_tearing,
+            )
+            self._last_measurement = ret_array[i]
+        return ret_array
+
+
+class ResealState(PatchPipetteState):
     """State that retracts pipette slowly to attempt to reseal the cell.
 
     Negative pressure may optionally be applied to attempt nucleus extraction
@@ -1105,19 +1184,56 @@ class PatchPipetteResealState(PatchPipetteState):
 
     Parameters
     ----------
+    extractNucleus : bool
+        Whether to attempt nucleus extraction during reseal (default True)
+    nuzzlePressureLimit : float
+        Largest vacuum pressure (pascals, expected negative) to apply during nuzzling (default is -4 kPa)
+    nuzzleDuration : float
+        Duration (seconds) to spend nuzzling (default is 15s)
+    nuzzleInitialPressure : float
+        Initial pressure (Pa) to apply during nuzzling (default is 0 Pa)
+    nuzzleLateralWiggleRadius : float
+        Radius of lateral wiggle during nuzzling (default is 5 µm)
+    nuzzleRepetitions : int
+        Number of times to repeat the nuzzling sequence (default is 2)
+    nuzzleSpeed : float
+        Speed to move pipette during nuzzling (default is 5 µm / s)
     initialPressure : float
-        Initial pressure (Pa) to apply (default is -0.5 kPa)
-    maximumPressure : float
-        Maximum pressure (Pa) to apply (default is -4 kPa)
+        Initial pressure (Pa) to apply after nucleus nuzzling, before retraction (default is -0.5 kPa)
+    retractionPressure : float
+        Pressure (Pa) to apply during retraction (default is -4 kPa)
     pressureChangeRate : float
-        Rate at which pressure should change during reseal (default is -0.5 kPa / min)
+        Rate at which pressure should change from initial/nuzzleLimit to retraction (default is 0.5 kPa / min)
     retractionSpeed : float
         Speed in m/s to move pipette during retraction (default is 0.3 um / s)
     resealTimeout : float
-        Seconds before reseal attempt exits
-    numTestPulseAverage : int
-        Number of test pulses to average when measuring resistance
-
+        Seconds before reseal attempt exits, not including grabbing the nucleus and baseline measurements (default is
+        10 min)
+    detectionTau : float
+        Seconds of resistence measurements to average when detecting tears and stretches (default 1s)
+    repairTau : float
+        Seconds of resistence measurements to average when determining when a tear or stretch has been corrected
+        (default 10s)
+    fallbackState : str
+        State to transition to if reseal fails (default is 'whole cell')
+    stretchDetectionThreshold : float
+        Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
+    tearDetectionThreshold : float
+        Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
+    retractionSuccessDistance : float
+        Distance (meters) to retract before checking for successful reseal (default is 200 µm)
+    resealSuccessResistance : float
+        Resistance (Ohms) above which the reseal is considered successful (default is 1e9)
+    resealSuccessDuration : float
+        Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
+    slurpPressure : float
+        Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
+    slurpRetractionSpeed : float
+        Speed in m/s to move pipette during nucleus slurping (default is 10 µm / s)
+    slurpDuration : float
+        Duration (seconds) to apply suction when trying to get the nucleus into the pipette (default is 10s)
+    slurpHeight : float
+        Height (meters) above the surface to conduct nucleus slurping and visual check (default is 50 µm)
     """
 
     stateName = 'reseal'
@@ -1130,80 +1246,184 @@ class PatchPipetteResealState(PatchPipetteState):
         'initialPressureSource': 'regulator',
     }
     _parameterTreeConfig = {
-        'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
-        'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
-        'numTestPulseAverage': {'type': 'int', 'default': 3},
+        'extractNucleus': {'type': 'bool', 'default': True},
         'fallbackState': {'type': 'str', 'default': 'whole cell'},
-        'maxPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
-        'pressureChangeRate': {'type': 'float', 'default': -0.5e3 / 60, 'suffix': 'Pa/s'},
+        'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
+        'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
+        'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
+        'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
+        'nuzzleRepetitions': {'type': 'int', 'default': 2},
+        'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
+        'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
+        'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
+        'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
+        'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
+        'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
+        'resealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
+        'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
+        'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
+        'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
+        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
+        'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
+        'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
+        'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
-        self.retractionFuture = None
         PatchPipetteState.__init__(self, *args, **kwds)
+        self._moveFuture = None
+        self._pressureFuture = None
+        self._lastResistance = None
+        self._firstSuccessTime = None
+        self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
+        self._analysis = ResealAnalysis(
+            stretch_threshold=self.config['stretchDetectionThreshold'],
+            tear_threshold=self.config['tearDetectionThreshold'],
+            detection_tau=self.config['detectionTau'],
+            repair_tau=self.config['repairTau'],
+        )
+
+    def nuzzle(self):
+        """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
+        self.setState("nuzzling")
+        pos = np.array(self.dev.pipetteDevice.globalPosition())
+        pipette_direction = self.dev.pipetteDevice.globalDirection()
+
+        def random_wiggle_direction():
+            """pick a random point on a circle perpendicular to the pipette axis"""
+            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
+                pass  # prevent division by zero
+            return self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec)
+
+        prev_dir = random_wiggle_direction()
+        for _ in range(self.config['nuzzleRepetitions']):
+            self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
+            self._pressureFuture = self.dev.pressureDevice.rampPressure(
+                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'])
+            start = ptime.time()
+            while ptime.time() - start < self.config['nuzzleDuration']:
+                while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
+                    pass  # ensure different direction from previous
+                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=self.config['nuzzleSpeed'])
+                prev_dir = direction
+                self.waitFor(self._moveFuture)
+            self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed'])
+            self.waitFor(self._moveFuture)
+            self.waitFor(self._pressureFuture)
+
+    @Future.wrap
+    def startRollingResistanceThresholds(self, _future: Future):
+        """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
+        self.monitorTestPulse()
+        start = ptime.time()
+        while ptime.time() - start < self.config['repairTau']:
+            _future.checkStop()
+            self.processAtLeastOneTestPulse()
+
+    def isStretching(self) -> bool:
+        """Return True if the resistance is increasing too quickly."""
+        return self._analysis.is_stretching()
+
+    def isTearing(self) -> bool:
+        """Return True if the resistance is decreasing."""
+        return self._analysis.is_tearing()
+
+    def isRetractionSuccessful(self):
+        if self.retractionDistance() > self.config['retractionSuccessDistance'] or (
+                self._lastResistance is not None and self._lastResistance > self.config['resealSuccessResistance']
+        ):
+            if self._firstSuccessTime is None:
+                self._firstSuccessTime = ptime.time()
+            elif ptime.time() - self._firstSuccessTime > self.config['resealSuccessDuration']:
+                return True
+        else:
+            self._firstSuccessTime = None
+        return False
+
+    def processAtLeastOneTestPulse(self):
+        """Wait for at least one test pulse to be processed."""
+        while True:
+            self.checkStop()
+            tps = self.getTestPulses(timeout=0.2)
+            if len(tps) > 0:
+                break
+            self.sleep(0.2)
+        self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
 
     def run(self):
         config = self.config
         dev = self.dev
-        self.monitorTestPulse()
+        baseline_future = self.startRollingResistanceThresholds()
+        if config['extractNucleus'] is True:
+            self.nuzzle()
+        dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
+        self.checkStop()
+        self.setState("measuring baseline resistance")
+        self.waitFor(baseline_future, timeout=self.config['repairTau'])
+        self._pressureFuture = dev.pressureDevice.rampPressure(
+            target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
-        patchrec = dev.patchRecord()
-        initialResistance = None
-        recentTestPulses = deque(maxlen=config['numTestPulseAverage'])
-
-        pressure = config['initialPressure']
-
-        self.retractionFuture = dev.pipetteDevice.retractFromSurface(speed=config['retractionSpeed'])
-
-        attained_max_pressure = False
-        startTime = ptime.time()
-        lastTime = startTime
-        while True:
-            now = ptime.time()
-            dt = now - lastTime
-            totalDt = now - startTime
-            lastTime = now
-
-            # check for timeout
-            if config['resealTimeout'] is not None and totalDt > config['resealTimeout']:
-                self._taskDone(interrupted=True, error="Timed out waiting for reseal.")
+        start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
+        recovery_future = None
+        retraction_future = None
+        while not self.isRetractionSuccessful():
+            if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
+                self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
                 return config['fallbackState']
 
-            self.checkStop()
+            self.processAtLeastOneTestPulse()
 
-            if not attained_max_pressure:
-                # update pressure
-                pressure = np.clip(pressure + config['pressureChangeRate'] * dt, config['maxPressure'], 0)
-                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                if pressure == config['maxPressure']:
-                    attained_max_pressure = True
+            if self.isStretching():
+                if retraction_future and not retraction_future.isDone():
+                    self.setState("handling stretch")
+                    retraction_future.stop()
+            elif self.isTearing():
+                if retraction_future and not retraction_future.isDone():
+                    self.setState("handling tear")
+                    retraction_future.stop()
+                    self._moveFuture = recovery_future = self.dev.pipetteDevice._moveToGlobal(
+                        pos=self._startPosition, speed=self.config['retractionSpeed'])
+            elif retraction_future is None or retraction_future.wasInterrupted():
+                if recovery_future is not None and not recovery_future.isDone():
+                    recovery_future.stop()
+                self.setState("retracting")
+                self._moveFuture = retraction_future = dev.pipetteDevice.retractFromSurface(
+                    speed=config['retractionSpeed'])
 
-            # pull in all new test pulses (hopefully only one since the last time we checked)
-            tps = self.getTestPulses(timeout=0.2)
-            if len(tps) == 0:
-                continue
-            recentTestPulses.extend(tps)
+            self.sleep(0.2)
 
-            # take note of initial resistance
-            tp = tps[-1]
-            ssr = tp.analysis()['steadyStateResistance']
-            if initialResistance is None:
-                initialResistance = ssr
-                patchrec['resealInitialResistance'] = initialResistance
+        self.setState("slurping in nucleus")
+        self.cleanup()
+        dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
+        self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
+        self.sleep(config['slurpDuration'])
+        self.waitFor(self._moveFuture, timeout=90)
+        dev.pipetteDevice.focusTip()
+        dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
+        self.sleep(np.inf)
 
-            # check progress on resistance
-            # if len(recentTestPulses) > config['numTestPulseAverage']:
-            #     res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-            #     if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
-            #         return self._transition_to_seal("cell detected (slow criteria)", patchrec)
-            self.checkStop()
+    def retractionDistance(self):
+        return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
 
     def cleanup(self):
-        if self.retractionFuture is not None:
-            self.retractionFuture.stop()
+        if self._moveFuture is not None:
+            self._moveFuture.stop()
+        if self._pressureFuture is not None:
+            self._pressureFuture.stop()
 
 
 class MoveNucleusToHomeState(PatchPipetteState):
+    """State that moves the pipette to its home position while applying negative pressure.
+
+    State name: home with nucleus
+
+    Parameters
+    ----------
+    pressureLimit : float
+        The smallest vacuum pressure (pascals, expected negative value) to allow during state.
+    """
     stateName = "home with nucleus"
     _parameterDefaultOverrides = {
         'initialPressure': None,
@@ -1211,16 +1431,17 @@ class MoveNucleusToHomeState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         # for expected negative values, a maximum is the "smallest" magnitude:
-        'maxPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'positionName': {'type': 'str', 'default': 'extract'},
     }
 
     def run(self):
-        self.waitFor(self.dev.pressureDevice.attainPressure("regulator", maximum=self.config['maxPressure']))
-        self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+        self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']), timeout=None)
+        self.waitFor(self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast'), timeout=None)
         self.sleep(float("inf"))
 
 
-class PatchPipetteBlowoutState(PatchPipetteState):
+class BlowoutState(PatchPipetteState):
     stateName = 'blowout'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -1241,7 +1462,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
 
         fut = self.dev.pipetteDevice.retractFromSurface()
         if fut is not None:
-            self.waitFor(fut)
+            self.waitFor(fut, timeout=None)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         self.sleep(config['blowoutDuration'])
@@ -1270,7 +1491,7 @@ class PatchPipetteBlowoutState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteCleanState(PatchPipetteState):
+class CleanState(PatchPipetteState):
     """Pipette cleaning state.
 
     Cycles +/- pressure in a "clean" bath followed by an optional "rinse" bath.
@@ -1322,12 +1543,12 @@ class PatchPipetteCleanState(PatchPipetteState):
         path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
         fut = pip._movePath(path)
         if fut is not None:
-            fut.wait()
+            self.waitFor(fut, timeout=None)
 
         for stage in ('clean', 'rinse'):
             self.checkStop()
 
-            sequence = config[stage + 'Sequence']
+            sequence = config[f'{stage}Sequence']
             if isinstance(sequence, str):
                 sequence = eval(sequence, units.__dict__)
             if len(sequence) == 0:
@@ -1335,7 +1556,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
             wellPos = pip.loadPosition(stage)
             if wellPos is None:
-                raise Exception("Device %s does not have a stored %s position." % (pip.name(), stage))
+                raise ValueError(f"Device {pip.name()} does not have a stored {stage} position.")
 
             # lift up, then sideways, then down into well
             waypoint1 = safePos.copy()
@@ -1348,7 +1569,7 @@ class PatchPipetteCleanState(PatchPipetteState):
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.waitFor(self.currentFuture)
+            self.waitFor(self.currentFuture, timeout=None)
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -1357,17 +1578,17 @@ class PatchPipetteCleanState(PatchPipetteState):
             self.resetPosition()
 
         dev.pipetteRecord()['cleanCount'] += 1
-        dev.clean = True
+        dev.setTipClean(True)
         self.resetPosition()
         dev.newPatchAttempt()
-        return 'out'          
+        return 'out'
 
     def resetPosition(self):
         if self.currentFuture is not None:
             # play in reverse
             fut = self.currentFuture
             self.currentFuture = None
-            self.waitFor(fut.undo())
+            self.waitFor(fut.undo(), timeout=None)
 
     def cleanup(self):
         dev = self.dev
@@ -1381,7 +1602,7 @@ class PatchPipetteCleanState(PatchPipetteState):
         PatchPipetteState.cleanup(self)
 
 
-class PatchPipetteNucleusCollectState(PatchPipetteState):
+class NucleusCollectState(PatchPipetteState):
     """Nucleus collection state.
 
     Cycles +/- pressure in a nucleus collection tube.
@@ -1423,7 +1644,7 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor([pip._moveToGlobal(self.collectionPos, speed='fast')])
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
@@ -1439,7 +1660,7 @@ class PatchPipetteNucleusCollectState(PatchPipetteState):
     def resetPosition(self):
         pip = self.dev.pipetteDevice
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'))
+        self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
 
     def cleanup(self):
         dev = self.dev

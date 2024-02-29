@@ -29,20 +29,20 @@ class PatchPipetteStateManager(Qt.QObject):
         [
             (state.stateName, state)
             for state in [
-                states.PatchPipetteOutState,
-                states.PatchPipetteBathState,
-                states.PatchPipetteApproachState,
-                states.PatchPipetteCellDetectState,
-                states.PatchPipetteSealState,
-                states.PatchPipetteCellAttachedState,
-                states.PatchPipetteBreakInState,
-                states.PatchPipetteWholeCellState,
-                states.PatchPipetteResealState,
-                states.PatchPipetteBlowoutState,
-                states.PatchPipetteBrokenState,
-                states.PatchPipetteFouledState,
-                states.PatchPipetteCleanState,
-                states.PatchPipetteNucleusCollectState,
+                states.OutState,
+                states.BathState,
+                states.ApproachState,
+                states.CellDetectState,
+                states.SealState,
+                states.CellAttachedState,
+                states.BreakInState,
+                states.WholeCellState,
+                states.ResealState,
+                states.BlowoutState,
+                states.BrokenState,
+                states.FouledState,
+                states.CleanState,
+                states.NucleusCollectState,
                 states.MoveNucleusToHomeState,
             ]
         ]
@@ -153,19 +153,18 @@ class PatchPipetteStateManager(Qt.QObject):
         self._sigStateChangeRequested.emit(state, returnQueue)
         try:
             success, ret = returnQueue.get(timeout=10)
-        except queue.Empty:
-            raise Exception("State change request timed out.")
+        except queue.Empty as e:
+            raise TimeoutError("State change request timed out.") from e
 
         if success:
             return ret
-        else:
-            sys.excepthook(*ret)
-            raise RuntimeError("Error requesting state change to %r; original exception appears above." % state)
+        sys.excepthook(*ret)
+        raise RuntimeError(f"Error requesting state change to {state!r}; original exception appears above.")
 
     def _stateChangeRequested(self, state, returnQueue):
         try:
             if state not in self.stateHandlers:
-                raise Exception("Unknown patch pipette state %r" % state)
+                raise ValueError(f"Unknown patch pipette state {state!r}")
             ret = (True, self.configureState(state))
         except Exception as exc:
             ret = (False, sys.exc_info())
@@ -229,7 +228,7 @@ class PatchPipetteStateManager(Qt.QObject):
             try:
                 job.wait(timeout=10)
             except job.Timeout:
-                printExc("Timed out waiting for job %s to complete" % job)
+                printExc(f"Timed out waiting for job {job} to complete")
             except Exception:
                 # hopefully someone else is watching this future for errors!
                 pass
@@ -242,7 +241,7 @@ class PatchPipetteStateManager(Qt.QObject):
         try:
             job.cleanup()
         except Exception:
-            printExc("Error during %s cleanup:" % job.stateName)
+            printExc(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
         if allowNextState and job.nextState is not None:
