@@ -260,7 +260,7 @@ class ApproachState(PatchPipetteState):
         fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.resetTestPulseHistory()
-        self.waitFor(fut)
+        self.waitFor(fut, timeout=None)
         return self.config['nextState']
 
 
@@ -1367,11 +1367,12 @@ class MoveNucleusToHomeState(PatchPipetteState):
     _parameterTreeConfig = {
         # for expected negative values, a maximum is the "smallest" magnitude:
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'positionName': {'type': 'str', 'default': 'extract'},
     }
 
     def run(self):
-        self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']))
-        self.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+        self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']), timeout=None)
+        self.waitFor(self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast'), timeout=None)
         self.sleep(float("inf"))
 
 
@@ -1396,7 +1397,7 @@ class BlowoutState(PatchPipetteState):
 
         fut = self.dev.pipetteDevice.retractFromSurface()
         if fut is not None:
-            self.waitFor(fut)
+            self.waitFor(fut, timeout=None)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         self.sleep(config['blowoutDuration'])
@@ -1477,12 +1478,12 @@ class CleanState(PatchPipetteState):
         path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
         fut = pip._movePath(path)
         if fut is not None:
-            fut.wait()
+            self.waitFor(fut, timeout=None)
 
         for stage in ('clean', 'rinse'):
             self.checkStop()
 
-            sequence = config[stage + 'Sequence']
+            sequence = config[f'{stage}Sequence']
             if isinstance(sequence, str):
                 sequence = eval(sequence, units.__dict__)
             if len(sequence) == 0:
@@ -1490,7 +1491,7 @@ class CleanState(PatchPipetteState):
 
             wellPos = pip.loadPosition(stage)
             if wellPos is None:
-                raise Exception("Device %s does not have a stored %s position." % (pip.name(), stage))
+                raise ValueError(f"Device {pip.name()} does not have a stored {stage} position.")
 
             # lift up, then sideways, then down into well
             waypoint1 = safePos.copy()
@@ -1503,7 +1504,7 @@ class CleanState(PatchPipetteState):
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.waitFor(self.currentFuture)
+            self.waitFor(self.currentFuture, timeout=None)
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -1512,17 +1513,17 @@ class CleanState(PatchPipetteState):
             self.resetPosition()
 
         dev.pipetteRecord()['cleanCount'] += 1
-        dev.clean = True
+        dev.setTipClean(True)
         self.resetPosition()
         dev.newPatchAttempt()
-        return 'out'          
+        return 'out'
 
     def resetPosition(self):
         if self.currentFuture is not None:
             # play in reverse
             fut = self.currentFuture
             self.currentFuture = None
-            self.waitFor(fut.undo())
+            self.waitFor(fut.undo(), timeout=None)
 
     def cleanup(self):
         dev = self.dev
@@ -1578,7 +1579,7 @@ class NucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor([pip._moveToGlobal(self.collectionPos, speed='fast')])
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
@@ -1594,7 +1595,7 @@ class NucleusCollectState(PatchPipetteState):
     def resetPosition(self):
         pip = self.dev.pipetteDevice
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'))
+        self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
 
     def cleanup(self):
         dev = self.dev

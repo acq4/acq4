@@ -1,8 +1,9 @@
 from __future__ import annotations
 import numpy as np
+import typing
+
 from acq4.util.future import MultiFuture
 
-import typing
 if typing.TYPE_CHECKING:
     from .pipette import Pipette
 
@@ -15,6 +16,7 @@ def defaultMotionPlanners():
         'approach': ApproachMotionPlanner,
         'target': TargetMotionPlanner,
         'idle': IdleMotionPlanner,
+        'saved': SavedPositionMotionPlanner,
     }
 
 
@@ -178,6 +180,15 @@ class PipetteMotionPlanner:
 
     def path(self):
         raise NotImplementedError()
+
+
+class SavedPositionMotionPlanner(PipetteMotionPlanner):
+    """Move to a saved position
+    """
+    def path(self):
+        startPosGlobal = self.pip.globalPosition()
+        endPosGlobal = self.pip.loadPosition(self.position)
+        return self.safePath(startPosGlobal, endPosGlobal, self.speed)
 
 
 class HomeMotionPlanner(PipetteMotionPlanner):
