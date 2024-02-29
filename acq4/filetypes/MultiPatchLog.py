@@ -1,4 +1,6 @@
 import json
+import re
+
 import numpy as np
 from typing import Any
 
@@ -11,14 +13,15 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
     {'name': 'baselinePotential', 'type': 'float', 'units': 'V'},
     {'name': 'baselineCurrent', 'type': 'float', 'units': 'A'},
-    {'name': 'peakResistance', 'type': 'float', 'units': 'ohm'},
-    {'name': 'steadyStateResistance', 'type': 'float', 'units': 'ohm'},
+    {'name': 'peakResistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'steadyStateResistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'fitExpAmp', 'type': 'float'},
     {'name': 'fitExpTau', 'type': 'float'},
     {'name': 'fitExpYOffset', 'type': 'float'},
     {'name': 'fitExpXOffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
 ]
+TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
 
 
 class IrregularTimeSeries(object):
@@ -281,7 +284,7 @@ class MultiPatchLogData(object):
             # 'move_request': is currently ignored
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),
-                dtype=[(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO],
+                dtype=TEST_PULSE_NUMPY_DTYPE,
             ),
         }
 
@@ -336,17 +339,17 @@ class PipettePathWidget(object):
             self,
             name: str,
             plot: pg.PlotItem,
-            log_data: MultiPatchLogData,
+            log_data: dict[str, Any],
             start_time: float,
     ):
         self._name = name
         self._parentPlot = plot
-        path = log_data[name]['position'][:]
+        path = log_data['position'][:]
         path[:, 0] -= start_time
         self._path = path
-        states = log_data[name]['state']
+        states = log_data['state']
         self._states = [[s[0] - start_time, *s[1:]] for s in states]
-        self._targets = log_data[name]['target'][:]
+        self._targets = log_data['target'][:]
         self._targets[:, 0] -= start_time
         self._target = None
         self._targetIndex = None
@@ -461,10 +464,9 @@ class PipetteStateRegion(pg.LinearRegionItem):
 
 class MultiPatchLogWidget(Qt.QWidget):
     # TODO selectable event types to display?
-    # TODO images should be displayed as the timeline matches?
-    # TODO option to add plots for anything else
+    # TODO display video files
     # TODO save initial target when log starts
-    # TODO save device positions, orientation when log starts
+    # TODO save device orientation when log starts
     # TODO investigate what logging autopatch module does
     # TODO associate all images and recordings with the cell
     # TODO multipatch logs are one-per-cell
@@ -489,31 +491,15 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._stretch_threshold = 0.005
         self._tear_threshold = -0.00128
         layout = Qt.QGridLayout()
-        # TODO my layout skills suuuuuck
         self.setLayout(layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
         self._widgets.append(self._plots_widget)
         layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
-        self._resistance_plot = self._plots_widget.addPlot(
-            name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
-        self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        self._analysis_plot.addItem(
-            pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
-        self._analysis_plot.addItem(
-            pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
-        self._analysis_plot.setXLink(self._resistance_plot)
-        self._timeSlider = pg.InfiniteLine(
-            movable=True,
-            angle=90,
-            pen=pg.mkPen('r'),
-            hoverPen=pg.mkPen('w', width=2),
-            label='t={value:0.2f}s',
-            labelOpts={'position': 0.1, 'color': pg.mkColor('r'), 'movable': True},
-        )
-        self._timeSlider.sigPositionChanged.connect(self.timeChanged)
-        self._resistance_plot.addItem(self._timeSlider)
+        self._plots_by_units: dict[str, pg.PlotItem] = {}
+        self._devices = {}
+        self._time_sliders = []
         ctrl_widget = Qt.QWidget(self)
         ctrl_widget.setMaximumWidth(200)
         self._ctrl_layout = Qt.QVBoxLayout()
@@ -521,40 +507,183 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._buildCtrlUi()
         layout.addWidget(ctrl_widget, 0, 1)
 
+    def buildPlotForUnits(self, units: str) -> pg.PlotItem:
+        if units in self._plots_by_units:
+            return self._plots_by_units[units]
+        plot: pg.PlotItem = self._plots_widget.addPlot(
+            name=units, labels=dict(bottom='s', left=units), row=len(self._plots_by_units) + 1, col=0)
+        if self._plots_by_units:
+            plot.setXLink(self._plots_by_units[list(self._plots_by_units.keys())[0]])
+        else:
+            plot.setXRange(0, self.endTime() - self.startTime())
+        time_slider = pg.InfiniteLine(
+            movable=True,
+            angle=90,
+            pen=pg.mkPen('r'),
+            hoverPen=pg.mkPen('w', width=2),
+            label='t={value:0.2f}s',
+            labelOpts={'position': 0.1, 'color': pg.mkColor('r'), 'movable': True},
+        )
+        time_slider.sigPositionChanged.connect(self.timeChanged)
+        time_slider.setBounds([0, self.endTime() - self.startTime()])
+        plot.addItem(time_slider)
+        self._time_sliders.append(time_slider)
+        if self._display_states.isChecked():
+            self._addStateRegions(plot)
+        if self._display_status.isChecked():
+            self._addStatusMessages(plot)
+        plot.show()
+        self._plots_by_units[units] = plot
+        return plot
+
+    def _addStateRegions(self, plot):
+        for data in self._devices.values():
+            last_time = None
+            last_state = None
+            region_idx = 0
+            for state in data.get('state', []):
+                if state[2] == '':  # full state change
+                    if last_time is not None:
+                        brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
+                        region_idx += 1
+                        region = self._makeStateRegion(last_time - self.startTime(), state[0] - self.startTime(), brush, last_state)
+                        plot.addItem(region)
+                    last_time = state[0]
+                    last_state = state[1]
+            if last_time is not None:
+                brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
+                region = self._makeStateRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
+                plot.addItem(region)
+
+    def _addStatusMessages(self, plot):
+        color = pg.mkColor(255, 255, 255, 80)
+        for data in self._devices.values():
+            for state in data.get('state', []):
+                if state[2] != '':
+                    line = pg.InfiniteLine(movable=False, pos=state[0] - self.startTime(), angle=90,
+                                           pen=pg.mkPen(color))
+                    plot.addItem(line)
+                    status = state[2].replace('{', '{{').replace('}', '}}')
+                    line.label = pg.InfLineLabel(
+                        line, status, position=0.75, rotateAxis=(1, 0), anchor=(1, 1), color=color)
+
     def _buildCtrlUi(self):
         # TODO color picker for each plot
+        self._ctrl_layout.addWidget(Qt.QLabel('Devices:'))
         self._ctrl_layout.addWidget(Qt.QLabel('Events:'))
-        states = Qt.QCheckBox('State Changes')
-        states.stateChanged.connect(self._toggleStateChanges)
-        self._ctrl_layout.addWidget(states)
-        status = Qt.QCheckBox('Status Messages')
-        status.stateChanged.connect(self._toggleStatusMessages)
-        self._ctrl_layout.addWidget(status)
+        self._display_states = Qt.QCheckBox('State Changes')
+        self._display_states.toggled.connect(self._toggleDisplayStates)
+        self._ctrl_layout.addWidget(self._display_states)
+        self._display_status = Qt.QCheckBox('Status Messages')
+        self._display_status.toggled.connect(self._toggleDisplayStatus)
+        self._ctrl_layout.addWidget(self._display_status)
         self._ctrl_layout.addWidget(Qt.QLabel('Plots:'))
-        peak_resistance = Qt.QCheckBox('Peak Resistance')
-        peak_resistance.stateChanged.connect(self._togglePeakResistance)
-        self._ctrl_layout.addWidget(peak_resistance)
-        steady_resistance = Qt.QCheckBox('Steady State Resistance')
-        steady_resistance.stateChanged.connect(self._toggleSteadyResistance)
-        self._ctrl_layout.addWidget(steady_resistance)
-        analysis = Qt.QCheckBox('Analysis')
-        analysis.stateChanged.connect(self._toggleAnalysis)
-        self._ctrl_layout.addWidget(analysis)
+        self._testPulseAnalysisCheckboxes = []
+        for meta in TEST_PULSE_METAARRAY_INFO:
+            if meta['name'] == 'event_time':
+                continue
+            name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', meta['name']).title()
+            cb = Qt.QCheckBox(name)
+            cb.name = meta['name']
+            cb.toggled.connect(self._toggleTestPulsePlot)
+            self._testPulseAnalysisCheckboxes.append(cb)
+            self._ctrl_layout.addWidget(cb)
+        self._displayPressure = Qt.QCheckBox('Pressure')
+        self._displayPressure.toggled.connect(self._togglePressurePlot)
+        self._ctrl_layout.addWidget(self._displayPressure)
+        self._displayAnalysis = Qt.QCheckBox('Reseal Analysis')
+        self._displayAnalysis.toggled.connect(self._toggleAnalysis)
+        self._ctrl_layout.addWidget(self._displayAnalysis)
 
-    def _toggleStateChanges(self):
-        pass
+    def _toggleDisplayStates(self, state: bool):
+        for plot in self._plots_by_units.values():
+            if state:
+                self._addStateRegions(plot)
+            else:
+                for item in plot.items:
+                    if isinstance(item, PipetteStateRegion):
+                        # TODO wtf; none of these work
+                        plot.removeItem(item)
+                        item.setParent(None)
+                        item.deleteLater()
+                        item.hide()
 
-    def _toggleStatusMessages(self):
-        pass
+    def _toggleDisplayStatus(self, state: bool):
+        for plot in self._plots_by_units.values():
+            if state:
+                self._addStatusMessages(plot)
+            else:
+                for item in plot.items:
+                    if isinstance(item, pg.InfiniteLine):
+                        # TODO hmmm
+                        plot.removeItem(item)
 
-    def _togglePeakResistance(self):
-        pass
+    def _toggleTestPulsePlot(self, state: bool):
+        if state:
+            ev = self.sender()
+            meta = next(m for m in TEST_PULSE_METAARRAY_INFO if m['name'] == ev.name)
+            plot = self.buildPlotForUnits(meta.get('units', ''))
+            for data in self._devices.values():
+                test_pulses = data.get('test_pulse', np.zeros(0, dtype=TEST_PULSE_NUMPY_DTYPE))
+                time = test_pulses['event_time'] - self.startTime()
+                if len(time) > 0:
+                    idx = next(i for i, m in enumerate(TEST_PULSE_METAARRAY_INFO) if m['name'] == ev.name)
+                    plot.plot(time, test_pulses[ev.name], pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))))
 
-    def _toggleSteadyResistance(self):
-        pass
+    def _togglePressurePlot(self, state: bool):
+        if state:
+            plot = self.buildPlotForUnits('Pa')
+            for data in self._devices.values():
+                pressure = data.get('pressure', np.zeros(0, dtype=[('time', float), ('pressure', float)]))
+                time = pressure['time'] - self.startTime()
+                if len(time) > 0:
+                    plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))))
 
-    def _toggleAnalysis(self):
-        pass
+    def _toggleAnalysis(self, state: bool):
+        from acq4.devices.PatchPipette.states import ResealAnalysis
+
+        if state:
+            resistance_plot = self.buildPlotForUnits('Ω')
+            analysis_plot = self.buildPlotForUnits('')
+            analysis_plot.addItem(pg.InfiniteLine(
+                movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
+            analysis_plot.addItem(pg.InfiniteLine(
+                movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
+            for data in self._devices.values():
+                test_pulses = data.get('test_pulse', np.zeros(0, dtype=TEST_PULSE_NUMPY_DTYPE))
+                states = data.get('state', [])
+                time = test_pulses['event_time'] - self.startTime()
+                if len(time) > 0:
+                    measurements = np.concatenate(
+                        (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
+                    # break the analysis up by state changes
+                    state_times = [s[0] - self.startTime() for s in states if s[2] == '']
+                    start_indexes = np.searchsorted(time, state_times)
+                    start_indexes = np.concatenate(([0], start_indexes, [len(states)]))
+                    for i in range(len(start_indexes) - 1):
+                        start = start_indexes[i]
+                        end = start_indexes[i + 1]
+                        if start >= end - 1:
+                            continue
+                        analyzer = ResealAnalysis(
+                            self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
+                        analysis = analyzer.process_measurements(measurements[start:end])
+                        analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
+                        resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
+                        analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
+                        resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
+                        analysis_plot.plot(
+                            analysis["time"],
+                            self._prepBooleansForPlotting(analysis["stretching"]),
+                            pen=pg.mkPen('y'),
+                            symbol='x',
+                        )
+                        analysis_plot.plot(
+                            analysis["time"],
+                            self._prepBooleansForPlotting(analysis["tearing"]),
+                            pen=pg.mkPen('r'),
+                            symbol='o',
+                        )
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
@@ -563,6 +692,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         for p in self._pipettes:
             p.setTime(time)
         self._pinned_image_z = -10000
+        for slider in self._time_sliders:
+            slider.setValue(time)
         for frame, img in self._frames:
             if frame <= time:
                 img.show()
@@ -584,90 +715,54 @@ class MultiPatchLogWidget(Qt.QWidget):
             self.loadImagesFromDir(log.parent().parent())
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
-            path = log_data[dev]['position']
-            states = log_data[dev]['state']
-            test_pulses = log_data[dev]['test_pulse']
+            self._devices[dev] = log_data[dev]
+        self.redraw()
+
+    def redraw(self):
+        # TODO clear things first
+        for dev, data in self._devices.items():
+            path = data['position']
+            states = data['state']
             if len(path) > 0:
                 widget = PipettePathWidget(
-                    dev, plot=self._visual_field, log_data=log_data, start_time=self.startTime())
+                    dev, plot=self._visual_field, log_data=data, start_time=self.startTime())
                 self._pipettes.append(widget)
-            self.plotTestPulses(test_pulses, states)
+            test_pulses = data['test_pulse']
+            # TODO break this up
+            # self.plotTestPulses(test_pulses, states)
 
-        self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
-        self._resistance_plot.setXRange(0, self.endTime() - self.startTime())
+        for slider in self._time_sliders:
+            slider.setBounds([0, self.endTime() - self.startTime()])
+        for plot in self._plots_by_units.values():
+            plot.setXRange(0, self.endTime() - self.startTime())
+            break  # they should be x-linked
         self.setTime(0)
 
     def plotTestPulses(self, test_pulses, states):
-        from acq4.devices.PatchPipette.states import ResealAnalysis
+        pass
 
-        # TODO better colors?
-        time = test_pulses['event_time'] - self.startTime()
-        if len(time) > 0:
-            self._resistance_plot.plot(
-                time, test_pulses['steadyStateResistance'], pen=pg.mkPen('g'))
-            # self._resistance_plot.plot(
-            #     time, test_pulses['peakResistance'], pen=pg.mkPen('g'))
-            # plot the exponential average as is used by the reseal logic
-            analyzer = ResealAnalysis(self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
-            measurements = np.concatenate(
-                (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
-            # break the analysis up by state changes
-            state_times = [s[0] - self.startTime() for s in states if s[2] == '']
-            start_indexes = np.searchsorted(time, state_times)
-            start_indexes = np.concatenate(([0], start_indexes, [len(states)]))
-            for i in range(len(start_indexes) - 1):
-                start = start_indexes[i]
-                end = start_indexes[i + 1]
-                if start >= end - 1:
-                    continue
-                analysis = analyzer.process_measurements(measurements[start:end])
-                self._analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
-                self._resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
-                self._analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
-                self._resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
-                self._plotCenteredBooleans(analysis["time"], analysis["stretching"], 'y', 'x')
-                self._plotCenteredBooleans(analysis["time"], analysis["tearing"], 'r', 'o')
-            last_time = None
-            last_state = None
-            region_idx = 0
-            for state in states:
-                if state[2] == '':  # full state change
-                    if last_time is not None:
-                        brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
-                        region_idx += 1
-                        self._addRegion(last_time - self.startTime(), state[0] - self.startTime(), brush, last_state)
-                    last_time = state[0]
-                    last_state = state[1]
-                else:  # status update
-                    color = pg.mkColor(255, 255, 255, 80)
-                    line = pg.InfiniteLine(movable=False, pos=state[0] - self.startTime(), angle=90,
-                                           pen=pg.mkPen(color))
-                    self._analysis_plot.addItem(line)
-                    status = state[2].replace('{', '{{').replace('}', '}}')
-                    line.label = pg.InfLineLabel(
-                        line, status, position=0.75, rotateAxis=(1, 0), anchor=(1, 1), color=color)
-            if last_time is not None:
-                brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
-                self._addRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
-
-    def _plotCenteredBooleans(self, time, data, color, symbol) -> pg.PlotDataItem:
+    @staticmethod
+    def _prepBooleansForPlotting(data) -> np.ndarray:
         data = data.astype(float)
         data[data < 1] = np.nan
         data -= 1
-        return self._analysis_plot.plot(time, data, pen=pg.mkPen(color), symbol=symbol)
+        return data
 
-    def _addRegion(self, start, end, brush, label):
+    def _makeStateRegion(self, start, end, brush, label) -> PipetteStateRegion:
         region = PipetteStateRegion([start, end], movable=False, brush=brush)
         region.doubleclicked.connect(self._zoomToRegion)
         region.clicked.connect(self._setTimeFromClick)
-        self._resistance_plot.addItem(region)
         pg.InfLineLabel(region.lines[0], label, position=0.5, rotateAxis=(1, 0), anchor=(1, 1))
+        return region
 
     def _zoomToRegion(self, region: PipetteStateRegion):
-        self._resistance_plot.setXRange(*region.getRegion(), padding=0)
+        for plot in self._plots_by_units.values():
+            plot.setXRange(*region.getRegion(), padding=0)
+            break  # they should be x-linked
 
     def _setTimeFromClick(self, pos: Qt.QPointF):
-        self._timeSlider.setValue(pos.x())
+        for slider in self._time_sliders:
+            slider.setValue(pos.x())
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
