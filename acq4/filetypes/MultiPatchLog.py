@@ -499,12 +499,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._resistance_plot = self._plots_widget.addPlot(
             name='Resistance', labels=dict(bottom='s', left='Ω'), row=1, col=0)
         self._analysis_plot = self._plots_widget.addPlot(name='Analysis', row=2, col=0)
-        stretch = pg.InfiniteLine(movable=True, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w'))
-        self._analysis_plot.addItem(stretch)
-        stretch.sigPositionChanged.connect(self._analysisParamsChanged)
-        tear = pg.InfiniteLine(movable=True, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w'))
-        self._analysis_plot.addItem(tear)
-        tear.sigPositionChanged.connect(self._analysisParamsChanged)
+        self._analysis_plot.addItem(
+            pg.InfiniteLine(movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
+        self._analysis_plot.addItem(
+            pg.InfiniteLine(movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
         self._analysis_plot.setXLink(self._resistance_plot)
         self._timeSlider = pg.InfiniteLine(
             movable=True,
@@ -542,22 +540,11 @@ class MultiPatchLogWidget(Qt.QWidget):
         analysis = Qt.QCheckBox('Analysis')
         analysis.stateChanged.connect(self._toggleAnalysis)
         self._ctrl_layout.addWidget(analysis)
-        self._ctrl_layout.addWidget(Qt.QLabel('Detection τ'))
-        detection_τ = Qt.QLineEdit(f"{self._detection_τ:.6f}")
-        detection_τ.editingFinished.connect(self._analysisParamsChanged)
-        self._ctrl_layout.addWidget(detection_τ)
-        self._ctrl_layout.addWidget(Qt.QLabel('Repair τ'))
-        repair_τ = Qt.QLineEdit(f"{self._repair_τ:.6f}")
-        repair_τ.editingFinished.connect(self._analysisParamsChanged)
-        self._ctrl_layout.addWidget(repair_τ)
 
     def _toggleStateChanges(self):
         pass
 
     def _toggleStatusMessages(self):
-        pass
-
-    def _analysisParamsChanged(self):
         pass
 
     def _togglePeakResistance(self):
@@ -570,16 +557,19 @@ class MultiPatchLogWidget(Qt.QWidget):
         pass
 
     def timeChanged(self, slider: pg.InfiniteLine):
-        time = slider.getXPos()
+        self.setTime(slider.getXPos())
+
+    def setTime(self, time: float):
         for p in self._pipettes:
             p.setTime(time)
         self._pinned_image_z = -10000
         for frame, img in self._frames:
             if frame <= time:
+                img.show()
                 img.setZValue(self._pinned_image_z)
                 self._pinned_image_z += 1
             else:
-                img.setZValue(-10000)
+                img.hide()
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
@@ -605,6 +595,7 @@ class MultiPatchLogWidget(Qt.QWidget):
 
         self._timeSlider.setBounds([0, self.endTime() - self.startTime()])
         self._resistance_plot.setXRange(0, self.endTime() - self.startTime())
+        self.setTime(0)
 
     def plotTestPulses(self, test_pulses, states):
         from acq4.devices.PatchPipette.states import ResealAnalysis
