@@ -22,7 +22,7 @@ class TestPulseThread(Thread):
         pass
 
     def __init__(self, dev, params):
-        Thread.__init__(self, name="TestPulseThread(%s)"%dev.name())
+        Thread.__init__(self, name=f"TestPulseThread({dev.name()})")
         self.dev = dev
         self._stop = False
         self.params = {
@@ -64,7 +64,7 @@ class TestPulseThread(Thread):
         newParams = self.params.copy()
         for k,v in kwds.items():
             if k not in self.params:
-                raise KeyError("Unknown parameter %s" % k)
+                raise KeyError(f"Unknown parameter {k}")
             newParams[k] = v
         newParams['_index'] += 1
         self.params = newParams
@@ -78,9 +78,8 @@ class TestPulseThread(Thread):
 
     def stop(self, block=False):
         self._stop = True
-        if block:
-            if not self.wait(10000):
-                raise RuntimeError("Timed out waiting for test pulse thread exit.")
+        if block and not self.wait(10000):
+            raise RuntimeError("Timed out waiting for test pulse thread exit.")
                 
     def run(self):
         while True:
@@ -271,11 +270,10 @@ class TestPulse(object):
         return self.taskParams['clampMode']
 
     def analysis(self):
-        if self.taskParams.get('ignoreWarnings', True):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                return self._doAnalysis()
-        else:
+        if not self.taskParams.get('ignoreWarnings', True):
+            return self._doAnalysis()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             return self._doAnalysis()
 
     def _doAnalysis(self):

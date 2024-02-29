@@ -274,7 +274,7 @@ class Pipette(Device, OptomechDevice):
             # for backward compatibility
             if self._calibratedYaw is not None:
                 return self._calibratedYaw
-            raise Exception(f"Yaw angle is not configured for {self.name()}")
+            raise ValueError(f"Yaw angle is not configured for {self.name()}")
         if self.config['yaw'] == 'auto':
             return self._manipulatorOrientation()['yaw']
         else:
@@ -289,7 +289,7 @@ class Pipette(Device, OptomechDevice):
             # for backward compatibility
             if self._calibratedPitch is not None:
                 return self._calibratedPitch
-            raise Exception(f"Pitch angle is not configured for {self.name()}")
+            raise ValueError(f"Pitch angle is not configured for {self.name()}")
         if self.config['pitch'] == 'auto':
             return self._manipulatorOrientation()['pitch']
         else:
@@ -415,7 +415,7 @@ class Pipette(Device, OptomechDevice):
 
     def _moveToGlobal(self, pos, speed, **kwds):
         """Move the electrode tip directly to the given position in global coordinates.
-        This method does _not_ implement any motion planning.
+        WARNING: This method does _not_ implement any motion planning.
         """
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)

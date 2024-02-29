@@ -630,7 +630,7 @@ class MoveFuture(Future):
         """
         if not self.isDone():
             self.dev.stop()
-            Future.stop(self, reason=reason)
+            super().stop(reason=reason)
 
 
 class MovePathFuture(MoveFuture):
