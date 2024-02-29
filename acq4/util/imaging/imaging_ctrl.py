@@ -250,7 +250,7 @@ class ImagingCtrl(Qt.QWidget):
         if self.ui.linkSavePinBtn.isChecked():
             self.recordThread.saveFrame(
                 self.frameDisplay.bgCtrl.makeStandaloneSaveCallable(),
-                self.frameDisplay.contrastCtrl.ui.gradient.saveState(),
+                self.frameDisplay.contrastCtrl.saveState(),
             )
         self.pinCurrentFrame()
 
