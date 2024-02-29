@@ -462,6 +462,13 @@ class PipetteStateRegion(pg.LinearRegionItem):
             super().mouseDoubleClickEvent(ev)
 
 
+def plottable_booleans(data) -> np.ndarray:
+    data = data.astype(float)
+    data[data < 1] = np.nan
+    data -= 1
+    return data
+
+
 class MultiPatchLogWidget(Qt.QWidget):
     # TODO selectable event types to display?
     # TODO display video files
@@ -485,6 +492,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._events = []
         self._widgets = []
         self._frames = []
+        self._current_time = 0
         self._pinned_image_z = -10000
         self._detection_τ = 5
         self._repair_τ = 10
@@ -498,6 +506,9 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
         self._plots_by_units: dict[str, pg.PlotItem] = {}
+        self._regions_by_plot: dict[pg.PlotItem, list[PipetteStateRegion]] = {}
+        self._status_by_plot: dict[pg.PlotItem, list[pg.InfiniteLine]] = {}
+        self._plot_items_by_plot: dict[pg.PlotItem, list[pg.PlotDataItem]] = {}
         self._devices = {}
         self._time_sliders = []
         ctrl_widget = Qt.QWidget(self)
@@ -526,37 +537,49 @@ class MultiPatchLogWidget(Qt.QWidget):
         )
         time_slider.sigPositionChanged.connect(self.timeChanged)
         time_slider.setBounds([0, self.endTime() - self.startTime()])
+        time_slider.setValue(self._current_time)
         plot.addItem(time_slider)
         self._time_sliders.append(time_slider)
-        if self._display_states.isChecked():
-            self._addStateRegions(plot)
+        if self._display_state_regions.isChecked():
+            regions = self._addStateRegions(plot)
+            self._regions_by_plot[plot] = regions
         if self._display_status.isChecked():
-            self._addStatusMessages(plot)
+            lines = self._addStatusMessages(plot)
+            self._status_by_plot[plot] = lines
         plot.show()
         self._plots_by_units[units] = plot
         return plot
 
-    def _addStateRegions(self, plot):
+    def _addStateRegions(self, plot) -> list[PipetteStateRegion]:
+        regions = []
         for data in self._devices.values():
             last_time = None
             last_state = None
             region_idx = 0
             for state in data.get('state', []):
-                if state[2] == '':  # full state change
+                if state[2] == '':
+                    brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
                     if last_time is not None:
-                        brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
-                        region_idx += 1
-                        region = self._makeStateRegion(last_time - self.startTime(), state[0] - self.startTime(), brush, last_state)
-                        plot.addItem(region)
+                        region = self._makeStateRegion(
+                            last_time - self.startTime(), state[0] - self.startTime(), brush, last_state)
+                    else:
+                        region = self._makeStateRegion(0, state[0] - self.startTime(), brush, '')
+                    plot.addItem(region)
+                    regions.append(region)
+                    region_idx += 1
                     last_time = state[0]
                     last_state = state[1]
             if last_time is not None:
                 brush = pg.mkBrush(pg.intColor(region_idx, hues=8, alpha=30))
-                region = self._makeStateRegion(last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
+                region = self._makeStateRegion(
+                    last_time - self.startTime(), self.endTime() - self.startTime(), brush, last_state)
                 plot.addItem(region)
+                regions.append(region)
+        return regions
 
-    def _addStatusMessages(self, plot):
+    def _addStatusMessages(self, plot) -> list[pg.InfiniteLine]:
         color = pg.mkColor(255, 255, 255, 80)
+        lines = []
         for data in self._devices.values():
             for state in data.get('state', []):
                 if state[2] != '':
@@ -566,14 +589,17 @@ class MultiPatchLogWidget(Qt.QWidget):
                     status = state[2].replace('{', '{{').replace('}', '}}')
                     line.label = pg.InfLineLabel(
                         line, status, position=0.75, rotateAxis=(1, 0), anchor=(1, 1), color=color)
+                    lines.append(line)
+        return lines
 
     def _buildCtrlUi(self):
         # TODO color picker for each plot
-        self._ctrl_layout.addWidget(Qt.QLabel('Devices:'))
+        # TODO devices
+        # self._ctrl_layout.addWidget(Qt.QLabel('Devices:'))
         self._ctrl_layout.addWidget(Qt.QLabel('Events:'))
-        self._display_states = Qt.QCheckBox('State Changes')
-        self._display_states.toggled.connect(self._toggleDisplayStates)
-        self._ctrl_layout.addWidget(self._display_states)
+        self._display_state_regions = Qt.QCheckBox('State Changes')
+        self._display_state_regions.toggled.connect(self._toggleDisplayStateRegions)
+        self._ctrl_layout.addWidget(self._display_state_regions)
         self._display_status = Qt.QCheckBox('Status Messages')
         self._display_status.toggled.connect(self._toggleDisplayStatus)
         self._ctrl_layout.addWidget(self._display_status)
@@ -595,49 +621,54 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayAnalysis.toggled.connect(self._toggleAnalysis)
         self._ctrl_layout.addWidget(self._displayAnalysis)
 
-    def _toggleDisplayStates(self, state: bool):
+    def _toggleDisplayStateRegions(self, state: bool):
         for plot in self._plots_by_units.values():
             if state:
-                self._addStateRegions(plot)
+                regions = self._addStateRegions(plot)
+                self._regions_by_plot.setdefault(plot, []).extend(regions)
             else:
-                for item in plot.items:
-                    if isinstance(item, PipetteStateRegion):
-                        # TODO wtf; none of these work
-                        plot.removeItem(item)
-                        item.setParent(None)
-                        item.deleteLater()
-                        item.hide()
+                for region in self._regions_by_plot.get(plot, []):
+                    plot.removeItem(region)
+                self._regions_by_plot[plot] = []
 
     def _toggleDisplayStatus(self, state: bool):
         for plot in self._plots_by_units.values():
             if state:
-                self._addStatusMessages(plot)
+                lines = self._addStatusMessages(plot)
+                self._status_by_plot.setdefault(plot, []).extend(lines)
             else:
-                for item in plot.items:
-                    if isinstance(item, pg.InfiniteLine):
-                        # TODO hmmm
-                        plot.removeItem(item)
+                for line in self._status_by_plot.get(plot, []):
+                    plot.removeItem(line)
+                self._status_by_plot[plot] = []
 
     def _toggleTestPulsePlot(self, state: bool):
+        ev = self.sender()
+        meta = next(m for m in TEST_PULSE_METAARRAY_INFO if m['name'] == ev.name)
+        plot = self.buildPlotForUnits(meta.get('units', ''))
         if state:
-            ev = self.sender()
-            meta = next(m for m in TEST_PULSE_METAARRAY_INFO if m['name'] == ev.name)
-            plot = self.buildPlotForUnits(meta.get('units', ''))
             for data in self._devices.values():
                 test_pulses = data.get('test_pulse', np.zeros(0, dtype=TEST_PULSE_NUMPY_DTYPE))
                 time = test_pulses['event_time'] - self.startTime()
                 if len(time) > 0:
                     idx = next(i for i, m in enumerate(TEST_PULSE_METAARRAY_INFO) if m['name'] == ev.name)
-                    plot.plot(time, test_pulses[ev.name], pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))))
+                    plot_item = plot.plot(time, test_pulses[ev.name], pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))))
+                    self._plot_items_by_plot.setdefault(plot, []).append(plot_item)
+        else:
+            for item in self._plot_items_by_plot.get(plot, []):
+                plot.removeItem(item)
+            self._plot_items_by_plot[plot] = []
 
     def _togglePressurePlot(self, state: bool):
         if state:
             plot = self.buildPlotForUnits('Pa')
+            plot.show()
             for data in self._devices.values():
                 pressure = data.get('pressure', np.zeros(0, dtype=[('time', float), ('pressure', float)]))
                 time = pressure['time'] - self.startTime()
                 if len(time) > 0:
                     plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))))
+        elif 'Pa' in self._plots_by_units:
+            self._plots_by_units['Pa'].hide()
 
     def _toggleAnalysis(self, state: bool):
         from acq4.devices.PatchPipette.states import ResealAnalysis
@@ -673,22 +704,15 @@ class MultiPatchLogWidget(Qt.QWidget):
                         analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
                         resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
                         analysis_plot.plot(
-                            analysis["time"],
-                            self._prepBooleansForPlotting(analysis["stretching"]),
-                            pen=pg.mkPen('y'),
-                            symbol='x',
-                        )
+                            analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x')
                         analysis_plot.plot(
-                            analysis["time"],
-                            self._prepBooleansForPlotting(analysis["tearing"]),
-                            pen=pg.mkPen('r'),
-                            symbol='o',
-                        )
+                            analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o')
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
 
     def setTime(self, time: float):
+        self._current_time = time
         for p in self._pipettes:
             p.setTime(time)
         self._pinned_image_z = -10000
@@ -722,14 +746,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         # TODO clear things first
         for dev, data in self._devices.items():
             path = data['position']
-            states = data['state']
             if len(path) > 0:
                 widget = PipettePathWidget(
                     dev, plot=self._visual_field, log_data=data, start_time=self.startTime())
                 self._pipettes.append(widget)
-            test_pulses = data['test_pulse']
-            # TODO break this up
-            # self.plotTestPulses(test_pulses, states)
 
         for slider in self._time_sliders:
             slider.setBounds([0, self.endTime() - self.startTime()])
@@ -737,16 +757,6 @@ class MultiPatchLogWidget(Qt.QWidget):
             plot.setXRange(0, self.endTime() - self.startTime())
             break  # they should be x-linked
         self.setTime(0)
-
-    def plotTestPulses(self, test_pulses, states):
-        pass
-
-    @staticmethod
-    def _prepBooleansForPlotting(data) -> np.ndarray:
-        data = data.astype(float)
-        data[data < 1] = np.nan
-        data -= 1
-        return data
 
     def _makeStateRegion(self, start, end, brush, label) -> PipetteStateRegion:
         region = PipetteStateRegion([start, end], movable=False, brush=brush)
@@ -756,9 +766,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         return region
 
     def _zoomToRegion(self, region: PipetteStateRegion):
-        for plot in self._plots_by_units.values():
-            plot.setXRange(*region.getRegion(), padding=0)
-            break  # they should be x-linked
+        # x-linked plots, so only the first needs to be set
+        list(self._plots_by_units.values())[0].setXRange(*region.getRegion(), padding=0)
 
     def _setTimeFromClick(self, pos: Qt.QPointF):
         for slider in self._time_sliders:
