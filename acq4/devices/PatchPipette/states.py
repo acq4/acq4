@@ -1117,7 +1117,7 @@ class ResealState(PatchPipetteState):
     nuzzleLateralWiggleRadius : float
         Radius of lateral wiggle during nuzzling (default is 5 µm)
     nuzzleRepetitions : int
-        Number of times to repeat the nuzzling sequence (default is 3)
+        Number of times to repeat the nuzzling sequence (default is 2)
     nuzzleSpeed : float
         Speed to move pipette during nuzzling (default is 5 µm / s)
     initialPressure : float
@@ -1125,22 +1125,26 @@ class ResealState(PatchPipetteState):
     retractionPressure : float
         Pressure (Pa) to apply during retraction (default is -4 kPa)
     pressureChangeRate : float
-        Rate at which pressure should change from initial to retraction (default is 0.5 kPa / min)
+        Rate at which pressure should change from initial/nuzzleLimit to retraction (default is 0.5 kPa / min)
     retractionSpeed : float
         Speed in m/s to move pipette during retraction (default is 0.3 um / s)
     resealTimeout : float
         Seconds before reseal attempt exits, not including grabbing the nucleus and baseline measurements (default is
         10 min)
-    secondsTestPulseAverage : float
-        Number of seconds to average when measuring resistance (default 20s)
+    detectionTau : float
+        Seconds of resistence measurements to average when detecting tears and stretches (default 1s)
+    repairTau : float
+        Seconds of resistence measurements to average when determining when a tear or stretch has been corrected
+        (default 10s)
     fallbackState : str
         State to transition to if reseal fails (default is 'whole cell')
-    maxAccessResistanceIncreaseRateBeforeStretch : float
-        Maximum rate at which access resistance can increase before the pipette is considered to be stretching the
-        membrane (default is 1%/s)
-    maxStretchRecoveryTime : float
+    stretchDetectionRatio : float
+        Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
+    stretchRecoveryTime : float
         Maximum time (seconds) to wait for access resistance to recover after stretching (default is 30s)
-    maxTearRecoveryTime : float
+    tearDetectionRatio : float
+        Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
+    tearRecoveryTime : float
         Maximum time (seconds) to wait for access resistance to recover after tearing (default is 60s)
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
@@ -1161,14 +1165,11 @@ class ResealState(PatchPipetteState):
     _parameterTreeConfig = {
         'extractNucleus': {'type': 'bool', 'default': True},
         'fallbackState': {'type': 'str', 'default': 'whole cell'},
-        'maxAccessResistanceIncreaseRateBeforeStretch': {'type': 'float', 'default': 1, 'suffix': '%/s'},
-        'maxStretchRecoveryTime': {'type': 'float', 'default': 30, 'suffix': 's'},
-        'maxTearRecoveryTime': {'type': 'float', 'default': 60, 'suffix': 's'},
         'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
         'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
         'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
         'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
-        'nuzzleRepetitions': {'type': 'int', 'default': 3},
+        'nuzzleRepetitions': {'type': 'int', 'default': 2},
         'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
         'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
         'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
@@ -1176,25 +1177,23 @@ class ResealState(PatchPipetteState):
         'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
         'retractionSuccessState': {'type': 'str', 'default': 'home with nucleus'},
-        'secondsTestPulseAverage': {'type': 'float', 'default': 20, 'suffix': 's'},
+        'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
+        'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'stretchDetectionRatio': {'type': 'float', 'default': 1.05},
+        'stretchRecoveryTime': {'type': 'float', 'default': 30, 'suffix': 's'},
+        'tearDetectionRatio': {'type': 'float', 'default': 1},
+        'tearRecoveryTime': {'type': 'float', 'default': 60, 'suffix': 's'},
     }
 
     def __init__(self, *args, **kwds):
         PatchPipetteState.__init__(self, *args, **kwds)
         self._retractionFuture = None
         self._pressureFuture = None
-        self._updateRollingResistanceThresholds = False
-        self._rollingLongTermTestPulses = deque()
-        self._rollingRecentTestPulses = deque()
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
-        self._longTermInputResistanceMean = None
-        self._longTermInputResistanceVariance = None
-        self._longTermAccessResistanceMean = None
-        self._longTermAccessResistanceVariance = None
-        self._recentInputResistanceMean = None
-        self._recentInputResistanceVariance = None
-        self._recentAccessResistanceMean = None
-        self._recentAccessResistanceVariance = None
+        self._detectionResistanceRatio = 1
+        self._repairResistanceRatio = 1
+        self._lastTestPulseTime = None
+        self._lastTestPulseSSResist = None
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
@@ -1227,60 +1226,50 @@ class ResealState(PatchPipetteState):
             self.waitFor(self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed']))
             self.waitFor(self._pressureFuture)
 
-    def sealToNucleus(self):
-        """Attempt to seal onto a nucleus."""
-        self.nuzzle()
-        self.setState("sealing to nucleus")
-        # TODO move forward a little?
-        self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['initialPressure'])
-        # TODO wait here? ramp up pressure? how do we know when to start the retraction?
-
     def handleTear(self):
         """Handle a tearing membrane by retracting the pipette and waiting for the resistance to recover."""
         self.setState("handling tear")
         self._retractionFuture.stop()
-        self.freezeRollingResistanceThresholds()
         recovery_future = self.dev.pipetteDevice._moveToGlobal(
-            pos=self._startPosition, speed=self.config['retractionSpeed'] * 10)
+            pos=self._startPosition, speed=self.config['retractionSpeed'])
         start = ptime.time()
-        while self.isTearing() and ptime.time() - start < self.config['maxTearRecoveryTime']:
+        while self.isTearing() and ptime.time() - start < self.config['tearRecoveryTime']:
             self.processAtLeastOneTestPulse()
         recovery_future.stop()
-        self.unfreezeRollingResistanceThresholds()
 
     def handleStretch(self):
         """Handle a stretching membrane by pausing and waiting for the resistance to stabilize."""
         self.setState("handling stretch")
         self._retractionFuture.stop()
-        self.freezeRollingResistanceThresholds()
         start = ptime.time()
         while (self.isStretching() and not self.isTearing()
-               and ptime.time() - start < self.config['maxStretchRecoveryTime']):
+               and ptime.time() - start < self.config['stretchRecoveryTime']):
             self.processAtLeastOneTestPulse()
         if self.isTearing():
             self.handleTear()
-        self.unfreezeRollingResistanceThresholds()
 
     @Future.wrap
     def startRollingResistanceThresholds(self, _future: Future):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
-        self._updateRollingResistanceThresholds = True
         self.monitorTestPulse()
         start = ptime.time()
-        while ptime.time() - start < self.config['secondsTestPulseAverage']:
+        while ptime.time() - start < self.config['repairTau']:
             _future.checkStop()
             self.processAtLeastOneTestPulse()
 
     def isStretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
-        change_ratio = self._recentAccessResistanceMean / self._longTermAccessResistanceMean
-        max_ratio = 1 + (self.config['maxAccessResistanceIncreaseRateBeforeStretch'] / 100)
-        return change_ratio > max_ratio
+        return (
+            self._detectionResistanceRatio > self.config['stretchDetectionRatio']
+            or self._repairResistanceRatio > self.config['stretchDetectionRatio']
+        )
 
     def isTearing(self) -> bool:
         """Return True if the resistance is decreasing."""
-        min_input_res = self._longTermInputResistanceMean - np.sqrt(self._longTermInputResistanceVariance)
-        return self._recentInputResistanceMean < min_input_res
+        return (
+            self._detectionResistanceRatio < self.config['tearDetectionRatio']
+            or self._repairResistanceRatio < self.config['tearDetectionRatio']
+        )
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
@@ -1290,65 +1279,39 @@ class ResealState(PatchPipetteState):
             if len(tps) > 0:
                 break
             self.sleep(0.2)
-        tps = [(tp.startTime(), tp.analysis()) for tp in tps]
-        self._rollingRecentTestPulses.extend(tps)
+        for test_pulse in tps:
+            resistance = test_pulse.analysis()['steadyStateResistance']
+            if self._lastTestPulseTime is None:
+                self._lastTestPulseTime = test_pulse.startTime()
+                self._lastTestPulseSSResist = resistance
+                continue
 
-        last_second = tps[-1][0] - 1
-        while self._rollingRecentTestPulses[0][0] < last_second:
-            self._rollingRecentTestPulses.popleft()
-        self.analyzeRecentTestPulses()
+            dt = test_pulse.startTime() - self._lastTestPulseTime
+            ratio = resistance / self._lastTestPulseSSResist
+            self._lastTestPulseTime = test_pulse.startTime()
+            self._lastTestPulseSSResist = resistance
 
-        self._rollingLongTermTestPulses.extend(tps)
-        last_20_seconds = tps[-1][0] - 20
-        while self._rollingLongTermTestPulses[0][0] < last_20_seconds:
-            self._rollingLongTermTestPulses.popleft()
-        if self._updateRollingResistanceThresholds:
-            self.analyzeLongTermTestPulses()
-
-    def analyzeLongTermTestPulses(self):
-        too_recent = self._rollingLongTermTestPulses[-1][0] - 1
-        access_res = np.fromiter(
-            (a[1]['peakResistance']
-             for a in self._rollingLongTermTestPulses if a[0] < too_recent),
-            dtype=float,
-        )
-        input_res = np.fromiter(
-            (a[1]['steadyStateResistance'] - a[1]['peakResistance']
-             for a in self._rollingLongTermTestPulses if a[0] < too_recent),
-            dtype=float,
-        )
-        # TODO this may need to be optimized not to recalculate the mean and variance every time
-        self._longTermInputResistanceMean = np.mean(input_res)
-        self._longTermInputResistanceVariance = np.var(input_res)
-        self._longTermAccessResistanceMean = np.mean(access_res)
-        self._longTermAccessResistanceVariance = np.var(access_res)
-
-    def analyzeRecentTestPulses(self):
-        analysis = [tp[1] for tp in self._rollingRecentTestPulses]
-        access_res = np.fromiter((a['peakResistance'] for a in analysis), dtype=float)
-        input_res = np.fromiter((a['steadyStateResistance'] - a['peakResistance'] for a in analysis), dtype=float)
-        self._recentInputResistanceMean = np.mean(input_res)
-        self._recentInputResistanceVariance = np.var(input_res)
-        self._recentAccessResistanceMean = np.mean(access_res)
-        self._recentAccessResistanceVariance = np.var(access_res)
-
-    def freezeRollingResistanceThresholds(self):
-        """Stop updating the rolling averages"""
-        self._updateRollingResistanceThresholds = False
-
-    def unfreezeRollingResistanceThresholds(self):
-        self._updateRollingResistanceThresholds = True
+            detection_alpha = 1 - np.exp(-dt / self.config['detectionTau'])
+            self._detectionResistanceRatio = (
+                self._detectionResistanceRatio * (1 - detection_alpha)
+                + ratio * detection_alpha
+            )
+            repair_alpha = 1 - np.exp(-dt / self.config['repairTau'])
+            self._repairResistanceRatio = (
+                self._repairResistanceRatio * (1 - repair_alpha)
+                + ratio * repair_alpha
+            )
 
     def run(self):
         config = self.config
         dev = self.dev
         baseline_future = self.startRollingResistanceThresholds()
         if config['extractNucleus'] is True:
-            self.sealToNucleus()
+            self.nuzzle()
         dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.checkStop()
         self.setState("measuring baseline resistance")
-        self.waitFor(baseline_future, timeout=self.config['secondsTestPulseAverage'])
+        self.waitFor(baseline_future, timeout=self.config['repairTau'])
         self._pressureFuture = dev.pressureDevice.rampPressure(
             target=config['retractionPressure'], rate=config['pressureChangeRate'])
 
@@ -1372,6 +1335,7 @@ class ResealState(PatchPipetteState):
                 self.handleStretch()
             elif self.isTearing():
                 self.handleTear()
+            # TODO what if it is totally torn?
 
             self.sleep(0.2)
 
