@@ -110,7 +110,7 @@ class DataManager(Module):
         cam_mod = self.manager.getModule("Camera")
         current_dir = self.manager.getCurrentDir()
         for f in current_dir.ls():
-            if f.endswith('.tif'):
+            if f.endswith('.tif') and 'background' not in f.lower():
                 f = current_dir[f]
                 frame = Frame(f.read(), f.info().deepcopy())
                 frame.loadLinkedFiles(current_dir)
@@ -128,22 +128,21 @@ class DataManager(Module):
         self.manager.setCurrentDir(handle)
 
     def currentDirChanged(self, name=None, change=None, args=()):
+        newDir = None
         if change in [None, 'moved', 'renamed', 'parent']:
             try:
                 newDir = self.manager.getCurrentDir()
                 dirName = newDir.name(relativeTo=self.baseDir)
             except Exception:
-                newDir = None
                 dirName = ""
             self.ui.currentDirText.setText(dirName)
             self.ui.fileTreeWidget.setCurrentDir(newDir)
-            has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
-            self.ui.loadPinnedImagesBtn.setEnabled(has_images)
         elif change == 'children':
             with contextlib.suppress(HelpfulException):
                 newDir = self.manager.getCurrentDir()
-                has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
-                self.ui.loadPinnedImagesBtn.setEnabled(has_images)
+
+        has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
+        self.ui.loadPinnedImagesBtn.setEnabled(has_images)
 
     def showFileDialog(self):
         bd = self.manager.getBaseDir()
