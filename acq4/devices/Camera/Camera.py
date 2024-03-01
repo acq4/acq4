@@ -512,6 +512,12 @@ class Frame(imaging.Frame):
 
         super().__init__(data, info)
 
+    @classmethod
+    def loadFromFileHandle(cls, fh: FileHandle):
+        frame = cls(fh.data(), fh.info().deepcopy())
+        frame.loadLinkedFiles(fh.parent())
+        return frame
+
 
 class CameraTask(DAQGenericTask):
     def __init__(self, dev: Camera, cmd, parentTask):
