@@ -1,6 +1,8 @@
+import functools
+
 import numpy as np
 import scipy.ndimage
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
@@ -29,7 +31,7 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self.lastFrameTime = None
         self.requestBgReset = False
-        self._cachedSaveName = None
+        self._cachedSaveCallable = None
 
         # Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -41,12 +43,12 @@ class BgSubtractCtrl(Qt.QWidget):
     def divideClicked(self):
         self.needFrameUpdate.emit()
         self.ui.subtractBgBtn.setChecked(False)
-        self._cachedSaveName = None
+        self._cachedSaveCallable = None
 
     def subtractClicked(self):
         self.needFrameUpdate.emit()
         self.ui.divideBgBtn.setChecked(False)
-        self._cachedSaveName = None
+        self._cachedSaveCallable = None
 
     def getBackgroundFrame(self):
         if self.backgroundFrame is None:
@@ -107,34 +109,24 @@ class BgSubtractCtrl(Qt.QWidget):
         else:
             self.backgroundFrame = x * self.backgroundFrame + (1 - x) * img
         self.blurredBackgroundFrame = None
-        self._cachedSaveName = None
+        self._cachedSaveCallable = None
 
-    def makeStandaloneSaveCallable(self):
-        if self._cachedSaveName is None:
+    def makeStandaloneSaveCallable(self) -> Callable[[DirHandle], str]:
+        if self._cachedSaveCallable is None:
             info = {
                 "subtract": self.ui.subtractBgBtn.isChecked(),
                 "divide": self.ui.divideBgBtn.isChecked(),
                 "blur": self.ui.bgBlurSpin.value(),
             }
-            frame = self.backgroundFrame  # TODO copy? mutex? both?
+            frame = self.backgroundFrame  # TODO copy? mutex? lazy copy in a mutex?
+
+            # TODO thread safety
+            @functools.cache
             def do_save(dh: DirHandle):
-                pass
-            # TODO thread safety, caching
-
-    def save(self, dh: DirHandle) -> Union[None, str]:
-        if self._cachedSaveName is None:
-            if self.backgroundFrame is None or not (
-                    self.ui.subtractBgBtn.isChecked() or self.ui.divideBgBtn.isChecked()
-            ):
-                return None
-            info = {
-                "subtract": self.ui.subtractBgBtn.isChecked(),
-                "divide": self.ui.divideBgBtn.isChecked(),
-                "blur": self.ui.bgBlurSpin.value(),
-            }
-            fh = dh.writeFile(self.backgroundFrame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
-            self._cachedSaveName = fh.shortName()
-        return self._cachedSaveName
+                fh = dh.writeFile(frame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
+                return fh.shortName()
+            self._cachedSaveCallable = do_save
+        return self._cachedSaveCallable
 
     def processImage(self, data: np.ndarray) -> np.ndarray:
         return remove_background_from_image(
@@ -142,7 +134,7 @@ class BgSubtractCtrl(Qt.QWidget):
             self.getBackgroundFrame(),
             self.ui.subtractBgBtn.isChecked(),
             self.ui.divideBgBtn.isChecked(),
-            # we cache our blur, so don't also do it here
+            # we cache our blur, so don't also apply it here
             # self.ui.bgBlurSpin.value(),
         )
 

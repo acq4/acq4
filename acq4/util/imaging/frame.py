@@ -1,3 +1,5 @@
+from typing import Callable
+
 import numpy as np
 
 from acq4.util.imaging.bg_subtract_ctrl import remove_background_from_image
@@ -69,7 +71,7 @@ class Frame(object):
         """
         return self.globalTransform().map(obj)
     
-    def saveImage(self, dh, filename, backgroundControl=None, contrastControl=None):
+    def saveImage(self, dh, filename, backgroundControl: Callable = None, contrastControl=None):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
@@ -98,7 +100,14 @@ class Frame(object):
         """
         data = self.getImage()
         if self._bg_removal is not None:
-            data = remove_background_from_image(data, self._bg_removal.read(), **self._bg_removal.info().deepcopy())
+            bg_info = self._bg_removal.info()
+            data = remove_background_from_image(
+                data,
+                self._bg_removal.read(),
+                subtract=bg_info.get("subtract"),
+                divide=bg_info.get("divide"),
+                blur=bg_info.get("blur"),
+            )
         levels = None
         lut = None
         contrast = self.info().get("contrastControl", None)
