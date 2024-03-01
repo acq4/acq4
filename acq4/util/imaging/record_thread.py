@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 import time
@@ -75,7 +75,7 @@ class RecordThread(Thread):
         """
         return self._recording
 
-    def saveFrame(self, bgCtrl: Callable, contrastCtrl):
+    def saveFrame(self, bgCtrl: Optional[Callable], contrastCtrl):
         """Ask the recording thread to save the most recently acquired frame."""
         # TODO get the bg and contrast metadata instead of teaching the Frame to do so
         with self.lock:

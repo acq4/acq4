@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 
@@ -71,7 +71,7 @@ class Frame(object):
         """
         return self.globalTransform().map(obj)
     
-    def saveImage(self, dh, filename, backgroundControl: Callable = None, contrastControl=None):
+    def saveImage(self, dh, filename, backgroundControl: Optional[Callable] = None, contrastControl=None):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
@@ -79,9 +79,7 @@ class Frame(object):
         data = self.getImage()
         info = self.info()
         if backgroundControl is not None:
-            bg = backgroundControl(dh)
-            if bg is not None:
-                info['backgroundControl'] = bg
+            info['backgroundControl'] = backgroundControl(dh)
         if contrastControl is not None:
             info['contrastControl'] = contrastControl
 

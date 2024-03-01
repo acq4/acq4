@@ -111,19 +111,19 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self._cachedDeferredSave = None
 
-    def deferredSave(self) -> Callable[[DirHandle], Optional[str]]:
+    def deferredSave(self) -> Optional[Callable[[DirHandle], str]]:
+        if self.backgroundFrame is None:
+            return None
         if self._cachedDeferredSave is None:
             info = {
                 "subtract": self.ui.subtractBgBtn.isChecked(),
                 "divide": self.ui.divideBgBtn.isChecked(),
                 "blur": self.ui.bgBlurSpin.value(),
             }
-            frame = None if self.backgroundFrame is None else self.backgroundFrame[:]
+            frame = self.backgroundFrame[:]
 
             @functools.cache
             def do_save(dh: DirHandle) -> Union[str, None]:
-                if frame is None:
-                    return None
                 fh = dh.writeFile(frame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
                 return fh.shortName()
             self._cachedDeferredSave = do_save
