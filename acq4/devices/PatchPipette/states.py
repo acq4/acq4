@@ -1289,6 +1289,7 @@ class ResealState(PatchPipetteState):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
         pos = np.array(self.dev.pipetteDevice.globalPosition())
+        # TODO move back a little?
         pipette_direction = self.dev.pipetteDevice.globalDirection()
 
         def random_wiggle_direction():
