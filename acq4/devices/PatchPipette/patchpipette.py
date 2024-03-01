@@ -289,7 +289,7 @@ class PatchPipette(Device):
         pos = np.array(pip.globalPosition())
         if self._lastPos is None or np.linalg.norm(pos - self._lastPos) > 1e-6:
             self._lastPos = pos
-            self.emitNewEvent('pipette_transform_changed', {'globalPosition': pos})
+            self.emitNewEvent('pipette_transform_changed', {'globalPosition': tuple(pos)})
 
     def setActive(self, active):
         if self.active == active:
