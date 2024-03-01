@@ -31,7 +31,7 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self.lastFrameTime = None
         self.requestBgReset = False
-        self._cachedSaveCallable = None
+        self._cachedDeferredSave = None
 
         # Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -43,12 +43,12 @@ class BgSubtractCtrl(Qt.QWidget):
     def divideClicked(self):
         self.needFrameUpdate.emit()
         self.ui.subtractBgBtn.setChecked(False)
-        self._cachedSaveCallable = None
+        self._cachedDeferredSave = None
 
     def subtractClicked(self):
         self.needFrameUpdate.emit()
         self.ui.divideBgBtn.setChecked(False)
-        self._cachedSaveCallable = None
+        self._cachedDeferredSave = None
 
     def getBackgroundFrame(self):
         if self.backgroundFrame is None:
@@ -109,24 +109,27 @@ class BgSubtractCtrl(Qt.QWidget):
         else:
             self.backgroundFrame = x * self.backgroundFrame + (1 - x) * img
         self.blurredBackgroundFrame = None
-        self._cachedSaveCallable = None
+        self._cachedDeferredSave = None
 
-    def makeStandaloneSaveCallable(self) -> Callable[[DirHandle], str]:
-        if self._cachedSaveCallable is None:
+    def deferredSave(self) -> Callable[[DirHandle], Optional[str]]:
+        if self._cachedDeferredSave is None:
             info = {
                 "subtract": self.ui.subtractBgBtn.isChecked(),
                 "divide": self.ui.divideBgBtn.isChecked(),
                 "blur": self.ui.bgBlurSpin.value(),
             }
-            frame = self.backgroundFrame  # TODO copy? mutex? lazy copy in a mutex?
+            # TODO mutex? lazy copy in a mutex?
+            frame = None if self.backgroundFrame is None else self.backgroundFrame[:]
 
             # TODO thread safety
             @functools.cache
-            def do_save(dh: DirHandle):
+            def do_save(dh: DirHandle) -> Union[str, None]:
+                if frame is None:
+                    return None
                 fh = dh.writeFile(frame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
                 return fh.shortName()
-            self._cachedSaveCallable = do_save
-        return self._cachedSaveCallable
+            self._cachedDeferredSave = do_save
+        return self._cachedDeferredSave
 
     def processImage(self, data: np.ndarray) -> np.ndarray:
         return remove_background_from_image(

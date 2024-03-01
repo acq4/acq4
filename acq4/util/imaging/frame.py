@@ -79,7 +79,9 @@ class Frame(object):
         data = self.getImage()
         info = self.info()
         if backgroundControl is not None:
-            info['backgroundControl'] = backgroundControl(dh)
+            bg = backgroundControl(dh)
+            if bg is not None:
+                info['backgroundControl'] = bg
         if contrastControl is not None:
             info['contrastControl'] = contrastControl
 

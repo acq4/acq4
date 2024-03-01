@@ -152,7 +152,7 @@ class ImagingCtrl(Qt.QWidget):
         if self.ui.linkSavePinBtn.isChecked():
             self.pinCurrentFrame()
         self.recordThread.saveFrame(
-            self.frameDisplay.bgCtrl.makeStandaloneSaveCallable(),
+            self.frameDisplay.bgCtrl.deferredSave(),
             self.frameDisplay.contrastCtrl.saveState(),
         )
 
@@ -249,7 +249,7 @@ class ImagingCtrl(Qt.QWidget):
     def pinFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
             self.recordThread.saveFrame(
-                self.frameDisplay.bgCtrl.makeStandaloneSaveCallable(),
+                self.frameDisplay.bgCtrl.deferredSave(),
                 self.frameDisplay.contrastCtrl.saveState(),
             )
         self.pinCurrentFrame()
