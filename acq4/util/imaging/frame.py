@@ -71,17 +71,20 @@ class Frame(object):
         """
         return self.globalTransform().map(obj)
     
-    def saveImage(self, dh, filename, backgroundControl: Optional[Callable] = None, contrastControl=None):
+    def saveImage(self, dh, filename, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
+        The optional *backgroundInfo* and *contrastInfo* arguments can be used to save additional
+        data needed to display the frame later. See `BackgroundSubtractCtrl.defferedSave` and
+        `ContrastCtrl.saveState` for details.
         """
         data = self.getImage()
         info = self.info()
-        if backgroundControl is not None:
-            info['backgroundControl'] = backgroundControl(dh)
-        if contrastControl is not None:
-            info['contrastControl'] = contrastControl
+        if backgroundInfo is not None:
+            info['backgroundInfo'] = backgroundInfo(dh)
+        if contrastInfo is not None:
+            info['contrastInfo'] = contrastInfo
 
         if filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
@@ -90,13 +93,14 @@ class Frame(object):
 
     def loadLinkedFiles(self, dh):
         """Load linked files from the same directory as the main file."""
-        bg_removal = self.info().get("backgroundControl", None)
+        bg_removal = self.info().get("backgroundInfo", None)
         if bg_removal is not None:
             self._bg_removal = dh[bg_removal]
 
     def imageItem(self) -> ImageItem:
         """
-        Return an ImageItem suitable for pinning.
+        Return an ImageItem suitable for pinning. This can apply background removal and contrast control if those
+        were saved with the frame (see loadLinkedFiles).
         """
         data = self.getImage()
         if self._bg_removal is not None:
@@ -110,7 +114,7 @@ class Frame(object):
             )
         levels = None
         lut = None
-        contrast = self.info().get("contrastControl", None)
+        contrast = self.info().get("contrastInfo", None)
         if contrast is not None and not isinstance(contrast, str):  # str was old format
             levels = contrast["levels"]
             gradient = pg.GradientEditorItem()
