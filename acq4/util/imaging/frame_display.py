@@ -67,12 +67,6 @@ class FrameDisplay(Qt.QObject):
     def backgroundWidget(self):
         return self.bgCtrl
 
-    def backgroundFrame(self):
-        """Return the currently active background image or None if background
-        subtraction is disabled.
-        """
-        return self.bgCtrl.backgroundFrame()
-
     def visibleImage(self):
         """Return a copy of the image as it is currently visible in the scene.
         """

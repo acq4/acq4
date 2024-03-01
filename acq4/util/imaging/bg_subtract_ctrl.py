@@ -118,10 +118,8 @@ class BgSubtractCtrl(Qt.QWidget):
                 "divide": self.ui.divideBgBtn.isChecked(),
                 "blur": self.ui.bgBlurSpin.value(),
             }
-            # TODO mutex? lazy copy in a mutex?
             frame = None if self.backgroundFrame is None else self.backgroundFrame[:]
 
-            # TODO thread safety
             @functools.cache
             def do_save(dh: DirHandle) -> Union[str, None]:
                 if frame is None:
