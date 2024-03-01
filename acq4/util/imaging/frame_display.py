@@ -1,5 +1,3 @@
-import time
-
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.cuda import shouldUseCuda, cupy
@@ -69,12 +67,6 @@ class FrameDisplay(Qt.QObject):
     def backgroundWidget(self):
         return self.bgCtrl
 
-    def backgroundFrame(self):
-        """Return the currently active background image or None if background
-        subtraction is disabled.
-        """
-        return self.bgCtrl.backgroundFrame()
-
     def visibleImage(self):
         """Return a copy of the image as it is currently visible in the scene.
         """
@@ -83,12 +75,6 @@ class FrameDisplay(Qt.QObject):
         return self.currentFrame.getImage()
 
     def newFrame(self, frame):
-        # lf = None
-        # if self.nextFrame is not None:
-        #     lf = self.nextFrame
-        # elif self.currentFrame is not None:
-        #     lf = self.currentFrame
-
         # self.nextFrame gets picked up by drawFrame() at some point
         self.nextFrame = frame
 
@@ -135,7 +121,7 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # Set new levels if auto gain is enabled
-            self.contrastCtrl.processImage(data)
+            self.contrastCtrl.updateWithImage(data)
             prof()
 
             if shouldUseCuda():

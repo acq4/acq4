@@ -1,30 +1,30 @@
-import queue
 from collections import deque
 
 import numpy as np
+import queue
 import threading
 import time
-
-from typing import Callable, Optional
+from MetaArray import MetaArray, axis
 from contextlib import contextmanager, ExitStack
 from six.moves import range
+from typing import Callable, Optional
 
-import pyqtgraph as pg
-from MetaArray import MetaArray, axis
 import acq4.util.ptime as ptime
+import pyqtgraph as pg
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt, imaging
-from acq4.util.future import Future
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
+from acq4.util.future import Future
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
 from .taskGUI import CameraTaskGui
+from ...util.DataManager import FileHandle
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -511,7 +511,13 @@ class Frame(imaging.Frame):
         tr = Camera.makeFrameTransform(info["region"], info["binning"])
         info["frameTransform"] = tr
 
-        imaging.Frame.__init__(self, data, info)
+        super().__init__(data, info)
+
+    @classmethod
+    def loadFromFileHandle(cls, fh: FileHandle):
+        frame = cls(fh.read(), fh.info().deepcopy())
+        frame.loadLinkedFiles(fh.parent())
+        return frame
 
 
 class CameraTask(DAQGenericTask):
@@ -845,6 +851,7 @@ class AcquireThread(Thread):
             info = camState.copy()
         binning = info["binning"]
         info.update({
+            "deviceName": self.dev.name(),
             "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
             "objective": scopeState.get("objective", None),
             "deviceTransform": transform,

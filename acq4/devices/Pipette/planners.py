@@ -8,18 +8,6 @@ if typing.TYPE_CHECKING:
     from .pipette import Pipette
 
 
-def defaultMotionPlanners():
-    return {
-        'home': HomeMotionPlanner,
-        'search': SearchMotionPlanner,
-        'aboveTarget': AboveTargetMotionPlanner,
-        'approach': ApproachMotionPlanner,
-        'target': TargetMotionPlanner,
-        'idle': IdleMotionPlanner,
-        'saved': SavedPositionMotionPlanner,
-    }
-
-
 class PipettePathGenerator:
     """Collection of methods for generating safe pipette paths.
 
@@ -228,7 +216,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         scope = pip.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
         if surfaceDepth is None:
-            raise Exception("Cannot determine search position; surface depth is not defined.")
+            raise ValueError("Cannot determine search position; surface depth is not defined.")
         searchDepth = surfaceDepth + pip._opts['searchHeight']
 
         cam = pip.imagingDevice()
@@ -258,8 +246,7 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
         pip = self.pip
         approachDepth = pip.approachDepth()
         approachPosition = pip.positionAtDepth(approachDepth, start=pip.targetPosition())
-        path = self.safePath(pip.globalPosition(), approachPosition, self.speed)
-        return path
+        return self.safePath(pip.globalPosition(), approachPosition, self.speed)
 
 
 class TargetMotionPlanner(PipetteMotionPlanner):
@@ -342,3 +329,15 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
         
         return pip._moveToGlobal(globalIdlePos, speed)
+
+
+def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
+    return {
+        'home': HomeMotionPlanner,
+        'search': SearchMotionPlanner,
+        'aboveTarget': AboveTargetMotionPlanner,
+        'approach': ApproachMotionPlanner,
+        'target': TargetMotionPlanner,
+        'idle': IdleMotionPlanner,
+        'saved': SavedPositionMotionPlanner,
+    }

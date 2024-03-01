@@ -546,12 +546,11 @@ class Manager(Qt.QObject):
                     raise
             return f
 
-    def getModule(self, name):
-        """Return an already loaded module"""
+    def getModule(self, name: str):
+        """Return a module"""
         with self.lock:
-            name = str(name)
             if name not in self.modules:
-                self.loadModule(name)
+                self.loadDefinedModule(name)
             return self.modules[name]
 
     def getCurrentDatabase(self):

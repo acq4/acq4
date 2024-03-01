@@ -1,10 +1,13 @@
+import functools
+
 import numpy as np
 import scipy.ndimage
-import time
+from typing import Optional, Union, Callable
 
 from acq4.util import Qt, ptime
+from acq4.util.DataManager import DirHandle
 
-Ui_Form = Qt.importTemplate('.bg_subtract_template')
+Ui_Form = Qt.importTemplate(".bg_subtract_template")
 
 
 class BgSubtractCtrl(Qt.QWidget):
@@ -16,6 +19,7 @@ class BgSubtractCtrl(Qt.QWidget):
     * background blur for unsharp masking
     * continuous averaging
     """
+
     needFrameUpdate = Qt.Signal()
 
     def __init__(self, parent=None):
@@ -23,12 +27,13 @@ class BgSubtractCtrl(Qt.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
-        self.backgroundFrame = None
+        self.backgroundFrame: Optional[np.ndarray] = None
         self.blurredBackgroundFrame = None
         self.lastFrameTime = None
         self.requestBgReset = False
+        self._cachedDeferredSave = None
 
-        ## Connect Background Subtraction Dock
+        # Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
         self.ui.collectBgBtn.clicked.connect(self.collectBgClicked)
         self.ui.divideBgBtn.clicked.connect(self.divideClicked)
@@ -38,10 +43,12 @@ class BgSubtractCtrl(Qt.QWidget):
     def divideClicked(self):
         self.needFrameUpdate.emit()
         self.ui.subtractBgBtn.setChecked(False)
+        self._cachedDeferredSave = None
 
     def subtractClicked(self):
         self.needFrameUpdate.emit()
         self.ui.divideBgBtn.setChecked(False)
+        self._cachedDeferredSave = None
 
     def getBackgroundFrame(self):
         if self.backgroundFrame is None:
@@ -78,39 +85,70 @@ class BgSubtractCtrl(Qt.QWidget):
         self.lastFrameTime = now
         if not self.ui.collectBgBtn.isChecked():
             return
-        
+
         # integrate new frame into background
         if self.ui.contAvgBgCheck.isChecked():
             x = np.exp(-dt * 5 / max(self.ui.bgTimeSpin.value(), 0.01))
         else:
-            ## stop collecting bg frames if we are in static mode and time is up
-            timeLeft = self.ui.bgTimeSpin.value() - (ptime.time()-self.bgStartTime)
+            # stop collecting bg frames if we are in static mode and time is up
+            timeLeft = self.ui.bgTimeSpin.value() - (ptime.time() - self.bgStartTime)
             if timeLeft > 0:
-                self.ui.collectBgBtn.setText("Collecting... (%d)" % int(timeLeft+1))
+                self.ui.collectBgBtn.setText(f"Collecting... ({int(timeLeft + 1)})")
             else:
                 self.ui.collectBgBtn.setChecked(False)
                 self.ui.collectBgBtn.setText("Collect Background")
 
             x = float(self.bgFrameCount) / (self.bgFrameCount + 1)
             self.bgFrameCount += 1
-    
+
         img = frame.getImage().astype(np.float32)
         if self.requestBgReset or self.backgroundFrame is None or self.backgroundFrame.shape != img.shape:
             self.requestBgReset = False
             self.backgroundFrame = img
             self.needFrameUpdate.emit()
         else:
-            self.backgroundFrame = x * self.backgroundFrame + (1-x) * img
+            self.backgroundFrame = x * self.backgroundFrame + (1 - x) * img
         self.blurredBackgroundFrame = None
-        
-    def processImage(self, data):
-        if self.ui.divideBgBtn.isChecked():
-            bg = self.getBackgroundFrame()
-            if bg is not None and bg.shape == data.shape:
-                data = data / bg
-        elif self.ui.subtractBgBtn.isChecked():
-            bg = self.getBackgroundFrame()
-            if bg is not None and bg.shape == data.shape:
-                data = data - bg
+        self._cachedDeferredSave = None
 
-        return data
+    def deferredSave(self) -> Optional[Callable[[DirHandle], str]]:
+        if self.backgroundFrame is None:
+            return None
+        if self._cachedDeferredSave is None:
+            info = {
+                "subtract": self.ui.subtractBgBtn.isChecked(),
+                "divide": self.ui.divideBgBtn.isChecked(),
+                "blur": self.ui.bgBlurSpin.value(),
+            }
+            frame = self.backgroundFrame
+
+            @functools.cache
+            def do_save(dh: DirHandle) -> Union[str, None]:
+                fh = dh.writeFile(frame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
+                return fh.shortName()
+            self._cachedDeferredSave = do_save
+        return self._cachedDeferredSave
+
+    def processImage(self, data: np.ndarray) -> np.ndarray:
+        return remove_background_from_image(
+            data,
+            self.getBackgroundFrame(),
+            self.ui.subtractBgBtn.isChecked(),
+            self.ui.divideBgBtn.isChecked(),
+            # we cache our blur, so don't also apply it here
+            # self.ui.bgBlurSpin.value(),
+        )
+
+
+def remove_background_from_image(
+    image: np.ndarray, bg: Optional[np.ndarray], subtract: bool = True, divide: bool = False, blur: float = 0.0
+):
+    if bg is None:
+        return image
+    if blur > 0.0:
+        bg = scipy.ndimage.gaussian_filter(bg, (blur, blur))
+    if divide:
+        return image / bg
+    if subtract:
+        return image - bg
+    return image

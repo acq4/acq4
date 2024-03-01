@@ -69,6 +69,7 @@ class PatchPipette(Device):
         self.clean = False
         self.calibrated = False
         self.waitingForSwap = False
+        self._lastPos = None
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -91,6 +92,8 @@ class PatchPipette(Device):
         self.pipetteDevice.sigMoveFinished.connect(self._pipetteMoveFinished)
         self.pipetteDevice.sigMoveRequested.connect(self._pipetteMoveRequested)
         self.pipetteDevice.sigTargetChanged.connect(self._pipetteTargetChanged)
+        self.pipetteDevice.parentDevice().sigPositionChanged.connect(self._pipetteTransformChanged)
+        self.pipetteDevice.parentDevice().sigOrientationChanged.connect(self._pipetteTransformChanged)
 
         deviceManager.declareInterface(name, ['patchpipette'], self)
 
@@ -283,8 +286,10 @@ class PatchPipette(Device):
         self.emitNewEvent('pipette_calibrated')
 
     def _pipetteTransformChanged(self, pip, movedDevice):
-        pos = pip.globalPosition()
-        self.emitNewEvent('pipette_transform_changed', {'globalPosition': pos})
+        pos = np.array(pip.globalPosition())
+        if self._lastPos is None or np.linalg.norm(pos - self._lastPos) > 1e-6:
+            self._lastPos = pos
+            self.emitNewEvent('pipette_transform_changed', {'globalPosition': tuple(pos)})
 
     def setActive(self, active):
         if self.active == active:

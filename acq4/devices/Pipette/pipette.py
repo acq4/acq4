@@ -2,16 +2,14 @@ import weakref
 from typing import List
 
 import numpy as np
-import pyqtgraph as pg
-from six.moves import range
-import json
 
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.util import Qt, ptime
+from acq4.util import Qt
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
@@ -135,7 +133,7 @@ class Pipette(Device, OptomechDevice):
 
         deviceManager.sigAbortAll.connect(self.stop)
 
-    def moveTo(self, position, speed, raiseErrors=False, **kwds):
+    def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
         If *raiseErrors* is True, then an exception will be raised in a background
@@ -149,7 +147,7 @@ class Pipette(Device, OptomechDevice):
                 plannerClass = self.motionPlanners.get('saved', self.defaultMotionPlanners.get('saved', None))
 
         if plannerClass is None:
-            raise ValueError("Unknown pipette move position %r" % position)
+            raise ValueError(f"Unknown pipette move position {position!r}")
 
         if self.currentMotionPlanner is not None:
             self.currentMotionPlanner.stop()
@@ -157,7 +155,7 @@ class Pipette(Device, OptomechDevice):
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
         future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
-            future.raiseErrors(message="Move to " + position + " position failed; requested from:\n{stack}")
+            future.raiseErrors(message=f"Move to {position} position failed; requested from:\n{{stack}}")
 
         return future
 
@@ -357,7 +355,7 @@ class Pipette(Device, OptomechDevice):
         scope = self.scopeDevice()
         surface = scope.getSurfaceDepth()
         if surface is None:
-            raise Exception("Surface depth has not been set.")
+            raise ValueError("Surface depth has not been set.")
         return surface + self._opts['approachHeight']
 
     def depthBelowSurface(self):
@@ -455,7 +453,7 @@ class Pipette(Device, OptomechDevice):
 
     def targetPosition(self):
         if self.target is None:
-            raise RuntimeError("No target defined for %s" % self.name())
+            raise RuntimeError(f"No target defined for {self.name()}")
         return self.target
 
     def hideMarkers(self, hide):
@@ -541,7 +539,7 @@ class PipetteRecorder:
         self.pip.sigMoveRequested.disconnect(self.recordMoveRequested)
 
     def store(self, filename):
-        json.dump(self.events, open(filename + '.json', 'w'))
+        json.dump(self.events, open(f'{filename}.json', 'w'))
 
 
 class PipetteCamModInterface(CameraModuleInterface):
@@ -551,7 +549,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     """
     canImage = False
 
-    def __init__(self, dev, mod, showUi=True):
+    def __init__(self, dev: "Pipette", mod, showUi=True):
         CameraModuleInterface.__init__(self, dev, mod)
         self._haveTarget = False
         self._showUi = showUi

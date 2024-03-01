@@ -185,6 +185,9 @@ class CameraWindow(Qt.QMainWindow):
     def getView(self):
         return self.view
 
+    def getInterfaceForDevice(self, name: str):
+        return self.interfaces[name]
+
     def getDepthView(self):
         self.depthDock.show()
         return self.depthPlot
@@ -261,12 +264,16 @@ class CameraWindow(Qt.QMainWindow):
         # update ROI plots
         self.roiWidget.newFrame(iface, frame)
 
+    def displayPinnedFrame(self, frame: "Frame"):
+        device_name = frame.info().get('deviceName', 'Camera')
+        imaging_ctrl = self.getInterfaceForDevice(device_name).imagingCtrl
+        imaging_ctrl.addPinnedFrame(frame.imageItem())
+
     def ifaceTransformChanged(self, iface):
         # imaging device moved; update viewport and tracked group.
         # This is only used when the camera is not running--
         # if the camera is running, then this is taken care of in drawFrame to
         # ensure that the image remains stationary on screen.
-        prof = Profiler()
         if not self.cam.isRunning():
             tr = pg.SRTTransform(self.cam.globalTransform())
             self.updateTransform(tr)
