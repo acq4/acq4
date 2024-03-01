@@ -24,6 +24,7 @@ from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
 from .taskGUI import CameraTaskGui
+from ...util.DataManager import FileHandle
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -514,7 +515,7 @@ class Frame(imaging.Frame):
 
     @classmethod
     def loadFromFileHandle(cls, fh: FileHandle):
-        frame = cls(fh.data(), fh.info().deepcopy())
+        frame = cls(fh.read(), fh.info().deepcopy())
         frame.loadLinkedFiles(fh.parent())
         return frame
 
