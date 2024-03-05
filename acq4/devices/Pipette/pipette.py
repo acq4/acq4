@@ -1,3 +1,4 @@
+import json
 import weakref
 from typing import List
 
@@ -9,7 +10,7 @@ from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
