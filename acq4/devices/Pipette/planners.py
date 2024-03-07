@@ -1,10 +1,10 @@
 from __future__ import annotations
 import numpy as np
-import typing
+from typing import TYPE_CHECKING, Union
 
 from acq4.util.future import MultiFuture
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .pipette import Pipette
 
 
@@ -138,7 +138,7 @@ class PipetteMotionPlanner:
     For example, moving to a pipette search position involves setting the focus to a certain height, followed by inserting
     the pipette tip diagonally near the
     """
-    def __init__(self, pip: Pipette, position: np.ndarray, speed: float, **kwds):
+    def __init__(self, pip: Pipette, position: Union[np.ndarray, str], speed: float, **kwds):
         self.pip = pip
         self.position = position
         self.speed = speed

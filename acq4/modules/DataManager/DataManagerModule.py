@@ -112,8 +112,7 @@ class DataManager(Module):
         for f in current_dir.ls():
             if f.endswith('.tif') and 'background' not in f.lower():
                 f = current_dir[f]
-                frame = Frame(f.read(), f.info().deepcopy())
-                frame.loadLinkedFiles(current_dir)
+                frame = Frame.loadFromFileHandle(f)
                 cam_mod.ui.displayPinnedFrame(frame)
 
     def updateLogDir(self, d):

@@ -28,11 +28,12 @@ class ContrastCtrl(Qt.QWidget):
         self.autoGainLevels = [0.0, 1.0]
         self.ignoreLevelChange = False
         self.alpha = 1.0
+        self._cached_state = None
         self.lastAGCMax = None
 
         # Connect DisplayGain dock
-        self.ui.histogram.sigLookupTableChanged.connect(self.levelsOrLUTChanged)
-        self.ui.histogram.sigLevelsChanged.connect(self.levelsOrLUTChanged)
+        self.ui.histogram.sigLookupTableChanged.connect(self.lutChanged)
+        self.ui.histogram.sigLevelsChanged.connect(self.levelsChanged)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
         self.ui.zoomLiveBtn.clicked.connect(self.zoomToImage)
@@ -50,7 +51,10 @@ class ContrastCtrl(Qt.QWidget):
         """
         self.imageItem.getViewBox().autoRange(items=[self.imageItem])
 
-    def levelsOrLUTChanged(self):
+    def lutChanged(self):
+        self._cached_state = None
+
+    def levelsChanged(self):
         if self.lastMinMax is None or not self.ui.btnAutoGain.isChecked() or self.ignoreLevelChange:
             return
         bl, wl = self.getLevels()
@@ -60,6 +64,7 @@ class ContrastCtrl(Qt.QWidget):
             return
         newLevels = [(bl - mn) / rng, (wl - mn) / rng]
         self.autoGainLevels = newLevels
+        self._cached_state = None
 
     def alphaChanged(self, val):
         self.alpha = val / self.ui.alphaSlider.maximum()  # slider only works in integers, and we need a 0 to 1 value
@@ -69,10 +74,12 @@ class ContrastCtrl(Qt.QWidget):
         return self.ui.histogram.getLevels()
 
     def saveState(self):
-        return {
-            'levels': self.getLevels(),
-            'gradient': self.ui.histogram.gradient.saveState()
-        }
+        if self._cached_state is None:
+            self._cached_state = {
+                'levels': self.getLevels(),
+                'gradient': self.ui.histogram.gradient.saveState()
+            }
+        return self._cached_state
 
     def toggleAutoGain(self, b):
         if b:

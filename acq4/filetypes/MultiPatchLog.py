@@ -263,10 +263,6 @@ class MultiPatchLogData(object):
                 count_for_use('pressure'),
                 dtype=[('time', float), ('pressure', float), ('source', 'U32')],
             ),
-            'pipette_transform': np.zeros(
-                (count_for_use('pipette_transform'), 4),
-                dtype=float,
-            ),
             'state': list(range(count_for_use('state'))),
             'auto_bias_target': np.zeros(
                 (count_for_use('auto_bias_target'), 2),
@@ -297,8 +293,6 @@ class MultiPatchLogData(object):
             return event_time, *event.get('position', event.get('globalPosition', (np.nan, np.nan, np.nan)))
         if use == 'pressure':
             return event_time, event['pressure'], event['source']
-        if use == 'pipette_transform':
-            return event_time, *event['globalPosition']
         if use == 'state':
             return event_time, event['state'], event.get('info', '')
         if use == 'auto_bias_target':

@@ -75,17 +75,16 @@ class RecordThread(Thread):
         """
         return self._recording
 
-    def saveFrame(self, bgCtrl: Optional[Callable], contrastCtrl):
+    def saveFrame(self, backgroundInfo: Optional[Callable], contrastInfo):
         """Ask the recording thread to save the most recently acquired frame."""
-        # TODO get the bg and contrast metadata instead of teaching the Frame to do so
         with self.lock:
             self.newFrames.append(
                 {
                     'frame': self.currentFrame,
                     'dir': self.m.getCurrentDir(),
                     'stack': False,
-                    'bgCtrl': bgCtrl,
-                    'contrastCtrl': contrastCtrl,
+                    'backgroundInfo': backgroundInfo,
+                    'contrastInfo': contrastInfo,
                 }
             )
 
@@ -178,7 +177,7 @@ class RecordThread(Thread):
                 try:
                     fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
                     fh = frame['frame'].saveImage(
-                        dh, fileName, backgroundControl=frame.get('bgCtrl'), contrastControl=frame.get('contrastCtrl')
+                        dh, fileName, backgroundInfo=frame.get('backgroundInfo'), contrastInfo=frame.get('contrastInfo')
                     )
                     self.sigSavedFrame.emit(fh.name())
                 except:

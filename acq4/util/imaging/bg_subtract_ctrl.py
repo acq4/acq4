@@ -120,7 +120,7 @@ class BgSubtractCtrl(Qt.QWidget):
                 "divide": self.ui.divideBgBtn.isChecked(),
                 "blur": self.ui.bgBlurSpin.value(),
             }
-            frame = self.backgroundFrame[:]
+            frame = self.backgroundFrame
 
             @functools.cache
             def do_save(dh: DirHandle) -> Union[str, None]:
