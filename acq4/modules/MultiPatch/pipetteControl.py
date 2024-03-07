@@ -198,7 +198,7 @@ class PipetteControl(Qt.QWidget):
             print("Set auto bias target:", val)
             self.pip.setAutoBiasTarget(val)
         if not (mode == 'IC' and self.pip.autoBiasEnabled()):
-            self.pip.clampDevice.setHolding(mode, val)
+            self.pip.setHolding(mode, val)
 
     def clampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
