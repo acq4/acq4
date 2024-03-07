@@ -794,13 +794,13 @@ class SealState(PatchPipetteState):
             config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
 
         mode = config['pressureMode']
-        self.setState('beginning seal (mode: %r)' % mode)
+        self.setState(f'beginning seal (mode: {mode!r})')
         if mode == 'user':
             dev.pressureDevice.setPressure(source='user', pressure=0)
         elif mode == 'auto':
             dev.pressureDevice.setPressure(source='atmosphere', pressure=pressure)
         else:
-            raise ValueError(f"pressureMode must be 'auto' or 'user' (got {mode}')")
+            raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
 
         dev.setTipClean(False)
 
@@ -827,7 +827,7 @@ class SealState(PatchPipetteState):
             patchrec['capacitanceBeforeBreakin'] = cap
 
             if not holdingSet and ssr > config['holdingThreshold']:
-                self.setState('enable holding potential %0.1f mV' % (config['holdingPotential']*1000))
+                self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode=None, value=config['holdingPotential'])
                 holdingSet = True
 
@@ -858,7 +858,7 @@ class SealState(PatchPipetteState):
 
                 if dt > config['autoSealTimeout']:
                     patchrec['sealSuccessful'] = False
-                    self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
+                    self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
                     return
 
                 # update pressure
@@ -882,7 +882,7 @@ class SealState(PatchPipetteState):
                     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                     continue
 
-                self.setState('Rpip slope: %g MOhm/sec   Pressure: %g Pa' % (slope/1e6, pressure))
+                self.setState(f'Rpip slope: {slope / 1e6:g} MOhm/sec   Pressure: {pressure:g} Pa')
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
 
     def cleanup(self):
