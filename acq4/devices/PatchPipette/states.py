@@ -798,7 +798,7 @@ class SealState(PatchPipetteState):
         if mode == 'user':
             dev.pressureDevice.setPressure(source='user', pressure=0)
         elif mode == 'auto':
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=pressure)
         else:
             raise ValueError(f"pressureMode must be 'auto' or 'user' (got {mode}')")
 
@@ -873,11 +873,12 @@ class SealState(PatchPipetteState):
                         pressure += change
                         break
                 
-                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
+                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to starting
+                # pressure and redo the pressure change
                 if pressure <= config['pressureLimit']:
                     dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                     self.sleep(config['resetDelay'])
-                    pressure = 0
+                    pressure = config['startingPressure']
                     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                     continue
 
