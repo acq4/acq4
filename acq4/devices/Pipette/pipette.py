@@ -16,6 +16,7 @@ from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
+from ...util.future import Future
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -412,6 +413,26 @@ class Pipette(Device, OptomechDevice):
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
+
+    @Future.wrap
+    def stepwiseAdvance(self, depth: float, maxSpeed: float = 10e-6, interval: float = 5, _future=None):
+        """Retract in 1µm steps, allowing for manual user movements"""
+        initial_direction = None
+        while True:
+            pos = self.globalPosition()
+            goal = self.positionAtDepth(depth)
+            direction = goal - pos
+            if initial_direction is None:
+                initial_direction = np.sign(direction[2])
+            if np.sign(direction[2]) != initial_direction:
+                break  # overshot
+            delta = 1e-6
+            distance = np.linalg.norm(direction)
+            step = pos + delta * direction / distance
+            _future.waitFor(self._moveToGlobal(step, speed=maxSpeed, linear=True))
+            if distance <= delta:
+                break
+            _future.sleep(interval)
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
