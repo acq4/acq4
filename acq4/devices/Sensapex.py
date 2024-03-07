@@ -240,7 +240,7 @@ class SensapexMoveFuture(MoveFuture):
         lastTarget = self.startPos
         print(f"stepwise speed: {speed}  delta: {delta}  distance: {distance}  duration: {duration}")
         while True:
-            # where should be be at this point?
+            # where should we be at this point?
             elapsedTime = ptime.time() - self.startTime
             fractionComplete = min(1.0, elapsedTime / duration)
             currentTarget = self.startPos + delta * fractionComplete
