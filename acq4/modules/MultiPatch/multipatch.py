@@ -242,12 +242,12 @@ class MultiPatchWindow(Qt.QWidget):
                 pip = pip.pipetteDevice
             pip.goHome(speed, raiseErrors=True)
 
-    def moveIdle(self):
-        speed = self.selectedSpeed(default='fast')
-        for pip in self.selectedPipettes():
-            if isinstance(pip, PatchPipette):
-                pip = pip.pipetteDevice
-            pip.goIdle(speed, raiseErrors=True)
+    # def moveIdle(self):
+    #     speed = self.selectedSpeed(default='fast')
+    #     for pip in self.selectedPipettes():
+    #         if isinstance(pip, PatchPipette):
+    #             pip = pip.pipetteDevice
+    #         pip.goIdle(speed, raiseErrors=True)
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():

@@ -450,8 +450,8 @@ class Pipette(Device, OptomechDevice):
         stage = self.parentDevice()
         try:
             return stage.moveToGlobal(stagePos, speed, **kwds)
-        except Exception as exc:
-            print("Error moving %s to global position %r:" % (self, pos))
+        except Exception:
+            print(f"Error moving {self} to global position {pos!r}:")
             raise
 
     def _solveGlobalStagePosition(self, pos):

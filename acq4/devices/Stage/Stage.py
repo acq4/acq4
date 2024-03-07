@@ -418,7 +418,7 @@ class Stage(Device, OptomechDevice):
         mfut = self._move(position, speed=speed, linear=linear, **kwds)
 
         if progress:
-            self._progressDialog = Qt.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
+            self._progressDialog = Qt.QProgressDialog(f"{self.name()} moving...", None, 0, 100)
             self._progressDialog.mf = mfut
             self._progressTimer.start(100)
 
