@@ -102,7 +102,7 @@ class MockClamp(PatchClamp):
         else:
             return self.daqDev.getChanHolding(chan)
 
-    def getHolding(self, mode=None):
+    def getHolding(self, mode: str = None):
         global ivModes
         with self.devLock:
             if mode is None:

@@ -236,8 +236,8 @@ class MultiClamp(PatchClamp):
                 if mode == 'I=0':  ## ..and if the current mode is I=0, do nothing.
                     return
             if mode == 'I=0':
-                raise Exception("Can't set holding value for I=0 mode.")
-            
+                raise ValueError("Can't set holding value for I=0 mode.")
+
             ## Update stored holding value if value is supplied
             if value is not None:
                 if self.holding[mode] == value:
@@ -250,11 +250,11 @@ class MultiClamp(PatchClamp):
                 self.sigHoldingChanged.emit(mode, value)
 
             ## We only want to set the actual DAQ channel if:
-            ##   - currently in I=0, or 
+            ##   - currently in I=0, or
             ##   - currently in the mode that was changed
             if mode != currentMode and currentMode != 'I=0':
                 return
-            
+
             holding = self.holding[mode]
             daq = self.getDAQName('command')
             chan = self.config['commandChannel']['channel']
@@ -264,7 +264,7 @@ class MultiClamp(PatchClamp):
                 if holding == 0.0:
                     s = 1.0
                 else:
-                    raise Exception('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
+                    raise ValueError('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
             scale = 1.0 / s
             daqDev.setChannelValue(chan, holding*scale, block=False)
 

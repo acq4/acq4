@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import numpy
 import sip
 from pyqtgraph import mkPen, disconnect
@@ -125,7 +122,7 @@ class MultiClampTaskGui(TaskGui):
                 self.setSignals(state['primarySignal'], state['secondarySignal'])
             self.stateGroup.setState(state)
             self.devStateChanged()
-        except:
+        except Exception:
             printExc('Error while restoring MultiClamp task GUI state:')
         finally:
             self._block_update = block

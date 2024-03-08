@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from acq4.devices.Device import Device
 from acq4.util import Qt
 

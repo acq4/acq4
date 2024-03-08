@@ -186,7 +186,6 @@ class PipetteControl(Qt.QWidget):
         val = self.ui.holdingSpin.value()
         mode = self.clampMode()
         if mode == 'VC' or (mode == 'IC' and self.pip.autoBiasEnabled()):
-            print("Set auto bias target:", val)
             self.pip.setAutoBiasTarget(val)
         if not (mode == 'IC' and self.pip.autoBiasEnabled()):
             self.pip.setHolding(mode, val)
@@ -205,21 +204,19 @@ class PipetteControl(Qt.QWidget):
         if self.pip.autoBiasEnabled():
             if mode == 'VC':
                 spinVal = hval
-                units = 'V'
                 self.ui.autoBiasBtn.setText('bias: vc')
             else:
                 biasTarget = self.pip.autoBiasTarget()
                 spinVal = biasTarget
-                units = 'V'
-                self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
+                self.ui.autoBiasBtn.setText(f'bias: {int(hval * 1e12):d}pA')
+            units = 'V'
             self.ui.autoBiasBtn.setChecked(True)
         else:
             if mode == 'VC':
-                spinVal = hval
                 units = 'V'
             else:
-                spinVal = hval
                 units = 'A'
+            spinVal = hval
             self.ui.autoBiasBtn.setChecked(False)
             self.ui.autoBiasBtn.setText('bias: off')
 
@@ -369,7 +366,7 @@ class PlotWidget(Qt.QWidget):
                 self.plot.plot(t, y, pen='b')
 
         elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
-            key,units = {
+            key, units = {
                 'ss resistance': ('steadyStateResistance', u'Ω'),
                 'peak resistance': ('peakResistance', u'Ω'),
                 'holding current': ('baselineCurrent', 'A'),

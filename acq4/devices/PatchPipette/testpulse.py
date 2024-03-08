@@ -60,7 +60,7 @@ class TestPulseThread(Thread):
 
     def setParameters(self, **kwds):
         newParams = self.params.copy()
-        for k,v in kwds.items():
+        for k, v in kwds.items():
             if k not in self.params:
                 raise KeyError(f"Unknown parameter {k}")
             newParams[k] = v

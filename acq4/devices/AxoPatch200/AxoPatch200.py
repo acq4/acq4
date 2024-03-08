@@ -168,8 +168,6 @@ class AxoPatch200(DAQGeneric):
         self.sigShowModeDialog.connect(self.showModeDialog)
         self.sigHideModeDialog.connect(self.hideModeDialog)
         
-        
-        
         try:
             self.setHolding()
         except:
