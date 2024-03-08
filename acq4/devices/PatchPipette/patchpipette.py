@@ -381,6 +381,10 @@ class PatchPipette(Device):
         self.sigAutoBiasChanged.emit(self, enabled, v)
         self.emitNewEvent('auto_bias_target_changed', OrderedDict([('enabled', enabled), ('target', v)]))
 
+    def setHolding(self, mode, value):
+        self.clampDevice.setHolding(mode, value)
+        self.emitNewEvent('holding_changed', {'mode': mode, 'value': value})
+
     def autoBiasTarget(self):
         return self._testPulseThread.getParameter('autoBiasTarget')
 
