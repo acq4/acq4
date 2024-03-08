@@ -162,20 +162,11 @@ class PipetteControl(Qt.QWidget):
             self.ui.modeText.setText(state['mode'])
             self.updateHoldingInfo(mode=state['mode'])
 
-    def clampHoldingChanged(self, clamp, mode):
-        clamp = self.pip.clampDevice
+    def clampHoldingChanged(self, mode, val):
         currentMode = str(self.ui.modeText.text()).upper()
         if mode != currentMode:
             return
         self.updateHoldingInfo(mode=mode)
-        # hval = clamp.getHolding(mode)
-        # if currentMode == 'IC':
-        #     if self.pip.autoBiasEnabled():
-        #         self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
-        #     else:
-        #         self._setHoldingSpin(hval, 'A')
-        # elif currentMode == 'VC':
-        #     self._setHoldingSpin(hval, 'V')
 
     def autoBiasChanged(self, pip, enabled, target):
         self.updateAutoBiasSpin()

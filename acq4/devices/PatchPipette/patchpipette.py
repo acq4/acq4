@@ -382,10 +382,7 @@ class PatchPipette(Device):
         self.emitNewEvent('auto_bias_target_changed', OrderedDict([('enabled', enabled), ('target', v)]))
 
     def setHolding(self, mode, value):
-        if mode == "IC":
-            self.setTestPulseParameters(icHolding=value, vcHolding=None)
-        else:
-            self.setTestPulseParameters(icHolding=None, vcHolding=value)
+        self.clampDevice.setHolding(mode, value)
         self.emitNewEvent('holding_changed', {'mode': mode, 'value': value})
 
     def autoBiasTarget(self):

@@ -17,7 +17,7 @@ class PatchClamp(Device):
     """
 
     sigStateChanged = Qt.Signal(object)  # state
-    sigHoldingChanged = Qt.Signal(object, object)  # self, mode
+    sigHoldingChanged = Qt.Signal(object, object)  # mode, value
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)

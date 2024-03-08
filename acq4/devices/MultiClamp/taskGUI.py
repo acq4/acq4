@@ -103,12 +103,11 @@ class MultiClampTaskGui(TaskGui):
             ssig = state['secondarySignal']
         self.setSignals(psig, ssig)
 
-    def devHoldingChanged(self, dev, mode):
+    def devHoldingChanged(self, mode, val):
         if mode != self.getMode():
             return
         if not self.ui.holdingSpin.isEnabled():
-            state = self.dev.getLastState(mode)
-            self.ui.holdingSpin.setValue(state['holding'])
+            self.ui.holdingSpin.setValue(val)
 
     def saveState(self):
         state = self.stateGroup.state().copy()

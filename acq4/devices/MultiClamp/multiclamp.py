@@ -247,8 +247,8 @@ class MultiClamp(PatchClamp):
                 state['holding'] = value
                 if mode == currentMode:
                     self.sigStateChanged.emit(state)
-                self.sigHoldingChanged.emit(self, mode)
-                
+                self.sigHoldingChanged.emit(mode, value)
+
             ## We only want to set the actual DAQ channel if:
             ##   - currently in I=0, or 
             ##   - currently in the mode that was changed
