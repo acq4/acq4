@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from acq4.devices.Device import Device
 from acq4.util import Qt
 
@@ -17,7 +14,7 @@ class PatchClamp(Device):
     """
 
     sigStateChanged = Qt.Signal(object)  # state
-    sigHoldingChanged = Qt.Signal(object, object)  # self, mode
+    sigHoldingChanged = Qt.Signal(object, object)  # mode, value
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)

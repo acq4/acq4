@@ -79,18 +79,16 @@ class MockClamp(PatchClamp):
                 mode = currentMode
             ivMode = ivModes[mode]  ## determine vc/ic
 
-            if value is None:
-                value = self.holding[ivMode]
-            else:
+            if value is not None:
                 self.holding[ivMode] = value
 
-            if ivMode == ivModes[currentMode] or force:
+            # if ivMode == ivModes[currentMode] or force:
                 # gain = self.getCmdGain(mode)
                 ## override the scale since getChanScale won't necessarily give the correct value
                 ## (we may be about to switch modes)
                 # DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
-                pass
-            self.sigHoldingChanged.emit('primary', self.holding.copy())
+                # pass
+            self.sigHoldingChanged.emit(ivMode, value)
 
     def setChanHolding(self, chan, value=None):
         if chan == 'command':
@@ -104,7 +102,7 @@ class MockClamp(PatchClamp):
         else:
             return self.daqDev.getChanHolding(chan)
 
-    def getHolding(self, mode=None):
+    def getHolding(self, mode: str = None):
         global ivModes
         with self.devLock:
             if mode is None:
@@ -410,13 +408,14 @@ class MockClampDevGui(Qt.QWidget):
         self.ui.vcHoldingSpin.setValue(vcHold)
         self.ui.icHoldingSpin.setValue(icHold)
 
-    def devHoldingChanged(self, chan, hval):
-        if isinstance(hval, dict):
+    def devHoldingChanged(self, mode, val):
+        if mode == "VC":
             self.ui.vcHoldingSpin.blockSignals(True)
-            self.ui.icHoldingSpin.blockSignals(True)
-            self.ui.vcHoldingSpin.setValue(hval['VC'])
-            self.ui.icHoldingSpin.setValue(hval['IC'])
+            self.ui.vcHoldingSpin.setValue(val)
             self.ui.vcHoldingSpin.blockSignals(False)
+        else:
+            self.ui.icHoldingSpin.blockSignals(True)
+            self.ui.icHoldingSpin.setValue(val)
             self.ui.icHoldingSpin.blockSignals(False)
 
     def devStateChanged(self):

@@ -168,8 +168,6 @@ class AxoPatch200(DAQGeneric):
         self.sigShowModeDialog.connect(self.showModeDialog)
         self.sigHideModeDialog.connect(self.hideModeDialog)
         
-        
-        
         try:
             self.setHolding()
         except:
@@ -210,7 +208,7 @@ class AxoPatch200(DAQGeneric):
                 ## (we may be about to switch modes)
                 DAQGeneric.setChanHolding(self, 'command', value, mapping=mapping)
            
-            self.sigHoldingChanged.emit('primary', self.holding.copy())
+            self.sigHoldingChanged.emit(self, self.holding.copy())
             
     def setChanHolding(self, chan, value=None):
         if chan == 'command':

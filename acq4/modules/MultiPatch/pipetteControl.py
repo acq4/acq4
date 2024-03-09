@@ -162,20 +162,11 @@ class PipetteControl(Qt.QWidget):
             self.ui.modeText.setText(state['mode'])
             self.updateHoldingInfo(mode=state['mode'])
 
-    def clampHoldingChanged(self, clamp, mode):
-        clamp = self.pip.clampDevice
+    def clampHoldingChanged(self, mode, val):
         currentMode = str(self.ui.modeText.text()).upper()
         if mode != currentMode:
             return
         self.updateHoldingInfo(mode=mode)
-        # hval = clamp.getHolding(mode)
-        # if currentMode == 'IC':
-        #     if self.pip.autoBiasEnabled():
-        #         self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
-        #     else:
-        #         self._setHoldingSpin(hval, 'A')
-        # elif currentMode == 'VC':
-        #     self._setHoldingSpin(hval, 'V')
 
     def autoBiasChanged(self, pip, enabled, target):
         self.updateAutoBiasSpin()
@@ -195,10 +186,9 @@ class PipetteControl(Qt.QWidget):
         val = self.ui.holdingSpin.value()
         mode = self.clampMode()
         if mode == 'VC' or (mode == 'IC' and self.pip.autoBiasEnabled()):
-            print("Set auto bias target:", val)
             self.pip.setAutoBiasTarget(val)
         if not (mode == 'IC' and self.pip.autoBiasEnabled()):
-            self.pip.clampDevice.setHolding(mode, val)
+            self.pip.setHolding(mode, val)
 
     def clampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
@@ -214,21 +204,19 @@ class PipetteControl(Qt.QWidget):
         if self.pip.autoBiasEnabled():
             if mode == 'VC':
                 spinVal = hval
-                units = 'V'
                 self.ui.autoBiasBtn.setText('bias: vc')
             else:
                 biasTarget = self.pip.autoBiasTarget()
                 spinVal = biasTarget
-                units = 'V'
-                self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
+                self.ui.autoBiasBtn.setText(f'bias: {int(hval * 1e12):d}pA')
+            units = 'V'
             self.ui.autoBiasBtn.setChecked(True)
         else:
             if mode == 'VC':
-                spinVal = hval
                 units = 'V'
             else:
-                spinVal = hval
                 units = 'A'
+            spinVal = hval
             self.ui.autoBiasBtn.setChecked(False)
             self.ui.autoBiasBtn.setText('bias: off')
 
@@ -378,7 +366,7 @@ class PlotWidget(Qt.QWidget):
                 self.plot.plot(t, y, pen='b')
 
         elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
-            key,units = {
+            key, units = {
                 'ss resistance': ('steadyStateResistance', u'Ω'),
                 'peak resistance': ('peakResistance', u'Ω'),
                 'holding current': ('baselineCurrent', 'A'),
