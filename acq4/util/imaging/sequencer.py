@@ -253,15 +253,6 @@ class ImageSequencerThread(Thread):
                 self.openShutter(False)
                 self.holdImagerFocus(False)
 
-        # TODO do we need any of this?
-        #                 except RuntimeError:
-        #                     if i == 4:
-        #                         print(
-        #                             "Did not reach focus after 5 iterations ({:g} != {:g})".format(
-        #                                 self.prot["imager"].getDevice().getFocusDepth(), depths[depthIndex]
-        #                             )
-        #                         )
-
     def sendStatusMessage(self, iteration, maxIter):
         if maxIter == 0:
             itermsg = f"iter={iteration + 1}"
@@ -276,7 +267,7 @@ class ImageSequencerThread(Thread):
         idev = self.prot["imager"]
         fdev = idev.getFocusDevice()
         if fdev is None:
-            raise Exception("Device %s is not connected to a focus controller." % idev)
+            raise Exception(f"Device {idev} is not connected to a focus controller.")
         if hasattr(fdev, "setHolding"):
             fdev.setHolding(hold)
 

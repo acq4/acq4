@@ -1,20 +1,19 @@
-from collections import deque
-
-import numpy as np
 import queue
 import threading
 import time
-from MetaArray import MetaArray, axis
+from collections import deque
 from contextlib import contextmanager, ExitStack
-from six.moves import range
 from typing import Callable, Optional
+
+import numpy as np
+from MetaArray import MetaArray, axis
 
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
-from acq4.util import Qt, imaging
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
@@ -23,8 +22,8 @@ from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
+from .frame import Frame
 from .taskGUI import CameraTaskGui
-from ...util.DataManager import FileHandle
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -502,22 +501,6 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def wait(self, *args, **kargs):
         return self.acqThread.wait(*args, **kargs)
-
-
-class Frame(imaging.Frame):
-    def __init__(self, data, info):
-        # make frame transform to map from image coordinates to sensor coordinates.
-        # (these may differ due to binning and region of interest settings)
-        tr = Camera.makeFrameTransform(info["region"], info["binning"])
-        info["frameTransform"] = tr
-
-        super().__init__(data, info)
-
-    @classmethod
-    def loadFromFileHandle(cls, fh: FileHandle):
-        frame = cls(fh.read(), fh.info().deepcopy())
-        frame.loadLinkedFiles(fh.parent())
-        return frame
 
 
 class CameraTask(DAQGenericTask):

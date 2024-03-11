@@ -1,12 +1,13 @@
 import json
 import re
+from typing import Any
 
 import numpy as np
-from typing import Any
 
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
+from acq4.util.imaging.frame import Frame
 from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
@@ -769,8 +770,6 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        from acq4.util.imaging import Frame
-
         for f in directory.ls():
             if f.endswith('.tif'):
                 f = directory[f]

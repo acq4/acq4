@@ -5,6 +5,7 @@ import numpy as np
 import scipy.ndimage
 
 import pyqtgraph as pg
+from acq4.util.surface import find_surface
 from acq4.util.typing import Number
 from pyqtgraph.units import µm
 
@@ -234,40 +235,10 @@ class Microscope(Device, OptomechDevice):
     def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
         """Set the surface of the sample based on how focused the images are."""
 
-        def center_area(img: np.ndarray) -> Tuple[slice, slice]:
-            """Return a slice that selects the center of the image."""
-            minimum = 50
-            center_w = img.shape[0] // 2
-            start_w = max(min(int(img.shape[0] * 0.4), center_w - minimum), 0)
-            end_w = max(min(int(img.shape[0] * 0.6), center_w + minimum), img.shape[0])
-            center_h = img.shape[1] // 2
-            start_h = max(min(int(img.shape[1] * 0.4), center_h - minimum), 0)
-            end_h = max(min(int(img.shape[1] * 0.6), center_h + minimum), img.shape[1])
-            return slice(start_w, end_w), slice(start_h, end_h)
-
-        def downsample(arr, n):
-            new_shape = n * (np.array(arr.shape[1:]) / n).astype(int)
-            clipped = arr[:, :new_shape[0], :new_shape[1]]
-            mean1 = clipped.reshape(clipped.shape[0], clipped.shape[1], clipped.shape[2]//n, n).mean(axis=3)
-            mean2 = mean1.reshape(mean1.shape[0], mean1.shape[1]//n, n, mean1.shape[2]).mean(axis=2)
-            return mean2
-
-        def calculate_focus_score(image):
-            # image += np.random.normal(size=image.shape, scale=100)
-            image = scipy.ndimage.laplace(image) / np.mean(image)
-            return image.var()
-
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack = _future.waitFor(self.getZStack(imager, z_range)).getResult()
-        filtered = downsample(np.array([f.data() for f in z_stack]), 5)
-        centers = filtered[(..., *center_area(filtered[0]))]
-        scored = np.array([calculate_focus_score(img) for img in centers])
-        surface = np.argmax(scored > 0.005)  # arbitrary threshold? seems about right on the test data
-        if surface == 0:
-            return
-
-        surface_frame = z_stack[surface]
-        self.setSurfaceDepth(surface_frame.info()['Depth'])
+        if depth := find_surface(z_stack) is not None:
+            self.setSurfaceDepth(depth)
 
     def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.
