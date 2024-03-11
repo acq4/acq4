@@ -311,16 +311,15 @@ class ImageSequencerThread(Thread):
                 has_frames = len(self._frames) > 0
             if paused:
                 wait = 0.1
+            elif until == "frame":
+                if has_frames:
+                    return
+                wait = 0.1
             else:
-                if until == "frame":
-                    if has_frames:
-                        return
-                    wait = 0.1
-                else:
-                    now = ptime.time()
-                    wait = until - now
-                    if wait <= 0:
-                        return
+                now = ptime.time()
+                wait = until - now
+                if wait <= 0:
+                    return
             time.sleep(min(0.1, wait))
 
     def getResult(self):
