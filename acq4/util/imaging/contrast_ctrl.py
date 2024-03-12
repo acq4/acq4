@@ -1,7 +1,6 @@
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.DataManager import DirHandle
 
 Ui_Form = Qt.importTemplate(".contrast_ctrl_template")
 

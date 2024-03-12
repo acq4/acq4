@@ -19,9 +19,6 @@ import time
 import weakref
 from collections import OrderedDict
 
-import six
-from six.moves import map
-
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
@@ -32,6 +29,7 @@ from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
 from .util import DataManager, ptime, Qt
+from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.debug import logExc, logMsg, createLogWindow
 
@@ -478,7 +476,7 @@ class Manager(Qt.QObject):
                 # .. do stuff
 
         """
-        devices = [self.getDevice(d) if isinstance(d, six.string_types) else d for d in devices]
+        devices = [self.getDevice(d) if isinstance(d, str) else d for d in devices]
         return DeviceLocker(self, devices, timeout=timeout)
 
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
@@ -537,7 +535,7 @@ class Manager(Qt.QObject):
         with self.lock:
             try:
                 f = self.getModule("Data Manager").selectedFile()
-                if not isinstance(f, DataManager.DirHandle):
+                if not isinstance(f, DirHandle):
                     f = f.parent()
             except Exception:
                 f = False
@@ -702,9 +700,9 @@ class Manager(Qt.QObject):
             except TypeError:
                 pass
 
-        if isinstance(d, six.string_types):
+        if isinstance(d, str):
             self.currentDir = self.baseDir.getDir(d, create=True)
-        elif isinstance(d, DataManager.DirHandle):
+        elif isinstance(d, DirHandle):
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
@@ -744,9 +742,9 @@ class Manager(Qt.QObject):
         Set the base directory for data storage. 
         """
         with self.lock:
-            if isinstance(d, six.string_types):
+            if isinstance(d, str):
                 dh = self.dirHandle(d, create=False)
-            elif isinstance(d, DataManager.DirHandle):
+            elif isinstance(d, DirHandle):
                 dh = d
             else:
                 raise Exception("Invalid argument type: ", type(d), d)
@@ -796,7 +794,7 @@ class Manager(Qt.QObject):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
         with self.lock:
             fields = OrderedDict()
-            if isinstance(file, DataManager.DirHandle):
+            if isinstance(file, DirHandle):
                 info = file.info()
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')
@@ -959,7 +957,7 @@ class Task:
 
     @staticmethod
     def getDevName(obj):
-        if isinstance(obj, six.string_types):
+        if isinstance(obj, str):
             return obj
         elif isinstance(obj, Device):
             return obj.name()

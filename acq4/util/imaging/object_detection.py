@@ -5,7 +5,7 @@ import scipy.stats
 from PIL import Image
 from typing import Optional
 
-from acq4.devices.Camera import Frame
+from acq4.devices.Camera.frame import Frame
 from acq4.util.future import Future
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner

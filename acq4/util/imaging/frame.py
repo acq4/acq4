@@ -2,7 +2,7 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from acq4.util.imaging.bg_subtract_ctrl import remove_background_from_image
+from acq4.util.imaging.background import remove_background_from_image
 import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D, ImageItem
 
