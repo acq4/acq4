@@ -239,7 +239,9 @@ class Microscope(Device, OptomechDevice):
         from acq4.devices.Camera import Frame
         z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range)).getResult()
         if idx := find_surface(z_stack) is not None:
-            self.setSurfaceDepth(z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2])
+            depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
+            self.setSurfaceDepth(depth)
+            self.setFocusDepth(depth)
 
     def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.
