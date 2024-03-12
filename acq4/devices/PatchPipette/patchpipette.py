@@ -1,3 +1,4 @@
+import json
 from collections import OrderedDict
 
 import numpy as np
@@ -431,6 +432,8 @@ class PatchPipette(Device):
         ])
         if eventData is not None:
             newEv.update(eventData)
+        # TODO delete this once bug is found
+        json.dumps(newEv)  # make sure it's serializable without the event system blowing our stack
         self.sigNewEvent.emit(self, newEv)
 
         self._eventLog.append(newEv)
