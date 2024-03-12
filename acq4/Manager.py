@@ -244,7 +244,7 @@ class Manager(Qt.QObject):
         self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
-        self.configure(cfg)
+        self.configure(self.config)
 
         self.configFile = configFile
         print("\n============= Manager configuration complete =================\n")
@@ -288,15 +288,16 @@ class Manager(Qt.QObject):
         self.sigConfigChanged.emit()
 
     def _loadConfig(self, cfg):
+        # Handle custom import prior to loading devices
+        if 'imports' in cfg:
+            if isinstance(cfg["imports"], str):
+                cfg["imports"] = [cfg["imports"]]
+            for mod in cfg["imports"]:
+                __import__(mod)
         for key, val in cfg.items():
             try:
-                # Handle custom import / exec
-                if key == 'imports':
-                    if isinstance(val, str):
-                        val = [val]
-                    for mod in val:
-                        __import__(mod)
-                elif key == 'execFiles':
+                # Hand custom exec
+                if key == 'execFiles':
                     if isinstance(val, str):
                         val = [val]
                     for pyfile in val:
