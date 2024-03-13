@@ -32,11 +32,16 @@ def calculate_focus_score(image):
 
 
 def find_surface(z_stack: list[Frame]) -> Union[int, None]:
-    filtered = downsample(np.array([f.data() for f in z_stack]), 5)
-    centers = filtered[(..., *center_area(filtered[0]))]
-    scored = np.array([calculate_focus_score(img) for img in centers])
-    surface = np.argmax(scored > 0.005)  # arbitrary threshold? seems about right on the test data
+    scored = score_frames(z_stack)
+    # surface = np.argmax(scored > 0.005)  # is a threshold needed?
+    surface = np.argmax(scored)
     if surface == 0:
         return
 
     return surface
+
+
+def score_frames(z_stack: list[Frame]) -> np.ndarray:
+    filtered = downsample(np.array([f.data() for f in z_stack]), 5)
+    centers = filtered[(..., *center_area(filtered[0]))]
+    return np.array([calculate_focus_score(img) for img in centers])
