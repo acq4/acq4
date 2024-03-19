@@ -234,14 +234,17 @@ class Microscope(Device, OptomechDevice):
     @Future.wrap
     def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
         """Set the surface of the sample based on how focused the images are."""
+        from acq4.devices.Camera import Frame
 
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
-        from acq4.devices.Camera import Frame
-        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range)).getResult()
+        z_stack_fut = self.getZStack(imager, z_range)
+        z_stack: list[Frame] = _future.waitFor(z_stack_fut).getResult()
         if idx := find_surface(z_stack) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
-            self.setFocusDepth(depth)
+            _future.waitFor(self.setFocusDepth(depth))
+        else:
+            raise ValueError("Could not find surface")
 
     def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.

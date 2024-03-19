@@ -1,14 +1,12 @@
-import time, weakref
+import weakref
 from typing import Union, Optional
 
 import numpy as np
-import pyqtgraph as pg
 from MetaArray import MetaArray
 
-from acq4.util import Qt, ptime
-from acq4.util.Thread import Thread
-from acq4.util.Mutex import Mutex
 import acq4.Manager as Manager
+import pyqtgraph as pg
+from acq4.util import Qt, ptime
 from acq4.util.future import Future
 
 
@@ -22,7 +20,7 @@ def runZStack(imager, z_range_args) -> Future:
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
-    return ImageSequencerFuture({
+    return run_image_sequence({
         "imager": imager,
         "zStack": True,
         "zStackRangeArgs": z_range_args,
@@ -30,25 +28,6 @@ def runZStack(imager, z_range_args) -> Future:
         "timelapseInterval": 0,
         "save": False,
     })
-
-
-class ImageSequencerFuture(Future):
-    def __init__(self, protocol):
-        Future.__init__(self)
-        self._protocol = protocol
-        self._thread = ImageSequencerThread()
-        self._thread.finished.connect(self._threadFinished)
-        self._thread.start(protocol)
-
-    def percentDone(self):
-        return 100 if self.isDone() else 0
-
-    def _threadFinished(self):
-        self._taskDone()
-
-    def getResult(self, timeout=None):
-        self.wait(timeout)
-        return self._thread.getResult()
 
 
 def _enforce_linear_z_stack(frames: list["Frame"], step: float) -> list["Frame"]:
@@ -165,123 +144,33 @@ def _slow_z_stack(imager, start, end, step, _future) -> list["Frame"]:
     return frames_fut.getResult()
 
 
-class ImageSequencerThread(Thread):
-    """Background thread that controls image acquisition / stage motion sequences.
-
-    Used for collecting Z stacks and tiled mosaics.
+def _hold_imager_focus(idev, hold):
+    """Tell the focus controller to lock or unlock.
     """
+    fdev = idev.getFocusDevice()
+    if fdev is None:
+        raise Exception(f"Device {idev} is not connected to a focus controller.")
+    if hasattr(fdev, "setHolding"):
+        fdev.setHolding(hold)
 
-    class StopException(Exception):
-        pass
 
-    sigMessage = Qt.Signal(object)  # message
+def _open_shutter(idev, open):
+    if hasattr(idev, "openShutter"):
+        idev.openShutter(open)
 
-    def __init__(self):
-        Thread.__init__(self)
-        self.prot = None
-        self._stop = False
-        self._frames = None
-        self._paused = False
-        self.lock = Mutex(recursive=True)
 
-    def start(self, protocol):
-        if self.isRunning():
-            raise Exception("Sequence is already running.")
-        self.prot = protocol
-        self._stop = False
-        self.sigMessage.emit("[ running.. ]")
-        Thread.start(self)
+def _status_message(iteration, maxIter):
+    if maxIter == 0:
+        return f"iter={iteration + 1}"
+    else:
+        return f"iter={iteration + 1}/{maxIter}"
 
-    def stop(self):
-        with self.lock:
-            self._stop = True
 
-    def pause(self, p):
-        with self.lock:
-            self._paused = p
-
-    def run(self):
-        try:
-            self.runSequence()
-        except self.StopException:
-            return
-
-    def runSequence(self):
-        # setup
-        prot = self.prot
-        maxIter = prot["timelapseCount"]
-        interval = prot["timelapseInterval"]
-        imager = self.prot["imager"]
-        self.holdImagerFocus(True)
-        self.openShutter(True)  # don't toggle shutter between stack frames
-        self._frames = []
-
-        # record
-        with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
-            try:
-                for i in range(maxIter):
-                    start = ptime.time()
-                    if prot["zStack"]:
-                        start, end, step = prot["zStackRangeArgs"]
-                        direction = start - end
-                        _set_focus_depth(imager, start, direction, 'fast')
-                        # fps = imager.getEstimatedFrameRate().getResult()
-                        stage = imager.scopeDev.getFocusDevice()
-                        z_per_second = stage.positionUpdatesPerSecond
-                        meters_per_frame = abs(step)
-                        speed = meters_per_frame * z_per_second * 0.5
-                        future = imager.acquireFrames()
-                        with imager.ensureRunning(ensureFreshFrames=True):
-                            imager.acquireFrames(1).wait()  # just to be sure the camera's recording
-                            _set_focus_depth(imager, end, direction, speed)
-                            imager.acquireFrames(1).wait()  # just to be sure the camera caught up
-                            future.stop()
-                            self._frames += future.getResult(timeout=10)
-                        try:
-                            self._frames = _enforce_linear_z_stack(self._frames, step)
-                        except ValueError:
-                            self.sigMessage.emit("Failed to enforce linear z stack. Retrying with stepwise movement.")
-                            self._frames = _slow_z_stack(imager, start, end, step).getResult()
-                            self._frames = _enforce_linear_z_stack(self._frames, step)
-                    else:  # single frame
-                        self._frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
-                    self.sendStatusMessage(i, maxIter)
-                    self.sleep(until=start + interval)
-            finally:
-                if prot["save"]:
-                    self.saveResults()
-                self.openShutter(False)
-                self.holdImagerFocus(False)
-
-    def sendStatusMessage(self, iteration, maxIter):
-        if maxIter == 0:
-            itermsg = f"iter={iteration + 1}"
-        else:
-            itermsg = f"iter={iteration + 1}/{maxIter}"
-
-        self.sigMessage.emit(f"[ running  {itermsg} ]")
-
-    def holdImagerFocus(self, hold):
-        """Tell the focus controller to lock or unlock.
-        """
-        idev = self.prot["imager"]
-        fdev = idev.getFocusDevice()
-        if fdev is None:
-            raise Exception(f"Device {idev} is not connected to a focus controller.")
-        if hasattr(fdev, "setHolding"):
-            fdev.setHolding(hold)
-
-    def openShutter(self, open):
-        idev = self.prot["imager"]
-        if hasattr(idev, "openShutter"):
-            idev.openShutter(open)
-
-    def recordFrame(self, frame, idx):
-        # Handle new frame
-        dh = self.prot["storageDir"]
-        name = f"image_{idx:03d}"
-
-        if self.prot["zStack"]:
+def _save_results(frames, storage_dir, is_z_stack: bool = False):
+    stack = None
+    for i, frame in enumerate(frames):
+        name = f"image_{i:03d}"
+        if is_z_stack:
             # start or append focus stack
             arrayInfo = [
                 {"name": "Depth", "values": [frame.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()]},
@@ -289,45 +178,64 @@ class ImageSequencerThread(Thread):
                 {"name": "Y"},
             ]
             data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
-            if idx == 0:
-                self.currentDepthStack = dh.writeFile(data, name, info=frame.info(), appendAxis="Depth")
+            if stack is None:
+                stack = storage_dir.writeFile(data, name, info=frame.info(), appendAxis="Depth")
             else:
-                data.write(self.currentDepthStack.name(), appendAxis="Depth")
+                data.write(stack.name(), appendAxis="Depth")
 
         else:
             # record single-frame image
             arrayInfo = [{"name": "X"}, {"name": "Y"}]
             data = MetaArray(frame.getImage(), info=arrayInfo)
-            dh.writeFile(data, name, info=frame.info())
+            storage_dir.writeFile(data, name, info=frame.info())
 
-    def sleep(self, until):
-        # Wait until some event occurs
-        # check for pause / stop while waiting
-        while True:
-            with self.lock:
-                if self._stop:
-                    raise self.StopException("stopped")
-                paused = self._paused
-                has_frames = len(self._frames) > 0
-            if paused:
-                wait = 0.1
-            elif until == "frame":
-                if has_frames:
-                    return
-                wait = 0.1
-            else:
-                now = ptime.time()
-                wait = until - now
-                if wait <= 0:
-                    return
-            time.sleep(min(0.1, wait))
 
-    def getResult(self):
-        return self._frames
+@Future.wrap
+def run_image_sequence(prot, _future: Future):
+    maxIter = prot["timelapseCount"]
+    interval = prot["timelapseInterval"]
+    imager = prot["imager"]
+    _hold_imager_focus(imager, True)
+    _open_shutter(imager, True)  # don't toggle shutter between stack frames
+    frames = []
 
-    def saveResults(self):
-        for i, f in enumerate(self._frames):
-            self.recordFrame(f, i)
+    # record
+    with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
+        try:
+            for i in range(maxIter):
+                start = ptime.time()
+                if prot["zStack"]:
+                    start, end, step = prot["zStackRangeArgs"]
+                    direction = start - end
+                    _set_focus_depth(imager, start, direction, 'fast')
+                    # fps = imager.getEstimatedFrameRate().getResult()
+                    stage = imager.scopeDev.getFocusDevice()
+                    z_per_second = stage.positionUpdatesPerSecond
+                    meters_per_frame = abs(step)
+                    speed = meters_per_frame * z_per_second * 0.5
+                    future = imager.acquireFrames()
+                    with imager.ensureRunning(ensureFreshFrames=True):
+                        imager.acquireFrames(1).wait()  # just to be sure the camera's recording
+                        _set_focus_depth(imager, end, direction, speed)
+                        imager.acquireFrames(1).wait()  # just to be sure the camera caught up
+                        future.stop()
+                        frames += future.getResult(timeout=10)
+                    try:
+                        frames = _enforce_linear_z_stack(frames, step)
+                    except ValueError:
+                        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
+                        frames = _slow_z_stack(imager, start, end, step).getResult()
+                        frames = _enforce_linear_z_stack(frames, step)
+                else:  # single frame
+                    frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
+                _future.setState(_status_message(i, maxIter))
+                _future.sleep(interval - (ptime.time() - start))
+        finally:
+            print("finishing up")
+            if prot["save"]:
+                _save_results(frames, prot["storageDir"], prot["zStack"])
+            _open_shutter(imager, False)
+            _hold_imager_focus(imager, False)
 
 
 class ImageSequencerCtrl(Qt.QWidget):
@@ -351,14 +259,12 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
 
-        self.thread = ImageSequencerThread()
+        self._future: Optional[Future] = None
 
         self.state = pg.WidgetGroup(self)
         self.state.sigChanged.connect(self.stateChanged)
         cameraMod.sigInterfaceAdded.connect(self.updateDeviceList)
         cameraMod.sigInterfaceRemoved.connect(self.updateDeviceList)
-        self.thread.finished.connect(self.threadStopped)
-        self.thread.sigMessage.connect(self.threadMessage)
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.pauseBtn.clicked.connect(self.pauseClicked)
         self.ui.setStartBtn.clicked.connect(self.setStartClicked)
@@ -367,17 +273,14 @@ class ImageSequencerCtrl(Qt.QWidget):
     def updateDeviceList(self):
         items = ["Select device.."]
         self.ui.deviceCombo.clear()
-        for k, v in self.mod().interfaces.items():
-            if v.canImage:
-                items.append(k)
+        items.extend(k for k, v in self.mod().interfaces.items() if v.canImage)
         self.ui.deviceCombo.setItems(items)
 
     def selectedImager(self):
         if self.ui.deviceCombo.currentIndex() < 1:
             return None
-        else:
-            name = self.ui.deviceCombo.currentText()
-            return self.mod().interfaces[name].getDevice()
+        name = self.ui.deviceCombo.currentText()
+        return self.mod().interfaces[name].getDevice()
 
     def stateChanged(self, name, value):
         if name == "deviceCombo":
@@ -417,12 +320,12 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.stop()
 
     def pauseClicked(self, b):
-        self.thread.pause(b)
+        pass  # TODO
 
     def start(self):
         try:
             if self.selectedImager() is None:
-                raise Exception("No imaging device selected.")
+                raise RuntimeError("No imaging device selected.")
             prot = self.makeProtocol()
             self.currentProtocol = prot
             dh = Manager.getManager().getCurrentDir().getDir("ImageSequence", create=True, autoIncrement=True)
@@ -431,27 +334,35 @@ class ImageSequencerCtrl(Qt.QWidget):
             dh.setInfo(dhinfo)
             prot["storageDir"] = dh
             prot["save"] = True
-            self.ui.startBtn.setText("Stop")
-            self.ui.zStackGroup.setEnabled(False)
-            self.ui.timelapseGroup.setEnabled(False)
-            self.ui.deviceCombo.setEnabled(False)
-            self.thread.start(prot)
+            self.setRunning(True)
+            self._future = run_image_sequence(prot)
+            self._future.sigFinished.connect(self.threadStopped)
+            self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
-            self.threadStopped()
+            self.threadStopped(self._future)
             raise
 
     def stop(self):
-        self.thread.stop()
+        if self._future is not None:
+            self._future.stop()
 
-    def threadStopped(self):
+    def threadStopped(self, future):
         self.ui.startBtn.setText("Start")
         self.ui.startBtn.setChecked(False)
-        self.ui.zStackGroup.setEnabled(True)
-        self.ui.timelapseGroup.setEnabled(True)
-        self.ui.deviceCombo.setEnabled(True)
+        self.setRunning(False)
         self.updateStatus()
+        if self._future is not None:
+            self._future.sigFinished.disconnect(self.threadStopped)
+            self._future.sigStateChanged.disconnect(self.threadMessage)
+            self._future = None
 
-    def threadMessage(self, message):
+    def setRunning(self, b):
+        self.ui.startBtn.setText("Stop" if b else "Start")
+        self.ui.zStackGroup.setEnabled(not b)
+        self.ui.timelapseGroup.setEnabled(not b)
+        self.ui.deviceCombo.setEnabled(not b)
+
+    def threadMessage(self, future, message):
         self.ui.statusLabel.setText(message)
 
     def updateStatus(self):
