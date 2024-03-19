@@ -191,7 +191,7 @@ def _save_results(frames, storage_dir, is_z_stack: bool = False):
 
 
 @Future.wrap
-def run_image_sequence(prot, _future: Future):
+def run_image_sequence(prot, _future: Future) -> list["Frame"]:
     maxIter = prot["timelapseCount"]
     interval = prot["timelapseInterval"]
     imager = prot["imager"]
@@ -231,11 +231,11 @@ def run_image_sequence(prot, _future: Future):
                 _future.setState(_status_message(i, maxIter))
                 _future.sleep(interval - (ptime.time() - start))
         finally:
-            print("finishing up")
             if prot["save"]:
                 _save_results(frames, prot["storageDir"], prot["zStack"])
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
+    return frames
 
 
 class ImageSequencerCtrl(Qt.QWidget):
