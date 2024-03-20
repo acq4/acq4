@@ -63,13 +63,12 @@ class MCDeviceGui(Qt.QWidget):
         finally:
             self.state.sigChanged.connect(self.uiStateChanged)
 
-    def devHoldingChanged(self, dev, mode):
+    def devHoldingChanged(self, mode, val):
         with pg.SignalBlock(self.state.sigChanged, self.uiStateChanged):
-            state = self.dev.getLastState(mode)
             if mode == 'VC':
-                self.ui.vcHoldingSpin.setValue(state['holding'])
-            elif mode == 'IC':
-                self.ui.icHoldingSpin.setValue(state['holding'])
+                self.ui.vcHoldingSpin.setValue(val)
+            else:
+                self.ui.icHoldingSpin.setValue(val)
 
     def uiStateChanged(self, name=None, value=None):
         if name == 'icRadio' and value is True:

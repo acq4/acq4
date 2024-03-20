@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import numpy
 import sip
 from pyqtgraph import mkPen, disconnect
@@ -103,12 +100,11 @@ class MultiClampTaskGui(TaskGui):
             ssig = state['secondarySignal']
         self.setSignals(psig, ssig)
 
-    def devHoldingChanged(self, dev, mode):
+    def devHoldingChanged(self, mode, val):
         if mode != self.getMode():
             return
         if not self.ui.holdingSpin.isEnabled():
-            state = self.dev.getLastState(mode)
-            self.ui.holdingSpin.setValue(state['holding'])
+            self.ui.holdingSpin.setValue(val)
 
     def saveState(self):
         state = self.stateGroup.state().copy()
@@ -126,7 +122,7 @@ class MultiClampTaskGui(TaskGui):
                 self.setSignals(state['primarySignal'], state['secondarySignal'])
             self.stateGroup.setState(state)
             self.devStateChanged()
-        except:
+        except Exception:
             printExc('Error while restoring MultiClamp task GUI state:')
         finally:
             self._block_update = block
