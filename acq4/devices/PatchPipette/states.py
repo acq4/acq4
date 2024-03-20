@@ -561,10 +561,10 @@ class CellDetectState(PatchPipetteState):
             self.checkStop()
 
             if config['autoAdvance']:
-                self.setState("cell detection: advance pipette")
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self.contAdvanceFuture is None:
+                        self.setState("cell detection: continuous pipette advance")
                         self.startContinuousMove()
                     if self.contAdvanceFuture.isDone():
                         self.contAdvanceFuture.wait()  # check for move errors
@@ -572,6 +572,7 @@ class CellDetectState(PatchPipetteState):
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
+                        self.setState("cell detection: stepping pipette")
                         self.advanceSteps = self.getAdvanceSteps()
                         print(len(self.advanceSteps))
                         print(self.advanceSteps)

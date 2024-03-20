@@ -13,6 +13,7 @@ from acq4.util import Qt, ptime
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
+from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
@@ -579,5 +580,5 @@ class MultiPatchWindow(Qt.QWidget):
         if self.storageFile is None:
             return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec).encode("utf8") + b",\n")
+            self.storageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
         self.storageFile.flush()

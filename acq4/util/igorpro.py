@@ -13,6 +13,9 @@ import zmq
 
 import os
 from six.moves import range
+
+from acq4.util.json_encoder import ACQ4JSONEncoder
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
 from pyqtgraph.util.mutex import Mutex
@@ -268,7 +271,7 @@ class ZMQIgorBridge(object):
                     "name": cmd,
                     "params": params}
                 }
-        msg = [b"", json.dumps(call).encode()]
+        msg = [b"", json.dumps(call, cls=ACQ4JSONEncoder).encode()]
         return msg
 
     def parseReply(self, reply):
