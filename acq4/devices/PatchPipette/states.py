@@ -825,7 +825,7 @@ class SealState(PatchPipetteState):
 
             if ssr > config['holdingThreshold'] and not holdingSet:
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
-                dev.setHolding(mode="VC", value=config['holdingPotential'])
+                dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
 
             # seal detected? 
