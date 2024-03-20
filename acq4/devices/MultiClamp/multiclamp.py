@@ -374,8 +374,6 @@ class MultiClampTask(DeviceTask):
 
     def configure(self):
         """Sets the state of a remote multiclamp to prepare for a program run."""
-        #print "mc configure"
-        
         #from debug import Profiler
         #prof = Profiler()
         ## Set state of clamp
@@ -431,7 +429,6 @@ class MultiClampTask(DeviceTask):
                 
         self.holdingVal = self.dev.getHolding(self.cmd['mode'])
         
-        #print "mc configure complete"
         #prof.mark('    Multiclamp: set holding')
                 
     def getUsedChannels(self):
