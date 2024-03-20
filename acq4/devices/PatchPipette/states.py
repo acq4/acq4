@@ -856,7 +856,7 @@ class SealState(PatchPipetteState):
                 if dt > config['autoSealTimeout']:
                     patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
-                    return
+                    return config['fallbackState']
 
                 # update pressure
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
