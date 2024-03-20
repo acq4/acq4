@@ -238,7 +238,7 @@ class Microscope(Device, OptomechDevice):
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack_fut = self.getZStack(imager, z_range)
         z_stack: list[Frame] = _future.waitFor(z_stack_fut).getResult()
-        if idx := find_surface(z_stack) is not None:
+        if (idx := find_surface(z_stack)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
             _future.waitFor(self.setFocusDepth(depth))
