@@ -277,8 +277,8 @@ class MultiPatchLogData(object):
             # TODO save current patch profile and any changes thereof
             # TODO save pressure measurements, maybe?
             # TODO save lighting
-            # TODO save clamp mode changes, holding voltage, current
-            # TODO save entire test pulse
+            # TODO handle clamp_state_change, holding value
+            # 'move_request': is currently ignored
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),
                 dtype=TEST_PULSE_NUMPY_DTYPE,

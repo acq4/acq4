@@ -108,7 +108,6 @@ class TestPulseThread(Thread):
     def runOnce(self, checkStop=False):
         currentMode = self._clampDev.getMode()
         params = self.params
-        params["holding"] = self._clampDev.getHolding(currentMode)
         runMode = currentMode if params['clampMode'] is None else params['clampMode']
         if runMode == 'I=0':
             runMode = 'IC'
@@ -181,8 +180,7 @@ class TestPulseThread(Thread):
         mode = params['clampMode']
 
         cmdData = np.empty(numPts * params['average'])
-        holding = self._clampDev.getHolding(mode)
-        cmdData[:] = holding
+        cmdData[:] = params.get('holding', self._clampDev.getHolding(mode))
 
         for i in range(params['average']):
             start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
@@ -198,8 +196,8 @@ class TestPulseThread(Thread):
                 'recordState': ['BridgeBalResist', 'BridgeBalEnable'],
             }
         }
-        if holding is not None:
-            cmd[self._clampName]['holding'] = holding
+        if 'holding' in params:
+            cmd[self._clampName]['holding'] = params['holding']
 
         return self._manager.createTask(cmd)
 
@@ -289,7 +287,7 @@ class TestPulse(object):
             peak = pri['Time': peakStart:peakStop]
             ssStop = params['preDuration'] + params['pulseDuration']
             ssStart = ssStop - 2e-3
-            steady  = pri['Time': ssStart:ssStop]
+            steady = pri['Time': ssStart:ssStop]
 
             if params['amplitude'] > 0:
                 peakValue = peak.max()
@@ -299,7 +297,7 @@ class TestPulse(object):
             baseValue = np.median(base)
 
             if params['clampMode'] == 'VC':
-                analysis['baselinePotential'] = params.get('holding', 0)
+                analysis['baselinePotential'] = self.data._info[-1]['DAQ']['command']['holding']
                 analysis['baselineCurrent'] = baseValue
                 analysis['peakResistance'] = params['amplitude'] / (peakValue - baseValue)
                 analysis['steadyStateResistance'] = np.abs(params['amplitude'] / (steadyValue - baseValue))
@@ -309,7 +307,7 @@ class TestPulse(object):
                 bridgeOn = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalEnable']
                 if not bridgeOn:
                     bridge = 0.0
-                analysis['baselineCurrent'] = params.get('holding', 0)
+                analysis['baselineCurrent'] = self.data._info[-1]['DAQ']['command']['holding']
                 analysis['baselinePotential'] = baseValue
                 analysis['peakResistance'] = bridge + (peakValue - baseValue) / params['amplitude']
                 analysis['steadyStateResistance'] = np.abs(bridge + (steadyValue - baseValue) / params['amplitude'])

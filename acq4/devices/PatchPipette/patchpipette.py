@@ -57,7 +57,11 @@ class PatchPipette(Device):
         self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
-        self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
+        if clampName is None:
+            self.clampDevice = None
+        else:
+            self.clampDevice = deviceManager.getDevice(clampName)
+            self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
 
         Device.__init__(self, deviceManager, config, name)
         self._eventLog = []  # chronological record of events 
@@ -381,9 +385,8 @@ class PatchPipette(Device):
         self.sigAutoBiasChanged.emit(self, enabled, v)
         self.emitNewEvent('auto_bias_target_changed', OrderedDict([('enabled', enabled), ('target', v)]))
 
-    def setHolding(self, mode, value):
-        self.clampDevice.setHolding(mode, value)
-        self.emitNewEvent('holding_changed', {'mode': mode, 'value': value})
+    def clampStateChanged(self, state):
+        self.emitNewEvent('clamp_state_change', state)
 
     def autoBiasTarget(self):
         return self._testPulseThread.getParameter('autoBiasTarget')
