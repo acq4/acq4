@@ -1,7 +1,8 @@
+import json
 from collections import OrderedDict
+from typing import Optional
 
 import numpy as np
-from typing import Optional
 
 from acq4.util import Qt
 from acq4.util import ptime
@@ -13,6 +14,7 @@ from ..Camera import Camera
 from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
+from ...util.json_encoder import ACQ4JSONEncoder
 
 
 class PatchPipette(Device):
@@ -434,6 +436,7 @@ class PatchPipette(Device):
         ])
         if eventData is not None:
             newEv.update(eventData)
+        json.dumps(newEv, cls=ACQ4JSONEncoder)  # make sure it's serializable without the event system blowing our stack
         self.sigNewEvent.emit(self, newEv)
 
         self._eventLog.append(newEv)
