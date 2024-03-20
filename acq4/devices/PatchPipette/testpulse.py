@@ -287,7 +287,7 @@ class TestPulse(object):
             peak = pri['Time': peakStart:peakStop]
             ssStop = params['preDuration'] + params['pulseDuration']
             ssStart = ssStop - 2e-3
-            steady  = pri['Time': ssStart:ssStop]
+            steady = pri['Time': ssStart:ssStop]
 
             if params['amplitude'] > 0:
                 peakValue = peak.max()
