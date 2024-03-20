@@ -1,14 +1,8 @@
 import collections
-from typing import Tuple
 
 import numpy as np
-import scipy.ndimage
 
 import pyqtgraph as pg
-from acq4.util.surface import find_surface
-from acq4.util.typing import Number
-from pyqtgraph.units import µm
-
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -18,6 +12,9 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
 from acq4.util.future import Future, MultiFuture
+from acq4.util.surface import find_surface
+from acq4.util.typing import Number
+from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
 
@@ -134,8 +131,10 @@ class Microscope(Device, OptomechDevice):
         # called when the objective index has changed.
         index = str(index)
         if index not in self.selectedObjectives:
-            raise Exception("Requested invalid objective switch position: %s (options are %s)" % (index, ', '.join(list(self.objectives.keys()))))
-            
+            raise ValueError(
+                f"Requested invalid objective switch position: {index} (options are {', '.join(list(self.objectives.keys()))})"
+            )
+
         ## determine new objective, return early if there is no change
         ## NOTE: it is possible in some cases for the objective to have changed even if the index has not.
         with self.lock:
@@ -239,7 +238,7 @@ class Microscope(Device, OptomechDevice):
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack_fut = self.getZStack(imager, z_range)
         z_stack: list[Frame] = _future.waitFor(z_stack_fut).getResult()
-        if idx := find_surface(z_stack) is not None:
+        if (idx := find_surface(z_stack)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
             _future.waitFor(self.setFocusDepth(depth))
