@@ -88,7 +88,17 @@ class MockPatch(object):
 
         i = (holding - self.membranePotential) / ssr
 
-        return {'baselinePotential': holding, 'baselineCurrent': i, 'peakResistance': pr, 'steadyStateResistance': ssr, 'capacitance': cap}
+        return {
+            'baselinePotential': holding,
+            'baselineCurrent': i,
+            'peakResistance': pr,
+            'steadyStateResistance': ssr,
+            'capacitance': cap,
+            'fitExpAmp': 0,
+            'fitExpTau': cap * ssr,
+            'fitExpYOffset': 0,
+            'fitExpXOffset': 0,
+        }
 
 
 class MockPatchUI(Qt.QWidget):
