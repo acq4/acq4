@@ -280,6 +280,7 @@ class MultiPatchLogData(object):
             # TODO save lighting
             # TODO handle clamp_state_change, holding value
             # TODO save entire test pulse?
+            # 'move_request': is currently ignored
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),
                 dtype=TEST_PULSE_NUMPY_DTYPE,
