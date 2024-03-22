@@ -353,6 +353,7 @@ class TestPulse(object):
                     analysis['capacitance'] = (Rin**2 * Q) / Cm_denom
                 else:
                     analysis['capacitance'] = 0
+                analysis['capacitance'] = tau * (1/Rm + 1/Rs)
             else:  # IC mode
                 if analysis['steadyStateResistance'] > 0:
                     analysis['capacitance'] = tau / analysis['steadyStateResistance']
