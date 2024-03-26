@@ -58,7 +58,9 @@ class MockClamp(PatchClamp):
         if config['simulator'] == 'builtin':
             self.simulator = self.process._import('hhSim')
         elif config['simulator'] == 'neuron':
-            self.simulator = self.process._import('neuronSim')
+            self.simulator = self.process._import('acq4.devices.MockClamp.neuronSim')
+        elif config['simulator'] == 'neuroanalysis':
+            self.simulator = self.process._import('acq4.devices.MockClamp.neuroanalysisSim')
 
         dm.declareInterface(name, ['clamp'], self)
 
