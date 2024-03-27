@@ -41,7 +41,7 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
             self.pip.sigTestPulseFinished.connect(self.updatePlots)
-            self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
+            self.pip.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
             if self.pip.pressureDevice is not None:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
@@ -62,6 +62,13 @@ class PipetteControl(Qt.QWidget):
             format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
             **_ic_mode_opts,
         )
+        self.ui.autoBiasTargetSpin.setOpts(
+            bounds=[None, None],
+            decimals=0,
+            siPrefix=True,
+            format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
+            **_vc_mode_opts,
+        )
         self.ui.autoOffsetBtn.clicked.connect(self.autoOffsetRequested)
         self.ui.autoPipCapBtn.clicked.connect(self.autoPipCapRequested)
         self.ui.autoBridgeBalanceBtn.clicked.connect(self.autoBridgeBalanceRequested)
@@ -81,9 +88,11 @@ class PipetteControl(Qt.QWidget):
         self.modeGroup.addButton(self.ui.i0Btn, 2)
         self.modeGroup.idClicked.connect(self.modeBtnClicked)
 
+        self._lockAutoBias = False  # prevent autoBias from being disabled when IC holding is changed automatically
         self.ui.autoBiasBtn.clicked.connect(self.autoBiasClicked)
-        self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingSpinChanged)
-        self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
+        self.ui.autoBiasVcBtn.clicked.connect(self.autoBiasVcClicked)
+        self.ui.vcHoldingSpin.sigValueChanging.connect(self.vcHoldingSpinChanged)
+        self.ui.icHoldingSpin.sigValueChanging.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
         self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
@@ -114,7 +123,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
             self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
-            self.autoBiasChanged(self.pip, self.pip.autoBiasEnabled(), self.pip.autoBiasTarget())
+            self._updateAutoBiasUi()
+            self._updateActiveHoldingUi()
 
     def active(self):
         return self.ui.activeBtn.isChecked()
@@ -166,30 +176,30 @@ class PipetteControl(Qt.QWidget):
         self.ui.stateText.setText(state.stateName)
 
     def clampHoldingChanged(self, mode, val):
-        self._setHoldingSpin(mode, val)
+        try:
+            self._lockAutoBias = True
+            # don't allow this update to disable auto bias
+            self._setHoldingSpin(mode, val)
+        finally:
+            self._lockAutoBias = False
+        if mode=='VC' and self.pip.autoBiasTarget() is None:
+            self.ui.autoBiasTargetSpin.setValue(val)
 
-    def autoBiasChanged(self, pip, enabled, target):
-        self.updateAutoBiasSpin()
-        with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
-            self.ui.autoBiasBtn.setChecked(enabled)
-
-    def updateAutoBiasSpin(self):
-        if self.pip.autoBiasEnabled() and self.selectedClampMode() == 'IC':
-            biasTarget = self.pip.autoBiasTarget()
-            self._setHoldingSpin(biasTarget, 'V')
-
-    def vcHoldingSpinChanged(self, value):
+    def vcHoldingSpinChanged(self):
         # NOTE: The spin emits a delayed signal when the user changes its value. 
         # That means if we are not careful, some other signal could reset the value
         # of the spin before it has even emitted the change signal, causing the user's
         # requested change to be cancelled.
-        self.pip.clampDevice.setHolding('VC', value)
+        self.pip.clampDevice.setHolding('VC', self.ui.vcHoldingSpin.value())
 
-    def icHoldingSpinChanged(self, value):
-        self.pip.clampDevice.setHolding('IC', value)
+    def icHoldingSpinChanged(self):
+        if not self._lockAutoBias:
+            self.pip.enableAutoBias(False)
+        self.pip.clampDevice.setHolding('IC', self.ui.icHoldingSpin.value())
 
     def autoBiasSpinChanged(self, value):
-        self.pip.setAutoBiasTarget(value)
+        if not self.ui.autoBiasVcBtn.isChecked():
+            self.pip.setAutoBiasTarget(value)
         
     def selectedClampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
@@ -206,35 +216,31 @@ class PipetteControl(Qt.QWidget):
             btnId = {'VC': 0, 'IC': 1, 'I=0': 2}[state['mode']]
             with pg.SignalBlock(self.modeGroup.idClicked, self.modeBtnClicked):
                 self.modeGroup.button(btnId).setChecked(True)
-            # self.pip.setTestPulseParameters(clampMode=state['mode'])
-            # self.updateHoldingInfo(mode=state['mode'])
 
-    # def updateHoldingInfo(self, mode=None):
-    #     clamp = self.pip.clampDevice
-    #     if mode is None:
-    #         mode = clamp.getMode()
-    #     hval = clamp.getHolding(mode)
+            self._updateActiveHoldingUi()
 
-    #     if self.pip.autoBiasEnabled():
-    #         if mode == 'VC':
-    #             spinVal = hval
-    #             self.ui.autoBiasBtn.setText('bias: vc')
-    #         else:
-    #             biasTarget = self.pip.autoBiasTarget()
-    #             spinVal = biasTarget
-    #             self.ui.autoBiasBtn.setText(f'bias: {int(hval * 1e12):d}pA')
-    #         units = 'V'
-    #         self.ui.autoBiasBtn.setChecked(True)
-    #     else:
-    #         if mode == 'VC':
-    #             units = 'V'
-    #         else:
-    #             units = 'A'
-    #         spinVal = hval
-    #         self.ui.autoBiasBtn.setChecked(False)
-    #         self.ui.autoBiasBtn.setText('bias: off')
+    def _updateActiveHoldingUi(self):
+        # color the holding controls that are currently active
+        mode = self.selectedClampMode()
+        bias_mode = 'VC' if self.ui.autoBiasVcBtn.isChecked() else 'manual'
+        bias_enabled = self.ui.autoBiasBtn.isChecked()
+        active_style = "SpinBox {background-color: #DFD;}"
 
-    #     self._setHoldingSpin(spinVal, units)
+        # reset all controls first
+        self.ui.vcHoldingSpin.setStyleSheet("")
+        self.ui.icHoldingSpin.setStyleSheet("")
+        self.ui.autoBiasTargetSpin.setStyleSheet("")
+        if mode == 'VC':
+            active = self.ui.vcHoldingSpin
+        elif mode == 'IC':
+            if bias_enabled:
+                if bias_mode == 'manual':
+                    active = self.ui.autoBiasTargetSpin
+                else:
+                    active = self.ui.vcHoldingSpin
+            else:
+                active = self.ui.icHoldingSpin
+        active.setStyleSheet(active_style)
 
     def _setHoldingSpin(self, mode, value):
         if mode == 'VC':
@@ -271,9 +277,27 @@ class PipetteControl(Qt.QWidget):
         for plt in self.plots:
             plt.hideHeader()
 
-    def autoBiasClicked(self):
-        self.pip.enableAutoBias(self.ui.autoBiasBtn.isChecked())
-        self.updateHoldingInfo()
+    def autoBiasClicked(self, enabled):
+        self.pip.enableAutoBias(enabled)
+        self._updateAutoBiasUi()
+
+    def autoBiasVcClicked(self, enabled):
+        if enabled:
+            self.pip.setAutoBiasTarget(None)
+            self.ui.autoBiasTargetSpin.setEnabled(False)
+            self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
+        else:
+            self.pip.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
+            self.ui.autoBiasTargetSpin.setEnabled(True)
+            self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
+
+    def _updateAutoBiasUi(self):
+        # auto bias changed elsewhere; update UI to reflect new state
+        with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
+            self.ui.autoBiasBtn.setChecked(self.pip.autoBiasEnabled())
+        with pg.SignalBlock(self.ui.autoBiasVcBtn.clicked, self.autoBiasVcClicked):
+            self.ui.autoBiasVcBtn.setChecked(self.pip.autoBiasTarget() is None)
+        self._updateActiveHoldingUi()
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
