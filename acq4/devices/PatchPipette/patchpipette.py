@@ -15,6 +15,7 @@ from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
 from ...util.json_encoder import ACQ4JSONEncoder
+from acq4.devices.PatchClamp.patchclamp import PatchClamp
 
 
 class PatchPipette(Device):
@@ -60,7 +61,7 @@ class PatchPipette(Device):
 
         clampName = config.pop('clampDevice', None)
         if clampName is None:
-            self.clampDevice = None
+            self.clampDevice: PatchClamp = None
         else:
             self.clampDevice = deviceManager.getDevice(clampName)
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)

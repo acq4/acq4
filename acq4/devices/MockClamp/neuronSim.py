@@ -6,11 +6,11 @@ import numpy as np
 import sys, os
 
 # Try standard locations to find neuron library
-for nrnpath in ['/usr/local/nrn/lib/python']:
-    if os.path.isdir(nrnpath):
-        sys.path.append(nrnpath)
-from .neuron import h
-from . import neuron
+# for nrnpath in ['/usr/local/nrn/lib/python']:
+#     if os.path.isdir(nrnpath):
+#         sys.path.append(nrnpath)
+from neuron import h
+import neuron
 
 # try to load extra mechanisms
 for name in ('i386', 'x86_64'):
@@ -67,14 +67,14 @@ def run(cmd):
 
     #times = h.Vector(np.linspace(h.t, h.t+len(data)*dt, len(data)))
     #print "times:", times.min(), times.max()
-    if mode == 'ic':
+    if mode == 'IC':
         #ic.delay = h.t
         ic.delay = 0
         vc.rs = 1e9
         im = h.Vector(data * 1e9)
         im.play(ic._ref_amp, dt)
 
-    elif mode == 'vc':
+    elif mode == 'VC':
         #vc.amp1 = data[0]
         vc.rs = vcrs
         ic.delay = 1e9
@@ -89,8 +89,7 @@ def run(cmd):
         #syn.i --- nA
         
     else:
-        sys.stderr.write("Unknown mode '%s'" % sys.argv[1])
-        raise Exception("Unknown mode '%s'" % sys.argv[1])
+        raise Exception("Unknown mode '%s'" % mode)
 
     #t2 = t + dt * (len(data)+2)
     #print "run until:", t2
@@ -104,9 +103,10 @@ def run(cmd):
     #print len(out), out
     #out = np.array(out)[:len(data)]
 
-    if mode == 'ic':
+    out = None
+    if mode == 'IC':
         out = np.array(icRec)[:len(data)] * 1e-3 + np.random.normal(size=len(data), scale=0.3e-3)
-    elif mode == 'vc':
+    elif mode == 'VC':
         out = np.array(vcRec)[:len(data)] * 1e-9 + np.random.normal(size=len(data), scale=3.e-12)
     return out
 

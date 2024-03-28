@@ -126,7 +126,7 @@ class CameraWindow(Qt.QMainWindow):
 
         self.gv.scene().sigMouseMoved.connect(self.updateMouse)
 
-    def addInterface(self, name, iface):
+    def addInterface(self, name, iface: "CameraModuleInterface"):
         """Display a new user interface in the camera module.
         """
         assert name not in self.interfaces
