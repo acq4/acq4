@@ -1094,7 +1094,7 @@ class Manager(Qt.QObject):
         t.execute()
         return t.getResult()
 
-    def createTask(self, cmd):
+    def createTask(self, cmd) -> Task:
         """
         Creates a new Task instance from the specified command structure.
         """
