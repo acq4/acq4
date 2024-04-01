@@ -19,9 +19,6 @@ import time
 import weakref
 from collections import OrderedDict
 
-import six
-from six.moves import map
-
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
@@ -478,7 +475,7 @@ class Manager(Qt.QObject):
                 # .. do stuff
 
         """
-        devices = [self.getDevice(d) if isinstance(d, six.string_types) else d for d in devices]
+        devices = [self.getDevice(d) if isinstance(d, str) else d for d in devices]
         return DeviceLocker(self, devices, timeout=timeout)
 
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
@@ -702,7 +699,7 @@ class Manager(Qt.QObject):
             except TypeError:
                 pass
 
-        if isinstance(d, six.string_types):
+        if isinstance(d, str):
             self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DataManager.DirHandle):
             self.currentDir = d
@@ -744,7 +741,7 @@ class Manager(Qt.QObject):
         Set the base directory for data storage. 
         """
         with self.lock:
-            if isinstance(d, six.string_types):
+            if isinstance(d, str):
                 dh = self.dirHandle(d, create=False)
             elif isinstance(d, DataManager.DirHandle):
                 dh = d
