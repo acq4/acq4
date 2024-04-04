@@ -190,16 +190,22 @@ class PipetteControl(Qt.QWidget):
         # That means if we are not careful, some other signal could reset the value
         # of the spin before it has even emitted the change signal, causing the user's
         # requested change to be cancelled.
-        self.pip.clampDevice.setHolding('VC', self.ui.vcHoldingSpin.value())
+        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
+            with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+                self.pip.clampDevice.setHolding('VC', self.ui.vcHoldingSpin.value())
 
     def icHoldingSpinChanged(self):
-        if not self._lockAutoBias:
-            self.pip.enableAutoBias(False)
-        self.pip.clampDevice.setHolding('IC', self.ui.icHoldingSpin.value())
+        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
+            with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+                if not self._lockAutoBias:
+                    self.pip.enableAutoBias(False)
+                self.pip.clampDevice.setHolding('IC', self.ui.icHoldingSpin.value())
 
     def autoBiasSpinChanged(self, value):
-        if not self.ui.autoBiasVcBtn.isChecked():
-            self.pip.setAutoBiasTarget(value)
+        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
+            with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+                if not self.ui.autoBiasVcBtn.isChecked():
+                    self.pip.setAutoBiasTarget(value)
         
     def selectedClampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
