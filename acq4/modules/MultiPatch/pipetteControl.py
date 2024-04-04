@@ -232,16 +232,15 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.setStyleSheet("")
         self.ui.autoBiasTargetSpin.setStyleSheet("")
         if mode == 'VC':
-            active = self.ui.vcHoldingSpin
+            self.ui.vcHoldingSpin.setStyleSheet(active_style)
         elif mode == 'IC':
             if bias_enabled:
                 if bias_mode == 'manual':
-                    active = self.ui.autoBiasTargetSpin
+                    self.ui.autoBiasTargetSpin.setStyleSheet(active_style)
                 else:
-                    active = self.ui.vcHoldingSpin
+                    self.ui.vcHoldingSpin.setStyleSheet(active_style)
             else:
-                active = self.ui.icHoldingSpin
-        active.setStyleSheet(active_style)
+                self.ui.icHoldingSpin.setStyleSheet(active_style)
 
     def _setHoldingSpin(self, mode, value):
         if mode == 'VC':
@@ -285,11 +284,10 @@ class PipetteControl(Qt.QWidget):
     def autoBiasVcClicked(self, enabled):
         if enabled:
             self.pip.setAutoBiasTarget(None)
-            self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
         else:
             self.pip.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
             self.ui.autoBiasTargetSpin.setEnabled(True)
-            self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
+        self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
         self._updateAutoBiasUi()
 
     def _updateAutoBiasUi(self):
