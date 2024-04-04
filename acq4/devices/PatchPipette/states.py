@@ -561,10 +561,10 @@ class CellDetectState(PatchPipetteState):
             self.checkStop()
 
             if config['autoAdvance']:
-                self.setState("cell detection: advance pipette")
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self.contAdvanceFuture is None:
+                        self.setState("cell detection: continuous pipette advance")
                         self.startContinuousMove()
                     if self.contAdvanceFuture.isDone():
                         self.contAdvanceFuture.wait()  # check for move errors
@@ -572,6 +572,7 @@ class CellDetectState(PatchPipetteState):
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
+                        self.setState("cell detection: stepping pipette")
                         self.advanceSteps = self.getAdvanceSteps()
                         print(len(self.advanceSteps))
                         print(self.advanceSteps)
@@ -774,7 +775,7 @@ class SealState(PatchPipetteState):
     def run(self):
         self.monitorTestPulse()
         config = self.config
-        dev = self.dev
+        dev: "PatchPipette" = self.dev
 
         recentTestPulses = deque(maxlen=config['nSlopeSamples'])
         while True:
@@ -794,13 +795,16 @@ class SealState(PatchPipetteState):
             config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
 
         mode = config['pressureMode']
-        self.setState('beginning seal (mode: %r)' % mode)
+        self.setState(f'beginning seal (mode: {mode!r})')
         if mode == 'user':
             dev.pressureDevice.setPressure(source='user', pressure=0)
         elif mode == 'auto':
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+            if config['delayBeforePressure'] == 0:
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            else:
+                dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         else:
-            raise ValueError(f"pressureMode must be 'auto' or 'user' (got {mode}')")
+            raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
 
         dev.setTipClean(False)
 
@@ -819,16 +823,13 @@ class SealState(PatchPipetteState):
 
             ssr = tp.analysis()['steadyStateResistance']
             cap = tp.analysis()['capacitance']
-            # if cap > config['breakInThreshold']:
-            #     patchrec['spontaneousBreakin'] = True
-            #     return 'break in'
 
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
 
-            if not holdingSet and ssr > config['holdingThreshold']:
-                self.setState('enable holding potential %0.1f mV' % (config['holdingPotential']*1000))
-                dev.clampDevice.setHolding(mode=None, value=config['holdingPotential'])
+            if ssr > config['holdingThreshold'] and not holdingSet:
+                self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
+                dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
 
             # seal detected? 
@@ -858,8 +859,8 @@ class SealState(PatchPipetteState):
 
                 if dt > config['autoSealTimeout']:
                     patchrec['sealSuccessful'] = False
-                    self._taskDone(interrupted=True, error="Seal failed after %f seconds" % dt)
-                    return
+                    self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
+                    return config['fallbackState']
 
                 # update pressure
                 res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
@@ -873,15 +874,16 @@ class SealState(PatchPipetteState):
                         pressure += change
                         break
                 
-                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to 0 and redo the pressure change
+                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to starting
+                # pressure and redo the pressure change
                 if pressure <= config['pressureLimit']:
                     dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
                     self.sleep(config['resetDelay'])
-                    pressure = 0
+                    pressure = config['startingPressure']
                     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                     continue
 
-                self.setState('Rpip slope: %g MOhm/sec   Pressure: %g Pa' % (slope/1e6, pressure))
+                self.setState(f'Rpip slope: {slope / 1e6:g} MOhm/sec   Pressure: {pressure:g} Pa')
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
 
     def cleanup(self):

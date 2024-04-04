@@ -14,6 +14,8 @@ import six
 from six.moves import map
 from six.moves import range
 
+from acq4.util.json_encoder import ACQ4JSONEncoder
+
 if __name__ == "__main__":
     libdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path = [os.path.join(libdir, "lib", "util")] + sys.path + [libdir]
@@ -329,7 +331,7 @@ class LogWindow(Qt.QMainWindow):
                 self.saveEntries(temp)
 
         self.logMsg(f"Moved log storage from {oldfName} to {self.fileName()}.")
-        self.logMsg(f"Current configuration: {json.dumps(self.manager.config)}")
+        self.logMsg(f"Current configuration: {json.dumps(self.manager.config, cls=ACQ4JSONEncoder)}")
         self.wid.ui.dirLabel.setText("Current Storage Directory: " + self.fileName())
         self.manager.sigLogDirChanged.emit(dh)
 
