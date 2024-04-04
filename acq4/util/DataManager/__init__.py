@@ -7,20 +7,17 @@ These classes implement a data management system that allows modules
 to easily store and retrieve data files along with metadata. The objects
 probably only need to be created via functions in the Manager class.
 """
-
-from collections import OrderedDict
-
 import contextlib
 import os
 import re
 import shutil
 import time
 import weakref
+from collections import OrderedDict
 from typing import Callable
 
-import acq4.filetypes as filetypes
-import acq4.util.advancedTypes as advancedTypes
-from acq4.util import Qt
+from acq4 import filetypes
+from acq4.util import Qt, advancedTypes as advancedTypes
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
 from pyqtgraph import SignalProxy, BusyCursor
@@ -179,10 +176,9 @@ class DataManager(Qt.QObject):
 
 
 class FileHandle(Qt.QObject):
-    
     sigChanged = Qt.Signal(object, object, object)  # (self, change, (args))
     sigDelayedChange = Qt.Signal(object, object)  # (self, changes)
-    
+
     def __init__(self, path, manager):
         Qt.QObject.__init__(self)
         self.manager = manager
@@ -194,7 +190,7 @@ class FileHandle(Qt.QObject):
             self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
         else:
             self.sigproxy = None
-        
+
     def getFile(self, fn):
         return getFileHandle(os.path.join(self.name(), fn))
 
@@ -229,7 +225,7 @@ class FileHandle(Qt.QObject):
                 else:
                     return os.path.join(ppath, rpath)
             return path
-        
+
     def shortName(self):
         """Return the name of this file without its path"""
         return os.path.split(self.name())[1]
@@ -245,12 +241,12 @@ class FileHandle(Qt.QObject):
                 dirName = os.path.split(self.name())[0]
                 self.parentDir = self.manager.getDirHandle(dirName)
             return self.parentDir
-        
+
     def info(self):
         self.checkExists()
         info = self.parent()._fileInfo(self.shortName())
         return advancedTypes.ProtectedDict(info)
-        
+
     def setInfo(self, info=None, **args):
         """Set meta-information for this file. Updates all keys specified in info, leaving others unchanged."""
         if info is None:
@@ -258,11 +254,11 @@ class FileHandle(Qt.QObject):
         self.checkExists()
         self.emitChanged('meta')
         return self.parent()._setFileInfo(self.shortName(), info)
-        
+
     def isManaged(self):
         self.checkExists()
         return self.parent().isManaged(self.shortName())
-        
+
     def move(self, newDir):
         self.checkExists()
         with self.lock:
@@ -293,7 +289,7 @@ class FileHandle(Qt.QObject):
 
             oldDir._childChanged()
             newDir._childChanged()
-        
+
     def rename(self, newName):
         """Rename this file.
 
@@ -320,7 +316,7 @@ class FileHandle(Qt.QObject):
 
             self.emitChanged('renamed', fn1, fn2)
             self.parent()._childChanged()
-        
+
     def delete(self):
         self.checkExists()
         with self.lock:
@@ -337,7 +333,7 @@ class FileHandle(Qt.QObject):
             self.path = None
             self.emitChanged('deleted', fn1)
             parent._childChanged()
-        
+
     def read(self, *args, **kargs):
         self.checkExists()
         with self.lock:
@@ -351,7 +347,7 @@ class FileHandle(Qt.QObject):
                 data = cls.read(self, *args, **kargs)
 
             return data
-        
+
     def fileType(self):
         with self.lock:
             info = self.info()
@@ -370,11 +366,11 @@ class FileHandle(Qt.QObject):
         changes = list(set(self.delayedChanges))
         self.delayedChanges = []
         self.sigDelayedChange.emit(self, changes)
-    
+
     def hasChildren(self):
         # self.checkExists()
         return False
-    
+
     def _parentMoved(self, oldDir, newDir):
         """Inform this object that it has been moved as a result of its (grand)parent having moved."""
         prefix = os.path.join(oldDir, '')
@@ -387,7 +383,7 @@ class FileHandle(Qt.QObject):
         self.path = newName
         self.parentDir = None
         self.emitChanged('parent')
-        
+
     def exists(self, name=None):
         if self.path is None:
             return False
@@ -405,13 +401,13 @@ class FileHandle(Qt.QObject):
 
     def isDir(self, path=None):
         return False
-        
+
     def isFile(self):
         return True
-        
+
     def _deleted(self):
         self.path = None
-    
+
     def isGrandchildOf(self, grandparent):
         """Return true if this files is anywhere in the tree beneath grandparent."""
         gname = os.path.join(abspath(grandparent.name()), '')
@@ -419,7 +415,7 @@ class FileHandle(Qt.QObject):
 
     def write(self, data, **kwargs):
         self.parent().writeFile(data, self.shortName(), **kwargs)
-        
+
     def flushSignals(self):
         """If any delayed signals are pending, send them now."""
         if self.sigproxy is not None:
@@ -433,31 +429,31 @@ class DirHandle(FileHandle):
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
         self._indexFileExists = False
-        
+
         if not os.path.isdir(self.path) and create:
             os.mkdir(self.path)
             self.createIndex()
-        
+
         # Let's avoid reading the index unless we really need to.
         self._indexFileExists = os.path.isfile(self._indexFile())
-    
+
     def _indexFile(self):
         """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
-    
+
     def _logFile(self):
         return os.path.join(self.path, '.log')
-    
+
     def __getitem__(self, item):
         item = item.lstrip(os.path.sep)
         fileName = os.path.join(self.name(), item)
         return self.manager.getHandle(fileName)
-    
+
     def createIndex(self):
         if self.isManaged():
             raise Exception("Directory is already managed!")
         self._writeIndex(OrderedDict([('.', {})]))
-        
+
     def logMsg(self, msg, tags=None):
         """Write a message into the log for this directory."""
         if tags is None:
@@ -467,12 +463,12 @@ class DirHandle(FileHandle):
                 raise Exception("tags argument must be a dict")
             tags['__timestamp__'] = time.time()
             tags['__message__'] = str(msg)
-            
+
             fd = open(self._logFile(), 'a')
             fd.write("%s\n" % repr(tags))
             fd.close()
             self.emitChanged('log', tags)
-        
+
     def readLog(self, recursive=0):
         """Return a list containing one dict for each log line"""
         with self.lock:
@@ -488,7 +484,7 @@ class DirHandle(FileHandle):
                 except:
                     print("****************** Error reading log file %s! *********************" % logf)
                     raise
-            
+
             if recursive > 0:
                 for d in self.subDirs():
                     dh = self[d]
@@ -499,16 +495,16 @@ class DirHandle(FileHandle):
                         msg['subdir'] = os.path.join(dh.shortName(), msg['subdir'])
                     log  = log + subLog
                 log.sort(key=lambda a: a['__timestamp__'])
-            
+
             return log
-        
+
     def subDirs(self):
         """Return a list of string names for all sub-directories."""
         with self.lock:
             ls = self.ls()
             subdirs = [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
             return subdirs
-    
+
     def incrementFileName(self, fileName, useExt=True):
         """Given fileName.ext, finds the next available fileName_NNN.ext"""
         files = self.ls()
@@ -524,9 +520,9 @@ class DirHandle(FileHandle):
         else:
             maxVal = 0
         return f'{fileName}_{maxVal:03d}{ext}'
-    
+
     def mkdir(self, name, autoIncrement=False, info=None):
-        """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the 
+        """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the
         end of the dir name if it already exists."""
         if info is None:
             info = {}
@@ -545,7 +541,7 @@ class DirHandle(FileHandle):
             self._childChanged()
 
             if self.isManaged():
-                ## Mark the creation time in the parent directory so it can sort its full list of files without 
+                ## Mark the creation time in the parent directory so it can sort its full list of files without
                 ## going into each subdir
                 self._setFileInfo(fullName, {'__timestamp__': t})
 
@@ -554,9 +550,9 @@ class DirHandle(FileHandle):
             ndm.setInfo(info)
             self.emitChanged('children', newDir)
             return ndm
-        
+
     def getDir(self, subdir, create=False, autoIncrement=False) -> "DirHandle":
-        """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only 
+        """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only
         if create==True"""
         with self.lock:
             ndir = os.path.join(self.path, subdir)
@@ -571,10 +567,10 @@ class DirHandle(FileHandle):
         if not fh.isManaged():
             self.indexFile(fileName)
         return fh
-        
+
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
-            
+
     def ls(self, normcase=False, sortMode='date', useCache=False):
         """Return a list of all files in the directory.
         If normcase is True, normalize the case of all names in the list.
@@ -588,7 +584,7 @@ class DirHandle(FileHandle):
                 return list(map(os.path.normcase, files))
             else:
                 return files[:]
-    
+
     def _updateLsCache(self, sortMode):
         try:
             files = os.listdir(self.name())
@@ -615,7 +611,7 @@ class DirHandle(FileHandle):
             raise ValueError(f'Unrecognized sort mode "{sortMode}"')
 
         self.lsCache[sortMode] = files
-    
+
     def _getFileCTime(self, fileName):
         if self.isManaged():
             index = self._readIndex()
@@ -634,18 +630,18 @@ class DirHandle(FileHandle):
             return os.path.getctime(os.path.join(self.name(), fileName))
         except Exception:
             return 0
-    
+
     def isGrandparentOf(self, child):
         """Return true if child is anywhere in the tree below this directory."""
         return child.isGrandchildOf(self)
-    
+
     def hasChildren(self):
         return len(self.ls()) > 0
-    
+
     def info(self):
         self._readIndex(unmanagedOk=True)  ## returns None if this directory has no index file
         return advancedTypes.ProtectedDict(self._fileInfo('.'))
-    
+
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
         with self.lock:
@@ -656,44 +652,44 @@ class DirHandle(FileHandle):
                 return index[file]
             else:
                 return {}
-    
+
     def isDir(self, path=None):
         with self.lock:
             if path is None:
                 return True
             else:
                 return self[path].isDir()
-        
+
     def isFile(self, fileName=None):
         if fileName is None:
             return False
         with self.lock:
             fn = os.path.abspath(os.path.join(self.path, fileName))
             return os.path.isfile(fn)
-        
+
     def createFile(self, fileName, info=None, autoIncrement=False):
         """Create a blank file"""
         if info is None:
             info = {}   ## never put {} in the function default
-        
+
         t = time.time()
         with self.lock:
             ## Increment file name
             if autoIncrement:
                 fileName = self.incrementFileName(fileName)
-            
+
             ## Write file
             open(os.path.join(self.name(), fileName), 'w')
-            
+
             self._childChanged()
-            
+
             ## Write meta-info
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
             self.emitChanged('children', fileName)
             return self[fileName]
-        
+
     def writeFile(self, obj, fileName, info=None, autoIncrement=False, fileType=None, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index.
         Will try to convert obj into a FileType if the correct type exists.
@@ -742,14 +738,14 @@ class DirHandle(FileHandle):
             fn = os.path.join(self.path, fileName)
             if not (os.path.isfile(fn) or os.path.isdir(fn)):
                 raise Exception("File %s does not exist." % fn)
-                
+
             if fileName in index:
                 if protect:
                     raise Exception("File %s is already indexed." % fileName)
 
             self._setFileInfo(fileName, info)
             self.emitChanged('meta', fileName)
-    
+
     def forget(self, fileName):
         """Remove fileName from the index for this directory"""
         with self.lock:
@@ -764,7 +760,7 @@ class DirHandle(FileHandle):
                     raise
                 self._writeIndex(index, lock=False)
                 self.emitChanged('meta', fileName)
-        
+
     def isManaged(self, fileName=None):
         with self.lock:
             if self._indexFileExists is False:
@@ -787,7 +783,7 @@ class DirHandle(FileHandle):
                 return False
             if name is None:
                 return os.path.exists(self.path)
-            
+
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))
             except:
@@ -812,17 +808,17 @@ class DirHandle(FileHandle):
             if fileName not in index:
                 index[fileName] = {}
                 append = True
-                
+
             for k in info:
                 index[fileName][k] = info[k]
-                
+
             if append:
                 self._appendIndex({fileName: info})
-                
+
             else:
                 self._writeIndex(index, lock=False)
             self.emitChanged('meta', fileName)
-        
+
     def _readIndex(self, lock=True, unmanagedOk=False):
         with self.lock:
             indexFile = self._indexFile()
@@ -839,7 +835,7 @@ class DirHandle(FileHandle):
                     print("***************Error while reading index file %s!*******************" % indexFile)
                     raise
             return self._index
-        
+
     def _writeIndex(self, newIndex, lock=True):
         with self.lock:
             writeConfigFile(newIndex, self._indexFile())
@@ -855,7 +851,7 @@ class DirHandle(FileHandle):
             for k in info:
                 self._index[k] = info[k]
             self._indexMTime = os.path.getmtime(indexFile)
-        
+
     def checkIndex(self):
         ind = self._readIndex(unmanagedOk=True)
         if ind is None:
@@ -868,7 +864,7 @@ class DirHandle(FileHandle):
                 changed = True
         if changed:
             self._writeIndex(ind)
-        
+
     def _childChanged(self):
         self.lsCache = {}
         self.emitChanged('children')

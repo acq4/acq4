@@ -1,18 +1,14 @@
-from __future__ import print_function
-
 import os
 from collections import OrderedDict
 
 import numpy as np
-import six
-from six.moves import range
 
+import acq4.util.DataManager
 import acq4.util.debug as debug
 from acq4 import Manager
-from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 from acq4.util import DataManager, functions
 from acq4.util.database.database import SqliteDatabase, parseColumnDefs, TableData
-from six.moves import map
+from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 
 
 class CaselessDict(OrderedDict):
@@ -578,7 +574,7 @@ class AnalysisDatabase(SqliteDatabase):
         If no relationships are found, return None.
         """
         def strlower(x):  # convert strings to lower, everything else stays the same
-            if isinstance(x, six.string_types):
+            if isinstance(x, str):
                 return x.lower()
             return x
             
@@ -673,9 +669,9 @@ class AnalysisDatabase(SqliteDatabase):
         """Return the name of the directory table that should hold dh.
         dh may be either a directory handle OR the string result of self.dataModel().dirType(dh)
         """
-        if isinstance(dh, DataManager.DirHandle):
+        if isinstance(dh, acq4.util.DataManager.DirHandle):
             typeName = self.dataModel().dirType(dh)
-        elif isinstance(dh, six.string_types):
+        elif isinstance(dh, str):
             typeName = dh
         else:
             raise TypeError(type(dh))
@@ -738,9 +734,9 @@ class AnalysisDatabase(SqliteDatabase):
                         allHandle = 0
                         for i in range(len(data)):
                             val = data[i][name]
-                            if val is None or isinstance(val, six.string_types):
+                            if val is None or isinstance(val, str):
                                 allStr += 1
-                            elif val is None or isinstance(val, DataManager.FileHandle):
+                            elif val is None or isinstance(val, acq4.util.DataManager.FileHandle):
                                 allHandle += 1
                         if allStr == len(data):
                             typ = 'text'
@@ -755,9 +751,9 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, six.string_types):
+                elif isinstance(v, str):
                     typ = 'text'
-                elif isinstance(v, DataManager.FileHandle):
+                elif isinstance(v, acq4.util.DataManager.FileHandle):
                     typ = 'file'
                 else:
                     typ = 'blob'
