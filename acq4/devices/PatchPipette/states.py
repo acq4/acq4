@@ -1206,8 +1206,10 @@ class ResealState(PatchPipetteState):
         Pressure (Pa) to apply during retraction (default is -4 kPa)
     pressureChangeRate : float
         Rate at which pressure should change from initial/nuzzleLimit to retraction (default is 0.5 kPa / min)
-    retractionSpeed : float
-        Speed in m/s to move pipette during retraction (default is 0.3 um / s)
+    maxRetractionSpeed : float
+        Speed in m/s to move pipette during each stepwise movement of the retraction (default is 10 um / s)
+    retractionStepInterval : float
+        Interval (seconds) between stepwise movements of the retraction (default is 5s)
     resealTimeout : float
         Seconds before reseal attempt exits, not including grabbing the nucleus and baseline measurements (default is
         10 min)
@@ -1259,7 +1261,8 @@ class ResealState(PatchPipetteState):
         'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
         'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
         'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
-        'retractionSpeed': {'type': 'float', 'default': 0.3e-6, 'suffix': 'm/s'},
+        'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
+        'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
         'resealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
@@ -1386,14 +1389,20 @@ class ResealState(PatchPipetteState):
                 if retraction_future and not retraction_future.isDone():
                     self.setState("handling tear")
                     retraction_future.stop()
-                    self._moveFuture = recovery_future = self.dev.pipetteDevice._moveToGlobal(
-                        pos=self._startPosition, speed=self.config['retractionSpeed'])
+                    self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
+                        self._startPosition[2],
+                        maxSpeed=self.config['maxRetractionSpeed'],
+                        interval=config['retractionStepInterval'],
+                    )
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if recovery_future is not None and not recovery_future.isDone():
                     recovery_future.stop()
                 self.setState("retracting")
-                self._moveFuture = retraction_future = dev.pipetteDevice.retractFromSurface(
-                    speed=config['retractionSpeed'])
+                self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
+                    dev.pipetteDevice.approachDepth(),
+                    maxSpeed=config['maxRetractionSpeed'],
+                    interval=config['retractionStepInterval'],
+                )
 
             self.sleep(0.2)
 
