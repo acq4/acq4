@@ -274,6 +274,8 @@ class MultiPatchLogData(object):
             ),
             # TODO save field of view dimensions to show stage (camera) position
             # TODO save objective
+            # TODO save current patch profile and any changes thereof
+            # TODO save pressure measurements, maybe?
             # TODO save lighting
             # TODO handle clamp_state_change, holding value
             # TODO save entire test pulse?
@@ -287,6 +289,8 @@ class MultiPatchLogData(object):
     @staticmethod
     def _prepare_event_for_use(event: dict, use: str) -> tuple[Any, ...]:
         event_time = float(event['event_time'])
+        # TODO 'move_request'
+        # TODO 'init'
         if use == 'event':
             return event_time, event['event'], event['is_true']
         if use == 'position':

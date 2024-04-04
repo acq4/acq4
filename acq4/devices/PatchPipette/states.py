@@ -774,7 +774,7 @@ class SealState(PatchPipetteState):
     def run(self):
         self.monitorTestPulse()
         config = self.config
-        dev = self.dev
+        dev: "PatchPipette" = self.dev
 
         recentTestPulses = deque(maxlen=config['nSlopeSamples'])
         while True:
@@ -819,14 +819,11 @@ class SealState(PatchPipetteState):
 
             ssr = tp.analysis()['steadyStateResistance']
             cap = tp.analysis()['capacitance']
-            # if cap > config['breakInThreshold']:
-            #     patchrec['spontaneousBreakin'] = True
-            #     return 'break in'
 
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
 
-            if not holdingSet and ssr > config['holdingThreshold']:
+            if ssr > config['holdingThreshold'] and not holdingSet:
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
