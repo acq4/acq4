@@ -275,8 +275,8 @@ class MultiPatchLogData(object):
             # TODO save field of view dimensions to show stage (camera) position
             # TODO save objective
             # TODO save lighting
-            # TODO save clamp mode changes, holding voltage, current
-            # TODO save entire test pulse
+            # TODO handle clamp_state_change, holding value
+            # TODO save entire test pulse?
             # 'move_request': is currently ignored
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),

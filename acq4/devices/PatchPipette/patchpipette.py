@@ -1,7 +1,8 @@
+import json
 from collections import OrderedDict
+from typing import Optional
 
 import numpy as np
-from typing import Optional
 
 from acq4.util import Qt
 from acq4.util import ptime
@@ -13,6 +14,7 @@ from ..Camera import Camera
 from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
+from ...util.json_encoder import ACQ4JSONEncoder
 
 
 class PatchPipette(Device):
@@ -57,7 +59,11 @@ class PatchPipette(Device):
         self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
-        self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
+        if clampName is None:
+            self.clampDevice = None
+        else:
+            self.clampDevice = deviceManager.getDevice(clampName)
+            self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
 
         Device.__init__(self, deviceManager, config, name)
         self._eventLog = []  # chronological record of events 
@@ -380,6 +386,9 @@ class PatchPipette(Device):
         enabled = self.autoBiasEnabled()
         self.sigAutoBiasChanged.emit(self, enabled, v)
         self.emitNewEvent('auto_bias_target_changed', OrderedDict([('enabled', enabled), ('target', v)]))
+
+    def clampStateChanged(self, state):
+        self.emitNewEvent('clamp_state_change', state)
 
     def autoBiasTarget(self):
         return self._testPulseThread.getParameter('autoBiasTarget')

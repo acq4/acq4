@@ -40,13 +40,11 @@ class TestPulseThread(Thread):
             'vcPreDuration': 5e-3,
             'vcPulseDuration': 10e-3,
             'vcPostDuration': 5e-3,
-            'vcHolding': None,
             'vcAmplitude': -10e-3,
             'vcAverage': 4,
             'icPreDuration': 10e-3,
             'icPulseDuration': 80e-3,
             'icPostDuration': 80e-3,
-            'icHolding': None,
             'icAmplitude': -10e-12,
             'icAverage': 4,
             '_index': 0,
@@ -62,7 +60,7 @@ class TestPulseThread(Thread):
 
     def setParameters(self, **kwds):
         newParams = self.params.copy()
-        for k,v in kwds.items():
+        for k, v in kwds.items():
             if k not in self.params:
                 raise KeyError(f"Unknown parameter {k}")
             newParams[k] = v
@@ -182,8 +180,7 @@ class TestPulseThread(Thread):
         mode = params['clampMode']
 
         cmdData = np.empty(numPts * params['average'])
-        holding = params['holding'] or self._clampDev.getHolding(mode)
-        cmdData[:] = holding
+        cmdData[:] = params['holding'] or self._clampDev.getHolding(mode)
 
         for i in range(params['average']):
             start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
@@ -217,7 +214,7 @@ class TestPulseThread(Thread):
         else:
             target = self.params['autoBiasTarget']
             if target is None:
-                target = self.params['vcHolding']
+                target = self.dev.clampDevice.getHolding("VC")
 
             rm = np.clip(analysis['steadyStateResistance'], 1e6, 10e9)
             vm = analysis['baselinePotential']
@@ -290,7 +287,7 @@ class TestPulse(object):
             peak = pri['Time': peakStart:peakStop]
             ssStop = params['preDuration'] + params['pulseDuration']
             ssStart = ssStop - 2e-3
-            steady  = pri['Time': ssStart:ssStop]
+            steady = pri['Time': ssStart:ssStop]
 
             if params['amplitude'] > 0:
                 peakValue = peak.max()
@@ -300,7 +297,7 @@ class TestPulse(object):
             baseValue = np.median(base)
 
             if params['clampMode'] == 'VC':
-                analysis['baselinePotential'] = params['holding'] or 0
+                analysis['baselinePotential'] = self.data._info[-1]['DAQ']['command']['holding']
                 analysis['baselineCurrent'] = baseValue
                 analysis['peakResistance'] = params['amplitude'] / (peakValue - baseValue)
                 analysis['steadyStateResistance'] = np.abs(params['amplitude'] / (steadyValue - baseValue))
@@ -310,7 +307,7 @@ class TestPulse(object):
                 bridgeOn = self.data._info[-1]['ClampState']['ClampParams']['BridgeBalEnable']
                 if not bridgeOn:
                     bridge = 0.0
-                analysis['baselineCurrent'] = params['holding'] or 0
+                analysis['baselineCurrent'] = self.data._info[-1]['DAQ']['command']['holding']
                 analysis['baselinePotential'] = baseValue
                 analysis['peakResistance'] = bridge + (peakValue - baseValue) / params['amplitude']
                 analysis['steadyStateResistance'] = np.abs(bridge + (steadyValue - baseValue) / params['amplitude'])
