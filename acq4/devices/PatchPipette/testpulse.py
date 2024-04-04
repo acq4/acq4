@@ -180,7 +180,7 @@ class TestPulseThread(Thread):
         mode = params['clampMode']
 
         cmdData = np.empty(numPts * params['average'])
-        cmdData[:] = params.get('holding', self._clampDev.getHolding(mode))
+        cmdData[:] = params['holding'] or self._clampDev.getHolding(mode)
 
         for i in range(params['average']):
             start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
@@ -196,7 +196,7 @@ class TestPulseThread(Thread):
                 'recordState': ['BridgeBalResist', 'BridgeBalEnable'],
             }
         }
-        if 'holding' in params:
+        if params['holding'] is not None:
             cmd[self._clampName]['holding'] = params['holding']
 
         return self._manager.createTask(cmd)
