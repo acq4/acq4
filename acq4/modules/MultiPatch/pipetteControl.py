@@ -209,6 +209,7 @@ class PipetteControl(Qt.QWidget):
     def modeBtnClicked(self, btnId):
         mode = self.selectedClampMode()
         self.pip.clampDevice.setMode(mode)
+        self._updateActiveHoldingUi()
 
     def clampStateChanged(self, state):
         mode = self.selectedClampMode()
