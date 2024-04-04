@@ -799,7 +799,10 @@ class SealState(PatchPipetteState):
         if mode == 'user':
             dev.pressureDevice.setPressure(source='user', pressure=0)
         elif mode == 'auto':
-            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            if config['delayBeforePressure'] == 0:
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            else:
+                dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         else:
             raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
 
