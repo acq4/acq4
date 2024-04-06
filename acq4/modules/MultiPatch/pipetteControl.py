@@ -91,8 +91,8 @@ class PipetteControl(Qt.QWidget):
         self._lockAutoBias = False  # prevent autoBias from being disabled when IC holding is changed automatically
         self.ui.autoBiasBtn.clicked.connect(self.autoBiasClicked)
         self.ui.autoBiasVcBtn.clicked.connect(self.autoBiasVcClicked)
-        self.ui.vcHoldingSpin.sigValueChanging.connect(self.vcHoldingSpinChanged)
-        self.ui.icHoldingSpin.sigValueChanging.connect(self.icHoldingSpinChanged)
+        self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingSpinChanged)
+        self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
         self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
@@ -182,30 +182,26 @@ class PipetteControl(Qt.QWidget):
             self._setHoldingSpin(mode, val)
         finally:
             self._lockAutoBias = False
-        if mode=='VC' and self.pip.autoBiasTarget() is None:
+        if mode == 'VC' and self.pip.autoBiasTarget() is None:
             self.ui.autoBiasTargetSpin.setValue(val)
 
-    def vcHoldingSpinChanged(self):
+    def vcHoldingSpinChanged(self, value):
         # NOTE: The spin emits a delayed signal when the user changes its value. 
         # That means if we are not careful, some other signal could reset the value
         # of the spin before it has even emitted the change signal, causing the user's
         # requested change to be cancelled.
-        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
-            with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
-                self.pip.clampDevice.setHolding('VC', self.ui.vcHoldingSpin.value())
+        with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+            self.pip.clampDevice.setHolding('VC', value)
 
-    def icHoldingSpinChanged(self):
-        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
-            with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
-                if not self._lockAutoBias:
-                    self.pip.enableAutoBias(False)
-                self.pip.clampDevice.setHolding('IC', self.ui.icHoldingSpin.value())
+    def icHoldingSpinChanged(self, value):
+        if not self._lockAutoBias:
+            self.pip.enableAutoBias(False)
+        with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+            self.pip.clampDevice.setHolding('IC', value)
 
     def autoBiasSpinChanged(self, value):
-        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
-            with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
-                if not self.ui.autoBiasVcBtn.isChecked():
-                    self.pip.setAutoBiasTarget(value)
+        if not self.ui.autoBiasVcBtn.isChecked():
+            self.pip.setAutoBiasTarget(value)
         
     def selectedClampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
