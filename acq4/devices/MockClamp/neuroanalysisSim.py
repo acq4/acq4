@@ -1,7 +1,5 @@
-from neuroanalysis.neuronsim.model_cell import ModelCell
 from neuroanalysis.data import TSeries
-import numpy as np
-
+from neuroanalysis.neuronsim.model_cell import ModelCell
 
 model_cell = ModelCell()
 model_cell.enable_mechs(['leak', 'lgkfast', 'lgkslow', 'lgkna'])
@@ -11,17 +9,16 @@ model_cell.clamp.cpip = 3e-12
 model_cell.soma.cap = 100e-12
 
 
-def run(cmd):
+def run(cmd: dict):
     """
-    Accept command like 
-    
+    Accept command like::
         {
             'dt': 1e-4,
             'mode': 'ic',
             'data': np.array([...]),
         }
-        
-    Return array of Vm or Im values.        
+
+    Return array of Vm or Im values.
     """
     global model_cell
     mode = cmd['mode'].lower()
