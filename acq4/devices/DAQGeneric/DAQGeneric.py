@@ -1,19 +1,16 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from collections import OrderedDict
 
 import numpy as np
-import six
+from MetaArray import MetaArray, axis
+from typing import Optional
 
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
-from pyqtgraph import siFormat
-from pyqtgraph.debug import Profiler
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from MetaArray import MetaArray, axis
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 
@@ -36,7 +33,7 @@ class DataMapping:
         self.offset = {}
         if chans is None:
             chans = device.listChannels()
-        if isinstance(chans, six.string_types):
+        if isinstance(chans, str):
             chans = [chans]
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
@@ -412,18 +409,18 @@ class DAQGenericTask(DeviceTask):
             # print "Stop task", self.daqTasks[ch]
             try:
                 self.daqTasks[ch].stop(abort=abort)
-            except:
+            except Exception:
                 printExc("Error while stopping DAQ task:")
-            prof('stop %s' % ch)
+            prof(f'stop {ch}')
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
-                prof('set holding %s' % ch)
+                prof(f'set holding {ch}')
             elif self.dev.isOutput(ch):  ## return all output channels to holding value
                 self.dev.setChanHolding(ch)
-                prof('reset to holding %s' % ch)
+                prof(f'reset to holding {ch}')
 
-    def getResult(self):
+    def getResult(self) -> Optional[MetaArray]:
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
 
@@ -434,49 +431,45 @@ class DAQGenericTask(DeviceTask):
             result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data'])  ## scale/offset/invert
             result[ch]['units'] = self.getChanUnits(ch)
 
-        if len(result) > 0:
-            meta = result[list(result.keys())[0]]['info']
-            rate = meta['rate']
-            nPts = meta['numPts']
-            ## Create an array of time values
-            timeVals = np.linspace(0, float(nPts - 1) / float(rate), nPts)
-
-            ## Concatenate all channels together into a single array, generate MetaArray info
-            chanList = [np.atleast_2d(result[x]['data']) for x in result]
-            cols = [(x, result[x]['units']) for x in result]
-            # print cols
-            try:
-                arr = np.concatenate(chanList)
-            except:
-                print(chanList)
-                print([a.shape for a in chanList])
-                raise
-
-            daqState = OrderedDict()
-            for ch in self.dev._DGConfig:
-                if ch in result:
-                    daqState[ch] = result[ch]['info']
-                else:
-                    daqState[ch] = {}
-
-                ## record current holding value for all output channels (even those that were not buffered for this task)    
-                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
-                    daqState[ch]['holding'] = self.holdingVals[ch]
-
-            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [
-                {'DAQ': daqState}]
-
-            protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
-            for ch in protInfo:
-                protInfo[ch].pop('command', None)
-                protInfo[ch].pop('lowLevelConf', None)
-            info[-1]['Protocol'] = protInfo
-
-            marr = MetaArray(arr, info=info)
-            return marr
-
-        else:
+        if len(result) <= 0:
             return None
+        meta = result[list(result.keys())[0]]['info']
+        rate = meta['rate']
+        nPts = meta['numPts']
+        ## Create an array of time values
+        timeVals = np.linspace(0, float(nPts - 1) / float(rate), nPts)
+
+        ## Concatenate all channels together into a single array, generate MetaArray info
+        chanList = [np.atleast_2d(result[x]['data']) for x in result]
+        cols = [(x, result[x]['units']) for x in result]
+        try:
+            arr = np.concatenate(chanList)
+        except Exception:
+            print(chanList)
+            print([a.shape for a in chanList])
+            raise
+
+        daqState = OrderedDict()
+        for ch in self.dev._DGConfig:
+            if ch in result:
+                daqState[ch] = result[ch]['info']
+            else:
+                daqState[ch] = {}
+
+            ## record current holding value for all output channels (even those that were not buffered for this task)    
+            if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
+                daqState[ch]['holding'] = self.holdingVals[ch]
+
+        info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [
+            {'DAQ': daqState}]
+
+        protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
+        for ch in protInfo:
+            protInfo[ch].pop('command', None)
+            protInfo[ch].pop('lowLevelConf', None)
+        info[-1]['Protocol'] = protInfo
+
+        return MetaArray(arr, info=info)
 
     def storeResult(self, dirHandle):
         DeviceTask.storeResult(self, dirHandle)

@@ -194,19 +194,13 @@ class Task:
                     prof.mark('start %s' % devName)
                 self.startTime = ptime.time()
 
-                # print "  %d Task started" % self.id
-
                 if not block:
                     prof.finish()
-                    # print "  %d Not blocking; execute complete" % self.id
                     return
 
                 ## Wait until all tasks are done
-                # print "Waiting for all tasks to finish.."
-
                 lastProcess = ptime.time()
                 isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
-                # print "isGuiThread:", isGuiThread
                 while not self.isDone():
                     now = ptime.time()
                     elapsed = now - self.startTime
@@ -215,17 +209,14 @@ class Task:
                             Qt.QApplication.processEvents()
                             lastProcess = ptime.time()
 
-                    if elapsed < self.cfg[
-                        'duration'] - 10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    if elapsed < self.cfg['duration'] - 10e-3:
                         sleep = min(10e-3, self.cfg['duration'] - elapsed - 5e-3)
                     else:
                         sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
-                    # print "sleep for", sleep
                     time.sleep(sleep)
-                # print "all tasks finshed."
 
                 self.stop()
-                # print "  %d execute complete" % self.id
             except:
                 printExc("==========  Error in task execution:  ==============")
                 self.abort()

@@ -186,7 +186,7 @@ class TestPulseThread(Thread):
             start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
             stop = start + int(params['pulseDuration'] * params['sampleRate'])
             cmdData[start:stop] += params['amplitude']
-        
+
         cmd = {
             'protocol': {'duration': duration * params['average']},
             self._daqName: {'rate': params['sampleRate'], 'numPts': numPts * params['average'], 'downsample': params['downsample']},
