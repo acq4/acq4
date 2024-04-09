@@ -11,14 +11,14 @@ from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
-    {'name': 'baselinePotential', 'type': 'float', 'units': 'V'},
-    {'name': 'baselineCurrent', 'type': 'float', 'units': 'A'},
-    {'name': 'peakResistance', 'type': 'float', 'units': 'Ω'},
-    {'name': 'steadyStateResistance', 'type': 'float', 'units': 'Ω'},
-    {'name': 'fitExpAmp', 'type': 'float'},
-    {'name': 'fitExpTau', 'type': 'float'},
-    {'name': 'fitExpYOffset', 'type': 'float'},
-    {'name': 'fitExpXOffset', 'type': 'float', 'units': 's'},
+    {'name': 'baseline_potential', 'type': 'float', 'units': 'V'},
+    {'name': 'baseline_current', 'type': 'float', 'units': 'A'},
+    {'name': 'peak_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'steady_state_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'fit_amplitude', 'type': 'float'},
+    {'name': 'time_constant', 'type': 'float'},
+    {'name': 'fit_yoffset', 'type': 'float'},
+    {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
@@ -683,7 +683,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 time = test_pulses['event_time'] - self.startTime()
                 if len(time) > 0:
                     measurements = np.concatenate(
-                        (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
+                        (time[:, np.newaxis], test_pulses['steady_state_resistance'][:, np.newaxis]), axis=1)
                     # break the analysis up by state changes
                     state_times = [s[0] - self.startTime() for s in states if s[2] == '']
                     start_indexes = np.searchsorted(time, state_times)

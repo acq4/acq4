@@ -1,6 +1,7 @@
 import numpy as np
-from acq4.devices.PatchPipette.testpulse import TestPulse
+
 from acq4.util import Qt, ptime
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
 class MockPatch(object):
@@ -11,10 +12,9 @@ class MockPatch(object):
 
         self.resetState()
 
-        pipette._testPulseThread.setParameters(testPulseClass=self.createTestPulse)
+        pipette._testPulseThread.setParameters(postProcessing=self.mockAnalysis)
     
-    def createTestPulse(self, dev, taskParams, result):
-        tp = TestPulse(dev, taskParams, result)
+    def mockAnalysis(self, tp: PatchClampTestPulse) -> PatchClampTestPulse:
         if self.enabled:
             tp._analysis = self.generateAnalysis()
         return tp
@@ -89,15 +89,16 @@ class MockPatch(object):
         i = (holding - self.membranePotential) / ssr
 
         return {
-            'baselinePotential': holding,
-            'baselineCurrent': i,
-            'peakResistance': pr,
-            'steadyStateResistance': ssr,
+            'baseline_potential': holding,
+            'baseline_current': i,
+            'access_resistance': pr,
+            'input_resistance': ssr - pr,
+            'steady_state_resistance': ssr,
             'capacitance': cap,
-            'fitExpAmp': 0,
-            'fitExpTau': cap * ssr,
-            'fitExpYOffset': 0,
-            'fitExpXOffset': 0,
+            'fit_amplitude': 0,
+            'time_constant': cap * ssr,
+            'fit_yoffset': 0,
+            'fit_xoffset': 0,
         }
 
 

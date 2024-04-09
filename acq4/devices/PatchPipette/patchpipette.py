@@ -3,6 +3,7 @@ from collections import OrderedDict
 from typing import Optional
 
 import numpy as np
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 from acq4.util import Qt
 from acq4.util import ptime
@@ -308,20 +309,21 @@ class PatchPipette(Device):
         """Return a widget with a UI to put in the device rack"""
         return PatchPipetteDeviceGui(self, win)
 
-    def _testPulseFinished(self, dev, result):
+    def _testPulseFinished(self, dev, result: PatchClampTestPulse):
         self._lastTestPulse = result
         if self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
             newTPH = np.empty(self._testPulseHistory.shape[0]*2, dtype=self._testPulseHistory.dtype)
             newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
             self._testPulseHistory = newTPH
-        analysis = result.analysis()
-        self._testPulseHistory[self._testPulseHistorySize]['time'] = result.startTime()
+        analysis = result.analysis
+        self._testPulseHistory[self._testPulseHistorySize]['time'] = result.start_time
         for k in analysis:
-            self._testPulseHistory[self._testPulseHistorySize][k] = analysis[k]
+            val = np.nan if (val := analysis[k]) is None else val
+            self._testPulseHistory[self._testPulseHistorySize][k] = val
         self._testPulseHistorySize += 1
 
         self.sigTestPulseFinished.emit(self, result)
-        self.emitNewEvent('test_pulse', result.analysis())
+        self.emitNewEvent('test_pulse', result.analysis)
 
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
@@ -340,14 +342,15 @@ class PatchPipette(Device):
         self._lastTestPulse = None
         self._testPulseHistory = np.empty(1000, dtype=[
             ('time', 'float'),
-            ('baselinePotential', 'float'),
-            ('baselineCurrent', 'float'),
-            ('peakResistance', 'float'),
-            ('steadyStateResistance', 'float'),
-            ('fitExpAmp', 'float'),
-            ('fitExpTau', 'float'),
-            ('fitExpXOffset', 'float'),
-            ('fitExpYOffset', 'float'),
+            ('baseline_potential', 'float'),
+            ('baseline_current', 'float'),
+            ('input_resistance', 'float'),
+            ('access_resistance', 'float'),
+            ('steady_state_resistance', 'float'),
+            ('fit_amplitude', 'float'),
+            ('time_constant', 'float'),
+            ('fit_xoffset', 'float'),
+            ('fit_yoffset', 'float'),
             ('capacitance', 'float'),
         ])
             

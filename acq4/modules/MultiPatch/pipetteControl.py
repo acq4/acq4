@@ -1,3 +1,4 @@
+import numpy as np
 import re
 
 import pyqtgraph as pg
@@ -6,6 +7,8 @@ from six.moves import zip
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
+from neuroanalysis.data import TSeries
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
@@ -353,36 +356,28 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo.hide()
         # self.closeBtn.hide()
 
-    def newTestPulse(self, tp, history):
+    def newTestPulse(self, tp: PatchClampTestPulse, history):
         if self.mode in ['test pulse', 'tp analysis']:
-            data = tp.data
-            pri = data['Channel': 'primary']
-            units = pri._info[-1]['ClampState']['primaryUnits'] 
-            self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
-            self.plot.setLabels(left=('', units))
+            pri: TSeries = tp['primary']
+            self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
+            self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
             if self.mode == 'tp analysis':
-                t,y = tp.getFitData()
-                self.plot.plot(t, y, pen='b')
+                fit = tp.fit_trace
+                self.plot.plot(fit.time_values, fit.data, pen='b')
 
         elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
             key, units = {
-                'ss resistance': ('steadyStateResistance', u'Ω'),
-                'peak resistance': ('peakResistance', u'Ω'),
-                'holding current': ('baselineCurrent', 'A'),
-                'holding potential': ('baselinePotential', 'V'),
-                'time constant': ('fitExpTau', 's'),
+                'ss resistance': ('steady_state_resistance', u'Ω'),
+                'peak resistance': ('access_resistance', u'Ω'),
+                'holding current': ('baseline_current', 'A'),
+                'holding potential': ('baseline_potential', 'V'),
+                'time constant': ('time_constant', 's'),
                 'capacitance': ('capacitance', 'F'),
             }[self.mode]
             self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=units))
-
-        elif self.mode in ['ss resistance', 'peak resistance']:
-            key = {'ss resistance': 'steadyStateResistance', 'peak resistance': 'peakResistance'}[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=u'Ω'))
+            val = np.nan if (val := tp.analysis[key]) is None else val
+            self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
     def setMode(self, mode):
         if self.mode == mode:
