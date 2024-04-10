@@ -319,7 +319,9 @@ class PatchPipette(Device):
         analysis = result.analysis
         self._testPulseHistory[self._testPulseHistorySize]['time'] = result.start_time
         for k in analysis:
-            val = np.nan if (val := analysis[k]) is None else val
+            val = analysis[k]
+            if val is None:
+                val = np.nan
             self._testPulseHistory[self._testPulseHistorySize][k] = val
         self._testPulseHistorySize += 1
 

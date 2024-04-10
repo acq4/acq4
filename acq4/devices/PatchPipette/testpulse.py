@@ -9,12 +9,7 @@ from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from ...Manager import getManager, Task
 from ...analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
-
-
-def downsample(data: np.ndarray, n: int) -> np.ndarray:
-    if n == 1:
-        return data
-    return data.reshape((len(data) // n, n)).mean(axis=1)
+from ...util.functions import downsample
 
 
 class TestPulseThread(Thread):
@@ -182,10 +177,10 @@ class TestPulseThread(Thread):
         pulse_len = len(pri) // params['average']
 
         times = result.xvals('Time')  # starts at 0
-        times = times[:pulse_len:params['downsample']]
+        times = times[:pulse_len]
 
+        pri = pri[:pulse_len * params['average']]
         pri = pri.reshape((params['average'], pulse_len)).mean(axis=0)
-        pri = downsample(pri, params['downsample'])
         pri = TSeries(
             channel_id='primary',
             data=pri,
@@ -195,17 +190,20 @@ class TestPulseThread(Thread):
         )
 
         cmd = task.command[self._clampName]['command']
-        cmd = downsample(cmd[:pulse_len], params['downsample'])
+        cmd = downsample(cmd[:pulse_len * params['downsample']], params['downsample'])
+        holding = params.get('holding', None)
+        if holding is None:
+            holding = cmd[0]
         if mode == 'vc':
             extra_kwds = {
-                'holding_potential': params.get('holding', cmd[0]),
+                'holding_potential': holding,
             }
         else:
             extra_kwds = {
-                'holding_current': params.get('holding', cmd[0]),
+                'holding_current': holding,
                 'bridge_balance': getBridgeBalanceCompensation(result),
             }
-        cmd -= cmd[0]  # neuroanalysis will double-count the baseline otherwise
+        cmd -= holding  # neuroanalysis will double-count the baseline otherwise
         cmd = TSeries(
             channel_id='command',
             data=cmd,

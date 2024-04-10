@@ -391,16 +391,13 @@ class PlotWidget(Qt.QWidget):
         # self.closeBtn.hide()
 
     def newTestPulse(self, tp: PatchClampTestPulse, history):
-        if self.mode in ['test pulse', 'tp analysis']:
-            pri: TSeries = tp['primary']
-            self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
-            self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
-
-            if self.mode == 'tp analysis':
-                fit = tp.fit_trace
-                self.plot.plot(fit.time_values, fit.data, pen='b')
-
-        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
+        if self.mode == 'test pulse':
+            self._plotTestPulse(tp)
+        elif self.mode == 'tp analysis':
+            self._plotTestPulse(tp)
+            fit = tp.fit_trace
+            self.plot.plot(fit.time_values, fit.data, pen='b')
+        else:
             key, units = {
                 'ss resistance': ('steady_state_resistance', u'Ω'),
                 'peak resistance': ('access_resistance', u'Ω'),
@@ -410,8 +407,15 @@ class PlotWidget(Qt.QWidget):
                 'capacitance': ('capacitance', 'F'),
             }[self.mode]
             self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            val = np.nan if (val := tp.analysis[key]) is None else val
+            val = tp.analysis[key]
+            if val is None:
+                val = np.nan
             self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
+
+    def _plotTestPulse(self, tp):
+        pri: TSeries = tp['primary']
+        self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
+        self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
     def setMode(self, mode):
         if self.mode == mode:
