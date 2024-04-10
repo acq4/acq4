@@ -12,13 +12,9 @@ import zmq
 
 
 import os
-from six.moves import range
-
 from acq4.util.json_encoder import ACQ4JSONEncoder
-
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
-from pyqtgraph.util.mutex import Mutex
 
 """
 Thanks to: Jason Yamada-Hanff  https://github.com/yamad/igor-mode

@@ -439,7 +439,6 @@ class PatchPipette(Device):
         ])
         if eventData is not None:
             newEv.update(eventData)
-        json.dumps(newEv, cls=ACQ4JSONEncoder)  # make sure it's serializable without the event system blowing our stack
         self.sigNewEvent.emit(self, newEv)
 
         self._eventLog.append(newEv)

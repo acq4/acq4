@@ -29,6 +29,7 @@ from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
 from .util import DataManager, ptime, Qt
+from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.debug import logExc, logMsg, createLogWindow
 
@@ -960,7 +961,7 @@ class Manager(Qt.QObject):
         with self.lock:
             try:
                 f = self.getModule("Data Manager").selectedFile()
-                if not isinstance(f, DataManager.DirHandle):
+                if not isinstance(f, DirHandle):
                     f = f.parent()
             except Exception:
                 f = False
@@ -1127,7 +1128,7 @@ class Manager(Qt.QObject):
 
         if isinstance(d, str):
             self.currentDir = self.baseDir.getDir(d, create=True)
-        elif isinstance(d, DataManager.DirHandle):
+        elif isinstance(d, DirHandle):
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
@@ -1169,7 +1170,7 @@ class Manager(Qt.QObject):
         with self.lock:
             if isinstance(d, str):
                 dh = self.dirHandle(d, create=False)
-            elif isinstance(d, DataManager.DirHandle):
+            elif isinstance(d, DirHandle):
                 dh = d
             else:
                 raise Exception("Invalid argument type: ", type(d), d)
@@ -1219,7 +1220,7 @@ class Manager(Qt.QObject):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
         with self.lock:
             fields = OrderedDict()
-            if isinstance(file, DataManager.DirHandle):
+            if isinstance(file, DirHandle):
                 info = file.info()
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')

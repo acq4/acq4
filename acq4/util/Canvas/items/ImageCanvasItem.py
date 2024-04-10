@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 from collections import OrderedDict
-from acq4.util import Qt
-from .CanvasItem import CanvasItem
+
 import numpy as np
-import scipy.ndimage as ndimage
+
+import acq4.util.DataManager
+import acq4.util.debug as debug
 import pyqtgraph as pg
 import pyqtgraph.flowchart
-import acq4.util.DataManager as DataManager
-import acq4.util.debug as debug
+from acq4.util import Qt
+from .CanvasItem import CanvasItem
 from .itemtypes import registerItemType
 
 
@@ -36,7 +35,7 @@ class ImageCanvasItem(CanvasItem):
             item = image
         elif isinstance(image, np.ndarray):
             self.data = image
-        elif isinstance(image, DataManager.FileHandle):
+        elif isinstance(image, acq4.util.DataManager.FileHandle):
             opts['handle'] = image
             self.handle = image
             self.data = self.handle.read()

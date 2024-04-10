@@ -11,7 +11,7 @@ from acq4.util.debug import printExc
 from pyqtgraph import FileDialog
 from . import FileAnalysisView
 from . import FileLogView
-from ...devices.Camera import Frame
+from ...devices.Camera.frame import Frame
 from ...util.HelpfulException import HelpfulException
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')

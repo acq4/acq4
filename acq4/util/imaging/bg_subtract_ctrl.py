@@ -5,7 +5,7 @@ import scipy.ndimage
 from typing import Optional, Union, Callable
 
 from acq4.util import Qt, ptime
-from acq4.util.DataManager import DirHandle
+from acq4.util.imaging.background import remove_background_from_image
 
 Ui_Form = Qt.importTemplate(".bg_subtract_template")
 
@@ -111,7 +111,7 @@ class BgSubtractCtrl(Qt.QWidget):
         self.blurredBackgroundFrame = None
         self._cachedDeferredSave = None
 
-    def deferredSave(self) -> Optional[Callable[[DirHandle], str]]:
+    def deferredSave(self) -> Optional[Callable[["DirHandle"], str]]:
         if self.backgroundFrame is None:
             return None
         if self._cachedDeferredSave is None:
@@ -123,7 +123,7 @@ class BgSubtractCtrl(Qt.QWidget):
             frame = self.backgroundFrame
 
             @functools.cache
-            def do_save(dh: DirHandle) -> Union[str, None]:
+            def do_save(dh: "DirHandle") -> Union[str, None]:
                 fh = dh.writeFile(frame, "background.tif", info, fileType="ImageFile", autoIncrement=True)
                 return fh.shortName()
             self._cachedDeferredSave = do_save
@@ -140,15 +140,3 @@ class BgSubtractCtrl(Qt.QWidget):
         )
 
 
-def remove_background_from_image(
-    image: np.ndarray, bg: Optional[np.ndarray], subtract: bool = True, divide: bool = False, blur: float = 0.0
-):
-    if bg is None:
-        return image
-    if blur > 0.0:
-        bg = scipy.ndimage.gaussian_filter(bg, (blur, blur))
-    if divide:
-        return image / bg
-    if subtract:
-        return image - bg
-    return image

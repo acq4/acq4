@@ -1,12 +1,13 @@
 import json
 import re
+from typing import Any
 
 import numpy as np
-from typing import Any
 
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
+from acq4.util.imaging.frame import Frame
 from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
@@ -277,8 +278,8 @@ class MultiPatchLogData(object):
             # TODO save current patch profile and any changes thereof
             # TODO save pressure measurements, maybe?
             # TODO save lighting
-            # TODO handle clamp_state_change, holding value
-            # 'move_request': is currently ignored
+            # TODO save clamp_state_change, holding voltage
+            # TODO save entire test pulse
             'test_pulse': np.zeros(
                 count_for_use('test_pulse'),
                 dtype=TEST_PULSE_NUMPY_DTYPE,
@@ -772,8 +773,6 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        from acq4.util.imaging import Frame
-
         for f in directory.ls():
             if f.endswith('.tif'):
                 f = directory[f]
