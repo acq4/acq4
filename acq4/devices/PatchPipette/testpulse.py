@@ -281,19 +281,3 @@ class TestPulseThread(Thread):
             newHolding = np.clip(newHolding, self._params['autoBiasMinCurrent'], self._params['autoBiasMaxCurrent'])
 
             self.dev.clampDevice.setHolding(mode, newHolding)
-
-    def getFitData(self):
-        # TODO fix this, put it somewhere it belongs and use it
-        params = self.taskParams
-        analysis = self.analysis()
-        pri = self.data['Channel': 'primary']
-        pulseStart = params['preDuration']  # + 150e-6
-        pulseStop = params['preDuration'] + params['pulseDuration']
-        pulse = pri['Time': pulseStart:pulseStop]
-        t = pulse.xvals('Time')
-        y = exp(t - analysis['fit_xoffset'], analysis['fit_amplitude'], analysis['time_constant'], analysis['fit_yoffset'])
-        return t,y
-
-
-def exp(t, amp, tau, yoffset):
-    return yoffset + amp * np.exp(-t / tau)
