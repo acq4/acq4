@@ -395,12 +395,14 @@ class PlotWidget(Qt.QWidget):
             self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self._plotTestPulse(tp)
-            if not getattr(tp, '__mock__', False):
+            if tp.analysis is None:
+                return
+            if tp.fit_trace_with_transient is not None:
                 trans_fit = tp.fit_trace_with_transient
                 self.plot.plot(trans_fit.time_values, trans_fit.data, pen='r')
-                fit_model = tp.main_fit_result['model']
-                fit = fit_model(trans_fit.time_values)
-                self.plot.plot(trans_fit.time_values  , fit, pen='b')
+            if tp.main_fit_trace is not None:
+                main_fit = tp.main_fit_trace
+                self.plot.plot(main_fit.time_values, main_fit.data, pen='b')
         else:
             key, units = {
                 'ss resistance': ('steady_state_resistance', u'Ω'),
