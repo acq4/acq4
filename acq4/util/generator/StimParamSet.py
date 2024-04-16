@@ -242,7 +242,7 @@ class PulseParameter(GroupParameter):
         ## If sequence is specified over sum, interpret that a bit differently.
         (sumName, sumSeq) = self.param('sum').compile()
         if sumSeq is not None:
-            if self.sum['affect'] == 'length':
+            if self['sum']['affect'] == 'length':
                 if not self.param('length').writable():
                     raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
                 if lenSeq is not None:
