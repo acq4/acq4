@@ -78,7 +78,7 @@ class SeqParameter(GroupParameter):
         
         args['children'] = [
             {'name': 'default', 'type': 'str', 'value': '0'},
-            {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list', 'eval']},
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range', 'list', 'eval']},
             {'name': 'start', 'type': 'str', 'value': '0', 'visible': False}, 
             {'name': 'stop', 'type': 'str', 'value': '0', 'visible': False}, 
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},

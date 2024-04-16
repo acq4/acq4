@@ -85,7 +85,7 @@ class SeqParameter(SimpleParameter):
         initialParams = [ch.name() for ch in self]
         
         newParams = [
-            {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list']},
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range', 'list']},
             {'name': 'start', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
             {'name': 'stop', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
@@ -199,7 +199,7 @@ class PulseParameter(GroupParameter):
                 SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01}),
                 SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
                 SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0, 'limits': (0, None),
-                    'children': [{'name': 'affect', 'type': 'list', 'values': ['length', 'amplitude'], 'value': 'length'}]
+                    'children': [{'name': 'affect', 'type': 'list', 'limits': ['length', 'amplitude'], 'value': 'length'}]
                     }),
             ], **kargs)
         self.param('length').sigValueChanged.connect(self.lenChanged)
@@ -242,7 +242,7 @@ class PulseParameter(GroupParameter):
         ## If sequence is specified over sum, interpret that a bit differently.
         (sumName, sumSeq) = self.param('sum').compile()
         if sumSeq is not None:
-            if self['sum']['affect'] == 'length':
+            if self['sum', 'affect'] == 'length':
                 if not self.param('length').writable():
                     raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
                 if lenSeq is not None:
