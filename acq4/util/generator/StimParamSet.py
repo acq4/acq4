@@ -1,9 +1,8 @@
-from __future__ import print_function
-import six
-
-from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
-import pyqtgraph as pg
 import collections
+
+import pyqtgraph as pg
+from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
+
 
 class StimParamSet(GroupParameter):
     ## top-level parameter in the simple stim generator tree
@@ -105,17 +104,17 @@ class SeqParameter(SimpleParameter):
         }
 
     def treeStateChanged(self, param, changes):
-        ## catch changes to 'sequence' so we can hide/show other params.
-        ## Note: it would be easier to just catch self.sequence.sigValueChanged,
-        ## but this approach allows us to block tree change events so they are all
-        ## released as a single update.
+        # catch changes to 'sequence' so we can hide/show other params.
+        # Note: it would be easier to just catch self.sequence.sigValueChanged,
+        # but this approach allows us to block tree change events so they are all
+        # released as a single update.
         with self.treeChangeBlocker():
-            ## queue up change 
+            # queue up change
             SimpleParameter.treeStateChanged(self, param, changes)
 
-            ## if needed, add some more changes before releasing the signal
+            # if needed, add some more changes before releasing the signal
             for param, change, data in changes:
-                ## if the sequence value changes, hide/show other parameters
+                # if the sequence value changes, hide/show other parameters
                 if param is self.param('sequence') and change == 'value':
                     vis = self.visibleParams[self['sequence']]
                     for ch in self:
@@ -149,7 +148,7 @@ class SeqParameter(SimpleParameter):
         
     def valueString(self, param):
         units = param.opts.get('units', None)
-        if isinstance(units, six.string_types) and len(units) > 0:
+        if isinstance(units, str) and len(units) > 0:
             val = pg.siFormat(param.value(), suffix=units, space='*', precision=5, allowUnicode=False)
         else:
             val = '%0.5g' % param.value()
@@ -232,28 +231,28 @@ class PulseParameter(GroupParameter):
         return name
 
     def preCompile(self):
-        ## prepare data for compile
+        # prepare data for compile
         seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()] 
         (start, startSeq) = seqParams[0]
         (length, lenSeq) = seqParams[1]
         (amp, ampSeq) = seqParams[2]
-        seq = {name:seq for name, seq in seqParams if seq is not None}
+        seq = {name: seq for name, seq in seqParams if seq is not None}
 
-        ## If sequence is specified over sum, interpret that a bit differently.
+        # If sequence is specified over sum, interpret that a bit differently.
         (sumName, sumSeq) = self.param('sum').compile()
         if sumSeq is not None:
             if self['sum', 'affect'] == 'length':
                 if not self.param('length').writable():
-                    raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
+                    raise ValueError(f"{self.name()}: Can not sequence over length; it is a read-only parameter.")
                 if lenSeq is not None:
-                    raise Exception("%s: Can not sequence over length and sum simultaneously." % self.name())
+                    raise ValueError(f"{self.name()}: Can not sequence over length and sum simultaneously.")
                 length = "%s / (%s)" % (sumName, amp)
             else:
                 if not self.param('amplitude').writable():
-                    raise Exception("%s: Can not sequence over amplitude; it is a read-only parameter." % self.name())
+                    raise ValueError(f"{self.name()}: Can not sequence over amplitude; it is a read-only parameter.")
                 if ampSeq is not None:
-                    raise Exception("%s: Can not sequence over amplitude and sum simultaneously." % self.name())
-                amp = "%s / (%s)" % (sumName, length)
+                    raise ValueError(f"{self.name()}: Can not sequence over amplitude and sum simultaneously.")
+                amp = f"{sumName} / ({length})"
             seq[sumName] = sumSeq
         
         return start, length, amp, seq
