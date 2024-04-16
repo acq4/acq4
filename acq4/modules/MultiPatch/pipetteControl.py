@@ -395,7 +395,7 @@ class PlotWidget(Qt.QWidget):
             self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self._plotTestPulse(tp)
-            if tp.analysis is None:
+            if tp.analysis is None:  # calling tp.analysis actually initiates the analysis needed for the plots
                 return
             if tp.fit_trace_with_transient is not None:
                 trans_fit = tp.fit_trace_with_transient

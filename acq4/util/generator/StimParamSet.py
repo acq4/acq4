@@ -103,8 +103,7 @@ class SeqParameter(SimpleParameter):
             'range': initialParams+['sequence', 'start', 'stop', 'steps', 'log spacing', 'randomize'],
             'list': initialParams+['sequence', 'list', 'randomize'],
         }
-        
-        
+
     def treeStateChanged(self, param, changes):
         ## catch changes to 'sequence' so we can hide/show other params.
         ## Note: it would be easier to just catch self.sequence.sigValueChanged,
@@ -113,7 +112,7 @@ class SeqParameter(SimpleParameter):
         with self.treeChangeBlocker():
             ## queue up change 
             SimpleParameter.treeStateChanged(self, param, changes)
-            
+
             ## if needed, add some more changes before releasing the signal
             for param, change, data in changes:
                 ## if the sequence value changes, hide/show other parameters
