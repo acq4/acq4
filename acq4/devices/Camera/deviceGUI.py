@@ -49,8 +49,7 @@ class CameraDeviceGui(Qt.QWidget):
                             params[-1]['siPrefix'] = True
                             params[-1]['minStep'] = 1e-6
                 elif type(p[0]) is list:
-                    #print k, val, p
-                    params.append({'name': k, 'type': 'list', 'value': val, 'values': p[0]})
+                    params.append({'name': k, 'type': 'list', 'value': val, 'limits': p[0]})
                 else:
                     print("    Ignoring parameter '%s': %s" % (k, str(p)))
                     continue

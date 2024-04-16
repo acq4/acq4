@@ -41,9 +41,9 @@ class PatchPipetteState(Future):
     run = None
 
     _parameterTreeConfig = {
-        'initialPressureSource': {'type': 'list', 'default': None, 'values': ['atmosphere', 'regulator', 'user'], 'optional': True},
+        'initialPressureSource': {'type': 'list', 'default': None, 'limits': ['atmosphere', 'regulator', 'user'], 'optional': True},
         'initialPressure': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'Pa'},
-        'initialClampMode': {'type': 'list', 'default': None, 'values': ['VC', 'IC'], 'optional': True},
+        'initialClampMode': {'type': 'list', 'default': None, 'limits': ['VC', 'IC'], 'optional': True},
         'initialClampHolding': {'type': 'float', 'default': None, 'optional': True},
         'initialTestPulseEnable': {'type': 'bool', 'default': None, 'optional': True},
         'initialTestPulseParameters': {'type': 'group', 'children': []},  # TODO
@@ -482,7 +482,7 @@ class CellDetectState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'autoAdvance': {'default': True, 'type': 'bool'},
-        'advanceMode': {'default': 'target', 'type': 'str', 'values': ['target', 'axial', 'vertical']},
+        'advanceMode': {'default': 'target', 'type': 'str', 'limits': ['target', 'axial', 'vertical']},
         'advanceContinuous': {'default': True, 'type': 'bool'},
         'advanceStepInterval': {'default': 0.1, 'type': 'float', 'suffix': 's'},
         'advanceStepDistance': {'default': 1e-6, 'type': 'float', 'suffix': 'm'},
@@ -747,7 +747,7 @@ class SealState(PatchPipetteState):
         'fallbackState': 'fouled',
     }
     _parameterTreeConfig = {
-        'pressureMode': {'type': 'str', 'default': 'user', 'values': ['auto', 'user']},
+        'pressureMode': {'type': 'str', 'default': 'user', 'limits': ['auto', 'user']},
         'startingPressure': {'type': 'float', 'default': -1000},
         'holdingThreshold': {'type': 'float', 'default': 100e6},
         'holdingPotential': {'type': 'float', 'default': -70e-3},
