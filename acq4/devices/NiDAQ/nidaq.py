@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import numpy
 import scipy.ndimage
 import scipy.signal
@@ -161,10 +158,9 @@ class NiDAQ(Device):
         data = data[:newLen]
         data.shape = (int(data.shape[0]/ds), ds)
         if binary:
-            data = data.mean(axis=1).round().astype(numpy.byte)
+            return data.mean(axis=1).round().astype(numpy.byte)
         else:
-            data = data.mean(axis=1)
-        return data
+            return data.mean(axis=1)
     
     @staticmethod
     def lowpass(data, cutoff, order=4, bidir=True, filter='bessel', stopCutoff=None, gpass=2., gstop=20., samplerate=None):
@@ -220,6 +216,7 @@ class NiDAQ(Device):
         d6[:radius] = data[:radius]
         d6[-radius:] = data[-radius:]
         return d6
+
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd, parentTask):
@@ -324,29 +321,24 @@ class Task(DeviceTask):
           'info': {'rate': xx, 'numPts': xx, ...}
         }
         """
-        #prof = Profiler("    NiDAQ.getData")
         res = self.st.getResult(channel)
         data = res['data']
-        
-            
-            
+
         if 'downsample' in self.cmd:
             ds = self.cmd['downsample']
         else:
             ds = 1
-            
+
         if 'filterMethod' in self.cmd:
             method = self.cmd['filterMethod']
-            
-            fScale = 0.5 * res['info']['rate'] / ds
-            
+
             if method == 'None':
                 pass
             #elif method == 'gaussian':
                 #width = self.cmd['gaussianWidth']
-                
+
                 #data = scipy.ndimage.gaussian_filter(data, width)
-                
+
                 #res['info']['filterMethod'] = method
                 #res['info']['filterWidth'] = width
             elif method == 'Bessel':
@@ -354,7 +346,7 @@ class Task(DeviceTask):
                 order = self.cmd['besselOrder']
                 bidir = self.cmd.get('besselBidirectional', True)
                 data = NiDAQ.lowpass(data, filter='bessel', bidir=bidir, cutoff=cutoff, order=order, samplerate=res['info']['rate'])
-                
+
                 res['info']['filterMethod'] = method
                 res['info']['filterCutoff'] = cutoff
                 res['info']['filterOrder'] = order
@@ -365,25 +357,22 @@ class Task(DeviceTask):
                 passDB = self.cmd['butterworthPassDB']
                 stopDB = self.cmd['butterworthStopDB']
                 bidir = self.cmd.get('butterworthBidirectional', True)
-                
+
                 data = NiDAQ.lowpass(data, filter='butterworth', bidir=bidir, cutoff=passF, stopCutoff=stopF, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
-                
+
                 res['info']['filterMethod'] = method
                 res['info']['filterPassband'] = passF
                 res['info']['filterStopband'] = stopF
                 res['info']['filterPassbandDB'] = passDB
                 res['info']['filterStopbandDB'] = stopDB
                 res['info']['filterBidirectional'] = bidir
-                
+
             else:
-                printExc("Unknown filter method '%s'" % str(method))
-                
-        
+                printExc(f"Unknown filter method '{method}'")
+
         if ds > 1:
-        
             if res['info']['type'] in ['di', 'do']:
                 res['data'] = (res['data'] > 0).astype(numpy.byte)
-                dsMethod = 'subsample'
                 data = data[::ds]
                 res['info']['downsampling'] = ds
                 res['info']['downsampleMethod'] = 'subsample'
@@ -393,8 +382,6 @@ class Task(DeviceTask):
                 res['info']['downsampling'] = ds
                 res['info']['downsampleMethod'] = 'mean'
                 res['info']['rate'] = res['info']['rate'] / ds
-            else:
-                dsMethod = None
 
         if 'denoiseMethod' in self.cmd:
             method = self.cmd['denoiseMethod']
@@ -403,18 +390,17 @@ class Task(DeviceTask):
             elif method == 'Pointwise':
                 width = self.cmd['denoiseWidth']
                 thresh = self.cmd['denoiseThreshold']
-                
+
                 res['info']['denoiseMethod'] = method
                 res['info']['denoiseWidth'] = width
                 res['info']['denoiseThreshold'] = thresh
                 data = NiDAQ.denoise(data, width, thresh)
             else:
-                printExc("Unknown denoise method '%s'" % str(method))
+                printExc(f"Unknown denoise method '{method}'")
 
-                
         res['data'] = data
         res['info']['numPts'] = data.shape[0]
-                
+
         return res
         
     def devName(self):
