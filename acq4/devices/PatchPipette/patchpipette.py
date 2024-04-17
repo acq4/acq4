@@ -241,13 +241,6 @@ class PatchPipette(Device):
     def setSelected(self):
         pass
 
-    def seal(self):
-        """Attempt to seal onto a cell.
-
-        * switches to VC holding after passing 100 MOhm
-        * increase suction if seal does not form
-        """
-
     def setState(self, state, setActive=True):
         """Attempt to set the state (out, bath, seal, whole cell, etc.) of this patch pipette.
 

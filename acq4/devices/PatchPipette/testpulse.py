@@ -138,8 +138,7 @@ class TestPulseThread(Thread):
             self._lastTaskParams = taskParams
         else:
             task = self._lastTask
-            taskParams = self._lastTaskParams
-        
+
         # if clamp mode changed while we were fiddling around, then abort.
         task.reserveDevices()
         try:
