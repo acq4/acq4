@@ -37,7 +37,6 @@ class TestPulseThread(Thread):
             'autoBiasVCCarryover': 0.7,
             'sampleRate': 500000,
             'downsample': 20,
-            'holding': None,
             'vcPreDuration': 5e-3,
             'vcPulseDuration': 10e-3,
             'vcPostDuration': 5e-3,
@@ -190,9 +189,7 @@ class TestPulseThread(Thread):
 
         cmd = task.command[self._clampName]['command']
         cmd = downsample(cmd[:pulse_len * params['downsample']], params['downsample'])
-        holding = params.get('holding', None)
-        if holding is None:
-            holding = cmd[0]
+        holding = cmd[0]
         if mode == 'vc':
             extra_kwds = {
                 'holding_potential': holding,
@@ -234,7 +231,7 @@ class TestPulseThread(Thread):
         mode = params['clampMode']
 
         cmdData = np.empty(numPts * params['average'])
-        cmdData[:] = params['holding'] or self._clampDev.getHolding(mode)
+        cmdData[:] = self._clampDev.getHolding(mode)
 
         for i in range(params['average']):
             start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
@@ -248,7 +245,6 @@ class TestPulseThread(Thread):
                 'mode': mode,
                 'command': cmdData,
                 'recordState': ['BridgeBalResist', 'BridgeBalEnable'],
-                'holding': params['holding'] or self._clampDev.getHolding(mode),
             }
         }
 
