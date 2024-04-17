@@ -215,6 +215,7 @@ class MultiClamp(PatchClamp):
         return MultiClampTask(self, cmd, parentTask)
     
     def getHolding(self, mode=None):
+        mode = mode.upper()
         if mode is None:  ## If no mode is specified, use the current mode
             mode = self.mc.getMode()
         if mode == 'I=0':
@@ -228,7 +229,8 @@ class MultiClamp(PatchClamp):
         Note--these are ACQ4-controlled holding values, NOT the holding values used by the amplifier.
         It is important to have this because the amplifier's holding values cannot be changed
         before switching modes.
-        """        
+        """
+        mode = mode.upper()
         with self.dm.reserveDevices([self, self.config['commandChannel']['device']]):
             currentMode = self.mc.getMode()
             if mode is None:  ## If no mode is specified, use the current mode
