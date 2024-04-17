@@ -127,7 +127,7 @@ class SeqParameter(SimpleParameter):
         if self['sequence'] == 'off':
             return self.valueString(self), None
         else:
-            name = "%s_%s" % (self.parent().varName(), self.name())
+            name = f"{self.parent().varName()}_{self.name()}"
             #seq = "%s = %s; " % (name, self.valueString(self))
             seqData = {
                 'default': self.valueString(self),
