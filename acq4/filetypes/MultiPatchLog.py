@@ -392,12 +392,10 @@ class PipettePathWidget(object):
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
-        before = [s for s in self._states if s[0] < time]
-        if len(before) == 0:
-            return
-        state = before[-1]
-        self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
-        self._displayTargetAtTime(time, pos[2])
+        state = next((s for s in self._states[::-1] if s[0] < time), None)
+        if state:
+            self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
+            self._displayTargetAtTime(time, pos[2])
 
     def _displayTargetAtTime(self, time: float, depth: float = 0.0):
         if len(self._targets) == 0:
