@@ -215,9 +215,9 @@ class MultiClamp(PatchClamp):
         return MultiClampTask(self, cmd, parentTask)
     
     def getHolding(self, mode=None):
-        mode = mode.upper()
         if mode is None:  ## If no mode is specified, use the current mode
             mode = self.mc.getMode()
+        mode = mode.upper()
         if mode == 'I=0':
             return 0.0
         else:
@@ -230,13 +230,13 @@ class MultiClamp(PatchClamp):
         It is important to have this because the amplifier's holding values cannot be changed
         before switching modes.
         """
-        mode = mode.upper()
         with self.dm.reserveDevices([self, self.config['commandChannel']['device']]):
             currentMode = self.mc.getMode()
             if mode is None:  ## If no mode is specified, use the current mode
                 mode = currentMode
                 if mode == 'I=0':  ## ..and if the current mode is I=0, do nothing.
                     return
+            mode = mode.upper()
             if mode == 'I=0':
                 raise ValueError("Can't set holding value for I=0 mode.")
 
