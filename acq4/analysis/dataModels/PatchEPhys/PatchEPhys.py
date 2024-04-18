@@ -24,7 +24,7 @@ deviceNames = {
 }
 
 # current and voltage clamp modes that are know to us
-ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
+ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow', 'i=0', 'I=0']
 vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
 
 """Function library for formalizing the raw data structures used in analysis.

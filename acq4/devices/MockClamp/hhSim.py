@@ -179,7 +179,7 @@ def run(cmd):
     result = runSim(initState, cmd=data, mode=mode, dt=dt, dur=dt*len(data))
     
     initState = result[-1, 2:]
-    if mode == 'ic':
+    if mode in ['ic', 'i=0']:
         out = result[:,2] + np.random.normal(size=len(data), scale=0.3e-3)
     elif mode == 'vc':
         out = result[:,1] + np.random.normal(size=len(data), scale=3.e-12)

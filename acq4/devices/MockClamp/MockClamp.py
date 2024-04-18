@@ -1,3 +1,5 @@
+from typing import Literal
+
 import os
 
 import pyqtgraph.multiprocess as mp
@@ -33,7 +35,7 @@ class MockClamp(PatchClamp):
             'IC': config.get('icHolding', 0.0)
         }
 
-        self.mode = 'I=0'
+        self.mode: Literal['VC', 'IC', 'I=0'] = 'I=0'
 
         self.config = config
 
@@ -104,6 +106,8 @@ class MockClamp(PatchClamp):
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
+            if mode == 'I=0':
+                return 0.0
             ivMode = ivModes[mode]  ## determine vc/ic
             return self.holding[ivMode]
 
@@ -134,7 +138,7 @@ class MockClamp(PatchClamp):
 
         ### TODO:
         ### If mode switches back the wrong direction, we need to reset the holding value and cancel.
-        self.mode = ivMode
+        self.mode = mode
         self.sigStateChanged.emit(self.getState())
 
     def getMode(self):
@@ -217,10 +221,10 @@ class MockClampTask(DAQGenericTask):
             'mode': mode,
             'primaryUnits': 'A' if mode == 'VC' else 'V',
             # copying multiclamp format here, but should eventually pick something more universal 
-            'ClampParams': ({
+            'ClampParams': ({} if mode == 'VC' else {
                                 'BridgeBalResist': 0,
                                 'BridgeBalEnable': True,
-                            } if mode == 'IC' else {}),
+                            }),
         }
 
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.

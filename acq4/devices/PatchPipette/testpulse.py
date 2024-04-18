@@ -1,3 +1,5 @@
+from typing import Literal
+
 import numpy as np
 import time
 from MetaArray import MetaArray
@@ -58,17 +60,21 @@ class TestPulseThread(Thread):
 
         self.setParameters(**params)
 
-    def paramsForMode(self, mode: str):
+    def paramsForMode(self, mode: Literal['VC', 'IC', 'I=0']):
         taskParams = self._params.copy()
+        taskParams['clampMode'] = mode
+        if mode == 'I=0':
+            test = 'ic'
+        else:
+            test = mode.lower()
         # select parameters to use based on clamp mode
         for k in self._params:
             # rename like icPulseDuration => pulseDuration
-            if k[:2] == mode.lower():
+            if k[:2] == test:
                 taskParams[k[2].lower() + k[3:]] = taskParams[k]
             # remove all ic__ and vc__ params
             if k[:2] in ('ic', 'vc'):
                 taskParams.pop(k)
-            taskParams['clampMode'] = mode
         return taskParams
 
     def setParameters(self, **kwds):
@@ -122,8 +128,6 @@ class TestPulseThread(Thread):
         currentMode = self._clampDev.getMode()
         params = self._params
         runMode = currentMode if params['clampMode'] is None else params['clampMode']
-        if runMode == 'I=0':
-            runMode = 'IC'
 
         # Can't reuse tasks yet; remove this when we can.
         self._lastTask = None
@@ -167,7 +171,7 @@ class TestPulseThread(Thread):
         self.sigTestPulseFinished.emit(self.dev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
-        mode = task.command[self._clampName]['mode'].lower()
+        mode = task.command[self._clampName]['mode']
         params = self.paramsForMode(mode)
         result: MetaArray = task.getResult()[self._clampName]
         start_time = result.infoCopy()[2]['DAQ']['primary']['startTime']  # TODO what the shit is this
@@ -183,14 +187,14 @@ class TestPulseThread(Thread):
             channel_id='primary',
             data=pri,
             time_values=times,
-            units='A' if mode == 'vc' else 'V',
+            units='A' if mode == 'VC' else 'V',
             start_time=start_time,
         )
 
         cmd = task.command[self._clampName]['command']
         cmd = downsample(cmd[:pulse_len * params['downsample']], params['downsample'])
         holding = cmd[0]
-        if mode == 'vc':
+        if mode == 'VC':
             extra_kwds = {
                 'holding_potential': holding,
             }
@@ -204,13 +208,13 @@ class TestPulseThread(Thread):
             channel_id='command',
             data=cmd,
             time_values=times,
-            units='V' if mode == 'vc' else 'A',
+            units='V' if mode == 'VC' else 'A',
             start_time=start_time,
         )
 
         rec = PatchClampRecording(
             channels={'primary': pri, 'command': cmd},
-            clamp_mode=mode,
+            clamp_mode=mode.lower(),
             device_type='patch clamp amplifier',
             device_id=self._clampName,
             start_time=start_time,
@@ -257,7 +261,7 @@ class TestPulseThread(Thread):
     def updateAutoBias(self, tp: PatchClampTestPulse):
         analysis = tp.analysis
         mode = tp.clamp_mode
-        if mode.lower() == 'vc':
+        if mode.upper() == 'VC':
             # set ic holding from baseline current, multiplied by some factor for a little more added safety.
             self.dev.clampDevice.setHolding('IC', analysis['baseline_current'] * self._params['autoBiasVCCarryover'])
         else:
