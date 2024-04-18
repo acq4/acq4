@@ -293,7 +293,7 @@ class MultiClamp(PatchClamp):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
         mode = mode.upper()
         if mode not in ['VC', 'IC', 'I=0']:
-            raise Exception('MultiClamp mode "%s" not recognized.' % mode)
+            raise ValueError(f'MultiClamp mode "{mode}" not recognized.')
 
         # these parameters change with clamp mode; need to invalidate cache
         for param in self.mode_dependent_params:
@@ -304,17 +304,14 @@ class MultiClamp(PatchClamp):
             if mcMode == mode:  ## Mode is already correct
                 return
 
-            ## If switching ic <-> vc, switch to i=0 first
+            # If switching ic <-> vc, switch to i=0 first
             if (mcMode=='IC' and mode=='VC') or (mcMode=='VC' and mode=='IC'):
                 self._switchingToMode = 'I=0'
                 self.mc.setMode('I=0')
                 mcMode = 'I=0'
-                #print "  set intermediate i0"
             if mcMode=='I=0':
-                ## Set holding level before leaving I=0 mode
-                #print "  set holding"
+                # Set holding level before leaving I=0 mode
                 self.setHolding(mode)
-            #print "  set mode"
             self._switchingToMode = mode
             self.mc.setMode(mode)
 
@@ -363,7 +360,7 @@ class MultiClampTask(DeviceTask):
         ## Sanity checks and default values for command:
         
         if ('mode' not in self.cmd) or (type(self.cmd['mode']) is not str) or (self.cmd['mode'].upper() not in ['IC', 'VC', 'I=0']):
-            raise Exception("Multiclamp command must specify clamp mode (IC, VC, or I=0)")
+            raise ValueError("Multiclamp command must specify clamp mode (IC, VC, or I=0)")
         self.cmd['mode'] = self.cmd['mode'].upper()
         
         for ch in ['primary', 'secondary']:
@@ -379,7 +376,7 @@ class MultiClampTask(DeviceTask):
         #from debug import Profiler
         #prof = Profiler()
         ## Set state of clamp
-        
+
         ## set holding level
         if 'holding' in self.cmd and self.cmd['mode'] != 'I=0':
             self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
