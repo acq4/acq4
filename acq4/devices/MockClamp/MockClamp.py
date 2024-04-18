@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import print_function, with_statement
-
 import os
 
 import pyqtgraph.multiprocess as mp
@@ -32,7 +28,6 @@ class MockClamp(PatchClamp):
             'command': config['Command'],
             'primary': config['ScaledSignal'],
         }
-
         self.holding = {
             'VC': config.get('vcHolding', -0.05),
             'IC': config.get('icHolding', 0.0)

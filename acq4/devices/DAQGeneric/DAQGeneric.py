@@ -340,13 +340,11 @@ class DAQGenericTask(DeviceTask):
             if chConf['type'] in ['ai', 'di']:
                 # if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
                 if not self._DAQCmd[ch].get('record', False):
-                    # print "    ignoring channel", ch, "recording disabled"
                     continue
 
             ## Output channels are only added if they have a command waveform specified
             elif chConf['type'] in ['ao', 'do']:
                 if 'command' not in self._DAQCmd[ch]:
-                    # print "    ignoring channel", ch, "no command"
                     continue
 
             self.bufferedChannels.append(ch)
@@ -355,30 +353,24 @@ class DAQGenericTask(DeviceTask):
                 # scale = self.getChanScale(ch)
                 cmdData = self._DAQCmd[ch]['command']
                 if cmdData is None:
-                    # print "No command for channel %s, skipping." % ch
                     continue
                 # cmdData = cmdData * scale
 
                 ## apply scale, offset or inversion for output lines
                 cmdData = self.mapping.mapToDaq(ch, cmdData)
-                # print "channel", chConf['channel'][1], cmdData
 
                 if chConf['type'] == 'do':
                     cmdData = cmdData.astype(np.uint32)
                     cmdData[cmdData <= 0] = 0
                     cmdData[cmdData > 0] = 0xFFFFFFFF
 
-                # print "channel", self._DAQCmd[ch]
-                # print "LOW LEVEL:", self._DAQCmd[ch].get('lowLevelConf', {})
                 daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 daqTask.setWaveform(chConf['channel'], cmdData)
-                # print "DO task %s has type" % ch, cmdData.dtype
             elif chConf['type'] == 'ai':
                 mode = chConf.get('mode', None)
                 # if len(chConf['channel']) > 2:
                 # mode = chConf['channel'][2]
-                # print "Adding channel %s to DAQ task" % chConf['channel'][1]
                 daqTask.addChannel(chConf['channel'], chConf['type'], mode=mode,
                                    **self._DAQCmd[ch].get('lowLevelConf', {}))
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on

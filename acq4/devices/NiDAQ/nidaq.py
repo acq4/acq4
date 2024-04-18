@@ -222,11 +222,7 @@ class Task(DeviceTask):
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
-        
-        ## get DAQ device
-        #daq = self.devm.getDevice(...)
-        
-        
+
         ## Create supertask from nidaq driver
         self.st = self.dev.n.createSuperTask()
 
@@ -235,15 +231,12 @@ class Task(DeviceTask):
         
         return self.cmd['rate']  ## currently, all channels use the same rate
 
-        
     def configure(self):
-        #print "daq configure", tasks
         #defaultAIMode = self.dev.config.get('defaultAIMode', None)
         
         ## Request to all devices that they create the channels they use on this task
         tasks = self.parentTask().tasks
         for dName in tasks:
-            #print "Requesting %s create channels" % dName
             if hasattr(tasks[dName], 'createChannels'):
                 tasks[dName].createChannels(self)
         
@@ -271,8 +264,7 @@ class Task(DeviceTask):
         if 'triggerDevice' in self.cmd:
             after.append(self.cmd['triggerDevice'])
         return before, after
-        
-        
+
     def addChannel(self, channel, type, mode=None, **kwargs):
         #print "Adding channel:", args, kwargs
         ## set default channel mode before adding
