@@ -397,14 +397,13 @@ def getBridgeBalanceCompensation(data_handle):
     mode = getClampMode(data)
     global ic_modes
     if mode not in ic_modes:
-        raise Exception(
-            "Data is in %s mode, not a current clamp mode, and therefore bridge balance compensation is not applicable." % str(
-                mode))
+        raise ValueError(f"Data is in {mode} mode, not a current clamp mode, and therefore bridge balance "
+                         f"compensation is not applicable.")
 
     info = data.infoCopy()[-1]
     bridgeEnabled = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalEnable', None)
     if bridgeEnabled is None:
-        raise Exception('Could not find whether BridgeBalance compensation was enabled for the given data.')
+        raise ValueError('Could not find whether BridgeBalance compensation was enabled for the given data.')
     elif not bridgeEnabled:
         return 0.0
     else:

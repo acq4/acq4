@@ -157,6 +157,7 @@ def runSim(initState, mode='ic', cmd=None, dt=0.1, dur=100, **args):
 
 initState = [-65e-3, -65e-3, 0.05, 0.6, 0.3, 0.0, 0.0]
 
+
 def run(cmd):
     """
     Accept command like 
@@ -170,8 +171,7 @@ def run(cmd):
     Return array of Vm or Im values.        
     """
     global initState
-    #print cmd, cmd['data'].min(), cmd['data'].max()
-    #print "  ", initState
+
     dt = cmd['dt'] * 1e3  ## convert s -> ms
     data = cmd['data']
     mode = cmd['mode'].lower()
@@ -184,10 +184,9 @@ def run(cmd):
     elif mode == 'vc':
         out = result[:,1] + np.random.normal(size=len(data), scale=3.e-12)
     else:
-        raise ValueError("Unknown clamp mode %r" % mode)
+        raise ValueError(f"Unknown clamp mode {mode!r}")
     
     return out
-
 
 
 # provide a visible test to make sure code is working and failures are not ours.

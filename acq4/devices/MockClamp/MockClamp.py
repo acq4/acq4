@@ -130,11 +130,10 @@ class MockClamp(PatchClamp):
         startIvMode = ivModes[startMode]
         ivMode = ivModes[mode]
         if (startIvMode == 'VC' and ivMode == 'IC') or (startIvMode == 'IC' and ivMode == 'VC'):
-            ## switch to I=0 first
-            # self.requestModeSwitch('I=0')
+            # switch to I=0 first. TODO why?
             self.mode = 'I=0'
 
-        self.setHolding(ivMode, force=True)  ## we're in I=0 mode now, so it's ok to force the holding value.
+        self.setHolding(ivMode)
 
         ### TODO:
         ### If mode switches back the wrong direction, we need to reset the holding value and cancel.
