@@ -56,8 +56,10 @@ class PatchPipette(Device):
         if clampName is None:
             self.clampDevice: Optional[PatchClamp] = None
         else:
-            self.clampDevice = deviceManager.getDevice(clampName)
+            self.clampDevice: Optional[PatchClamp] = deviceManager.getDevice(clampName)
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
+            self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
+            self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
 
         Device.__init__(self, deviceManager, config, name)
         self._eventLog = []  # chronological record of events 
@@ -330,6 +332,12 @@ class PatchPipette(Device):
     def _pipetteTargetChanged(self, pip, pos):
         self.sigTargetChanged.emit(self, pos)
         self.emitNewEvent('target_changed', {'target_position': [pos[0], pos[1], pos[2]]})
+
+    def _autoBiasChanged(self, clamp, enabled, target):
+        self.emitNewEvent('auto_bias_change', {'enabled': enabled, 'target': target})
+
+    def _testPulseFinished(self, clamp, result):
+        self.emitNewEvent('test_pulse', result.analysis)
 
     def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict([

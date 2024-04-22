@@ -191,8 +191,8 @@ class MultiPatchLogData(object):
                 uses.append('pressure')
             if event_type in {'state_change', 'state_event'}:
                 uses.append('state')
-            if event_type in {'auto_bias_enabled', 'auto_bias_target_changed'}:
-                uses.append('auto_bias_target')
+            if event_type in {'auto_bias_change'}:
+                uses.append('auto_bias_change')
             if event_type in {'target_changed'}:
                 uses.append('target')
             # currently ignored:
@@ -266,8 +266,8 @@ class MultiPatchLogData(object):
                 dtype=[('time', float), ('pressure', float), ('source', 'U32')],
             ),
             'state': list(range(count_for_use('state'))),
-            'auto_bias_target': np.zeros(
-                (count_for_use('auto_bias_target'), 2),
+            'auto_bias_change': np.zeros(
+                (count_for_use('auto_bias_change'), 2),
                 dtype=float,
             ),
             'target': np.zeros(
@@ -300,7 +300,7 @@ class MultiPatchLogData(object):
             return event_time, event['pressure'], event['source']
         if use == 'state':
             return event_time, event['state'], event.get('info', '')
-        if use == 'auto_bias_target':
+        if use == 'auto_bias_change':
             return event_time, event['target'] if event.get('enabled', True) else np.nan
         if use == 'target':
             return event_time, *event['target_position']

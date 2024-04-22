@@ -20,16 +20,16 @@ modeNames = ['VC', 'I=0', 'IC']
 class MockClamp(PatchClamp):
 
     def __init__(self, dm, config, name):
+        self.daqConfig = {
+            'command': config['Command'],
+            'primary': config['ScaledSignal'],
+        }
 
         PatchClamp.__init__(self, dm, config, name)
 
         # Generate config to use for DAQ 
         self.devLock = Mutex(Mutex.Recursive)
 
-        self.daqConfig = {
-            'command': config['Command'],
-            'primary': config['ScaledSignal'],
-        }
         self.holding = {
             'VC': config.get('vcHolding', -0.05),
             'IC': config.get('icHolding', 0.0)

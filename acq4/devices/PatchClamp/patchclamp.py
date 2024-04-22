@@ -113,7 +113,6 @@ class PatchClamp(Device):
         self._testPulseHistorySize += 1
 
         self.sigTestPulseFinished.emit(self, result)
-        self.emitNewEvent('test_pulse', result.analysis)
 
     def testPulseHistory(self):
         return self._testPulseHistory[:self._testPulseHistorySize].copy()
@@ -134,9 +133,7 @@ class PatchClamp(Device):
         return self._testPulseThread.isRunning()
 
     def testPulseEnabledChanged(self):
-        en = self.testPulseEnabled()
-        self.sigTestPulseEnabled.emit(self, en)
-        self.emitNewEvent('test_pulse_enabled', {'enabled': en})
+        self.sigTestPulseEnabled.emit(self, self.testPulseEnabled())
 
     def setTestPulseParameters(self, **params):
         self._testPulseThread.setParameters(**params)
@@ -147,7 +144,6 @@ class PatchClamp(Device):
     def enableAutoBias(self, enable=True):
         self.setTestPulseParameters(autoBiasEnabled=enable)
         self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
-        self.emitNewEvent('auto_bias_enabled', {'enabled': enable, 'target': self.autoBiasTarget()})
 
     def autoBiasEnabled(self):
         return self._testPulseThread.getParameter('autoBiasEnabled')
@@ -156,7 +152,6 @@ class PatchClamp(Device):
         self.setTestPulseParameters(autoBiasTarget=v)
         enabled = self.autoBiasEnabled()
         self.sigAutoBiasChanged.emit(self, enabled, v)
-        self.emitNewEvent('auto_bias_target_changed', {'enabled': enabled, 'target': v})
 
     def autoBiasTarget(self):
         return self._testPulseThread.getParameter('autoBiasTarget')

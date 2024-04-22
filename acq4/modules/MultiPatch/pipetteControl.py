@@ -168,8 +168,8 @@ class PipetteControl(Qt.QWidget):
 
     def updatePlots(self):
         """Update the pipette data plots."""
-        tp = self.pip.lastTestPulse()
-        tph = self.pip.testPulseHistory()
+        tp = self.pip.clampDevice.lastTestPulse()
+        tph = self.pip.clampDevice.testPulseHistory()
         for plt in self.plots:
             plt.newTestPulse(tp, tph)
 
@@ -185,7 +185,7 @@ class PipetteControl(Qt.QWidget):
             self._setHoldingSpin(mode, val)
         finally:
             self._lockAutoBias = False
-        if mode == 'VC' and self.pip.autoBiasTarget() is None:
+        if mode == 'VC' and self.pip.clampDevice.autoBiasTarget() is None:
             self.ui.autoBiasTargetSpin.setValue(val)
 
     def vcHoldingSpinChanged(self, value):
@@ -198,13 +198,13 @@ class PipetteControl(Qt.QWidget):
 
     def icHoldingSpinChanged(self, value):
         if not self._lockAutoBias:
-            self.pip.enableAutoBias(False)
+            self.pip.clampDevice.enableAutoBias(False)
         with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
             self.pip.clampDevice.setHolding('IC', value)
 
     def autoBiasSpinChanged(self, value):
         if not self.ui.autoBiasVcBtn.isChecked():
-            self.pip.setAutoBiasTarget(value)
+            self.pip.clampDevice.setAutoBiasTarget(value)
         
     def selectedClampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
@@ -284,14 +284,14 @@ class PipetteControl(Qt.QWidget):
             plt.hideHeader()
 
     def autoBiasClicked(self, enabled):
-        self.pip.enableAutoBias(enabled)
+        self.pip.clampDevice.enableAutoBias(enabled)
         self._updateAutoBiasUi()
 
     def autoBiasVcClicked(self, enabled):
         if enabled:
-            self.pip.setAutoBiasTarget(None)
+            self.pip.clampDevice.setAutoBiasTarget(None)
         else:
-            self.pip.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
+            self.pip.clampDevice.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
             self.ui.autoBiasTargetSpin.setEnabled(True)
         self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
         self._updateAutoBiasUi()
@@ -299,12 +299,12 @@ class PipetteControl(Qt.QWidget):
     def _updateAutoBiasUi(self):
         # auto bias changed elsewhere; update UI to reflect new state
         with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
-            self.ui.autoBiasBtn.setChecked(self.pip.autoBiasEnabled())
+            self.ui.autoBiasBtn.setChecked(self.pip.clampDevice.autoBiasEnabled())
         with pg.SignalBlock(self.ui.autoBiasVcBtn.clicked, self.autoBiasVcClicked):
-            self.ui.autoBiasVcBtn.setChecked(self.pip.autoBiasTarget() is None)
+            self.ui.autoBiasVcBtn.setChecked(self.pip.clampDevice.autoBiasTarget() is None)
         self._updateActiveHoldingUi()
 
-        if self.pip.autoBiasTarget() is None:
+        if self.pip.clampDevice.autoBiasTarget() is None:
             self.ui.autoBiasTargetSpin.setEnabled(False)
         else:
             self.ui.autoBiasTargetSpin.setEnabled(True)
@@ -413,7 +413,7 @@ class PlotWidget(Qt.QWidget):
                 'time constant': ('time_constant', 's'),
                 'capacitance': ('capacitance', 'F'),
             }[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
+            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
                 val = np.nan

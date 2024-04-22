@@ -375,7 +375,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     # def testPulseClicked(self):
     #     for pip in self.selectedPipettes():
-    #         pip.enableTestPulse(self.ui.testPulseBtn.isChecked())
+    #         pip.clampDevice.enableTestPulse(self.ui.testPulseBtn.isChecked())
 
     def pipetteActiveChanged(self, active):
         self.selectionChanged()
@@ -574,7 +574,7 @@ class MultiPatchWindow(Qt.QWidget):
     def resetHistory(self):
         self.eventHistory = []
         for pip in self.selectedPipettes():
-            pip.resetTestPulseHistory()
+            pip.clampDevice.resetTestPulseHistory()
 
     def writeRecords(self, recs):
         if self.storageFile is None:

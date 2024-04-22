@@ -1,18 +1,19 @@
 import numpy as np
 
+from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt, ptime
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
 class MockPatch(object):
-    def __init__(self, pipette):
+    def __init__(self, pipette: PatchPipette):
         self.pipette = pipette
         self.enabled = False
         self.widget = MockPatchUI(self)
 
         self.resetState()
 
-        pipette._testPulseThread.setParameters(postProcessing=self.mockAnalysis)
+        pipette.clampDevice.setTestPulseParameters(postProcessing=self.mockAnalysis)
     
     def mockAnalysis(self, tp: PatchClampTestPulse) -> PatchClampTestPulse:
         if self.enabled:
