@@ -1,7 +1,7 @@
+import queue
 from collections import OrderedDict
 
 import sys
-from six.moves import queue
 from typing import Optional
 
 from acq4 import getManager

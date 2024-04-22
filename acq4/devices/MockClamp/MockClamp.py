@@ -40,11 +40,11 @@ class MockClamp(PatchClamp):
         self.config = config
 
         # create a daq device under the hood
-        self.daqDev = DAQGeneric(dm, self.daqConfig, '{}Daq'.format(name))
+        self.daqDev = DAQGeneric(dm, self.daqConfig, f'{name}Daq')
 
         try:
             self.setHolding()
-        except:
+        except Exception:
             printExc("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
@@ -151,9 +151,7 @@ class MockClamp(PatchClamp):
         else:
             units = ['A', 'V']
 
-        if chan == 'command':
-            return units[0]
-        elif chan == 'secondary':
+        if chan in ['command', 'secondary']:
             return units[0]
         elif chan == 'primary':
             return units[1]
@@ -231,8 +229,7 @@ class MockClampTask(DAQGenericTask):
 
     def read(self):
         ## Called by DAQGeneric to simulate a read-from-DAQ
-        res = self.job.result(timeout=30)._getValue()
-        return res
+        return self.job.result(timeout=30)._getValue()
 
     def write(self, data, dt):
         ## Called by DAQGeneric to simulate a write-to-DAQ
@@ -304,12 +301,12 @@ class MockClampTaskGui(DAQGenericTaskGui):
 
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
-        state = {}
-        state['daqState'] = DAQGenericTaskGui.saveState(self)
-        state['mode'] = self.getMode()
-        # state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
-        # state['holding'] = self.ctrl.holdingSpin.value()
-        return state
+        return {
+            'daqState': DAQGenericTaskGui.saveState(self),
+            'mode': self.getMode(),
+            # 'holdingEnabled': self.ctrl.holdingCheck.isChecked(),
+            # 'holding': self.ctrl.holdingSpin.value(),
+        }
 
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
@@ -327,13 +324,7 @@ class MockClampTaskGui(DAQGenericTaskGui):
 
     def generateTask(self, params=None):
         daqTask = DAQGenericTaskGui.generateTask(self, params)
-
-        task = {
-            'mode': self.getMode(),
-            'daqProtocol': daqTask
-        }
-
-        return task
+        return {'mode': self.getMode(), 'daqProtocol': daqTask}
 
     def modeChanged(self):
         global ivModes
@@ -370,7 +361,7 @@ class MockClampTaskGui(DAQGenericTaskGui):
         if chan == 'command':
             return self.clampDev.getHolding(self.getMode())
         else:
-            raise Exception("Can't get holding value for channel %s" % chan)
+            raise ValueError(f"Can't get holding value for channel {chan}")
 
 
 class MockClampDevGui(Qt.QWidget):
