@@ -166,17 +166,16 @@ class MultiClamp(PatchClamp):
         with self.stateLock:
             if mode in self.lastState:
                 return self.lastState[mode]
-        
+
     def extCmdScale(self, mode):
         """Return our best guess as to the external command sensitivity for the given mode."""
         s = self.getLastState(mode)
         if s is not None:
             return s['extCmdScale']
+        elif mode == 'VC':
+            return 50
         else:
-            if mode == 'VC':
-                return 50
-            else:
-                return 2.5e9
+            return 2.5e9
         
     def getState(self):
         return self.mc.getState()
