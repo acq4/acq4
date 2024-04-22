@@ -1,15 +1,13 @@
-import time
-
 import numpy as np
+import time
+from MetaArray import MetaArray, axis
 
 from acq4.Manager import logMsg
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
-from acq4.util.Mutex import Mutex
-from MetaArray import MetaArray, axis
-from .DeviceGui import MCDeviceGui
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
+from ...util.Mutex import Mutex
 from ...util.debug import printExc
 
 
@@ -128,6 +126,9 @@ class MultiClamp(PatchClamp):
         
         dm.declareInterface(name, ['clamp'], self)
 
+    def description(self):
+        return self.config['channelID']
+
     def listChannels(self):
         chans = {}
         for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']:
@@ -143,7 +144,7 @@ class MultiClamp(PatchClamp):
         with self.stateLock:
             self._paramCache = {}  # not sure if this is necessary or helpful
             if state is None:
-                state = self.lastState[mode]
+                state = self.getLastState(mode)
             mode = state['mode']
             state['holding'] = self.holding[mode]
             self.lastState[mode] = state.copy()
@@ -157,7 +158,7 @@ class MultiClamp(PatchClamp):
                 self._switchingToMode = None
 
         self.sigStateChanged.emit(state)
-        
+
     def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
         if mode is None:
@@ -204,9 +205,6 @@ class MultiClamp(PatchClamp):
             self.getParam(param)
         else:
             self.mc.setParam(param, value)
-
-    def deviceInterface(self, win):
-        return MCDeviceGui(self, win)
 
     def taskInterface(self, taskRunner):
         return MultiClampTaskGui(self, taskRunner)

@@ -1,11 +1,12 @@
 import numpy as np
 from typing import Literal
 
-from acq4.devices.PatchClamp.testpulse import TestPulseThread
-from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.devices.Device import Device
+from acq4.devices.PatchClamp.gui import PatchClampDeviceGui
+from acq4.devices.PatchClamp.testpulse import TestPulseThread
 from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 from acq4.util import Qt
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
 class PatchClamp(Device):
@@ -33,9 +34,19 @@ class PatchClamp(Device):
         self._testPulseHistorySize = 0
         self._testPulseHistory = None
 
+    def deviceInterface(self, win):
+        return PatchClampDeviceGui(self, win)
+
+    def description(self) -> str:
+        return str(type(self))
+
     def getState(self):
         """Return a dictionary of active state parameters
         """
+        raise NotImplementedError()
+
+    def getLastState(self, mode=None):
+        """Return the state when last in the given mode"""
         raise NotImplementedError()
 
     def getParam(self, param):

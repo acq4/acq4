@@ -67,9 +67,6 @@ class MockClamp(PatchClamp):
     def taskInterface(self, taskRunner):
         return MockClampTaskGui(self, taskRunner)
 
-    def deviceInterface(self, win):
-        return MockClampDevGui(self)
-
     def setHolding(self, mode=None, value=None, force=False):
         global ivModes
         with self.devLock:
@@ -88,6 +85,7 @@ class MockClamp(PatchClamp):
                 # DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
                 # pass
             self.sigHoldingChanged.emit(ivMode, value)
+            self.sigStateChanged.emit(self.getState())
 
     def setChanHolding(self, chan, value=None):
         if chan == 'command':
@@ -108,13 +106,22 @@ class MockClamp(PatchClamp):
                 mode = self.getMode()
             if mode == 'I=0':
                 return 0.0
-            ivMode = ivModes[mode]  ## determine vc/ic
+            ivMode = ivModes[mode]  # determine vc/ic
             return self.holding[ivMode]
 
     def getState(self):
+        mode = self.getMode()
         return {
-            'mode': self.getMode(),
+            'mode': mode,
+            'holding': self.getHolding(mode)
         }
+
+    def getParam(self, name):
+        return {'HoldingEnable': True}.get(name)
+
+    def getLastState(self, mode=None):
+        mode = mode or self.getMode()
+        return {'mode': mode, 'holding': self.getHolding(mode)}
 
     def listModes(self):
         global modeNames
