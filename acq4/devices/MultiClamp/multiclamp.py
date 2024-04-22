@@ -130,10 +130,10 @@ class MultiClamp(PatchClamp):
         return self.config['channelID']
 
     def listChannels(self):
-        chans = {}
-        for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']:
-            chans[ch] = self.config[ch].copy()
-        return chans
+        return {
+            ch: self.config[ch].copy()
+            for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']
+        }
 
     def quit(self):
         if self.mc is not None:
@@ -317,7 +317,7 @@ class MultiClamp(PatchClamp):
 
     def getDAQName(self, channel):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
-        return self.config[channel + 'Channel']['device']
+        return self.config[f'{channel}Channel']['device']
 
 
 class MultiClampTask(DeviceTask):
@@ -442,11 +442,11 @@ class MultiClampTask(DeviceTask):
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
-        
-        ## NOTE: no guarantee that self.configure has been run before createChannels is called! 
+
+        ## NOTE: no guarantee that self.configure has been run before createChannels is called!
         for ch in self.getUsedChannels():
-            chConf = self.dev.config[ch+'Channel']
-                
+            chConf = self.dev.config[f'{ch}Channel']
+
             if chConf['device'] == daqTask.devName():
                 if ch == 'command':
                     daqTask.addChannel(chConf['channel'], chConf['type'])
@@ -473,13 +473,11 @@ class MultiClampTask(DeviceTask):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
         channels = self.getUsedChannels()
-        #print channels
         result = {}
         #result['info'] = self.state
         for ch in channels:
-            chConf = self.dev.config[ch+'Channel']
+            chConf = self.dev.config[f'{ch}Channel']
             result[ch] = self.daqTasks[ch].getData(chConf['channel'])
-            # print result[ch]
             nPts = result[ch]['info']['numPts']
             rate = result[ch]['info']['rate']
             if ch == 'command':
@@ -492,55 +490,42 @@ class MultiClampTask(DeviceTask):
                     result[ch]['units'] = 'A'
             else:
                 #scale = 1.0 / self.state[ch + 'Signal'][1]
-                scale = self.state[ch + 'ScaleFactor']
+                scale = self.state[f'{ch}ScaleFactor']
                 result[ch]['data'] = result[ch]['data'] * scale
                 #result[ch]['units'] = self.state[ch + 'Signal'][2]
-                result[ch]['units'] = self.state[ch + 'Units']
+                result[ch]['units'] = self.state[f'{ch}Units']
                 result[ch]['name'] = ch
-        # print result
-            
+
         if len(result) == 0:
             return None
-            
-        ## Copy state from first channel (assume this is the same for all channels)
-        #firstChInfo = result[channels[0]]['info']
-        #for k in firstChInfo:
-            #self.state[k] = firstChInfo[k]
-        daqState = {}
-        for ch in result:
-            daqState[ch] = result[ch]['info']
-            
+
+        daqState = {ch: result[ch]['info'] for ch in result}
         ## record command holding value
         if 'command' not in daqState:
             daqState['command'] = {}
         daqState['command']['holding'] = self.holdingVal
-            
+
         #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
         timeVals = np.linspace(0, float(nPts-1) / float(rate), nPts)
         chanList = [np.atleast_2d(result[x]['data']) for x in result]
         # for l in chanList:
-        # print l.shape
         cols = [(result[x]['name'], result[x]['units']) for x in result]
-        # print cols
-        #print [a.shape for a in chanList]
         try:
             arr = np.concatenate(chanList)
         except:
             for a in chanList:
                 print(a.shape)
             raise
-        
+
         info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]
-        
+
         taskInfo = self.cmd.copy()
         if 'command' in taskInfo:
             del taskInfo['command']
         info[-1]['Protocol'] = taskInfo
         info[-1]['startTime'] = result[list(result.keys())[0]]['info']['startTime']
-        
-        marr = MetaArray(arr, info=info)
-            
-        return marr
+
+        return MetaArray(arr, info=info)
     
     def stop(self, abort=False):
         ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
