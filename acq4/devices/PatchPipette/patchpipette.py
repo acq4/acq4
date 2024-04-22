@@ -54,7 +54,7 @@ class PatchPipette(Device):
 
         clampName = config.pop('clampDevice', None)
         if clampName is None:
-            self.clampDevice: PatchClamp = None
+            self.clampDevice: Optional[PatchClamp] = None
         else:
             self.clampDevice = deviceManager.getDevice(clampName)
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)

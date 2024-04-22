@@ -1,7 +1,6 @@
 import numpy as np
 
 from acq4.util import Qt, ptime
-from neuroanalysis.data import TSeries
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
@@ -16,7 +15,6 @@ class MockPatch(object):
         pipette._testPulseThread.setParameters(postProcessing=self.mockAnalysis)
     
     def mockAnalysis(self, tp: PatchClampTestPulse) -> PatchClampTestPulse:
-        tp.__mock__ = self.enabled
         if self.enabled:
             tp._analysis = self.generateAnalysis()
         return tp

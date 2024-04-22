@@ -405,12 +405,12 @@ class MultiPatchWindow(Qt.QWidget):
             self.ui.selectedGroupBox.setEnabled(False)
         else:
             if solo:
-                self.ui.selectedGroupBox.setTitle("Selected: %s" % (pips[0].name()))
+                self.ui.selectedGroupBox.setTitle(f"Selected: {pips[0].name()}")
             elif len(pips) > 1:
                 self.ui.selectedGroupBox.setTitle("Selected: multiple")
             self.ui.selectedGroupBox.setEnabled(True)
             self.updateSelectedPipControls()
-        
+
         self.updateXKeysBacklight()
 
     def updateSelectedPipControls(self):
@@ -455,16 +455,16 @@ class MultiPatchWindow(Qt.QWidget):
         self.xkdev.setBacklights(bl, axis=1)
 
     def xkeysStateChanged(self, dev, changes):
-        for k,v in changes.items():
+        actions = {0: 'activeBtn', 1: 'lockBtn', 2: 'selectBtn', 3: 'tipBtn', 4: 'targetBtn'}
+        for k, v in changes.items():
             if k == 'keys':
                 for key, state in v:
-                    if state is True:
+                    if state:
                         if key[1] > 3:
-                            row = key[0]
                             col = key[1] - 4
                             if col >= len(self.pips):
                                 continue
-                            actions = {0:'activeBtn', 1:'lockBtn', 2:'selectBtn', 3:'tipBtn', 4:'targetBtn'}
+                            row = key[0]
                             if row in actions:
                                 btnName = actions[row]
                                 btn = getattr(self.pipCtrls[col].ui, btnName)
