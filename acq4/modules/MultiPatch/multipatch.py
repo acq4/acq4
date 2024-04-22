@@ -80,7 +80,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
                 pip.sigNewEvent.connect(self.pipetteEvent)
-                pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
+                pip.clampDevice.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
             ctrl = PipetteControl(pip, self)
             if i > 0:
                 ctrl.hideHeader()
@@ -370,7 +370,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip = pip.pipetteDevice
             pip.hideMarkers(hide)
 
-    def pipetteTestPulseEnabled(self, pip, enabled):
+    def pipetteTestPulseEnabled(self, clamp, enabled):
         self.updateSelectedPipControls()
 
     # def testPulseClicked(self):

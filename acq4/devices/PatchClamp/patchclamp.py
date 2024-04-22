@@ -1,6 +1,10 @@
+import numpy as np
 from typing import Literal
 
+from acq4.devices.PatchClamp.testpulse import TestPulseThread
+from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.devices.Device import Device
+from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 from acq4.util import Qt
 
 
@@ -17,9 +21,17 @@ class PatchClamp(Device):
 
     sigStateChanged = Qt.Signal(object)  # state
     sigHoldingChanged = Qt.Signal(object, object)  # mode, value
+    sigTestPulseFinished = Qt.Signal(object, object)  # self, TestPulse
+    sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
+    sigAutoBiasChanged = Qt.Signal(object, object, object)  # self, enabled, target
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
+        self._lastTestPulse = None
+        self._testPulseThread = None
+        self._initTestPulse(config.get('testPulse', {}))
+        self._testPulseHistorySize = 0
+        self._testPulseHistory = None
 
     def getState(self):
         """Return a dictionary of active state parameters
@@ -77,3 +89,74 @@ class PatchClamp(Device):
         """Return the name of the DAQ device that performs digitization for this amplifier channel.
         """
         raise NotImplementedError()
+
+    def _initTestPulse(self, params):
+        self.resetTestPulseHistory()
+        self._testPulseThread = TestPulseThread(self, params)
+        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
+        self._testPulseThread.started.connect(self.testPulseEnabledChanged)
+        self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
+
+    def _testPulseFinished(self, dev, result: PatchClampTestPulse):
+        self._lastTestPulse = result
+        if self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
+            newTPH = np.empty(self._testPulseHistory.shape[0] * 2, dtype=self._testPulseHistory.dtype)
+            newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
+            self._testPulseHistory = newTPH
+        analysis = result.analysis
+        self._testPulseHistory[self._testPulseHistorySize]['event_time'] = result.start_time
+        for k in analysis:
+            val = analysis[k]
+            if val is None:
+                val = np.nan
+            self._testPulseHistory[self._testPulseHistorySize][k] = val
+        self._testPulseHistorySize += 1
+
+        self.sigTestPulseFinished.emit(self, result)
+        self.emitNewEvent('test_pulse', result.analysis)
+
+    def testPulseHistory(self):
+        return self._testPulseHistory[:self._testPulseHistorySize].copy()
+
+    def resetTestPulseHistory(self):
+        self._lastTestPulse = None
+        self._testPulseHistory = np.empty(1000, dtype=TEST_PULSE_NUMPY_DTYPE)
+
+        self._testPulseHistorySize = 0
+
+    def enableTestPulse(self, enable=True, block=False):
+        if enable:
+            self._testPulseThread.start()
+        elif self._testPulseThread is not None:
+            self._testPulseThread.stop(block=block)
+
+    def testPulseEnabled(self):
+        return self._testPulseThread.isRunning()
+
+    def testPulseEnabledChanged(self):
+        en = self.testPulseEnabled()
+        self.sigTestPulseEnabled.emit(self, en)
+        self.emitNewEvent('test_pulse_enabled', {'enabled': en})
+
+    def setTestPulseParameters(self, **params):
+        self._testPulseThread.setParameters(**params)
+
+    def lastTestPulse(self):
+        return self._lastTestPulse
+
+    def enableAutoBias(self, enable=True):
+        self.setTestPulseParameters(autoBiasEnabled=enable)
+        self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
+        self.emitNewEvent('auto_bias_enabled', {'enabled': enable, 'target': self.autoBiasTarget()})
+
+    def autoBiasEnabled(self):
+        return self._testPulseThread.getParameter('autoBiasEnabled')
+
+    def setAutoBiasTarget(self, v):
+        self.setTestPulseParameters(autoBiasTarget=v)
+        enabled = self.autoBiasEnabled()
+        self.sigAutoBiasChanged.emit(self, enabled, v)
+        self.emitNewEvent('auto_bias_target_changed', {'enabled': enabled, 'target': v})
+
+    def autoBiasTarget(self):
+        return self._testPulseThread.getParameter('autoBiasTarget')

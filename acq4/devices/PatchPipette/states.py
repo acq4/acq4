@@ -161,21 +161,21 @@ class PatchPipetteState(Future):
 
         # enable test pulse if config requests it AND the device is "active"
         if tp is not None:
-            self.dev.enableTestPulse(tp and self.dev.active)
+            self.dev.clampDevice.enableTestPulse(tp and self.dev.active)
         if tpParams is not None:
-            self.dev.setTestPulseParameters(**tpParams)
+            self.dev.clampDevice.setTestPulseParameters(**tpParams)
 
         if bias is not None:
-            self.dev.enableAutoBias(bias)
+            self.dev.clampDevice.enableAutoBias(bias)
         if biasTarget is not None:
-            self.dev.setAutoBiasTarget(biasTarget)
+            self.dev.clampDevice.setAutoBiasTarget(biasTarget)
 
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults
         """
-        self.dev.sigTestPulseFinished.connect(self.testPulseFinished)
+        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
 
-    def testPulseFinished(self, pip, result):
+    def testPulseFinished(self, clamp, result):
         self.testPulseResults.put(result)
 
     def getTestPulses(self, timeout):
@@ -219,7 +219,7 @@ class PatchPipetteState(Future):
             error = str(exc)
             excInfo = sys.exc_info()
         finally:
-            disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
+            disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
 
@@ -259,7 +259,7 @@ class ApproachState(PatchPipetteState):
         # move to approach position + auto pipette offset
         fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
-        self.dev.resetTestPulseHistory()
+        self.dev.clampDevice.resetTestPulseHistory()
         self.waitFor(fut, timeout=None)
         return self.config['nextState']
 
