@@ -1,11 +1,9 @@
-from __future__ import print_function
-import numpy as np
-from ..PatchPipette import PatchPipette
 from acq4.util.mies import MIES
 from .patch_clamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
-from .testpulse import MIESTestPulseThread
 from .states import MIESPatchPipetteStateManager
+from .testpulse import MIESTestPulseThread
+from ..PatchPipette import PatchPipette
 
 
 class MIESPatchPipette(PatchPipette):
@@ -20,14 +18,13 @@ class MIESPatchPipette(PatchPipette):
         self._headstage = config.pop('headstage')
 
         # create pressure and clamp devices
-        clampName = name + "_clamp"
+        clampName = f"{name}_clamp"
         clamp = MIESPatchClamp(
             deviceManager, 
             config={'headstage': self._headstage},
             name=clampName)
 
-        
-        pressureName = name + "_pressure"
+        pressureName = f"{name}_pressure"
         pressure = MIESPressureControl(
             deviceManager, 
             config={'headstage': self._headstage},
@@ -38,8 +35,6 @@ class MIESPatchPipette(PatchPipette):
             'pressureDevice': pressureName,
         })
         PatchPipette.__init__(self, deviceManager, config, name)
-
-
 
     # def getTPRange(self):
     #     return self.mies.getTPRange()
