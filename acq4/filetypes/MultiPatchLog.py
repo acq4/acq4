@@ -24,6 +24,13 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
+TEST_PULSE_PARAMETER_CONFIG = []
+for info in TEST_PULSE_METAARRAY_INFO:
+    info = info.copy()
+    if 'units' in info:
+        info['suffix'] = info['units']
+        del info['units']
+    TEST_PULSE_PARAMETER_CONFIG.append(info)
 
 
 class IrregularTimeSeries(object):

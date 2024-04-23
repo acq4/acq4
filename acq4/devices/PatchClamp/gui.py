@@ -1,4 +1,5 @@
 import pyqtgraph as pg
+from acq4.filetypes.MultiPatchLog import TEST_PULSE_PARAMETER_CONFIG
 from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.DeviceGuiTemplate')
@@ -20,6 +21,38 @@ class PatchClampDeviceGui(Qt.QWidget):
         self.dev.sigStateChanged.connect(self.devStateChanged)
         self.dev.sigHoldingChanged.connect(self.devHoldingChanged)
         self.devStateChanged()
+
+        editorSpace = self.ui.mockAnalysisLayout
+        self.ui.toggleMockAnalysis.clicked.connect(self._toggleMockAnalysis)
+        self.analysisPTree = pg.parametertree.ParameterTree()
+        editorSpace.addWidget(self.analysisPTree, 0, 0)
+
+        editable = [c for c in TEST_PULSE_PARAMETER_CONFIG if c['name'] != 'event_time']
+        self._mockAnalysisRoot = pg.parametertree.Parameter.create(
+            name='Analysis', type='group', children=editable)
+        self.analysisPTree.setParameters(self._mockAnalysisRoot, showTop=False)
+        self._mockAnalysisRoot.sigTreeStateChanged.connect(self._paramTreeChanged)
+        self.analysisPTree.setEnabled(False)
+        self.dev.sigTestPulseFinished.connect(self._handleTestPulseFinished)
+
+    def _toggleMockAnalysis(self, enable):
+        self.analysisPTree.setEnabled(enable)
+
+    def _handleTestPulseFinished(self, clamp, tp):
+        if not self.ui.toggleMockAnalysis.isChecked():
+            for k, v in tp.analysis.items():
+                if k == 'event_time':
+                    continue
+                self._mockAnalysisRoot[k] = v
+
+    def _paramTreeChanged(self, root_param, changes):
+        if not self.ui.toggleMockAnalysis.isChecked():
+            return
+        for param, change, data in changes:
+            if change != 'value':
+                continue
+            param_name = self._mockAnalysisRoot.childPath(param)[0]
+            # TODO now param_name: data just needs to go into the analysis
 
     def devStateChanged(self, state=None):
         if state is None:
