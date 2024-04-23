@@ -33,6 +33,7 @@ class PatchClamp(Device):
         self._initTestPulse(config.get('testPulse', {}))
         self._testPulseHistorySize = 0
         self._testPulseHistory = None
+        self._testPulseAnalysisOverrides = {}
 
     def deviceInterface(self, win):
         return PatchClampDeviceGui(self, win)
@@ -70,6 +71,18 @@ class PatchClamp(Device):
         """Set the holding value for a specific clamp mode.
         """
         raise NotImplementedError()
+
+    def mockTestPulseAnalysis(self, **values):
+        self._testPulseAnalysisOverrides.update(values)
+
+    def disableMockTestPulseAnalysis(self):
+        self._testPulseAnalysisOverrides = {}
+
+    def testPulsePostProcessing(self, tp: PatchClampTestPulse):
+        """Perform extra modifications to the test pulse, e.g. manually override its analysis."""
+        if self._testPulseAnalysisOverrides:
+            tp.analysis.update(self._testPulseAnalysisOverrides)
+        return tp
 
     def autoPipetteOffset(self):
         """Automatically set the pipette offset.

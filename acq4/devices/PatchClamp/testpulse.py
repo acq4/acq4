@@ -28,7 +28,7 @@ class TestPulseThread(Thread):
         self._clampDev = dev
         self._stop = False
         self._params = {
-            'postProcessing': None,
+            'postProcessing': dev.testPulsePostProcessing,
             'clampMode': None,
             'interval': None,
             'autoBiasEnabled': True,

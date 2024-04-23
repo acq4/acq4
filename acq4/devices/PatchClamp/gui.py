@@ -37,6 +37,10 @@ class PatchClampDeviceGui(Qt.QWidget):
 
     def _toggleMockAnalysis(self, enable):
         self.analysisPTree.setEnabled(enable)
+        if enable:
+            self.dev.mockTestPulseAnalysis(**{k: self._mockAnalysisRoot[k] for k in self._mockAnalysisRoot.keys()})
+        else:
+            self.dev.disableMockTestPulseAnalysis()
 
     def _handleTestPulseFinished(self, clamp, tp):
         if not self.ui.toggleMockAnalysis.isChecked():
@@ -51,8 +55,8 @@ class PatchClampDeviceGui(Qt.QWidget):
         for param, change, data in changes:
             if change != 'value':
                 continue
-            param_name = self._mockAnalysisRoot.childPath(param)[0]
-            # TODO now param_name: data just needs to go into the analysis
+            param_name = root_param.childPath(param)[0]
+            self.dev.mockTestPulseAnalysis(**{param_name: data})
 
     def devStateChanged(self, state=None):
         if state is None:
