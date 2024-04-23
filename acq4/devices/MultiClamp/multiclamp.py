@@ -20,7 +20,6 @@ class MultiClamp(PatchClamp):
 
     def __init__(self, dm, config, name):
         PatchClamp.__init__(self, dm, config, name)
-        self.config = config
         self.index = None
         self.devRackGui = None
         self.mc = None

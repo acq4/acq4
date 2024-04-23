@@ -2,7 +2,6 @@ import numpy as np
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt, ptime
-from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
 class MockPatch(object):

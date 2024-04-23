@@ -1271,7 +1271,7 @@ class Manager(Qt.QObject):
                     try:
                         d.quit()
                     except:
-                        print(f"Error while requesting device '{d.name}' quit.")
+                        print(f"Error while requesting device '{d.name()}' quit.")
                         if self.exitOnError:
                             raise
                         else:
