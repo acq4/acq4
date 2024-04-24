@@ -535,7 +535,7 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError("Must be implemented in subclass.")
 
     def checkLimits(self, pos):
-        """Raise an exception if *pos* is outside the configured limits"""
+        """Raise an exception if *pos* (in local coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyz'[axis]
             x = pos[axis]

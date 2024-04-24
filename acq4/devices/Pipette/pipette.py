@@ -16,6 +16,7 @@ from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
+from ...util.HelpfulException import HelpfulException
 from ...util.future import Future
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -172,12 +173,29 @@ class Pipette(Device, OptomechDevice):
         cache = self.readConfigFile('stored_positions')
         cache[name] = list(pos)
         self.writeConfigFile(cache, 'stored_positions')
+        self.checkRangeOfMotion(pos)
 
     def loadPosition(self, name, default=None):
         """Return a previously saved position.
         """
         cache = self.readConfigFile('stored_positions')
         return cache.get(name, default)
+
+    def checkRangeOfMotion(self, pos, tolerance=400e-6):
+        """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
+        manipulator: Stage = self.parentDevice()
+        pos = np.array(pos)
+        ignore_y = np.array([tolerance, 0, tolerance])
+        bounds = (self.mapGlobalToParent(pos + ignore_y), self.mapGlobalToParent(pos - ignore_y))
+        try:
+            for b in bounds:
+                manipulator.checkLimits(b)
+        except ValueError as e:
+            raise HelpfulException(
+                f"The specified position is within ±{tolerance:g}m of the limits of this manipulator "
+                f"and may not always be accessible, depending on your pipette length consistency.",
+                reasons=[f"Manipulator limits: {manipulator.getLimits()}"],
+            ) from e
 
     def scopeDevice(self):
         if self._scopeDev is None:
