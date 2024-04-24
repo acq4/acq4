@@ -1,8 +1,7 @@
 import json
+import numpy as np
 import weakref
 from typing import List
-
-import numpy as np
 
 import pyqtgraph as pg
 from acq4 import getManager
@@ -902,10 +901,10 @@ class Axis(pg.ROI):
         p.scale(w, h)
         p.drawPath(self._path)
 
-    def setAngle(self, angle, update=True):
+    def setAngle(self, angle, update=True, **kwds):
         if self.state['angle'] == angle:
             return
-        pg.ROI.setAngle(self, angle, update=update)
+        pg.ROI.setAngle(self, angle, update=update, **kwds)
 
 
 class PipetteDeviceGui(Qt.QWidget):
