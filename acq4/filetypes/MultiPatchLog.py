@@ -525,7 +525,11 @@ class MultiPatchLogWidget(Qt.QWidget):
         if units in self._plots_by_units:
             return self._plots_by_units[units]
         plot: pg.PlotItem = self._plots_widget.addPlot(
-            name=units, labels=dict(bottom='s', left=units), row=len(self._plots_by_units) + 1, col=0)
+            name=units,
+            labels=dict(bottom=('time', 's'), left=('', units)),
+            row=len(self._plots_by_units) + 1,
+            col=0,
+        )
         if self._plots_by_units:
             plot.setXLink(self._plots_by_units[list(self._plots_by_units.keys())[0]])
         else:
