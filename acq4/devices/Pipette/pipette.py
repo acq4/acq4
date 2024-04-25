@@ -184,16 +184,25 @@ class Pipette(Device, OptomechDevice):
         """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
         manipulator: Stage = self.parentDevice()
         pos = np.array(pos)
-        bounds = (self.mapGlobalToParent(pos + tolerance), self.mapGlobalToParent(pos - tolerance))
-        try:
-            for b in bounds:
-                manipulator.checkLimits(b)
-        except ValueError as e:
+        bad_axes = []
+        e = None
+        for axis in (0, 1, 2):
+            try:
+                bound = pos[:]
+                bound[axis] -= tolerance
+                manipulator.checkLimits(bound)
+                bound[axis] += 2 * tolerance
+                manipulator.checkLimits(bound)
+            except ValueError as e:
+                bad_axes.append(axis)
+        if bad_axes:
+            axis_names = {0: 'x', 1: 'y', 2: 'z'}
+            axes = ', '.join(axis_names[axis] for axis in bad_axes)
             raise HelpfulException(
-                f"The specified position is within ±{tolerance:g}m of the limits of this manipulator "
-                f"and may not always be accessible, depending on your pipette length consistency.",
+                f"The specified position is within ±{tolerance:g}m of the {axes} limit(s) of this manipulator "
+                f"and may not always be accessible, depending on your pipette pull consistency.",
                 reasons=[f"Manipulator limits: {manipulator.getLimits()}"],
-            ) from e
+            )
 
     def scopeDevice(self):
         if self._scopeDev is None:
