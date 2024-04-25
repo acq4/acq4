@@ -195,16 +195,52 @@ class Scientifica(SerialDevice):
         if it is unknown.
         """
         types = {
-            '1': 'linear', '2': 'ums', '3': 'mmtp', '4': 'slicemaster', '5': 'patchstar',
-            '6': 'mmsp', '7': 'mmsp_z', '1.05': 'patchstar', '1.08': 'microstar', '1.09': 'ums', '1.10': 'imtp',
-            '1.11': 'slice_scope', '1.12': 'condenser', '1.13': 'mmbp', '1.14': 'ivm_manipulator',
-            '3.01': 'linear', '3.02': 'ums', '3.03': 'mmtp', '3.04': 'slicemaster', '3.05': 'patchstar',
-            '3.06': 'mmsp', '3.07': 'mmsp_z', '3.08': 'microstar', '3.09': 'ums', '3.10': 'imtp',
-            '3.11': 'slicescope', '3.12': 'condenser', '3.13': 'mmbp', '3.14': 'ivm_manipulator', '3.15': 'custom',
-            '3.16': 'extended_patchstar', '3.17': 'ivm_mini',
+            '1': 'linear',
+            '2': 'ums',
+            '3': 'mmtp',
+            '4': 'slicemaster',
+            '5': 'patchstar',
+            '6': 'mmsp',
+            '7': 'mmsp_z',
+            '1.05': 'patchstar',
+            '1.08': 'microstar',
+            '1.09': 'ums',
+            '1.10': 'imtp',
+            '1.11': 'slice_scope',
+            '1.12': 'condenser',
+            '1.13': 'mmbp',
+            '1.14': 'ivm_manipulator',
+            '3.01': 'linear',
+            '3.02': 'ums',
+            '3.03': 'mmtp',
+            '3.04': 'slicemaster',
+            '3.05': 'patchstar',
+            '3.06': 'mmsp',
+            '3.07': 'mmsp_z',
+            '3.08': 'microstar',
+            '3.09': 'ums',
+            '3.10': 'imtp',
+            '3.11': 'slicescope',
+            '3.12': 'condenser',
+            '3.13': 'mmbp',
+            '3.14': 'ivm_manipulator',
+            '3.15': 'custom',
+            '3.16': 'extended_patchstar',
+            '3.17': 'ivm_mini',
+            '3.18': 'slicescope_2',
+            '3.19': 'ivm_3000_rotary',
+            '3.20': 'patchscope_pro',
+            '3.21': 'patchscope_pro_turret',
+            '3.22': 'ivm_3000',
         }
         typ = self.send('type').decode()
         return types.get(typ, typ)
+
+    def hasSeparateZSpeed(self):
+        return self.getType() not in [
+            'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
+            'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',
+        ]
 
     def getDescription(self):
         """Return this device's description string.
@@ -414,12 +450,8 @@ class Scientifica(SerialDevice):
         if self._version < 3:
             speed = speed * 2 * abs(self._axis_scale[0])
         self.setParam('maxSpeed', speed)
-        try:
+        if self.hasSeparateZSpeed():
             self.setParam('maxZSpeed', speed)
-        except RuntimeError as exc:
-            # some devices do not support Z axis speed. errno 3 is for unrecognized params.
-            if getattr(exc, 'errno', 0) != 3:
-                raise exc
 
     def moveTo(self, pos, speed=None):
         """Set the position of the manipulator.
@@ -493,4 +525,3 @@ class Scientifica(SerialDevice):
             self.write('BAUD %s\r' % baudkey)
             self.close()
             self.open(baudrate=baudrate)
-
