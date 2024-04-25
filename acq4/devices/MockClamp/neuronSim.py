@@ -46,8 +46,15 @@ def load_allen(model_id):
     and compiled if it has not been downloaded before.
     """
     global soma, h
+    import allensdk.model.biophysical as allensdk_model_biophysical
     from allensdk.model.biophysical.runner import run, load_description
     from allensdk.model.biophysical.utils import create_utils
+
+    lib_path = os.path.dirname(allensdk_model_biophysical.__file__)
+    hoc_file = os.path.join(lib_path, 'cell.hoc')
+    if not os.path.exists(hoc_file):
+        url = "https://raw.githubusercontent.com/AllenInstitute/AllenSDK/master/allensdk/model/biophysical/cell.hoc"
+        urllib.request.urlretrieve(url, hoc_file)
 
     model_path = os.path.join(model_base_path, str(model_id))
     if not os.path.exists(model_path):
