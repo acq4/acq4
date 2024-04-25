@@ -36,432 +36,6 @@ from .util.debug import logExc, logMsg, createLogWindow
 _ = logExc  # prevent cleanup of logExc; needed by debug
 
 
-class Task:
-    id = 0
-
-    def __init__(self, dm, command):
-        self.dm = dm
-        self.command = command
-        self.result = None
-
-        self.taskLock = Mutex(recursive=True)
-        self.deviceLock = None
-
-        self.startedDevs = []
-        self.startTime = None
-        self.stopTime = None
-
-        # self.reserved = False
-        try:
-            self.cfg = command['protocol']
-        except:
-            print("================== Manager Task.__init__ command: =================")
-            print(command)
-            print("===========================================================")
-            raise TypeError("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
-        self.id = Task.id
-        Task.id += 1
-
-        ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
-        # print "Task command", command
-        self.devNames = list(command.keys())
-        self.devNames.remove('protocol')
-        self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
-
-        ## Create task objects. Each task object is a handle to the device which is unique for this task run.
-        self.tasks = {}
-        # print "devNames: ", self.devNames
-
-        for devName in self.devNames:
-            task = self.devs[devName].createTask(self.command[devName], self)
-            if task is None:
-                printExc("Device '%s' does not have a task interface; ignoring." % devName)
-                continue
-            self.tasks[devName] = task
-
-    @staticmethod
-    def getDevName(obj):
-        if isinstance(obj, str):
-            return obj
-        elif isinstance(obj, Device):
-            return obj.name()
-        elif isinstance(obj, DeviceTask):
-            return obj.dev.name()
-
-    def getConfigOrder(self):
-        ## determine the order in which tasks must be configured
-        ## This is determined by tasks having called Task.addConfigDependency()
-        ## when they were initialized.
-
-        # request config order dependencies from devices
-        deps = {devName: set() for devName in self.devNames}
-        for devName, task in self.tasks.items():
-            before, after = task.getConfigOrder()
-            deps[devName] |= set(map(Task.getDevName, before))
-            for t in map(self.getDevName, after):
-                if t in deps:
-                    deps[t].add(devName)
-
-        # request estimated configure time
-        cost = {devName: self.tasks[devName].getPrepTimeEstimate() for devName in self.devNames}
-
-        # convert sets to lists
-        deps = dict([(k, list(deps[k])) for k in deps.keys()])
-
-        # return sorted order
-        order = self.toposort(deps, cost)
-        return order
-
-    def getStartOrder(self):
-        ## determine the order in which tasks must be started
-        ## This is determined by tasks having called Task.addStartDependency()
-        ## when they were initialized.
-        deps = {devName: set() for devName in self.devNames}
-        for devName, task in self.tasks.items():
-            before, after = task.getStartOrder()
-            deps[devName] |= set(map(Task.getDevName, before))
-            for t in map(self.getDevName, after):
-                if t not in deps:
-                    # device is not in task; don't worry about its start order
-                    # (this happens, for example, with Trigger devices that do not need to be started by acq4)
-                    continue
-                deps[t].add(devName)
-
-        deps = dict([(k, list(deps[k])) for k in deps.keys()])
-
-        # return sorted order
-        order = self.toposort(deps)
-        return order
-
-    def execute(self, block=True, processEvents=True):
-        """Start the task.
-
-        If block is true, then the function blocks until the task is complete.
-        if processEvents is true, then Qt events are processed while waiting for the task to complete.
-        """
-        with self.taskLock:
-            self.startedDevs = []
-            self.stopped = False  # whether sub-tasks have been stopped yet
-            self.abortRequested = False
-            self._done = False  # cached output of isDone()
-
-            # print "======  Executing task %d:" % self.id
-            # print self.cfg
-            # print "======================="
-
-            ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
-            from acq4.util.debug import Profiler
-            prof = Profiler('Manager.Task.execute', disabled=True)
-            try:
-
-                # print self.id, "Task.execute:", self.tasks
-                ## Reserve all hardware
-                self.reserveDevices()
-
-                prof.mark('reserve')
-
-                ## Determine order of device configuration.
-                configOrder = self.getConfigOrder()
-
-                ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
-                ## This is how we allow multiple devices to communicate and decide how to operate together.
-                ## Each task may modify the startOrder list to suit its needs.
-                # print "Configuring subtasks.."
-                for devName in configOrder:
-                    self.tasks[devName].configure()
-                    prof.mark('configure %s' % devName)
-
-                startOrder = self.getStartOrder()
-                # print "done"
-
-                if 'leadTime' in self.cfg:
-                    time.sleep(self.cfg['leadTime'])
-
-                prof.mark('leadSleep')
-
-                self.result = None
-
-                ## Start tasks in specific order
-                # print "Starting tasks.."
-                for devName in startOrder:
-                    # print "  ", devName
-                    try:
-                        self.startedDevs.append(devName)
-                        self.tasks[devName].start()
-                    except:
-                        self.startedDevs.remove(devName)
-                        print(f"Error starting device '{devName}'; aborting task.")
-                        raise
-                    prof.mark('start %s' % devName)
-                self.startTime = ptime.time()
-
-                if not block:
-                    prof.finish()
-                    return
-
-                ## Wait until all tasks are done
-                lastProcess = ptime.time()
-                isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
-                while not self.isDone():
-                    now = ptime.time()
-                    elapsed = now - self.startTime
-                    if isGuiThread:
-                        if processEvents and now - lastProcess > 20e-3:  ## only process Qt events every 20ms
-                            Qt.QApplication.processEvents()
-                            lastProcess = ptime.time()
-
-                    ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
-                    if elapsed < self.cfg['duration'] - 10e-3:
-                        sleep = min(10e-3, self.cfg['duration'] - elapsed - 5e-3)
-                    else:
-                        sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
-                    time.sleep(sleep)
-
-                self.stop()
-            except:
-                printExc("==========  Error in task execution:  ==============")
-                self.abort()
-                self.releaseDevices()
-                raise
-            finally:
-                prof.finish()
-
-    def isDone(self):
-        """Return True if all tasks are completed and ready to return results.
-
-        If the task run time exceeds the timeout duration, then raise RuntimeError.
-        """
-        with self.taskLock:
-            # If we previously returned True or raised an exception, then
-            # just repeat that result.
-            if self._done is True:
-                return True
-            elif self._done is not False:
-                raise self._done
-
-            # Check for timeout
-            if self.startTime is not None:
-                # By default, timeout occurs 10 sec after requested duration is elapsed.
-                # Set timeout=None to disable the check.
-                timeout = self.cfg.get('timeout', self.cfg['duration'] + 10.0)
-
-                now = ptime.time()
-                elapsed = now - self.startTime
-                if timeout is not None and elapsed > timeout:
-                    self.stop(abort=True)
-                    self._done = RuntimeError("Task timed out (>%0.2fs)." % timeout)
-                    raise self._done
-
-            # For testing tasks that fail to complete
-            if getattr(self, 'test_endless', False):
-                return False
-
-            # print "Manager.Task.isDone"
-            if not self.abortRequested:
-                t = ptime.time()
-                if self.startTime is None or t - self.startTime < self.cfg['duration']:
-                    # print "  not done yet"
-                    return False
-                # else:
-                # print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
-            # else:
-            # print "  aborted, checking tasks.."
-            d = self._tasksDone()
-            # print "  tasks say:", d
-            self._done = d
-            return d
-
-    def _tasksDone(self):
-        for t in self.tasks:
-            if not self.tasks[t].isDone():
-                # print "Task %s not finished" % t
-                return False
-        if self.stopTime is None:
-            self.stopTime = ptime.time()
-        return True
-
-    def duration(self):
-        """Return the requested task duration, or None if it was not given."""
-        return self.command.get('protocol', {}).get('duration', None)
-
-    def runTime(self):
-        """Return the length of time since this task began running.
-        If the task has already finished, return the length of time the task ran for.
-        If the task has not started yet, return None.
-        """
-        if self.startTime is None:
-            return None
-        if self.stopTime is None:
-            return ptime.time() - self.startTime
-        return self.stopTime - self.startTime
-
-    def stop(self, abort=False):
-        """Stop all tasks and read data. If abort is True, do not attempt to collect results from the task.
-        """
-        with self.taskLock:
-
-            prof = Profiler("Manager.Task.stop", disabled=True)
-            self.abortRequested = abort
-            try:
-                if not self.stopped:
-                    ## Stop all device tasks
-                    while len(self.startedDevs) > 0:
-                        t = self.startedDevs.pop()
-                        try:
-                            self.tasks[t].stop(abort=abort)
-                        except:
-                            printExc("Error while stopping task %s:" % t)
-                        prof.mark("   ..task " + t + " stopped")
-                    self.stopped = True
-
-                if not abort and not self._tasksDone():
-                    raise Exception("Cannot get result; task is still running.")
-
-                if not abort and self.result is None:
-                    # print "Get results.."
-                    ## Let each device generate its own output structure.
-                    result = {'protocol': {'startTime': self.startTime}}
-                    for devName in self.tasks:
-                        try:
-                            result[devName] = self.tasks[devName].getResult()
-                        except:
-                            printExc(f"Error getting result for task {devName} (will set result=None for this task):")
-                            result[devName] = None
-                        prof.mark("get result: " + devName)
-                    self.result = result
-                    # print "RESULT 1:", self.result
-
-                    ## Store data if requested
-                    if 'storeData' in self.cfg and self.cfg['storeData'] is True:
-                        self.cfg['storageDir'].setInfo(result['protocol'])
-                        for t in self.tasks:
-                            self.tasks[t].storeResult(self.cfg['storageDir'])
-                    prof.mark("store data")
-            finally:
-                ## Regardless of any other problems, at least make sure we
-                ## release hardware for future use
-                if self.stopTime is None:
-                    self.stopTime = ptime.time()
-
-                self.releaseDevices()
-                prof.mark("release all")
-                prof.finish()
-
-            if abort:
-                gc.collect()  ## it is often the case that now is a good time to garbage-collect.
-
-    def getResult(self):
-        with self.taskLock:
-            self.stop()
-            return self.result
-
-    def reserveDevices(self):
-        if self.deviceLock is None:
-            try:
-                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()))
-                self.deviceLock.lock()
-            except Exception:
-                self.deviceLock = None
-                raise
-
-    def releaseDevices(self):
-        if self.deviceLock is None:
-            return
-        self.deviceLock.unlock()
-        self.deviceLock = None
-
-    def abort(self):
-        """Stop all tasks, to not attempt to get data."""
-        self.stop(abort=True)
-
-    @staticmethod
-    def toposort(deps, cost=None):
-        """Topological sort. Arguments are:
-        deps       Dictionary describing dependencies where a:[b,c] means "a
-                    depends on b and c"
-        cost       Optional dictionary of per-node cost values. This will be used
-                    to sort independent graph branches by total cost.
-
-        Examples::
-
-            # Sort the following graph:
-            #
-            #   B ──┬─────> C <── D
-            #       │       │
-            #   E <─┴─> A <─┘
-            #
-            deps = {'a': ['b', 'c'], 'c': ['b', 'd'], 'e': ['b']}
-            toposort(deps)
-            => ['b', 'e', 'd', 'c', 'a']
-
-            # This example is underspecified; there are several orders
-            # that correctly satisfy the graph. However, we may use the
-            # 'cost' argument to impose more constraints on the sort order.
-
-            # Let each node have the following cost:
-            cost = {'a': 0, 'b': 0, 'c': 1, 'e': 1, 'd': 3}
-
-            # Then the total cost of following any node is its own cost plus
-            # the cost of all nodes that follow it:
-            #   A = cost[a]
-            #   B = cost[b] + cost[c] + cost[e] + cost[a]
-            #   C = cost[c] + cost[a]
-            #   D = cost[d] + cost[c] + cost[a]
-            #   E = cost[e]
-            # If we sort independent branches such that the highest cost comes
-            # first, the output is:
-            toposort(deps, cost=cost)
-            => ['d', 'b', 'c', 'e', 'a']
-        """
-        # copy deps and make sure all nodes have a key in deps
-        deps0 = deps
-        deps = {}
-        for k, v in deps0.items():
-            deps[k] = v[:]
-            for k2 in v:
-                if k2 not in deps:
-                    deps[k2] = []
-
-        # Compute total branch cost for each node
-        key = None
-        if cost is not None:
-            order = Task.toposort(deps)
-            allDeps = {n: set(n) for n in order}
-            for n in order[::-1]:
-                for n2 in deps.get(n, []):
-                    allDeps[n2] |= allDeps.get(n, set())
-
-            totalCost = {n: sum([cost.get(x, 0) for x in allDeps[n]]) for n in allDeps}
-            key = lambda x: totalCost.get(x, 0)
-
-        # compute weighted order
-        order = []
-        while len(deps) > 0:
-            # find all nodes with no remaining dependencies
-            ready = [k for k in deps if len(deps[k]) == 0]
-
-            # If no nodes are ready, then there must be a cycle in the graph
-            if len(ready) == 0:
-                print(deps)
-                raise Exception("Cannot resolve requested device configure/start order.")
-
-            # sort by branch cost
-            if key is not None:
-                ready.sort(key=key, reverse=True)
-
-            # add the highest-cost node to the order, then remove it from the
-            # entire set of dependencies
-            order.append(ready[0])
-            del deps[ready[0]]
-            for v in deps.values():
-                try:
-                    v.remove(ready[0])
-                except ValueError:
-                    pass
-
-        return order
-
-
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
@@ -1086,7 +660,7 @@ class Manager(Qt.QObject):
         t.execute()
         return t.getResult()
 
-    def createTask(self, cmd) -> Task:
+    def createTask(self, cmd) -> "Task":
         """
         Creates a new Task instance from the specified command structure.
         """
@@ -1336,6 +910,432 @@ class DeviceLocker(object):
 
     def __exit__(self, *args):
         self.unlock()
+
+
+class Task:
+    id = 0
+
+    def __init__(self, dm, command):
+        self.dm = dm
+        self.command = command
+        self.result = None
+
+        self.taskLock = Mutex(recursive=True)
+        self.deviceLock = None
+
+        self.startedDevs = []
+        self.startTime = None
+        self.stopTime = None
+
+        # self.reserved = False
+        try:
+            self.cfg = command['protocol']
+        except:
+            print("================== Manager Task.__init__ command: =================")
+            print(command)
+            print("===========================================================")
+            raise TypeError("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
+        self.id = Task.id
+        Task.id += 1
+
+        ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
+        # print "Task command", command
+        self.devNames = list(command.keys())
+        self.devNames.remove('protocol')
+        self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
+
+        ## Create task objects. Each task object is a handle to the device which is unique for this task run.
+        self.tasks = {}
+        # print "devNames: ", self.devNames
+
+        for devName in self.devNames:
+            task = self.devs[devName].createTask(self.command[devName], self)
+            if task is None:
+                printExc("Device '%s' does not have a task interface; ignoring." % devName)
+                continue
+            self.tasks[devName] = task
+
+    @staticmethod
+    def getDevName(obj):
+        if isinstance(obj, str):
+            return obj
+        elif isinstance(obj, Device):
+            return obj.name()
+        elif isinstance(obj, DeviceTask):
+            return obj.dev.name()
+
+    def getConfigOrder(self):
+        ## determine the order in which tasks must be configured
+        ## This is determined by tasks having called Task.addConfigDependency()
+        ## when they were initialized.
+
+        # request config order dependencies from devices
+        deps = {devName: set() for devName in self.devNames}
+        for devName, task in self.tasks.items():
+            before, after = task.getConfigOrder()
+            deps[devName] |= set(map(Task.getDevName, before))
+            for t in map(self.getDevName, after):
+                if t in deps:
+                    deps[t].add(devName)
+
+        # request estimated configure time
+        cost = {devName: self.tasks[devName].getPrepTimeEstimate() for devName in self.devNames}
+
+        # convert sets to lists
+        deps = dict([(k, list(deps[k])) for k in deps.keys()])
+
+        # return sorted order
+        order = self.toposort(deps, cost)
+        return order
+
+    def getStartOrder(self):
+        ## determine the order in which tasks must be started
+        ## This is determined by tasks having called Task.addStartDependency()
+        ## when they were initialized.
+        deps = {devName: set() for devName in self.devNames}
+        for devName, task in self.tasks.items():
+            before, after = task.getStartOrder()
+            deps[devName] |= set(map(Task.getDevName, before))
+            for t in map(self.getDevName, after):
+                if t not in deps:
+                    # device is not in task; don't worry about its start order
+                    # (this happens, for example, with Trigger devices that do not need to be started by acq4)
+                    continue
+                deps[t].add(devName)
+
+        deps = dict([(k, list(deps[k])) for k in deps.keys()])
+
+        # return sorted order
+        order = self.toposort(deps)
+        return order
+
+    def execute(self, block=True, processEvents=True):
+        """Start the task.
+
+        If block is true, then the function blocks until the task is complete.
+        if processEvents is true, then Qt events are processed while waiting for the task to complete.
+        """
+        with self.taskLock:
+            self.startedDevs = []
+            self.stopped = False  # whether sub-tasks have been stopped yet
+            self.abortRequested = False
+            self._done = False  # cached output of isDone()
+
+            # print "======  Executing task %d:" % self.id
+            # print self.cfg
+            # print "======================="
+
+            ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
+            from acq4.util.debug import Profiler
+            prof = Profiler('Manager.Task.execute', disabled=True)
+            try:
+
+                # print self.id, "Task.execute:", self.tasks
+                ## Reserve all hardware
+                self.reserveDevices()
+
+                prof.mark('reserve')
+
+                ## Determine order of device configuration.
+                configOrder = self.getConfigOrder()
+
+                ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
+                ## This is how we allow multiple devices to communicate and decide how to operate together.
+                ## Each task may modify the startOrder list to suit its needs.
+                # print "Configuring subtasks.."
+                for devName in configOrder:
+                    self.tasks[devName].configure()
+                    prof.mark('configure %s' % devName)
+
+                startOrder = self.getStartOrder()
+                # print "done"
+
+                if 'leadTime' in self.cfg:
+                    time.sleep(self.cfg['leadTime'])
+
+                prof.mark('leadSleep')
+
+                self.result = None
+
+                ## Start tasks in specific order
+                # print "Starting tasks.."
+                for devName in startOrder:
+                    # print "  ", devName
+                    try:
+                        self.startedDevs.append(devName)
+                        self.tasks[devName].start()
+                    except:
+                        self.startedDevs.remove(devName)
+                        print(f"Error starting device '{devName}'; aborting task.")
+                        raise
+                    prof.mark('start %s' % devName)
+                self.startTime = ptime.time()
+
+                if not block:
+                    prof.finish()
+                    return
+
+                ## Wait until all tasks are done
+                lastProcess = ptime.time()
+                isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
+                while not self.isDone():
+                    now = ptime.time()
+                    elapsed = now - self.startTime
+                    if isGuiThread:
+                        if processEvents and now - lastProcess > 20e-3:  ## only process Qt events every 20ms
+                            Qt.QApplication.processEvents()
+                            lastProcess = ptime.time()
+
+                    ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    if elapsed < self.cfg['duration'] - 10e-3:
+                        sleep = min(10e-3, self.cfg['duration'] - elapsed - 5e-3)
+                    else:
+                        sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
+                    time.sleep(sleep)
+
+                self.stop()
+            except:
+                printExc("==========  Error in task execution:  ==============")
+                self.abort()
+                self.releaseDevices()
+                raise
+            finally:
+                prof.finish()
+
+    def isDone(self):
+        """Return True if all tasks are completed and ready to return results.
+
+        If the task run time exceeds the timeout duration, then raise RuntimeError.
+        """
+        with self.taskLock:
+            # If we previously returned True or raised an exception, then
+            # just repeat that result.
+            if self._done is True:
+                return True
+            elif self._done is not False:
+                raise self._done
+
+            # Check for timeout
+            if self.startTime is not None:
+                # By default, timeout occurs 10 sec after requested duration is elapsed.
+                # Set timeout=None to disable the check.
+                timeout = self.cfg.get('timeout', self.cfg['duration'] + 10.0)
+
+                now = ptime.time()
+                elapsed = now - self.startTime
+                if timeout is not None and elapsed > timeout:
+                    self.stop(abort=True)
+                    self._done = RuntimeError("Task timed out (>%0.2fs)." % timeout)
+                    raise self._done
+
+            # For testing tasks that fail to complete
+            if getattr(self, 'test_endless', False):
+                return False
+
+            # print "Manager.Task.isDone"
+            if not self.abortRequested:
+                t = ptime.time()
+                if self.startTime is None or t - self.startTime < self.cfg['duration']:
+                    # print "  not done yet"
+                    return False
+                # else:
+                # print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
+            # else:
+            # print "  aborted, checking tasks.."
+            d = self._tasksDone()
+            # print "  tasks say:", d
+            self._done = d
+            return d
+
+    def _tasksDone(self):
+        for t in self.tasks:
+            if not self.tasks[t].isDone():
+                # print "Task %s not finished" % t
+                return False
+        if self.stopTime is None:
+            self.stopTime = ptime.time()
+        return True
+
+    def duration(self):
+        """Return the requested task duration, or None if it was not given."""
+        return self.command.get('protocol', {}).get('duration', None)
+
+    def runTime(self):
+        """Return the length of time since this task began running.
+        If the task has already finished, return the length of time the task ran for.
+        If the task has not started yet, return None.
+        """
+        if self.startTime is None:
+            return None
+        if self.stopTime is None:
+            return ptime.time() - self.startTime
+        return self.stopTime - self.startTime
+
+    def stop(self, abort=False):
+        """Stop all tasks and read data. If abort is True, do not attempt to collect results from the task.
+        """
+        with self.taskLock:
+
+            prof = Profiler("Manager.Task.stop", disabled=True)
+            self.abortRequested = abort
+            try:
+                if not self.stopped:
+                    ## Stop all device tasks
+                    while len(self.startedDevs) > 0:
+                        t = self.startedDevs.pop()
+                        try:
+                            self.tasks[t].stop(abort=abort)
+                        except:
+                            printExc("Error while stopping task %s:" % t)
+                        prof.mark("   ..task " + t + " stopped")
+                    self.stopped = True
+
+                if not abort and not self._tasksDone():
+                    raise Exception("Cannot get result; task is still running.")
+
+                if not abort and self.result is None:
+                    # print "Get results.."
+                    ## Let each device generate its own output structure.
+                    result = {'protocol': {'startTime': self.startTime}}
+                    for devName in self.tasks:
+                        try:
+                            result[devName] = self.tasks[devName].getResult()
+                        except:
+                            printExc(f"Error getting result for task {devName} (will set result=None for this task):")
+                            result[devName] = None
+                        prof.mark("get result: " + devName)
+                    self.result = result
+                    # print "RESULT 1:", self.result
+
+                    ## Store data if requested
+                    if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+                        self.cfg['storageDir'].setInfo(result['protocol'])
+                        for t in self.tasks:
+                            self.tasks[t].storeResult(self.cfg['storageDir'])
+                    prof.mark("store data")
+            finally:
+                ## Regardless of any other problems, at least make sure we
+                ## release hardware for future use
+                if self.stopTime is None:
+                    self.stopTime = ptime.time()
+
+                self.releaseDevices()
+                prof.mark("release all")
+                prof.finish()
+
+            if abort:
+                gc.collect()  ## it is often the case that now is a good time to garbage-collect.
+
+    def getResult(self):
+        with self.taskLock:
+            self.stop()
+            return self.result
+
+    def reserveDevices(self):
+        if self.deviceLock is None:
+            try:
+                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()))
+                self.deviceLock.lock()
+            except Exception:
+                self.deviceLock = None
+                raise
+
+    def releaseDevices(self):
+        if self.deviceLock is None:
+            return
+        self.deviceLock.unlock()
+        self.deviceLock = None
+
+    def abort(self):
+        """Stop all tasks, to not attempt to get data."""
+        self.stop(abort=True)
+
+    @staticmethod
+    def toposort(deps, cost=None):
+        """Topological sort. Arguments are:
+        deps       Dictionary describing dependencies where a:[b,c] means "a
+                    depends on b and c"
+        cost       Optional dictionary of per-node cost values. This will be used
+                    to sort independent graph branches by total cost.
+
+        Examples::
+
+            # Sort the following graph:
+            #
+            #   B ──┬─────> C <── D
+            #       │       │
+            #   E <─┴─> A <─┘
+            #
+            deps = {'a': ['b', 'c'], 'c': ['b', 'd'], 'e': ['b']}
+            toposort(deps)
+            => ['b', 'e', 'd', 'c', 'a']
+
+            # This example is underspecified; there are several orders
+            # that correctly satisfy the graph. However, we may use the
+            # 'cost' argument to impose more constraints on the sort order.
+
+            # Let each node have the following cost:
+            cost = {'a': 0, 'b': 0, 'c': 1, 'e': 1, 'd': 3}
+
+            # Then the total cost of following any node is its own cost plus
+            # the cost of all nodes that follow it:
+            #   A = cost[a]
+            #   B = cost[b] + cost[c] + cost[e] + cost[a]
+            #   C = cost[c] + cost[a]
+            #   D = cost[d] + cost[c] + cost[a]
+            #   E = cost[e]
+            # If we sort independent branches such that the highest cost comes
+            # first, the output is:
+            toposort(deps, cost=cost)
+            => ['d', 'b', 'c', 'e', 'a']
+        """
+        # copy deps and make sure all nodes have a key in deps
+        deps0 = deps
+        deps = {}
+        for k, v in deps0.items():
+            deps[k] = v[:]
+            for k2 in v:
+                if k2 not in deps:
+                    deps[k2] = []
+
+        # Compute total branch cost for each node
+        key = None
+        if cost is not None:
+            order = Task.toposort(deps)
+            allDeps = {n: set(n) for n in order}
+            for n in order[::-1]:
+                for n2 in deps.get(n, []):
+                    allDeps[n2] |= allDeps.get(n, set())
+
+            totalCost = {n: sum([cost.get(x, 0) for x in allDeps[n]]) for n in allDeps}
+            key = lambda x: totalCost.get(x, 0)
+
+        # compute weighted order
+        order = []
+        while len(deps) > 0:
+            # find all nodes with no remaining dependencies
+            ready = [k for k in deps if len(deps[k]) == 0]
+
+            # If no nodes are ready, then there must be a cycle in the graph
+            if len(ready) == 0:
+                print(deps)
+                raise Exception("Cannot resolve requested device configure/start order.")
+
+            # sort by branch cost
+            if key is not None:
+                ready.sort(key=key, reverse=True)
+
+            # add the highest-cost node to the order, then remove it from the
+            # entire set of dependencies
+            order.append(ready[0])
+            del deps[ready[0]]
+            for v in deps.values():
+                try:
+                    v.remove(ready[0])
+                except ValueError:
+                    pass
+
+        return order
 
 
 DOC_ROOT = 'http://acq4.org/documentation/'
