@@ -180,12 +180,11 @@ class Pipette(Device, OptomechDevice):
         cache = self.readConfigFile('stored_positions')
         return cache.get(name, default)
 
-    def checkRangeOfMotion(self, pos, tolerance=400e-6):
+    def checkRangeOfMotion(self, pos, tolerance=500e-6):
         """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
         manipulator: Stage = self.parentDevice()
         pos = np.array(pos)
-        ignore_y = np.array([tolerance, 0, tolerance])
-        bounds = (self.mapGlobalToParent(pos + ignore_y), self.mapGlobalToParent(pos - ignore_y))
+        bounds = (self.mapGlobalToParent(pos + tolerance), self.mapGlobalToParent(pos - tolerance))
         try:
             for b in bounds:
                 manipulator.checkLimits(b)
