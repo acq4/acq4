@@ -12,17 +12,25 @@ from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
-    {'name': 'baselinePotential', 'type': 'float', 'units': 'V'},
-    {'name': 'baselineCurrent', 'type': 'float', 'units': 'A'},
-    {'name': 'peakResistance', 'type': 'float', 'units': 'Ω'},
-    {'name': 'steadyStateResistance', 'type': 'float', 'units': 'Ω'},
-    {'name': 'fitExpAmp', 'type': 'float'},
-    {'name': 'fitExpTau', 'type': 'float'},
-    {'name': 'fitExpYOffset', 'type': 'float'},
-    {'name': 'fitExpXOffset', 'type': 'float', 'units': 's'},
+    {'name': 'baseline_potential', 'type': 'float', 'units': 'V'},
+    {'name': 'baseline_current', 'type': 'float', 'units': 'A'},
+    {'name': 'input_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'access_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'steady_state_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'fit_amplitude', 'type': 'float'},
+    {'name': 'time_constant', 'type': 'float'},
+    {'name': 'fit_yoffset', 'type': 'float'},
+    {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
+TEST_PULSE_PARAMETER_CONFIG = []
+for info in TEST_PULSE_METAARRAY_INFO:
+    info = info.copy()
+    if 'units' in info:
+        info['suffix'] = info['units']
+        del info['units']
+    TEST_PULSE_PARAMETER_CONFIG.append(info)
 
 
 class IrregularTimeSeries(object):
@@ -190,8 +198,8 @@ class MultiPatchLogData(object):
                 uses.append('pressure')
             if event_type in {'state_change', 'state_event'}:
                 uses.append('state')
-            if event_type in {'auto_bias_enabled', 'auto_bias_target_changed'}:
-                uses.append('auto_bias_target')
+            if event_type in {'auto_bias_change'}:
+                uses.append('auto_bias_change')
             if event_type in {'target_changed'}:
                 uses.append('target')
             # currently ignored:
@@ -265,8 +273,8 @@ class MultiPatchLogData(object):
                 dtype=[('time', float), ('pressure', float), ('source', 'U32')],
             ),
             'state': list(range(count_for_use('state'))),
-            'auto_bias_target': np.zeros(
-                (count_for_use('auto_bias_target'), 2),
+            'auto_bias_change': np.zeros(
+                (count_for_use('auto_bias_change'), 2),
                 dtype=float,
             ),
             'target': np.zeros(
@@ -299,7 +307,7 @@ class MultiPatchLogData(object):
             return event_time, event['pressure'], event['source']
         if use == 'state':
             return event_time, event['state'], event.get('info', '')
-        if use == 'auto_bias_target':
+        if use == 'auto_bias_change':
             return event_time, event['target'] if event.get('enabled', True) else np.nan
         if use == 'target':
             return event_time, *event['target_position']
@@ -391,13 +399,10 @@ class PipettePathWidget(object):
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
-        state = self._states[0]
-        for s in self._states:
-            if s[0] >= time:
-                break
-            state = s
-        self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
-        self._displayTargetAtTime(time, pos[2])
+        state = next((s for s in self._states[::-1] if s[0] < time), None)
+        if state:
+            self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
+            self._displayTargetAtTime(time, pos[2])
 
     def _displayTargetAtTime(self, time: float, depth: float = 0.0):
         if len(self._targets) == 0:
@@ -520,7 +525,11 @@ class MultiPatchLogWidget(Qt.QWidget):
         if units in self._plots_by_units:
             return self._plots_by_units[units]
         plot: pg.PlotItem = self._plots_widget.addPlot(
-            name=units, labels=dict(bottom='s', left=units), row=len(self._plots_by_units) + 1, col=0)
+            name=units,
+            labels=dict(bottom=('time', 's'), left=('', units)),
+            row=len(self._plots_by_units) + 1,
+            col=0,
+        )
         if self._plots_by_units:
             plot.setXLink(self._plots_by_units[list(self._plots_by_units.keys())[0]])
         else:
@@ -684,7 +693,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 time = test_pulses['event_time'] - self.startTime()
                 if len(time) > 0:
                     measurements = np.concatenate(
-                        (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
+                        (time[:, np.newaxis], test_pulses['steady_state_resistance'][:, np.newaxis]), axis=1)
                     # break the analysis up by state changes
                     state_times = [s[0] - self.startTime() for s in states if s[2] == '']
                     start_indexes = np.searchsorted(time, state_times)

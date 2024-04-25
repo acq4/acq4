@@ -1,7 +1,7 @@
+import queue
 from collections import OrderedDict
 
 import sys
-from six.moves import queue
 from typing import Optional
 
 from acq4 import getManager
@@ -208,7 +208,7 @@ class PatchPipetteStateManager(Qt.QObject):
         else:
             self.stopJob()
             if self.dev.clampDevice is not None:
-                self.dev.enableTestPulse(False)
+                self.dev.clampDevice.enableTestPulse(False)
             if self.dev.pressureDevice is not None:
                 self.dev.pressureDevice.setPressure(source='atmosphere')
 

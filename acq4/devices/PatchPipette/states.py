@@ -12,10 +12,10 @@ import warnings
 from copy import deepcopy
 
 from acq4 import getManager
-from acq4.devices.PatchPipette.testpulse import TestPulse
 from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
+from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect, units
 
 
@@ -161,21 +161,21 @@ class PatchPipetteState(Future):
 
         # enable test pulse if config requests it AND the device is "active"
         if tp is not None:
-            self.dev.enableTestPulse(tp and self.dev.active)
+            self.dev.clampDevice.enableTestPulse(tp and self.dev.active)
         if tpParams is not None:
-            self.dev.setTestPulseParameters(**tpParams)
+            self.dev.clampDevice.setTestPulseParameters(**tpParams)
 
         if bias is not None:
-            self.dev.enableAutoBias(bias)
+            self.dev.clampDevice.enableAutoBias(bias)
         if biasTarget is not None:
-            self.dev.setAutoBiasTarget(biasTarget)
+            self.dev.clampDevice.setAutoBiasTarget(biasTarget)
 
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults
         """
-        self.dev.sigTestPulseFinished.connect(self.testPulseFinished)
+        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
 
-    def testPulseFinished(self, pip, result):
+    def testPulseFinished(self, clamp, result):
         self.testPulseResults.put(result)
 
     def getTestPulses(self, timeout):
@@ -219,7 +219,7 @@ class PatchPipetteState(Future):
             error = str(exc)
             excInfo = sys.exc_info()
         finally:
-            disconnect(self.dev.sigTestPulseFinished, self.testPulseFinished)
+            disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
 
@@ -259,7 +259,7 @@ class ApproachState(PatchPipetteState):
         # move to approach position + auto pipette offset
         fut = self.dev.pipetteDevice.goApproach('fast')
         self.dev.clampDevice.autoPipetteOffset()
-        self.dev.resetTestPulseHistory()
+        self.dev.clampDevice.resetTestPulseHistory()
         self.waitFor(fut, timeout=None)
         return self.config['nextState']
 
@@ -370,7 +370,7 @@ class BathState(PatchPipetteState):
             
             tp = tps[-1]  # if we're falling behind, just skip the extra test pulses
 
-            ssr = tp.analysis()['steadyStateResistance']
+            ssr = tp.analysis['steady_state_resistance']
             if ssr > config['bathThreshold']:
                 # not in bath yet
                 bathResistances = []
@@ -535,7 +535,7 @@ class CellDetectState(PatchPipetteState):
             recentTestPulses.extend(tps)
 
             tp = tps[-1]
-            ssr = tp.analysis()['steadyStateResistance']
+            ssr = tp.analysis['steady_state_resistance']
             if initialResistance is None:
                 # take note of initial resistance
                 initialResistance = ssr
@@ -554,7 +554,7 @@ class CellDetectState(PatchPipetteState):
                 return self._transition_to_seal("cell detected (fast criteria)", patchrec)
             # slow cell detection
             if len(recentTestPulses) > config['slowDetectionSteps']:
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+                res = np.array([tp.analysis['steady_state_resistance'] for tp in recentTestPulses])
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
                     return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self.checkStop()
@@ -784,10 +784,10 @@ class SealState(PatchPipetteState):
             self.checkStop()
             time.sleep(0.05)
         
-        initialResistance = initialTP.analysis()['steadyStateResistance']
+        initialResistance = initialTP.analysis['steady_state_resistance']
         patchrec = dev.patchRecord()
         patchrec['resistanceBeforeSeal'] = initialResistance
-        patchrec['capacitanceBeforeSeal'] = initialTP.analysis()['capacitance']
+        patchrec['capacitanceBeforeSeal'] = initialTP.analysis['capacitance']
         startTime = ptime.time()
         pressure = config['startingPressure']
         if isinstance(config['pressureChangeRates'], str):
@@ -820,8 +820,8 @@ class SealState(PatchPipetteState):
                 continue
             tp = tps[-1]
 
-            ssr = tp.analysis()['steadyStateResistance']
-            cap = tp.analysis()['capacitance']
+            ssr = tp.analysis['steady_state_resistance']
+            cap = tp.analysis['capacitance']
 
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
@@ -862,8 +862,8 @@ class SealState(PatchPipetteState):
                     return config['fallbackState']
 
                 # update pressure
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-                times = np.array([tp.startTime() for tp in recentTestPulses])
+                res = np.array([tp.analysis['steady_state_resistance'] for tp in recentTestPulses])
+                times = np.array([tp.start_time for tp in recentTestPulses])
                 slope = scipy.stats.linregress(times, res).slope
                 pressure = np.clip(pressure, config['pressureLimit'], 0)
                 
@@ -903,15 +903,22 @@ class CellAttachedState(PatchPipetteState):
     autoBreakInDelay : float
         Delay time (seconds) before transitioning to 'break in' state. If None, then never automatically
         transition to break-in.
-    breakInThreshold : float
-        Capacitance (Farads) above which the pipette is considered to be whole-cell and immediately
+    capacitanceThreshold : float
+        Capacitance (default 10pF) above which the pipette is considered to be whole-cell and immediately
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
+    resistanceThreshold : float
+        Steady state resistance threshold (default 100MΩ) below which the cell is considered to either be
+        'spontaneousDetachmentState' or 'spontaneousBreakInState'.
     holdingCurrentThreshold : float
-        Holding current (Amps) below which the cell is considered to be lost and the state fails.
-    spontaneousBreakInState:
-        Name of state to transition to when the membrane breaks in spontaneously. Default
-        is 'break in' so that partial break-ins will be completed. To disable, set to 'whole cell'.
+        Holding current (presumed negative) below which the cell is considered to be lost and the state goes
+        to `spontaneousDetachmentState'. Default -1nA.
+    spontaneousBreakInState : str
+        Name of state to transition to when the membrane breaks in spontaneously. Default is 'break in' so
+        that partial break-ins will be completed. Consider 'whole cell' to avoid break-in protocol.
+    spontaneousDetachmentState : str
+        Name of state to transition to when the pipette completely loses its seal. Default is 'fouled', but
+        consider using 'seal' or 'cell detect' for a retry.
     """
     stateName = 'cell attached'
     _parameterDefaultOverrides = {
@@ -922,9 +929,11 @@ class CellAttachedState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'autoBreakInDelay': {'type': 'float', 'default': None, 'optional': True, 'suffix': 's'},
-        'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
+        'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
+        'resistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
         'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
+        'spontaneousDetachmentState': {'type': 'str', 'default': 'fouled'},
     }
 
     def run(self):
@@ -944,17 +953,22 @@ class CellAttachedState(PatchPipetteState):
                 continue
 
             tp = tps[-1]
-            holding = tp.analysis()['baselineCurrent']
+            holding = tp.analysis['baseline_current']
             if holding < self.config['holdingCurrentThreshold']:
                 self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
-                return
-            
-            cap = tp.analysis()['capacitance']
-            if cap > config['breakInThreshold']:
+                return config['spontaneousDetachmentState']
+
+            cap = tp.analysis['capacitance']
+            if cap > config['capacitanceThreshold']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
-            patchrec['resistanceBeforeBreakin'] = tp.analysis()['steadyStateResistance']
+            ssr = tp.analysis['steady_state_resistance']
+            if ssr < config['resistanceThreshold']:
+                self._taskDone(interrupted=True, error='Steady state resistance dropped below threshold.')
+                return config['spontaneousDetachmentState']
+
+            patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
 
 
@@ -1071,8 +1085,8 @@ class BreakInState(PatchPipetteState):
                 break
         tp = tps[-1]
 
-        analysis = tp.analysis()
-        holding = analysis['baselineCurrent']
+        analysis = tp.analysis
+        holding = analysis['baseline_current']
         if holding < self.config['holdingCurrentThreshold']:
             self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
             return False
@@ -1080,7 +1094,7 @@ class BreakInState(PatchPipetteState):
         # If ssr and cap cross threshold => successful break in
         # If only ssr crosses threshold => lost cell
         # If only cap crosses threshold => partial break in, keep trying
-        ssr = analysis['steadyStateResistance']
+        ssr = analysis['steady_state_resistance']
         cap = analysis['capacitance']
         if self.config['resistanceThreshold'] is not None and ssr < self.config['resistanceThreshold']:
             return True
@@ -1116,9 +1130,9 @@ class ResealAnalysis(object):
         """Return True if the resistance is decreasing."""
         return self._last_measurement and self._last_measurement['tearing']
 
-    def process_test_pulses(self, tps: list[TestPulse]) -> np.ndarray:
+    def process_test_pulses(self, tps: list[PatchClampTestPulse]) -> np.ndarray:
         return self.process_measurements(
-            np.array([(tp.startTime(), tp.analysis()['steadyStateResistance']) for tp in tps]))
+            np.array([(tp.start_time, tp.analysis['steady_state_resistance']) for tp in tps]))
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(
@@ -1484,12 +1498,12 @@ class BlowoutState(PatchPipetteState):
         while True:
             self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
-            if len(tps) == 0 or tps[-1].startTime() < start:
+            if len(tps) == 0 or tps[-1].start_time < start:
                 continue
             break
 
-        tp = tps[-1].analysis()
-        patchrec['resistanceAfterBlowout'] = tp['steadyStateResistance']
+        tp = tps[-1].analysis
+        patchrec['resistanceAfterBlowout'] = tp['steady_state_resistance']
         self.dev.finishPatchRecord()
         return config['fallbackState']
         

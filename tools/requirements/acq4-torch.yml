@@ -84,6 +84,7 @@ dependencies:
       - matplotlib
       - msgpack
       - natsort
+      - neuroanalysis
       - numba
       - numpy
       - nvidia-cublas-cu11

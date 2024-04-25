@@ -1,3 +1,4 @@
+import numpy as np
 import re
 
 import pyqtgraph as pg
@@ -6,6 +7,8 @@ from six.moves import zip
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
+from neuroanalysis.data import TSeries
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
@@ -40,8 +43,8 @@ class PipetteControl(Qt.QWidget):
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
-            self.pip.sigTestPulseFinished.connect(self.updatePlots)
-            self.pip.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
+            self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
+            self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
             if self.pip.pressureDevice is not None:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
@@ -165,8 +168,8 @@ class PipetteControl(Qt.QWidget):
 
     def updatePlots(self):
         """Update the pipette data plots."""
-        tp = self.pip.lastTestPulse()
-        tph = self.pip.testPulseHistory()
+        tp = self.pip.clampDevice.lastTestPulse()
+        tph = self.pip.clampDevice.testPulseHistory()
         for plt in self.plots:
             plt.newTestPulse(tp, tph)
 
@@ -182,7 +185,7 @@ class PipetteControl(Qt.QWidget):
             self._setHoldingSpin(mode, val)
         finally:
             self._lockAutoBias = False
-        if mode == 'VC' and self.pip.autoBiasTarget() is None:
+        if mode == 'VC' and self.pip.clampDevice.autoBiasTarget() is None:
             self.ui.autoBiasTargetSpin.setValue(val)
 
     def vcHoldingSpinChanged(self, value):
@@ -195,13 +198,13 @@ class PipetteControl(Qt.QWidget):
 
     def icHoldingSpinChanged(self, value):
         if not self._lockAutoBias:
-            self.pip.enableAutoBias(False)
+            self.pip.clampDevice.enableAutoBias(False)
         with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
             self.pip.clampDevice.setHolding('IC', value)
 
     def autoBiasSpinChanged(self, value):
         if not self.ui.autoBiasVcBtn.isChecked():
-            self.pip.setAutoBiasTarget(value)
+            self.pip.clampDevice.setAutoBiasTarget(value)
         
     def selectedClampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
@@ -281,14 +284,14 @@ class PipetteControl(Qt.QWidget):
             plt.hideHeader()
 
     def autoBiasClicked(self, enabled):
-        self.pip.enableAutoBias(enabled)
+        self.pip.clampDevice.enableAutoBias(enabled)
         self._updateAutoBiasUi()
 
     def autoBiasVcClicked(self, enabled):
         if enabled:
-            self.pip.setAutoBiasTarget(None)
+            self.pip.clampDevice.setAutoBiasTarget(None)
         else:
-            self.pip.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
+            self.pip.clampDevice.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
             self.ui.autoBiasTargetSpin.setEnabled(True)
         self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
         self._updateAutoBiasUi()
@@ -296,12 +299,12 @@ class PipetteControl(Qt.QWidget):
     def _updateAutoBiasUi(self):
         # auto bias changed elsewhere; update UI to reflect new state
         with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
-            self.ui.autoBiasBtn.setChecked(self.pip.autoBiasEnabled())
+            self.ui.autoBiasBtn.setChecked(self.pip.clampDevice.autoBiasEnabled())
         with pg.SignalBlock(self.ui.autoBiasVcBtn.clicked, self.autoBiasVcClicked):
-            self.ui.autoBiasVcBtn.setChecked(self.pip.autoBiasTarget() is None)
+            self.ui.autoBiasVcBtn.setChecked(self.pip.clampDevice.autoBiasTarget() is None)
         self._updateActiveHoldingUi()
 
-        if self.pip.autoBiasTarget() is None:
+        if self.pip.clampDevice.autoBiasTarget() is None:
             self.ui.autoBiasTargetSpin.setEnabled(False)
         else:
             self.ui.autoBiasTargetSpin.setEnabled(True)
@@ -388,36 +391,38 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo.hide()
         # self.closeBtn.hide()
 
-    def newTestPulse(self, tp, history):
-        if self.mode in ['test pulse', 'tp analysis']:
-            data = tp.data
-            pri = data['Channel': 'primary']
-            units = pri._info[-1]['ClampState']['primaryUnits'] 
-            self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
-            self.plot.setLabels(left=('', units))
-
-            if self.mode == 'tp analysis':
-                t,y = tp.getFitData()
-                self.plot.plot(t, y, pen='b')
-
-        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
+    def newTestPulse(self, tp: PatchClampTestPulse, history):
+        if self.mode == 'test pulse':
+            self._plotTestPulse(tp)
+        elif self.mode == 'tp analysis':
+            self._plotTestPulse(tp)
+            if tp.analysis is None:  # calling tp.analysis actually initiates the analysis needed for the plots
+                return
+            if tp.fit_trace_with_transient is not None:
+                trans_fit = tp.fit_trace_with_transient
+                self.plot.plot(trans_fit.time_values, trans_fit.data, pen='r')
+            if tp.main_fit_trace is not None:
+                main_fit = tp.main_fit_trace
+                self.plot.plot(main_fit.time_values, main_fit.data, pen='b')
+        else:
             key, units = {
-                'ss resistance': ('steadyStateResistance', u'Ω'),
-                'peak resistance': ('peakResistance', u'Ω'),
-                'holding current': ('baselineCurrent', 'A'),
-                'holding potential': ('baselinePotential', 'V'),
-                'time constant': ('fitExpTau', 's'),
+                'ss resistance': ('steady_state_resistance', u'Ω'),
+                'peak resistance': ('access_resistance', u'Ω'),
+                'holding current': ('baseline_current', 'A'),
+                'holding potential': ('baseline_potential', 'V'),
+                'time constant': ('time_constant', 's'),
                 'capacitance': ('capacitance', 'F'),
             }[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=units))
+            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+            val = tp.analysis[key]
+            if val is None:
+                val = np.nan
+            self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
-        elif self.mode in ['ss resistance', 'peak resistance']:
-            key = {'ss resistance': 'steadyStateResistance', 'peak resistance': 'peakResistance'}[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=u'Ω'))
+    def _plotTestPulse(self, tp):
+        pri: TSeries = tp['primary']
+        self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
+        self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
     def setMode(self, mode):
         if self.mode == mode:
