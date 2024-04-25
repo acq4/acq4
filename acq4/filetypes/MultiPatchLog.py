@@ -12,14 +12,15 @@ from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
-    {'name': 'baselinePotential', 'type': 'float', 'units': 'V'},
-    {'name': 'baselineCurrent', 'type': 'float', 'units': 'A'},
-    {'name': 'peakResistance', 'type': 'float', 'units': 'Ω'},
-    {'name': 'steadyStateResistance', 'type': 'float', 'units': 'Ω'},
-    {'name': 'fitExpAmp', 'type': 'float'},
-    {'name': 'fitExpTau', 'type': 'float'},
-    {'name': 'fitExpYOffset', 'type': 'float'},
-    {'name': 'fitExpXOffset', 'type': 'float', 'units': 's'},
+    {'name': 'baseline_potential', 'type': 'float', 'units': 'V'},
+    {'name': 'baseline_current', 'type': 'float', 'units': 'A'},
+    {'name': 'input_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'access_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'steady_state_resistance', 'type': 'float', 'units': 'Ω'},
+    {'name': 'fit_amplitude', 'type': 'float'},
+    {'name': 'time_constant', 'type': 'float'},
+    {'name': 'fit_yoffset', 'type': 'float'},
+    {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
@@ -391,13 +392,10 @@ class PipettePathWidget(object):
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
-        state = self._states[0]
-        for s in self._states:
-            if s[0] >= time:
-                break
-            state = s
-        self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
-        self._displayTargetAtTime(time, pos[2])
+        state = next((s for s in self._states[::-1] if s[0] < time), None)
+        if state:
+            self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
+            self._displayTargetAtTime(time, pos[2])
 
     def _displayTargetAtTime(self, time: float, depth: float = 0.0):
         if len(self._targets) == 0:
@@ -684,7 +682,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 time = test_pulses['event_time'] - self.startTime()
                 if len(time) > 0:
                     measurements = np.concatenate(
-                        (time[:, np.newaxis], test_pulses['steadyStateResistance'][:, np.newaxis]), axis=1)
+                        (time[:, np.newaxis], test_pulses['steady_state_resistance'][:, np.newaxis]), axis=1)
                     # break the analysis up by state changes
                     state_times = [s[0] - self.startTime() for s in states if s[2] == '']
                     start_indexes = np.searchsorted(time, state_times)

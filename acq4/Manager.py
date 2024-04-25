@@ -660,7 +660,7 @@ class Manager(Qt.QObject):
         t.execute()
         return t.getResult()
 
-    def createTask(self, cmd):
+    def createTask(self, cmd) -> "Task":
         """
         Creates a new Task instance from the specified command structure.
         """
@@ -1011,9 +1011,9 @@ class Task:
 
     def execute(self, block=True, processEvents=True):
         """Start the task.
-        
+
         If block is true, then the function blocks until the task is complete.
-        if processEvents is true, then Qt events are processed while waiting for the task to complete.        
+        if processEvents is true, then Qt events are processed while waiting for the task to complete.
         """
         with self.taskLock:
             self.startedDevs = []
@@ -1071,19 +1071,13 @@ class Task:
                     prof.mark('start %s' % devName)
                 self.startTime = ptime.time()
 
-                # print "  %d Task started" % self.id
-
                 if not block:
                     prof.finish()
-                    # print "  %d Not blocking; execute complete" % self.id
                     return
 
                 ## Wait until all tasks are done
-                # print "Waiting for all tasks to finish.."
-
                 lastProcess = ptime.time()
                 isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
-                # print "isGuiThread:", isGuiThread
                 while not self.isDone():
                     now = ptime.time()
                     elapsed = now - self.startTime
@@ -1092,17 +1086,14 @@ class Task:
                             Qt.QApplication.processEvents()
                             lastProcess = ptime.time()
 
-                    if elapsed < self.cfg[
-                        'duration'] - 10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    if elapsed < self.cfg['duration'] - 10e-3:
                         sleep = min(10e-3, self.cfg['duration'] - elapsed - 5e-3)
                     else:
                         sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
-                    # print "sleep for", sleep
                     time.sleep(sleep)
-                # print "all tasks finshed."
 
                 self.stop()
-                # print "  %d execute complete" % self.id
             except:
                 printExc("==========  Error in task execution:  ==============")
                 self.abort()
@@ -1117,7 +1108,7 @@ class Task:
         If the task run time exceeds the timeout duration, then raise RuntimeError.
         """
         with self.taskLock:
-            # If we previously returned True or raised an exception, then 
+            # If we previously returned True or raised an exception, then
             # just repeat that result.
             if self._done is True:
                 return True
@@ -1210,8 +1201,7 @@ class Task:
                         try:
                             result[devName] = self.tasks[devName].getResult()
                         except:
-                            printExc("Error getting result for task %s (will "
-                                     "set result=None for this task):" % devName)
+                            printExc(f"Error getting result for task {devName} (will set result=None for this task):")
                             result[devName] = None
                         prof.mark("get result: " + devName)
                     self.result = result
@@ -1224,7 +1214,7 @@ class Task:
                             self.tasks[t].storeResult(self.cfg['storageDir'])
                     prof.mark("store data")
             finally:
-                ## Regardless of any other problems, at least make sure we 
+                ## Regardless of any other problems, at least make sure we
                 ## release hardware for future use
                 if self.stopTime is None:
                     self.stopTime = ptime.time()
@@ -1235,8 +1225,6 @@ class Task:
 
             if abort:
                 gc.collect()  ## it is often the case that now is a good time to garbage-collect.
-            # print "tasks:", self.tasks
-            # print "RESULT:", self.result
 
     def getResult(self):
         with self.taskLock:
@@ -1265,30 +1253,30 @@ class Task:
     @staticmethod
     def toposort(deps, cost=None):
         """Topological sort. Arguments are:
-        deps       Dictionary describing dependencies where a:[b,c] means "a 
+        deps       Dictionary describing dependencies where a:[b,c] means "a
                     depends on b and c"
         cost       Optional dictionary of per-node cost values. This will be used
-                    to sort independent graph branches by total cost. 
-                
+                    to sort independent graph branches by total cost.
+
         Examples::
 
             # Sort the following graph:
-            # 
+            #
             #   B ──┬─────> C <── D
-            #       │       │       
+            #       │       │
             #   E <─┴─> A <─┘
-            #     
+            #
             deps = {'a': ['b', 'c'], 'c': ['b', 'd'], 'e': ['b']}
             toposort(deps)
             => ['b', 'e', 'd', 'c', 'a']
-            
+
             # This example is underspecified; there are several orders
             # that correctly satisfy the graph. However, we may use the
             # 'cost' argument to impose more constraints on the sort order.
-            
+
             # Let each node have the following cost:
             cost = {'a': 0, 'b': 0, 'c': 1, 'e': 1, 'd': 3}
-            
+
             # Then the total cost of following any node is its own cost plus
             # the cost of all nodes that follow it:
             #   A = cost[a]
@@ -1296,7 +1284,7 @@ class Task:
             #   C = cost[c] + cost[a]
             #   D = cost[d] + cost[c] + cost[a]
             #   E = cost[e]
-            # If we sort independent branches such that the highest cost comes 
+            # If we sort independent branches such that the highest cost comes
             # first, the output is:
             toposort(deps, cost=cost)
             => ['d', 'b', 'c', 'e', 'a']

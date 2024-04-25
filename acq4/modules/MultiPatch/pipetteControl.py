@@ -1,3 +1,4 @@
+import numpy as np
 import re
 
 import pyqtgraph as pg
@@ -6,6 +7,8 @@ from six.moves import zip
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
+from neuroanalysis.data import TSeries
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
@@ -388,36 +391,38 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo.hide()
         # self.closeBtn.hide()
 
-    def newTestPulse(self, tp, history):
-        if self.mode in ['test pulse', 'tp analysis']:
-            data = tp.data
-            pri = data['Channel': 'primary']
-            units = pri._info[-1]['ClampState']['primaryUnits'] 
-            self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
-            self.plot.setLabels(left=('', units))
-
-            if self.mode == 'tp analysis':
-                t,y = tp.getFitData()
-                self.plot.plot(t, y, pen='b')
-
-        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
+    def newTestPulse(self, tp: PatchClampTestPulse, history):
+        if self.mode == 'test pulse':
+            self._plotTestPulse(tp)
+        elif self.mode == 'tp analysis':
+            self._plotTestPulse(tp)
+            if tp.analysis is None:  # calling tp.analysis actually initiates the analysis needed for the plots
+                return
+            if tp.fit_trace_with_transient is not None:
+                trans_fit = tp.fit_trace_with_transient
+                self.plot.plot(trans_fit.time_values, trans_fit.data, pen='r')
+            if tp.main_fit_trace is not None:
+                main_fit = tp.main_fit_trace
+                self.plot.plot(main_fit.time_values, main_fit.data, pen='b')
+        else:
             key, units = {
-                'ss resistance': ('steadyStateResistance', u'Ω'),
-                'peak resistance': ('peakResistance', u'Ω'),
-                'holding current': ('baselineCurrent', 'A'),
-                'holding potential': ('baselinePotential', 'V'),
-                'time constant': ('fitExpTau', 's'),
+                'ss resistance': ('steady_state_resistance', u'Ω'),
+                'peak resistance': ('access_resistance', u'Ω'),
+                'holding current': ('baseline_current', 'A'),
+                'holding potential': ('baseline_potential', 'V'),
+                'time constant': ('time_constant', 's'),
                 'capacitance': ('capacitance', 'F'),
             }[self.mode]
             self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=units))
+            val = tp.analysis[key]
+            if val is None:
+                val = np.nan
+            self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
-        elif self.mode in ['ss resistance', 'peak resistance']:
-            key = {'ss resistance': 'steadyStateResistance', 'peak resistance': 'peakResistance'}[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=u'Ω'))
+    def _plotTestPulse(self, tp):
+        pri: TSeries = tp['primary']
+        self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
+        self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
     def setMode(self, mode):
         if self.mode == mode:

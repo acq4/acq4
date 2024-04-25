@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import print_function, with_statement
+from typing import Literal
 
 import os
 
@@ -32,13 +30,12 @@ class MockClamp(PatchClamp):
             'command': config['Command'],
             'primary': config['ScaledSignal'],
         }
-
         self.holding = {
             'VC': config.get('vcHolding', -0.05),
             'IC': config.get('icHolding', 0.0)
         }
 
-        self.mode = 'I=0'
+        self.mode: Literal['VC', 'IC', 'I=0'] = 'I=0'
 
         self.config = config
 
@@ -109,6 +106,8 @@ class MockClamp(PatchClamp):
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
+            if mode == 'I=0':
+                return 0.0
             ivMode = ivModes[mode]  ## determine vc/ic
             return self.holding[ivMode]
 
@@ -131,15 +130,14 @@ class MockClamp(PatchClamp):
         startIvMode = ivModes[startMode]
         ivMode = ivModes[mode]
         if (startIvMode == 'VC' and ivMode == 'IC') or (startIvMode == 'IC' and ivMode == 'VC'):
-            ## switch to I=0 first
-            # self.requestModeSwitch('I=0')
+            # switch to I=0 first. TODO why?
             self.mode = 'I=0'
 
-        self.setHolding(ivMode, force=True)  ## we're in I=0 mode now, so it's ok to force the holding value.
+        self.setHolding(ivMode)
 
         ### TODO:
         ### If mode switches back the wrong direction, we need to reset the holding value and cancel.
-        self.mode = ivMode
+        self.mode = mode
         self.sigStateChanged.emit(self.getState())
 
     def getMode(self):
@@ -222,10 +220,10 @@ class MockClampTask(DAQGenericTask):
             'mode': mode,
             'primaryUnits': 'A' if mode == 'VC' else 'V',
             # copying multiclamp format here, but should eventually pick something more universal 
-            'ClampParams': ({
+            'ClampParams': ({} if mode == 'VC' else {
                                 'BridgeBalResist': 0,
                                 'BridgeBalEnable': True,
-                            } if mode == 'IC' else {}),
+                            }),
         }
 
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.

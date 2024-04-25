@@ -12,10 +12,10 @@ import warnings
 from copy import deepcopy
 
 from acq4 import getManager
-from acq4.devices.PatchPipette.testpulse import TestPulse
 from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
+from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect, units
 
 
@@ -370,7 +370,7 @@ class BathState(PatchPipetteState):
             
             tp = tps[-1]  # if we're falling behind, just skip the extra test pulses
 
-            ssr = tp.analysis()['steadyStateResistance']
+            ssr = tp.analysis['steady_state_resistance']
             if ssr > config['bathThreshold']:
                 # not in bath yet
                 bathResistances = []
@@ -535,7 +535,7 @@ class CellDetectState(PatchPipetteState):
             recentTestPulses.extend(tps)
 
             tp = tps[-1]
-            ssr = tp.analysis()['steadyStateResistance']
+            ssr = tp.analysis['steady_state_resistance']
             if initialResistance is None:
                 # take note of initial resistance
                 initialResistance = ssr
@@ -554,7 +554,7 @@ class CellDetectState(PatchPipetteState):
                 return self._transition_to_seal("cell detected (fast criteria)", patchrec)
             # slow cell detection
             if len(recentTestPulses) > config['slowDetectionSteps']:
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
+                res = np.array([tp.analysis['steady_state_resistance'] for tp in recentTestPulses])
                 if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
                     return self._transition_to_seal("cell detected (slow criteria)", patchrec)
             self.checkStop()
@@ -784,10 +784,10 @@ class SealState(PatchPipetteState):
             self.checkStop()
             time.sleep(0.05)
         
-        initialResistance = initialTP.analysis()['steadyStateResistance']
+        initialResistance = initialTP.analysis['steady_state_resistance']
         patchrec = dev.patchRecord()
         patchrec['resistanceBeforeSeal'] = initialResistance
-        patchrec['capacitanceBeforeSeal'] = initialTP.analysis()['capacitance']
+        patchrec['capacitanceBeforeSeal'] = initialTP.analysis['capacitance']
         startTime = ptime.time()
         pressure = config['startingPressure']
         if isinstance(config['pressureChangeRates'], str):
@@ -820,8 +820,8 @@ class SealState(PatchPipetteState):
                 continue
             tp = tps[-1]
 
-            ssr = tp.analysis()['steadyStateResistance']
-            cap = tp.analysis()['capacitance']
+            ssr = tp.analysis['steady_state_resistance']
+            cap = tp.analysis['capacitance']
 
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
@@ -862,8 +862,8 @@ class SealState(PatchPipetteState):
                     return config['fallbackState']
 
                 # update pressure
-                res = np.array([tp.analysis()['steadyStateResistance'] for tp in recentTestPulses])
-                times = np.array([tp.startTime() for tp in recentTestPulses])
+                res = np.array([tp.analysis['steady_state_resistance'] for tp in recentTestPulses])
+                times = np.array([tp.start_time for tp in recentTestPulses])
                 slope = scipy.stats.linregress(times, res).slope
                 pressure = np.clip(pressure, config['pressureLimit'], 0)
                 
@@ -944,17 +944,17 @@ class CellAttachedState(PatchPipetteState):
                 continue
 
             tp = tps[-1]
-            holding = tp.analysis()['baselineCurrent']
+            holding = tp.analysis['baseline_current']
             if holding < self.config['holdingCurrentThreshold']:
                 self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
                 return
             
-            cap = tp.analysis()['capacitance']
+            cap = tp.analysis['capacitance']
             if cap > config['breakInThreshold']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
-            patchrec['resistanceBeforeBreakin'] = tp.analysis()['steadyStateResistance']
+            patchrec['resistanceBeforeBreakin'] = tp.analysis['steady_state_resistance']
             patchrec['capacitanceBeforeBreakin'] = cap
 
 
@@ -1071,8 +1071,8 @@ class BreakInState(PatchPipetteState):
                 break
         tp = tps[-1]
 
-        analysis = tp.analysis()
-        holding = analysis['baselineCurrent']
+        analysis = tp.analysis
+        holding = analysis['baseline_current']
         if holding < self.config['holdingCurrentThreshold']:
             self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
             return False
@@ -1080,7 +1080,7 @@ class BreakInState(PatchPipetteState):
         # If ssr and cap cross threshold => successful break in
         # If only ssr crosses threshold => lost cell
         # If only cap crosses threshold => partial break in, keep trying
-        ssr = analysis['steadyStateResistance']
+        ssr = analysis['steady_state_resistance']
         cap = analysis['capacitance']
         if self.config['resistanceThreshold'] is not None and ssr < self.config['resistanceThreshold']:
             return True
@@ -1116,9 +1116,9 @@ class ResealAnalysis(object):
         """Return True if the resistance is decreasing."""
         return self._last_measurement and self._last_measurement['tearing']
 
-    def process_test_pulses(self, tps: list[TestPulse]) -> np.ndarray:
+    def process_test_pulses(self, tps: list[PatchClampTestPulse]) -> np.ndarray:
         return self.process_measurements(
-            np.array([(tp.startTime(), tp.analysis()['steadyStateResistance']) for tp in tps]))
+            np.array([(tp.start_time, tp.analysis['steady_state_resistance']) for tp in tps]))
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(
@@ -1484,12 +1484,12 @@ class BlowoutState(PatchPipetteState):
         while True:
             self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
-            if len(tps) == 0 or tps[-1].startTime() < start:
+            if len(tps) == 0 or tps[-1].start_time < start:
                 continue
             break
 
-        tp = tps[-1].analysis()
-        patchrec['resistanceAfterBlowout'] = tp['steadyStateResistance']
+        tp = tps[-1].analysis
+        patchrec['resistanceAfterBlowout'] = tp['steady_state_resistance']
         self.dev.finishPatchRecord()
         return config['fallbackState']
         

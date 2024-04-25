@@ -1,3 +1,5 @@
+from typing import Literal
+
 from acq4.devices.Device import Device
 from acq4.util import Qt
 
@@ -61,12 +63,12 @@ class PatchClamp(Device):
         """
         raise NotImplementedError()
 
-    def getMode(self):
+    def getMode(self) -> Literal['VC', 'IC', 'I=0']:
         """Get the currently active clamp mode ('IC', 'VC', etc.)
         """
         raise NotImplementedError()
 
-    def setMode(self, mode):
+    def setMode(self, mode: Literal['VC', 'IC', 'I=0']):
         """Set the currently active clamp mode ('IC', 'VC', etc.)
         """
         raise NotImplementedError()

@@ -67,8 +67,8 @@ class TestPulse(object):
             'startTime': data[0],
         }
         self.analysis = {
-            'steadyStateResistance': data[1],
-            'peakResistance': data[2],
+            'steady_state_resistance': data[1],
+            'peak_resistance': data[2],
         }
 
     @property
