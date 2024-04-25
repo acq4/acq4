@@ -1,17 +1,13 @@
+import os
 from typing import Literal
 
-import os
-
 import pyqtgraph.multiprocess as mp
-from acq4.devices.AxoPatch200 import CancelException
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
-from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-
-Ui_MockClampDevGui = Qt.importTemplate('.devTemplate')
+from pyqtgraph.WidgetGroup import WidgetGroup
 
 ivModes = {'I=0': 'IC', 'VC': 'VC', 'IC': 'IC'}
 modeNames = ['VC', 'I=0', 'IC']
