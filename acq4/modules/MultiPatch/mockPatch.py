@@ -1,25 +1,16 @@
 import numpy as np
 
+from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt, ptime
-from neuroanalysis.data import TSeries
-from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
 class MockPatch(object):
-    def __init__(self, pipette):
+    def __init__(self, pipette: PatchPipette):
         self.pipette = pipette
-        self.enabled = False
+        self.pipette.clampDevice.sigTestPulseFinished.connect(self._onTestPulse)
         self.widget = MockPatchUI(self)
-
+        self._enabled = False
         self.resetState()
-
-        pipette._testPulseThread.setParameters(postProcessing=self.mockAnalysis)
-    
-    def mockAnalysis(self, tp: PatchClampTestPulse) -> PatchClampTestPulse:
-        tp.__mock__ = self.enabled
-        if self.enabled:
-            tp._analysis = self.generateAnalysis()
-        return tp
 
     def resetState(self):
         self.radius = 7e-6
@@ -103,9 +94,18 @@ class MockPatch(object):
             'fit_xoffset': 0,
         }
 
+    def _onTestPulse(self, tp):
+        # TODO this won't be triggered in time to impact the current test pulse? maybe that's good enough?
+        if self._enabled:
+            self.pipette.clampDevice.mockTestPulseAnalysis(**self.generateAnalysis())
+
+    def setEnabled(self, enabled):
+        self.resetState()
+        self._enabled = enabled
+
 
 class MockPatchUI(Qt.QWidget):
-    def __init__(self, mp):
+    def __init__(self, mp: MockPatch):
         self.mockpatch = mp
 
         Qt.QWidget.__init__(self)
@@ -125,4 +125,4 @@ class MockPatchUI(Qt.QWidget):
         self.foulBtn.setCheckable(True)
 
     def enableClicked(self):
-        self.mockpatch.enabled = self.enableBtn.isChecked()
+        self.mockpatch.setEnabled(self.enableBtn.isChecked())

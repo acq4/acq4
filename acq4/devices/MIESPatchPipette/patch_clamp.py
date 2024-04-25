@@ -16,15 +16,15 @@ class MIESPatchClamp(PatchClamp):
         self.mies.autoPipetteOffset()
 
     def setMode(self, mode):
-        print("STUB: set clamp mode %r" % mode)
+        print(f"STUB: set clamp mode {mode!r}")
 
     def getMode(self):
         return 'ic'
 
-    def setHolding(self, mode, value):
-        print("STUB: set clamp holding %r %r" % (mode, value))
+    def setHolding(self, mode=None, value=None):
+        print(f"STUB: set clamp holding {mode!r} {value!r}")
 
-    def getHolding(self, mode):
+    def getHolding(self, mode=None):
         return 0
 
     def getState(self):
