@@ -1,10 +1,11 @@
+import contextlib
+import functools
+import numpy as np
 import threading
 from typing import Tuple
-import functools
 
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
-import numpy as np
 from acq4.util.Mutex import Mutex
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
@@ -92,7 +93,7 @@ class Stage(Device, OptomechDevice):
                 try:
                     js = dm.getDevice(jsname)
                 except Exception:
-                    print('Joystick device "%s" not found; disabling control from this device.' % jsname)
+                    print(f'Joystick device "{jsname}" not found; disabling control from this device.')
                     continue
                 jsdevs.add(js)
                 self._jsAxes.add((js, jsaxis))
@@ -202,8 +203,7 @@ class Stage(Device, OptomechDevice):
         devices with more complex kinematics need to reimplement this method.
         """ 
         tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
-        pos = pg.Vector(self.inverseAxisTransform().map(tr))
-        return pos
+        return pg.Vector(self.inverseAxisTransform().map(tr))
 
     def axisTransform(self) -> pg.Transform3D:
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
@@ -239,7 +239,7 @@ class Stage(Device, OptomechDevice):
 
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
-        assert axis in ('+x', '-x', '+y', '-y', '+z', '-z')
+        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z'}
         m = self.axisTransform().matrix()
         axis_index = {'x': 0, 'y': 1, 'z': 2}[axis[1]]
         axis_sign = 1 if axis[0] == '+' else -1
@@ -269,8 +269,7 @@ class Stage(Device, OptomechDevice):
         stagePos.
         """
         offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
-        m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
-        return m
+        return pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -464,7 +463,7 @@ class Stage(Device, OptomechDevice):
         """Helper function to convert absolute position (possibly
         containing Nones) to an absolute position.
         """
-        if any([x is None for x in abs]):
+        if any(x is None for x in abs):
             pos = self.getPosition()
             for i,x in enumerate(abs):
                 if x is not None:
@@ -535,7 +534,7 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError("Must be implemented in subclass.")
 
     def checkLimits(self, pos):
-        """Raise an exception if *pos* is outside the configured limits"""
+        """Raise an exception if *pos* (in local coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyz'[axis]
             x = pos[axis]
@@ -554,7 +553,7 @@ class Stage(Device, OptomechDevice):
     def goHome(self, speed='fast'):
         homePos = self.homePosition()
         if homePos is None:
-            raise Exception("No home position set for %s" % self.name())
+            raise RuntimeError(f"No home position set for {self.name()}")
         return self.moveToGlobal(homePos, speed=speed)
 
     def setHomePosition(self, pos=None):
@@ -660,8 +659,7 @@ class MovePathFuture(MoveFuture):
         fut = self._currentFuture
         if fut is None:
             return 0.0
-        pd = (100 * fut._pathStep + fut.percentDone()) / len(self.path)
-        return pd
+        return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
     def isDone(self):
         return self._done
@@ -685,15 +683,13 @@ class MovePathFuture(MoveFuture):
                 fut._pathStep = i
                 self._currentFuture = fut
                 while not fut.isDone():
-                    try:
+                    with contextlib.suppress(fut.Timeout):
                         fut.wait(timeout=0.1)
                         self.currentStep = i + 1
-                    except fut.Timeout:
-                        pass
                     if self._stopRequested:
                         fut.stop()
                         break
-                
+
                 if self._stopRequested:
                     self._errorMessage = "Move was cancelled"
                     self._wasInterrupted = True
@@ -704,7 +700,7 @@ class MovePathFuture(MoveFuture):
                     self._wasInterrupted = True
                     break
         except Exception as exc:
-            self._errorMessage = "Error in path move thread: %s" % exc
+            self._errorMessage = f"Error in path move thread: {exc}"
             self._wasInterrupted = True
         finally:
             self._done = True

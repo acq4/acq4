@@ -1,8 +1,7 @@
 import json
+import numpy as np
 import weakref
 from typing import List
-
-import numpy as np
 
 import pyqtgraph as pg
 from acq4 import getManager
@@ -16,6 +15,7 @@ from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
+from ...util.HelpfulException import HelpfulException
 from ...util.future import Future
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -172,12 +172,37 @@ class Pipette(Device, OptomechDevice):
         cache = self.readConfigFile('stored_positions')
         cache[name] = list(pos)
         self.writeConfigFile(cache, 'stored_positions')
+        self.checkRangeOfMotion(pos)
 
     def loadPosition(self, name, default=None):
         """Return a previously saved position.
         """
         cache = self.readConfigFile('stored_positions')
         return cache.get(name, default)
+
+    def checkRangeOfMotion(self, pos, tolerance=500e-6):
+        """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
+        manipulator: Stage = self.parentDevice()
+        pos = np.array(pos)
+        bad_axes = []
+        e = None
+        for axis in (0, 1, 2):
+            try:
+                bound = pos[:]
+                bound[axis] -= tolerance
+                manipulator.checkLimits(bound)
+                bound[axis] += 2 * tolerance
+                manipulator.checkLimits(bound)
+            except ValueError as e:
+                bad_axes.append(axis)
+        if bad_axes:
+            axis_names = {0: 'x', 1: 'y', 2: 'z'}
+            axes = ', '.join(axis_names[axis] for axis in bad_axes)
+            raise HelpfulException(
+                f"The specified position is within ±{tolerance:g}m of the {axes} limit(s) of this manipulator "
+                f"and may not always be accessible, depending on your pipette pull consistency.",
+                reasons=[f"Manipulator limits: {manipulator.getLimits()}"],
+            )
 
     def scopeDevice(self):
         if self._scopeDev is None:
@@ -884,10 +909,10 @@ class Axis(pg.ROI):
         p.scale(w, h)
         p.drawPath(self._path)
 
-    def setAngle(self, angle, update=True):
+    def setAngle(self, angle, update=True, **kwds):
         if self.state['angle'] == angle:
             return
-        pg.ROI.setAngle(self, angle, update=update)
+        pg.ROI.setAngle(self, angle, update=update, **kwds)
 
 
 class PipetteDeviceGui(Qt.QWidget):
