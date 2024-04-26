@@ -9,7 +9,7 @@ from pyqtgraph import mkPen
 
 
 class AutomationDebugWindow(Qt.QMainWindow):
-    def __init__(self, module):
+    def __init__(self, module: "AutomationDebug"):
         super().__init__()
         self._layout = Qt.QGridLayout()
         widget = Qt.QWidget()

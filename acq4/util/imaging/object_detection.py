@@ -78,16 +78,25 @@ def _get_remote_process():
 
 
 @Future.wrap
-def detect_neurons(frame: Frame, _future: Future):
+def detect_neurons(frame: Frame, _future: Future, model: str = "cellpose"):
     shared_array = _get_shared_array(frame.data())
     transform = frame.globalTransform()
     _future.checkStop()
     with _lock:
-        remote_process = _get_remote_process()
-        rmt_array = remote_process.client.transfer(shared_array)
-        rmt_this = remote_process.client._import("acq4.util.imaging.object_detection")
+        rmt_process = _get_remote_process()
+        rmt_array = rmt_process.client.transfer(shared_array)
+        rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this._do_neuron_detection_yolo(rmt_array.data, transform)
+        return rmt_this.do_neuron_detection(rmt_array.data, transform, model)
+
+
+def do_neuron_detection(data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose") -> list:
+    if model == 'yolo':
+        return _do_neuron_detection_yolo(data, transform)
+    elif model == 'cellpose':
+        return _do_neuron_detection_cellpose(data, transform)
+    else:
+        raise ValueError(f"Unknown model {model}")
 
 
 def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:
@@ -113,12 +122,17 @@ def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> li
     return [xyxy_to_rect(box) for box in boxes]  # TODO filter by class? score?
 
 
+def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -> list:
+    return []
+
+
 @click.command()
 @click.argument("image", required=True)
-def cli(image):
+@click.option("--model", default="cellpose", show_default=True, type=click.Choice(["cellpose", "yolo"]))
+def cli(image, model):
     null_xform = SRTTransform3D()
     image = Image.open(image)
-    neurons = _do_neuron_detection_yolo(np.array(image), null_xform)
+    neurons = do_neuron_detection(np.array(image), null_xform, model)
     print(f"Detected {len(neurons)} neuron(s)")
     print(neurons)
 
