@@ -13,7 +13,21 @@ modeNames = ['VC', 'I=0', 'IC']
 
 
 class MockClamp(PatchClamp):
+    """
+    MockClamp is a class that simulates a patch clamp amplifier.
 
+
+    Configuration examples::
+
+        # Simuator imported from neuroanalysis
+        simulator: 'neuroanalysis'
+
+        # simulator using neuron with cell model downloaded from AllenSDK
+        simulator: 'neuron'
+        condaEnv: 'allensdk'
+        modelId: 491623973  # mouse L5 pvalb perisomatic
+
+    """
     def __init__(self, dm, config, name):
         self.daqConfig = {
             'command': config['Command'],
