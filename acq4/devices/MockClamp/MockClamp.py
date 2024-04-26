@@ -69,6 +69,7 @@ class MockClamp(PatchClamp):
             currentMode = self.getMode()
             if mode is None:
                 mode = currentMode
+            mode = mode.upper()
             ivMode = ivModes[mode]  ## determine vc/ic
 
             if value is not None:
@@ -100,6 +101,7 @@ class MockClamp(PatchClamp):
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
+            mode = mode.upper()
             if mode == 'I=0':
                 return 0.0
             ivMode = ivModes[mode]  # determine vc/ic
