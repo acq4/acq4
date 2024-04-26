@@ -1,8 +1,9 @@
-from threading import RLock
-
+import PIL
+import click
 import numpy as np
 import scipy.stats
 from PIL import Image
+from threading import RLock
 from typing import Optional
 
 from acq4.devices.Camera.frame import Frame
@@ -11,15 +12,14 @@ from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
 
-from yolo import YOLO  # todo put this someplace
-
 _lock = RLock()
 _remote_process: Optional[ProcessSpawner] = None
 _shared_array: Optional[SharedNDArray] = None
-_yolo: Optional[YOLO] = None
+_yolo: "Optional[YOLO]" = None
 
 
-def _get_yolo() -> YOLO:
+def _get_yolo() -> "YOLO":
+    from yolo import YOLO  # todo put this someplace
     global _yolo
     if _yolo is None:
         _yolo = YOLO()
@@ -87,10 +87,10 @@ def detect_neurons(frame: Frame, _future: Future):
         rmt_array = remote_process.client.transfer(shared_array)
         rmt_this = remote_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this._do_neuron_detection(rmt_array.data, transform)
+        return rmt_this._do_neuron_detection_yolo(rmt_array.data, transform)
 
 
-def _do_neuron_detection(data: np.ndarray, transform: SRTTransform3D) -> list:
+def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:
     image = Image.fromarray(data)
     image = normalize(image)
     my_yolo = _get_yolo()
@@ -111,3 +111,17 @@ def _do_neuron_detection(data: np.ndarray, transform: SRTTransform3D) -> list:
         end = transform.map((end_x, end_y))
         return start, end
     return [xyxy_to_rect(box) for box in boxes]  # TODO filter by class? score?
+
+
+@click.command()
+@click.argument("image", required=True)
+def cli(image):
+    null_xform = SRTTransform3D()
+    image = Image.open(image)
+    neurons = _do_neuron_detection_yolo(np.array(image), null_xform)
+    print(f"Detected {len(neurons)} neuron(s)")
+    print(neurons)
+
+
+if __name__ == '__main__':
+    cli()
