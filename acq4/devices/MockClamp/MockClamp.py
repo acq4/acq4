@@ -1,7 +1,6 @@
 import os
+import teleprox
 from typing import Literal
-
-import pyqtgraph.multiprocess as mp
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
 from acq4.util import Qt
@@ -14,7 +13,21 @@ modeNames = ['VC', 'I=0', 'IC']
 
 
 class MockClamp(PatchClamp):
+    """
+    MockClamp is a class that simulates a patch clamp amplifier.
 
+
+    Configuration examples::
+
+        # Simuator imported from neuroanalysis
+        simulator: 'neuroanalysis'
+
+        # simulator using neuron with cell model downloaded from AllenSDK
+        simulator: 'neuron'
+        condaEnv: 'allensdk'
+        modelId: 491623973  # mouse L5 pvalb perisomatic
+
+    """
     def __init__(self, dm, config, name):
         self.daqConfig = {
             'command': config['Command'],
@@ -44,16 +57,19 @@ class MockClamp(PatchClamp):
             printExc("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
-        self.process = mp.Process()
-        rsys = self.process._import('sys')
-        rsys._setProxyOptions(returnType='proxy')  # need to access remote path by proxy, not by value
+        self.process = teleprox.ProcessSpawner(conda_env=config.get('condaEnv', None))
+        rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
         if config['simulator'] == 'builtin':
-            self.simulator = self.process._import('hhSim')
+            self.simulator = self.process.client._import('hhSim')
         elif config['simulator'] == 'neuron':
-            self.simulator = self.process._import('acq4.devices.MockClamp.neuronSim')
+            self.simulator = self.process.client._import('neuronSim')
+            if 'modelId' in config:
+                self.simulator.load_allen(config['modelId'])
+            else:
+                self.simulator.load_default()
         elif config['simulator'] == 'neuroanalysis':
-            self.simulator = self.process._import('acq4.devices.MockClamp.neuroanalysisSim')
+            self.simulator = self.process.client._import('neuroanalysisSim')
 
         dm.declareInterface(name, ['clamp'], self)
 
@@ -166,7 +182,7 @@ class MockClamp(PatchClamp):
 
     def quit(self):
         # self.process.send(None)
-        self.process.close()
+        self.process.stop()
         self.daqDev.quit()
 
     def getDAQName(self, channel):
@@ -234,11 +250,17 @@ class MockClampTask(DAQGenericTask):
 
     def read(self):
         ## Called by DAQGeneric to simulate a read-from-DAQ
-        return self.job.result(timeout=30)._getValue()
+        return self.job.result(timeout=30)
 
     def write(self, data, dt):
         ## Called by DAQGeneric to simulate a write-to-DAQ
-        self.job = self.clampDev.simulator.run({'data': data, 'dt': dt, 'mode': self.cmd['mode']}, _callSync='async')
+        self.job = self.clampDev.simulator.run({
+            'data': data, 
+            'dt': dt, 
+            'mode': self.cmd['mode'],
+            'vcHolding': self.clampDev.getHolding('VC'),
+            'icHolding': self.clampDev.getHolding('IC'),
+        }, _sync='async')
 
     def isDone(self):
         ## check on neuron process

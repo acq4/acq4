@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from six.moves import range
-
 """
 Main ACQ4 invocation script
 Copyright 2010  Luke Campagnola
@@ -16,6 +12,7 @@ if __package__ is None:
 
     __package__ = 'acq4'
 
+from .util import pg_setup  
 from .util import Qt
 from .Manager import Manager
 from .util.debug import installExceptionHandler
