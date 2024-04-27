@@ -1,3 +1,4 @@
+import itertools
 import weakref
 from typing import Union, Optional
 
@@ -202,7 +203,9 @@ def run_image_sequence(prot, _future: Future) -> list["Frame"]:
     # record
     with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
         try:
-            for i in range(maxIter):
+            for i in itertools.count():
+                if i >= maxIter:
+                    break
                 start = ptime.time()
                 if prot["zStack"]:
                     start, end, step = prot["zStackRangeArgs"]
@@ -215,11 +218,11 @@ def run_image_sequence(prot, _future: Future) -> list["Frame"]:
                     speed = meters_per_frame * z_per_second * 0.5
                     future = imager.acquireFrames()
                     with imager.ensureRunning(ensureFreshFrames=True):
-                        imager.acquireFrames(1).wait()  # just to be sure the camera's recording
+                        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
                         _set_focus_depth(imager, end, direction, speed)
-                        imager.acquireFrames(1).wait()  # just to be sure the camera caught up
+                        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
                         future.stop()
-                        frames += future.getResult(timeout=10)
+                        frames += _future.waitFor(future).getResult(timeout=10)
                     try:
                         frames = _enforce_linear_z_stack(frames, step)
                     except ValueError:
@@ -305,7 +308,12 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["zStackRangeArgs"] = None
 
         if prot["timelapse"]:
-            prot["timelapseCount"] = self.ui.iterationsSpin.value()
+            count = self.ui.iterationsSpin.cleanText()
+            if count == "inf":
+                count = float(count)
+            else:
+                count = int(count)
+            prot["timelapseCount"] = count
             prot["timelapseInterval"] = self.ui.intervalSpin.value()
         else:
             prot["timelapseCount"] = 1
@@ -331,6 +339,8 @@ class ImageSequencerCtrl(Qt.QWidget):
             dh = Manager.getManager().getCurrentDir().getDir("ImageSequence", create=True, autoIncrement=True)
             dhinfo = prot.copy()
             del dhinfo["imager"]
+            if dhinfo["timelapseCount"] == float("inf"):
+                dhinfo["timelapseCount"] = -1
             dh.setInfo(dhinfo)
             prot["storageDir"] = dh
             prot["save"] = True
@@ -344,6 +354,8 @@ class ImageSequencerCtrl(Qt.QWidget):
 
     def stop(self):
         if self._future is not None:
+            self.ui.startBtn.setText("Stopping...")
+            self.ui.startBtn.setEnabled(False)
             self._future.stop()
 
     def threadStopped(self, future):
@@ -357,6 +369,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             self._future = None
 
     def setRunning(self, b):
+        self.ui.startBtn.setEnabled(True)
         self.ui.startBtn.setText("Stop" if b else "Start")
         self.ui.zStackGroup.setEnabled(not b)
         self.ui.timelapseGroup.setEnabled(not b)
