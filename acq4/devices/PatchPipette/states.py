@@ -360,6 +360,9 @@ class BathState(PatchPipetteState):
         initialResistance = None
         bathResistances = []
 
+        if config['initialClampMode'] == 'VC':
+            dev.clampDevice.setHolding('IC', 0)  # only reset this if not configured to do otherwise
+
         while True:
             self.checkStop()
 
