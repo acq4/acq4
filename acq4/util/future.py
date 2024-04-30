@@ -180,7 +180,6 @@ class Future(Qt.QObject):
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
-                # This would be a fantastic place to "raise from self._excInfo[1]" once we move to py3
                 msg = f"Task {self} did not complete (no error message)."
             else:
                 msg = f"Task {self} did not complete: {err}"

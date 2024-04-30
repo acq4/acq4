@@ -1,5 +1,7 @@
 import contextlib
 import functools
+import sys
+
 import numpy as np
 import threading
 from typing import Tuple
@@ -639,14 +641,11 @@ class MovePathFuture(MoveFuture):
         self.path = path
         self.currentStep = 0
         self._currentFuture = None
-        self._done = False
-        self._wasInterrupted = False
-        self._errorMessage = None
 
         for step in self.path:
             if step.get("globalPos") is not None:
                 step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
-        for i,step in enumerate(self.path):
+        for i, step in enumerate(self.path):
             try:
                 self.dev.checkMove(**step)
             except Exception as exc:
@@ -661,12 +660,6 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def isDone(self):
-        return self._done
-
-    def wasInterrupted(self):
-        return self._wasInterrupted
-
     def errorMessage(self):
         return self._errorMessage
 
@@ -679,31 +672,36 @@ class MovePathFuture(MoveFuture):
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
-                fut = self.dev.move(**step)
+                fut: Future = self.dev.move(**step)
                 fut._pathStep = i
                 self._currentFuture = fut
                 while not fut.isDone():
                     with contextlib.suppress(fut.Timeout):
-                        fut.wait(timeout=0.1)
+                        fut.wait(timeout=0.1)  # raises Timeout
                         self.currentStep = i + 1
                     if self._stopRequested:
                         fut.stop()
                         break
 
                 if self._stopRequested:
-                    self._errorMessage = "Move was cancelled"
-                    self._wasInterrupted = True
+                    self._taskDone(interrupted=True, error="Move was cancelled by external request")
                     break
 
                 if fut.wasInterrupted():
-                    self._errorMessage = "Path step %d/%d: %s" % (i+1, len(self.path), fut.errorMessage())
-                    self._wasInterrupted = True
+                    self._taskDone(
+                        interrupted=True,
+                        error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
+                        excInfo=fut._excInfo,
+                    )
                     break
         except Exception as exc:
-            self._errorMessage = f"Error in path move thread: {exc}"
-            self._wasInterrupted = True
-        finally:
-            self._done = True
+            self._taskDone(
+                interrupted=True,
+                error=f"Error in trying to {self.path.get('explanation')}",
+                excInfo=(type(exc), exc, exc.__traceback__),
+            )
+        if not self.isDone():
+            self._taskDone()  # success!
 
     def undo(self):
         """Reverse the moves generated in this future and return a new future.
