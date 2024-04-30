@@ -711,6 +711,7 @@ class MovePathFuture(MoveFuture):
         for i in range(min(self.currentStep, len(self.path)-1), -1, -1):
             step = fwdPath[i+1].copy()
             step['position'] = fwdPath[i]['position']
+            step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
         return self.dev.movePath(revPath)
 
