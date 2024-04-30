@@ -1591,7 +1591,11 @@ class CleanState(PatchPipetteState):
             waypoint1[2] = wellPos[2] + config['approachHeight']
             waypoint2 = wellPos.copy()
             waypoint2[2] = waypoint1[2]
-            path = [(waypoint1, 'fast', False), (waypoint2, 'fast', True), (wellPos, 'fast', False)]
+            path = [
+                (waypoint1, 'fast', False, f"get to {waypoint1[2]} z"),
+                (waypoint2, 'fast', True, f"above the {stage}ing well"),
+                (wellPos, 'fast', False, f"into the {stage}ing well"),
+            ]
 
             self.currentFuture = pip._movePath(path)
 

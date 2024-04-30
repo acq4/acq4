@@ -6,6 +6,13 @@ from acq4.util.future import MultiFuture
 
 if TYPE_CHECKING:
     from .pipette import Pipette
+    from ..Stage import Stage
+
+RETRACTION_TO_AVOID_SAMPLE_TEAR = "retracting away from sample"
+MOVE_TO_DESTINATION = "final move to destination"
+APPROACH_WAYPOINT = "approach waypoint"
+SAFE_SPEED_WAYPOINT = "safe speed waypoint"
+APPROACH_TO_CORRECT_FOR_HYSTERESIS = "hysteresis correction waypoint"
 
 
 class PipettePathGenerator:
@@ -18,8 +25,9 @@ class PipettePathGenerator:
     """
     def __init__(self, pip: Pipette):
         self.pip = pip
+        self.manipulator: Stage = pip.parentDevice()
 
-    def safePath(self, globalStart, globalStop, speed):
+    def safePath(self, globalStart, globalStop, speed, explanation=None):
         """Given global starting and stopping positions, return a list of global waypoints that avoid obstacles.
 
         Generally, movements are split into axes parallel and orthogonal to the pipette. When moving "inward", the
@@ -33,6 +41,7 @@ class PipettePathGenerator:
 
         The returned path does _not_ include the starting position.
         """
+        explanation = explanation or MOVE_TO_DESTINATION
         globalStart = np.asarray(globalStart)
         globalStop = np.asarray(globalStop)
         path = [(globalStart,)]
@@ -45,7 +54,7 @@ class PipettePathGenerator:
             if not canMoveLaterally:
                 # need to retract first
                 safePos = self.pip.positionAtDepth(slowDepth, start=globalStart)
-                path.append((safePos, 'slow', True))
+                path.append((safePos, 'slow', True, RETRACTION_TO_AVOID_SAMPLE_TEAR))
                 # the rest of this method continues as if safePos is the starting point
                 globalStart = safePos
 
@@ -69,38 +78,45 @@ class PipettePathGenerator:
 
         # break up the inner segment if part of it needs to be slower
         if inward:
-            slowpath = self.enforceSafeSpeed(waypoint, globalStop, speed, linear=True)
-            path += [(waypoint, speed, False)] + slowpath
+            slowpath = self.enforceSafeSpeed(waypoint, globalStop, speed, explanation, linear=True)
+            path += [(waypoint, speed, False, APPROACH_WAYPOINT)] + slowpath
         else:
-            slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, linear=True)
-            path += slowpath + [(globalStop, speed, False)]
+            slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
+            path += slowpath + [(globalStop, speed, False, explanation)]
 
+        path = path[1:]  # trim off the start position
         for step in path:
-            assert np.isfinite(step[0]).all()
-        return path[1:]
+            try:
+                assert np.isfinite(step[0]).all()
+                self.manipulator.checkLimits(self.pip.mapGlobalToParent(step[0]))
+            except Exception as e:
+                raise ValueError(
+                    f"Moving {self.pip} to '{step[3]}' would be beyond the limits of its manipulator: {e}"
+                ) from e
+        return path
 
-    def enforceSafeSpeed(self, start, stop, speed, linear):
+    def enforceSafeSpeed(self, start, stop, speed, explanation, linear):
         """Given global start/stop positions and a desired speed, return a path that reduces the speed for segments that
         are close to the sample.
         """
         if speed == 'slow':
             # already slow; no need for extra steps
-            return [(stop, speed, linear)]
+            return [(stop, speed, linear, explanation)]
 
         slowDepth = self.pip.approachDepth()
         startSlow = start[2] < slowDepth
         stopSlow = stop[2] < slowDepth
         if startSlow and stopSlow:
             # all slow
-            return [(stop, 'slow', linear)]
+            return [(stop, 'slow', linear, explanation)]
         elif not startSlow and not stopSlow:
-            return [(stop, speed, linear)]
+            return [(stop, speed, linear, explanation)]
         else:
             waypoint = self.pip.positionAtDepth(slowDepth, start=start)
             if startSlow:
-                return [(waypoint, 'slow', linear), (stop, speed, linear)]
+                return [(waypoint, 'slow', linear, SAFE_SPEED_WAYPOINT), (stop, speed, linear, explanation)]
             else:
-                return [(waypoint, speed, linear), (stop, 'slow', linear)]
+                return [(waypoint, speed, linear, SAFE_SPEED_WAYPOINT), (stop, 'slow', linear, explanation)]
 
     def safeYZPosition(self, start, margin=2e-3):
         """Return a position to travel to, beginning from *start*, where the pipette may freely move in the local YZ
@@ -163,8 +179,7 @@ class PipetteMotionPlanner:
             self.future.stop()
 
     def _move(self):
-        path = self.path()
-        return self.pip._movePath(path)
+        return self.pip._movePath(self.path())
 
     def path(self):
         raise NotImplementedError()
@@ -269,8 +284,8 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
-        path = self.safePath(pip.globalPosition(), waypoint1, speed)
-        path.append((waypoint2, 'slow', True))
+        path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
+        path.append((waypoint2, 'slow', True, MOVE_TO_DESTINATION))
         pfut = pip._movePath(path)
         sfut = scope.setGlobalPosition(waypoint2)
 
@@ -313,7 +328,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         scope = pip.scopeDevice()
         surface = scope.getSurfaceDepth()
         if surface is None:
-            raise Exception("Surface depth has not been set.")
+            raise ValueError("Surface depth has not been set.")
 
         # we want to land 1 mm above sample surface
         idleDepth = surface + pip._opts['idleHeight']
