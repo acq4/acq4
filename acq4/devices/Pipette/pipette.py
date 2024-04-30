@@ -190,9 +190,9 @@ class Pipette(Device, OptomechDevice):
             try:
                 bound = pos[:]
                 bound[axis] -= tolerance
-                manipulator.checkLimits(bound)
+                manipulator.checkLimits(self.mapGlobalToParent(bound))
                 bound[axis] += 2 * tolerance
-                manipulator.checkLimits(bound)
+                manipulator.checkLimits(self.mapGlobalToParent(bound))
             except ValueError as e:
                 bad_axes.append(axis)
         if bad_axes:
