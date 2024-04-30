@@ -360,16 +360,16 @@ class Pipette(Device, OptomechDevice):
     def _movePath(self, path) -> MovePathFuture:
         """
         move along a path defined in global coordinates.
-        Format is [(pos, speed, linear), ...]
+        Format is [(pos, speed, linear, explanation), ...]
         returns the movefuture of the last move.
         WARNING: This method does _not_ implement any motion planning.
         """
 
         self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path})
         stagePath = []
-        for pos, speed, linear in path:
+        for pos, speed, linear, explanation in path:
             stagePos = self._solveGlobalStagePosition(pos)
-            stagePath.append({'globalPos': stagePos, 'speed': speed, 'linear': linear})
+            stagePath.append({'globalPos': stagePos, 'speed': speed, 'linear': linear, 'explanation': explanation})
 
         stage = self.parentDevice()
         return stage.movePath(stagePath)
