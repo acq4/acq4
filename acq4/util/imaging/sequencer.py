@@ -21,14 +21,11 @@ def runZStack(imager, z_range_args) -> Future:
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
-    return run_image_sequence({
-        "imager": imager,
-        "zStack": True,
-        "zStackRangeArgs": z_range_args,
-        "timelapseCount": 1,
-        "timelapseInterval": 0,
-        "save": False,
-    })
+    return run_image_sequence(
+        imager=imager,
+        zStack=True,
+        zStackRangeArgs=z_range_args,
+    )
 
 
 def _enforce_linear_z_stack(frames: list["Frame"], step: float) -> list["Frame"]:
@@ -192,10 +189,16 @@ def _save_results(frames, storage_dir, is_z_stack: bool = False):
 
 
 @Future.wrap
-def run_image_sequence(prot, _future: Future) -> list["Frame"]:
-    maxIter = prot["timelapseCount"]
-    interval = prot["timelapseInterval"]
-    imager = prot["imager"]
+def run_image_sequence(
+        imager,
+        timelapseCount: int = 1,
+        timelapseInterval: float = 0,
+        zStack: bool = False,
+        zStackRangeArgs: "tuple | None" = None,
+        save: bool = False,
+        storageDir: "DirHandle | None" = None,
+        _future: Future = None
+) -> list["Frame"]:
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
     frames = []
@@ -204,11 +207,11 @@ def run_image_sequence(prot, _future: Future) -> list["Frame"]:
     with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
         try:
             for i in itertools.count():
-                if i >= maxIter:
+                if i >= timelapseCount:
                     break
                 start = ptime.time()
-                if prot["zStack"]:
-                    start, end, step = prot["zStackRangeArgs"]
+                if zStack:
+                    start, end, step = zStackRangeArgs
                     direction = start - end
                     _set_focus_depth(imager, start, direction, 'fast')
                     # fps = imager.getEstimatedFrameRate().getResult()
@@ -231,11 +234,11 @@ def run_image_sequence(prot, _future: Future) -> list["Frame"]:
                         frames = _enforce_linear_z_stack(frames, step)
                 else:  # single frame
                     frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
-                _future.setState(_status_message(i, maxIter))
-                _future.sleep(interval - (ptime.time() - start))
+                _future.setState(_status_message(i, timelapseCount))
+                _future.sleep(timelapseInterval - (ptime.time() - start))
         finally:
-            if prot["save"]:
-                _save_results(frames, prot["storageDir"], prot["zStack"])
+            if save:
+                _save_results(frames, storageDir, zStack)
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
     return frames
@@ -297,7 +300,6 @@ class ImageSequencerCtrl(Qt.QWidget):
         prot = {
             "imager": self.selectedImager(),
             "zStack": self.ui.zStackGroup.isChecked(),
-            "timelapse": self.ui.timelapseGroup.isChecked(),
         }
         if prot["zStack"]:
             start = self.ui.zStartSpin.value()
@@ -307,7 +309,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         else:
             prot["zStackRangeArgs"] = None
 
-        if prot["timelapse"]:
+        if self.ui.timelapseGroup.isChecked():
             count = self.ui.iterationsSpin.cleanText()
             if count == "inf":
                 count = float(count)
@@ -345,7 +347,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["storageDir"] = dh
             prot["save"] = True
             self.setRunning(True)
-            self._future = run_image_sequence(prot)
+            self._future = run_image_sequence(**prot)
             self._future.sigFinished.connect(self.threadStopped)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
@@ -380,7 +382,7 @@ class ImageSequencerCtrl(Qt.QWidget):
 
     def updateStatus(self):
         prot = self.makeProtocol()
-        if prot["timelapse"]:
+        if prot["timelapseCount"] > 1:
             itermsg = f"iter=0/{prot['timelapseCount']}"
         else:
             itermsg = "iter=0"
