@@ -255,6 +255,10 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.zEndSpin.setOpts(value=50e-6, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.zSpacingSpin.setOpts(min=1e-9, value=1e-6, suffix="m", siPrefix=True, dec=True, minStep=1e-9, step=0.5)
         self.ui.intervalSpin.setOpts(min=0, value=1, suffix="s", siPrefix=True, dec=True, minStep=1e-3, step=1)
+        self.ui.xLeftSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.xRightSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.yTopSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
@@ -270,6 +274,8 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.pauseBtn.setVisible(False)  # Todo
         self.ui.setStartBtn.clicked.connect(self.setStartClicked)
         self.ui.setEndBtn.clicked.connect(self.setEndClicked)
+        self.ui.setTopLeftBtn.clicked.connect(self.setTopLeftClicked)
+        self.ui.setBottomRightBtn.clicked.connect(self.setBottomRightClicked)
 
     def updateDeviceList(self):
         items = ["Select device.."]
@@ -282,6 +288,12 @@ class ImageSequencerCtrl(Qt.QWidget):
             return None
         name = self.ui.deviceCombo.currentText()
         return self.mod().interfaces[name].getDevice()
+
+    def _selectedImagerOrComplain(self):
+        dev = self.selectedImager()
+        if dev is None:
+            raise ValueError("Must select an imaging device first.")
+        return dev
 
     def stateChanged(self, name, value):
         if name == "deviceCombo":
@@ -367,6 +379,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.startBtn.setEnabled(True)
         self.ui.startBtn.setText("Stop" if b else "Start")
         self.ui.zStackGroup.setEnabled(not b)
+        self.ui.mosaicGroup.setEnabled(not b)
         self.ui.timelapseGroup.setEnabled(not b)
         self.ui.deviceCombo.setEnabled(not b)
 
@@ -384,13 +397,22 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.statusLabel.setText(msg)
 
     def setStartClicked(self):
-        dev = self.selectedImager()
-        if dev is None:
-            raise Exception("Must select an imaging device first.")
+        dev = self._selectedImagerOrComplain()
         self.ui.zStartSpin.setValue(dev.getFocusDepth())
 
     def setEndClicked(self):
-        dev = self.selectedImager()
-        if dev is None:
-            raise Exception("Must select an imaging device first.")
+        dev = self._selectedImagerOrComplain()
         self.ui.zEndSpin.setValue(dev.getFocusDepth())
+
+    def setTopLeftClicked(self):
+        dev = self._selectedImagerOrComplain()
+        bound = dev.globalTransform().map(Qt.QPointF(0, 0))
+        self.ui.xLeftSpin.setValue(bound.x())
+        self.ui.yTopSpin.setValue(bound.y())
+
+    def setBottomRightClicked(self):
+        dev = self._selectedImagerOrComplain()
+        size = dev.getParam("sensorSize")
+        bound = dev.globalTransform().map(Qt.QPointF(*size))
+        self.ui.xRightSpin.setValue(bound.x())
+        self.ui.yBottomSpin.setValue(bound.y())
