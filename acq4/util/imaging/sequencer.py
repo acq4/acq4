@@ -205,27 +205,7 @@ def run_image_sequence(
                     break
                 start = ptime.time()
                 if z_stack is not None:
-                    start, end, step = z_stack
-                    direction = start - end
-                    _set_focus_depth(imager, start, direction, 'fast')
-                    # fps = imager.getEstimatedFrameRate().getResult()
-                    stage = imager.scopeDev.getFocusDevice()
-                    z_per_second = stage.positionUpdatesPerSecond
-                    meters_per_frame = abs(step)
-                    speed = meters_per_frame * z_per_second * 0.5
-                    future = imager.acquireFrames()
-                    with imager.ensureRunning(ensureFreshFrames=True):
-                        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-                        _set_focus_depth(imager, end, direction, speed)
-                        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-                        future.stop()
-                        frames += _future.waitFor(future).getResult(timeout=10)
-                    try:
-                        frames = _enforce_linear_z_stack(frames, step)
-                    except ValueError:
-                        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-                        frames = _slow_z_stack(imager, start, end, step).getResult()
-                        frames = _enforce_linear_z_stack(frames, step)
+                    frames.append(_do_z_stack(imager, z_stack, _future))
                 else:  # single frame
                     frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
                 _future.setState(_status_message(i, count))
@@ -235,6 +215,30 @@ def run_image_sequence(
                 _save_results(frames, storage_dir, bool(z_stack))
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
+    return frames
+
+
+def _do_z_stack(imager, z_stack: tuple[float, float, float], _future: Future) -> list["Frame"]:
+    start, end, step = z_stack
+    direction = start - end
+    _set_focus_depth(imager, start, direction, 'fast')
+    stage = imager.scopeDev.getFocusDevice()
+    z_per_second = stage.positionUpdatesPerSecond
+    meters_per_frame = abs(step)
+    speed = meters_per_frame * z_per_second * 0.5
+    frames_fut = imager.acquireFrames()
+    with imager.ensureRunning(ensureFreshFrames=True):
+        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+        _set_focus_depth(imager, end, direction, speed)
+        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+        frames_fut.stop()
+        frames = _future.waitFor(frames_fut).getResult(timeout=10)
+    try:
+        frames = _enforce_linear_z_stack(frames, step)
+    except ValueError:
+        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
+        frames = _slow_z_stack(imager, start, end, step).getResult()
+        frames = _enforce_linear_z_stack(frames, step)
     return frames
 
 
@@ -312,8 +316,6 @@ class ImageSequencerCtrl(Qt.QWidget):
             end = self.ui.zEndSpin.value()
             spacing = self.ui.zSpacingSpin.value()
             prot["z_stack"] = (start, end, spacing)
-        else:
-            prot["z_stack"] = None
 
         if self.ui.timelapseGroup.isChecked():
             count = self.ui.iterationsSpin.cleanText()
@@ -343,7 +345,6 @@ class ImageSequencerCtrl(Qt.QWidget):
             if self.selectedImager() is None:
                 raise RuntimeError("No imaging device selected.")
             prot = self.makeProtocol()
-            self.currentProtocol = prot
             dh = Manager.getManager().getCurrentDir().getDir("ImageSequence", create=True, autoIncrement=True)
             dhinfo = prot.copy()
             del dhinfo["imager"]
