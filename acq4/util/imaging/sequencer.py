@@ -189,7 +189,7 @@ def run_image_sequence(
         imager,
         count: float = 1,
         interval: float = 0,
-        z_stack: "tuple | None" = None,
+        z_stack: "tuple[float, float, float] | None" = None,
         storage_dir: "DirHandle | None" = None,
         _future: Future = None
 ) -> list["Frame"]:
