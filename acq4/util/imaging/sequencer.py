@@ -273,6 +273,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         cameraMod.sigInterfaceRemoved.connect(self.updateDeviceList)
         self.ui.startBtn.clicked.connect(self.startClicked)
         self.ui.pauseBtn.clicked.connect(self.pauseClicked)
+        self.ui.pauseBtn.setVisible(False)  # Todo
         self.ui.setStartBtn.clicked.connect(self.setStartClicked)
         self.ui.setEndBtn.clicked.connect(self.setEndClicked)
 
