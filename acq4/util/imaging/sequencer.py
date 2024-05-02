@@ -206,7 +206,7 @@ def run_image_sequence(
                     break
                 start = ptime.time()
                 for move in movements_to_cover_region(imager, mosaic):
-                    _future.waitFor(move())
+                    _future.waitFor(move)
                     if z_stack is not None:
                         frames.extend(_future.waitFor(_do_z_stack(imager, z_stack)).getResult())
                     else:  # single frame
@@ -216,15 +216,15 @@ def run_image_sequence(
                 _future.sleep(interval - (ptime.time() - start))
         finally:
             if storage_dir is not None:
-                _save_results(frames, storage_dir, z_stack is not None)
+                _save_results(frames, storage_dir, count > 1, z_stack is not None, mosaic is not None)
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
     return frames
 
 
-def movements_to_cover_region(imager, region: "tuple[float, float, float, float, float] | None") -> Generator[Callable[[], Future], None, None]:
+def movements_to_cover_region(imager, region: "tuple[float, float, float, float, float] | None") -> Generator[Future, None, None]:
     if region is None:
-        yield lambda: Future.immediate()
+        yield Future.immediate()
         return
 
     xform = pg.SRTTransform3D(imager.globalTransform())
@@ -255,7 +255,7 @@ def movements_to_cover_region(imager, region: "tuple[float, float, float, float,
     while not y_finished:
         y_finished = (pos - coverage_offset)[1] <= region_bottom_right[1]
         while not x_finished:
-            yield lambda: imager.moveCenterToGlobal(pos, "fast")
+            yield imager.moveCenterToGlobal(pos, "fast")
             x_finished = x_tests[x_direction]()
             if not x_finished:
                 pos[0] += x_steps[x_direction]
