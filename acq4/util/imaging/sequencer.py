@@ -1,6 +1,6 @@
 import itertools
 import weakref
-from typing import Union, Optional, Generator
+from typing import Union, Optional, Generator, Callable
 
 import numpy as np
 from MetaArray import MetaArray
@@ -208,9 +208,9 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move())
                     if z_stack is not None:
-                        frames.append(_do_z_stack(imager, z_stack, _future))
+                        frames.extend(_do_z_stack(imager, z_stack, _future))
                     else:  # single frame
-                        frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
+                        frames.append(_future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0])
                     _future.checkStop()
                 _future.setState(_status_message(i, count))
                 _future.sleep(interval - (ptime.time() - start))
@@ -222,11 +222,11 @@ def run_image_sequence(
     return frames
 
 
-def movements_to_cover_region(imager, region: "tuple[float, float, float, float] | None") -> Generator[Future, None, None]:
+def movements_to_cover_region(imager, region: "tuple[float, float, float, float] | None") -> Generator[Callable[[], Future], None, None]:
     if region is None:
         fut = Future()
         fut._taskDone()
-        yield fut
+        yield lambda: fut
         return
 
     xform = pg.SRTTransform3D(imager.globalTransform())
