@@ -224,9 +224,7 @@ def run_image_sequence(
 
 def movements_to_cover_region(imager, region: "tuple[float, float, float, float] | None") -> Generator[Callable[[], Future], None, None]:
     if region is None:
-        fut = Future()
-        fut._taskDone()
-        yield lambda: fut
+        yield lambda: Future.immediate()
         return
 
     xform = pg.SRTTransform3D(imager.globalTransform())

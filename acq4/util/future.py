@@ -45,6 +45,13 @@ class Future(Qt.QObject):
             return future
         return wrapper
 
+    @classmethod
+    def immediate(cls, result=None):
+        """Create a future that is already resolved with the optional result."""
+        fut = cls()
+        fut._taskDone(returnValue=result)
+        return fut
+
     def __init__(self):
         Qt.QObject.__init__(self)
         
@@ -72,8 +79,7 @@ class Future(Qt.QObject):
     def _executeInThread(self, func, args, kwds):
         try:
             kwds['_future'] = self
-            self._returnVal = func(*args, **kwds)
-            self._taskDone()
+            self._taskDone(returnValue=func(*args, **kwds))
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
 
@@ -121,7 +127,7 @@ class Future(Qt.QObject):
             self._errorMessage = reason
         self._stopRequested = True
 
-    def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None):
+    def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None, returnValue=None):
         """Called by subclasses when the task is done (regardless of the reason)
         """
         if self._isDone:
@@ -136,6 +142,8 @@ class Future(Qt.QObject):
             self.setState(state or f'interrupted: {error}')
         else:
             self.setState(state or 'complete')
+        if returnValue is not None:
+            self._returnVal = returnValue
         self.finishedEvent.set()
         self.sigFinished.emit(self)
 
