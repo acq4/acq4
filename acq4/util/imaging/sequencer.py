@@ -208,7 +208,7 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move())
                     if z_stack is not None:
-                        frames.extend(_do_z_stack(imager, z_stack, _future))
+                        frames.extend(_future.waitFor(_do_z_stack(imager, z_stack)).getResult())
                     else:  # single frame
                         frames.append(_future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0])
                     _future.checkStop()
@@ -261,6 +261,7 @@ def movements_to_cover_region(imager, region: "tuple[float, float, float, float]
         x_finished = False
 
 
+@Future.wrap
 def _do_z_stack(imager, z_stack: tuple[float, float, float], _future: Future) -> list["Frame"]:
     start, end, step = z_stack
     direction = start - end
@@ -294,6 +295,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         Qt.QWidget.__init__(self)
 
         self.imager = None
+        self._manuallyStopped = False
 
         self.ui = Qt.importTemplate(".sequencerTemplate")()
         self.ui.setupUi(self)
@@ -416,7 +418,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.ui.startBtn.setText("Stopping...")
             self.ui.startBtn.setEnabled(False)
             self._future.stop()
-            self.cleanUpFuture()  # to prevent this from raising in threadStopped
+            self._manuallyStopped = True
 
     def threadStopped(self, future):
         self.ui.startBtn.setText("Start")
@@ -425,13 +427,12 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.updateStatus()
         if self._future is not None:
             fut = self._future
-            self.cleanUpFuture()
-            fut.wait(timeout=1)  # to raise errors if any happened
-
-    def cleanUpFuture(self):
-        self._future.sigFinished.disconnect(self.threadStopped)
-        self._future.sigStateChanged.disconnect(self.threadMessage)
-        self._future = None
+            self._future.sigFinished.disconnect(self.threadStopped)
+            self._future.sigStateChanged.disconnect(self.threadMessage)
+            self._future = None
+            if not self._manuallyStopped:
+                fut.wait(timeout=1)  # to raise errors if any happened
+                self._manuallyStopped = False
 
     def setRunning(self, b):
         self.ui.startBtn.setEnabled(True)

@@ -63,7 +63,7 @@
    <item row="0" column="0">
     <widget class="QPushButton" name="startBtn">
      <property name="toolTip">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Begin acquiring a sequence of images (timelapse, z-stack, or both).&lt;/p&gt;&lt;p&gt;Click again to interrupt a running sequence.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Begin acquiring a sequence of images (timelapse, z-stack, mosaic, or any combination thereof).&lt;/p&gt;&lt;p&gt;Click again to interrupt a running sequence.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="text">
       <string>Start</string>
@@ -147,7 +147,7 @@
      </layout>
     </widget>
    </item>
-   <item row="0" column="2" rowspan="3">
+   <item row="0" column="3" rowspan="3">
     <widget class="QGroupBox" name="zStackGroup">
      <property name="toolTip">
       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable or disable acquiring a stack of images along a range of focus depths.&lt;/p&gt;&lt;p&gt;The entire stack is acquired once per timelapse iteration.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -254,7 +254,7 @@
      </layout>
     </widget>
    </item>
-   <item row="0" column="3" rowspan="3">
+   <item row="0" column="2" rowspan="3">
     <widget class="QGroupBox" name="mosaicGroup">
      <property name="toolTip">
       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable or disable acquiring a tile mosaic of images or z-stacks.&lt;/p&gt;&lt;p&gt;Images may overlap.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
