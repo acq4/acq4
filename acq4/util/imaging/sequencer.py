@@ -242,15 +242,22 @@ def movements_to_cover_region(imager, region: "tuple[float, float, float, float]
     region_bottom_right = np.array((*region[2:], z))
     pos = region_top_left + move_offset
     x_finished = y_finished = False
+    x_tests = (
+            lambda: (pos - coverage_offset)[0] >= region_bottom_right[0],
+            lambda: (pos + coverage_offset)[0] <= region_top_left[0],
+    )
+    x_steps = (step[0], -step[0])
+    x_direction = 0
 
     while not y_finished:
-        y_finished = (pos - coverage_offset)[1] < region_bottom_right[1]
+        y_finished = (pos - coverage_offset)[1] <= region_bottom_right[1]
         while not x_finished:
-            x_finished = (pos - coverage_offset)[0] > region_bottom_right[0]
             yield lambda: imager.moveCenterToGlobal(pos, "fast")
-            pos[0] += step[0]
+            x_finished = x_tests[x_direction]()
+            if not x_finished:
+                pos[0] += x_steps[x_direction]
         pos[1] += step[1]
-        pos[0] = (region_top_left + move_offset)[0]
+        x_direction = (x_direction + 1) % 2
         x_finished = False
 
 
