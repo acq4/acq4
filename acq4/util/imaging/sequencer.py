@@ -190,7 +190,7 @@ def run_image_sequence(
         count: float = 1,
         interval: float = 0,
         z_stack: "tuple[float, float, float] | None" = None,
-        mosaic: "tuple[float, float, float, float] | None" = None,
+        mosaic: "tuple[float, float, float, float, float] | None" = None,
         storage_dir: "DirHandle | None" = None,
         _future: Future = None
 ) -> list["Frame"]:
@@ -222,7 +222,7 @@ def run_image_sequence(
     return frames
 
 
-def movements_to_cover_region(imager, region: "tuple[float, float, float, float] | None") -> Generator[Callable[[], Future], None, None]:
+def movements_to_cover_region(imager, region: "tuple[float, float, float, float, float] | None") -> Generator[Callable[[], Future], None, None]:
     if region is None:
         yield lambda: Future.immediate()
         return
@@ -236,10 +236,13 @@ def movements_to_cover_region(imager, region: "tuple[float, float, float, float]
     move_offset = img_center - img_top_left
     img_bottom_right = np.array(xform.map((img_x + img_w, img_y + img_h, 0)))
     coverage_offset = img_center - img_bottom_right
-    step = img_bottom_right - img_top_left
+    overlap = region[-1]
+    step = np.abs(img_bottom_right - img_top_left) - overlap
+    if np.any(step <= 0):
+        raise ValueError(f"Overlap {overlap:g} exceeds field of view")
 
     region_top_left = np.array((*region[:2], z))
-    region_bottom_right = np.array((*region[2:], z))
+    region_bottom_right = np.array((*region[2:4], z))
     pos = region_top_left + move_offset
     x_finished = y_finished = False
     x_tests = (
@@ -256,7 +259,7 @@ def movements_to_cover_region(imager, region: "tuple[float, float, float, float]
             x_finished = x_tests[x_direction]()
             if not x_finished:
                 pos[0] += x_steps[x_direction]
-        pos[1] += step[1]
+        pos[1] -= step[1]
         x_direction = (x_direction + 1) % 2
         x_finished = False
 
@@ -308,6 +311,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.xRightSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.yTopSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.mosaicOverlapSpin.setOpts(value=50e-6, suffix="m", siPrefix=True, step=1e-6, decimals=6, bounds=(0, float('inf')))
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
@@ -380,6 +384,7 @@ class ImageSequencerCtrl(Qt.QWidget):
                 self.ui.yTopSpin.value(),
                 self.ui.xRightSpin.value(),
                 self.ui.yBottomSpin.value(),
+                self.ui.mosaicOverlapSpin.value(),
             )
 
         return prot
