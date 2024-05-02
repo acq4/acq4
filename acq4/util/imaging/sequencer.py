@@ -1,6 +1,6 @@
 import itertools
 import weakref
-from typing import Union, Optional
+from typing import Union, Optional, Generator
 
 import numpy as np
 from MetaArray import MetaArray
@@ -190,6 +190,7 @@ def run_image_sequence(
         count: float = 1,
         interval: float = 0,
         z_stack: "tuple[float, float, float] | None" = None,
+        mosaic: "tuple[float, float, float, float] | None" = None,
         storage_dir: "DirHandle | None" = None,
         _future: Future = None
 ) -> list["Frame"]:
@@ -204,18 +205,55 @@ def run_image_sequence(
                 if i >= count:
                     break
                 start = ptime.time()
-                if z_stack is not None:
-                    frames.append(_do_z_stack(imager, z_stack, _future))
-                else:  # single frame
-                    frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
+                for move in movements_to_cover_region(imager, mosaic):
+                    _future.waitFor(move())
+                    if z_stack is not None:
+                        frames.append(_do_z_stack(imager, z_stack, _future))
+                    else:  # single frame
+                        frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
+                    _future.checkStop()
                 _future.setState(_status_message(i, count))
                 _future.sleep(interval - (ptime.time() - start))
         finally:
             if storage_dir is not None:
-                _save_results(frames, storage_dir, bool(z_stack))
+                _save_results(frames, storage_dir, z_stack is not None)
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
     return frames
+
+
+def movements_to_cover_region(imager, region: "tuple[float, float, float, float] | None") -> Generator[Future, None, None]:
+    if region is None:
+        fut = Future()
+        fut._taskDone()
+        yield fut
+        return
+
+    xform = pg.SRTTransform3D(imager.globalTransform())
+    img_center = imager.globalCenterPosition()
+    z = img_center[2]
+    img_x, img_y, img_w, img_h = imager.getParam("region")
+
+    img_top_left = np.array(xform.map((img_x, img_y, 0)))
+    move_offset = img_center - img_top_left
+    img_bottom_right = np.array(xform.map((img_x + img_w, img_y + img_h, 0)))
+    coverage_offset = img_center - img_bottom_right
+    step = img_bottom_right - img_top_left
+
+    region_top_left = np.array((*region[:2], z))
+    region_bottom_right = np.array((*region[2:], z))
+    pos = region_top_left + move_offset
+    x_finished = y_finished = False
+
+    while not y_finished:
+        y_finished = (pos - coverage_offset)[1] < region_bottom_right[1]
+        while not x_finished:
+            x_finished = (pos - coverage_offset)[0] > region_bottom_right[0]
+            yield lambda: imager.moveCenterToGlobal(pos, "fast")
+            pos[0] += step[0]
+        pos[1] += step[1]
+        pos[0] = (region_top_left + move_offset)[0]
+        x_finished = False
 
 
 def _do_z_stack(imager, z_stack: tuple[float, float, float], _future: Future) -> list["Frame"]:
@@ -329,6 +367,14 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["count"] = 1
             prot["interval"] = 0
 
+        if self.ui.mosaicGroup.isChecked():
+            prot["mosaic"] = (
+                self.ui.xLeftSpin.value(),
+                self.ui.yTopSpin.value(),
+                self.ui.xRightSpin.value(),
+                self.ui.yBottomSpin.value(),
+            )
+
         return prot
 
     def startClicked(self, b):
@@ -365,6 +411,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.ui.startBtn.setText("Stopping...")
             self.ui.startBtn.setEnabled(False)
             self._future.stop()
+            self.cleanUpFuture()  # to prevent this from raising in threadStopped
 
     def threadStopped(self, future):
         self.ui.startBtn.setText("Start")
@@ -372,9 +419,14 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.setRunning(False)
         self.updateStatus()
         if self._future is not None:
-            self._future.sigFinished.disconnect(self.threadStopped)
-            self._future.sigStateChanged.disconnect(self.threadMessage)
-            self._future = None
+            fut = self._future
+            self.cleanUpFuture()
+            fut.wait(timeout=1)  # to raise errors if any happened
+
+    def cleanUpFuture(self):
+        self._future.sigFinished.disconnect(self.threadStopped)
+        self._future.sigStateChanged.disconnect(self.threadMessage)
+        self._future = None
 
     def setRunning(self, b):
         self.ui.startBtn.setEnabled(True)
@@ -406,14 +458,15 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.zEndSpin.setValue(dev.getFocusDepth())
 
     def setTopLeftClicked(self):
-        dev = self._selectedImagerOrComplain()
-        bound = dev.globalTransform().map(Qt.QPointF(0, 0))
+        cam = self._selectedImagerOrComplain()
+        region = cam.getParam("region")
+        bound = cam.globalTransform().map(Qt.QPointF(region[0], region[1]))
         self.ui.xLeftSpin.setValue(bound.x())
         self.ui.yTopSpin.setValue(bound.y())
 
     def setBottomRightClicked(self):
-        dev = self._selectedImagerOrComplain()
-        size = dev.getParam("sensorSize")
-        bound = dev.globalTransform().map(Qt.QPointF(*size))
+        cam = self._selectedImagerOrComplain()
+        region = cam.getParam("region")
+        bound = cam.globalTransform().map(Qt.QPointF(region[0] + region[2], region[1] + region[3]))
         self.ui.xRightSpin.setValue(bound.x())
         self.ui.yBottomSpin.setValue(bound.y())
