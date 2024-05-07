@@ -342,7 +342,7 @@ class CameraInterface(CameraModuleInterface):
         """
         Return bounding rect of this imaging device in global coordinates
         """
-        return self.cam.getBoundary().boundingRect()
+        return Qt.QRectF(*self.cam.getBoundary())
 
 
 class CameraItemGroup(DeviceTreeItemGroup):
@@ -352,7 +352,9 @@ class CameraItemGroup(DeviceTreeItemGroup):
     def makeGroup(self, dev, subdev):
         grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
         if dev is self.device:
-            bound = Qt.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound = Qt.QPainterPath()
+            bound.addRect(Qt.QRectF(*self.device.getBoundary(globalCoords=False)))
+            bound = Qt.QGraphicsPathItem(bound)
             bound.setParentItem(grp)
             bound.setPen(pg.mkPen(40, 150, 150))
         return grp

@@ -263,21 +263,20 @@ def movements_to_cover_region(
 ) -> Generator[Future, None, None]:
     """
     Generate a sequence of snaking movements to cover the region. `region` is a tuple containing the `left`, `top`,
-    `right`, and `bottom` coordinates, as well as an `overlap`. `region` can also be None, in which case this yields
-    once with a no-op Future.
+    `right`, and `bottom` coordinates, as well as an `overlap`, all in global/meters. `region` can also be None, in
+    which case this yields once with a no-op Future.
     """
     if region is None:
         yield Future.immediate()
         return
 
-    xform = pg.SRTTransform3D(imager.globalTransform())
     img_center = imager.globalCenterPosition()
     z = img_center[2]
-    img_x, img_y, img_w, img_h = imager.getParam("region")
+    img_x, img_y, img_w, img_h = imager.getBoundary(mode="roi")
 
-    img_top_left = np.array(xform.map((img_x, img_y, 0)))
+    img_top_left = np.array((img_x, img_y, z))
     move_offset = img_center - img_top_left
-    img_bottom_right = np.array(xform.map((img_x + img_w, img_y + img_h, 0)))
+    img_bottom_right = np.array((img_x + img_w, img_y + img_h, z))
     coverage_offset = img_center - img_bottom_right
     overlap = region[-1]
     step = np.abs(img_bottom_right - img_top_left)[:2] - overlap
@@ -447,7 +446,8 @@ class ImageSequencerCtrl(Qt.QWidget):
             dh = Manager.getManager().getCurrentDir().getDir("ImageSequence", create=True, autoIncrement=True)
             dhinfo = prot.copy()
             del dhinfo["imager"]
-            del dhinfo["pin"]
+            if "pin" in dhinfo:
+                del dhinfo["pin"]
             if dhinfo["count"] == float("inf"):
                 dhinfo["count"] = -1
             dh.setInfo(dhinfo)

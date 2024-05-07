@@ -375,33 +375,26 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             return self.scopeDev
 
-    def getBoundary(self, globalCoords=True):
-        """Return the boundaries of the camera sensor in global coordinates.
-        If globalCoords==False, return in local coordinates.
+    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
+        """Return the boundaries of the camera in the specified coordinates.
+        If globalCoords is False, return in local coordinates.
+        `mode` can be either "sensor" for max sensor size or "roi" for current available region.
+        Returns (left, top, width, height).
         """
-        size = self.getParam("sensorSize")
-        bounds = Qt.QPainterPath()
-        bounds.addRect(Qt.QRectF(0, 0, *size))
+        if mode == "sensor":
+            bounds = (0, 0, *self.getParam("sensorSize"))
+        elif mode == "roi":
+            bounds = self.getParam("region")
+        else:
+            raise ValueError("mode must be either 'sensor' or 'roi'")
+        bounds = tuple(map(float, bounds))
         if globalCoords:
-            return pg.SRTTransform(self.globalTransform()).map(bounds)
+            start = self.mapToGlobal(bounds[:2])
+            end = self.mapToGlobal((bounds[2] + bounds[0], bounds[3] + bounds[1]))
+            size = (end[0] - start[0], end[1] - start[1])
+            return (*start, *size)
         else:
             return bounds
-
-    def getBoundaries(self):
-        """Return a list of camera boundaries for all objectives"""
-        objs = self.scopeDev.listObjectives()
-        return [self.getBoundary(o) for o in objs]
-
-    # deprecated: not used anywhere, and I'm not sure it's correct.
-    # def mapToSensor(self, pos):
-    #     """Return the sub-pixel location on the sensor that corresponds to global position pos"""
-    #     ss = self.getScopeState()
-    #     boundary = self.getBoundary()
-    #     boundary.translate(*ss['scopePosition'][:2])
-    #     size = self.sensorSize
-    #     x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
-    #     y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
-    #     return (x, y)
 
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
