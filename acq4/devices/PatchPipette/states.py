@@ -44,7 +44,8 @@ class PatchPipetteState(Future):
         'initialPressureSource': {'type': 'list', 'default': None, 'limits': ['atmosphere', 'regulator', 'user'], 'optional': True},
         'initialPressure': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'Pa'},
         'initialClampMode': {'type': 'list', 'default': None, 'limits': ['VC', 'IC'], 'optional': True},
-        'initialClampHolding': {'type': 'float', 'default': None, 'optional': True},
+        'initialICHolding': {'type': 'float', 'default': None, 'optional': True},
+        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True},
         'initialTestPulseEnable': {'type': 'bool', 'default': None, 'optional': True},
         'initialTestPulseParameters': {'type': 'group', 'children': []},  # TODO
         'initialAutoBiasEnable': {'type': 'bool', 'default': False, 'optional': True},
@@ -146,7 +147,8 @@ class PatchPipetteState(Future):
         if cdev is None:
             return
         mode = self.config.get('initialClampMode')
-        holding = self.config.get('initialClampHolding')
+        ic_holding = self.config.get('initialICHolding')
+        vc_holding = self.config.get('initialVCHolding')
         tp = self.config.get('initialTestPulseEnable')
         tpParams = self.config.get('initialTestPulseParameters')
         bias = self.config.get('initialAutoBiasEnable')
@@ -154,10 +156,12 @@ class PatchPipetteState(Future):
 
         if mode is not None:
             cdev.setMode(mode)
-            if holding is not None:
-                cdev.setHolding(mode=mode, value=holding)
             if tpParams is None:
                 tpParams = {}
+        if ic_holding is not None:
+            cdev.setHolding(mode="IC", value=ic_holding)
+        if ic_holding is not None:
+            cdev.setHolding(mode="VC", value=vc_holding)
 
         # enable test pulse if config requests it AND the device is "active"
         if tp is not None:
@@ -239,7 +243,7 @@ class OutState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': False,
         'finishPatchRecord': True,
     }
@@ -269,7 +273,7 @@ class WholeCellState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': -70e-3,
+        'initialVCHolding': -70e-3,
         'initialTestPulseEnable': True,
         'initialAutoBiasEnable': True,
         'initialAutoBiasTarget': -70e-3,
@@ -297,7 +301,7 @@ class BrokenState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': True,
         'finishPatchRecord': True,
     }
@@ -311,7 +315,7 @@ class FouledState(PatchPipetteState):
     stateName = 'fouled'
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': True,
     }
 
@@ -344,7 +348,8 @@ class BathState(PatchPipetteState):
         'initialPressure': 3500.,  # 0.5 PSI
         'initialPressureSource': 'regulator',
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
+        'initialICHolding': 0,
         'initialTestPulseEnable': True,
     }
     _parameterTreeConfig = {
@@ -359,9 +364,6 @@ class BathState(PatchPipetteState):
         dev = self.dev
         initialResistance = None
         bathResistances = []
-
-        if config['initialClampMode'] == 'VC':
-            dev.clampDevice.setHolding('IC', 0)  # only reset this if not configured to do otherwise
 
         while True:
             self.checkStop()
@@ -427,8 +429,8 @@ class CellDetectState(PatchPipetteState):
     initialClampMode : str
         Clamp mode to set when beginning this state--
         'VC' or 'IC' (default 'VC')
-    initialClampHolding : float
-        Initial holding value to use when beginning this state (default 0)
+    initialVCHolding : float
+        Initial VC holding value to use when beginning this state (default 0)
     autoAdvance : bool
         If True, automatically advance the pipette while monitoring for cells (default True)
     advanceMode : str
@@ -478,7 +480,7 @@ class CellDetectState(PatchPipetteState):
 
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': True,
         'fallbackState': 'bath',
     }
@@ -744,7 +746,7 @@ class SealState(PatchPipetteState):
 
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': True,
         'fallbackState': 'fouled',
     }
@@ -927,7 +929,7 @@ class CellAttachedState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': -70e-3,
+        'initialVCHolding': -70e-3,
         'initialTestPulseEnable': True,
     }
     _parameterTreeConfig = {
@@ -1006,7 +1008,7 @@ class BreakInState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': -70e-3,
+        'initialVCHolding': -70e-3,
         'initialTestPulseEnable': True,
         'fallbackState': 'fouled',
     }
@@ -1260,7 +1262,7 @@ class ResealState(PatchPipetteState):
 
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
-        'initialClampHolding': -70e-3,
+        'initialVCHolding': -70e-3,
         'initialTestPulseEnable': True,
         'initialPressure': -0.5e3,
         'initialPressureSource': 'regulator',
@@ -1474,7 +1476,7 @@ class BlowoutState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': True,
         'fallbackState': 'bath',
     }
@@ -1541,7 +1543,7 @@ class CleanState(PatchPipetteState):
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
         'initialClampMode': 'VC',
-        'initialClampHolding': 0,
+        'initialVCHolding': 0,
         'initialTestPulseEnable': False,
         'fallbackState': 'out',
         'finishPatchRecord': True,
