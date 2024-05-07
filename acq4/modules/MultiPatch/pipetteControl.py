@@ -300,14 +300,17 @@ class PipetteControl(Qt.QWidget):
         # auto bias changed elsewhere; update UI to reflect new state
         with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
             self.ui.autoBiasBtn.setChecked(self.pip.clampDevice.autoBiasEnabled())
+        target = self.pip.clampDevice.autoBiasTarget()
         with pg.SignalBlock(self.ui.autoBiasVcBtn.clicked, self.autoBiasVcClicked):
-            self.ui.autoBiasVcBtn.setChecked(self.pip.clampDevice.autoBiasTarget() is None)
-        self._updateActiveHoldingUi()
-
-        if self.pip.clampDevice.autoBiasTarget() is None:
+            self.ui.autoBiasVcBtn.setChecked(target is None)
+        if target is None:
             self.ui.autoBiasTargetSpin.setEnabled(False)
         else:
+            with pg.SignalBlock(self.ui.autoBiasTargetSpin.valueChanged, self.autoBiasSpinChanged):
+                self.ui.autoBiasTargetSpin.setValue(target)
             self.ui.autoBiasTargetSpin.setEnabled(True)
+
+        self._updateActiveHoldingUi()
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
