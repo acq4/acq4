@@ -21,15 +21,15 @@
     <number>3</number>
    </property>
    <item row="1" column="0">
-    <widget class="QPushButton" name="pauseBtn">
+    <widget class="QCheckBox" name="pinCheckbox">
      <property name="toolTip">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Pause the sequence acquisition.&lt;/p&gt;&lt;p&gt;Click again to resume.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Pin the images in the main window.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="text">
-      <string>Pause</string>
+      <string>Pin</string>
      </property>
-     <property name="checkable">
-      <bool>true</bool>
+     <property name="checked">
+      <bool>false</bool>
      </property>
     </widget>
    </item>

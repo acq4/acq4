@@ -9,6 +9,8 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.future import Future
+from acq4.util.surface import find_surface
+from acq4.util.threadrun import runInGuiThread
 
 
 def runZStack(imager, z_range_args) -> Future:
@@ -160,7 +162,10 @@ def _status_message(iteration, maxIter):
         return f"iter={iteration + 1}/{maxIter}"
 
 
-def _save_results(frames, storage_dir, is_z_stack: bool = False):
+def _save_results(frames, storage_dir, is_timelapse: bool = False, is_z_stack: bool = False, is_mosaic: bool = False):
+    frames = _organize_results(frames, is_timelapse, is_z_stack, is_mosaic)
+    if storage_dir is None:
+        return frames
     stack = None
     for i, frame in enumerate(frames):
         name = f"image_{i:03d}"
@@ -182,6 +187,26 @@ def _save_results(frames, storage_dir, is_z_stack: bool = False):
             arrayInfo = [{"name": "X"}, {"name": "Y"}]
             data = MetaArray(frame.getImage(), info=arrayInfo)
             storage_dir.writeFile(data, name, info=frame.info())
+    return frames
+
+
+def _organize_results(mosaics, is_timelapse: bool, is_z_stack: bool, is_mosaic: bool):
+    if is_mosaic:
+        if not is_timelapse:
+            return mosaics[0]
+        if is_z_stack:
+            return mosaics
+        else:
+            return zip(*mosaics)  # todo handle interrupted sequences
+    elif is_z_stack:
+        if is_timelapse:
+            return [m[0] for m in mosaics]
+        else:
+            return mosaics[0][0]
+    elif is_timelapse:
+        return mosaics[0]
+    else:
+        return [mosaics[0][0]]
 
 
 @Future.wrap
@@ -189,14 +214,18 @@ def run_image_sequence(
         imager,
         count: float = 1,
         interval: float = 0,
+        pin: "Callable[[Frame]] | None" = None,
         z_stack: "tuple[float, float, float] | None" = None,
         mosaic: "tuple[float, float, float, float, float] | None" = None,
         storage_dir: "DirHandle | None" = None,
         _future: Future = None
-) -> list["Frame"]:
+) -> "list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
+    imaging_ctrl = imager
     frames = []
+    stacks = []
+    mosaics = []
 
     # record
     with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
@@ -208,21 +237,35 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
                     if z_stack is not None:
-                        frames.extend(_future.waitFor(_do_z_stack(imager, z_stack)).getResult())
+                        stacks.append(_future.waitFor(_do_z_stack(imager, z_stack)).getResult())
+                        if pin:
+                            most_focused = find_surface(stacks[-1]) or (len(stacks[-1]) // 2)
+                            pin(stacks[-1][most_focused])
                     else:  # single frame
                         frames.append(_future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0])
+                        if pin:
+                            pin(frames[-1])
                     _future.checkStop()
                 _future.setState(_status_message(i, count))
                 _future.sleep(interval - (ptime.time() - start))
+                mosaics.append(frames or stacks)
+                frames = []
+                stacks = []
         finally:
-            if storage_dir is not None:
-                _save_results(frames, storage_dir, count > 1, z_stack is not None, mosaic is not None)
+            result = _save_results(mosaics, storage_dir, count > 1, z_stack is not None, mosaic is not None)
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
-    return frames
+    return result
 
 
-def movements_to_cover_region(imager, region: "tuple[float, float, float, float, float] | None") -> Generator[Future, None, None]:
+def movements_to_cover_region(
+    imager, region: "tuple[float, float, float, float, float] | None"
+) -> Generator[Future, None, None]:
+    """
+    Generate a sequence of snaking movements to cover the region. `region` is a tuple containing the `left`, `top`,
+    `right`, and `bottom` coordinates, as well as an `overlap`. `region` can also be None, in which case this yields
+    once with a no-op Future.
+    """
     if region is None:
         yield Future.immediate()
         return
@@ -237,7 +280,7 @@ def movements_to_cover_region(imager, region: "tuple[float, float, float, float,
     img_bottom_right = np.array(xform.map((img_x + img_w, img_y + img_h, 0)))
     coverage_offset = img_center - img_bottom_right
     overlap = region[-1]
-    step = np.abs(img_bottom_right - img_top_left) - overlap
+    step = np.abs(img_bottom_right - img_top_left)[:2] - overlap
     if np.any(step <= 0):
         raise ValueError(f"Overlap {overlap:g} exceeds field of view")
 
@@ -323,8 +366,6 @@ class ImageSequencerCtrl(Qt.QWidget):
         cameraMod.sigInterfaceAdded.connect(self.updateDeviceList)
         cameraMod.sigInterfaceRemoved.connect(self.updateDeviceList)
         self.ui.startBtn.clicked.connect(self.startClicked)
-        self.ui.pauseBtn.clicked.connect(self.pauseClicked)
-        self.ui.pauseBtn.setVisible(False)  # Todo
         self.ui.setStartBtn.clicked.connect(self.setStartClicked)
         self.ui.setEndBtn.clicked.connect(self.setEndClicked)
         self.ui.setTopLeftBtn.clicked.connect(self.setTopLeftClicked)
@@ -387,6 +428,9 @@ class ImageSequencerCtrl(Qt.QWidget):
                 self.ui.mosaicOverlapSpin.value(),
             )
 
+        if self.ui.pinCheckbox.isChecked():
+            prot["pin"] = lambda f: runInGuiThread(self.mod().displayPinnedFrame, f)
+
         return prot
 
     def startClicked(self, b):
@@ -394,9 +438,6 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.start()
         else:
             self.stop()
-
-    def pauseClicked(self, b):
-        pass  # TODO
 
     def start(self):
         try:
@@ -406,6 +447,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             dh = Manager.getManager().getCurrentDir().getDir("ImageSequence", create=True, autoIncrement=True)
             dhinfo = prot.copy()
             del dhinfo["imager"]
+            del dhinfo["pin"]
             if dhinfo["count"] == float("inf"):
                 dhinfo["count"] = -1
             dh.setInfo(dhinfo)
