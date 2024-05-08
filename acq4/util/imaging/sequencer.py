@@ -8,6 +8,7 @@ from MetaArray import MetaArray
 import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
+from acq4.util.DataManager import DirHandle
 from acq4.util.future import Future
 from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
@@ -162,15 +163,36 @@ def _status_message(iteration, maxIter):
         return f"iter={iteration + 1}/{maxIter}"
 
 
-def _save_results(frames, storage_dir, is_timelapse: bool = False, is_z_stack: bool = False, is_mosaic: bool = False):
-    frames = _organize_results(frames, is_timelapse, is_z_stack, is_mosaic)
-    if storage_dir is None:
-        return frames
-    stack = None
-    for i, frame in enumerate(frames):
-        name = f"image_{i:03d}"
-        if is_z_stack:
-            # start or append focus stack
+# TODO make sure we have data viewer for all of these
+# TODO make sure reloading pinned images works for all of these
+def _save_results(
+        frames: "Frame | list[Frame]",
+        storage_dir: DirHandle,
+        idx: int,
+        is_timelapse: bool = False,
+        is_mosaic: bool = False,
+        is_z_stack: bool = False,
+):
+    """
+        +-----------+--------+---------+------------------------+
+        | timelapse | mosaic | z-stack |    resultant files     |
+        +-----------+--------+---------+------------------------+
+        | true      | true   | true    | folders of z-stack mas |
+        | true      | true   | false   | folders of images      |
+        | true      | false  | true    | multiple z-stack mas   |
+        | true      | false  | false   | single timelapse ma    |
+        | false     | true   | true    | multiple z-stack mas   |
+        | false     | true   | false   | multiple images        |
+        | false     | false  | true    | single z-stack ma      |
+        | false     | false  | false   | single image           |
+        +-----------+--------+---------+------------------------+
+    """
+    if is_mosaic and is_timelapse:
+        storage_dir = storage_dir.getDir(f"mosaic_{idx:03d}", create=True)
+
+    if is_z_stack:
+        stack = None
+        for frame in frames:
             arrayInfo = [
                 {"name": "Depth", "values": [frame.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()]},
                 {"name": "X"},
@@ -178,35 +200,23 @@ def _save_results(frames, storage_dir, is_timelapse: bool = False, is_z_stack: b
             ]
             data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
             if stack is None:
-                stack = storage_dir.writeFile(data, name, info=frame.info(), appendAxis="Depth")
+                stack = storage_dir.writeFile(
+                    data, "z_stack", info=frame.info(), appendAxis="Depth", autoIncrement=True
+                )
             else:
                 data.write(stack.name(), appendAxis="Depth")
-
+    elif is_timelapse and not is_mosaic:
+        arrayInfo = [{"name": "Time", "values": [frames.info()["time"]]}, {"name": "X"}, {"name": "Y"}]
+        data = MetaArray(frames.getImage()[np.newaxis, ...], info=arrayInfo)
+        if idx == 0:
+            storage_dir.writeFile(data, "timelapse", info=frames.info(), appendAxis="Time")
         else:
-            # record single-frame image
-            arrayInfo = [{"name": "X"}, {"name": "Y"}]
-            data = MetaArray(frame.getImage(), info=arrayInfo)
-            storage_dir.writeFile(data, name, info=frame.info())
-    return frames
-
-
-def _organize_results(mosaics, is_timelapse: bool, is_z_stack: bool, is_mosaic: bool):
-    if is_mosaic:
-        if not is_timelapse:
-            return mosaics[0]
-        if is_z_stack:
-            return mosaics
-        else:
-            return zip(*mosaics)  # todo handle interrupted sequences
-    elif is_z_stack:
-        if is_timelapse:
-            return [m[0] for m in mosaics]
-        else:
-            return mosaics[0][0]
-    elif is_timelapse:
-        return mosaics[0]
+            data.write(storage_dir["timelapse.ma"].name(), appendAxis="Time")
     else:
-        return [mosaics[0][0]]
+        # TODO change this to tiffs? don't Frames already know how to save themselves?
+        arrayInfo = [{"name": "X"}, {"name": "Y"}]
+        data = MetaArray(frames.getImage(), info=arrayInfo)
+        storage_dir.writeFile(data, "image", info=frames.info(), autoIncrement=True)
 
 
 @Future.wrap
@@ -219,16 +229,33 @@ def run_image_sequence(
         mosaic: "tuple[float, float, float, float, float] | None" = None,
         storage_dir: "DirHandle | None" = None,
         _future: Future = None
-) -> "list[Frame | list[Frame | list[Frame]]]":
+) -> "Frame | list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
-    imaging_ctrl = imager
-    frames = []
-    stacks = []
-    mosaics = []
+    man = Manager.getManager()
+    # imaging_ctrl = man.getModule("Camera").getInterfaceForDevice(imager.name()).imagingCtrl  # TODO get the bg/contrast
+    result = []
+    is_timelapse = count > 1
+
+    def handle_new_frames(f: "Frame | list[Frame]", idx: int):
+        if is_timelapse:
+            if idx + 1 > len(result):
+                result.append([])
+            dest = result[-1]
+        else:
+            dest = result
+        dest.append(f)
+        if pin:
+            if z_stack:
+                most_focused = find_surface(f) or (len(f) // 2)
+                pin(f[most_focused])
+            else:
+                pin(f)
+        if storage_dir:
+            _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
 
     # record
-    with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
+    with man.reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete
         try:
             for i in itertools.count():
                 if i >= count:
@@ -236,23 +263,16 @@ def run_image_sequence(
                 start = ptime.time()
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
-                    if z_stack is not None:
-                        stacks.append(_future.waitFor(_do_z_stack(imager, z_stack)).getResult())
-                        if pin:
-                            most_focused = find_surface(stacks[-1]) or (len(stacks[-1]) // 2)
-                            pin(stacks[-1][most_focused])
+                    if z_stack:
+                        stack = _future.waitFor(_acquire_z_stack(imager, *z_stack)).getResult()
+                        handle_new_frames(stack, i)
                     else:  # single frame
-                        frames.append(_future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0])
-                        if pin:
-                            pin(frames[-1])
+                        frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
+                        handle_new_frames(frame, i)
                     _future.checkStop()
                 _future.setState(_status_message(i, count))
                 _future.sleep(interval - (ptime.time() - start))
-                mosaics.append(frames or stacks)
-                frames = []
-                stacks = []
         finally:
-            result = _save_results(mosaics, storage_dir, count > 1, z_stack is not None, mosaic is not None)
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
     return result
@@ -307,9 +327,9 @@ def movements_to_cover_region(
 
 
 @Future.wrap
-def _do_z_stack(imager, z_stack: tuple[float, float, float], _future: Future) -> list["Frame"]:
-    start, end, step = z_stack
-    direction = start - end
+def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list["Frame"]:
+    # TODO think about strobing the lighting for clearer images
+    direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
@@ -318,7 +338,7 @@ def _do_z_stack(imager, z_stack: tuple[float, float, float], _future: Future) ->
     frames_fut = imager.acquireFrames()
     with imager.ensureRunning(ensureFreshFrames=True):
         _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-        _set_focus_depth(imager, end, direction, speed)
+        _set_focus_depth(imager, stop, direction, speed)
         _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
         frames_fut.stop()
         frames = _future.waitFor(frames_fut).getResult(timeout=10)
@@ -326,7 +346,7 @@ def _do_z_stack(imager, z_stack: tuple[float, float, float], _future: Future) ->
         frames = _enforce_linear_z_stack(frames, step)
     except ValueError:
         _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-        frames = _slow_z_stack(imager, start, end, step).getResult()
+        frames = _slow_z_stack(imager, start, stop, step).getResult()
         frames = _enforce_linear_z_stack(frames, step)
     return frames
 
