@@ -200,6 +200,7 @@ def _save_results(
             ]
             data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
             if stack is None:
+                # TODO once each frame has distinct info(), this will need to change somehow
                 stack = storage_dir.writeFile(
                     data, "z_stack", info=frame.info(), appendAxis="Depth", autoIncrement=True
                 )
@@ -213,10 +214,7 @@ def _save_results(
         else:
             data.write(storage_dir["timelapse.ma"].name(), appendAxis="Time")
     else:
-        # TODO change this to tiffs? don't Frames already know how to save themselves?
-        arrayInfo = [{"name": "X"}, {"name": "Y"}]
-        data = MetaArray(frames.getImage(), info=arrayInfo)
-        storage_dir.writeFile(data, "image", info=frames.info(), autoIncrement=True)
+        frames.saveImage(storage_dir, "image")
 
 
 @Future.wrap

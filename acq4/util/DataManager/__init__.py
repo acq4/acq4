@@ -612,6 +612,10 @@ class DirHandle(FileHandle):
 
         self.lsCache[sortMode] = files
 
+    def __iter__(self):
+        for f in self.ls():
+            yield self[f]
+
     def _getFileCTime(self, fileName):
         if self.isManaged():
             index = self._readIndex()
