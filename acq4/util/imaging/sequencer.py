@@ -215,7 +215,7 @@ def _save_results(
         else:
             data.write(storage_dir["timelapse.ma"].name(), appendAxis="Time")
     else:
-        frames.saveImage(storage_dir, "image")
+        frames.saveImage(storage_dir, "image.tif")
 
 
 @Future.wrap

@@ -176,7 +176,7 @@ class RecordThread(Thread):
                     fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
                     fh = frame['frame'].saveImage(dh, fileName)
                     self.sigSavedFrame.emit(fh.name())
-                except:
+                except Exception:
                     self.sigSavedFrame.emit(False)
                     raise
                 continue
