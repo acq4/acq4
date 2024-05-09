@@ -126,10 +126,11 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
 
 @Future.wrap
 def _slow_z_stack(imager, start, end, step, _future) -> list["Frame"]:
+    camera_interface = Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(imager.name())
     sign = np.sign(end - start)
     direction = sign * -1
     step = sign * abs(step)
-    frames_fut = imager.acquireFrames()
+    frames_fut = camera_interface.acquirePinnableFrames()
     _set_focus_depth(imager, start, direction, speed='fast', future=_future)
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
@@ -231,7 +232,7 @@ def run_image_sequence(
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
     man = Manager.getManager()
-    # imaging_ctrl = man.getModule("Camera").getInterfaceForDevice(imager.name()).imagingCtrl  # TODO get the bg/contrast
+    camera_interface = man.getModule("Camera").ui.getInterfaceForDevice(imager.name())
     result = []
     is_timelapse = count > 1
 
@@ -265,7 +266,9 @@ def run_image_sequence(
                         stack = _future.waitFor(_acquire_z_stack(imager, *z_stack)).getResult()
                         handle_new_frames(stack, i)
                     else:  # single frame
-                        frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
+                        frame = _future.waitFor(
+                            camera_interface.acquirePinnableFrames(1, ensureFreshFrames=True)
+                        ).getResult()[0]
                         handle_new_frames(frame, i)
                     _future.checkStop()
                 _future.setState(_status_message(i, count))
@@ -327,13 +330,14 @@ def movements_to_cover_region(
 @Future.wrap
 def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list["Frame"]:
     # TODO think about strobing the lighting for clearer images
+    camera_interface = Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(imager.name())
     direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
-    frames_fut = imager.acquireFrames()
+    frames_fut = camera_interface.acquirePinnableFrames()
     with imager.ensureRunning(ensureFreshFrames=True):
         _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
         _set_focus_depth(imager, stop, direction, speed)

@@ -70,8 +70,14 @@ class Frame(object):
         """Map *obj* from the frame's data coordinates to global coordinates.
         """
         return self.globalTransform().map(obj)
-    
-    def saveImage(self, dh, filename, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
+
+    def includeDisplayProcessing(self, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
+        if backgroundInfo is not None:
+            self._info['backgroundInfo'] = backgroundInfo
+        if contrastInfo is not None:
+            self._info['contrastInfo'] = contrastInfo
+
+    def saveImage(self, dh, filename):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
@@ -81,10 +87,8 @@ class Frame(object):
         """
         data = self.getImage()
         info = self.info()
-        if backgroundInfo is not None:
-            info['backgroundInfo'] = backgroundInfo(dh)
-        if contrastInfo is not None:
-            info['contrastInfo'] = contrastInfo
+        if callable(info.get('backgroundInfo')):
+            info['backgroundInfo'] = info['backgroundInfo'](dh)
 
         if filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)

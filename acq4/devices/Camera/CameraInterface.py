@@ -5,6 +5,7 @@ from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.debug import printExc
+from acq4.util.future import Future
 from acq4.util.imaging import ImagingCtrl
 from pyqtgraph import SignalProxy, Point
 
@@ -157,6 +158,11 @@ class CameraInterface(CameraModuleInterface):
             raise
         return camSize, scope
     
+    def acquirePinnableFrames(self, n: "int | None" = None, ensureFreshFrames: bool = False) -> Future:
+        """Like Camera.acquireFrames, but including the live background and contrast adjustments found in the
+        frameDisplay in this interface."""
+        return self.cam.acquireFrames(n, ensureFreshFrames, postProcessing=self.frameDisplay.prepareFrameForSaving)
+
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--

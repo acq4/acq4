@@ -278,7 +278,7 @@ class Camera(DAQGeneric, OptomechDevice):
             if not running:
                 self.stop()
 
-    def acquireFrames(self, n=None, ensureFreshFrames=False) -> "FrameAcquisitionFuture":
+    def acquireFrames(self, n=None, ensureFreshFrames=False, postProcessing=None) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames and return a FrameAcquisitionFuture.
 
         If *n* is None, then frames will be acquired until future.stop() is called.
@@ -289,7 +289,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         if n is None and ensureFreshFrames:
             raise ValueError("ensureFreshFrames=True is not compatible with n=None")
-        return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
+        return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames, postProcessing=postProcessing)
 
     @Future.wrap
     def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list["Frame"]:
@@ -957,12 +957,20 @@ class AcquireThread(Thread):
 
 
 class FrameAcquisitionFuture(Future):
-    def __init__(self, camera: Camera, frameCount: Optional[int], timeout: float = 10, ensureFreshFrames: bool = False):
+    def __init__(
+            self,
+            camera: Camera,
+            frameCount: Optional[int],
+            timeout: float = 10,
+            ensureFreshFrames: bool = False,
+            postProcessing: Optional[Callable[[Frame], Frame]] = None,
+    ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
         super().__init__()
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
+        self._post_processing = postProcessing
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
@@ -993,6 +1001,12 @@ class FrameAcquisitionFuture(Future):
                             self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
                             break
                         continue
+                    if self._post_processing is not None:
+                        try:
+                            frame = self._post_processing(frame)
+                        except Exception as e:
+                            self._taskDone(interrupted=True, error=e)
+                            break
                     self._frames.append(frame)
                     if self._stop_when is not None and self._stop_when(frame):
                         self._taskDone()
