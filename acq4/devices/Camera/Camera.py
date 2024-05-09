@@ -991,6 +991,7 @@ class FrameAcquisitionFuture(Future):
                             break
                         if ptime.time() - lastFrameTime > self._timeout:
                             self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
+                            break
                         continue
                     self._frames.append(frame)
                     if self._stop_when is not None and self._stop_when(frame):
@@ -998,6 +999,7 @@ class FrameAcquisitionFuture(Future):
                         break
                     if self._frame_count is not None and len(self._frames) >= self._frame_count:
                         self._taskDone()
+                        break
             finally:
                 self._camera.acqThread.disconnectCallback(self.handleNewFrame)
 
