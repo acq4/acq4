@@ -11,6 +11,7 @@ from MetaArray import MetaArray, axis
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.Device import Device
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -18,6 +19,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from acq4.util.future import Future
+from acq4.util.imaging.frame import FrameProducer
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
@@ -26,7 +28,7 @@ from .frame import Frame
 from .taskGUI import CameraTaskGui
 
 
-class Camera(DAQGeneric, OptomechDevice):
+class Camera(DAQGeneric, OptomechDevice, FrameProducer):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles acquisition tasks, scope integration, expose/trigger lines
      - Subclasses should handle the connection to the camera driver by overriding
@@ -128,6 +130,9 @@ class Camera(DAQGeneric, OptomechDevice):
             dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
 
         dm.declareInterface(name, ["camera"], self)
+
+    def devicesToReserve(self) -> list[Device]:
+        return [self, self.parentDevice(), self.scopeDev]
 
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""

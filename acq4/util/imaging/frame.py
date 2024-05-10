@@ -1,9 +1,12 @@
+from abc import ABCMeta, abstractmethod
 from typing import Callable, Optional
 
 import numpy as np
 
-from acq4.util.imaging.background import remove_background_from_image
 import pyqtgraph as pg
+from acq4.devices.Device import Device
+from acq4.util.future import Future
+from acq4.util.imaging.background import remove_background_from_image
 from pyqtgraph import SRTTransform3D, ImageItem
 
 
@@ -127,3 +130,32 @@ class Frame(object):
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as2D())
         return item
+
+
+class FrameProducer(object):
+    def acquireFrames(self, n: "int | None" = None, ensureFreshFrames: bool = False, postProcessing=None) -> Future:
+        raise NotImplementedError()
+
+    def getFocusDevice(self) -> Device:
+        raise NotImplementedError()
+
+    def getFocusDepth(self) -> float:
+        raise NotImplementedError()
+
+    def setFocusDepth(self, z, speed='fast') -> Future:
+        raise NotImplementedError()
+
+    def ensureRunning(self, ensureFreshFrames=False):
+        raise NotImplementedError()
+
+    def devicesToReserve(self) -> list[Device]:
+        raise NotImplementedError()
+
+    def globalCenterPosition(self, mode="sensor"):
+        raise NotImplementedError()
+
+    def moveCenterToGlobal(self, position, speed, center="roi") -> Future:
+        raise NotImplementedError()
+
+    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
+        raise NotImplementedError()

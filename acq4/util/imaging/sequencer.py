@@ -10,6 +10,7 @@ import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
 from acq4.util.future import Future
+from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
 
@@ -27,7 +28,7 @@ def runZStack(imager, z_range_args) -> Future:
     return run_image_sequence(imager=imager, z_stack=z_range_args)
 
 
-def _enforce_linear_z_stack(frames: list["Frame"], step: float) -> list["Frame"]:
+def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
@@ -125,12 +126,11 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
 
 
 @Future.wrap
-def _slow_z_stack(imager, start, end, step, _future) -> list["Frame"]:
-    camera_interface = Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(imager.name())
+def _slow_z_stack(imager, start, end, step, _future) -> list[Frame]:
     sign = np.sign(end - start)
     direction = sign * -1
     step = sign * abs(step)
-    frames_fut = camera_interface.acquirePinnableFrames()
+    frames_fut = imager.acquireFrames()
     _set_focus_depth(imager, start, direction, speed='fast', future=_future)
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
@@ -230,7 +230,6 @@ def run_image_sequence(
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
     man = Manager.getManager()
-    camera_interface = man.getModule("Camera").ui.getInterfaceForDevice(imager.name())
     result = []
     is_timelapse = count > 1
 
@@ -252,7 +251,7 @@ def run_image_sequence(
             _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
 
     # record
-    with man.reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete
+    with man.reserveDevices(imager.devicesToReserve()):
         try:
             for i in itertools.count():
                 if i >= count:
@@ -265,7 +264,7 @@ def run_image_sequence(
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(
-                            camera_interface.acquirePinnableFrames(1, ensureFreshFrames=True)
+                            imager.acquireFrames(1, ensureFreshFrames=True)
                         ).getResult()[0]
                         handle_new_frames(frame, i)
                     _future.checkStop()
@@ -294,6 +293,7 @@ def movements_to_cover_region(
 
 
 def positions_to_cover_region(region, imager_center, imager_region) -> Generator[tuple, None, None]:
+    """Ha! (ignoring overlap), `region` is (x1, y1, x2, y2), `imager_region` is (x1, y1, w, h)."""
     z = imager_center[2]
     img_x, img_y, img_w, img_h = imager_region
     img_top_left = np.array((img_x, img_y, z))
@@ -329,16 +329,15 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 
 @Future.wrap
-def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list["Frame"]:
+def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
     # TODO think about strobing the lighting for clearer images
-    camera_interface = Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(imager.name())
     direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
-    frames_fut = camera_interface.acquirePinnableFrames()
+    frames_fut = imager.acquireFrames()
     with imager.ensureRunning(ensureFreshFrames=True):
         _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
         _set_focus_depth(imager, stop, direction, speed)
@@ -421,7 +420,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         """Build a description of everything that needs to be done during the sequence.
         """
         prot = {
-            "imager": self.selectedImager(),
+            "imager": Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(self.selectedImager().name()),
         }
         if self.ui.zStackGroup.isChecked():
             start = self.ui.zStartSpin.value()
@@ -482,6 +481,8 @@ class ImageSequencerCtrl(Qt.QWidget):
         except Exception:
             self.threadStopped(self._future)
             raise
+        if self._future.isDone():  # probably an immediate error
+            self.threadStopped(self._future)
 
     def stop(self):
         if self._future is not None:
