@@ -164,8 +164,6 @@ def _status_message(iteration, maxIter):
         return f"iter={iteration + 1}/{maxIter}"
 
 
-# TODO make sure we have data viewer for all of these
-# TODO make sure reloading pinned images works for all of these
 def _save_results(
         frames: "Frame | list[Frame]",
         storage_dir: DirHandle,
@@ -201,7 +199,7 @@ def _save_results(
             ]
             data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
             if stack is None:
-                # TODO once each frame has distinct info(), this will need to change somehow
+                # TODO do we want to save the background/contrast display data for each frame, too
                 stack = storage_dir.writeFile(
                     data, "z_stack", info=frame.info(), appendAxis="Depth", autoIncrement=True
                 )
@@ -291,14 +289,17 @@ def movements_to_cover_region(
         yield Future.immediate()
         return
 
-    img_center = imager.globalCenterPosition()
-    z = img_center[2]
-    img_x, img_y, img_w, img_h = imager.getBoundary(mode="roi")
+    for pos in positions_to_cover_region(region, imager.globalCenterPosition(), imager.getBoundary(mode="roi")):
+        yield imager.moveCenterToGlobal(pos, "fast")
 
+
+def positions_to_cover_region(region, imager_center, imager_region) -> Generator[tuple, None, None]:
+    z = imager_center[2]
+    img_x, img_y, img_w, img_h = imager_region
     img_top_left = np.array((img_x, img_y, z))
-    move_offset = img_center - img_top_left
+    move_offset = imager_center - img_top_left
     img_bottom_right = np.array((img_x + img_w, img_y + img_h, z))
-    coverage_offset = img_center - img_bottom_right
+    coverage_offset = imager_center - img_bottom_right
     overlap = region[-1]
     step = np.abs(img_bottom_right - img_top_left)[:2] - overlap
     if np.any(step <= 0):
@@ -318,7 +319,7 @@ def movements_to_cover_region(
     while not y_finished:
         y_finished = (pos - coverage_offset)[1] <= region_bottom_right[1]
         while not x_finished:
-            yield imager.moveCenterToGlobal(pos, "fast")
+            yield pos
             x_finished = x_tests[x_direction]()
             if not x_finished:
                 pos[0] += x_steps[x_direction]
