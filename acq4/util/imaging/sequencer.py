@@ -1,6 +1,6 @@
 import itertools
 import weakref
-from typing import Union, Optional, Generator, Callable
+from typing import Union, Optional, Generator
 
 import numpy as np
 from MetaArray import MetaArray

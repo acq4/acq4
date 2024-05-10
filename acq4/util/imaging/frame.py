@@ -81,11 +81,12 @@ class Frame(object):
             self._info['contrastInfo'] = contrastInfo
 
     def saveImage(self, dh, filename):
+        # TODO let this append to a file as well and it'll handle z-stacks and timelapses!
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
         The optional *backgroundInfo* and *contrastInfo* arguments can be used to save additional
-        data needed to display the frame later. See `BackgroundSubtractCtrl.defferedSave` and
+        data needed to display the frame later. See `BackgroundSubtractCtrl.deferredSave` and
         `ContrastCtrl.saveState` for details.
         """
         data = self.getImage()

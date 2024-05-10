@@ -1,4 +1,5 @@
 import acq4.Manager as Manager
+import contextlib
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 from acq4.devices.Device import Device
@@ -247,14 +248,11 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
         if self.hasQuit:
             return
 
-        try:
+        with contextlib.suppress(TypeError):
             self.cam.sigNewFrame.disconnect(self.newFrame)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
             self.cam.sigShowMessage.disconnect(self.showMessage)
-        except TypeError:
-            pass
-
         self.hasQuit = True
         if self.cam.isRunning():
             self.cam.stop()
@@ -290,7 +288,7 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
     def setUiBinning(self, b, updateCamera=True):
         ind = self.ui.binningCombo.findText(str(b))
         if ind == -1:
-            raise Exception("Binning mode %s not in list." % str(b))
+            raise ValueError(f"Binning mode {str(b)} not in list.")
 
         if updateCamera:
             self.ui.binningCombo.setCurrentIndex(ind)
