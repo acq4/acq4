@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Callable, Optional
 
 import numpy as np
+from MetaArray import MetaArray
 
 import pyqtgraph as pg
 from acq4.devices.Device import Device
@@ -80,24 +81,44 @@ class Frame(object):
         if contrastInfo is not None:
             self._info['contrastInfo'] = contrastInfo
 
-    def saveImage(self, dh, filename):
-        # TODO let this append to a file as well and it'll handle z-stacks and timelapses!
+    @property
+    def time(self):
+        return self._info['time']
+
+    @property
+    def depth(self):
+        return self.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()
+
+    def saveImage(self, dh, filename=None, appendTo=None, appendAxis=None, autoIncrement=True):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
-        The optional *backgroundInfo* and *contrastInfo* arguments can be used to save additional
-        data needed to display the frame later. See `BackgroundSubtractCtrl.deferredSave` and
-        `ContrastCtrl.saveState` for details.
+
+        If *appendTo* is not None, the file will be appended to *appendTo* along the *appendAxis*, which
+        value we will supply from this object (e.g. "Depth" goes to `self.depth`).
         """
         data = self.getImage()
         info = self.info()
         if callable(info.get('backgroundInfo')):
             info['backgroundInfo'] = info['backgroundInfo'](dh)
+        if filename and not filename.endswith('.ma'):
+            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=autoIncrement)
 
-        if filename.endswith('.ma'):
-            return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
-        else:
-            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)
+        if appendAxis:
+            array_info = [
+                {'name': appendAxis, 'values': [getattr(self, appendAxis.lower())]},
+                {'name': 'X'},
+                {'name': 'Y'},
+            ]
+            data = MetaArray(data[np.newaxis, ...], info=array_info)
+
+            if appendTo:
+                data.write(appendTo.name(), appendAxis=appendAxis)
+                return appendTo
+
+        return dh.writeFile(
+            data, filename, info, fileType="MetaArray", autoIncrement=autoIncrement, appendAxis=appendAxis
+        )
 
     def loadLinkedFiles(self, dh):
         """Load linked files from the same directory as the main file."""

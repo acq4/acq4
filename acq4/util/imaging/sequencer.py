@@ -3,7 +3,6 @@ import weakref
 from typing import Union, Optional, Generator
 
 import numpy as np
-from MetaArray import MetaArray
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
@@ -192,26 +191,16 @@ def _save_results(
     if is_z_stack:
         stack = None
         for frame in frames:
-            arrayInfo = [
-                {"name": "Depth", "values": [frame.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()]},
-                {"name": "X"},
-                {"name": "Y"},
-            ]
-            data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
             if stack is None:
                 # TODO do we want to save the background/contrast display data for each frame, too
-                stack = storage_dir.writeFile(
-                    data, "z_stack", info=frame.info(), appendAxis="Depth", autoIncrement=True
-                )
+                stack = frame.saveImage(storage_dir, "z_stack.ma", appendAxis="Depth")
             else:
-                data.write(stack.name(), appendAxis="Depth")
+                frame.saveImage(storage_dir, appendTo=stack, appendAxis="Depth")
     elif is_timelapse and not is_mosaic:
-        arrayInfo = [{"name": "Time", "values": [frames.info()["time"]]}, {"name": "X"}, {"name": "Y"}]
-        data = MetaArray(frames.getImage()[np.newaxis, ...], info=arrayInfo)
         if idx == 0:
-            storage_dir.writeFile(data, "timelapse", info=frames.info(), appendAxis="Time")
+            frames.saveImage(storage_dir, "timelapse.ma", appendAxis="Time", autoIncrement=False)
         else:
-            data.write(storage_dir["timelapse.ma"].name(), appendAxis="Time")
+            frames.saveImage(storage_dir, appendTo=storage_dir["timelapse.ma"], appendAxis="Time")
     else:
         frames.saveImage(storage_dir, "image.tif")
 
