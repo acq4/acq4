@@ -110,10 +110,15 @@ class DataManager(Module):
     def loadPinnedImages(self):
         cam_mod = self.manager.getModule("Camera")
         current_dir = self.manager.getCurrentDir()
-        for f in current_dir:
-            if f.fileType() == "ImageFile" and 'background' not in f.name().lower():
-                frame = Frame.loadFromFileHandle(f)
-                cam_mod.ui.displayPinnedFrame(frame)
+
+        def load_images(d):
+            for f in d:
+                if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
+                    frame = Frame.loadFromFileHandle(f)
+                    cam_mod.ui.displayPinnedFrame(frame)
+                elif f.shortName().startswith("ImageSequence_"):
+                    load_images(f)
+        load_images(current_dir)
 
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
@@ -140,7 +145,9 @@ class DataManager(Module):
             with contextlib.suppress(HelpfulException):
                 newDir = self.manager.getCurrentDir()
 
-        has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.fileType() == "ImageFile")
+        has_images = newDir is not None and newDir.hasMatchingChildren(
+            lambda f: f.fileType() == "ImageFile" or f.shortName().startswith("ImageSequence_")
+        )
         self.ui.loadPinnedImagesBtn.setEnabled(has_images)
 
     def showFileDialog(self):

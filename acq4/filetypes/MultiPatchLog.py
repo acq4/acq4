@@ -782,9 +782,8 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        for f in directory.ls():
-            if f.endswith('.tif'):
-                f = directory[f]
+        for f in directory:
+            if f.fileType() == "ImageFile":
                 frame = Frame(f.read(), f.info().deepcopy())
                 frame.loadLinkedFiles(directory)
                 img = frame.imageItem()
@@ -792,6 +791,8 @@ class MultiPatchLogWidget(Qt.QWidget):
                 self._pinned_image_z += 1
                 self._visual_field.addItem(img)
                 self._frames.append((frame.info().get('time', 0) - self.startTime(), img))
+            elif f.shortName().startswith("ImageSequence_"):
+                self.loadImagesFromDir(f)
         self._frames = sorted(self._frames, key=lambda x: x[0])
 
     def close(self):
