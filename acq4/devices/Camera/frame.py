@@ -1,3 +1,4 @@
+import pyqtgraph as pg
 from acq4.util import imaging
 from acq4.util.DataManager import FileHandle
 
@@ -15,19 +16,27 @@ class Frame(imaging.Frame):
 
     @classmethod
     def loadFromFileHandle(cls, fh: FileHandle) -> "Frame | list[Frame]":
+        data = fh.read()
         if fh.fileType() == "MetaArray":
-            data = fh.read().asarray()
-        else:
-            data = fh.read()
-        if data.ndim == 3:
-            frames = []
-            for row in data:
-                # TODO depth and time are row-specific
-                f = Frame(row, fh.info().deepcopy())
-                f.loadLinkedFiles(fh.parent())
-                frames.append(f)
-            return frames
-        else:
-            frame = cls(data, fh.info().deepcopy())
-            frame.loadLinkedFiles(fh.parent())
-            return frame
+            if data.ndim == 3:
+                frames = []
+                for row in data:
+                    info = fh.info().deepcopy()
+                    if data.axisName(0) == "Time":
+                        info["time"] = row.axisValues(2)
+                    elif data.axisName(0) == "Depth":
+                        depth = row.axisValues(2)
+                        xform = pg.SRTTransform3D(info["transform"])
+                        pos = xform.getTranslation()
+                        pos[2] = depth
+                        xform.setTranslate(pos)
+                        info["transform"] = xform
+                    f = Frame(row.asarray(), info)
+                    f.loadLinkedFiles(fh.parent())
+                    frames.append(f)
+                return frames
+            else:
+                data = data.asarray()
+        frame = cls(data, fh.info().deepcopy())
+        frame.loadLinkedFiles(fh.parent())
+        return frame
