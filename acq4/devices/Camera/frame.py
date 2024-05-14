@@ -14,7 +14,19 @@ class Frame(imaging.Frame):
         super().__init__(data, info)
 
     @classmethod
-    def loadFromFileHandle(cls, fh: FileHandle):
-        frame = cls(fh.read(), fh.info().deepcopy())
-        frame.loadLinkedFiles(fh.parent())
-        return frame
+    def loadFromFileHandle(cls, fh: FileHandle) -> "Frame | list[Frame]":
+        if fh.fileType() == "MetaArray":
+            data = fh.read().asarray()
+        else:
+            data = fh.read()
+        if data.ndim == 3:
+            frames = []
+            for row in data:
+                info = fh.info().deepcopy()
+                # TODO depth and time are row-specific
+                frames.append(Frame(row, info))
+            return frames
+        else:
+            frame = cls(data, fh.info().deepcopy())
+            frame.loadLinkedFiles(fh.parent())
+            return frame

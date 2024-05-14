@@ -116,6 +116,11 @@ class DataManager(Module):
                 if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
                     frame = Frame.loadFromFileHandle(f)
                     cam_mod.ui.displayPinnedFrame(frame)
+                elif f.fileType() == "MetaArray" and 'fps' in f.info():
+                    frame_s = Frame.loadFromFileHandle(f)
+                    if not isinstance(frame_s, Frame):
+                        frame_s = frame_s[len(frame_s) // 2]
+                    cam_mod.ui.displayPinnedFrame(frame_s)
                 elif f.shortName().startswith("ImageSequence_"):
                     load_images(f)
         load_images(current_dir)
@@ -146,7 +151,9 @@ class DataManager(Module):
                 newDir = self.manager.getCurrentDir()
 
         has_images = newDir is not None and newDir.hasMatchingChildren(
-            lambda f: f.fileType() == "ImageFile" or f.shortName().startswith("ImageSequence_")
+            lambda f: f.fileType() == "ImageFile" or f.shortName().startswith("ImageSequence_") or (
+                f.fileType() == "MetaArray" and 'fps' in f.info()
+            )
         )
         self.ui.loadPinnedImagesBtn.setEnabled(has_images)
 
