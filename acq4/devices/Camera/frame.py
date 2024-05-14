@@ -22,9 +22,10 @@ class Frame(imaging.Frame):
         if data.ndim == 3:
             frames = []
             for row in data:
-                info = fh.info().deepcopy()
                 # TODO depth and time are row-specific
-                frames.append(Frame(row, info))
+                f = Frame(row, fh.info().deepcopy())
+                f.loadLinkedFiles(fh.parent())
+                frames.append(f)
             return frames
         else:
             frame = cls(data, fh.info().deepcopy())

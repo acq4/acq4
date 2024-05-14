@@ -800,6 +800,21 @@ class DirHandle(FileHandle):
         with self.lock:
             return any(test(self[f]) for f in self.ls())
 
+    def representativeFramesForAllImages(self):
+        from acq4.devices.Camera import Frame
+        frames = []
+        for f in self:
+            if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
+                frames.append(Frame.loadFromFileHandle(f))
+            elif f.fileType() == "MetaArray" and 'fps' in f.info():
+                frame_s = Frame.loadFromFileHandle(f)
+                if not isinstance(frame_s, Frame):
+                    frame_s = frame_s[len(frame_s) // 2]
+                frames.append(frame_s)
+            elif f.shortName().startswith("ImageSequence_"):
+                frames.extend(f.representativeFramesForAllImages())
+        return frames
+
     def _setFileInfo(self, fileName, info=None, **args):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
         if info is None:

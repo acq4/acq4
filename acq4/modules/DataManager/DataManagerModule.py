@@ -110,20 +110,8 @@ class DataManager(Module):
     def loadPinnedImages(self):
         cam_mod = self.manager.getModule("Camera")
         current_dir = self.manager.getCurrentDir()
-
-        def load_images(d):
-            for f in d:
-                if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
-                    frame = Frame.loadFromFileHandle(f)
-                    cam_mod.ui.displayPinnedFrame(frame)
-                elif f.fileType() == "MetaArray" and 'fps' in f.info():
-                    frame_s = Frame.loadFromFileHandle(f)
-                    if not isinstance(frame_s, Frame):
-                        frame_s = frame_s[len(frame_s) // 2]
-                    cam_mod.ui.displayPinnedFrame(frame_s)
-                elif f.shortName().startswith("ImageSequence_"):
-                    load_images(f)
-        load_images(current_dir)
+        for f in current_dir.representativeFramesForAllImages():
+            cam_mod.ui.displayPinnedFrame(f)
 
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
