@@ -700,8 +700,9 @@ class MovePathFuture(MoveFuture):
                 error=f"Error in trying to {self.path.get('explanation')}",
                 excInfo=(type(exc), exc, exc.__traceback__),
             )
-        if not self.isDone():
-            self._taskDone()  # success!
+        finally:
+            if not self.isDone():
+                self._taskDone()  # success!
 
     def undo(self):
         """Reverse the moves generated in this future and return a new future.

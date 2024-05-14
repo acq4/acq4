@@ -1,17 +1,21 @@
 import acq4.Manager as Manager
+import contextlib
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
+from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.debug import printExc
+from acq4.util.future import Future
 from acq4.util.imaging import ImagingCtrl
+from acq4.util.imaging.frame import FrameProducer
 from pyqtgraph import SignalProxy, Point
 
 CameraInterfaceTemplate = Qt.importTemplate('.CameraInterfaceTemplate')
 
 
-class CameraInterface(CameraModuleInterface):
+class CameraInterface(CameraModuleInterface, FrameProducer):
     """
     This class provides all the functionality necessary for a camera to display 
     images and controls within the camera module's main window. Each camera that 
@@ -20,9 +24,8 @@ class CameraInterface(CameraModuleInterface):
     The interface provides a control GUI via the controlWidget() method and 
     directly manages its own GraphicsItems within the camera module's view box.
     """
-    
     sigNewFrame = Qt.Signal(object, object)  # self, frame
-    
+
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
 
@@ -157,6 +160,39 @@ class CameraInterface(CameraModuleInterface):
             raise
         return camSize, scope
     
+    def acquireFrames(self, n: "int | None" = None, ensureFreshFrames: bool = False, postProcessing=None) -> Future:
+        """Like Camera.acquireFrames, but including the live background and contrast adjustments found in the
+        frameDisplay in this interface."""
+        return self.cam.acquireFrames(n, ensureFreshFrames, postProcessing=self.frameDisplay.prepareFrameForSaving)
+
+    def getFocusDevice(self):
+        return self.cam.getFocusDevice()
+
+    def getFocusDepth(self) -> float:
+        return self.cam.getFocusDepth()
+
+    def setFocusDepth(self, z, speed='fast') -> Future:
+        return self.cam.setFocusDepth(z, speed)
+
+    def ensureRunning(self, ensureFreshFrames=False):
+        return self.cam.ensureRunning(ensureFreshFrames)
+
+    def devicesToReserve(self) -> list[Device]:
+        return self.cam.devicesToReserve()
+
+    def globalCenterPosition(self, mode="sensor"):
+        return self.cam.globalCenterPosition()
+
+    def moveCenterToGlobal(self, position, speed, center="roi") -> Future:
+        return self.cam.moveCenterToGlobal(position, speed, center)
+
+    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
+        return self.cam.getBoundary(globalCoords, mode)
+
+    @property
+    def scopeDev(self) -> Device:
+        return self.cam.scopeDev
+
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
@@ -212,14 +248,11 @@ class CameraInterface(CameraModuleInterface):
         if self.hasQuit:
             return
 
-        try:
+        with contextlib.suppress(TypeError):
             self.cam.sigNewFrame.disconnect(self.newFrame)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
             self.cam.sigShowMessage.disconnect(self.showMessage)
-        except TypeError:
-            pass
-
         self.hasQuit = True
         if self.cam.isRunning():
             self.cam.stop()
@@ -255,7 +288,7 @@ class CameraInterface(CameraModuleInterface):
     def setUiBinning(self, b, updateCamera=True):
         ind = self.ui.binningCombo.findText(str(b))
         if ind == -1:
-            raise Exception("Binning mode %s not in list." % str(b))
+            raise ValueError(f"Binning mode {str(b)} not in list.")
 
         if updateCamera:
             self.ui.binningCombo.setCurrentIndex(ind)
@@ -342,7 +375,7 @@ class CameraInterface(CameraModuleInterface):
         """
         Return bounding rect of this imaging device in global coordinates
         """
-        return self.cam.getBoundary().boundingRect()
+        return Qt.QRectF(*self.cam.getBoundary())
 
 
 class CameraItemGroup(DeviceTreeItemGroup):
@@ -352,7 +385,9 @@ class CameraItemGroup(DeviceTreeItemGroup):
     def makeGroup(self, dev, subdev):
         grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
         if dev is self.device:
-            bound = Qt.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound = Qt.QPainterPath()
+            bound.addRect(Qt.QRectF(*self.device.getBoundary(globalCoords=False)))
+            bound = Qt.QGraphicsPathItem(bound)
             bound.setParentItem(grp)
             bound.setPen(pg.mkPen(40, 150, 150))
         return grp

@@ -1,9 +1,13 @@
+from abc import ABCMeta, abstractmethod
 from typing import Callable, Optional
 
 import numpy as np
+from MetaArray import MetaArray
 
-from acq4.util.imaging.background import remove_background_from_image
 import pyqtgraph as pg
+from acq4.devices.Device import Device
+from acq4.util.future import Future
+from acq4.util.imaging.background import remove_background_from_image
 from pyqtgraph import SRTTransform3D, ImageItem
 
 
@@ -70,26 +74,51 @@ class Frame(object):
         """Map *obj* from the frame's data coordinates to global coordinates.
         """
         return self.globalTransform().map(obj)
-    
-    def saveImage(self, dh, filename, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
+
+    def includeDisplayProcessing(self, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
+        if backgroundInfo is not None:
+            self._info['backgroundInfo'] = backgroundInfo
+        if contrastInfo is not None:
+            self._info['contrastInfo'] = contrastInfo
+
+    @property
+    def time(self):
+        return self._info['time']
+
+    @property
+    def depth(self):
+        return self.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()
+
+    def saveImage(self, dh, filename=None, appendTo=None, appendAxis=None, autoIncrement=True):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
-        The optional *backgroundInfo* and *contrastInfo* arguments can be used to save additional
-        data needed to display the frame later. See `BackgroundSubtractCtrl.defferedSave` and
-        `ContrastCtrl.saveState` for details.
+
+        If *appendTo* is not None, the file will be appended to *appendTo* along the *appendAxis*, which
+        value we will supply from this object (e.g. "Depth" goes to `self.depth`).
         """
         data = self.getImage()
         info = self.info()
-        if backgroundInfo is not None:
-            info['backgroundInfo'] = backgroundInfo(dh)
-        if contrastInfo is not None:
-            info['contrastInfo'] = contrastInfo
+        if callable(info.get('backgroundInfo')):
+            info['backgroundInfo'] = info['backgroundInfo'](dh)
+        if filename and not filename.endswith('.ma'):
+            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=autoIncrement)
 
-        if filename.endswith('.ma'):
-            return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
-        else:
-            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)
+        if appendAxis:
+            array_info = [
+                {'name': appendAxis, 'values': [getattr(self, appendAxis.lower())]},
+                {'name': 'X'},
+                {'name': 'Y'},
+            ]
+            data = MetaArray(data[np.newaxis, ...], info=array_info)
+
+            if appendTo:
+                data.write(appendTo.name(), appendAxis=appendAxis)
+                return appendTo
+
+        return dh.writeFile(
+            data, filename, info, fileType="MetaArray", autoIncrement=autoIncrement, appendAxis=appendAxis
+        )
 
     def loadLinkedFiles(self, dh):
         """Load linked files from the same directory as the main file."""
@@ -123,3 +152,32 @@ class Frame(object):
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as2D())
         return item
+
+
+class FrameProducer(object):
+    def acquireFrames(self, n: "int | None" = None, ensureFreshFrames: bool = False, postProcessing=None) -> Future:
+        raise NotImplementedError()
+
+    def getFocusDevice(self) -> Device:
+        raise NotImplementedError()
+
+    def getFocusDepth(self) -> float:
+        raise NotImplementedError()
+
+    def setFocusDepth(self, z, speed='fast') -> Future:
+        raise NotImplementedError()
+
+    def ensureRunning(self, ensureFreshFrames=False):
+        raise NotImplementedError()
+
+    def devicesToReserve(self) -> list[Device]:
+        raise NotImplementedError()
+
+    def globalCenterPosition(self, mode="sensor"):
+        raise NotImplementedError()
+
+    def moveCenterToGlobal(self, position, speed, center="roi") -> Future:
+        raise NotImplementedError()
+
+    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
+        raise NotImplementedError()

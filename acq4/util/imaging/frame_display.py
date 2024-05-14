@@ -67,6 +67,10 @@ class FrameDisplay(Qt.QObject):
     def backgroundWidget(self):
         return self.bgCtrl
 
+    def prepareFrameForSaving(self, frame: "Frame") -> "Frame":
+        frame.includeDisplayProcessing(self.bgCtrl.deferredSave(), self.contrastCtrl.saveState())
+        return frame
+
     def visibleImage(self):
         """Return a copy of the image as it is currently visible in the scene.
         """

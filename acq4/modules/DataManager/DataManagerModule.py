@@ -12,6 +12,7 @@ from pyqtgraph import FileDialog
 from . import FileAnalysisView
 from . import FileLogView
 from ...devices.Camera.frame import Frame
+from ...filetypes.ImageFile import ImageFile
 from ...util.HelpfulException import HelpfulException
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
@@ -109,11 +110,8 @@ class DataManager(Module):
     def loadPinnedImages(self):
         cam_mod = self.manager.getModule("Camera")
         current_dir = self.manager.getCurrentDir()
-        for f in current_dir.ls():
-            if f.endswith('.tif') and 'background' not in f.lower():
-                f = current_dir[f]
-                frame = Frame.loadFromFileHandle(f)
-                cam_mod.ui.displayPinnedFrame(frame)
+        for f in current_dir.representativeFramesForAllImages():
+            cam_mod.ui.displayPinnedFrame(f)
 
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
@@ -140,7 +138,11 @@ class DataManager(Module):
             with contextlib.suppress(HelpfulException):
                 newDir = self.manager.getCurrentDir()
 
-        has_images = newDir is not None and newDir.hasMatchingChildren(lambda f: f.shortName().endswith('.tif'))
+        has_images = newDir is not None and newDir.hasMatchingChildren(
+            lambda f: f.fileType() == "ImageFile" or f.shortName().startswith("ImageSequence_") or (
+                f.fileType() == "MetaArray" and 'fps' in f.info()
+            )
+        )
         self.ui.loadPinnedImagesBtn.setEnabled(has_images)
 
     def showFileDialog(self):

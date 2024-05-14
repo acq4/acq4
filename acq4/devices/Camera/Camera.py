@@ -11,6 +11,7 @@ from MetaArray import MetaArray, axis
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.Device import Device
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -18,6 +19,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from acq4.util.future import Future
+from acq4.util.imaging.frame import FrameProducer
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
@@ -26,7 +28,7 @@ from .frame import Frame
 from .taskGUI import CameraTaskGui
 
 
-class Camera(DAQGeneric, OptomechDevice):
+class Camera(DAQGeneric, OptomechDevice, FrameProducer):
     """Generic camera device class. All cameras should extend from this interface.
      - The class handles acquisition tasks, scope integration, expose/trigger lines
      - Subclasses should handle the connection to the camera driver by overriding
@@ -128,6 +130,9 @@ class Camera(DAQGeneric, OptomechDevice):
             dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
 
         dm.declareInterface(name, ["camera"], self)
+
+    def devicesToReserve(self) -> list[Device]:
+        return [self, self.parentDevice(), self.scopeDev]
 
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
@@ -278,7 +283,7 @@ class Camera(DAQGeneric, OptomechDevice):
             if not running:
                 self.stop()
 
-    def acquireFrames(self, n=None, ensureFreshFrames=False) -> "FrameAcquisitionFuture":
+    def acquireFrames(self, n=None, ensureFreshFrames=False, postProcessing=None) -> "FrameAcquisitionFuture":
         """Acquire a specific number of frames and return a FrameAcquisitionFuture.
 
         If *n* is None, then frames will be acquired until future.stop() is called.
@@ -289,7 +294,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         if n is None and ensureFreshFrames:
             raise ValueError("ensureFreshFrames=True is not compatible with n=None")
-        return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
+        return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames, postProcessing=postProcessing)
 
     @Future.wrap
     def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list["Frame"]:
@@ -375,33 +380,26 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             return self.scopeDev
 
-    def getBoundary(self, globalCoords=True):
-        """Return the boundaries of the camera sensor in global coordinates.
-        If globalCoords==False, return in local coordinates.
+    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
+        """Return the boundaries of the camera in the specified coordinates.
+        If globalCoords is False, return in local coordinates.
+        `mode` can be either "sensor" for max sensor size or "roi" for current available region.
+        Returns (left, top, width, height).
         """
-        size = self.getParam("sensorSize")
-        bounds = Qt.QPainterPath()
-        bounds.addRect(Qt.QRectF(0, 0, *size))
+        if mode == "sensor":
+            bounds = (0, 0, *self.getParam("sensorSize"))
+        elif mode == "roi":
+            bounds = self.getParam("region")
+        else:
+            raise ValueError("mode must be either 'sensor' or 'roi'")
+        bounds = tuple(map(float, bounds))
         if globalCoords:
-            return pg.SRTTransform(self.globalTransform()).map(bounds)
+            start = self.mapToGlobal(bounds[:2])
+            end = self.mapToGlobal((bounds[2] + bounds[0], bounds[3] + bounds[1]))
+            size = (end[0] - start[0], end[1] - start[1])
+            return (*start, *size)
         else:
             return bounds
-
-    def getBoundaries(self):
-        """Return a list of camera boundaries for all objectives"""
-        objs = self.scopeDev.listObjectives()
-        return [self.getBoundary(o) for o in objs]
-
-    # deprecated: not used anywhere, and I'm not sure it's correct.
-    # def mapToSensor(self, pos):
-    #     """Return the sub-pixel location on the sensor that corresponds to global position pos"""
-    #     ss = self.getScopeState()
-    #     boundary = self.getBoundary()
-    #     boundary.translate(*ss['scopePosition'][:2])
-    #     size = self.sensorSize
-    #     x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
-    #     y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
-    #     return (x, y)
 
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
@@ -964,12 +962,20 @@ class AcquireThread(Thread):
 
 
 class FrameAcquisitionFuture(Future):
-    def __init__(self, camera: Camera, frameCount: Optional[int], timeout: float = 10, ensureFreshFrames: bool = False):
+    def __init__(
+            self,
+            camera: Camera,
+            frameCount: Optional[int],
+            timeout: float = 10,
+            ensureFreshFrames: bool = False,
+            postProcessing: Optional[Callable[[Frame], Frame]] = None,
+    ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
         super().__init__()
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
+        self._post_processing = postProcessing
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
@@ -998,13 +1004,21 @@ class FrameAcquisitionFuture(Future):
                             break
                         if ptime.time() - lastFrameTime > self._timeout:
                             self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
+                            break
                         continue
+                    if self._post_processing is not None:
+                        try:
+                            frame = self._post_processing(frame)
+                        except Exception as e:
+                            self._taskDone(interrupted=True, error=e)
+                            break
                     self._frames.append(frame)
                     if self._stop_when is not None and self._stop_when(frame):
                         self._taskDone()
                         break
                     if self._frame_count is not None and len(self._frames) >= self._frame_count:
                         self._taskDone()
+                        break
             finally:
                 self._camera.acqThread.disconnectCallback(self.handleNewFrame)
 

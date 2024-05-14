@@ -1,14 +1,17 @@
 import itertools
 import weakref
-from typing import Union, Optional
+from typing import Union, Optional, Generator
 
 import numpy as np
-from MetaArray import MetaArray
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
+from acq4.util.DataManager import DirHandle
 from acq4.util.future import Future
+from acq4.util.imaging import Frame
+from acq4.util.surface import find_surface
+from acq4.util.threadrun import runInGuiThread
 
 
 def runZStack(imager, z_range_args) -> Future:
@@ -21,17 +24,10 @@ def runZStack(imager, z_range_args) -> Future:
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
-    return run_image_sequence({
-        "imager": imager,
-        "zStack": True,
-        "zStackRangeArgs": z_range_args,
-        "timelapseCount": 1,
-        "timelapseInterval": 0,
-        "save": False,
-    })
+    return run_image_sequence(imager=imager, z_stack=z_range_args)
 
 
-def _enforce_linear_z_stack(frames: list["Frame"], step: float) -> list["Frame"]:
+def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
@@ -129,7 +125,7 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
 
 
 @Future.wrap
-def _slow_z_stack(imager, start, end, step, _future) -> list["Frame"]:
+def _slow_z_stack(imager, start, end, step, _future) -> list[Frame]:
     sign = np.sign(end - start)
     direction = sign * -1
     step = sign * abs(step)
@@ -167,77 +163,182 @@ def _status_message(iteration, maxIter):
         return f"iter={iteration + 1}/{maxIter}"
 
 
-def _save_results(frames, storage_dir, is_z_stack: bool = False):
-    stack = None
-    for i, frame in enumerate(frames):
-        name = f"image_{i:03d}"
-        if is_z_stack:
-            # start or append focus stack
-            arrayInfo = [
-                {"name": "Depth", "values": [frame.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()]},
-                {"name": "X"},
-                {"name": "Y"},
-            ]
-            data = MetaArray(frame.getImage()[np.newaxis, ...], info=arrayInfo)
-            if stack is None:
-                stack = storage_dir.writeFile(data, name, info=frame.info(), appendAxis="Depth")
-            else:
-                data.write(stack.name(), appendAxis="Depth")
+def _save_results(
+        frames: "Frame | list[Frame]",
+        storage_dir: DirHandle,
+        idx: int,
+        is_timelapse: bool = False,
+        is_mosaic: bool = False,
+        is_z_stack: bool = False,
+):
+    """
+        +-----------+--------+---------+------------------------+
+        | timelapse | mosaic | z-stack |    resultant files     |
+        +-----------+--------+---------+------------------------+
+        | true      | true   | true    | folders of z-stack mas |
+        | true      | true   | false   | folders of images      |
+        | true      | false  | true    | multiple z-stack mas   |
+        | true      | false  | false   | single timelapse ma    |
+        | false     | true   | true    | multiple z-stack mas   |
+        | false     | true   | false   | multiple images        |
+        | false     | false  | true    | single z-stack ma      |
+        | false     | false  | false   | single image           |
+        +-----------+--------+---------+------------------------+
+    """
+    if is_mosaic and is_timelapse:
+        storage_dir = storage_dir.getDir(f"mosaic_{idx:03d}", create=True)
 
+    if is_z_stack:
+        stack = None
+        for frame in frames:
+            if stack is None:
+                # TODO do we want to save the background/contrast display data for each frame, too
+                stack = frame.saveImage(storage_dir, "z_stack.ma", appendAxis="Depth")
+            else:
+                frame.saveImage(storage_dir, appendTo=stack, appendAxis="Depth")
+    elif is_timelapse and not is_mosaic:
+        if idx == 0:
+            frames.saveImage(storage_dir, "timelapse.ma", appendAxis="Time", autoIncrement=False)
         else:
-            # record single-frame image
-            arrayInfo = [{"name": "X"}, {"name": "Y"}]
-            data = MetaArray(frame.getImage(), info=arrayInfo)
-            storage_dir.writeFile(data, name, info=frame.info())
+            frames.saveImage(storage_dir, appendTo=storage_dir["timelapse.ma"], appendAxis="Time")
+    else:
+        frames.saveImage(storage_dir, "image.tif")
 
 
 @Future.wrap
-def run_image_sequence(prot, _future: Future) -> list["Frame"]:
-    maxIter = prot["timelapseCount"]
-    interval = prot["timelapseInterval"]
-    imager = prot["imager"]
+def run_image_sequence(
+        imager,
+        count: float = 1,
+        interval: float = 0,
+        pin: "Callable[[Frame]] | None" = None,
+        z_stack: "tuple[float, float, float] | None" = None,
+        mosaic: "tuple[float, float, float, float, float] | None" = None,
+        storage_dir: "DirHandle | None" = None,
+        _future: Future = None
+) -> "Frame | list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
-    frames = []
+    man = Manager.getManager()
+    result = []
+    is_timelapse = count > 1
+
+    def handle_new_frames(f: "Frame | list[Frame]", idx: int):
+        if is_timelapse:
+            if idx + 1 > len(result):
+                result.append([])
+            dest = result[-1]
+        else:
+            dest = result
+        dest.append(f)
+        if pin:
+            if z_stack:
+                most_focused = find_surface(f) or (len(f) // 2)
+                pin(f[most_focused])
+            else:
+                pin(f)
+        if storage_dir:
+            _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
 
     # record
-    with Manager.getManager().reserveDevices([imager, imager.parentDevice()]):  # TODO this isn't complete or correct
+    with man.reserveDevices(imager.devicesToReserve()):
         try:
             for i in itertools.count():
-                if i >= maxIter:
+                if i >= count:
                     break
                 start = ptime.time()
-                if prot["zStack"]:
-                    start, end, step = prot["zStackRangeArgs"]
-                    direction = start - end
-                    _set_focus_depth(imager, start, direction, 'fast')
-                    # fps = imager.getEstimatedFrameRate().getResult()
-                    stage = imager.scopeDev.getFocusDevice()
-                    z_per_second = stage.positionUpdatesPerSecond
-                    meters_per_frame = abs(step)
-                    speed = meters_per_frame * z_per_second * 0.5
-                    future = imager.acquireFrames()
-                    with imager.ensureRunning(ensureFreshFrames=True):
-                        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-                        _set_focus_depth(imager, end, direction, speed)
-                        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-                        future.stop()
-                        frames += _future.waitFor(future).getResult(timeout=10)
-                    try:
-                        frames = _enforce_linear_z_stack(frames, step)
-                    except ValueError:
-                        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-                        frames = _slow_z_stack(imager, start, end, step).getResult()
-                        frames = _enforce_linear_z_stack(frames, step)
-                else:  # single frame
-                    frames.append(imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
-                _future.setState(_status_message(i, maxIter))
+                for move in movements_to_cover_region(imager, mosaic):
+                    _future.waitFor(move)
+                    if z_stack:
+                        stack = _future.waitFor(_acquire_z_stack(imager, *z_stack)).getResult()
+                        handle_new_frames(stack, i)
+                    else:  # single frame
+                        frame = _future.waitFor(
+                            imager.acquireFrames(1, ensureFreshFrames=True)
+                        ).getResult()[0]
+                        handle_new_frames(frame, i)
+                    _future.checkStop()
+                _future.setState(_status_message(i, count))
                 _future.sleep(interval - (ptime.time() - start))
         finally:
-            if prot["save"]:
-                _save_results(frames, prot["storageDir"], prot["zStack"])
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
+    return result
+
+
+def movements_to_cover_region(
+    imager, region: "tuple[float, float, float, float, float] | None"
+) -> Generator[Future, None, None]:
+    """
+    Generate a sequence of snaking movements to cover the region. `region` is a tuple containing the `left`, `top`,
+    `right`, and `bottom` coordinates, as well as an `overlap`, all in global/meters. `region` can also be None, in
+    which case this yields once with a no-op Future.
+    """
+    if region is None:
+        yield Future.immediate()
+        return
+
+    for pos in positions_to_cover_region(region, imager.globalCenterPosition(), imager.getBoundary(mode="roi")):
+        yield imager.moveCenterToGlobal(pos, "fast")
+
+
+def positions_to_cover_region(region, imager_center, imager_region) -> Generator[tuple, None, None]:
+    """Ha! (ignoring overlap), `region` is (x1, y1, x2, y2), `imager_region` is (x1, y1, w, h)."""
+    z = imager_center[2]
+    img_x, img_y, img_w, img_h = imager_region
+    img_top_left = np.array((img_x, img_y, z))
+    move_offset = imager_center - img_top_left
+    img_bottom_right = np.array((img_x + img_w, img_y + img_h, z))
+    coverage_offset = imager_center - img_bottom_right
+    overlap = region[-1]
+    step = np.abs(img_bottom_right - img_top_left)[:2] - overlap
+    if np.any(step <= 0):
+        raise ValueError(f"Overlap {overlap:g} exceeds field of view")
+
+    region_top_left = np.array((*region[:2], z))
+    region_bottom_right = np.array((*region[2:4], z))
+    pos = region_top_left + move_offset
+    x_finished = y_finished = False
+    x_tests = (
+            lambda: (pos - coverage_offset)[0] >= region_bottom_right[0],
+            lambda: (pos + coverage_offset)[0] <= region_top_left[0],
+    )
+    x_steps = (step[0], -step[0])
+    x_direction = 0
+
+    while not y_finished:
+        y_finished = (pos - coverage_offset)[1] <= region_bottom_right[1]
+        while not x_finished:
+            yield pos
+            x_finished = x_tests[x_direction]()
+            if not x_finished:
+                pos[0] += x_steps[x_direction]
+        pos[1] -= step[1]
+        x_direction = (x_direction + 1) % 2
+        x_finished = False
+
+
+@Future.wrap
+def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
+    # TODO think about strobing the lighting for clearer images
+    direction = start - stop
+    _set_focus_depth(imager, start, direction, 'fast')
+    stage = imager.scopeDev.getFocusDevice()
+    z_per_second = stage.positionUpdatesPerSecond
+    meters_per_frame = abs(step)
+    speed = meters_per_frame * z_per_second * 0.5
+    frames_fut = imager.acquireFrames()
+    with imager.ensureRunning(ensureFreshFrames=True):
+        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+        _set_focus_depth(imager, stop, direction, speed)
+        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+        frames_fut.stop()
+        frames = _future.waitFor(frames_fut).getResult(timeout=10)
+    try:
+        frames = _enforce_linear_z_stack(frames, step)
+    except ValueError:
+        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
+        frames = _slow_z_stack(imager, start, stop, step).getResult()
+        frames = _enforce_linear_z_stack(frames, step)
     return frames
 
 
@@ -250,6 +351,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         Qt.QWidget.__init__(self)
 
         self.imager = None
+        self._manuallyStopped = False
 
         self.ui = Qt.importTemplate(".sequencerTemplate")()
         self.ui.setupUi(self)
@@ -258,6 +360,11 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.zEndSpin.setOpts(value=50e-6, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.zSpacingSpin.setOpts(min=1e-9, value=1e-6, suffix="m", siPrefix=True, dec=True, minStep=1e-9, step=0.5)
         self.ui.intervalSpin.setOpts(min=0, value=1, suffix="s", siPrefix=True, dec=True, minStep=1e-3, step=1)
+        self.ui.xLeftSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.xRightSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.yTopSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
+        self.ui.mosaicOverlapSpin.setOpts(value=50e-6, suffix="m", siPrefix=True, step=1e-6, decimals=6, bounds=(0, float('inf')))
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
@@ -269,9 +376,10 @@ class ImageSequencerCtrl(Qt.QWidget):
         cameraMod.sigInterfaceAdded.connect(self.updateDeviceList)
         cameraMod.sigInterfaceRemoved.connect(self.updateDeviceList)
         self.ui.startBtn.clicked.connect(self.startClicked)
-        self.ui.pauseBtn.clicked.connect(self.pauseClicked)
         self.ui.setStartBtn.clicked.connect(self.setStartClicked)
         self.ui.setEndBtn.clicked.connect(self.setEndClicked)
+        self.ui.setTopLeftBtn.clicked.connect(self.setTopLeftClicked)
+        self.ui.setBottomRightBtn.clicked.connect(self.setBottomRightClicked)
 
     def updateDeviceList(self):
         items = ["Select device.."]
@@ -285,6 +393,12 @@ class ImageSequencerCtrl(Qt.QWidget):
         name = self.ui.deviceCombo.currentText()
         return self.mod().interfaces[name].getDevice()
 
+    def _selectedImagerOrComplain(self):
+        dev = self.selectedImager()
+        if dev is None:
+            raise ValueError("Must select an imaging device first.")
+        return dev
+
     def stateChanged(self, name, value):
         if name == "deviceCombo":
             imager = self.selectedImager()
@@ -295,29 +409,37 @@ class ImageSequencerCtrl(Qt.QWidget):
         """Build a description of everything that needs to be done during the sequence.
         """
         prot = {
-            "imager": self.selectedImager(),
-            "zStack": self.ui.zStackGroup.isChecked(),
-            "timelapse": self.ui.timelapseGroup.isChecked(),
+            "imager": Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(self.selectedImager().name()),
         }
-        if prot["zStack"]:
+        if self.ui.zStackGroup.isChecked():
             start = self.ui.zStartSpin.value()
             end = self.ui.zEndSpin.value()
             spacing = self.ui.zSpacingSpin.value()
-            prot["zStackRangeArgs"] = (start, end, spacing)
-        else:
-            prot["zStackRangeArgs"] = None
+            prot["z_stack"] = (start, end, spacing)
 
-        if prot["timelapse"]:
+        if self.ui.timelapseGroup.isChecked():
             count = self.ui.iterationsSpin.cleanText()
             if count == "inf":
                 count = float(count)
             else:
                 count = int(count)
-            prot["timelapseCount"] = count
-            prot["timelapseInterval"] = self.ui.intervalSpin.value()
+            prot["count"] = count
+            prot["interval"] = self.ui.intervalSpin.value()
         else:
-            prot["timelapseCount"] = 1
-            prot["timelapseInterval"] = 0
+            prot["count"] = 1
+            prot["interval"] = 0
+
+        if self.ui.mosaicGroup.isChecked():
+            prot["mosaic"] = (
+                self.ui.xLeftSpin.value(),
+                self.ui.yTopSpin.value(),
+                self.ui.xRightSpin.value(),
+                self.ui.yBottomSpin.value(),
+                self.ui.mosaicOverlapSpin.value(),
+            )
+
+        if self.ui.pinCheckbox.isChecked():
+            prot["pin"] = lambda f: runInGuiThread(self.mod().displayPinnedFrame, f)
 
         return prot
 
@@ -327,36 +449,36 @@ class ImageSequencerCtrl(Qt.QWidget):
         else:
             self.stop()
 
-    def pauseClicked(self, b):
-        pass  # TODO
-
     def start(self):
         try:
             if self.selectedImager() is None:
                 raise RuntimeError("No imaging device selected.")
             prot = self.makeProtocol()
-            self.currentProtocol = prot
             dh = Manager.getManager().getCurrentDir().getDir("ImageSequence", create=True, autoIncrement=True)
             dhinfo = prot.copy()
             del dhinfo["imager"]
-            if dhinfo["timelapseCount"] == float("inf"):
-                dhinfo["timelapseCount"] = -1
+            if "pin" in dhinfo:
+                del dhinfo["pin"]
+            if dhinfo["count"] == float("inf"):
+                dhinfo["count"] = -1
             dh.setInfo(dhinfo)
-            prot["storageDir"] = dh
-            prot["save"] = True
+            prot["storage_dir"] = dh
             self.setRunning(True)
-            self._future = run_image_sequence(prot)
+            self._future = run_image_sequence(**prot)
             self._future.sigFinished.connect(self.threadStopped)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
             self.threadStopped(self._future)
             raise
+        if self._future.isDone():  # probably an immediate error
+            self.threadStopped(self._future)
 
     def stop(self):
         if self._future is not None:
             self.ui.startBtn.setText("Stopping...")
             self.ui.startBtn.setEnabled(False)
             self._future.stop()
+            self._manuallyStopped = True
 
     def threadStopped(self, future):
         self.ui.startBtn.setText("Start")
@@ -364,14 +486,19 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.setRunning(False)
         self.updateStatus()
         if self._future is not None:
+            fut = self._future
             self._future.sigFinished.disconnect(self.threadStopped)
             self._future.sigStateChanged.disconnect(self.threadMessage)
             self._future = None
+            if not self._manuallyStopped:
+                fut.wait(timeout=1)  # to raise errors if any happened
+                self._manuallyStopped = False
 
     def setRunning(self, b):
         self.ui.startBtn.setEnabled(True)
         self.ui.startBtn.setText("Stop" if b else "Start")
         self.ui.zStackGroup.setEnabled(not b)
+        self.ui.mosaicGroup.setEnabled(not b)
         self.ui.timelapseGroup.setEnabled(not b)
         self.ui.deviceCombo.setEnabled(not b)
 
@@ -380,8 +507,8 @@ class ImageSequencerCtrl(Qt.QWidget):
 
     def updateStatus(self):
         prot = self.makeProtocol()
-        if prot["timelapse"]:
-            itermsg = f"iter=0/{prot['timelapseCount']}"
+        if prot["count"] > 1:
+            itermsg = f"iter=0/{prot['count']}"
         else:
             itermsg = "iter=0"
 
@@ -389,13 +516,23 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.statusLabel.setText(msg)
 
     def setStartClicked(self):
-        dev = self.selectedImager()
-        if dev is None:
-            raise Exception("Must select an imaging device first.")
+        dev = self._selectedImagerOrComplain()
         self.ui.zStartSpin.setValue(dev.getFocusDepth())
 
     def setEndClicked(self):
-        dev = self.selectedImager()
-        if dev is None:
-            raise Exception("Must select an imaging device first.")
+        dev = self._selectedImagerOrComplain()
         self.ui.zEndSpin.setValue(dev.getFocusDepth())
+
+    def setTopLeftClicked(self):
+        cam = self._selectedImagerOrComplain()
+        region = cam.getParam("region")
+        bound = cam.globalTransform().map(Qt.QPointF(region[0], region[1]))
+        self.ui.xLeftSpin.setValue(bound.x())
+        self.ui.yTopSpin.setValue(bound.y())
+
+    def setBottomRightClicked(self):
+        cam = self._selectedImagerOrComplain()
+        region = cam.getParam("region")
+        bound = cam.globalTransform().map(Qt.QPointF(region[0] + region[2], region[1] + region[3]))
+        self.ui.xRightSpin.setValue(bound.x())
+        self.ui.yBottomSpin.setValue(bound.y())

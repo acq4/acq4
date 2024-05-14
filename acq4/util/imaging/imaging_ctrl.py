@@ -151,10 +151,7 @@ class ImagingCtrl(Qt.QWidget):
     def saveFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
             self.pinCurrentFrame()
-        self.recordThread.saveFrame(
-            self.frameDisplay.bgCtrl.deferredSave(),
-            self.frameDisplay.contrastCtrl.saveState(),
-        )
+        self.recordThread.saveFrame(self.frameDisplay.prepareFrameForSaving)
 
     def recordStackToggled(self, b):
         if b:
@@ -248,10 +245,7 @@ class ImagingCtrl(Qt.QWidget):
 
     def pinFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
-            self.recordThread.saveFrame(
-                self.frameDisplay.bgCtrl.deferredSave(),
-                self.frameDisplay.contrastCtrl.saveState(),
-            )
+            self.recordThread.saveFrame(self.frameDisplay.prepareFrameForSaving)
         self.pinCurrentFrame()
 
     def pinCurrentFrame(self):
