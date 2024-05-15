@@ -132,7 +132,7 @@ class Camera(DAQGeneric, OptomechDevice, FrameProducer):
         dm.declareInterface(name, ["camera"], self)
 
     def devicesToReserve(self) -> list[Device]:
-        return [self, self.parentDevice(), self.scopeDev]
+        return self.parentDevices()
 
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
