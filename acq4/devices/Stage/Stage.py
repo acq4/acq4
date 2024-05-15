@@ -697,7 +697,7 @@ class MovePathFuture(MoveFuture):
         except Exception as exc:
             self._taskDone(
                 interrupted=True,
-                error=f"Error in trying to {self.path.get('explanation')}",
+                error=f"Error in trying to {step.get('explanation')}",
                 excInfo=(type(exc), exc, exc.__traceback__),
             )
         finally:
