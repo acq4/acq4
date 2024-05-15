@@ -130,7 +130,7 @@ class SutterMPC200(Stage):
     def positionUpdatesPerSecond(self):
         return 1.0 / SutterMPC200._monitor.minInterval
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
             speed = self.slowSpeed

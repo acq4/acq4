@@ -69,7 +69,7 @@ class NewScaleMPM(Stage):
         Stage.quit(self)
         self.dev.close()
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         with self.lock:
             speed = self._interpretSpeed(speed)
             self._lastMove = NewScaleMoveFuture(self, pos, speed, linear)
