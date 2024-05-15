@@ -408,9 +408,13 @@ class ImageSequencerCtrl(Qt.QWidget):
     def makeProtocol(self):
         """Build a description of everything that needs to be done during the sequence.
         """
-        prot = {
-            "imager": Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(self.selectedImager().name()),
-        }
+        cam = self.selectedImager()
+        if cam is None:
+            prot = {}
+        else:
+            prot = {
+                "imager": Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(cam.name()),
+            }
         if self.ui.zStackGroup.isChecked():
             start = self.ui.zStartSpin.value()
             end = self.ui.zEndSpin.value()
