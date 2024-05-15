@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
-from ..Stage import Stage, StageInterface, MoveFuture
+import time
+
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from pyqtgraph import debug
-import time
+from ..Stage import Stage, StageInterface, MoveFuture
+
 
 class ChangeNotifier(Qt.QObject):
     sigPosChanged = Qt.Signal(object, object, object)
@@ -230,6 +230,3 @@ class MFC1MoveFuture(MoveFuture):
         if self._moveStatus['status'] in (None, 'moving'):
             self._moveStatus = self.dev.dev.move_status(self.id)
         return self._moveStatus
-        
-
-

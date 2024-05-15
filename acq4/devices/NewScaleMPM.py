@@ -81,7 +81,6 @@ class NewScaleMPM(Stage):
                 self._getPosition()
             except socket.timeout:
                 print("timeout in newscale monitor thread")
-                pass
             time.sleep(self._interval)
 
 

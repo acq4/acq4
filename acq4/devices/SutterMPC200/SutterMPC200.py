@@ -1,11 +1,11 @@
 import time
-from acq4.util import Qt, ptime
-from ..Stage import Stage, MoveFuture
+
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from pyqtgraph import debug
-from six.moves import range
+from ..Stage import Stage, MoveFuture
 
 
 def __reload__(old):
@@ -318,4 +318,3 @@ class MPC200MoveFuture(MoveFuture):
         if self._moveStatus[1] in (None, False):
             self._moveStatus = SutterMPC200._monitor.moveStatus(self._id)
         return self._moveStatus
-        
