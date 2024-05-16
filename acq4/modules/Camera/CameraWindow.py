@@ -170,7 +170,7 @@ class CameraWindow(Qt.QMainWindow):
             raise TypeError("string or CameraModuleInterface argument required.")
 
         if name is None:
-            raise ValueError("Interface %s not found." % iface)
+            raise ValueError(f"Interface {iface} not found.")
         iface = self.interfaces.pop(name)
         if hasattr(iface, "sigNewFrame"):
             pg.disconnect(iface.sigNewFrame, self.newFrame)

@@ -130,10 +130,10 @@ class CameraInterface(CameraModuleInterface):
         for action, key in self.cam.camConfig.get('hotkeys', {}).items():
             if action not in ['snap', 'start']:
                 raise ValueError("Unknown hotkey action %r" % action)
-            
+
             dev = Manager.getManager().getDevice(key['device'])
             dev.addKeyCallback(key['key'], self.hotkeyPressed, (action,))
-    
+
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
 

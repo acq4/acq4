@@ -307,7 +307,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
         Depending on the underlying camera driver, this method may cause the camera to restart.
         """
-        frames = self._acquireFrames(int(n))
+        frames = self._acquireFrames(n)
 
         info = self.acqThread.buildFrameInfo(self.getScopeState())
         info["time"] = ptime.time()
@@ -319,7 +319,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def _acquireFrames(self, n):
         # todo: default implementation can use acquisition thread instead..
-        raise NotImplementedError("Camera class %s does not implement this method." % self.__class__.__name__)
+        raise NotImplementedError(f"Camera class {self.__class__.__name__} does not implement this method.")
 
     def restart(self):
         if self.isRunning():

@@ -85,7 +85,6 @@ FrameModes = OrderedDict([
 ])
 
 
-
 class ImagerWindow(Qt.QMainWindow):
     """
     Create the window we will use for the Imager Module.
