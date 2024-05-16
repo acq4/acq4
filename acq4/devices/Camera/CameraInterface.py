@@ -1,21 +1,19 @@
-import acq4.Manager as Manager
 import contextlib
+
+import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
-from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.debug import printExc
-from acq4.util.future import Future
 from acq4.util.imaging import ImagingCtrl
-from acq4.util.imaging.frame import FrameProducer
 from pyqtgraph import SignalProxy, Point
 
 CameraInterfaceTemplate = Qt.importTemplate('.CameraInterfaceTemplate')
 
 
-class CameraInterface(CameraModuleInterface, FrameProducer):
+class CameraInterface(CameraModuleInterface):
     """
     This class provides all the functionality necessary for a camera to display 
     images and controls within the camera module's main window. Each camera that 
@@ -24,7 +22,6 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
     The interface provides a control GUI via the controlWidget() method and 
     directly manages its own GraphicsItems within the camera module's view box.
     """
-    sigNewFrame = Qt.Signal(object, object)  # self, frame
 
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
@@ -113,8 +110,12 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
         self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  # note that this signal (from acq4.util.SpinBox) is delayed.
 
+        # We get new frames by adding a processing step to the camera.
+        # This allow us to attach metadata (background+contrast info) to the frames before
+        # they are consumed by anyone else
+        self.cam.addFrameProcessor(self.newFrame)
+
         # Signals from Camera device
-        self.cam.sigNewFrame.connect(self.newFrame)
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
@@ -135,7 +136,6 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
     
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
-        self.sigNewFrame.emit(self, frame)
 
     def controlWidget(self):
         return self.widget
@@ -159,39 +159,6 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
             self.showMessage("Error opening camera")
             raise
         return camSize, scope
-    
-    def acquireFrames(self, n: "int | None" = None, ensureFreshFrames: bool = False, postProcessing=None) -> Future:
-        """Like Camera.acquireFrames, but including the live background and contrast adjustments found in the
-        frameDisplay in this interface."""
-        return self.cam.acquireFrames(n, ensureFreshFrames, postProcessing=self.frameDisplay.prepareFrameForSaving)
-
-    def getFocusDevice(self):
-        return self.cam.getFocusDevice()
-
-    def getFocusDepth(self) -> float:
-        return self.cam.getFocusDepth()
-
-    def setFocusDepth(self, z, speed='fast') -> Future:
-        return self.cam.setFocusDepth(z, speed)
-
-    def ensureRunning(self, ensureFreshFrames=False):
-        return self.cam.ensureRunning(ensureFreshFrames)
-
-    def devicesToReserve(self) -> list[Device]:
-        return self.cam.devicesToReserve()
-
-    def globalCenterPosition(self, mode="sensor"):
-        return self.cam.globalCenterPosition()
-
-    def moveCenterToGlobal(self, position, speed, center="roi") -> Future:
-        return self.cam.moveCenterToGlobal(position, speed, center)
-
-    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
-        return self.cam.getBoundary(globalCoords, mode)
-
-    @property
-    def scopeDev(self) -> Device:
-        return self.cam.scopeDev
 
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
@@ -249,7 +216,6 @@ class CameraInterface(CameraModuleInterface, FrameProducer):
             return
 
         with contextlib.suppress(TypeError):
-            self.cam.sigNewFrame.disconnect(self.newFrame)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
             self.cam.sigShowMessage.disconnect(self.showMessage)

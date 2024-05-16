@@ -22,6 +22,7 @@ class FrameDisplay(Qt.QObject):
     bgSubtractClass = BgSubtractCtrl
 
     imageUpdated = Qt.Signal(object)  # emits frame when the image is redrawn
+    sigDrawNewFrame = Qt.Signal(object)  # frame
 
     def __init__(self, maxFPS=30):
         Qt.QObject.__init__(self)
@@ -34,7 +35,7 @@ class FrameDisplay(Qt.QObject):
         self.contrastCtrl = self.contrastClass()
         self.contrastCtrl.setImageItem(self._imageItem)
         self.bgCtrl = self.bgSubtractClass()
-        self.bgCtrl.needFrameUpdate.connect(self.updateFrame)
+        self.bgCtrl.needFrameUpdate.connect(self.backgroundChanged)
 
         self.nextFrame = None
         self._updateFrame = False
@@ -51,12 +52,20 @@ class FrameDisplay(Qt.QObject):
         self.frameTimer.start(self._msPerFrame)  # draw frames no faster than 60Hz
         # Qt.QTimer.singleShot(1, self.drawFrame)
         # avoiding possible singleShot-induced crashes
+        self.sigDrawNewFrame.connect(self._drawFrameInGui)
 
-    def updateFrame(self):
-        """Redisplay the current frame.
+        self.contrastCtrl.sigOutputStateChanged.connect(self.contrastChanged)
+
+    def backgroundChanged(self):
+        """Background removal options have changed; redisplay and reset auto gain
         """
         self._updateFrame = True
         self.contrastCtrl.resetAutoGain()
+
+    def contrastChanged(self):
+        """Contrast controls have changed; redisplay
+        """
+        self._updateFrame = True
 
     def imageItem(self):
         return self._imageItem
@@ -67,10 +76,6 @@ class FrameDisplay(Qt.QObject):
     def backgroundWidget(self):
         return self.bgCtrl
 
-    def prepareFrameForSaving(self, frame: "Frame") -> "Frame":
-        frame.includeDisplayProcessing(self.bgCtrl.deferredSave(), self.contrastCtrl.saveState())
-        return frame
-
     def visibleImage(self):
         """Return a copy of the image as it is currently visible in the scene.
         """
@@ -79,12 +84,14 @@ class FrameDisplay(Qt.QObject):
         return self.currentFrame.getImage()
 
     def newFrame(self, frame):
-        # self.nextFrame gets picked up by drawFrame() at some point
-        self.nextFrame = frame
-
+        # integrate new frame into background
         self.bgCtrl.newFrame(frame)
+        # possibly draw the frame and update auto gain (rate limited)
+        self.drawFrame(frame)
+        # annotate frame with background and contrast info
+        frame.includeDisplayProcessing(self.bgCtrl.deferredSave(), self.contrastCtrl.saveState())
 
-    def drawFrame(self):
+    def drawFrame(self, frame=None):
         if self.hasQuit:
             return
         try:
@@ -93,12 +100,12 @@ class FrameDisplay(Qt.QObject):
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
                 return
             # if there is no new frame and no controls have changed, just exit
-            if not self._updateFrame and self.nextFrame is None:
+            if not self._updateFrame and frame is None:
                 return
             self._updateFrame = False
 
             # If there are no new frames and no previous frames, then there is nothing to draw.
-            if self.currentFrame is None and self.nextFrame is None:
+            if self.currentFrame is None and frame is None:
                 return
 
             prof = Profiler()
@@ -110,9 +117,9 @@ class FrameDisplay(Qt.QObject):
             prof()
 
             # Handle the next available frame, if there is one.
-            if self.nextFrame is not None:
-                self.currentFrame = self.nextFrame
-                self.nextFrame = None
+            if frame is not None:
+                self.currentFrame = frame
+                frame = None
 
             data = self.currentFrame.getImage()
             # if we got a stack of frames, just display the first one. (not sure what else we could do here..)
@@ -128,19 +135,19 @@ class FrameDisplay(Qt.QObject):
             self.contrastCtrl.updateWithImage(data)
             prof()
 
-            if shouldUseCuda():
-                self._imageItem.updateImage(cupy.asarray(data))
-            else:
-                self._imageItem.updateImage(data.copy())
-            prof()
-
-            self.imageUpdated.emit(self.currentFrame)
-            prof()
-
+            self.sigDrawNewFrame.emit(data)
             prof.finish()
 
         except Exception:
             printExc("Error while drawing new frames:")
+
+    def _drawFrameInGui(self, data):
+        if shouldUseCuda():
+            self._imageItem.updateImage(cupy.asarray(data))
+        else:
+            self._imageItem.updateImage(data.copy())
+
+        self.imageUpdated.emit(self.currentFrame)
 
     def quit(self):
         self._imageItem = None
