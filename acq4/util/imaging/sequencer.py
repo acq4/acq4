@@ -14,19 +14,6 @@ from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
 
 
-def runZStack(imager, z_range_args) -> Future:
-    """Acquire a Z stack from the given imager.
-
-    Args:
-        imager: Imager instance
-        z_range_args: (start, end, step)
-
-    Returns:
-        Future: Future object that will contain the frames once the acquisition is complete.
-    """
-    return run_image_sequence(imager=imager, z_stack=z_range_args)
-
-
 def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
@@ -249,7 +236,7 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = _future.waitFor(_acquire_z_stack(imager, *z_stack)).getResult()
+                        stack = _future.waitFor(acquire_z_stack(imager, *z_stack)).getResult()
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(
@@ -318,7 +305,18 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 
 @Future.wrap
-def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
+def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> Future:
+    """Acquire a Z stack from the given imager.
+
+    Args:
+        imager: Imager instance
+        start: z position to begin
+        stop: z position to end (can be above or below start)
+        step: expected distance between frames
+
+    Returns:
+        Future: Future object that will contain the frames once the acquisition is complete.
+    """
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')
@@ -326,19 +324,21 @@ def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fu
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
-    frames_fut = imager.acquireFrames()
-    with imager.ensureRunning(ensureFreshFrames=True):
-        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-        _set_focus_depth(imager, stop, direction, speed)
-        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-        frames_fut.stop()
-        frames = _future.waitFor(frames_fut).getResult(timeout=10)
-    try:
-        frames = _enforce_linear_z_stack(frames, step)
-    except ValueError:
-        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-        frames = _slow_z_stack(imager, start, stop, step).getResult()
-        frames = _enforce_linear_z_stack(frames, step)
+    man = Manager.getManager()
+    with man.reserveDevices(imager.devicesToReserve()):
+        frames_fut = imager.acquireFrames()
+        with imager.ensureRunning(ensureFreshFrames=True):
+            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+            _set_focus_depth(imager, stop, direction, speed)
+            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+            frames_fut.stop()
+            frames = _future.waitFor(frames_fut).getResult(timeout=10)
+        try:
+            frames = _enforce_linear_z_stack(frames, step)
+        except ValueError:
+            _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
+            frames = _slow_z_stack(imager, start, stop, step).getResult()
+            frames = _enforce_linear_z_stack(frames, step)
     return frames
 
 
@@ -408,9 +408,7 @@ class ImageSequencerCtrl(Qt.QWidget):
     def makeProtocol(self):
         """Build a description of everything that needs to be done during the sequence.
         """
-        prot = {
-            "imager": Manager.getManager().getModule("Camera").ui.getInterfaceForDevice(self.selectedImager().name()),
-        }
+        prot = {"imager": self.selectedImager()}
         if self.ui.zStackGroup.isChecked():
             start = self.ui.zStartSpin.value()
             end = self.ui.zEndSpin.value()

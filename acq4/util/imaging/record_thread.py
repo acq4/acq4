@@ -75,12 +75,12 @@ class RecordThread(Thread):
         """
         return self._recording
 
-    def saveFrame(self, prepareFrameForSaving):
+    def saveFrame(self):
         """Ask the recording thread to save the most recently acquired frame."""
         with self.lock:
             self.newFrames.append(
                 {
-                    'frame': prepareFrameForSaving(self.currentFrame),
+                    'frame': self.currentFrame,
                     'dir': self.m.getCurrentDir(),
                     'stack': False,
                 }

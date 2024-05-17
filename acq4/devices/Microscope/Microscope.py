@@ -226,9 +226,9 @@ class Microscope(Device, OptomechDevice):
 
         The z-stack is returned as frames.
         """
-        from acq4.util.imaging.sequencer import runZStack
+        from acq4.util.imaging.sequencer import acquire_z_stack
 
-        return runZStack(imager, z_range)
+        return acquire_z_stack(imager, *z_range)
 
     @Future.wrap
     def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:

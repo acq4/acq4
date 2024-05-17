@@ -99,9 +99,9 @@ class MicroManagerCamera(Camera):
             if self.mmc.getRemainingImageCount() > 0:
                 timeoutStart = ptime.time()
                 frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+            elif ptime.time() - timeoutStart > 10.0:
+                raise Exception("Timed out waiting for camera frame.")
             else:
-                if ptime.time() - timeoutStart > 10.0:
-                    raise Exception("Timed out waiting for camera frame.")
                 time.sleep(0.005)
         if len(frames) < n:
             printExc(
