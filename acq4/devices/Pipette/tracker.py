@@ -39,9 +39,7 @@ class PipetteTracker(object):
         This method guarantees that the frame is exposed *after* this method is called.
         """
         imager = self._getImager(imager)
-        with imager.run():
-            frame = imager.acquireFrames(1, blocking=True)[0]
-        return frame
+        return imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
 
     def getNextFrame(self, imager=None):
         """Return the next frame available from the imager. 
@@ -160,7 +158,7 @@ class PipetteTracker(object):
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
 
         # clipped image region
-        subimg = frame.data()[0, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
+        subimg = frame.data()[minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
 
         return subimg, tipRelPos
 
@@ -185,11 +183,11 @@ class PipetteTracker(object):
         imager = self._getImager(imager)
         centerFrame = self.takeFrame()
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength * 0.15, tipLength=tipLength)
-        center = centerFrame.data()[0, minImgPos[0]: maxImgPos[0], minImgPos[1]: maxImgPos[1]]
+        center = centerFrame.data()[minImgPos[0]: maxImgPos[0], minImgPos[1]: maxImgPos[1]]
         if zRange is None:
             zRange = 80e-6
-        zStart = self.dev.tipPosition()[2] + zRange / 2
-        zEnd = self.dev.tipPosition()[2] - zRange / 2
+        zStart = self.dev.globalPosition()[2] + zRange / 2
+        zEnd = self.dev.globalPosition()[2] - zRange / 2
         if zStep is None:
             zStep = 1e-6
         frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
@@ -398,7 +396,7 @@ class PipetteTracker(object):
                         dlg += 1
 
                         if show:
-                            imv.setImage(frame.data()[0])
+                            imv.setImage(frame.data())
                             p1 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos))
                             p2 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos + err[tuple(ind)]))
                             p3 = frame.globalTransform().inverted()[0].map(pg.Vector(reportedPos))
