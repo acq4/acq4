@@ -783,7 +783,7 @@ class SealState(PatchPipetteState):
 
         recentTestPulses = deque(maxlen=config['nSlopeSamples'])
         while True:
-            initialTP = dev.lastTestPulse()
+            initialTP = dev.clampDevice.lastTestPulse()
             if initialTP is not None:
                 break
             self.checkStop()
