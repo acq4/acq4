@@ -25,9 +25,9 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
     step = abs(step)
-    frames = [(f.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z(), f) for f in frames]
-    expected_size = abs(frames[-1][0] - frames[0][0]) / step
-    if len(frames) < expected_size:
+    depths = [(f.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z(), f) for f in frames]
+    expected_size = abs(depths[-1][0] - depths[0][0]) / step
+    if len(depths) < expected_size:
         raise ValueError("Insufficient frames to have one frame per step.")
     # throw away frames that are nearly identical to the previous frame (hopefully this only
     # happens at the endpoints)
