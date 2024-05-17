@@ -14,19 +14,6 @@ from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
 
 
-def runZStack(imager, z_range_args) -> Future:
-    """Acquire a Z stack from the given imager.
-
-    Args:
-        imager: Imager instance
-        z_range_args: (start, end, step)
-
-    Returns:
-        Future: Future object that will contain the frames once the acquisition is complete.
-    """
-    return run_image_sequence(imager=imager, z_stack=z_range_args)
-
-
 def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
@@ -249,7 +236,7 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = _future.waitFor(_acquire_z_stack(imager, *z_stack)).getResult()
+                        stack = _future.waitFor(acquire_z_stack(imager, *z_stack)).getResult()
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(
@@ -318,7 +305,18 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 
 @Future.wrap
-def _acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
+def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> Future:
+    """Acquire a Z stack from the given imager.
+
+    Args:
+        imager: Imager instance
+        start: z position to begin
+        stop: z position to end (can be above or below start)
+        step: expected distance between frames
+
+    Returns:
+        Future: Future object that will contain the frames once the acquisition is complete.
+    """
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')

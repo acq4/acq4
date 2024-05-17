@@ -10,7 +10,7 @@ from acq4.util import Qt, ptime
 from acq4.util.image_registration import imageTemplateMatch
 from .pipette_detection import TemplateMatchPipetteDetector
 from ...util.future import Future
-from ...util.imaging.sequencer import runZStack
+from ...util.imaging.sequencer import acquire_z_stack
 
 
 class PipetteTracker(object):
@@ -190,9 +190,9 @@ class PipetteTracker(object):
         zEnd = self.dev.globalPosition()[2] - zRange / 2
         if zStep is None:
             zStep = 1e-6
-        frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
+        frames = _future.waitFor(acquire_z_stack(imager, zStart, zEnd, zStep)).getResult()
         _future.waitFor(self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow"))
-        bg_frames = _future.waitFor(runZStack(imager, (zStart, zEnd, zStep))).getResult()
+        bg_frames = _future.waitFor(acquire_z_stack(imager, zStart, zEnd, zStep)).getResult()
         _future.waitFor(self.dev._moveToLocal([tipLength * 3, 0, 0], "slow"))
         key = imager.getDeviceStateKey()
         maxInd = np.argmax([imageTemplateMatch(f.data(), center)[1] for f in frames])
