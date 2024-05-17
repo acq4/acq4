@@ -505,7 +505,7 @@ class ROIPlotter(Qt.QWidget):
 
         # Get rid of old frames
         minTime = None
-        now = pg.time()
+        now = ptime.time()
         for r in self.ROIs:
             while len(r["times"]) > 0 and r["times"][0] < (now - self.roiTimeSpin.value()):
                 r["times"].pop(0)
