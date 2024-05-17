@@ -324,19 +324,21 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
-    frames_fut = imager.acquireFrames()
-    with imager.ensureRunning(ensureFreshFrames=True):
-        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-        _set_focus_depth(imager, stop, direction, speed)
-        _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-        frames_fut.stop()
-        frames = _future.waitFor(frames_fut).getResult(timeout=10)
-    try:
-        frames = _enforce_linear_z_stack(frames, step)
-    except ValueError:
-        _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-        frames = _slow_z_stack(imager, start, stop, step).getResult()
-        frames = _enforce_linear_z_stack(frames, step)
+    man = Manager.getManager()
+    with man.reserveDevices(imager.devicesToReserve()):
+        frames_fut = imager.acquireFrames()
+        with imager.ensureRunning(ensureFreshFrames=True):
+            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+            _set_focus_depth(imager, stop, direction, speed)
+            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+            frames_fut.stop()
+            frames = _future.waitFor(frames_fut).getResult(timeout=10)
+        try:
+            frames = _enforce_linear_z_stack(frames, step)
+        except ValueError:
+            _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
+            frames = _slow_z_stack(imager, start, stop, step).getResult()
+            frames = _enforce_linear_z_stack(frames, step)
     return frames
 
 
