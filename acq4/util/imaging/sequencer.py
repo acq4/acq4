@@ -32,7 +32,7 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     # throw away frames that are nearly identical to the previous frame (hopefully this only
     # happens at the endpoints)
 
-    def difference_is_significant(frame1, frame2):
+    def difference_is_significant(frame1: tuple[float, Frame], frame2: tuple[float, Frame]):
         """Returns whether the absolute difference between the two frames is significant. Frames are
         tuples of (z, frame)."""
         z1, frame1 = frame1
@@ -50,14 +50,14 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
             return np.mean(overflowed_diff * abs_adjust) > threshold
         else:
             return np.mean(np.abs(overflowed_diff)) > threshold
-    frames = [frames[0]] + [
-        f for i, f in enumerate(frames[1:], 1)
-        if difference_is_significant(f, frames[i - 1])
+    depths = [depths[0]] + [
+        f for i, f in enumerate(depths[1:], 1)
+        if difference_is_significant(f, depths[i - 1])
     ]
-    if len(frames) < expected_size:
+    if len(depths) < expected_size:
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
-    return [f for _, f in sorted(frames, )]
+    return [f for _, f in sorted(depths)]
 
     # TODO do we want this?
     # TODO interpolate first?
@@ -236,7 +236,7 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = _future.waitFor(acquire_z_stack(imager, *z_stack)).getResult()
+                        stack = unwrapped_z_stack(imager, *z_stack, _future)
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(
@@ -317,6 +317,10 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
+    return unwrapped_z_stack(imager, start, stop, step, _future)
+
+
+def unwrapped_z_stack(imager, start, stop, step, _future):
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')
