@@ -190,11 +190,11 @@ class PipetteTracker(object):
         zEnd = self.dev.globalPosition()[2] - zRange / 2
         if zStep is None:
             zStep = 1e-6
-        frames = _future.waitFor(acquire_z_stack(imager, zStart, zEnd, zStep)).getResult()
+        frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
         pxSize = frames[0].info()["pixelSize"]
         frames = np.array([f.data() for f in frames])
         _future.waitFor(self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow"))
-        bg_frames = _future.waitFor(acquire_z_stack(imager, zStart, zEnd, zStep)).getResult()
+        bg_frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
         bg_frames = np.array([f.data() for f in bg_frames])
         _future.waitFor(self.dev._moveToLocal([tipLength * 3, 0, 0], "slow"))
         key = imager.getDeviceStateKey()

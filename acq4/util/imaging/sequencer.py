@@ -236,12 +236,10 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = unwrapped_z_stack(imager, *z_stack, _future)
+                        stack = acquire_z_stack(imager, *z_stack, block=True).getResult()
                         handle_new_frames(stack, i)
                     else:  # single frame
-                        frame = _future.waitFor(
-                            imager.acquireFrames(1, ensureFreshFrames=True)
-                        ).getResult()[0]
+                        frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
                         handle_new_frames(frame, i)
                     _future.checkStop()
                 _future.setState(_status_message(i, count))
@@ -317,10 +315,6 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
-    return unwrapped_z_stack(imager, start, stop, step, _future)
-
-
-def unwrapped_z_stack(imager, start, stop, step, _future):
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, 'fast')

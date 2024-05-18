@@ -221,14 +221,14 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range: tuple[Number]) -> Future:
+    def getZStack(self, imager: "Device", z_range, block=False) -> Future:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
         """
         from acq4.util.imaging.sequencer import acquire_z_stack
 
-        return acquire_z_stack(imager, *z_range)
+        return acquire_z_stack(imager, *z_range, block=block)
 
     @Future.wrap
     def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
@@ -236,8 +236,7 @@ class Microscope(Device, OptomechDevice):
         from acq4.devices.Camera import Frame
 
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
-        z_stack_fut = self.getZStack(imager, z_range)
-        z_stack: list[Frame] = _future.waitFor(z_stack_fut).getResult()
+        z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
         if (idx := find_surface(z_stack)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
