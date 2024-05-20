@@ -48,7 +48,7 @@ class FrameDisplay(Qt.QObject):
         # Some checks may be skipped even if there is a new frame waiting to avoid drawing more than
         # 60fps.
         self.frameTimer = Qt.QTimer()
-        self.frameTimer.timeout.connect(self.drawFrame)
+        self.frameTimer.timeout.connect(self.checkForDraw)
         self.frameTimer.start(self._msPerFrame)  # draw frames no faster than 60Hz
         # Qt.QTimer.singleShot(1, self.drawFrame)
         # avoiding possible singleShot-induced crashes
@@ -87,11 +87,11 @@ class FrameDisplay(Qt.QObject):
         # integrate new frame into background
         self.bgCtrl.newFrame(frame)
         # possibly draw the frame and update auto gain (rate limited)
-        self.drawFrame(frame)
+        self.checkForDraw(frame)
         # annotate frame with background and contrast info
         frame.includeDisplayProcessing(self.bgCtrl.deferredSave(), self.contrastCtrl.saveState())
 
-    def drawFrame(self, frame=None):
+    def checkForDraw(self, frame=None):
         if self.hasQuit:
             return
         try:
@@ -109,11 +109,6 @@ class FrameDisplay(Qt.QObject):
                 return
 
             prof = Profiler()
-            # We will now draw a new frame (even if the frame is unchanged)
-            if self.lastDrawTime is not None:
-                fps = 1.0 / (t - self.lastDrawTime)
-                self.displayFps = fps
-            self.lastDrawTime = t
             prof()
 
             # Handle the next available frame, if there is one.
@@ -142,6 +137,14 @@ class FrameDisplay(Qt.QObject):
             printExc("Error while drawing new frames:")
 
     def _drawFrameInGui(self, data):
+        # We will now draw a new frame (even if the frame is unchanged)
+        t = ptime.time()
+        if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
+            return
+        if self.lastDrawTime is not None:
+            fps = 1.0 / (t - self.lastDrawTime)
+            self.displayFps = fps
+        self.lastDrawTime = t
         if shouldUseCuda():
             self._imageItem.updateImage(cupy.asarray(data))
         else:

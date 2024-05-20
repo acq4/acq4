@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.debug import printExc
 from .frame_display import FrameDisplay
 from .record_thread import RecordThread
@@ -40,6 +40,7 @@ class ImagingCtrl(Qt.QWidget):
     sigStartVideoClicked = Qt.Signal(object)  # mode
     sigStopVideoClicked = Qt.Signal()
     sigAcquireFrameClicked = Qt.Signal(object)  # mode
+    sigUpdateUi = Qt.Signal()
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
 
@@ -60,6 +61,8 @@ class ImagingCtrl(Qt.QWidget):
         self.ui.setupUi(self)
 
         # format labels
+        self._fps = 0
+        self._lastDrawTime = ptime.time()
         self.ui.fpsLabel.setFormatStr("{avgValue:.1f} fps")
         self.ui.fpsLabel.setAverageTime(2.0)
         self.ui.displayFpsLabel.setFormatStr("{avgValue:.1f} fps")
@@ -87,6 +90,7 @@ class ImagingCtrl(Qt.QWidget):
         self.ui.saveFrameBtn.clicked.connect(self.saveFrameClicked)
         self.ui.pinFrameBtn.clicked.connect(self.pinFrameClicked)
         self.ui.clearPinnedFramesBtn.clicked.connect(self.clearPinnedFramesClicked)
+        self.sigUpdateUi.connect(self.updateUi)
 
     def addFrameButton(self, name):
         """Add a new button below the original "Acquire Frame" button.
@@ -117,22 +121,14 @@ class ImagingCtrl(Qt.QWidget):
         btn.clicked.connect(self._handleNamedVideoButtonClick)
 
     def newFrame(self, frame):
-        self.ui.saveFrameBtn.setEnabled(True)
-        self.ui.pinFrameBtn.setEnabled(True)
-
         # update acquisition frame rate
         now = frame.info()["time"]
         if self.lastFrameTime is not None:
             dt = now - self.lastFrameTime
             if dt > 0:
                 fps = 1.0 / dt
-                self.ui.fpsLabel.setValue(fps)
+                self._fps = fps
         self.lastFrameTime = now
-
-        # update display frame rate
-        fps = self.frameDisplay.displayFps
-        if fps is not None:
-            self.ui.displayFpsLabel.setValue(fps)
 
         if self.recordingStack():
             frameShape = frame.getImage().shape
@@ -147,6 +143,19 @@ class ImagingCtrl(Qt.QWidget):
             self.ui.stackSizeLabel.setText("%d frames" % self.recordThread.stackSize)
 
         self.frameDisplay.newFrame(frame)
+        self.sigUpdateUi.emit()
+
+    def updateUi(self):
+        now = ptime.time()
+        if (now - self._lastDrawTime) < 0.5:
+            return
+        self._lastDrawTime = now
+        self.ui.saveFrameBtn.setEnabled(True)
+        self.ui.pinFrameBtn.setEnabled(True)
+        self.ui.fpsLabel.setValue(self._fps)
+        fps = self.frameDisplay.displayFps
+        if fps is not None:
+            self.ui.displayFpsLabel.setValue(fps)
 
     def saveFrameClicked(self):
         if self.ui.linkSavePinBtn.isChecked():
