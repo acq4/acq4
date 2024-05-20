@@ -41,7 +41,12 @@ class Future(Qt.QObject):
         @functools.wraps(func)
         def wrapper(*args, **kwds):
             future = cls()
-            future.executeInThread(func, args, kwds)
+            if kwds.pop('block', False):
+                kwds['_future'] = future
+                future.executeAndSetReturn(func, args, kwds)
+                future.wait()
+            else:
+                future.executeInThread(func, args, kwds)
             return future
         return wrapper
 
@@ -73,10 +78,10 @@ class Future(Qt.QObject):
 
         The function should call _taskDone() when finished (or raise an exception).
         """
-        self._executingThread = threading.Thread(target=self._executeInThread, args=(func, args, kwds), daemon=True)
+        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True)
         self._executingThread.start()
 
-    def _executeInThread(self, func, args, kwds):
+    def executeAndSetReturn(self, func, args, kwds):
         try:
             kwds['_future'] = self
             self._taskDone(returnValue=func(*args, **kwds))

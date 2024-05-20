@@ -17,7 +17,7 @@ def imageTemplateMatch(img, template, unsharp=3):
     """
     import skimage.feature
     if img.shape[0] < template.shape[0] or img.shape[1] < template.shape[1]:
-        raise ValueError("Image must be larger than template.  %s %s" % (img.shape, template.shape))
+        raise ValueError(f"Image ({img.shape}) must be larger than template ({template.shape})")
     cc = skimage.feature.match_template(img, template)
     # high-pass filter; we're looking for a fairly sharp peak.
     if unsharp is not False:
