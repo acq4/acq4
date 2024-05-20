@@ -1012,35 +1012,33 @@ class FrameAcquisitionFuture(Future):
     def _monitorAcquisition(self):
         self._camera.sigNewFrame.connect(self._queue.put, type=Qt.Qt.DirectConnection)
         with ExitStack() as stack:
+            stack.callback(self._camera.sigNewFrame.disconnect, self._queue.put)
             if self._ensure_fresh_frames:
                 stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
-            try:
-                lastFrameTime = ptime.time()
-                while True:
-                    if self.isDone():
-                        break
+            lastFrameTime = ptime.time()
+            while True:
+                if self.isDone():
+                    break
+                try:
+                    frame = self._queue.get_nowait()
+                    lastFrameTime = ptime.time()
+                except queue.Empty:
                     try:
-                        frame = self._queue.get_nowait()
-                        lastFrameTime = ptime.time()
-                    except queue.Empty:
-                        try:
-                            self.checkStop(0.1)  # delay while checking for a stop request
-                        except self.StopRequested:
-                            self._taskDone(interrupted=self._frame_count is not None)
-                            break
-                        if ptime.time() - lastFrameTime > self._timeout:
-                            self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
-                            break
-                        continue
-                    self._frames.append(frame)
-                    if self._stop_when is not None and self._stop_when(frame):
-                        self._taskDone()
+                        self.checkStop(0.1)  # delay while checking for a stop request
+                    except self.StopRequested:
+                        self._taskDone(interrupted=self._frame_count is not None)
                         break
-                    if self._frame_count is not None and len(self._frames) >= self._frame_count:
-                        self._taskDone()
+                    if ptime.time() - lastFrameTime > self._timeout:
+                        self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
                         break
-            finally:
-                self._camera.sigNewFrame.disconnect(self._queue.put)
+                    continue
+                self._frames.append(frame)
+                if self._stop_when is not None and self._stop_when(frame):
+                    self._taskDone()
+                    break
+                if self._frame_count is not None and len(self._frames) >= self._frame_count:
+                    self._taskDone()
+                    break
 
     def peekAtResult(self) -> list[Frame]:
         return self._frames[:]
