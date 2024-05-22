@@ -112,6 +112,8 @@ class Camera(DAQGeneric, OptomechDevice):
         self._processingThread = FrameProcessingThread()
         self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame)
         self._processingThread.start()
+        self.addFrameProcessor(self.addFrameInfo)
+        self.addFrameProcessor(Frame.ensureTransform)  # order matters because the transform likely comes from addFrameInfo
         self.acqThread.sigRawFrameAcquired.connect(self._processingThread.handleNewRawFrame)
 
         self.sigGlobalTransformChanged.connect(self.transformChanged)
@@ -136,6 +138,25 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def devicesToReserve(self) -> list[Device]:
         return self.parentDevices()
+
+    def addFrameInfo(self, frame: Frame):
+        # TODO cache this more, maybe?
+        scope_state = self.getScopeState()
+        ps = scope_state["pixelSize"]  # size of CCD pixel
+        transform = pg.SRTTransform3D(scope_state["transform"])
+        cam_params = {"binning", "exposure", "region", "triggerMode"}
+        info = frame.info().copy()
+        if cam_params - info.keys():
+            info.update(dict(self.getParams(cam_params)))
+        binning = info["binning"]
+        info.update({
+            "deviceName": self.name(),
+            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
+            "objective": scope_state.get("objective", None),
+            "deviceTransform": transform,
+            "illumination": scope_state.get("illumination", None),
+        })
+        frame.addInfo(info)
 
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
@@ -308,16 +329,14 @@ class Camera(DAQGeneric, OptomechDevice):
         Depending on the underlying camera driver, this method may cause the camera to restart.
         """
         frames = self._acquireFrames(n)
-
-        info = self.acqThread.buildFrameInfo(self.getScopeState())
-        info["time"] = ptime.time()
-        retval = []
+        now = ptime.time()
+        frames = [Frame(f, {"time": now}) for f in frames]
         for f in frames:
-            retval.append(Frame(f, info))
-            self.newRawFrame(retval[-1])  # allow others access to this frame (for example, camera module can update)
-        return retval
+            # allow others access to this frame (for example, camera module can update)
+            self._processingThread.handleNewRawFrame(f)
+        return frames
 
-    def _acquireFrames(self, n):
+    def _acquireFrames(self, n) -> np.ndarray:
         # todo: default implementation can use acquisition thread instead..
         raise NotImplementedError(f"Camera class {self.__class__.__name__} does not implement this method.")
 
@@ -829,7 +848,7 @@ class AcquireThread(Thread):
     sigRawFrameAcquired = Qt.Signal(object)
     sigShowMessage = Qt.Signal(object)
 
-    def __init__(self, dev):
+    def __init__(self, dev: Camera):
         Thread.__init__(self)
         self.dev = dev
         self.camLock = self.dev.camLock
@@ -855,23 +874,6 @@ class AcquireThread(Thread):
             if not self.cameraStartEvent.wait(5):
                 raise Exception("Timed out waiting for camera to start.")
 
-    def buildFrameInfo(self, scopeState, camState: Optional[dict] = None) -> dict:
-        ps = scopeState["pixelSize"]  # size of CCD pixel
-        transform = pg.SRTTransform3D(scopeState["transform"])  # TODO this is expensive; can we pull it out of the acq thread?
-        if camState is None:
-            info = dict(self.dev.getParams(["binning", "exposure", "region", "triggerMode"]))
-        else:
-            info = camState.copy()
-        binning = info["binning"]
-        info.update({
-            "deviceName": self.dev.name(),
-            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
-            "objective": scopeState.get("objective", None),
-            "deviceTransform": transform,
-            "illumination": scopeState.get("illumination", None),
-        })
-        return info
-
     def run(self):
         lastFrameId = None
 
@@ -885,7 +887,6 @@ class AcquireThread(Thread):
 
             lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
-            lastFrameID = None
 
             while True:
                 now = ptime.time()
@@ -896,20 +897,10 @@ class AcquireThread(Thread):
                     if lastFrameId is not None:
                         drop = frames[0]["id"] - lastFrameId - 1
                         if drop > 0:
-                            print("WARNING: Camera dropped %d frames" % drop)
+                            print(f"WARNING: Camera dropped {drop} frames")
 
                     # Build meta-info for this frame(s)
                     info = camState.copy()
-
-                    ss = self.dev.getScopeState()
-
-                    if ss["id"] != lastFrameID:
-                        lastFrameID = ss["id"]
-                        # regenerate frameInfo here
-                        frameInfo = self.buildFrameInfo(ss, camState=camState)
-
-                    # Copy frame info to info array
-                    info.update(frameInfo)  # TODO should this really be updating using last frame's info? (when ss["id"] was lastFrameID)
 
                     # Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)

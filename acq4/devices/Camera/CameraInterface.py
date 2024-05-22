@@ -113,7 +113,7 @@ class CameraInterface(CameraModuleInterface):
         # We get new frames by adding a processing step to the camera.
         # This allow us to attach metadata (background+contrast info) to the frames before
         # they are consumed by anyone else
-        self.cam.addFrameProcessor(self.newFrame)
+        self.cam.addFrameProcessor(self.newFrame, final=True)
 
         # Signals from Camera device
         self.cam.sigCameraStopped.connect(self.cameraStopped)
