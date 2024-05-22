@@ -27,6 +27,33 @@ class Frame(object):
         self._bg_removal = None
 
     @classmethod
+    def loadFromFileHandle(cls, fh: FileHandle) -> "Frame | list[Frame]":
+        data = fh.read()
+        if fh.fileType() == "MetaArray":
+            if data.ndim == 3:
+                frames = []
+                for row in data:
+                    info = fh.info().deepcopy()
+                    if data.axisName(0) == "Time":
+                        info["time"] = row.axisValues(2)
+                    elif data.axisName(0) == "Depth":
+                        depth = row.axisValues(2)
+                        xform = pg.SRTTransform3D(info["transform"])
+                        pos = xform.getTranslation()
+                        pos[2] = depth
+                        xform.setTranslate(pos)
+                        info["transform"] = xform
+                    f = Frame(row.asarray(), info)
+                    f.loadLinkedFiles(fh.parent())
+                    frames.append(f)
+                return frames
+            else:
+                data = data.asarray()
+        frame = cls(data, fh.info().deepcopy())
+        frame.loadLinkedFiles(fh.parent())
+        return frame
+
+    @classmethod
     def ensureTransform(cls, frame):
         # Complete transform maps from image coordinates to global.
         if 'transform' not in frame.info():
@@ -151,30 +178,3 @@ class Frame(object):
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as2D())
         return item
-
-    @classmethod
-    def loadFromFileHandle(cls, fh: FileHandle) -> "Frame | list[Frame]":
-        data = fh.read()
-        if fh.fileType() == "MetaArray":
-            if data.ndim == 3:
-                frames = []
-                for row in data:
-                    info = fh.info().deepcopy()
-                    if data.axisName(0) == "Time":
-                        info["time"] = row.axisValues(2)
-                    elif data.axisName(0) == "Depth":
-                        depth = row.axisValues(2)
-                        xform = pg.SRTTransform3D(info["transform"])
-                        pos = xform.getTranslation()
-                        pos[2] = depth
-                        xform.setTranslate(pos)
-                        info["transform"] = xform
-                    f = Frame(row.asarray(), info)
-                    f.loadLinkedFiles(fh.parent())
-                    frames.append(f)
-                return frames
-            else:
-                data = data.asarray()
-        frame = cls(data, fh.info().deepcopy())
-        frame.loadLinkedFiles(fh.parent())
-        return frame
