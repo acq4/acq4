@@ -85,11 +85,11 @@ class FrameDisplay(Qt.QObject):
 
     def newFrame(self, frame):
         # integrate new frame into background
-        self.bgCtrl.newFrame(frame)
+        self.bgCtrl.includeNewFrame(frame)
         # possibly draw the frame and update auto gain (rate limited)
         self.checkForDraw(frame)
         # annotate frame with background and contrast info
-        frame.includeDisplayProcessing(self.bgCtrl.deferredSave(), self.contrastCtrl.saveState())
+        frame.addInfo(backgroundInfo=self.bgCtrl.deferredSave(), contrastInfo=self.contrastCtrl.saveState())
 
     def checkForDraw(self, frame=None):
         if self.hasQuit:
@@ -100,26 +100,21 @@ class FrameDisplay(Qt.QObject):
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
                 return
             # if there is no new frame and no controls have changed, just exit
-            if not self._updateFrame and frame is None:
+            if frame is None and not self._updateFrame:
                 return
             self._updateFrame = False
+
+            prof = Profiler()
+            prof()
 
             # If there are no new frames and no previous frames, then there is nothing to draw.
             if self.currentFrame is None and frame is None:
                 return
 
-            prof = Profiler()
-            prof()
-
             # Handle the next available frame, if there is one.
             if frame is not None:
                 self.currentFrame = frame
-                frame = None
-
             data = self.currentFrame.getImage()
-            # if we got a stack of frames, just display the first one. (not sure what else we could do here..)
-            if data.ndim == 3:
-                data = data[0]
             prof()
 
             # divide the background out of the current frame if needed

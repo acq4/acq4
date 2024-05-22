@@ -76,7 +76,7 @@ class BgSubtractCtrl(Qt.QWidget):
         else:
             self.ui.collectBgBtn.setText("Collect Background")
 
-    def newFrame(self, frame):
+    def includeNewFrame(self, frame):
         now = ptime.time()
         if self.lastFrameTime is None:
             dt = 0

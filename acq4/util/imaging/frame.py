@@ -24,9 +24,12 @@ class Frame(object):
         self._data = data
         self._info = info
         self._bg_removal = None
+
+    @classmethod
+    def ensureTransform(cls, frame):
         # Complete transform maps from image coordinates to global.
-        if 'transform' not in info:
-            info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
+        if 'transform' not in frame.info():
+            frame.addInfo(transform=SRTTransform3D(frame.deviceTransform() * frame.frameTransform()))
 
     def asarray(self):
         """Assuming this frame object represents multiple frames, return an array with one Frame per frame
@@ -42,7 +45,12 @@ class Frame(object):
         """Return the meta info dict for this frame.
         """
         return self._info
-    
+
+    def addInfo(self, info: "dict|None" = None, **kwargs):
+        if info is not None:
+            self._info.update(info)
+        self._info.update(kwargs)
+
     def getImage(self):
         """Return processed image data.
 
@@ -71,12 +79,6 @@ class Frame(object):
         """Map *obj* from the frame's data coordinates to global coordinates.
         """
         return self.globalTransform().map(obj)
-
-    def includeDisplayProcessing(self, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
-        if backgroundInfo is not None:
-            self._info['backgroundInfo'] = backgroundInfo
-        if contrastInfo is not None:
-            self._info['contrastInfo'] = contrastInfo
 
     @property
     def time(self):
@@ -136,7 +138,6 @@ class Frame(object):
                 self._bg_removal.read(),
                 subtract=bg_info.get("subtract"),
                 divide=bg_info.get("divide"),
-                blur=bg_info.get("blur"),
             )
         levels = None
         lut = None
