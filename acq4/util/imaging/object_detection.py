@@ -1,13 +1,13 @@
-import PIL
+from threading import RLock
+from typing import Optional
+
 import click
 import numpy as np
 import scipy.stats
 from PIL import Image
-from threading import RLock
-from typing import Optional
 
-from acq4.devices.Camera.frame import Frame
 from acq4.util.future import Future
+from acq4.util.imaging import Frame
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray

@@ -4,6 +4,7 @@ import numpy as np
 from MetaArray import MetaArray
 
 import pyqtgraph as pg
+from acq4.util.DataManager import FileHandle
 from acq4.util.imaging.background import remove_background_from_image
 from pyqtgraph import SRTTransform3D, ImageItem
 
@@ -150,3 +151,30 @@ class Frame(object):
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as2D())
         return item
+
+    @classmethod
+    def loadFromFileHandle(cls, fh: FileHandle) -> "Frame | list[Frame]":
+        data = fh.read()
+        if fh.fileType() == "MetaArray":
+            if data.ndim == 3:
+                frames = []
+                for row in data:
+                    info = fh.info().deepcopy()
+                    if data.axisName(0) == "Time":
+                        info["time"] = row.axisValues(2)
+                    elif data.axisName(0) == "Depth":
+                        depth = row.axisValues(2)
+                        xform = pg.SRTTransform3D(info["transform"])
+                        pos = xform.getTranslation()
+                        pos[2] = depth
+                        xform.setTranslate(pos)
+                        info["transform"] = xform
+                    f = Frame(row.asarray(), info)
+                    f.loadLinkedFiles(fh.parent())
+                    frames.append(f)
+                return frames
+            else:
+                data = data.asarray()
+        frame = cls(data, fh.info().deepcopy())
+        frame.loadLinkedFiles(fh.parent())
+        return frame

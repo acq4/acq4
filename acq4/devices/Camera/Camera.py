@@ -19,11 +19,11 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from acq4.util.future import Future
+from acq4.util.imaging.frame import Frame
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
-from .frame import Frame
 from .taskGUI import CameraTaskGui
 
 
@@ -156,6 +156,9 @@ class Camera(DAQGeneric, OptomechDevice):
             "deviceTransform": transform,
             "illumination": scope_state.get("illumination", None),
         })
+        tr = self.makeFrameTransform(info["region"], info["binning"])
+        info["frameTransform"] = tr
+
         frame.addInfo(info)
 
     def setupCamera(self):

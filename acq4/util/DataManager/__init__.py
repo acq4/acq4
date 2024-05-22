@@ -801,7 +801,8 @@ class DirHandle(FileHandle):
             return any(test(self[f]) for f in self.ls())
 
     def representativeFramesForAllImages(self):
-        from acq4.devices.Camera import Frame
+        from acq4.util.imaging import Frame
+
         frames = []
         for f in self:
             if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():

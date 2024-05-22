@@ -12,6 +12,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
 from acq4.util.future import Future, MultiFuture
+from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.typing import Number
 from pyqtgraph.units import µm
@@ -233,8 +234,6 @@ class Microscope(Device, OptomechDevice):
     @Future.wrap
     def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
         """Set the surface of the sample based on how focused the images are."""
-        from acq4.devices.Camera import Frame
-
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
         if (idx := find_surface(z_stack)) is not None:

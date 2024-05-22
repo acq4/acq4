@@ -7,7 +7,6 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
-from acq4.util.imaging.frame import Frame
 from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
