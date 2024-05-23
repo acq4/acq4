@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pyqtgraph as pg
 from acq4.filetypes.MultiPatchLog import MultiPatchLogWidget
 from acq4.util import Qt
@@ -12,7 +14,8 @@ class FileDataView(Qt.QSplitter):
         self._current = None
         self._widgets = []
         self._dictWidget = None
-        self._imageWidget = None
+        self._cursorText = None
+        self._imageWidget: Optional[pg.ImageView] = None
         self._multiPatchLogWidget = None
 
     def setCurrentFile(self, fh: FileHandle):
@@ -67,9 +70,22 @@ class FileDataView(Qt.QSplitter):
             self.clear()
             w = pg.ImageView(self)
             self._imageWidget = w
+            self._imageWidget.scene.sigMouseMoved.connect(self.noticeMouseMove)
+            self._cursorText = pg.TextItem()
+            self._imageWidget.scene.addItem(self._cursorText)
             self.addWidget(w)
             self._widgets.append(w)
         self._imageWidget.setImage(data, autoRange=False)
+
+    def noticeMouseMove(self, pos):
+        if self._imageWidget is None:
+            return
+        view = self._imageWidget.getView()
+        if not view.sceneBoundingRect().contains(pos):
+            return
+        self._cursorText.setPos(pos.x() + 12, pos.y())
+        pos = view.mapSceneToView(pos)
+        self._cursorText.setText(f'({int(pos.x())}, {int(pos.y())})', color='y')
 
     def displayMultiPatchLog(self, fh):
         self.clear()
@@ -83,7 +99,10 @@ class FileDataView(Qt.QSplitter):
         for w in self._widgets:
             w.close()
             w.setParent(None)
+        if self._imageWidget is not None:
+            self._imageWidget.scene.sigMouseMoved.disconnect(self.noticeMouseMove)
         self._widgets = []
         self._dictWidget = None
         self._imageWidget = None
+        self._cursorText = None
         self._multiPatchLogWidget = None
