@@ -89,18 +89,19 @@ class MicroManagerCamera(Camera):
     def _acquireFrames(self, n=1):
         if self.isRunning():
             self.stop()
-        self.mmc.setCameraDevice(self.camName)
-        self.mmc.startSequenceAcquisition(n, 0, True)
-        frames = []
-        timeoutStart = ptime.time()
-        while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
-            if self.mmc.getRemainingImageCount() > 0:
-                timeoutStart = ptime.time()
-                frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
-            elif ptime.time() - timeoutStart > 10.0:
-                raise TimeoutError("Timed out waiting for camera frame.")
-            else:
-                time.sleep(0.005)
+        with self.camLock:
+            self.mmc.setCameraDevice(self.camName)
+            self.mmc.startSequenceAcquisition(n, 0, True)
+            frames = []
+            timeoutStart = ptime.time()
+            while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
+                if self.mmc.getRemainingImageCount() > 0:
+                    timeoutStart = ptime.time()
+                    frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+                elif ptime.time() - timeoutStart > 10.0:
+                    raise TimeoutError("Timed out waiting for camera frame.")
+                else:
+                    time.sleep(0.005)
         if len(frames) < n:
             printExc(
                 f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})",
