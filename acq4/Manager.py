@@ -591,13 +591,10 @@ class Manager(Qt.QObject):
         self.removeWindowShortcut(mod.window())
         self.sigModulesChanged.emit()
         self.sigModuleHasQuit.emit(mod.name)
-        # print "Module", mod.name, "has quit"
 
     def unloadModule(self, name):
         try:
-            # print "    request quit.."
             self.getModule(name).quit()
-            # print "    request quit done"
         except:
             print(f"Error while requesting module '{name}' quit.")
             if self.exitOnError:
@@ -612,7 +609,6 @@ class Manager(Qt.QObject):
             else:
                 return
         self.sigModulesChanged.emit()
-        # print "Unloaded module", name
 
     def reloadAll(self):
         """Reload all python code"""
@@ -939,14 +935,12 @@ class Task:
         Task.id += 1
 
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
-        # print "Task command", command
         self.devNames = list(command.keys())
         self.devNames.remove('protocol')
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
 
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
         self.tasks = {}
-        # print "devNames: ", self.devNames
 
         for devName in self.devNames:
             task = self.devs[devName].createTask(self.command[devName], self)
@@ -1021,16 +1015,12 @@ class Task:
             self.abortRequested = False
             self._done = False  # cached output of isDone()
 
-            # print "======  Executing task %d:" % self.id
-            # print self.cfg
-            # print "======================="
 
             ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
             from acq4.util.debug import Profiler
             prof = Profiler('Manager.Task.execute', disabled=True)
             try:
 
-                # print self.id, "Task.execute:", self.tasks
                 ## Reserve all hardware
                 self.reserveDevices()
 
@@ -1042,13 +1032,11 @@ class Task:
                 ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
                 ## This is how we allow multiple devices to communicate and decide how to operate together.
                 ## Each task may modify the startOrder list to suit its needs.
-                # print "Configuring subtasks.."
                 for devName in configOrder:
                     self.tasks[devName].configure()
-                    prof.mark('configure %s' % devName)
+                    prof.mark(f'configure {devName}')
 
                 startOrder = self.getStartOrder()
-                # print "done"
 
                 if 'leadTime' in self.cfg:
                     time.sleep(self.cfg['leadTime'])
@@ -1058,9 +1046,7 @@ class Task:
                 self.result = None
 
                 ## Start tasks in specific order
-                # print "Starting tasks.."
                 for devName in startOrder:
-                    # print "  ", devName
                     try:
                         self.startedDevs.append(devName)
                         self.tasks[devName].start()
@@ -1068,7 +1054,7 @@ class Task:
                         self.startedDevs.remove(devName)
                         print(f"Error starting device '{devName}'; aborting task.")
                         raise
-                    prof.mark('start %s' % devName)
+                    prof.mark(f'start {devName}')
                 self.startTime = ptime.time()
 
                 if not block:
@@ -1132,25 +1118,19 @@ class Task:
             if getattr(self, 'test_endless', False):
                 return False
 
-            # print "Manager.Task.isDone"
             if not self.abortRequested:
                 t = ptime.time()
                 if self.startTime is None or t - self.startTime < self.cfg['duration']:
-                    # print "  not done yet"
                     return False
                 # else:
-                # print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
             # else:
-            # print "  aborted, checking tasks.."
             d = self._tasksDone()
-            # print "  tasks say:", d
             self._done = d
             return d
 
     def _tasksDone(self):
         for t in self.tasks:
             if not self.tasks[t].isDone():
-                # print "Task %s not finished" % t
                 return False
         if self.stopTime is None:
             self.stopTime = ptime.time()
@@ -1194,7 +1174,6 @@ class Task:
                     raise Exception("Cannot get result; task is still running.")
 
                 if not abort and self.result is None:
-                    # print "Get results.."
                     ## Let each device generate its own output structure.
                     result = {'protocol': {'startTime': self.startTime}}
                     for devName in self.tasks:
@@ -1205,7 +1184,6 @@ class Task:
                             result[devName] = None
                         prof.mark("get result: " + devName)
                     self.result = result
-                    # print "RESULT 1:", self.result
 
                     ## Store data if requested
                     if 'storeData' in self.cfg and self.cfg['storeData'] is True:
