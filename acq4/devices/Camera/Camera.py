@@ -875,7 +875,7 @@ class AcquireThread(Thread):
         Thread.start(self, *args)
         if block:
             if not self.cameraStartEvent.wait(5):
-                raise Exception("Timed out waiting for camera to start.")
+                raise TimeoutError("Timed out waiting for camera to start.")
 
     def run(self):
         lastFrameId = None

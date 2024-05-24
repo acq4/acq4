@@ -502,8 +502,7 @@ class DirHandle(FileHandle):
         """Return a list of string names for all sub-directories."""
         with self.lock:
             ls = self.ls()
-            subdirs = [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
-            return subdirs
+            return [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
 
     def incrementFileName(self, fileName, useExt=True):
         """Given fileName.ext, finds the next available fileName_NNN.ext"""
@@ -512,7 +511,7 @@ class DirHandle(FileHandle):
             (fileName, ext) = os.path.splitext(fileName)
         else:
             ext = ''
-        regex = re.compile(fileName + r'_(\d+)')
+        regex = re.compile(fileName + r'_(\d{3,})$')
         files = [f for f in files if regex.match(f)]
         if len(files) > 0:
             files.sort()
