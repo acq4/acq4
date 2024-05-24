@@ -1,4 +1,4 @@
-from acq4.devices.BaseXKeys import BaseXKeys
+from acq4.devices.Keyboard import Keyboard
 
 XKeysDriver = None
 pieDevices = None
@@ -38,7 +38,7 @@ def getDevices():
     return pieDevices
 
 
-class XKeys(BaseXKeys):
+class XKeys(Keyboard):
     """P.I. Engineering X-Keys input device.
 
     Configuration example::
