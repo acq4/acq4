@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-import platform
-from acq4.util import Qt
-from acq4.devices.Device import Device
-from acq4.util.Mutex import Mutex
-import pyqtgraph.multiprocess as mp
-from six.moves import range
+from acq4.devices.Keyboard import Keyboard
+
+XKeysDriver = None
+pieDevices = None
+
 
 def __reload__(old):
     # avoid enumerating devices more than once because this seems to generate lots of (potentially dangerous)
@@ -17,8 +14,6 @@ def __reload__(old):
         XKeysDriver = old['XKeysDriver']
 
 
-XKeysDriver = None
-
 def getDriver():
     global XKeysDriver, mp
     if XKeysDriver is None:
@@ -26,25 +21,24 @@ def getDriver():
     return XKeysDriver
 
 
-pieDevices = None
-
 def getDevices():
-    global pieDevices
+    global pieDevices, XKeysDriver
     if pieDevices is None:
         # create initial connection to all available devices
         drv = getDriver()
         try:
             pieDevices = [drv.XKeysDevice(h) for h in drv.getDeviceHandles()]
-        except mp.NoResultError:
+        except mp.NoResultError as e:
             # XKeys can completely lock up the remote process if the device
             # is left in a bad state
             XKeysDriver = None
-            raise Exception("No response received from xkeys remote process (try unplugging/replugging your xkeys device).")
+            raise RuntimeError(
+                "No response received from xkeys remote process (try unplugging/replugging your xkeys device)."
+            ) from e
     return pieDevices
 
 
-
-class XKeys(Device):
+class XKeys(Keyboard):
     """P.I. Engineering X-Keys input device.
 
     Configuration example::
@@ -53,30 +47,24 @@ class XKeys(Device):
             driver: 'XKeys'
             index: 0
     """
-    sigStateChanged = Qt.Signal(object, object)  # self, changes
-
     def __init__(self, man, config, name):
-        Device.__init__(self, man, config, name)
+        super().__init__(man, config, name)
         index = config.get('index', 0)
         devs = getDevices()
         if len(devs) == 0:
-            raise Exception("No X-Keys devices found.")
+            raise RuntimeError("No X-Keys devices found.")
         try:
             self.dev = devs[index]
-        except IndexError:
-            devstr = ", ".join(["%d: %s" % (i, devs[i].model) for i in range(len(devs))])
-            raise ValueError("No X-Keys with device index %d. Options are: %s" % (index, devstr))
+        except IndexError as e:
+            devstr = ", ".join([f"{i}: {devs[i].model}" for i in range(len(devs))])
+            raise ValueError(f"No X-Keys with device index {index}. Options are: {devstr}") from e
         self.model = self.dev.model
         self.keyshape = self.dev.keyshape
         self.capabilities = self.dev.capabilities
 
         self.dev.setCallback(self._stateChanged)
 
-        self.dev.setIntensity(255,255)
-
-        self._callbacks = {}
-        # use queued signal here to ensure events are processed in GUI thread
-        self.sigStateChanged.connect(self._handleCallbacks, Qt.Qt.QueuedConnection)
+        self.dev.setIntensity(255, 255)
 
     def setBacklights(self, state, **kwds):
         self.dev.setBacklights(state, **kwds)
@@ -100,18 +88,6 @@ class XKeys(Device):
     def _stateChanged(self, changes):
         self.sigStateChanged.emit(self, changes)
 
-    def _handleCallbacks(self, dev, changes):
-        # check for key press callbacks
-        keych = changes.get('keys', [])
-        for pos, state in keych:
-            if state is False:
-                continue
-            for cb, args in self._callbacks.get(pos, []):
-                cb(dev, changes, *args)
-    
     def quit(self):
         self.dev.setBacklightRows(0, 0)
         self.dev.close()
-
-    def addKeyCallback(self, key, callback, args=()):
-        self._callbacks.setdefault(key, []).append((callback, args))
