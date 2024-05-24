@@ -806,7 +806,7 @@ class DirHandle(FileHandle):
         for f in self:
             if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
                 frames.append(Frame.loadFromFileHandle(f))
-            elif f.fileType() == "MetaArray" and 'fps' in f.info():
+            elif f.fileType() == "MetaArray" and 'pixelSize' in f.info():
                 frame_s = Frame.loadFromFileHandle(f)
                 if not isinstance(frame_s, Frame):
                     frame_s = frame_s[len(frame_s) // 2]
