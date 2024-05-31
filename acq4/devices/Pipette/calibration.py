@@ -1,17 +1,17 @@
 import numpy as np
 from .pipette import Pipette
 from acq4.devices.Camera import Camera
-from .planners import PipettePlanner
+from .planners import PipetteMotionPlanner
 from acq4.util.future import Future
 
 
 @Future.wrap
-def calibratePipette(pipette: Pipette, imager: Camera, _future):
+def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, _future):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
     # focus 2mm above surface
-    surfaceZ = imager.scopeDevice.getSurfaceDepth()
+    surfaceZ = scopeDevice.getSurfaceDepth()
     _future.waitFor(imager.setFocusDepth(surfaceZ + 2e-3))
 
     # move pipette to search position
@@ -21,7 +21,7 @@ def calibratePipette(pipette: Pipette, imager: Camera, _future):
     searchPos1 = center + pipVector * 1e-3 + pipY * 2e-3
     searchPos2 = center + pipVector * 1e-3 - pipY * 2e-3
     # using a planner avoids possible collisions with the objective
-    planner = PipettePlanner(pipette, searchPos1, speed=1e-3)
+    planner = PipetteMotionPlanner(pipette, searchPos1, speed=1e-3)
     _future.waitFor(planner.move())
 
     # record from imager and pipette position while moving pipette across the objecive
@@ -29,7 +29,7 @@ def calibratePipette(pipette: Pipette, imager: Camera, _future):
         try:
             imgFuture = imager.acquireFrames()
             pipRecorder = pipette.startRecording()
-            planner = PipettePlanner(pipette, searchPos2, speed=1e-3)
+            planner = PipetteMotionPlanner(pipette, searchPos2, speed=1e-3)
             _future.waitFor(planner.move())
         finally:
             pipRecorder.stop()
