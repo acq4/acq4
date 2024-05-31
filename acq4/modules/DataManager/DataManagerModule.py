@@ -138,7 +138,7 @@ class DataManager(Module):
 
         has_images = newDir is not None and newDir.hasMatchingChildren(
             lambda f: f.fileType() == "ImageFile" or f.shortName().startswith("ImageSequence_") or (
-                f.fileType() == "MetaArray" and 'fps' in f.info()
+                f.fileType() == "MetaArray" and 'pixelSize' in f.info()
             )
         )
         self.ui.loadPinnedImagesBtn.setEnabled(has_images)

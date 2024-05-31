@@ -2,7 +2,7 @@ from acq4.util import Qt
 from acq4.devices.Device import Device
 
 
-class BaseXKeys(Device):
+class Keyboard(Device):
     sigStateChanged = Qt.Signal(object, object)  # self, changes
 
     def __init__(self, man, config, name):

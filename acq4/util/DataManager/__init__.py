@@ -801,15 +801,16 @@ class DirHandle(FileHandle):
 
     def representativeFramesForAllImages(self):
         from acq4.util.imaging import Frame
+        from acq4.util.surface import find_surface
 
         frames = []
         for f in self:
             if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
                 frames.append(Frame.loadFromFileHandle(f))
-            elif f.fileType() == "MetaArray" and 'fps' in f.info():
+            elif f.fileType() == "MetaArray" and 'pixelSize' in f.info():
                 frame_s = Frame.loadFromFileHandle(f)
                 if not isinstance(frame_s, Frame):
-                    frame_s = frame_s[len(frame_s) // 2]
+                    frame_s = frame_s[find_surface(frame_s) or len(frame_s) // 2]
                 frames.append(frame_s)
             elif f.shortName().startswith("ImageSequence_"):
                 frames.extend(f.representativeFramesForAllImages())

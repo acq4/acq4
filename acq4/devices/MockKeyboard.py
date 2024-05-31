@@ -1,10 +1,7 @@
-from acq4.devices.BaseXKeys import BaseXKeys
+from acq4.devices.Keyboard import Keyboard
 
 
-class MockXKeys(BaseXKeys):
-    def addKeyCallback(self, key, callback, args=()):
-        pass
-
+class MockKeyboard(Keyboard):
     def setBacklights(self, state, **kwds):
         pass
 
