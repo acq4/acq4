@@ -125,7 +125,7 @@ def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> li
 def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -> list:
     from cellpose import models
     model = models.Cellpose(gpu=True, model_type="cyto3")
-    masks_pred, flows, styles, diams = model.eval([data], diameter=0, niter=2000)
+    masks_pred, flows, styles, diams = model.eval([data], diameter=30, niter=2000)
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
 
     def bbox(num):
