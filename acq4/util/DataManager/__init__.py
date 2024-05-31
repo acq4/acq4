@@ -511,7 +511,7 @@ class DirHandle(FileHandle):
             (fileName, ext) = os.path.splitext(fileName)
         else:
             ext = ''
-        regex = re.compile(fileName + r'_(\d{3,})$')
+        regex = re.compile(fileName + r'_(\d{3,})' + ext + r'$')
         files = [f for f in files if regex.match(f)]
         if len(files) > 0:
             files.sort()
