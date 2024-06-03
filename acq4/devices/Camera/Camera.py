@@ -293,7 +293,7 @@ class Camera(DAQGeneric, OptomechDevice):
         the frames are necessarily acquired.
 
         Usage::
-            with camera.run():
+            with camera.ensureRunning():
                 frames = camera.acquireFrames(10).getResult()
         """
         running = self.isRunning()

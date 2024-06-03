@@ -14,7 +14,7 @@ def main():
     parser.add_argument('output', nargs='?', help='Output file for tiff image')
     parser.add_argument('-x', '--x', type=int, default=None, help='For a region, center on this X value')
     parser.add_argument('-y', '--y', type=int, default=None, help='For a region, center on this Y value')
-    parser.add_argument('-r', '--r', type=int, default=None, help='Select the region that would inscribe a circle with radius R, centered on (X, Y)')
+    parser.add_argument('-r', '--r', type=int, default=None, help='Select the region described by a cylinder with radius R, centered on (X, Y)')
     parser.add_argument('-z', '--z', type=int, default=None, help='Pull a single frame at Z index')
     parser.add_argument('--info', action='store_true', help='Print info about the file and exit')
     args = parser.parse_args()

@@ -116,13 +116,13 @@ class Frame(object):
     def depth(self):
         return self.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()
 
-    def saveImage(self, dh, filename=None, appendTo=None, appendAxis=None, autoIncrement=True):
+    def saveImage(self, dh, filename=None, appendTo=None, appendAxis=None, autoIncrement=True, valuesForAppend=None):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
 
         If *appendTo* is not None, the file will be appended to *appendTo* along the *appendAxis*, which
-        value we will supply from this object (e.g. "Depth" goes to `self.depth`).
+        value you must also supply as *valuesForAppend*.
         """
         data = self.getImage()
         info = self.info()
@@ -133,7 +133,7 @@ class Frame(object):
 
         if appendAxis:
             array_info = [
-                {'name': appendAxis, 'values': [getattr(self, appendAxis.lower())]},
+                {'name': appendAxis, 'values': valuesForAppend},
                 {'name': 'X'},
                 {'name': 'Y'},
             ]

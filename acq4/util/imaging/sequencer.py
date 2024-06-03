@@ -180,14 +180,14 @@ def _save_results(
         for frame in frames:
             if stack is None:
                 # TODO do we want to save the background/contrast display data for each frame, too
-                stack = frame.saveImage(storage_dir, "z_stack.ma", appendAxis="Depth")
+                stack = frame.saveImage(storage_dir, "z_stack.ma", appendAxis="Depth", valuesForAppend=[frame.depth])
             else:
-                frame.saveImage(storage_dir, appendTo=stack, appendAxis="Depth")
+                frame.saveImage(storage_dir, appendTo=stack, appendAxis="Depth", valuesForAppend=[frame.depth])
     elif is_timelapse and not is_mosaic:
         if idx == 0:
-            frames.saveImage(storage_dir, "timelapse.ma", appendAxis="Time", autoIncrement=False)
+            frames.saveImage(storage_dir, "timelapse.ma", appendAxis="Time", autoIncrement=False, valuesForAppend=[frames.time])
         else:
-            frames.saveImage(storage_dir, appendTo=storage_dir["timelapse.ma"], appendAxis="Time")
+            frames.saveImage(storage_dir, appendTo=storage_dir["timelapse.ma"], appendAxis="Time", valuesForAppend=[frames.time])
     else:
         frames.saveImage(storage_dir, "image.tif")
 
