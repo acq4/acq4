@@ -1,10 +1,8 @@
+import time
 from collections import OrderedDict
+from functools import lru_cache
 
 import numpy as np
-import six
-import time
-from functools import lru_cache
-from six.moves import range
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
@@ -91,18 +89,19 @@ class MicroManagerCamera(Camera):
     def _acquireFrames(self, n=1):
         if self.isRunning():
             self.stop()
-        self.mmc.setCameraDevice(self.camName)
-        self.mmc.startSequenceAcquisition(n, 0, True)
-        frames = []
-        timeoutStart = ptime.time()
-        while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
-            if self.mmc.getRemainingImageCount() > 0:
-                timeoutStart = ptime.time()
-                frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
-            else:
-                if ptime.time() - timeoutStart > 10.0:
-                    raise Exception("Timed out waiting for camera frame.")
-                time.sleep(0.005)
+        with self.camLock:
+            self.mmc.setCameraDevice(self.camName)
+            self.mmc.startSequenceAcquisition(n, 0, True)
+            frames = []
+            timeoutStart = ptime.time()
+            while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
+                if self.mmc.getRemainingImageCount() > 0:
+                    timeoutStart = ptime.time()
+                    frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+                elif ptime.time() - timeoutStart > 10.0:
+                    raise TimeoutError("Timed out waiting for camera frame.")
+                else:
+                    time.sleep(0.005)
         if len(frames) < n:
             printExc(
                 f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})",
@@ -127,14 +126,14 @@ class MicroManagerCamera(Camera):
         frames = []
         with self.camLock:
             for i in range(nFrames):
-                frame = {}
-                frame['time'] = self.lastFrameTime + (dt * (i + 1))
-                frame['id'] = self.frameId
-                frame['data'] = self.mmc.popNextImage().T
-                frames.append(frame)
+                frames.append({
+                    'time': self.lastFrameTime + (dt * (i + 1)),
+                    'id': self.frameId,
+                    'data': self.mmc.popNextImage().T,
+                })
                 self.frameId += 1
 
-        self.lastFrame = frame
+        self.lastFrame = frames[-1]
         self.lastFrameTime = now
         return frames
 
@@ -260,7 +259,7 @@ class MicroManagerCamera(Camera):
         """List properties of specified parameters, or of all parameters if None"""
         if params is None:
             return self._allParams.copy()
-        if isinstance(params, six.string_types):
+        if isinstance(params, str):
             return self._allParams[params]
         return dict([(p, self._allParams[p]) for p in params])
 
