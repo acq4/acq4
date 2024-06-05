@@ -192,15 +192,15 @@ class PipetteTracker(object):
             zStep = 1e-6
         frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
         pxSize = frames[0].info()["pixelSize"]
-        frames = np.array([f.data() for f in frames])
+        frames = np.stack([f.data() for f in frames], axis=0)
         _future.waitFor(self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow"))
         bg_frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
-        bg_frames = np.array([f.data() for f in bg_frames])
+        bg_frames = np.stack([f.data() for f in bg_frames], axis=0)
         _future.waitFor(self.dev._moveToLocal([tipLength * 3, 0, 0], "slow"))
         key = imager.getDeviceStateKey()
         maxInd = np.argmax([imageTemplateMatch(f, center)[1] for f in frames])
         self.reference[key] = {
-            "frames": frames - bg_frames,
+            "frames": frames - bg_frames.mean(axis=0),
             "zStep": zStep,
             "centerInd": maxInd,
             "centerPos": tipRelPos,
