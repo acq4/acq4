@@ -176,7 +176,7 @@ class Sensapex(Stage):
             UMP.get_ump().poller.stop()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         if self._force_linear_movement:
             linear = True
         if self._force_nonlinear_movement:

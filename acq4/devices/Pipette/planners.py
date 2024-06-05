@@ -85,13 +85,16 @@ class PipettePathGenerator:
             path += slowpath + [(globalStop, speed, False, explanation)]
 
         path = path[1:]  # trim off the start position
-        for step in path:
+        for globalPos, speed, linear, stepName in path:
             try:
-                assert np.isfinite(step[0]).all()
-                self.manipulator.checkLimits(self.pip.mapGlobalToParent(step[0]))
+                assert np.isfinite(globalPos).all()
+                # what global position should we ask the stage to move to in order for the pipette tip to reach globalPos
+                manipulatorGlobalPos = self.pip._solveGlobalStagePosition(globalPos)
+                # ask the stage to check whether this position is reachable
+                self.manipulator.checkGlobalLimits(manipulatorGlobalPos)
             except Exception as e:
                 raise ValueError(
-                    f"Moving {self.pip} to '{step[3]}' would be beyond the limits of its manipulator: {e}"
+                    f"Moving {self.pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
         return path
 

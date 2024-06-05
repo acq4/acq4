@@ -1,3 +1,5 @@
+import contextlib
+
 import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
@@ -20,9 +22,7 @@ class CameraInterface(CameraModuleInterface):
     The interface provides a control GUI via the controlWidget() method and 
     directly manages its own GraphicsItems within the camera module's view box.
     """
-    
-    sigNewFrame = Qt.Signal(object, object)  # self, frame
-    
+
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
 
@@ -110,8 +110,12 @@ class CameraInterface(CameraModuleInterface):
         self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  # note that this signal (from acq4.util.SpinBox) is delayed.
 
+        # We get new frames by adding a processing step to the camera.
+        # This allow us to attach metadata (background+contrast info) to the frames before
+        # they are consumed by anyone else
+        self.cam.addFrameProcessor(self.newFrame, final=True)
+
         # Signals from Camera device
-        self.cam.sigNewFrame.connect(self.newFrame)
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
@@ -126,13 +130,12 @@ class CameraInterface(CameraModuleInterface):
         for action, key in self.cam.camConfig.get('hotkeys', {}).items():
             if action not in ['snap', 'start']:
                 raise ValueError("Unknown hotkey action %r" % action)
-            
+
             dev = Manager.getManager().getDevice(key['device'])
             dev.addKeyCallback(key['key'], self.hotkeyPressed, (action,))
-    
+
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
-        self.sigNewFrame.emit(self, frame)
 
     def controlWidget(self):
         return self.widget
@@ -156,7 +159,7 @@ class CameraInterface(CameraModuleInterface):
             self.showMessage("Error opening camera")
             raise
         return camSize, scope
-    
+
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
@@ -212,14 +215,10 @@ class CameraInterface(CameraModuleInterface):
         if self.hasQuit:
             return
 
-        try:
-            self.cam.sigNewFrame.disconnect(self.newFrame)
+        with contextlib.suppress(TypeError):
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
             self.cam.sigShowMessage.disconnect(self.showMessage)
-        except TypeError:
-            pass
-
         self.hasQuit = True
         if self.cam.isRunning():
             self.cam.stop()
@@ -255,7 +254,7 @@ class CameraInterface(CameraModuleInterface):
     def setUiBinning(self, b, updateCamera=True):
         ind = self.ui.binningCombo.findText(str(b))
         if ind == -1:
-            raise Exception("Binning mode %s not in list." % str(b))
+            raise ValueError(f"Binning mode {str(b)} not in list.")
 
         if updateCamera:
             self.ui.binningCombo.setCurrentIndex(ind)
@@ -342,7 +341,7 @@ class CameraInterface(CameraModuleInterface):
         """
         Return bounding rect of this imaging device in global coordinates
         """
-        return self.cam.getBoundary().boundingRect()
+        return Qt.QRectF(*self.cam.getBoundary())
 
 
 class CameraItemGroup(DeviceTreeItemGroup):
@@ -352,7 +351,9 @@ class CameraItemGroup(DeviceTreeItemGroup):
     def makeGroup(self, dev, subdev):
         grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
         if dev is self.device:
-            bound = Qt.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound = Qt.QPainterPath()
+            bound.addRect(Qt.QRectF(*self.device.getBoundary(globalCoords=False)))
+            bound = Qt.QGraphicsPathItem(bound)
             bound.setParentItem(grp)
             bound.setPen(pg.mkPen(40, 150, 150))
         return grp

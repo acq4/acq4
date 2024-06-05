@@ -937,4 +937,4 @@ class PipetteDeviceGui(Qt.QWidget):
     def pipetteMoved(self):
         pos = self.dev.globalPosition()
         for i in range(3):
-            self.posLabels[i].setText("%0.3g um" % (pos[i] * 1e6))
+            self.posLabels[i].setText("%0.3f mm" % (pos[i] * 1e3))

@@ -1,9 +1,11 @@
 from typing import Callable, Optional
 
 import numpy as np
+from MetaArray import MetaArray
 
-from acq4.util.imaging.background import remove_background_from_image
 import pyqtgraph as pg
+from acq4.util.DataManager import FileHandle
+from acq4.util.imaging.background import remove_background_from_image
 from pyqtgraph import SRTTransform3D, ImageItem
 
 
@@ -23,9 +25,39 @@ class Frame(object):
         self._data = data
         self._info = info
         self._bg_removal = None
+
+    @classmethod
+    def loadFromFileHandle(cls, fh: FileHandle) -> "Frame | list[Frame]":
+        data = fh.read()
+        if fh.fileType() == "MetaArray":
+            if data.ndim == 3:
+                frames = []
+                for row in data:
+                    info = fh.info().deepcopy()
+                    if data.axisName(0) == "Time":
+                        info["time"] = row.axisValues(2)
+                    elif data.axisName(0) == "Depth":
+                        depth = row.axisValues(2)
+                        xform = pg.SRTTransform3D(info["transform"])
+                        pos = xform.getTranslation()
+                        pos[2] = depth
+                        xform.setTranslate(pos)
+                        info["transform"] = xform
+                    f = Frame(row.asarray(), info)
+                    f.loadLinkedFiles(fh.parent())
+                    frames.append(f)
+                return frames
+            else:
+                data = data.asarray()
+        frame = cls(data, fh.info().deepcopy())
+        frame.loadLinkedFiles(fh.parent())
+        return frame
+
+    @classmethod
+    def ensureTransform(cls, frame):
         # Complete transform maps from image coordinates to global.
-        if 'transform' not in info:
-            info['transform'] = SRTTransform3D(self.deviceTransform() * self.frameTransform())
+        if 'transform' not in frame.info():
+            frame.addInfo(transform=SRTTransform3D(frame.deviceTransform() * frame.frameTransform()))
 
     def asarray(self):
         """Assuming this frame object represents multiple frames, return an array with one Frame per frame
@@ -41,7 +73,12 @@ class Frame(object):
         """Return the meta info dict for this frame.
         """
         return self._info
-    
+
+    def addInfo(self, info: "dict|None" = None, **kwargs):
+        if info is not None:
+            self._info.update(info)
+        self._info.update(kwargs)
+
     def getImage(self):
         """Return processed image data.
 
@@ -70,26 +107,45 @@ class Frame(object):
         """Map *obj* from the frame's data coordinates to global coordinates.
         """
         return self.globalTransform().map(obj)
-    
-    def saveImage(self, dh, filename, backgroundInfo: Optional[Callable] = None, contrastInfo=None):
+
+    @property
+    def time(self):
+        return self._info['time']
+
+    @property
+    def depth(self):
+        return self.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()
+
+    def saveImage(self, dh, filename=None, appendTo=None, appendAxis=None, autoIncrement=True):
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
-        The optional *backgroundInfo* and *contrastInfo* arguments can be used to save additional
-        data needed to display the frame later. See `BackgroundSubtractCtrl.defferedSave` and
-        `ContrastCtrl.saveState` for details.
+
+        If *appendTo* is not None, the file will be appended to *appendTo* along the *appendAxis*, which
+        value we will supply from this object (e.g. "Depth" goes to `self.depth`).
         """
         data = self.getImage()
         info = self.info()
-        if backgroundInfo is not None:
-            info['backgroundInfo'] = backgroundInfo(dh)
-        if contrastInfo is not None:
-            info['contrastInfo'] = contrastInfo
+        if callable(info.get('backgroundInfo')):
+            info['backgroundInfo'] = info['backgroundInfo'](dh)
+        if filename and not filename.endswith('.ma'):
+            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=autoIncrement)
 
-        if filename.endswith('.ma'):
-            return dh.writeFile(data, filename, info, fileType="MetaArray", autoIncrement=True)
-        else:
-            return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=True)
+        if appendAxis:
+            array_info = [
+                {'name': appendAxis, 'values': [getattr(self, appendAxis.lower())]},
+                {'name': 'X'},
+                {'name': 'Y'},
+            ]
+            data = MetaArray(data[np.newaxis, ...], info=array_info)
+
+            if appendTo:
+                data.write(appendTo.name(), appendAxis=appendAxis)
+                return appendTo
+
+        return dh.writeFile(
+            data, filename, info, fileType="MetaArray", autoIncrement=autoIncrement, appendAxis=appendAxis
+        )
 
     def loadLinkedFiles(self, dh):
         """Load linked files from the same directory as the main file."""
@@ -110,7 +166,6 @@ class Frame(object):
                 self._bg_removal.read(),
                 subtract=bg_info.get("subtract"),
                 divide=bg_info.get("divide"),
-                blur=bg_info.get("blur"),
             )
         levels = None
         lut = None

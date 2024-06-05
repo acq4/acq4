@@ -7,7 +7,7 @@ dependencies:
   - pillow
   - pyparsing=2.4.7
   - pyqt>=5.12
-  - python=3.9
+  - python>=3.9
   - scipy
   - sqlite
   - pyserial

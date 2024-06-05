@@ -3,7 +3,7 @@ from typing import Union, Tuple
 import numpy as np
 import scipy
 
-from acq4.devices.Camera.frame import Frame
+from acq4.util.imaging import Frame
 
 
 def center_area(img: np.ndarray) -> Tuple[slice, slice]:

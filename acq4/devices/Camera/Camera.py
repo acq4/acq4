@@ -11,6 +11,7 @@ from MetaArray import MetaArray, axis
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.Device import Device
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -18,11 +19,11 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from acq4.util.future import Future
+from acq4.util.imaging.frame import Frame
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
-from .frame import Frame
 from .taskGUI import CameraTaskGui
 
 
@@ -107,7 +108,13 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.finished.connect(self.acqThreadFinished)
         self.acqThread.started.connect(self.acqThreadStarted)
         self.acqThread.sigShowMessage.connect(self.showMessage)
-        self.acqThread.sigNewFrame.connect(self.newFrame)
+
+        self._processingThread = FrameProcessingThread()
+        self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame)
+        self._processingThread.start()
+        self.addFrameProcessor(self.addFrameInfo)
+        self.addFrameProcessor(Frame.ensureTransform)  # order matters because the transform likely comes from addFrameInfo
+        self.acqThread.sigRawFrameAcquired.connect(self._processingThread.handleNewRawFrame)
 
         self.sigGlobalTransformChanged.connect(self.transformChanged)
 
@@ -128,6 +135,31 @@ class Camera(DAQGeneric, OptomechDevice):
             dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
 
         dm.declareInterface(name, ["camera"], self)
+
+    def devicesToReserve(self) -> list[Device]:
+        return self.parentDevices()
+
+    def addFrameInfo(self, frame: Frame):
+        # TODO cache this more, maybe?
+        scope_state = self.getScopeState()
+        ps = scope_state["pixelSize"]  # size of CCD pixel
+        transform = pg.SRTTransform3D(scope_state["transform"])
+        cam_params = {"binning", "exposure", "region", "triggerMode"}
+        info = frame.info().copy()
+        if cam_params - info.keys():
+            info.update(dict(self.getParams(cam_params)))
+        binning = info["binning"]
+        info.update({
+            "deviceName": self.name(),
+            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
+            "objective": scope_state.get("objective", None),
+            "deviceTransform": transform,
+            "illumination": scope_state.get("illumination", None),
+        })
+        tr = self.makeFrameTransform(info["region"], info["binning"])
+        info["frameTransform"] = tr
+
+        frame.addInfo(info)
 
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
@@ -299,19 +331,17 @@ class Camera(DAQGeneric, OptomechDevice):
 
         Depending on the underlying camera driver, this method may cause the camera to restart.
         """
-        frames = self._acquireFrames(int(n))
-
-        info = self.acqThread.buildFrameInfo(self.getScopeState())
-        info["time"] = ptime.time()
-        retval = []
+        frames = self._acquireFrames(n)
+        now = ptime.time()
+        frames = [Frame(f, {"time": now}) for f in frames]
         for f in frames:
-            retval.append(Frame(f, info))
-            self.newFrame(retval[-1])  # allow others access to this frame (for example, camera module can update)
-        return retval
+            # allow others access to this frame (for example, camera module can update)
+            self._processingThread.handleNewRawFrame(f)
+        return frames
 
-    def _acquireFrames(self, n):
+    def _acquireFrames(self, n) -> np.ndarray:
         # todo: default implementation can use acquisition thread instead..
-        raise NotImplementedError("Camera class %s does not implement this method." % self.__class__.__name__)
+        raise NotImplementedError(f"Camera class {self.__class__.__name__} does not implement this method.")
 
     def restart(self):
         if self.isRunning():
@@ -375,33 +405,26 @@ class Camera(DAQGeneric, OptomechDevice):
         with self.lock:
             return self.scopeDev
 
-    def getBoundary(self, globalCoords=True):
-        """Return the boundaries of the camera sensor in global coordinates.
-        If globalCoords==False, return in local coordinates.
+    def getBoundary(self, globalCoords: bool = True, mode="sensor") -> tuple:
+        """Return the boundaries of the camera in the specified coordinates.
+        If globalCoords is False, return in local coordinates.
+        `mode` can be either "sensor" for max sensor size or "roi" for current available region.
+        Returns (left, top, width, height).
         """
-        size = self.getParam("sensorSize")
-        bounds = Qt.QPainterPath()
-        bounds.addRect(Qt.QRectF(0, 0, *size))
+        if mode == "sensor":
+            bounds = (0, 0, *self.getParam("sensorSize"))
+        elif mode == "roi":
+            bounds = self.getParam("region")
+        else:
+            raise ValueError("mode must be either 'sensor' or 'roi'")
+        bounds = tuple(map(float, bounds))
         if globalCoords:
-            return pg.SRTTransform(self.globalTransform()).map(bounds)
+            start = self.mapToGlobal(bounds[:2])
+            end = self.mapToGlobal((bounds[2] + bounds[0], bounds[3] + bounds[1]))
+            size = (end[0] - start[0], end[1] - start[1])
+            return (*start, *size)
         else:
             return bounds
-
-    def getBoundaries(self):
-        """Return a list of camera boundaries for all objectives"""
-        objs = self.scopeDev.listObjectives()
-        return [self.getBoundary(o) for o in objs]
-
-    # deprecated: not used anywhere, and I'm not sure it's correct.
-    # def mapToSensor(self, pos):
-    #     """Return the sub-pixel location on the sensor that corresponds to global position pos"""
-    #     ss = self.getScopeState()
-    #     boundary = self.getBoundary()
-    #     boundary.translate(*ss['scopePosition'][:2])
-    #     size = self.sensorSize
-    #     x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
-    #     y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
-    #     return (x, y)
 
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
@@ -493,8 +516,9 @@ class Camera(DAQGeneric, OptomechDevice):
     def showMessage(self, msg):
         self.sigShowMessage.emit(msg)
 
-    def newFrame(self, data):
-        self.sigNewFrame.emit(data)
+    def addFrameProcessor(self, processor: Callable[[Frame], None], final: bool = False):
+        self._processingThread.addFrameProcessor(processor, final)
+        # TODO will we remove them ever?
 
     def isRunning(self):
         return self.acqThread.isRunning()
@@ -781,11 +805,53 @@ class CameraTaskResult:
         return self._frameTimes, self._frameTimesPrecise
 
 
+class FrameProcessingThread(Thread):
+    sigFrameFullyProcessed = Qt.Signal(object)  # Frame
+
+    def __init__(self):
+        super().__init__()
+        self._processors = []
+        self._final_processor = None
+        self._queue = queue.Queue()
+
+    def addFrameProcessor(self, processor: Callable[[Frame], None], final=False):
+        if final:
+            if self._final_processor is not None:
+                raise RuntimeError("Only one `final` processor can be added.")
+            self._final_processor = processor
+        else:
+            self._processors.append(processor)
+
+    @property
+    def processors(self):
+        if self._final_processor is not None:
+            return self._processors + [self._final_processor]
+        return self._processors
+
+    def handleNewRawFrame(self, frame):
+        self._queue.put(frame)
+
+    def run(self):
+        while True:
+            try:
+                frame = self._queue.get_nowait()
+            except queue.Empty:
+                time.sleep(0.01)
+                # TODO check for halt?
+                continue
+            for callback in self.processors:
+                try:
+                    callback(frame)
+                except Exception:
+                    printExc("Frame processing callback failed")
+            self.sigFrameFullyProcessed.emit(frame)
+
+
 class AcquireThread(Thread):
-    sigNewFrame = Qt.Signal(object)
+    sigRawFrameAcquired = Qt.Signal(object)
     sigShowMessage = Qt.Signal(object)
 
-    def __init__(self, dev):
+    def __init__(self, dev: Camera):
         Thread.__init__(self)
         self.dev = dev
         self.camLock = self.dev.camLock
@@ -796,11 +862,6 @@ class AcquireThread(Thread):
         self.tasks = []
         self.cameraStartEvent = threading.Event()
         self._recentFPS = deque(maxlen=10)
-
-        # This thread does not run an event loop,
-        # so we may need to deliver frames manually to some places
-        self._newFrameCallbacks = set()
-        self._newFrameCallbacksMutex = Mutex()
 
     def __del__(self):
         if hasattr(self, "cam"):
@@ -816,32 +877,6 @@ class AcquireThread(Thread):
             if not self.cameraStartEvent.wait(5):
                 raise TimeoutError("Timed out waiting for camera to start.")
 
-    def connectCallback(self, method):
-        with self._newFrameCallbacksMutex:
-            self._newFrameCallbacks.add(method)
-
-    def disconnectCallback(self, method):
-        with self._newFrameCallbacksMutex:
-            if method in self._newFrameCallbacks:
-                self._newFrameCallbacks.remove(method)
-
-    def buildFrameInfo(self, scopeState, camState: Optional[dict] = None) -> dict:
-        ps = scopeState["pixelSize"]  # size of CCD pixel
-        transform = pg.SRTTransform3D(scopeState["transform"])  # TODO this is expensive; can we pull it out of the acq thread?
-        if camState is None:
-            info = dict(self.dev.getParams(["binning", "exposure", "region", "triggerMode"]))
-        else:
-            info = camState.copy()
-        binning = info["binning"]
-        info.update({
-            "deviceName": self.dev.name(),
-            "pixelSize": [ps[0] * binning[0], ps[1] * binning[1]],  # size of image pixel
-            "objective": scopeState.get("objective", None),
-            "deviceTransform": transform,
-            "illumination": scopeState.get("illumination", None),
-        })
-        return info
-
     def run(self):
         lastFrameId = None
 
@@ -855,7 +890,6 @@ class AcquireThread(Thread):
 
             lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
-            lastFrameID = None
 
             while True:
                 now = ptime.time()
@@ -866,20 +900,10 @@ class AcquireThread(Thread):
                     if lastFrameId is not None:
                         drop = frames[0]["id"] - lastFrameId - 1
                         if drop > 0:
-                            print("WARNING: Camera dropped %d frames" % drop)
+                            print(f"WARNING: Camera dropped {drop} frames")
 
                     # Build meta-info for this frame(s)
                     info = camState.copy()
-
-                    ss = self.dev.getScopeState()
-
-                    if ss["id"] != lastFrameID:
-                        lastFrameID = ss["id"]
-                        # regenerate frameInfo here
-                        frameInfo = self.buildFrameInfo(ss, camState=camState)
-
-                    # Copy frame info to info array
-                    info.update(frameInfo)  # TODO should this really be updating using last frame's info? (when ss["id"] was lastFrameID)
 
                     # Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / len(frames)
@@ -894,11 +918,7 @@ class AcquireThread(Thread):
                         data = frame.pop("data")
                         frameInfo.update(frame)  # copies 'time' key supplied by camera
                         out = Frame(data, frameInfo)
-                        with self._newFrameCallbacksMutex:
-                            callbacks = list(self._newFrameCallbacks)
-                        for c in callbacks:
-                            c(out)
-                        self.sigNewFrame.emit(out)
+                        self.sigRawFrameAcquired.emit(out)
 
                     lastFrameTime = now
                     lastFrameId = frames[-1]["id"]
@@ -964,7 +984,13 @@ class AcquireThread(Thread):
 
 
 class FrameAcquisitionFuture(Future):
-    def __init__(self, camera: Camera, frameCount: Optional[int], timeout: float = 10, ensureFreshFrames: bool = False):
+    def __init__(
+            self,
+            camera: Camera,
+            frameCount: Optional[int],
+            timeout: float = 10,
+            ensureFreshFrames: bool = False,
+    ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
         super().__init__()
         self._camera = camera
@@ -978,38 +1004,35 @@ class FrameAcquisitionFuture(Future):
         self._thread.start()
 
     def _monitorAcquisition(self):
-        self._camera.acqThread.connectCallback(self.handleNewFrame)
+        self._camera.sigNewFrame.connect(self._queue.put, type=Qt.Qt.DirectConnection)
         with ExitStack() as stack:
+            stack.callback(self._camera.sigNewFrame.disconnect, self._queue.put)
             if self._ensure_fresh_frames:
                 stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
-            try:
-                lastFrameTime = ptime.time()
-                while True:
-                    if self.isDone():
-                        break
+            lastFrameTime = ptime.time()
+            while True:
+                if self.isDone():
+                    break
+                try:
+                    frame = self._queue.get_nowait()
+                    lastFrameTime = ptime.time()
+                except queue.Empty:
                     try:
-                        frame = self._queue.get_nowait()
-                        lastFrameTime = ptime.time()
-                    except queue.Empty:
-                        try:
-                            self.checkStop(0.1)  # delay while checking for a stop request
-                        except self.StopRequested:
-                            self._taskDone(interrupted=self._frame_count is not None)
-                            break
-                        if ptime.time() - lastFrameTime > self._timeout:
-                            self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
-                        continue
-                    self._frames.append(frame)
-                    if self._stop_when is not None and self._stop_when(frame):
-                        self._taskDone()
+                        self.checkStop(0.1)  # delay while checking for a stop request
+                    except self.StopRequested:
+                        self._taskDone(interrupted=self._frame_count is not None)
                         break
-                    if self._frame_count is not None and len(self._frames) >= self._frame_count:
-                        self._taskDone()
-            finally:
-                self._camera.acqThread.disconnectCallback(self.handleNewFrame)
-
-    def handleNewFrame(self, frame):
-        self._queue.put(frame)
+                    if ptime.time() - lastFrameTime > self._timeout:
+                        self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
+                        break
+                    continue
+                self._frames.append(frame)
+                if self._stop_when is not None and self._stop_when(frame):
+                    self._taskDone()
+                    break
+                if self._frame_count is not None and len(self._frames) >= self._frame_count:
+                    self._taskDone()
+                    break
 
     def peekAtResult(self) -> list[Frame]:
         return self._frames[:]

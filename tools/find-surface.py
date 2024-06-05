@@ -5,8 +5,8 @@ import click
 import numpy as np
 
 import pyqtgraph as pg
-from acq4.devices.Camera.frame import Frame
 from acq4.util.DataManager import getFileHandle
+from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface, score_frames
 
 

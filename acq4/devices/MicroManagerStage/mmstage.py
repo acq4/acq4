@@ -178,7 +178,7 @@ class MicroManagerStage(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
@@ -189,7 +189,7 @@ class MicroManagerStage(Stage):
 
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveX=moveZ)
+            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveZ=moveZ)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -245,7 +245,7 @@ class MonitorThread(Thread):
                     interval = min(maxInterval, interval * 2)
 
                 time.sleep(interval)
-            except:
+            except Exception:
                 debug.printExc('Error in MicromanagerStage monitor thread:')
                 time.sleep(maxInterval)
 
@@ -262,7 +262,7 @@ class MicroManagerMoveFuture(MoveFuture):
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.lock:
             if moveXY:
-                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[0:1])
+                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:1])
             if moveXY:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
 
@@ -316,7 +316,7 @@ class MicroManagerMoveFuture(MoveFuture):
             # not actually stopped! This should not happen.
             raise RuntimeError("Interrupted move but manipulator is still running!")
         else:
-            raise Exception("Unknown status: %s" % status)
+            raise ValueError(f"Unknown status: {status}")
 
     def errorMessage(self):
         return self._errorMsg
