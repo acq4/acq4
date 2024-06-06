@@ -113,7 +113,6 @@ class Camera(DAQGeneric, OptomechDevice):
         self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame)
         self._processingThread.start()
         self.addFrameProcessor(self.addFrameInfo)
-        self.addFrameProcessor(Frame.ensureTransform)  # order matters because the transform likely comes from addFrameInfo
         self.acqThread.sigRawFrameAcquired.connect(self._processingThread.handleNewRawFrame)
 
         self.sigGlobalTransformChanged.connect(self.transformChanged)
@@ -158,6 +157,8 @@ class Camera(DAQGeneric, OptomechDevice):
         })
         tr = self.makeFrameTransform(info["region"], info["binning"])
         info["frameTransform"] = tr
+        # Complete transform maps from image coordinates to global.
+        info['transform'] = SRTTransform3D(info['deviceTransform'] * info['frameTransform'])
 
         frame.addInfo(info)
 

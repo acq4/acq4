@@ -50,12 +50,6 @@ class Frame:
         frame.loadLinkedFiles(fh.parent())
         return frame
 
-    @classmethod
-    def ensureTransform(cls, frame):
-        # Complete transform maps from image coordinates to global.
-        if 'transform' not in frame.info():
-            frame.addInfo(transform=SRTTransform3D(frame.deviceTransform() * frame.frameTransform()))
-
     def data(self):
         """Return raw imaging data.
         """
