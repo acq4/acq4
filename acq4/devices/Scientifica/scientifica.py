@@ -158,7 +158,8 @@ class Scientifica(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
-        self.monitor.stop()
+        if hasattr(self, 'monitor'):  # in case __init__ failed
+            self.monitor.stop()
         Stage.quit(self)
 
     def _move(self, pos, speed, linear, **kwargs):
