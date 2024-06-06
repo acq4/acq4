@@ -1,15 +1,13 @@
-from typing import Callable, Optional
-
 import numpy as np
 from MetaArray import MetaArray
 
 import pyqtgraph as pg
-from acq4.util.DataManager import FileHandle
+from acq4.util.DataManager import FileHandle, DirHandle
 from acq4.util.imaging.background import remove_background_from_image
 from pyqtgraph import SRTTransform3D, ImageItem
 
 
-class Frame(object):
+class Frame:
     """One or more frames of imaging data, including meta information.
 
     Expects *info* to be a dictionary with some minimal information:
@@ -21,7 +19,6 @@ class Frame(object):
     """
 
     def __init__(self, data, info):
-        object.__init__(self)
         self._data = data
         self._info = info
         self._bg_removal = None
@@ -58,11 +55,6 @@ class Frame(object):
         # Complete transform maps from image coordinates to global.
         if 'transform' not in frame.info():
             frame.addInfo(transform=SRTTransform3D(frame.deviceTransform() * frame.frameTransform()))
-
-    def asarray(self):
-        """Assuming this frame object represents multiple frames, return an array with one Frame per frame
-        """
-        return [Frame(frame, self.info().copy()) for frame in self.data()]
 
     def data(self):
         """Return raw imaging data.
