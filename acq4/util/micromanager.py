@@ -9,6 +9,14 @@ _mmc = None
 microManagerPaths = glob.glob("C:\\Program Files\Micro-Manager*")
 
 
+def versionWarning():
+    """Used to warn the user of possible mismatch between MicroManager and pymmcore API versions"""
+    import pymmcore
+    return f"""
+        Check that the MicroManager API version number (help->about in the MicroManager GUI)
+        matches the pymmcore API version number ({pymmcore.__version__.split('.')[3]})
+    """
+
 class MicroManagerError(Exception):
     pass
 

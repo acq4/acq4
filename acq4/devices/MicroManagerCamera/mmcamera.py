@@ -29,10 +29,20 @@ triggerModes = {
 class MicroManagerCamera(Camera):
     """Camera device that uses MicroManager to provide imaging.
 
-    Configuration keys:
+    Requires pymmcore to be installed along with MicroManager with the same API version.
+    To configure a new camera:
+    1. First make sure your pymmcore API version matches the MicroManager API version.
+        - MicroManager API version can be found in the MicroManager GUI under Help -> About.
+        - pymmcore API version can be found by running `import pymmcore; print(pymmcore.__version__.split('.')[3])`
+        - If versions are not matched, then download a different version of MicroManager that matches the pymmcore version.
+    2. Next make sure you can load and operate the camera via the MicroManager GUI. 
+        - When selecting your camera in the hardware wizard, take note of the adapter name and device name
+    3. Configure the camera in the ACQ4 configuration file::
 
-    * mmAdapterName
-    * mmDeviceName
+        Camera:
+            driver: 'MicroManagerCamera'
+            mmAdapterName: 'HamamatsuHam'
+            mmDeviceName: 'HamamatsuHam_DCAM'
     """
 
     def __init__(self, manager, config, name):
@@ -57,7 +67,10 @@ class MicroManagerCamera(Camera):
         if adapterName not in allAdapters:
             raise ValueError("Adapter name '%s' is not valid. Options are: %s" % (adapterName, allAdapters))
         deviceName = self._config['mmDeviceName']
-        allDevices = self.mmc.getAvailableDevices(adapterName)
+        try:
+            allDevices = self.mmc.getAvailableDevices(adapterName)
+        except Exception as e:
+            raise RuntimeError(f"Error getting available devices for MicroManager adapter '{adapterName}'. {micromanager.versionWarning()}") from e
         if deviceName not in allDevices:
             raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (
                 deviceName, adapterName, allDevices))
