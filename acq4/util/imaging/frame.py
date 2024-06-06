@@ -106,9 +106,33 @@ class Frame:
 
     @property
     def depth(self):
-        return self.mapFromFrameToGlobal(pg.Vector(0, 0, 0)).z()
+        return self.globalPosition[2]
 
-    def saveImage(self, dh, filename=None, appendTo=None, appendAxis=None, autoIncrement=True, valuesForAppend=None):
+    @property
+    def globalPosition(self):
+        return self.mapFromFrameToGlobal(np.array((0.0, 0.0, 0.0)))
+
+    def _metaArrayInfo(self):
+        return [
+            {
+                'name': 'Time',
+                'values': [self.time],
+                'globalPosition': self.globalPosition.reshape((1, 3)),
+            },
+            {'name': 'X'},
+            {'name': 'Y'},
+        ]
+
+    _metaArrayWriteKwargs = {'appendAxis': 'Time', 'appendKeys': ['globalPosition']}
+
+    def appendImage(self, fh: FileHandle) -> FileHandle:
+        # TODO should we be appending contrast?
+        data = self.getImage()
+        data = MetaArray(data[np.newaxis, ...], info=self._metaArrayInfo())
+        data.write(fh.name(), **self._metaArrayWriteKwargs)
+        return fh
+
+    def saveImage(self, dh: DirHandle, filename: str, autoIncrement=True) -> FileHandle:
         """Save this frame data to *filename* inside DirHandle *dh*.
 
         The file name must end with ".ma" (for MetaArray) or any supported image file extension.
@@ -120,23 +144,18 @@ class Frame:
         info = self.info()
         if callable(info.get('backgroundInfo')):
             info['backgroundInfo'] = info['backgroundInfo'](dh)
-        if filename and not filename.endswith('.ma'):
+
+        if not filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=autoIncrement)
 
-        if appendAxis:
-            array_info = [
-                {'name': appendAxis, 'values': valuesForAppend},
-                {'name': 'X'},
-                {'name': 'Y'},
-            ]
-            data = MetaArray(data[np.newaxis, ...], info=array_info)
-
-            if appendTo:
-                data.write(appendTo.name(), appendAxis=appendAxis)
-                return appendTo
-
+        data = MetaArray(data[np.newaxis, ...], info=self._metaArrayInfo())
         return dh.writeFile(
-            data, filename, info, fileType="MetaArray", autoIncrement=autoIncrement, appendAxis=appendAxis
+            data,
+            filename,
+            info,
+            fileType="MetaArray",
+            autoIncrement=autoIncrement,
+            **self._metaArrayWriteKwargs,
         )
 
     def loadLinkedFiles(self, dh):
