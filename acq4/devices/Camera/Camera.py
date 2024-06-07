@@ -360,7 +360,11 @@ class Camera(DAQGeneric, OptomechDevice):
         if hasattr(self, "acqThread") and self.isRunning():
             self.stop()
             if not self.wait(10000):
-                raise Exception("Timed out while waiting for thread exit!")
+                raise TimeoutError("Timed out while waiting for acquisition thread to exit!")
+        if hasattr(self, "_processingThread") and self._processingThread.isRunning():
+            self._processingThread.stop()
+            if not self._processingThread.wait(10000):
+                raise TimeoutError("Timed out waiting for frame processing thread to stop")
         DAQGeneric.quit(self)
 
     @Future.wrap
@@ -818,6 +822,7 @@ class FrameProcessingThread(Thread):
 
     def __init__(self):
         super().__init__()
+        self._stop = False
         self._processors = []
         self._final_processor = None
         self._queue = queue.Queue()
@@ -830,6 +835,9 @@ class FrameProcessingThread(Thread):
         else:
             self._processors.append(processor)
 
+    def stop(self):
+        self._stop = True
+
     @property
     def processors(self):
         if self._final_processor is not None:
@@ -840,11 +848,10 @@ class FrameProcessingThread(Thread):
         self._queue.put(frame)
 
     def run(self):
-        while True:
+        while not self._stop:
             try:
                 frame = self._queue.get(timeout=0.1)
             except queue.Empty:
-                # TODO check for halt?
                 continue
             for callback in self.processors:
                 try:
