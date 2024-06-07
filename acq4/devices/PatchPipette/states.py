@@ -761,7 +761,7 @@ class SealState(PatchPipetteState):
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRates': {'type': 'str', 'default': "[(0.5e6, -100), (100e6, 0), (-1e6, 200)]"},  # TODO
+        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (None, 0)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
@@ -795,8 +795,11 @@ class SealState(PatchPipetteState):
         patchrec['capacitanceBeforeSeal'] = initialTP.analysis['capacitance']
         startTime = ptime.time()
         pressure = config['startingPressure']
+
         if isinstance(config['pressureChangeRates'], str):
             config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
+        # sort pressure change rates by resistance slope thresholds
+        pressureChangeRates = sorted(config['pressureChangeRates'], key=lambda x: x[0])
 
         mode = config['pressureMode']
         self.setState(f'beginning seal (mode: {mode!r})')
@@ -838,6 +841,8 @@ class SealState(PatchPipetteState):
 
             # seal detected? 
             if ssr > config['sealThreshold']:
+                self.setState('gigaohm seal detected')
+
                 # delay for a short period, possibly applying pressure to allow seal to stabilize
                 if config['delayAfterSeal'] > 0:
                     if config['afterSealPressure'] == 0:
@@ -847,7 +852,6 @@ class SealState(PatchPipetteState):
                     self.sleep(config['delayAfterSeal'])
 
                 dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-                self.setState('gigaohm seal detected')
 
                 dev.clampDevice.autoCapComp()
 
@@ -873,7 +877,7 @@ class SealState(PatchPipetteState):
                 pressure = np.clip(pressure, config['pressureLimit'], 0)
                 
                 # decide how much to adjust pressure based on rate of change in seal resistance
-                for max_slope, change in config['pressureChangeRates']:
+                for max_slope, change in pressureChangeRates:
                     if max_slope is None or slope < max_slope:
                         pressure += change
                         break
