@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import weakref
 from typing import Union, Optional, Generator
@@ -8,7 +10,7 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
-from acq4.util.future import Future
+from acq4.util.future import Future, wrap
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
@@ -111,8 +113,9 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
         f.wait()
 
 
-@Future.wrap
-def _slow_z_stack(imager, start, end, step, _future) -> list[Frame]:
+# MC this file doesn't handle typing correctly with Future.wrap, but I don't know why...
+@wrap
+def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
     sign = np.sign(end - start)
     direction = sign * -1
     step = sign * abs(step)
@@ -193,7 +196,7 @@ def _save_results(
         frames.saveImage(storage_dir, "image.tif")
 
 
-@Future.wrap
+@wrap
 def run_image_sequence(
         imager,
         count: float = 1,
@@ -303,8 +306,8 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
-@Future.wrap
-def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> Future:
+@wrap
+def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
     Args:

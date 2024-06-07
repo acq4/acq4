@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 import functools
-import sys
 import threading
-import time
 import traceback
-from typing import Callable
+from typing import Callable, Generic, TypeVar, ParamSpec
+
+import sys
+import time
 
 from acq4.util import Qt, ptime
 
+T = TypeVar('T')
 
-class Future(Qt.QObject):
+
+class Future(Qt.QObject, Generic[T]):
     """Used to track the progress of an asynchronous task.
 
     The simplest subclasses reimplement percentDone() and call _taskDone() when finished.
@@ -23,32 +28,6 @@ class Future(Qt.QObject):
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses.
         """
-
-    @classmethod
-    def wrap(cls, func: Callable) -> Callable[..., 'Future']:
-        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
-        named "_future" as a keyword argument. This Future can be variously used to checkStop() the
-        function, wait for other futures, and will be returned by the decorated function call.
-        Usage:
-            @Future.wrap
-            def myFunc(arg1, arg2, _future=None):
-                ...
-                _future.checkStop()
-                _future.waitFor(someOtherFuture)
-                ...
-            result = myFunc(arg1, arg2).getResult()
-        """
-        @functools.wraps(func)
-        def wrapper(*args, **kwds):
-            future = cls()
-            if kwds.pop('block', False):
-                kwds['_future'] = future
-                future.executeAndSetReturn(func, args, kwds)
-                future.wait()
-            else:
-                future.executeInThread(func, args, kwds)
-            return future
-        return wrapper
 
     @classmethod
     def immediate(cls, result=None):
@@ -70,7 +49,7 @@ class Future(Qt.QObject):
         self._state = 'starting'
         self._errorMonitorThread = None
         self._executingThread = None
-        self._returnVal = None
+        self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
 
     def executeInThread(self, func, args, kwds):
@@ -88,7 +67,7 @@ class Future(Qt.QObject):
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
 
-    def getResult(self, **kwds):
+    def getResult(self, **kwds) -> T:
         self.wait(**kwds)
         return self._returnVal
 
@@ -285,6 +264,43 @@ class Future(Qt.QObject):
             except Exception as exc2:
                 formattedMsg = f"{message} [additional error formatting error message: {exc2}]"
             raise RuntimeError(formattedMsg) from exc
+
+
+P = ParamSpec('P')
+R = TypeVar('R')
+
+
+def wrap(func: Callable[P, R]) -> Callable[P, Future[R]]:
+    """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
+    named "_future" as a keyword argument. This Future can be variously used to checkStop() the
+    function, wait for other futures, and will be returned by the decorated function call. The function
+    can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
+    Usage:
+        @Future.wrap
+        def myFunc(arg1, arg2, _future=None):
+            ...
+            _future.checkStop()
+            _future.waitFor(someOtherFuture)
+            ...
+        result = myFunc(arg1, arg2).getResult()
+        threadless_result = myFunc(arg1, arg2, block=True).getResult()
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwds: P.kwargs) -> Future[R]:
+        future = Future()
+        if kwds.pop('block', False):
+            kwds['_future'] = future
+            future.executeAndSetReturn(func, args, kwds)
+            future.wait()
+        else:
+            future.executeInThread(func, args, kwds)
+        return future
+
+    return wrapper
+
+
+Future.wrap = wrap
 
 
 class MultiFuture(Future):

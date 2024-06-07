@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import queue
 import threading
-import time
 from collections import deque
 from contextlib import contextmanager, ExitStack
 from typing import Callable, Optional
 
 import numpy as np
+import time
 from MetaArray import MetaArray, axis
 
 import acq4.util.ptime as ptime
@@ -318,7 +320,7 @@ class Camera(DAQGeneric, OptomechDevice):
             if not running:
                 self.stop()
 
-    def acquireFrames(self, n=None, ensureFreshFrames=False) -> "FrameAcquisitionFuture":
+    def acquireFrames(self, n=None, ensureFreshFrames=False) -> FrameAcquisitionFuture:
         """Acquire a specific number of frames and return a FrameAcquisitionFuture.
 
         If *n* is None, then frames will be acquired until future.stop() is called.
@@ -332,7 +334,7 @@ class Camera(DAQGeneric, OptomechDevice):
         return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
 
     @Future.wrap
-    def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list["Frame"]:
+    def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list[Frame]:
         """Ask the camera driver to acquire a specific number of frames and return a Future.
 
         Call future.getResult() to return the acquired Frame object.
@@ -689,7 +691,7 @@ class CameraTask(DAQGenericTask):
 
 
 class CameraTaskResult:
-    def __init__(self, task, frames, daqResult):
+    def __init__(self, task: CameraTask, frames: list[Frame], daqResult: MetaArray | None):
         self.lock = Mutex(recursive=True)
         self._task = task
         self._frames = frames

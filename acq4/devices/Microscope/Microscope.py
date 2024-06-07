@@ -222,7 +222,7 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range, block=False) -> Future:
+    def getZStack(self, imager: "Device", z_range, block=False) -> Future[list[Frame]]:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
