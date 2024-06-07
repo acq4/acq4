@@ -198,10 +198,14 @@ class Pipette(Device, OptomechDevice):
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
+            pos = self.mapGlobalToParent(pos)
             raise HelpfulException(
                 f"The specified position is within ±{tolerance:g}m of the {axes} limit(s) of this manipulator "
                 f"and may not always be accessible, depending on your pipette pull consistency.",
-                reasons=[f"Manipulator limits: {manipulator.getLimits()}"],
+                reasons=[
+                    f"Manipulator limits: {manipulator.getLimits()}",
+                    f"Position: ({pos[0]:f}, {pos[1]:f}, {pos[2]:f})",
+                ],
             )
 
     def scopeDevice(self):
