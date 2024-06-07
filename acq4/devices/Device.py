@@ -149,7 +149,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         return {'input': None, 'output': None}
     
     def __repr__(self):
-        return '<%s "%s">' % (self.__class__.__name__, self.name())
+        return f'<{self.__class__.__name__} "{self.name()}">'
     
 
 class DeviceTask(object):

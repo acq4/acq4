@@ -611,6 +611,10 @@ class DirHandle(FileHandle):
 
         self.lsCache[sortMode] = files
 
+    def __iter__(self):
+        for f in self.ls():
+            yield self[f]
+
     def _getFileCTime(self, fileName):
         if self.isManaged():
             index = self._readIndex()
@@ -794,6 +798,23 @@ class DirHandle(FileHandle):
         """Returns True if any child of this directory matches the given test function."""
         with self.lock:
             return any(test(self[f]) for f in self.ls())
+
+    def representativeFramesForAllImages(self):
+        from acq4.util.imaging import Frame
+        from acq4.util.surface import find_surface
+
+        frames = []
+        for f in self:
+            if f.fileType() == "ImageFile" and 'background' not in f.shortName().lower():
+                frames.append(Frame.loadFromFileHandle(f))
+            elif f.fileType() == "MetaArray" and 'pixelSize' in f.info():
+                frame_s = Frame.loadFromFileHandle(f)
+                if not isinstance(frame_s, Frame):
+                    frame_s = frame_s[find_surface(frame_s) or len(frame_s) // 2]
+                frames.append(frame_s)
+            elif f.shortName().startswith("ImageSequence_"):
+                frames.extend(f.representativeFramesForAllImages())
+        return frames
 
     def _setFileInfo(self, fileName, info=None, **args):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""

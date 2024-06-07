@@ -170,7 +170,7 @@ class CameraWindow(Qt.QMainWindow):
             raise TypeError("string or CameraModuleInterface argument required.")
 
         if name is None:
-            raise ValueError("Interface %s not found." % iface)
+            raise ValueError(f"Interface {iface} not found.")
         iface = self.interfaces.pop(name)
         if hasattr(iface, "sigNewFrame"):
             pg.disconnect(iface.sigNewFrame, self.newFrame)
@@ -505,7 +505,7 @@ class ROIPlotter(Qt.QWidget):
 
         # Get rid of old frames
         minTime = None
-        now = pg.time()
+        now = ptime.time()
         for r in self.ROIs:
             while len(r["times"]) > 0 and r["times"][0] < (now - self.roiTimeSpin.value()):
                 r["times"].pop(0)

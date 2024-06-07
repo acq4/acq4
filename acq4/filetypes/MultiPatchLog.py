@@ -7,7 +7,6 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
-from acq4.util.imaging.frame import Frame
 from acq4.util.target import Target
 
 TEST_PULSE_METAARRAY_INFO = [
@@ -782,16 +781,12 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def loadImagesFromDir(self, directory: "DirHandle"):
         # TODO images associated with the correct slice and cell only
-        for f in directory.ls():
-            if f.endswith('.tif'):
-                f = directory[f]
-                frame = Frame(f.read(), f.info().deepcopy())
-                frame.loadLinkedFiles(directory)
-                img = frame.imageItem()
-                img.setZValue(self._pinned_image_z)
-                self._pinned_image_z += 1
-                self._visual_field.addItem(img)
-                self._frames.append((frame.info().get('time', 0) - self.startTime(), img))
+        for frame in directory.representativeFramesForAllImages():
+            img = frame.imageItem()
+            img.setZValue(self._pinned_image_z)
+            self._pinned_image_z += 1
+            self._visual_field.addItem(img)
+            self._frames.append((frame.info().get('time', 0) - self.startTime(), img))
         self._frames = sorted(self._frames, key=lambda x: x[0])
 
     def close(self):

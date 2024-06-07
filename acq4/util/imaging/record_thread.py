@@ -75,7 +75,7 @@ class RecordThread(Thread):
         """
         return self._recording
 
-    def saveFrame(self, backgroundInfo: Optional[Callable], contrastInfo):
+    def saveFrame(self):
         """Ask the recording thread to save the most recently acquired frame."""
         with self.lock:
             self.newFrames.append(
@@ -83,8 +83,6 @@ class RecordThread(Thread):
                     'frame': self.currentFrame,
                     'dir': self.m.getCurrentDir(),
                     'stack': False,
-                    'backgroundInfo': backgroundInfo,
-                    'contrastInfo': contrastInfo,
                 }
             )
 
@@ -176,11 +174,9 @@ class RecordThread(Thread):
                 # Store single frame to new file
                 try:
                     fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
-                    fh = frame['frame'].saveImage(
-                        dh, fileName, backgroundInfo=frame.get('backgroundInfo'), contrastInfo=frame.get('contrastInfo')
-                    )
+                    fh = frame['frame'].saveImage(dh, fileName)
                     self.sigSavedFrame.emit(fh.name())
-                except:
+                except Exception:
                     self.sigSavedFrame.emit(False)
                     raise
                 continue

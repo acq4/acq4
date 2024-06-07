@@ -231,7 +231,7 @@ class MockCamera(Camera):
         finally:
             self.stopCamera()
 
-        return np.concatenate(frames[:int(n)])
+        return np.concatenate(frames[:n])
 
     def _cameraRunning(self):
         return self.lastFrameTime is not None

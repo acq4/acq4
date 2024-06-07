@@ -535,17 +535,22 @@ class Stage(Device, OptomechDevice):
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")
 
-    def checkLimits(self, pos):
-        """Raise an exception if *pos* (in local coordinates) is outside the configured limits"""
+    def checkGlobalLimits(self, globalPos):
+        """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
+        stagePos = self.mapGlobalToDevicePosition(globalPos)
+        self.checkLimits(stagePos)
+
+    def checkLimits(self, stagePos):
+        """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyz'[axis]
-            x = pos[axis]
+            x = stagePos[axis]
             if x is None:
                 continue
             if limit[0] is not None and x < limit[0]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis < {limit[0]}")
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}")
             if limit[1] is not None and x > limit[1]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis > {limit[1]}")
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}")
 
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
@@ -670,8 +675,10 @@ class MovePathFuture(MoveFuture):
         Future.stop(self, reason=reason)
 
     def _movePath(self):
-        try:
-            for i, step in enumerate(self.path):
+        for i, step in enumerate(self.path):
+            step = step.copy()
+            explanation = step.pop('explanation', 'unnamed')
+            try:
                 fut: Future = self.dev.move(**step)
                 fut._pathStep = i
                 self._currentFuture = fut
@@ -694,15 +701,16 @@ class MovePathFuture(MoveFuture):
                         excInfo=fut._excInfo,
                     )
                     break
-        except Exception as exc:
-            self._taskDone(
-                interrupted=True,
-                error=f"Error in trying to {self.path.get('explanation')}",
-                excInfo=(type(exc), exc, exc.__traceback__),
-            )
-        finally:
-            if not self.isDone():
-                self._taskDone()  # success!
+            except Exception as exc:
+                self._taskDone(
+                    interrupted=True,
+                    error=f"Error moving to path step {i} ({explanation})",
+                    excInfo=(type(exc), exc, exc.__traceback__),
+                )
+                break
+            finally:
+                if not self.isDone():
+                    self._taskDone()  # success!
 
     def undo(self):
         """Reverse the moves generated in this future and return a new future.
