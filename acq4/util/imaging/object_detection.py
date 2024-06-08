@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 from threading import RLock
 from typing import Optional
 
 import click
 import numpy as np
 import scipy.stats
+import tifffile
+from MetaArray import MetaArray
 from PIL import Image
 
-from acq4.util.future import Future
+from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
@@ -77,10 +81,15 @@ def _get_remote_process():
     return _remote_process
 
 
-@Future.wrap
-def detect_neurons(frame: Frame, _future: Future, model: str = "cellpose"):
-    shared_array = _get_shared_array(frame.data())
-    transform = frame.globalTransform()
+@future_wrap
+def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future: Future = None) -> list:
+    if isinstance(frames, Frame):
+        data = frames.data()[np.newaxis, ...]
+        transform = frames.globalTransform()
+    else:
+        data = np.stack([frame.data() for frame in frames])
+        transform = frames[0].globalTransform()
+    shared_array = _get_shared_array(data)
     _future.checkStop()
     with _lock:
         rmt_process = _get_remote_process()
@@ -124,14 +133,15 @@ def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> li
 
 def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -> list:
     from cellpose import models
+
     model = models.Cellpose(gpu=True, model_type="cyto3")
     masks_pred, flows, styles, diams = model.eval([data], diameter=30, niter=2000)
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
 
-    def bbox(num):
+    def bbox(num) -> tuple[tuple[float, float], tuple[float, float]]:
         match = mask == num
-        rows = np.any(match, axis=1)
-        cols = np.any(match, axis=0)
+        rows = np.any(match, axis=2)
+        cols = np.any(match, axis=1)
         rmin, rmax = np.where(rows)[0][[0, -1]]
         cmin, cmax = np.where(cols)[0][[0, -1]]
         start = transform.map((rmin, cmin))
@@ -151,8 +161,16 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -
 @click.option("--model", default="cellpose", show_default=True, type=click.Choice(["cellpose", "yolo"]))
 def cli(image, model):
     null_xform = SRTTransform3D()
-    image = Image.open(image)
-    neurons = do_neuron_detection(np.array(image), null_xform, model)
+    if image[-3:] == ".ma":
+        image = MetaArray(file=image)
+        data = image.asarray()
+    elif image[-5:] == ".tiff":
+        data = tifffile.imread(image)
+    else:
+        image = Image.open(image)
+        data = np.array(image)
+    print(f"image shape: {data.shape}")
+    neurons = do_neuron_detection(data, null_xform, model)
     print(f"Detected {len(neurons)} neuron(s)")
     print(neurons)
 
