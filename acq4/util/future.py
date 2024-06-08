@@ -270,7 +270,7 @@ P = ParamSpec('P')
 R = TypeVar('R')
 
 
-def wrap(func: Callable[P, R]) -> Callable[P, Future[R]]:
+def future_wrap(func: Callable[P, R]) -> Callable[P, Future[R]]:
     """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
     named "_future" as a keyword argument. This Future can be variously used to checkStop() the
     function, wait for other futures, and will be returned by the decorated function call. The function
@@ -300,7 +300,7 @@ def wrap(func: Callable[P, R]) -> Callable[P, Future[R]]:
     return wrapper
 
 
-Future.wrap = wrap
+Future.wrap = future_wrap
 
 
 class MultiFuture(Future):
