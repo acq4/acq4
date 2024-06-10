@@ -11,7 +11,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from acq4.util.future import Future, MultiFuture
+from acq4.util.future import Future, MultiFuture, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.typing import Number
@@ -231,8 +231,8 @@ class Microscope(Device, OptomechDevice):
 
         return acquire_z_stack(imager, *z_range, block=block)
 
-    @Future.wrap
-    def findSurfaceDepth(self, imager: "Device", _future: Future) -> None:
+    @future_wrap
+    def findSurfaceDepth(self, imager: "Device", _future: Future) -> float:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
@@ -240,6 +240,7 @@ class Microscope(Device, OptomechDevice):
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
             _future.waitFor(self.setFocusDepth(depth))
+            return depth
         else:
             raise ValueError("Could not find surface")
 

@@ -11,6 +11,7 @@ import time
 from acq4.util import Qt, ptime
 
 T = TypeVar('T')
+S = TypeVar('S')
 
 
 class Future(Qt.QObject, Generic[T]):
@@ -214,7 +215,7 @@ class Future(Qt.QObject, Generic[T]):
             self.checkStop()
             time.sleep(interval)
 
-    def waitFor(self, future: 'Future', timeout=20.0) -> 'Future':
+    def waitFor(self, future: Future[S], timeout=20.0) -> Future[S]:
         """Wait for another future to complete while also checking for stop requests on self.
         """
         start = time.time()
