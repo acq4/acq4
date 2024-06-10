@@ -140,8 +140,8 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -
 
     def bbox(num) -> tuple[tuple[float, float], tuple[float, float]]:
         match = mask == num
-        rows = np.any(match, axis=2)
-        cols = np.any(match, axis=1)
+        rows = np.any(match, axis=-1)
+        cols = np.any(match, axis=-2)
         rmin, rmax = np.where(rows)[0][[0, -1]]
         cmin, cmax = np.where(cols)[0][[0, -1]]
         start = transform.map((rmin, cmin))
