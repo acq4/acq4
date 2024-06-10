@@ -114,7 +114,6 @@ class AutomationDebugWindow(Qt.QMainWindow):
         neurons_fut.sigFinished.connect(self._handleAutoFinish)
 
     def _handleFlatResults(self, neurons_fut: Future) -> list:
-        neurons_fut.wait()
         try:
             cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
             for widget in self._previousBoxWidgets:
@@ -140,21 +139,19 @@ class AutomationDebugWindow(Qt.QMainWindow):
     def _detectNeuronsFlat(self, _future: Future):
         from acq4.util.imaging.object_detection import detect_neurons
 
-        cam = self.cameraDevice
-        with cam.ensureRunning():
-            frame = _future.waitFor(cam.acquireFrames(1)).getResult()[0]
+        with self.cameraDevice.ensureRunning():
+            frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
         return _future.waitFor(detect_neurons(frame)).getResult()
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
         from acq4.util.imaging.object_detection import detect_neurons
 
-        cam = self.cameraDevice
-        depth = cam.getFocusDepth()
+        depth = self.cameraDevice.getFocusDepth()
         start = depth - 10 * µm
         stop = depth + 10 * µm
-        z_stack = _future.waitFor(acquire_z_stack(cam, start, stop, 1 * µm)).getResult()
-        cam.setFocusDepth(depth)  # no need to wait
+        z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
+        self.cameraDevice.setFocusDepth(depth)  # no need to wait
         return _future.waitFor(detect_neurons(z_stack)).getResult()
 
     @future_wrap
@@ -169,13 +166,15 @@ class AutomationDebugWindow(Qt.QMainWindow):
         return self._handleFlatResults(neurons_fut)
 
     def _handleAutoFinish(self, fut: Future):
-        if boxes := fut.getResult():
-            box = random.choice(boxes)
-            center = box.rect().center()
-            # tODO translate? depth?
-            center = (center.x(), center.y(), self.cameraDevice.getFocusDepth())
-            self.pipetteDevice.setTarget(center)
-        self._setWorkingState(False)
+        try:
+            if boxes := fut.getResult():
+                box = random.choice(boxes)
+                center = box.rect().center()
+                # tODO translate? depth?
+                center = (center.x(), center.y(), self.cameraDevice.getFocusDepth())
+                self.pipetteDevice.setTarget(center)
+        finally:
+            self._setWorkingState(False)
 
     def quit(self):
         self.close()
