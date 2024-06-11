@@ -24,6 +24,10 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self.setWindowTitle('Automation Debug')
         self._previousBoxWidgets = []
 
+        self._clearBtn = Qt.QPushButton('Clear')
+        self._clearBtn.clicked.connect(self.clearBoundingBoxes)
+        self._layout.addWidget(self._clearBtn)
+
         self._zStackDetectBtn = Qt.QPushButton('Neurons in z-stack?')
         self._zStackDetectBtn.clicked.connect(self.startZStackDetect)
         self._layout.addWidget(self._zStackDetectBtn)
@@ -68,6 +72,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     def _setWorkingState(self, working: bool):
         self.module.manager.getModule('Camera').window()  # make sure camera window is open
+        self._clearBtn.setEnabled(not working)
         self._zStackDetectBtn.setEnabled(not working)
         self._flatDetectBtn.setEnabled(not working)
         self._autoTargetBtn.setEnabled(not working)
@@ -113,12 +118,16 @@ class AutomationDebugWindow(Qt.QMainWindow):
         neurons_fut = self._autoTarget()
         neurons_fut.sigFinished.connect(self._handleAutoFinish)
 
+    def clearBoundingBoxes(self):
+        cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
+        for widget in self._previousBoxWidgets:
+            cam_win.removeItem(widget)
+        self._previousBoxWidgets = []
+
     def _handleFlatResults(self, neurons_fut: Future) -> list:
         try:
             cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
-            for widget in self._previousBoxWidgets:
-                cam_win.removeItem(widget)
-            self._previousBoxWidgets = []
+            self.clearBoundingBoxes()
             for start, end in neurons_fut.getResult():
                 box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
                 box.setPen(mkPen('r', width=2))
