@@ -65,8 +65,36 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # record from imager and pipette position while retracting pipette out of frame
         retractPos = centerPipPos - pipVector * 2e-3
         frames2, posEvents2 = watchMovingPipette(pipette, imager, retractPos, speed=searchSpeed, _future=_future)
-        
+
         # analyze frames for center point
+        # direction of 
+        # pick a line perpendicular to the pipette that crosses the center of the frame        
+        center = np.array(frames2[0].shape) // 2
+
+        d = Point(imgPts[1] - imgPts[0])
+        o = Point(imgPts[0])
+        rgn = fn.affineSlice(data, shape=(int(d.length()),), vectors=[Point(d.norm())], origin=o, axes=axes, order=order, returnCoords=returnMappedCoords, **kwds)
+
+        """>>> tr = f1.globalTransform().inverted()
+>>> tr.map(f.l['pipVector']) - tr.map([0, 0, 0])
+    Traceback (most recent call last):
+      File "C:\Users\svc_multipatch\acq4\dependencies\pyqtgraph\pyqtgraph\console\repl_widget.py", line 104, in runCmd
+        exec(cmdCode, self.globals(), self.locals())
+      File "<input>", line 1, in <module>
+    AttributeError: 'tuple' object has no attribute 'map'
+    
+>>> tr[0].map(f.l['pipVector']) - tr[0].map([0, 0, 0])
+array([-2.64085096e+06, -8.83543906e+04, -5.20805441e-01])
+>>> imgVector = tr[0].map(f.l['pipVector']) - tr[0].map([0, 0, 0])
+>>> imgVector / np.linalg.norm(imgVector)
+array([-9.99440791e-01, -3.34380787e-02, -1.97100938e-07])
+>>> pv = f.l['pipVector']
+>>> pv
+array([-0.85319802,  0.02854527, -0.52080543])
+>>> pv[2] = 0
+>>> imgVector = tr[0].map(pv) - tr[0].map([0, 0, 0])
+>>> imgVector / np.linalg.norm(imgVector)"""
+
         # avg should be drifting at the beginning and flat at the end
         avg2 = np.array([(np.abs(frame.data() - bgFrame)).mean() for frame in frames2])
 

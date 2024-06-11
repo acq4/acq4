@@ -182,23 +182,36 @@ class PipetteTracker(object):
         """
         imager = self._getImager(imager)
         centerFrame = self.takeFrame()
+
+        if tipLength is None:
+            tipLength = self.suggestTipLength(centerFrame)
+
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength * 0.15, tipLength=tipLength)
         center = centerFrame.data()[minImgPos[0]: maxImgPos[0], minImgPos[1]: maxImgPos[1]]
         if zRange is None:
-            zRange = 80e-6
+            zRange = tipLength * 1.5
         zStart = self.dev.globalPosition()[2] + zRange / 2
         zEnd = self.dev.globalPosition()[2] - zRange / 2
         if zStep is None:
-            zStep = 1e-6
+            zStep = zRange / 30
+
+        # collect pipette stack
         frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
         pxSize = frames[0].info()["pixelSize"]
-        frames = np.stack([f.data() for f in frames], axis=0)
+        frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
+
+        # collect background stack
         _future.waitFor(self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow"))
         bg_frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
-        bg_frames = np.stack([f.data() for f in bg_frames], axis=0)
-        _future.waitFor(self.dev._moveToLocal([tipLength * 3, 0, 0], "slow"))
-        key = imager.getDeviceStateKey()
+        bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
+
+        # return pipette to original position
+        self.dev._moveToLocal([tipLength * 3, 0, 0], "slow")
+
+        # find frame that most closely matches center frame
         maxInd = np.argmax([imageTemplateMatch(f, center)[1] for f in frames])
+
+        key = imager.getDeviceStateKey()
         self.reference[key] = {
             "frames": frames - bg_frames.mean(axis=0),
             "zStep": zStep,
