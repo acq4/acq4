@@ -1617,7 +1617,8 @@ class CleanState(PatchPipetteState):
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.resetPosition()
+        self.dev.pipetteDevice.moveTo('home', 'fast')
+        self.currentFuture = None
         dev.newPatchAttempt()
         return 'out'
 
@@ -1636,7 +1637,7 @@ class CleanState(PatchPipetteState):
             printExc("Error resetting pressure after clean")
         
         self.resetPosition()
-            
+
         PatchPipetteState.cleanup(self)
 
 
