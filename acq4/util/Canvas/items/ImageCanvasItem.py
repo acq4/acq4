@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
 import numpy as np
+from MetaArray import MetaArray
 
 import acq4.util.DataManager
 import acq4.util.debug as debug
@@ -116,7 +117,7 @@ class ImageCanvasItem(CanvasItem):
         self.timeControls = [self.timeSlider]
 
         if self.data is not None:
-            if isinstance(self.data, pg.metaarray.MetaArray):
+            if isinstance(self.data, MetaArray):
                 self.filter.setInput(self.data.asarray())
             else:
                 self.filter.setInput(self.data)
@@ -171,9 +172,9 @@ class ImageCanvasItem(CanvasItem):
         if showTime:
             self.timeSlider.setMinimum(0)
             self.timeSlider.setMaximum(data.shape[0]-1)
-            self.graphicsItem().setImage(data[self.timeSlider.value()], autoLevels=self.autoBtn.isChecked())
+            self.graphicsItem().setImage(data[self.timeSlider.value()].asarray(), autoLevels=self.autoBtn.isChecked())
         else:
-            self.graphicsItem().setImage(data, autoLevels=self.autoBtn.isChecked())
+            self.graphicsItem().setImage(data.asarray(), autoLevels=self.autoBtn.isChecked())
 
         for widget in self.timeControls:
             widget.setVisible(showTime)
