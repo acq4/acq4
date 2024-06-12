@@ -59,6 +59,7 @@ def logMsg(msg, **kwargs):
           docs: a list of strings where documentation related to the message can be found
           reasons: a list of reasons (as strings) for the message
           traceback: a list of formatted callstack/traceback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+          threads: a dictionary of thread IDs to tracebacks
        Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
         """
     global LOG_UI
@@ -106,7 +107,14 @@ def exceptionCallback(*args):
         # if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
         try:
             blockLogging = True
-            logMsg("Unexpected error: ", exception=args, msgType="error")
+            kwargs = {'exception': args, 'msgType': "error"}
+            if args and 'Timeout' in str(args[0]):
+                kwargs['threads'] = {
+                    id: ''.join(traceback.format_stack(frame))
+                    for id, frame in sys._current_frames().items()
+                    if id != threading.current_thread().ident
+                }
+            logMsg("Unexpected error: ", **kwargs)
         except:
             print("Error: Exception could no be logged.")
             original_excepthook(*sys.exc_info())
