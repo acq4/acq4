@@ -242,7 +242,7 @@ class Manager(Qt.QObject):
         self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
-        self.configure(cfg)
+        self.configure(self.config)
 
         self.configFile = configFile
         print("\n============= Manager configuration complete =================\n")
@@ -286,15 +286,23 @@ class Manager(Qt.QObject):
         self.sigConfigChanged.emit()
 
     def _loadConfig(self, cfg):
+        # Handle custom import prior to loading devices
+        if 'imports' in cfg:
+            try:
+                if isinstance(cfg["imports"], str):
+                    cfg["imports"] = [cfg["imports"]]
+                for mod in cfg["imports"]:
+                    __import__(mod)
+            except:
+                if self.exitOnError:
+                    raise
+                else:
+                    printExc("Error in ACQ4 configuration:")
+
         for key, val in cfg.items():
             try:
-                # Handle custom import / exec
-                if key == 'imports':
-                    if isinstance(val, str):
-                        val = [val]
-                    for mod in val:
-                        __import__(mod)
-                elif key == 'execFiles':
+                # Hand custom exec
+                if key == 'execFiles':
                     if isinstance(val, str):
                         val = [val]
                     for pyfile in val:
@@ -304,11 +312,11 @@ class Manager(Qt.QObject):
                 elif key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
-                            print("    --> Ignoring device '%s' -- disabled by request" % k)
-                            logMsg("    --> Ignoring device '%s' -- disabled by request" % k)
+                            print(f"    --> Ignoring device '{k}' -- disabled by request")
+                            logMsg(f"    --> Ignoring device '{k}' -- disabled by request")
                             continue
-                        print("  === Configuring device '%s' ===" % k)
-                        logMsg("  === Configuring device '%s' ===" % k)
+                        print(f"  === Configuring device '{k}' ===")
+                        logMsg(f"  === Configuring device '{k}' ===")
                         try:
                             conf = cfg['devices'][k]
                             driverName = conf['driver']
@@ -331,8 +339,8 @@ class Manager(Qt.QObject):
 
                 ## set new storage directory
                 elif key == 'storageDir':
-                    print("=== Setting base directory: %s ===" % cfg['storageDir'])
-                    logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
+                    print(f"=== Setting base directory: {cfg['storageDir']} ===")
+                    logMsg(f"=== Setting base directory: {cfg['storageDir']} ===")
                     self.setBaseDir(cfg['storageDir'])
 
                 elif key == 'defaultCompression':
@@ -346,9 +354,9 @@ class Manager(Qt.QObject):
                         assert cstr in [None, 'gzip', 'szip', 'lzf']
                     except Exception:
                         raise Exception(
-                            "'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
+                            f"'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '{comp}'")
 
-                    print("=== Setting default HDF5 compression: %s ===" % comp)
+                    print(f"=== Setting default HDF5 compression: {comp} ===")
                     from MetaArray import MetaArray
                     MetaArray.defaultCompression = comp
 
