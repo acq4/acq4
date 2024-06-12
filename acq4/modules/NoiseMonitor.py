@@ -1,6 +1,8 @@
 from __future__ import print_function
 import time, weakref, collections
 import numpy as np
+from MetaArray import MetaArray
+
 from acq4.util import Qt
 
 from acq4.modules.Module import Module
@@ -232,7 +234,7 @@ class ChannelRecorder(Qt.QSplitter):
             self.envLine.setValue(trialArr[0])
             self.specLine.setValue(trialArr[0])
         
-        ma = pg.metaarray.MetaArray(dataArr[np.newaxis, :], info=[
+        ma = MetaArray(dataArr[np.newaxis, :], info=[
             {'name': 'Trial', 'units': 's', 'values': trialArr}] + data._info)
 
         if self.rawDataFile is None:
@@ -243,7 +245,7 @@ class ChannelRecorder(Qt.QSplitter):
 
         # Envelope analysis
         envData = np.array([[dataArr.min(), dataArr.mean(), dataArr.max(), dataArr.std()]])
-        env = pg.metaarray.MetaArray(envData, info=[
+        env = MetaArray(envData, info=[
             {'name': 'Trial', 'units': 's', 'values': trialArr},
             {'name': 'Metric', 'units': self.units}])
         if self.envelopeFile is None:
@@ -265,7 +267,7 @@ class ChannelRecorder(Qt.QSplitter):
         # log scale for pretty
         fft = np.log10(fft)
 
-        spec = pg.metaarray.MetaArray(fft[np.newaxis, :], info=[
+        spec = MetaArray(fft[np.newaxis, :], info=[
             {'name': 'Trial', 'units': 's', 'values': trialArr},
             {'name': 'Frequency', 'units': 'Hz', 'values': freqArr}])
         if self.spectrogramFile is None:
