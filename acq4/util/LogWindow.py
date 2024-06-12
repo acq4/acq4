@@ -12,6 +12,7 @@ import numpy as np
 import sys
 
 import pyqtgraph.configfile as configfile
+from pyqtgraph.debug import threadName
 from pyqtgraph import FeedbackButton
 from pyqtgraph import FileDialog
 
@@ -673,12 +674,10 @@ class LogWidget(Qt.QWidget):
         threads = entry["threads"]
         traceback.format_stack
         hidden = "\n".join(
-            f"<li><b>Thread {id}</b><br/><span class='traceback'>{self.formatTracebackForHTML(frames)}</span></li>"
+            f"<li>Thread <b>{threadName(id)}</b> ({id}):<br/>"
+            f"<span class='traceback'>{self.formatTracebackForHTML(frames)}</span></li>"
             for id, frames in threads.items()
         )
-        # threads = "\n".join(
-        #     f"<li><b>Thread {id}</b><span class='traceback'>{stack}</span></li>"
-        # )
         entry["threadsHtml"] = f"<ul>{hidden}</ul>"
         entryId = entry["id"]
         return f'<br/><a href="threads:{entryId}">Show thread states {entryId}</a>'

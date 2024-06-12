@@ -108,7 +108,7 @@ def exceptionCallback(*args):
         try:
             blockLogging = True
             kwargs = {'exception': args, 'msgType': "error"}
-            if args and 'Timeout' in str(args[0]):
+            if args:  # and 'Timeout' in str(args[0]):
                 kwargs['threads'] = {
                     id: traceback.format_stack(frames)
                     for id, frames in sys._current_frames().items()
