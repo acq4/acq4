@@ -655,7 +655,7 @@ class LogWidget(Qt.QWidget):
         try:
             tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
         except Exception:
-            print("\n" + str(tb) + "\n")
+            print(f"\n{tb}\n")
             raise
 
         cleanLines = []
