@@ -290,10 +290,17 @@ class Manager(Qt.QObject):
     def _loadConfig(self, cfg):
         # Handle custom import prior to loading devices
         if 'imports' in cfg:
-            if isinstance(cfg["imports"], str):
-                cfg["imports"] = [cfg["imports"]]
-            for mod in cfg["imports"]:
-                __import__(mod)
+            try:
+                if isinstance(cfg["imports"], str):
+                    cfg["imports"] = [cfg["imports"]]
+                for mod in cfg["imports"]:
+                    __import__(mod)
+            except:
+                if self.exitOnError:
+                    raise
+                else:
+                    printExc("Error in ACQ4 configuration:")
+
         for key, val in cfg.items():
             try:
                 # Hand custom exec
