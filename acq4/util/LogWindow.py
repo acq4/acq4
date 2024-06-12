@@ -671,10 +671,15 @@ class LogWidget(Qt.QWidget):
 
     def formatThreadsForHTML(self, entry):
         threads = entry["threads"]
-        threads = "\n".join(
-            f"<li><b>Thread {id}</b><span class='traceback'>{stack}</span></li>" for id, stack in threads.items()
+        traceback.format_stack
+        hidden = "\n".join(
+            f"<li><b>Thread {id}</b><br/><span class='traceback'>{self.formatTracebackForHTML(frames)}</span></li>"
+            for id, frames in threads.items()
         )
-        entry["threadsHtml"] = f"<ul>{threads}</ul>"
+        # threads = "\n".join(
+        #     f"<li><b>Thread {id}</b><span class='traceback'>{stack}</span></li>"
+        # )
+        entry["threadsHtml"] = f"<ul>{hidden}</ul>"
         entryId = entry["id"]
         return f'<br/><a href="threads:{entryId}">Show thread states {entryId}</a>'
 

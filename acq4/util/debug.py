@@ -110,8 +110,8 @@ def exceptionCallback(*args):
             kwargs = {'exception': args, 'msgType': "error"}
             if args and 'Timeout' in str(args[0]):
                 kwargs['threads'] = {
-                    id: ''.join(traceback.format_stack(frame))
-                    for id, frame in sys._current_frames().items()
+                    id: traceback.format_stack(frames)
+                    for id, frames in sys._current_frames().items()
                     if id != threading.current_thread().ident
                 }
             logMsg("Unexpected error: ", **kwargs)
