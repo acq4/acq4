@@ -314,11 +314,11 @@ class Manager(Qt.QObject):
                 elif key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
-                            print("    --> Ignoring device '%s' -- disabled by request" % k)
-                            logMsg("    --> Ignoring device '%s' -- disabled by request" % k)
+                            print(f"    --> Ignoring device '{k}' -- disabled by request")
+                            logMsg(f"    --> Ignoring device '{k}' -- disabled by request")
                             continue
-                        print("  === Configuring device '%s' ===" % k)
-                        logMsg("  === Configuring device '%s' ===" % k)
+                        print(f"  === Configuring device '{k}' ===")
+                        logMsg(f"  === Configuring device '{k}' ===")
                         try:
                             conf = cfg['devices'][k]
                             driverName = conf['driver']
@@ -341,8 +341,8 @@ class Manager(Qt.QObject):
 
                 ## set new storage directory
                 elif key == 'storageDir':
-                    print("=== Setting base directory: %s ===" % cfg['storageDir'])
-                    logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
+                    print(f"=== Setting base directory: {cfg['storageDir']} ===")
+                    logMsg(f"=== Setting base directory: {cfg['storageDir']} ===")
                     self.setBaseDir(cfg['storageDir'])
 
                 elif key == 'defaultCompression':
@@ -356,9 +356,9 @@ class Manager(Qt.QObject):
                         assert cstr in [None, 'gzip', 'szip', 'lzf']
                     except Exception:
                         raise Exception(
-                            "'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
+                            f"'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '{comp}'")
 
-                    print("=== Setting default HDF5 compression: %s ===" % comp)
+                    print(f"=== Setting default HDF5 compression: {comp} ===")
                     from MetaArray import MetaArray
                     MetaArray.defaultCompression = comp
 
