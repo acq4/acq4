@@ -4,10 +4,11 @@ debug.py - Functions to aid in debugging
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more information.
 """
-from __future__ import print_function
 
-from pyqtgraph.debug import *
+import sys
+
 import pyqtgraph.debug as pgdebug
+from pyqtgraph.debug import *
 from pyqtgraph.exceptionHandling import original_excepthook
 
 LOG_UI = None
@@ -69,11 +70,10 @@ def logMsg(msg, **kwargs):
         except:
             print("Error logging message:")
             print("    " + "\n    ".join(msg.split("\n")))
-            print("    " + str(kwargs))
+            print(f"    {kwargs}")
             sys.excepthook(*sys.exc_info())
     else:
         print("Can't log message; no log created yet.")
-        # print args
         print(kwargs)
 
 
@@ -116,7 +116,7 @@ def exceptionCallback(*args):
                 }
             logMsg("Unexpected error: ", **kwargs)
         except:
-            print("Error: Exception could no be logged.")
+            print("Error: Exception could not be logged.")
             original_excepthook(*sys.exc_info())
         finally:
             blockLogging = False

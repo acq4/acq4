@@ -247,7 +247,6 @@ class LogWindow(Qt.QMainWindow):
     def makeError1(self):
         try:
             self.makeError2()
-            # print x
         except:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(
@@ -265,14 +264,14 @@ class LogWindow(Qt.QMainWindow):
     def makeError2(self):
         try:
             raise NameError("name 'y' is not defined")
-        except:
+        except NameErorr as e:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(
                 message="msg from makeError",
                 exc=(t, exc, tb),
                 reasons=["reason one", "reason 2"],
                 docs=["what, you expect documentation?"],
-            )
+            ) from e
 
     def show(self):
         Qt.QMainWindow.show(self)
@@ -640,10 +639,10 @@ class LogWidget(Qt.QWidget):
 
         if count != 1:
             return text, stackText, messages
-        exc = '<div class="exception"><ol>' + "\n".join(["<li>%s</li>" % ex for ex in text]) + "</ol></div>"
+        exc = '<div class="exception"><ol>' + "\n".join([f"<li>{ex}</li>" for ex in text]) + "</ol></div>"
         tbStr = "\n".join(
             [
-                "<li><b>%s</b><br/><span class='traceback'>%s</span></li>" % (messages[i], tb)
+                f"<li><b>{messages[i]}</b><br/><span class='traceback'>{tb}</span></li>"
                 for i, tb in enumerate(stackText)
             ]
         )
