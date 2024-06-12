@@ -115,8 +115,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     def startAutoTarget(self):
         self._setWorkingState(True)
-        neurons_fut = self._autoTarget()
-        neurons_fut.sigFinished.connect(self._handleAutoFinish)
+        target_fut = self._autoTarget()
+        target_fut.sigFinished.connect(self._handleAutoFinish)
 
     def clearBoundingBoxes(self):
         cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
@@ -126,23 +126,26 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     def _handleFlatResults(self, neurons_fut: Future) -> list:
         try:
-            cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
-            self.clearBoundingBoxes()
-            for start, end in neurons_fut.getResult():
-                box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
-                box.setPen(mkPen('r', width=2))
-                box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
-                cam_win.addItem(box)
-                self._previousBoxWidgets.append(box)
-                # TODO label boxes
-                # label = TextItem('Neuron')
-                # label.setPen(mkPen('r', width=1))
-                # label.setPos(*end)
-                # cam_win.addItem(label)
-                # self._previousBoxWidgets.append(label)
+            self._displayBoundingBoxes(neurons_fut.getResult())
         finally:
             self._setWorkingState(False)
         return self._previousBoxWidgets
+
+    def _displayBoundingBoxes(self, bounding_boxes):
+        cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
+        self.clearBoundingBoxes()
+        for start, end in bounding_boxes:
+            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
+            box.setPen(mkPen('r', width=2))
+            box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
+            cam_win.addItem(box)
+            self._previousBoxWidgets.append(box)
+            # TODO label boxes
+            # label = TextItem('Neuron')
+            # label.setPen(mkPen('r', width=1))
+            # label.setPos(*end)
+            # cam_win.addItem(label)
+            # self._previousBoxWidgets.append(label)
 
     @future_wrap
     def _detectNeuronsFlat(self, _future: Future):
@@ -172,12 +175,12 @@ class AutomationDebugWindow(Qt.QMainWindow):
         depth -= 50 * µm
         self.cameraDevice.setFocusDepth(depth)
         neurons_fut = _future.waitFor(self._detectNeuronsFlat())
-        return self._handleFlatResults(neurons_fut)
+        self._displayBoundingBoxes(neurons_fut.getResult())
 
     def _handleAutoFinish(self, fut: Future):
         try:
-            if boxes := fut.getResult():
-                box = random.choice(boxes)
+            if self._previousBoxWidgets:
+                box = random.choice(self._previousBoxWidgets)
                 center = box.rect().center()
                 # tODO translate? depth?
                 center = (center.x(), center.y(), self.cameraDevice.getFocusDepth())
