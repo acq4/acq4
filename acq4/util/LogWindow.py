@@ -672,7 +672,6 @@ class LogWidget(Qt.QWidget):
 
     def formatThreadsForHTML(self, entry):
         threads = entry["threads"]
-        traceback.format_stack
         hidden = "\n".join(
             f"<li>Thread <b>{threadName(id)}</b> ({id}):<br/>"
             f"<span class='traceback'>{self.formatTracebackForHTML(frames)}</span></li>"
