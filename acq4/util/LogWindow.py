@@ -717,6 +717,12 @@ class LogWidget(Qt.QWidget):
                     e["tracebackHtml"],
                     doc,
                 )
+            if "threadsHtml" in e:
+                doc = re.sub(
+                    f'<a href="threads:{e["id"]}">(<[^>]+>)*Show thread states {e["id"]}(<[^>]+>)*</a>',
+                    e["threadsHtml"],
+                    doc,
+                )
 
         with open(fileName, "wb") as f:
             f.write(doc.encode("utf-8"))
