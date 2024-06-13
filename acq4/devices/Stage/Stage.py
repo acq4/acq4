@@ -695,12 +695,11 @@ class MovePathFuture(MoveFuture):
                     break
 
                 if fut.wasInterrupted():
-                    if not self.isDone():
-                        self._taskDone(
-                            interrupted=True,
-                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
-                            excInfo=fut._excInfo,
-                        )
+                    self._taskDone(
+                        interrupted=True,
+                        error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
+                        excInfo=fut._excInfo,
+                    )
                     break
             except Exception as exc:
                 self._taskDone(
