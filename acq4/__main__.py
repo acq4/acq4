@@ -5,7 +5,8 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 print("Loading ACQ4...")
-import os, sys
+import os
+import sys
 
 if __package__ is None:
     import acq4
@@ -13,7 +14,6 @@ if __package__ is None:
     __package__ = 'acq4'
 
 from .util import pg_setup  
-from .util import Qt
 from .Manager import Manager
 from .util.debug import installExceptionHandler
 
@@ -44,6 +44,7 @@ import pyqtgraph as pg
 
 app = pg.mkQApp()
 
+
 ## Install a simple message handler for Qt errors:
 def messageHandler(*args):
     if len(args) == 2:  # Qt4
@@ -60,10 +61,9 @@ def messageHandler(*args):
     try:
         logf = "crash.log"
 
-        fh = open(logf, 'a')
-        fh.write(msg + '\n')
-        fh.write('\n'.join(traceback.format_stack()))
-        fh.close()
+        with open(logf, 'a') as fh:
+            fh.write(msg + '\n')
+            fh.write('\n'.join(traceback.format_stack()))
     except:
         print("Failed to write crash log:")
         traceback.print_exc()
@@ -82,8 +82,6 @@ try:
     pg.QtCore.qInstallMsgHandler(messageHandler)
 except AttributeError:
     pg.QtCore.qInstallMessageHandler(messageHandler)
-
-
 
 
 ## Prevent Windows 7 from grouping ACQ4 windows under a single generic python icon in the taskbar
