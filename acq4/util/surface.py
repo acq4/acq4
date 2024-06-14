@@ -26,14 +26,13 @@ def downsample(arr, n):
 
 
 def calculate_focus_score(image):
-    # image += np.random.normal(size=image.shape, scale=100)
     image = scipy.ndimage.laplace(image) / np.mean(image)
     return image.var()
 
 
 def find_surface(z_stack: list[Frame], percentile: int = 96) -> Union[int, None]:
     scored = score_frames(z_stack)
-    surface = np.argmax(scored > np.percentile(scored, percentile))
+    surface = np.argwhere(scored > np.percentile(scored, percentile)).max()
     if surface == 0:
         return
 
