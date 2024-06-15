@@ -147,12 +147,10 @@ class CameraInterface(CameraModuleInterface):
             scope = self.cam.getScopeDevice()
 
             try:
-                bins = self.cam.listParams('binning')[0][0]
+                bins = self.cam.listParams(['binning'])['binning'][0][0]
             except Exception:
-                bins = self.cam.listParams('binningX')[0]
-            bins.sort()
-            bins.reverse()
-            for b in bins:
+                bins = self.cam.listParams(['binningX'])['binningX'][0]
+            for b in reversed(sorted(bins)):
                 self.ui.binningCombo.addItem(str(b))
 
         except Exception:
@@ -216,6 +214,7 @@ class CameraInterface(CameraModuleInterface):
             return
 
         with contextlib.suppress(TypeError):
+            self.cam.removeFrameProcessor(self.newFrame)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
             self.cam.sigShowMessage.disconnect(self.showMessage)

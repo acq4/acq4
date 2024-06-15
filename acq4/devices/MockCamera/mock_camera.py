@@ -18,7 +18,6 @@ HEIGHT = 512
 
 class MockCamera(Camera):
     def __init__(self, manager, config, name):
-        self.camLock = Mutex(Mutex.Recursive)  # Lock to protect access to camera
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=10)  # pre-generate noise for use in images
@@ -347,12 +346,6 @@ class MockCamera(Camera):
             else:
                 vals[k] = self.params[k]
         return vals
-
-    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
-
-    def getParam(self, param):
-        return self.getParams([param])[param]
 
     def createTask(self, cmd, parentTask):
         with self.lock:

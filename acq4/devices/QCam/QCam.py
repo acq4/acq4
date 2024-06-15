@@ -11,10 +11,6 @@ from acq4.util.Mutex import Mutex
 
 
 class QCam(Camera):
-    def __init__(self, *args, **kargs):
-        self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
-        Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
-        
     def setupCamera(self):
         self.qcd = QCamDriverClass()
         cams = self.qcd.listCameras()
