@@ -229,12 +229,12 @@ class VimbaXCamera(Camera):
                         autoRestart=autoRestart,
                         autoCorrect=autoCorrect,
                     )
-                    newvals = {'region': (newvals['regionX'], newvals['regionY'], newvals['regionW'], newvals['regionH'])}
+                    newvals['region'] = (newvals['regionX'], newvals['regionY'], newvals['regionW'], newvals['regionH'])
                 elif p == 'binning':
                     newvals, _r = self.setParams(
                         [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
                     )
-                    newvals = {'binning': (newvals['binningX'], newvals['binningY'])}
+                    newvals['binning'] = (newvals['binningX'], newvals['binningY'])
                 elif p == 'triggerMode':
                     if v == 'Normal':
                         self._dev.TriggerMode.set(False)
@@ -242,13 +242,18 @@ class VimbaXCamera(Camera):
                         self._dev.TriggerMode.set(True)
                     newvals = {p: v}
                     _r = True
+                elif p == 'exposure':
+                    self._dev.ExposureTimeAbs.set(v * 1000)
+                    newvals = {p: v}
+                    _r = True
                 else:
                     getattr(self._dev, _mapParamNameToFeatureName(p)).set(v)
                     # TODO autocorrect
                     newvals = {p: v}
-                    _r = False  # TODO ?
+                    _r = True  # TODO how do I know this?
                 retval.update(newvals)
                 restart = restart or _r
+                self._paramValues.update(retval)
         # TODO autoRestart
         return retval, restart
 
@@ -268,7 +273,7 @@ class VimbaXCamera(Camera):
 
     def startCamera(self):
         with self._lock:
-            self._frameGenerator = self._dev.get_frame_generator(timeout_ms=100)
+            self._frameGenerator = self._dev.get_frame_generator(timeout_ms=int(self.getParam('exposure') * 2 * 1000))
 
     def stopCamera(self):
         with self._lock:
