@@ -241,7 +241,11 @@ class VimbaXCamera(Camera):
         pass
 
     def _acquireFrames(self, n) -> np.ndarray:
-        pass
+        with VmbSystem.get_instance():
+            with self._dev:
+                return np.concatenate(
+                    [f.as_numpy_ndarray()[np.newaxis, ...] for f in self._dev.get_frame_generator(n)]
+                )
 
 
 def _mapParamNameToFeatureName(name):
@@ -322,13 +326,21 @@ def show_features(obj, prefix=''):
 
 
 def main():
-    with VmbSystem.get_instance() as _v:
-        _cam = _v.get_all_cameras()[0]
-        print(f'Camera ID: {_cam.get_id()}')
-        with _cam:
-            show_features(_cam)
-            for stream in _cam.get_streams():
-                show_features(stream, '\t')
+    class MockManager:
+        def declareInterface(self, *args, **kwargs):
+            pass
+    cam = VimbaXCamera(MockManager(), {'id': 'DEV_000F315B9827'}, 'test')
+    print(cam.getParam('bitDepth'))
+    fut = cam.driverSupportedFixedFrameAcquisition(5)
+    f = fut.getResult()
+    print(len(f))
+    # with VmbSystem.get_instance() as _v:
+    #     _cam = _v.get_all_cameras()[0]
+    #     print(f'Camera ID: {_cam.get_id()}')
+    #     with _cam:
+    #         show_features(_cam)
+    #         for stream in _cam.get_streams():
+    #             show_features(stream, '\t')
 
 
 if __name__ == '__main__':
