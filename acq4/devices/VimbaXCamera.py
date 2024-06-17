@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from threading import RLock
 
 import numpy as np
 
@@ -9,21 +10,19 @@ from vmbpy import VmbSystem, Camera as VmbCamera, VmbCameraError, VmbFeatureErro
 
 
 class VimbaXCamera(Camera):
-    """Camera class for VimbaX cameras. See https://github.com/alliedvision/VmbPy for driver install instructions."""
+    """Camera class for VimbaX cameras. See https://github.com/alliedvision/VmbPy for driver install instructions.
+    This isn't necessarily production-ready code, and has only been written for use on a test rig."""
 
     def __init__(self, dm, config, name):
         self._dev: VmbCamera | None = None
+        self._lock = RLock()
         self._config = config
         self._paramProperties = None
-        self._allParamNames = ['triggerMode', 'exposure', 'binning', 'region', 'gain', 'sensorSize', 'bitDepth']
+        self._paramValues = {}
+        self._frameGenerator = None
         super().__init__(dm, config, name)
-        # TODO Camera DEV_000F315B9827: GVSPPacketSize not optimized for streaming GigE Vision. Enable jumbo packets for improved performance.
-        # TODO stream.GVSPAdjustPacketSize.run() somehow?
-        #                 with contextlib.suppress(AttributeError, VmbFeatureError):
-        #                     stream = self._dev.get_streams()[0]
-        #                     stream.GVSPAdjustPacketSize.run()
-        #                     while not stream.GVSPAdjustPacketSize.is_done():
-        #                         pass
+
+        # TODO is segfault-on-exit a problem?
 
     def setupCamera(self):
         with VmbSystem.get_instance() as vmb:
@@ -33,7 +32,28 @@ class VimbaXCamera(Camera):
             except VmbCameraError as e:
                 available = "', '".join(c.get_id() for c in vmb.get_all_cameras())
                 raise ValueError(f"Failed to open camera with id '{_id}'. Available: '{available}'") from e
-            # TODO fill in more _allParamNames
+
+        # MC: Danger! We're hereafter tricking all device access to make it think we're in a context manager
+        VmbSystem.get_instance().__enter__()
+        self._dev.__enter__()
+
+        with contextlib.suppress(AttributeError, VmbFeatureError):
+            stream = self._dev.get_streams()[0]
+            stream.GVSPAdjustPacketSize.run()
+            while not stream.GVSPAdjustPacketSize.is_done():
+                pass
+
+        for f in self._dev.get_all_features():
+            if hasattr(f, "get"):
+                name = f.get_name()
+                self._paramValues[name] = f.get()
+
+        # TODO do I need to do something for ['triggerMode', 'exposure', 'binning', 'region', 'sensorSize', 'bitDepth']?
+
+    def quit(self):
+        super().quit()
+        self._dev.__exit__(None, None, None)
+        VmbSystem.get_instance().__exit__(None, None, None)
 
     def listParams(self, params=None):
         if self._paramProperties is None:
@@ -176,76 +196,91 @@ class VimbaXCamera(Camera):
         # Width
         # WidthMax
 
-        def name(f):
-            n = f.get_name()
-            return n[0].lower() + n[1:]
-
-        with VmbSystem.get_instance():
-            with self._dev:
-                if params is None:
-                    return self.getParams(self._allParamNames)
-                retval = {}
-                for p in params:
-                    if p == 'sensorSize':
-                        retval[p] = (self.getParam('sensorWidth'), self.getParam('sensorHeight'))
-                    elif p == 'binning':
-                        retval[p] = (self.getParam('binningX'), self.getParam('binningY'))
-                    elif p == 'region':
-                        retval[p] = (self.getParam('regionX'), self.getParam('regionY'),
-                                     self.getParam('regionW'), self.getParam('regionH'))
-                    else:
-                        retval[p] = getattr(self._dev, _mapParamNameToFeatureName(p)).get()
-                return retval
+        # TODO mutex this cache access and update
+        retval = {}
+        for p in params:
+            if p == 'sensorSize':
+                retval[p] = (self.getParam('sensorWidth'), self.getParam('sensorHeight'))
+            elif p == 'binning':
+                retval[p] = (self.getParam('binningX'), self.getParam('binningY'))
+            elif p == 'region':
+                retval[p] = (self.getParam('regionX'), self.getParam('regionY'),
+                             self.getParam('regionW'), self.getParam('regionH'))
+            else:
+                retval[p] = self._paramValues[_mapParamNameToFeatureName(p)]
+        return retval
 
     def setParams(self, params: dict | list[tuple], autoRestart=True, autoCorrect=True):
         retval = {}
         restart = False
-        with VmbSystem.get_instance():
-            with self._dev:
-                if isinstance(params, dict):
-                    params = params.items()
-                for p, v in params:
-                    if p == 'region':
-                        x, y = self.getParam('binning')
-                        newvals, _r = self.setParams(
-                            [
-                                ('regionX', v[0] // x),
-                                ('regionY', v[1] // y),
-                                ('regionW', v[2] // x),  # TODO this is still out-of-bounds. what math are they doing?
-                                ('regionH', v[3] // y),
-                            ],
-                            autoRestart=autoRestart,
-                            autoCorrect=autoCorrect,
-                        )
-                    elif p == 'binning':
-                        newvals, _r = self.setParams(
-                            [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
-                        )
+        with self._lock:
+            if isinstance(params, dict):
+                params = params.items()
+            for p, v in params:
+                if p == 'region':
+                    x, y = self.getParam('binning')
+                    newvals, _r = self.setParams(
+                        [
+                            ('regionX', v[0] // x),
+                            ('regionY', v[1] // y),
+                            ('regionW', v[2] // x),  # TODO this is still out-of-bounds. what math are they doing?
+                            ('regionH', v[3] // y),
+                        ],
+                        autoRestart=autoRestart,
+                        autoCorrect=autoCorrect,
+                    )
+                    newvals = {'region': (newvals['regionX'], newvals['regionY'], newvals['regionW'], newvals['regionH'])}
+                elif p == 'binning':
+                    newvals, _r = self.setParams(
+                        [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
+                    )
+                    newvals = {'binning': (newvals['binningX'], newvals['binningY'])}
+                elif p == 'triggerMode':
+                    if v == 'Normal':
+                        self._dev.TriggerMode.set(False)
                     else:
-                        getattr(self._dev, _mapParamNameToFeatureName(p)).set(v)
-                        # TODO autocorrect
-                        newvals = {p: v}
-                        _r = False  # TODO ?
-                    retval.update(newvals)
-                    restart = restart or _r
+                        self._dev.TriggerMode.set(True)
+                    newvals = {p: v}
+                    _r = True
+                else:
+                    getattr(self._dev, _mapParamNameToFeatureName(p)).set(v)
+                    # TODO autocorrect
+                    newvals = {p: v}
+                    _r = False  # TODO ?
+                retval.update(newvals)
+                restart = restart or _r
         # TODO autoRestart
         return retval, restart
 
     def newFrames(self):
-        pass
+        with self._lock:
+            if self._frameGenerator is None:
+                return []
+            # todo get as many as are available right now
+            f = next(self._frameGenerator)
+            arr = f.as_numpy_ndarray().copy()
+            return [{
+                'id': f.get_id(),
+                # MC: color data will blow this up
+                'data': arr.reshape(arr.shape[:-1]),
+                'time': f.get_timestamp(),
+            }]
 
     def startCamera(self):
-        pass
+        with self._lock:
+            self._frameGenerator = self._dev.get_frame_generator(timeout_ms=100)
 
     def stopCamera(self):
-        pass
+        with self._lock:
+            self._dev.stop_streaming()
+            self._frameGenerator = None
 
     def _acquireFrames(self, n) -> np.ndarray:
-        with VmbSystem.get_instance():
-            with self._dev:
-                return np.concatenate(
-                    [f.as_numpy_ndarray()[np.newaxis, ...] for f in self._dev.get_frame_generator(n)]
-                )
+        with self._lock:
+            # MC: color data will be lost here!
+            return np.concatenate(
+                [f.as_numpy_ndarray()[np.newaxis, :, :, 0] for f in self._dev.get_frame_generator(n)]
+            )
 
 
 def _mapParamNameToFeatureName(name):
@@ -326,14 +361,21 @@ def show_features(obj, prefix=''):
 
 
 def main():
+    from time import sleep
+
     class MockManager:
         def declareInterface(self, *args, **kwargs):
             pass
     cam = VimbaXCamera(MockManager(), {'id': 'DEV_000F315B9827'}, 'test')
     print(cam.getParam('bitDepth'))
     fut = cam.driverSupportedFixedFrameAcquisition(5)
-    f = fut.getResult()
-    print(len(f))
+    res = fut.getResult()
+    print(len(res), res[0].data().shape)
+    # import ipdb; ipdb.set_trace()
+    # with cam.ensureRunning():
+    #     fut = cam.acquireFrames(5)
+    #     frames = fut.getResult()
+    #     print(len(frames), frames[0].data().shape)
     # with VmbSystem.get_instance() as _v:
     #     _cam = _v.get_all_cameras()[0]
     #     print(f'Camera ID: {_cam.get_id()}')
