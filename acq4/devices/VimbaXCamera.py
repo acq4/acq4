@@ -54,6 +54,7 @@ class VimbaXCamera(Camera):
         super().quit()
         self._dev.__exit__(None, None, None)
         VmbSystem.get_instance().__exit__(None, None, None)
+        self._dev = None
 
     def listParams(self, params=None):
         if self._paramProperties is None:
@@ -277,8 +278,9 @@ class VimbaXCamera(Camera):
 
     def stopCamera(self):
         with self._lock:
-            self._dev.stop_streaming()
-            self._frameGenerator = None
+            if self._dev is not None:
+                self._dev.stop_streaming()
+                self._frameGenerator = None
 
     def _acquireFrames(self, n) -> np.ndarray:
         with self._lock:
@@ -373,6 +375,10 @@ def main():
             pass
     cam = VimbaXCamera(MockManager(), {'id': 'DEV_000F315B9827'}, 'test')
     print(cam.getParam('bitDepth'))
+    cam.setParam('region', (0, 0, 40, 40))
+    cam.setParam('exposure', 0.01)
+    cam.setParam('triggerMode', 'Normal')
+    cam.setParam('binning', (2, 2))
     fut = cam.driverSupportedFixedFrameAcquisition(5)
     res = fut.getResult()
     print(len(res), res[0].data().shape)
@@ -388,6 +394,7 @@ def main():
     #         show_features(_cam)
     #         for stream in _cam.get_streams():
     #             show_features(stream, '\t')
+    cam.quit()
 
 
 if __name__ == '__main__':
