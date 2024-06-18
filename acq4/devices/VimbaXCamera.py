@@ -6,7 +6,7 @@ from threading import RLock
 import numpy as np
 
 from acq4.devices.Camera import Camera
-from vmbpy import VmbSystem, Camera as VmbCamera, VmbCameraError, VmbFeatureError
+from vmbpy import VmbSystem, Camera as VmbCamera, VmbCameraError, VmbFeatureError, BoolFeature
 
 
 class VimbaXCamera(Camera):
@@ -17,12 +17,10 @@ class VimbaXCamera(Camera):
         self._dev: VmbCamera | None = None
         self._lock = RLock()
         self._config = config
-        self._paramProperties = None
+        self._paramProperties = {}
         self._paramValues = {}
         self._frameGenerator = None
         super().__init__(dm, config, name)
-
-        # TODO is segfault-on-exit a problem?
 
     def setupCamera(self):
         with VmbSystem.get_instance() as vmb:
@@ -47,8 +45,15 @@ class VimbaXCamera(Camera):
             if hasattr(f, "get"):
                 name = f.get_name()
                 self._paramValues[name] = f.get()
-
-        # TODO do I need to do something for ['triggerMode', 'exposure', 'binning', 'region', 'sensorSize', 'bitDepth']?
+                rng = None
+                if hasattr(f, "get_range"):
+                    rng = f.get_range()
+                elif isinstance(f, BoolFeature):
+                    rng = [False, True]
+                elif hasattr(f, "get_all_entries"):
+                    rng = [str(e) for e in f.get_all_entries()]
+                self._paramProperties[_featureNameToParamName(name)] = (rng, f.is_writeable())
+        self._paramProperties['triggerMode'] = (['Normal', 'Abnormal?'], True)
 
     def quit(self):
         super().quit()
@@ -57,147 +62,11 @@ class VimbaXCamera(Camera):
         self._dev = None
 
     def listParams(self, params=None):
-        if self._paramProperties is None:
-            self._paramProperties = {
-                'binningX': ((1, 2, 4), True),
-                'binningY': ((1, 2, 4), True),
-                'regionX': ((0, self.getParam('sensorWidth') - 1), True),
-                'regionY': ((0, self.getParam('sensorHeight') - 1), True),
-                'regionW': ((1, self.getParam('sensorWidth')), True),
-                'regionH': ((1, self.getParam('sensorHeight')), True),
-            }
-            # TODO discover all the others
         if params is None:
             return self._paramProperties
         return {p: self._paramProperties[p] for p in params}
 
     def getParams(self, params=None):
-        # AcquisitionAbort
-        # AcquisitionFrameCount
-        # AcquisitionFrameRateAbs
-        # AcquisitionFrameRateLimit
-        # AcquisitionMode
-        # AcquisitionStart
-        # AcquisitionStop
-        # BandwidthControlMode
-        # BinningHorizontal
-        # BinningVertical
-        # BlackLevel
-        # BlackLevelSelector
-        # ChunkModeActive
-        # DSPSubregionBottom
-        # DSPSubregionLeft
-        # DSPSubregionRight
-        # DSPSubregionTop
-        # DeviceFirmwareVersion
-        # DeviceID
-        # DeviceModelName
-        # DevicePartNumber
-        # DeviceScanType
-        # DeviceTemperature
-        # DeviceTemperatureSelector
-        # DeviceVendorName
-        # EventAcquisitionEnd
-        # EventAcquisitionRecordTrigger
-        # EventAcquisitionStart
-        # EventError
-        # EventExposureEnd
-        # EventFrameTrigger
-        # EventFrameTriggerReady
-        # EventLine1FallingEdge
-        # EventLine1RisingEdge
-        # EventLine2FallingEdge
-        # EventLine2RisingEdge
-        # EventLine3FallingEdge
-        # EventLine3RisingEdge
-        # EventLine4FallingEdge
-        # EventLine4RisingEdge
-        # EventNotification
-        # EventOverflow
-        # EventSelector
-        # EventsEnable1
-        # ExposureAuto
-        # ExposureAutoAdjustTol
-        # ExposureAutoAlg
-        # ExposureAutoMax
-        # ExposureAutoMin
-        # ExposureAutoOutliers
-        # ExposureAutoRate
-        # ExposureAutoTarget
-        # ExposureMode
-        # ExposureTimeAbs
-        # FirmwareVerBuild
-        # FirmwareVerMajor
-        # FirmwareVerMinor
-        # Gain
-        # GainAuto
-        # GainAutoAdjustTol
-        # GainAutoMax
-        # GainAutoMin
-        # GainAutoOutliers
-        # GainAutoRate
-        # GainAutoTarget
-        # GainSelector
-        # Gamma
-        # GevSCPSPacketSize
-        # GevTimestampControlLatch
-        # GevTimestampControlReset
-        # GevTimestampTickFrequency
-        # GevTimestampValue
-        # Height
-        # HeightMax
-        # ImageSize
-        # LUTAddress
-        # LUTBitDepthIn
-        # LUTBitDepthOut
-        # LUTEnable
-        # LUTIndex
-        # LUTLoadAll
-        # LUTMode
-        # LUTSaveAll
-        # LUTSelector
-        # LUTSizeBytes
-        # LUTValue
-        # NonImagePayloadSize
-        # OffsetX
-        # OffsetY
-        # PayloadSize
-        # PixelFormat
-        # RecorderPreEventCount
-        # SensorBits
-        # SensorHeight
-        # SensorType
-        # SensorWidth
-        # StreamBytesPerSecond
-        # StreamFrameRateConstrain
-        # StreamHoldCapacity
-        # StreamHoldEnable
-        # StrobeDelay
-        # StrobeDuration
-        # StrobeDurationMode
-        # StrobeSource
-        # SyncInGlitchFilter
-        # SyncInLevels
-        # SyncInSelector
-        # SyncOutLevels
-        # SyncOutPolarity
-        # SyncOutSelector
-        # SyncOutSource
-        # TriggerActivation
-        # TriggerDelayAbs
-        # TriggerMode
-        # TriggerOverlap
-        # TriggerSelector
-        # TriggerSoftware
-        # TriggerSource
-        # UserSetDefaultSelector
-        # UserSetLoad
-        # UserSetSave
-        # UserSetSelector
-        # Width
-        # WidthMax
-
-        # TODO mutex this cache access and update
         retval = {}
         for p in params:
             if p == 'sensorSize':
@@ -208,7 +77,7 @@ class VimbaXCamera(Camera):
                 retval[p] = (self.getParam('regionX'), self.getParam('regionY'),
                              self.getParam('regionW'), self.getParam('regionH'))
             else:
-                retval[p] = self._paramValues[_mapParamNameToFeatureName(p)]
+                retval[p] = self._paramValues[_paramNameToFeatureName(p)]
         return retval
 
     def setParams(self, params: dict | list[tuple], autoRestart=True, autoCorrect=True):
@@ -222,9 +91,9 @@ class VimbaXCamera(Camera):
                     x, y = self.getParam('binning')
                     newvals, _r = self.setParams(
                         [
-                            ('regionX', v[0] // x),
+                            ('regionX', v[0] // x),  # TODO it says that the x/y can't be non-zero most of the time. why?
                             ('regionY', v[1] // y),
-                            ('regionW', v[2] // x),  # TODO this is still out-of-bounds. what math are they doing?
+                            ('regionW', v[2] // x),  # TODO this is still out-of-bounds under binning. what math are they doing?
                             ('regionH', v[3] // y),
                         ],
                         autoRestart=autoRestart,
@@ -241,20 +110,22 @@ class VimbaXCamera(Camera):
                         self._dev.TriggerMode.set(False)
                     else:
                         self._dev.TriggerMode.set(True)
+                    self._paramValues['TriggerMode'] = v == 'Normal'
                     newvals = {p: v}
                     _r = True
                 elif p == 'exposure':
                     self._dev.ExposureTimeAbs.set(v * 1000)
+                    self._paramValues['ExposureTimeAbs'] = v * 1000
                     newvals = {p: v}
                     _r = True
                 else:
-                    getattr(self._dev, _mapParamNameToFeatureName(p)).set(v)
+                    getattr(self._dev, _paramNameToFeatureName(p)).set(v)
+                    self._paramValues[_paramNameToFeatureName(p)] = v
                     # TODO autocorrect
                     newvals = {p: v}
                     _r = True  # TODO how do I know this?
                 retval.update(newvals)
                 restart = restart or _r
-                self._paramValues.update(retval)
         # TODO autoRestart
         return retval, restart
 
@@ -268,7 +139,7 @@ class VimbaXCamera(Camera):
             return [{
                 'id': f.get_id(),
                 # MC: color data will blow this up
-                'data': arr.reshape(arr.shape[:-1]),
+                'data': arr.reshape(arr.shape[:-1]).T,
                 'time': f.get_timestamp(),
             }]
 
@@ -283,25 +154,35 @@ class VimbaXCamera(Camera):
                 self._frameGenerator = None
 
     def _acquireFrames(self, n) -> np.ndarray:
+        def reshape(f):
+            arr = f.as_numpy_ndarray()[:, :, 0].T
+            return arr[np.newaxis, ...]
         with self._lock:
             # MC: color data will be lost here!
             return np.concatenate(
-                [f.as_numpy_ndarray()[np.newaxis, :, :, 0] for f in self._dev.get_frame_generator(n)]
+                [reshape(f) for f in self._dev.get_frame_generator(n)]
             )
 
 
-def _mapParamNameToFeatureName(name):
-    known_map = {
-        'binningX': 'BinningHorizontal',
-        'binningY': 'BinningVertical',
-        'regionX': 'OffsetX',
-        'regionY': 'OffsetY',
-        'regionW': 'Width',
-        'regionH': 'Height',
-        'bitDepth': 'SensorBits',
-        'exposure': 'ExposureTimeAbs',
-    }
-    return known_map.get(name, name[0].upper() + name[1:])
+_known_map = {
+    'binningX': 'BinningHorizontal',
+    'binningY': 'BinningVertical',
+    'regionX': 'OffsetX',
+    'regionY': 'OffsetY',
+    'regionW': 'Width',
+    'regionH': 'Height',
+    'bitDepth': 'SensorBits',
+    'exposure': 'ExposureTimeAbs',
+}
+_inverse_known_map = {v: k for k, v in _known_map.items()}
+
+
+def _paramNameToFeatureName(name):
+    return _known_map.get(name, name[0].upper() + name[1:])
+
+
+def _featureNameToParamName(name):
+    return _inverse_known_map.get(name, name[0].lower() + name[1:])
 
 
 # TODO stream features:
