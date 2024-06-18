@@ -45,6 +45,7 @@ class VimbaXCamera(Camera):
             if hasattr(f, "get"):
                 name = f.get_name()
                 self._paramValues[name] = f.get()
+                f.register_change_handler(self._updateParamCache)
                 rng = None
                 if hasattr(f, "get_range"):
                     rng = f.get_range()
@@ -52,8 +53,7 @@ class VimbaXCamera(Camera):
                     rng = [False, True]
                 elif hasattr(f, "get_all_entries"):
                     rng = [str(e) for e in f.get_all_entries()]
-                self._paramProperties[_featureNameToParamName(name)] = (rng, f.is_writeable())
-        self._paramProperties['triggerMode'] = (['Normal', 'Abnormal?'], True)
+                self._paramProperties[_featureNameToParamName(name)] = (rng, f.is_writeable(), True, [])
 
     def quit(self):
         super().quit()
@@ -61,12 +61,19 @@ class VimbaXCamera(Camera):
         VmbSystem.get_instance().__exit__(None, None, None)
         self._dev = None
 
+    def _updateParamCache(self, feature):
+        # not in the mutex, because this is called from a C context that loses track its python context
+        self._paramValues[feature.get_name()] = feature.get()
+        self.sigParamsChanged.emit({_featureNameToParamName(feature.get_name()): feature.get()})
+
     def listParams(self, params=None):
         if params is None:
-            return self._paramProperties
+            return self._paramProperties.copy()
         return {p: self._paramProperties[p] for p in params}
 
     def getParams(self, params=None):
+        if params is None:
+            return self.getParams(list(self._paramProperties.keys()))
         retval = {}
         for p in params:
             if p == 'sensorSize':
@@ -76,6 +83,8 @@ class VimbaXCamera(Camera):
             elif p == 'region':
                 retval[p] = (self.getParam('regionX'), self.getParam('regionY'),
                              self.getParam('regionW'), self.getParam('regionH'))
+            elif p == 'exposure':
+                retval[p] = self._paramValues['ExposureTimeAbs'] / 1000
             else:
                 retval[p] = self._paramValues[_paramNameToFeatureName(p)]
         return retval
@@ -110,23 +119,24 @@ class VimbaXCamera(Camera):
                         self._dev.TriggerMode.set(False)
                     else:
                         self._dev.TriggerMode.set(True)
-                    self._paramValues['TriggerMode'] = v == 'Normal'
                     newvals = {p: v}
                     _r = True
                 elif p == 'exposure':
                     self._dev.ExposureTimeAbs.set(v * 1000)
-                    self._paramValues['ExposureTimeAbs'] = v * 1000
                     newvals = {p: v}
                     _r = True
                 else:
                     getattr(self._dev, _paramNameToFeatureName(p)).set(v)
-                    self._paramValues[_paramNameToFeatureName(p)] = v
                     # TODO autocorrect
                     newvals = {p: v}
                     _r = True  # TODO how do I know this?
                 retval.update(newvals)
                 restart = restart or _r
-        # TODO autoRestart
+        if restart and autoRestart:
+            running = self.isRunning()
+            self.stopCamera()
+            if running:
+                self.startCamera()
         return retval, restart
 
     def newFrames(self):
@@ -172,7 +182,6 @@ _known_map = {
     'regionW': 'Width',
     'regionH': 'Height',
     'bitDepth': 'SensorBits',
-    'exposure': 'ExposureTimeAbs',
 }
 _inverse_known_map = {v: k for k, v in _known_map.items()}
 
