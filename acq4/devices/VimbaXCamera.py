@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import queue
 from threading import RLock
 
 import numpy as np
@@ -19,7 +20,7 @@ class VimbaXCamera(Camera):
         self._config = config
         self._paramProperties = {}
         self._paramValues = {}
-        self._frameGenerator = None
+        self._frameQueue = queue.Queue()
         super().__init__(dm, config, name)
 
     def setupCamera(self):
@@ -140,28 +141,30 @@ class VimbaXCamera(Camera):
         return retval, restart
 
     def newFrames(self):
+        frames = []
         with self._lock:
-            if self._frameGenerator is None:
-                return []
-            # todo get as many as are available right now
-            f = next(self._frameGenerator)
-            arr = f.as_numpy_ndarray().copy()
-            return [{
-                'id': f.get_id(),
-                # MC: color data will blow this up
-                'data': arr.reshape(arr.shape[:-1]).T,
-                'time': f.get_timestamp(),
-            }]
+            with contextlib.suppress(queue.Empty):
+                while f := self._frameQueue.get_nowait():
+                    arr = f.as_numpy_ndarray()
+                    frames.append({
+                        'id': f.get_id(),
+                        # MC: color data will blow this up
+                        'data': arr.reshape(arr.shape[:-1]).T,
+                        'time': f.get_timestamp(),
+                    })
+                    with contextlib.suppress(ValueError):
+                        # ValueErrors from "wrong queue for frame" at restart are fine
+                        self._dev.queue_frame(f)
+        return frames
 
     def startCamera(self):
         with self._lock:
-            self._frameGenerator = self._dev.get_frame_generator(timeout_ms=int(self.getParam('exposure') * 2 * 1000))
+            self._dev.start_streaming(lambda _, __, f: self._frameQueue.put(f))
 
     def stopCamera(self):
         with self._lock:
-            if self._dev is not None:
+            if self._dev is not None and self._dev.is_streaming():
                 self._dev.stop_streaming()
-                self._frameGenerator = None
 
     def _acquireFrames(self, n) -> np.ndarray:
         def reshape(f):
