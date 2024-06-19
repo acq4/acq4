@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import queue
 from threading import RLock
+from time import sleep
 
 import numpy as np
 
@@ -21,6 +22,7 @@ class VimbaXCamera(Camera):
         self._paramProperties = {}
         self._paramValues = {}
         self._frameQueue = queue.Queue()
+        self._doParamUpdates = True
         super().__init__(dm, config, name)
 
     def setupCamera(self):
@@ -48,7 +50,9 @@ class VimbaXCamera(Camera):
                 self._paramValues[name] = f.get()
                 f.register_change_handler(self._updateParamCache)
                 rng = None
-                if hasattr(f, "get_range"):
+                if name in ('BinningX', 'BinningY'):
+                    rng = [r for r in range(*f.get_range()) if r == 1 or r % 2 == 0]
+                elif hasattr(f, "get_range"):
                     rng = f.get_range()
                 elif isinstance(f, BoolFeature):
                     rng = [False, True]
@@ -64,8 +68,24 @@ class VimbaXCamera(Camera):
 
     def _updateParamCache(self, feature):
         # not in the mutex, because this is called from a C context that loses track its python context
-        self._paramValues[feature.get_name()] = feature.get()
-        self.sigParamsChanged.emit({_featureNameToParamName(feature.get_name()): feature.get()})
+        if not self._doParamUpdates:
+            return
+        value = feature.get()
+        dev_name = feature.get_name()
+        name = _featureNameToParamName(dev_name)
+        if 'region' in name:
+            x, y = self.getParam('binning')
+            value *= x if name[-1] in ('X', 'W') else y
+        self._paramValues[dev_name] = value
+        self.sigParamsChanged.emit({name: value})
+
+    @contextlib.contextmanager
+    def _noParamUpdates(self):
+        self._doParamUpdates = False
+        try:
+            yield
+        finally:
+            self._doParamUpdates = True
 
     def listParams(self, params=None):
         if params is None:
@@ -82,8 +102,12 @@ class VimbaXCamera(Camera):
             elif p == 'binning':
                 retval[p] = (self.getParam('binningX'), self.getParam('binningY'))
             elif p == 'region':
-                retval[p] = (self.getParam('regionX'), self.getParam('regionY'),
-                             self.getParam('regionW'), self.getParam('regionH'))
+                retval[p] = (
+                    self.getParam('regionX'),
+                    self.getParam('regionY'),
+                    self.getParam('regionW'),
+                    self.getParam('regionH'),
+                )
             elif p == 'exposure':
                 retval[p] = self._paramValues['ExposureTimeAbs'] / 1000
             else:
@@ -109,21 +133,37 @@ class VimbaXCamera(Camera):
                         autoRestart=autoRestart,
                         autoCorrect=autoCorrect,
                     )
-                    newvals['region'] = (newvals['regionX'], newvals['regionY'], newvals['regionW'], newvals['regionH'])
+                    newvals['region'] = v
                 elif p == 'binning':
-                    newvals, _r = self.setParams(
-                        [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
-                    )
-                    newvals['binning'] = (newvals['binningX'], newvals['binningY'])
+                    old_x, old_y = self.getParam('binning')
+                    with self._noParamUpdates():
+                        newvals, _r = self.setParams(
+                            [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
+                        )
+                        x = newvals['binningX']
+                        y = newvals['binningY']
+                        newvals['binning'] = (x, y)
+                        newvals['regionX'] = self.getParam('regionX') * x // old_x
+                        newvals['regionY'] = self.getParam('regionY') * y // old_y
+                        newvals['regionW'] = self.getParam('regionW') * x // old_x
+                        newvals['regionH'] = self.getParam('regionH') * y // old_y
+                        newvals['region'] = (newvals['regionX'], newvals['regionY'], newvals['regionW'], newvals['regionH'])
                 elif p == 'triggerMode':
                     self._dev.TriggerMode.set(v in ('On', 1, True))
                     newvals = {p: v}
                     _r = True
                 elif p == 'exposure':
-                    self._dev.ExposureTimeAbs.set(v * 1000)
-                    newvals = {p: v}
+                    v = v * 1000
+                    if autoCorrect:
+                        v = int(min(
+                            max(v, self._paramProperties['exposureTimeAbs'][0][0]),
+                            self._paramProperties['exposureTimeAbs'][0][1],
+                        ))
+                    self._dev.ExposureTimeAbs.set(v)
+                    newvals = {p: v / 1000}
                     _r = True
                 else:
+                    self._paramValues[_paramNameToFeatureName(p)] = v
                     getattr(self._dev, _paramNameToFeatureName(p)).set(v)
                     # TODO autocorrect
                     newvals = {p: v}
@@ -243,46 +283,57 @@ def _featureNameToParamName(name):
 # StatTimeElapsed
 
 
-def show_features(obj, prefix=''):
-    for feature in obj.get_all_features():
-        print(f'{prefix} {feature.get_name():<40} : {feature.get_tooltip()}')
-        # print(f'{prefix} Display name   : {feature.get_display_name()}')
-        # print(f'{prefix} Tooltip        : {feature.get_tooltip()}')
-        # print(f'{prefix} Description    : {feature.get_description()}')
-        # print(f'{prefix} SFNC Namespace : {feature.get_sfnc_namespace()}')
-        # print(f'{prefix} Visibility     : {feature.get_visibility()}')
-        with contextlib.suppress(Exception):
-            value = feature.get()
-            # print(f'{prefix} Value          : {value}')
-        # print()
-
-
 def main():
     class MockManager:
         def declareInterface(self, *args, **kwargs):
             pass
     cam = VimbaXCamera(MockManager(), {'id': 'DEV_000F315B9827'}, 'test')
-    print(cam.getParam('bitDepth'))
-    cam.setParam('region', (0, 0, 40, 40))
-    cam.setParam('exposure', 0.01)
-    cam.setParam('triggerMode', 'Normal')
-    cam.setParam('binning', (2, 2))
-    fut = cam.driverSupportedFixedFrameAcquisition(5)
-    res = fut.getResult()
-    print(len(res), res[0].data().shape)
-    # import ipdb; ipdb.set_trace()
-    # with cam.ensureRunning():
-    #     fut = cam.acquireFrames(5)
-    #     frames = fut.getResult()
-    #     print(len(frames), frames[0].data().shape)
-    # with VmbSystem.get_instance() as _v:
-    #     _cam = _v.get_all_cameras()[0]
-    #     print(f'Camera ID: {_cam.get_id()}')
-    #     with _cam:
-    #         show_features(_cam)
-    #         for stream in _cam.get_streams():
-    #             show_features(stream, '\t')
-    cam.quit()
+    try:
+        cam.setParam('binningX', 1)
+        cam.setParam('binningY', 1)
+        w, h = cam.getParam('sensorSize')
+        w -= 4
+        h -= 4
+        cam.setParam('region', (0, 0, w, h))
+        print('pre test', cam.getParam('region'))
+        _bin_test(cam, 1, w, h)
+        print('test start!', cam.getParam('region'))
+        _bin_test(cam, 2, w, h)
+        _bin_test(cam, 4, w, h)
+
+        cam.setParam('exposure', 0.01)
+        cam.setParam('triggerMode', 'Normal')
+        fut = cam.driverSupportedFixedFrameAcquisition(5)
+        res = fut.getResult()
+        print(len(res), res[0].data().shape)
+            # import ipdb; ipdb.set_trace()
+            # with cam.ensureRunning():
+            #     fut = cam.acquireFrames(5)
+            #     frames = fut.getResult()
+            #     print(len(frames), frames[0].data().shape)
+            # with VmbSystem.get_instance() as _v:
+            #     _cam = _v.get_all_cameras()[0]
+            #     print(f'Camera ID: {_cam.get_id()}')
+            #     with _cam:
+            #         show_features(_cam)
+            #         for stream in _cam.get_streams():
+            #             show_features(stream, '\t')
+    finally:
+        # cam.quit()
+        pass
+
+
+def _bin_test(cam, b, w, h):
+    print('--------start setting binning------')
+    cam.setParam('binning', (b, b))
+    print('--------end setting binning------')
+    sleep(0.1)
+    assert cam.getParam('region') == (0, 0, w, h), f"bin {b}: {cam.getParam('region')}"
+    print('>>>>>>>> start setting region <<<<<<<<')
+    cam.setParam('region', (0, 0, w, h))
+    print('>>>>>>>> end setting region <<<<<<<<')
+    sleep(0.1)
+    assert cam.getParam('region') == (0, 0, w, h), f"bin {b}: {cam.getParam('region')}"
 
 
 if __name__ == '__main__':
