@@ -194,53 +194,53 @@ def _featureNameToParamName(name):
     return _inverse_known_map.get(name, name[0].lower() + name[1:])
 
 
-# TODO stream features:
-        #          Feature name   : StreamID
-        #          Feature name   : StreamType
-        #          Feature name   : StreamAnnouncedBufferCount
-        #          Feature name   : StreamAcquisitionModeSelector
-        #          Feature name   : StreamBufferHandlingMode
-        #          Feature name   : StreamAnnounceBufferMinimum
-        #          Feature name   : StreamInputBufferCount
-        #          Feature name   : StreamOutputBufferCount
-        #          Feature name   : StreamIsGrabbing
-        #          Feature name   : MulticastEnable
-        #          Feature name   : MulticastIPAddress
-        #          Feature name   : GVSPFilterVersion
-        #          Feature name   : GVSPFilterCompatibility
-        #          Feature name   : GVSPTimeout
-        #          Feature name   : GVSPDriver
-        #          Feature name   : GVSPHostReceiveBufferSize
-        #          Feature name   : GVSPBurstSize
-        #          Feature name   : GVSPMaxLookBack
-        #          Feature name   : GVSPMaxRequests
-        #          Feature name   : GVSPMissingSize
-        #          Feature name   : GVSPTiltingSize
-        #          Feature name   : GVSPMaxWaitSize
-        #          Feature name   : GVSPPacketSize
-        #          Feature name   : GVSPAdjustPacketSize
-        #          Feature name   : GVSPProtocol
-        #          Feature name   : FrameStatisticsCounter
-        #          Feature name   : FrameStatisticsCounterSelector
-        #          Feature name   : FramePacketStatisticsCounter
-        #          Feature name   : FramePacketStatisticsCounterSelector
-        #          Feature name   : FrameRate
-        #          Feature name   : FrameRateSelector
-        #          Feature name   : StreamTimeElapsed
-        #          Feature name   : StatPacketUnavailable
-        #          Feature name   : StatFrameDelivered
-        #          Feature name   : StatFrameDropped
-        #          Feature name   : StatFrameUnderrun
-        #          Feature name   : StatFrameShoved
-        #          Feature name   : StatFrameRescued
-        #          Feature name   : StatPacketReceived
-        #          Feature name   : StatPacketMissed
-        #          Feature name   : StatPacketErrors
-        #          Feature name   : StatPacketRequested
-        #          Feature name   : StatPacketResent
-        #          Feature name   : StatFrameRate
-        #          Feature name   : StatLocalRate
-        #          Feature name   : StatTimeElapsed
+# TODO stream features, maybe:
+# StreamID
+# StreamType
+# StreamAnnouncedBufferCount
+# StreamAcquisitionModeSelector
+# StreamBufferHandlingMode
+# StreamAnnounceBufferMinimum
+# StreamInputBufferCount
+# StreamOutputBufferCount
+# StreamIsGrabbing
+# MulticastEnable
+# MulticastIPAddress
+# GVSPFilterVersion
+# GVSPFilterCompatibility
+# GVSPTimeout
+# GVSPDriver
+# GVSPHostReceiveBufferSize
+# GVSPBurstSize
+# GVSPMaxLookBack
+# GVSPMaxRequests
+# GVSPMissingSize
+# GVSPTiltingSize
+# GVSPMaxWaitSize
+# GVSPPacketSize
+# GVSPAdjustPacketSize
+# GVSPProtocol
+# FrameStatisticsCounter
+# FrameStatisticsCounterSelector
+# FramePacketStatisticsCounter
+# FramePacketStatisticsCounterSelector
+# FrameRate
+# FrameRateSelector
+# StreamTimeElapsed
+# StatPacketUnavailable
+# StatFrameDelivered
+# StatFrameDropped
+# StatFrameUnderrun
+# StatFrameShoved
+# StatFrameRescued
+# StatPacketReceived
+# StatPacketMissed
+# StatPacketErrors
+# StatPacketRequested
+# StatPacketResent
+# StatFrameRate
+# StatLocalRate
+# StatTimeElapsed
 
 
 def show_features(obj, prefix=''):
@@ -258,8 +258,6 @@ def show_features(obj, prefix=''):
 
 
 def main():
-    from time import sleep
-
     class MockManager:
         def declareInterface(self, *args, **kwargs):
             pass
