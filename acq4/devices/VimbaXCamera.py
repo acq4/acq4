@@ -116,10 +116,7 @@ class VimbaXCamera(Camera):
                     )
                     newvals['binning'] = (newvals['binningX'], newvals['binningY'])
                 elif p == 'triggerMode':
-                    if v == 'Normal':
-                        self._dev.TriggerMode.set(False)
-                    else:
-                        self._dev.TriggerMode.set(True)
+                    self._dev.TriggerMode.set(v in ('On', 1, True))
                     newvals = {p: v}
                     _r = True
                 elif p == 'exposure':
