@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy.interpolate
 from acq4.util.surface import find_surface, score_frames
 from .pipette import Pipette
 from acq4.devices.Camera import Camera
@@ -70,44 +70,49 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # direction of 
         # pick a line perpendicular to the pipette that crosses the center of the frame        
         center = np.array(frames2[0].shape) // 2
+        frame_tr = frames2[0].globalTransform().inverted()[0]
+        imgVector = frame_tr.map(pipVector) - frame_tr.map([0, 0, 0])
+        imgVector /= np.linalg.norm(imgVector)
+        orthoVector = np.array([imgVector[1], -imgVector[0]])  # 90 deg CW
 
-        d = Point(imgPts[1] - imgPts[0])
-        o = Point(imgPts[0])
-        rgn = fn.affineSlice(data, shape=(int(d.length()),), vectors=[Point(d.norm())], origin=o, axes=axes, order=order, returnCoords=returnMappedCoords, **kwds)
+        radiusPx = (center**2).sum()**0.5
+        start = center - radiusPx * orthoVector
+        interpCoords = start + np.arange(int(radiusPx*2))[:, np.newaxis] * orthoVector[np.newaxis, :]
 
-        """>>> tr = f1.globalTransform().inverted()
->>> tr.map(f.l['pipVector']) - tr.map([0, 0, 0])
-    Traceback (most recent call last):
-      File "C:\Users\svc_multipatch\acq4\dependencies\pyqtgraph\pyqtgraph\console\repl_widget.py", line 104, in runCmd
-        exec(cmdCode, self.globals(), self.locals())
-      File "<input>", line 1, in <module>
-    AttributeError: 'tuple' object has no attribute 'map'
-    
->>> tr[0].map(f.l['pipVector']) - tr[0].map([0, 0, 0])
-array([-2.64085096e+06, -8.83543906e+04, -5.20805441e-01])
->>> imgVector = tr[0].map(f.l['pipVector']) - tr[0].map([0, 0, 0])
->>> imgVector / np.linalg.norm(imgVector)
-array([-9.99440791e-01, -3.34380787e-02, -1.97100938e-07])
->>> pv = f.l['pipVector']
->>> pv
-array([-0.85319802,  0.02854527, -0.52080543])
->>> pv[2] = 0
->>> imgVector = tr[0].map(pv) - tr[0].map([0, 0, 0])
->>> imgVector / np.linalg.norm(imgVector)"""
+        profile = np.empty((len(frames2), interpCoords.shape[0]))
+        for i,frame in enumerate(frames2):
+            profile[i] = scipy.interpolate.interpn(
+                points=(np.arange(frame.shape[0]), np.arange(frame.shape[1])),
+                values=frame.data() - bgFrame,
+                xi=interpCoords,
+                method='nearest',
+                bounds_error=False,
+                fill_value=0,
+            )
 
         # avg should be drifting at the beginning and flat at the end
-        avg2 = np.array([(np.abs(frame.data() - bgFrame)).mean() for frame in frames2])
+        avg2 = np.abs(profile.mean(axis=1))
 
-        # find index where we just reach the flat region (when we cross 3x the background stdev)
-        endIndex = len(avg2) - np.searchsorted(avg2[::-1], avg2[-1] + 0.1 * (avg2.max()-avg2[-1]))
+        # find index where we just reach the flat region
+        endIndex = len(avg2) - np.searchsorted(avg2[::-1], avg2[-1] + 0.02 * (avg2.max()-avg2[-1]))
         endTime = pipetteCameraDelay + frames2[endIndex].info()['time']
         
         # find pipette position at end time
         endPipPos = getPipettePositionAtTime(posEvents2, endTime)
 
-        # add 1/2 width of fov
-        halfFrameWidth = frames2[0].info()['pixelSize'][0] * (frames2[0].data().shape[0] //2)
-        centerPipPos2 = endPipPos + pipVector * halfFrameWidth 
+        # find center of mass when the pipette crossed the center of the frame
+        cs2 = np.cumsum(np.abs(profile[endIndex]))
+        centerIndex2 = np.searchsorted(cs2, cs2.max()/2, 'left')
+        centerPosPx = interpCoords[centerIndex2]
+        # centerPos = frames2[0].globalTransform().map(list(centerPosPx) + [0])
+        yDistPx = centerIndex2 - len(interpCoords) // 2
+        yDist = frames2[0].info()['pixelSize'][0] * yDistPx
+
+
+        # # add 1/2 width of fov
+        # halfFrameWidth = frames2[0].info()['pixelSize'][0] * (frames2[0].data().shape[0] //2)
+        # centerPipPos2 = endPipPos + pipVector * halfFrameWidth 
+        centerPipPos2 = endPipPos + np.array([0, yDist, 0])
 
         # move to new center
         pipette._moveToGlobal(centerPipPos2, speed='fast').wait()
@@ -117,7 +122,7 @@ array([-0.85319802,  0.02854527, -0.52080543])
         zStack = acquire_z_stack(imager, *z_range, block=True).getResult()
         focusScore = score_frames(zStack)
         targetScore = focusScore.min() + 0.1 * (focusScore.max() - focusScore.min())
-        focusIndex = np.searchsorted(focusScore, targetScore, 'left')
+        focusIndex = np.argwhere(focusScore > targetScore)[:,0].min()
         depth = zStack[focusIndex].mapFromFrameToGlobal([0, 0, 0])[2]
         imager.setFocusDepth(depth).wait()
 

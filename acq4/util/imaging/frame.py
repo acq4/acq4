@@ -74,6 +74,18 @@ class Frame(object):
         """
         return self._info
 
+    @property
+    def shape(self):
+        return self._data.shape
+    
+    @property
+    def ndim(self):
+        return self._data.ndim
+
+    @property
+    def dtype(self):
+        return self._data.dtype
+
     def addInfo(self, info: "dict|None" = None, **kwargs):
         if info is not None:
             self._info.update(info)
