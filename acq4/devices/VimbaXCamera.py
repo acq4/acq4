@@ -142,7 +142,6 @@ class VimbaXCamera(Camera):
                     )
                     newvals['region'] = v
                 elif p == 'binning':
-                    old_x, old_y = self.getParam('binning')
                     with self._noParamUpdates():
                         newvals, _r = self.setParams(
                             [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
