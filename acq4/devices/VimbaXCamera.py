@@ -20,7 +20,8 @@ class VimbaXCamera(Camera):
         self._lock = RLock()
         self._config = config
         self._paramProperties = {}
-        self._paramValues = {}
+        self._paramValuesOnDev = {}
+        self._region = ()
         self._frameQueue = queue.Queue()
         self._doParamUpdates = True
         super().__init__(dm, config, name)
@@ -47,7 +48,7 @@ class VimbaXCamera(Camera):
         for f in self._dev.get_all_features():
             if hasattr(f, "get"):
                 name = f.get_name()
-                self._paramValues[name] = f.get()
+                self._paramValuesOnDev[name] = f.get()
                 f.register_change_handler(self._updateParamCache)
                 rng = None
                 if name in ('BinningX', 'BinningY'):
@@ -59,6 +60,19 @@ class VimbaXCamera(Camera):
                 elif hasattr(f, "get_all_entries"):
                     rng = [str(e) for e in f.get_all_entries()]
                 self._paramProperties[_featureNameToParamName(name)] = (rng, f.is_writeable(), True, [])
+        self._region = self._guessInitialRegion()
+
+    def _guessInitialRegion(self):
+        bin_x, bin_y = self.getParam('binning')
+        x = self.getParam('regionX')
+        y = self.getParam('regionY')
+        w = self.getParam('regionW')
+        h = self.getParam('regionH')
+        if (w + 1) * bin_x == self.getParam('sensorWidth'):
+            w += 1
+        if (h + 1) * bin_y == self.getParam('sensorHeight'):
+            h += 1
+        return x * bin_x, y * bin_y, w * bin_x, h * bin_y
 
     def quit(self):
         super().quit()
@@ -73,10 +87,7 @@ class VimbaXCamera(Camera):
         value = feature.get()
         dev_name = feature.get_name()
         name = _featureNameToParamName(dev_name)
-        if 'region' in name:
-            x, y = self.getParam('binning')
-            value *= x if name[-1] in ('X', 'W') else y
-        self._paramValues[dev_name] = value
+        self._paramValuesOnDev[dev_name] = value
         self.sigParamsChanged.emit({name: value})
 
     @contextlib.contextmanager
@@ -102,16 +113,11 @@ class VimbaXCamera(Camera):
             elif p == 'binning':
                 retval[p] = (self.getParam('binningX'), self.getParam('binningY'))
             elif p == 'region':
-                retval[p] = (
-                    self.getParam('regionX'),
-                    self.getParam('regionY'),
-                    self.getParam('regionW'),
-                    self.getParam('regionH'),
-                )
+                retval[p] = self._region
             elif p == 'exposure':
-                retval[p] = self._paramValues['ExposureTimeAbs'] / 1000
+                retval[p] = self._paramValuesOnDev['ExposureTimeAbs'] / 1000
             else:
-                retval[p] = self._paramValues[_paramNameToFeatureName(p)]
+                retval[p] = self._paramValuesOnDev[_paramNameToFeatureName(p)]
         return retval
 
     def setParams(self, params: dict | list[tuple], autoRestart=True, autoCorrect=True):
@@ -122,13 +128,14 @@ class VimbaXCamera(Camera):
                 params = params.items()
             for p, v in params:
                 if p == 'region':
+                    self._region = v
                     x, y = self.getParam('binning')
                     newvals, _r = self.setParams(
                         [
                             ('regionX', v[0] // x),  # TODO it says that the x/y can't be non-zero most of the time. why?
                             ('regionY', v[1] // y),
-                            ('regionW', v[2] // x),  # TODO this is still out-of-bounds under binning. what math are they doing?
-                            ('regionH', v[3] // y),
+                            ('regionW', min(v[2] // x, self.getParam('sensorWidth') // x - 1)),
+                            ('regionH', min(v[3] // y, self.getParam('sensorHeight') // y - 1)),
                         ],
                         autoRestart=autoRestart,
                         autoCorrect=autoCorrect,
@@ -143,11 +150,6 @@ class VimbaXCamera(Camera):
                         x = newvals['binningX']
                         y = newvals['binningY']
                         newvals['binning'] = (x, y)
-                        newvals['regionX'] = self.getParam('regionX') * x // old_x
-                        newvals['regionY'] = self.getParam('regionY') * y // old_y
-                        newvals['regionW'] = self.getParam('regionW') * x // old_x
-                        newvals['regionH'] = self.getParam('regionH') * y // old_y
-                        newvals['region'] = (newvals['regionX'], newvals['regionY'], newvals['regionW'], newvals['regionH'])
                 elif p == 'triggerMode':
                     self._dev.TriggerMode.set(v in ('On', 1, True))
                     newvals = {p: v}
@@ -163,7 +165,7 @@ class VimbaXCamera(Camera):
                     newvals = {p: v / 1000}
                     _r = True
                 else:
-                    self._paramValues[_paramNameToFeatureName(p)] = v
+                    self._paramValuesOnDev[_paramNameToFeatureName(p)] = v
                     getattr(self._dev, _paramNameToFeatureName(p)).set(v)
                     # TODO autocorrect
                     newvals = {p: v}
@@ -292,12 +294,12 @@ def main():
         cam.setParam('binningX', 1)
         cam.setParam('binningY', 1)
         w, h = cam.getParam('sensorSize')
-        w -= 4
-        h -= 4
+        # w -= 4
+        # h -= 4
         cam.setParam('region', (0, 0, w, h))
         print('pre test', cam.getParam('region'))
         _bin_test(cam, 1, w, h)
-        print('test start!', cam.getParam('region'))
+        print('real test start!', cam.getParam('region'))
         _bin_test(cam, 2, w, h)
         _bin_test(cam, 4, w, h)
 
