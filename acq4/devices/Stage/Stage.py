@@ -316,6 +316,16 @@ class Stage(Device, OptomechDevice):
         ## this informs rigidly-connected devices that they have moved
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
+    def setDeviceTransform(self, tr):
+        is_dict = isinstance(tr, dict)
+        super().setDeviceTransform(tr)
+        if is_dict:  # only do this during init, basically
+            m = pg.SRTTransform3D(self.deviceTransform())
+            angle, axis = m.getRotation()
+            scale = m.getScale()
+            if tuple(scale) != (1, 1, 1) or angle != 0:
+                raise ValueError("Stage transform must be only translation.")
+
     @property
     def positionUpdatesPerSecond(self):
         """Return the rate at which the device reports position updates.
