@@ -9,7 +9,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 
 
 @Future.wrap
-def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.5e-3, pipetteCameraDelay=0, _future=None):
+def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.8e-3, pipetteCameraDelay=0, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
@@ -89,7 +89,6 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # find center of mass when the pipette crossed the center of the frame
         cs2 = np.cumsum(np.abs(profile[endIndex]))
         centerIndex2 = np.searchsorted(cs2, cs2.max()/2, 'left')
-        centerPosPx = interpCoords[centerIndex2]
         # centerPos = frames2[0].globalTransform().map(list(centerPosPx) + [0])
         yDistPx = centerIndex2 - len(interpCoords) // 2
         yDist = frames2[0].info()['pixelSize'][0] * yDistPx
@@ -104,7 +103,7 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         pipette._moveToGlobal(centerPipPos2, speed='fast').wait()
 
         # autofocus
-        z_range = (startDepth - 500e-6, startDepth + 500e-6, 10e-6)
+        z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
         zStack = acquire_z_stack(imager, *z_range, block=True).getResult()
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
