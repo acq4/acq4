@@ -10,11 +10,11 @@ import time
 
 from acq4.util import Qt, ptime
 
-T = TypeVar('T')
-S = TypeVar('S')
+FUTURE_RETVAL_TYPE = TypeVar('FUTURE_RETVAL_TYPE')
+WAITING_RETVAL_TYPE = TypeVar('WAITING_RETVAL_TYPE')
 
 
-class Future(Qt.QObject, Generic[T]):
+class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     """Used to track the progress of an asynchronous task.
 
     The simplest subclasses reimplement percentDone() and call _taskDone() when finished.
@@ -68,7 +68,7 @@ class Future(Qt.QObject, Generic[T]):
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
 
-    def getResult(self, **kwds) -> T:
+    def getResult(self, **kwds) -> FUTURE_RETVAL_TYPE:
         self.wait(**kwds)
         return self._returnVal
 
@@ -215,7 +215,7 @@ class Future(Qt.QObject, Generic[T]):
             self.checkStop()
             time.sleep(interval)
 
-    def waitFor(self, future: Future[S], timeout=20.0) -> Future[S]:
+    def waitFor(self, future: Future[WAITING_RETVAL_TYPE], timeout=20.0) -> Future[WAITING_RETVAL_TYPE]:
         """Wait for another future to complete while also checking for stop requests on self.
         """
         start = time.time()
@@ -267,11 +267,13 @@ class Future(Qt.QObject, Generic[T]):
             raise RuntimeError(formattedMsg) from exc
 
 
-P = ParamSpec('P')
-R = TypeVar('R')
+WRAPPED_FN_PARAMS = ParamSpec('WRAPPED_FN_PARAMS')
+WRAPPEND_FN_RETVAL_TYPE = TypeVar('WRAPPEND_FN_RETVAL_TYPE')
 
 
-def future_wrap(func: Callable[P, R]) -> Callable[P, Future[R]]:
+def future_wrap(
+        func: Callable[WRAPPED_FN_PARAMS, WRAPPEND_FN_RETVAL_TYPE]
+) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPEND_FN_RETVAL_TYPE]]:
     """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
     named "_future" as a keyword argument. This Future can be variously used to checkStop() the
     function, wait for other futures, and will be returned by the decorated function call. The function
@@ -288,7 +290,7 @@ def future_wrap(func: Callable[P, R]) -> Callable[P, Future[R]]:
     """
 
     @functools.wraps(func)
-    def wrapper(*args: P.args, **kwds: P.kwargs) -> Future[R]:
+    def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPEND_FN_RETVAL_TYPE]:
         future = Future()
         if kwds.pop('block', False):
             kwds['_future'] = future
