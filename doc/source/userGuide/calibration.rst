@@ -108,7 +108,7 @@ The next step is to ensure that acq4 understands how the stage's x,y,z axes are 
                 device: 20
                 scale: 1.0e-6, 1.0e-6, -1.0e-6  # x, y, z
 
-    a. Note that this is at the top level of the Stage config, not inside the transform section. The transform section is used to set the stage's position in the global coordinate system, and the scale section is used to convert from hardware-reported position to global coordinates.
+    a. Note that the *scale* parameter is at the top level of the Stage config, not inside the transform section. The transform section is used to set the stage's position in the global coordinate system, whereas the scale section is used to convert from hardware-reported position to global coordinates.
     b. Load the Camera module, find the "Depth" plot, and look for the yellow line indicating the Z position of the focal plane.
     c. Verify that when focusing the objective lens physically upward, the yellow line also moves upward on-screen.
     d. If not, the ``scale`` section of the stage’s config should get a sign change on the 3rd numeric value; restart acq4 and verify the Z orientation is correct.
