@@ -940,7 +940,7 @@ class CellAttachedState(PatchPipetteState):
         'autoBreakInDelay': {'type': 'float', 'default': None, 'optional': True, 'suffix': 's'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
-        'resistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'resistanceThreshold': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
         'spontaneousDetachmentState': {'type': 'str', 'default': 'fouled'},
     }
@@ -1617,7 +1617,8 @@ class CleanState(PatchPipetteState):
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.resetPosition()
+        self.dev.pipetteDevice.moveTo('home', 'fast')
+        self.currentFuture = None
         dev.newPatchAttempt()
         return 'out'
 
@@ -1636,7 +1637,7 @@ class CleanState(PatchPipetteState):
             printExc("Error resetting pressure after clean")
         
         self.resetPosition()
-            
+
         PatchPipetteState.cleanup(self)
 
 

@@ -106,11 +106,12 @@ The next step is to ensure that acq4 understands how the stage's x,y,z axes are 
             Stage:
                 driver: 'Sensapex'
                 device: 20
-                scale: 1.0e-6, 1.0e-6, -1.0e-6  # x,y,z scale factors relating hardware-reported position to global coordinates
+                scale: 1.0e-6, 1.0e-6, -1.0e-6  # x, y, z
 
-    a. Load the Camera module, find the "Depth" plot, and look for the yellow line indicating the Z position of the focal plane.       
-    b. Verify that when focusing the objective lens physically upward, the yellow line also moves upward on-screen.
-    c. If not, the ``scale`` section of the stage’s config should get a sign change on the 3rd numeric value; restart acq4 and verify the Z orientation is correct.
+    a. Note that the *scale* parameter is at the top level of the Stage config, not inside the transform section. The transform section is used to set the stage's position in the global coordinate system, whereas the scale section is used to convert from hardware-reported position to global coordinates.
+    b. Load the Camera module, find the "Depth" plot, and look for the yellow line indicating the Z position of the focal plane.
+    c. Verify that when focusing the objective lens physically upward, the yellow line also moves upward on-screen.
+    d. If not, the ``scale`` section of the stage’s config should get a sign change on the 3rd numeric value; restart acq4 and verify the Z orientation is correct.
 
 2. Set z-axis scale
     a. Open the camera module, start video, and focus on a pipette tip.

@@ -236,7 +236,8 @@ class Microscope(Device, OptomechDevice):
         """Set the surface of the sample based on how focused the images are."""
         z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
         z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
-        if (idx := find_surface(z_stack)) is not None:
+        threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
+        if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
             _future.waitFor(self.setFocusDepth(depth))
