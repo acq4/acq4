@@ -178,6 +178,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._displayBoundingBoxes(neurons_fut.getResult())
 
     def _handleAutoFinish(self, fut: Future):
+        fut.wait()  # to raise errors
         try:
             if self._previousBoxWidgets:
                 box = random.choice(self._previousBoxWidgets)
