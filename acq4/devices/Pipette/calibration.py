@@ -70,17 +70,17 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # the point where we transition from drifting to flat should be where the pipette tip crosses
         # the center of the frame
         avg2 = np.abs(profile).mean(axis=1)
+        avg2 -= avg2[-10:].mean()
 
-        # do the same for background frames
-        bgProfile, _ = interpolate_orthogonal_line(bgFrames, bgFrame, pipVector)
-        bgAvg2 = np.abs(bgProfile.mean(axis=1))
+        # first find where we reach 1/3 of max value
+        thirdIndex = np.argwhere(avg2 > avg2.max() / 3).max()
+
+        # now check each frame one at a time until the value of the frame reaches the 95th percentile of the remaining frames
+        for endIndex in range(thirdIndex, len(avg2)):
+            pct = scipy.stats.percentileofscore(avg2[endIndex+1:], avg2[endIndex])
+            if pct <= 95:
+                break
         
-        # choose threshold for detecting pipette tip crossing the center
-        thresholdSize = max(bgAvg2.std() * 3, 0.2 * (avg2.max()-avg2[-1]))
-        threshold = avg2[-1] + thresholdSize
-
-        # find index where we just reach the flat region
-        endIndex = np.argwhere(avg2 > threshold).max()
         endTime = pipetteCameraDelay + frames2[endIndex].info()['time']
         
         # find pipette position at end time
@@ -117,22 +117,32 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # find tip 
         tipImg = zDiff[zIndex]
         tipThreshold = 0.5 * (tipImg.max() + tipImg.min())
-        imgPos = np.argwhere(tipImg > tipThreshold).mean(axis=0)
-        globalPos = tipFrame.mapFromFrameToGlobal([imgPos[0], imgPos[1], 0])
+        tipPixels = np.argwhere(tipImg > tipThreshold)
+        imgVector = frame_pipette_direction(zStack[0], pipVector)[:2]
+        tipPixelDistanceAlongPipette = np.dot(tipPixels, imgVector)
+        tippestPixel = tipPixels[np.argmax(tipPixelDistanceAlongPipette)]
+        globalPos = tipFrame.mapFromFrameToGlobal([tippestPixel[0], tippestPixel[1], 0])
         pipette.resetGlobalPosition(globalPos)
 
         # focusScore = score_frames(zStack)
         # targetScore = focusScore.min() + 0.1 * (focusScore.max() - focusScore.min())
         # focusIndex = np.argwhere(focusScore > targetScore)[:,0].min()
         # depth = zStack[focusIndex].mapFromFrameToGlobal([0, 0, 0])[2]
-
-        imager.setFocusDepth(globalPos[2]).wait()
+        pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
 
         # find tip!
         # cal = pipette.tracker.autoCalibrate()
 
     finally:
         _future.l = locals().copy()
+
+
+def frame_pipette_direction(frame, pipVector):
+    """Return the direction a pipette points in image coordinates for a frame"""
+    frame_tr = frame.globalTransform().inverted()[0]
+    imgVector = frame_tr.map(pipVector) - frame_tr.map([0, 0, 0])
+    imgVector /= np.linalg.norm(imgVector)
+    return imgVector
 
 
 def interpolate_orthogonal_line(frames, bgFrame, pipVector):
@@ -152,9 +162,7 @@ def interpolate_orthogonal_line(frames, bgFrame, pipVector):
             len(interpCoords) == profile.shape[1]
     """
     center = np.array(frames[0].shape) // 2
-    frame_tr = frames[0].globalTransform().inverted()[0]
-    imgVector = frame_tr.map(pipVector) - frame_tr.map([0, 0, 0])
-    imgVector /= np.linalg.norm(imgVector)
+    imgVector = frame_pipette_direction(frames[0], pipVector)
     orthoVector = np.array([imgVector[1], -imgVector[0]])  # 90 deg CW
 
     radiusPx = (center**2).sum()**0.5
