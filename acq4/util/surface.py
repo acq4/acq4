@@ -30,7 +30,7 @@ def calculate_focus_score(image):
     return image.var()
 
 
-def find_surface(z_stack: list[Frame], percentile: int = 96) -> Union[int, None]:
+def find_surface(z_stack: list[Frame], percentile: int = 80) -> Union[int, None]:
     scored = score_frames(z_stack)
     surface = np.argwhere(scored > np.percentile(scored, percentile)).max()
     if surface == 0:
