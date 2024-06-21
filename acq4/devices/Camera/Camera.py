@@ -1,21 +1,24 @@
+from __future__ import annotations
+
 import queue
 import threading
-import time
 from collections import deque
 from contextlib import contextmanager, ExitStack
 from typing import Callable, Optional
 
 import numpy as np
-from MetaArray import MetaArray, axis
+import time
 
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
+from MetaArray import MetaArray, axis
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Device import Device
 from acq4.devices.Microscope import Microscope
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
+from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
 from acq4.util.future import Future
@@ -62,6 +65,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def __init__(self, dm, config, name):
         # Generate config to use for DAQ
+        self.camLock = RecursiveMutex()  ## Lock to protect access to camera
         daqConfig = {}
         if "exposeChannel" in config:
             daqConfig["exposure"] = config["exposeChannel"]
@@ -190,7 +194,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         raise NotImplementedError("Function must be reimplemented in subclass.")
 
-    def setParams(self, params, autoRestart=True, autoCorrect=True):
+    def setParams(self, params: dict | list, autoRestart=True, autoCorrect=True) -> tuple[dict[str, any], bool]:
         """Set camera parameters. Options are:
            params: a list or dict of (param, value) pairs to be set. Parameters are set in the order specified.
            autoRestart: If true, restart the camera if required to enact the parameter changes
@@ -206,8 +210,9 @@ class Camera(DAQGeneric, OptomechDevice):
     def getParams(self, params=None):
         raise NotImplementedError("Function must be reimplemented in subclass.")
 
-    def setParam(self, param, val, autoCorrect=True, autoRestart=True):
-        return self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)[0]
+    def setParam(self, param: str, val, autoCorrect=True, autoRestart=True) -> tuple[any, bool]:
+        values, restart = self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)
+        return values[param], restart
 
     def getParam(self, param):
         return self.getParams([param])[param]
@@ -530,7 +535,9 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def addFrameProcessor(self, processor: Callable[[Frame], None], final: bool = False):
         self._processingThread.addFrameProcessor(processor, final)
-        # TODO will we remove them ever?
+
+    def removeFrameProcessor(self, processor: Callable[[Frame], None]):
+        self._processingThread.removeFrameProcessor(processor)
 
     def isRunning(self):
         return self.acqThread.isRunning()
@@ -834,6 +841,12 @@ class FrameProcessingThread(Thread):
             self._final_processor = processor
         else:
             self._processors.append(processor)
+
+    def removeFrameProcessor(self, processor: Callable[[Frame], None]):
+        if processor in self._processors:
+            self._processors.remove(processor)
+        if processor == self._final_processor:
+            self._final_processor = None
 
     def stop(self):
         self._stop = True

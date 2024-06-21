@@ -72,7 +72,6 @@ class CameraDeviceGui(Qt.QWidget):
         self.dev.setParams(vals)    
         
     def paramsChanged(self, params):
-        #print "Camera param changed:", params
         ## Called when state of camera has changed
         for p in list(params.keys()):  ## flatten out nested dicts
             if isinstance(params[p], dict):
