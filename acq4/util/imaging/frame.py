@@ -110,8 +110,8 @@ class Frame(object):
         return SRTTransform3D(self._info['frameTransform'])
         
     def globalTransform(self):
-        """Return the transform that maps this frame's image coordinates
-        to global coordinates. This is equivalent to (deviceTransform * frameTransform).
+        """Return the transform that maps this frame's image coordinates (row, col)
+        to global coordinates (x, y, z). This is equivalent to (deviceTransform * frameTransform).
         """
         return SRTTransform3D(self._info['transform'])
         
