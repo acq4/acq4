@@ -52,6 +52,12 @@ class Stage(Device, OptomechDevice):
         self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
         self._inverseBaseTransform = None
 
+        m = pg.SRTTransform3D(self._baseTransform)
+        angle, axis = m.getRotation()
+        scale = m.getScale()
+        if tuple(scale) != (1, 1, 1) or angle != 0:
+            raise ValueError("Stage transform must be only translation.")
+
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
@@ -315,16 +321,6 @@ class Stage(Device, OptomechDevice):
     def _updateTransform(self):
         ## this informs rigidly-connected devices that they have moved
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
-
-    def setDeviceTransform(self, tr):
-        is_dict = isinstance(tr, dict)
-        super().setDeviceTransform(tr)
-        if is_dict:  # only do this during init, basically
-            m = pg.SRTTransform3D(self.deviceTransform())
-            angle, axis = m.getRotation()
-            scale = m.getScale()
-            if tuple(scale) != (1, 1, 1) or angle != 0:
-                raise ValueError("Stage transform must be only translation.")
 
     @property
     def positionUpdatesPerSecond(self):
