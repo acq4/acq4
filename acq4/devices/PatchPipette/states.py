@@ -940,7 +940,7 @@ class CellAttachedState(PatchPipetteState):
         'autoBreakInDelay': {'type': 'float', 'default': None, 'optional': True, 'suffix': 's'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
-        'resistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'resistanceThreshold': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
         'spontaneousDetachmentState': {'type': 'str', 'default': 'fouled'},
     }
