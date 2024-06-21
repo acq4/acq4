@@ -13,7 +13,8 @@ from acq4.util.surface import find_surface, score_frames
 @click.command()
 @click.argument('zstack_filename')
 @click.option('--graph', is_flag=True, help='Display the graph of calculated scores')
-def find_surface_in_stack(zstack_filename: str, graph=False):
+@click.option('--threshold', help='Percentile to call the surface', default=92)
+def find_surface_in_stack(zstack_filename: str, graph=False, threshold=92):
     fh = getFileHandle(zstack_filename)
     stack_arr = fh.read()
     z_stack = []
@@ -41,7 +42,7 @@ def find_surface_in_stack(zstack_filename: str, graph=False):
         pg.plot(scores)
         pg.exec()
     else:
-        surface_idx = find_surface(z_stack)
+        surface_idx = find_surface(z_stack, threshold)
         print(f'Surface at {surface_idx}')
 
 
