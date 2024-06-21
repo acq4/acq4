@@ -212,7 +212,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def setParam(self, param: str, val, autoCorrect=True, autoRestart=True) -> tuple[any, bool]:
         values, restart = self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)
-        return values[param], restart
+        return values, restart
 
     def getParam(self, param):
         return self.getParams([param])[param]
