@@ -75,7 +75,7 @@ class FilterWheel(Device, OptomechDevice):
                     if ports is None:
                         ports = devports
                     elif set(ports) != set(devports):
-                        raise Exception("FilterSet %r does not have the expected ports (%r vs %r)" % (filt, devports, ports))
+                        raise Exception(f"{filt!r} does not have the expected ports ({devports!r} vs {ports!r})")
             else:
                 raise TypeError("Slot definition must be str or dict; got: %r" % slot)
 
