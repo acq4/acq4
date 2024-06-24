@@ -174,6 +174,15 @@ class FilterWheel(Device, OptomechDevice):
     def _getPosition(self):
         raise NotImplementedError("Method must be implemented in subclass")
 
+    def loadPreset(self, name):
+        """Load a preset filter wheel position by name."""
+        idx = None
+        for i, n in self._slotNames.items():
+            if n == name:
+                idx = i
+                break
+        self.setPosition(idx)
+
     def _positionChanged(self, pos):
         filt = self.getFilter(pos)
         self.setCurrentSubdevice(filt)

@@ -68,6 +68,13 @@ class LightSource(Device):
         """
         return [s['name'] for s in self.sourceConfigs if s['active']]
 
+    def loadPreset(self, conf):
+        chan = conf.get('channel', None)
+        for c in self.sourceConfigs:
+            self.setSourceActive(c, c == chan)
+        if 'brightness' in conf:
+            self.setSourceBrightness(chan, conf['brightness'])
+
     def sourceActive(self, name):
         """Return True if the named light source is currently active.
         """
