@@ -1,7 +1,5 @@
 """
 Main ACQ4 invocation script
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 print("Loading ACQ4...")
@@ -101,16 +99,16 @@ from pyqtgraph.util.garbage_collector import GarbageCollector
 gc = GarbageCollector(interval=1.0, debug=False)
 
 ## Create Manager. This configures devices and creates the main manager window.
-man = Manager(argv=sys.argv[1:])
+man = Manager.runFromCommandLine(argv=sys.argv[1:])
 
 # If example config was loaded, offer more help to the user.
-message = """\
+message = f"""\
 <center><b>Demo mode:</b><br>\
-ACQ4 is running from an example configuration file at:<br><pre>%s</pre><br>\
+ACQ4 is running from an example configuration file at:<br><pre>{man.configFile}</pre><br>\
 This configuration defines several simulated devices that allow you to test the capabilities of ACQ4.<br>\
 See the <a href="http://acq4.org/documentation/userGuide/configuration.html">ACQ4 documentation</a> \
 for more information.</center>
-""" % man.configFile
+"""
 if man.configFile.endswith(os.path.join('example', 'default.cfg')):
     mbox = Qt.QMessageBox()
     mbox.setText(message)
