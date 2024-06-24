@@ -37,11 +37,6 @@ class LightSource(Device):
         Device.__init__(self, dm, config, name)
         self.sourceConfigs = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
         self._lock = Mutex.Mutex()
-        if config.get("mock", False):
-            for key in config:
-                if key.lower() in ("driver", "mock"):
-                    continue
-                self.addSource(key, config[key])
 
     def deviceInterface(self, win):
         return LightSourceDevGui(self)
