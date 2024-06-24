@@ -285,10 +285,11 @@ def _featureNameToParamName(name):
 
 
 def main():
-    class MockManager:
-        def declareInterface(self, *args, **kwargs):
-            pass
-    cam = VimbaXCamera(MockManager(), {'id': 'DEV_000F315B9827'}, 'test')
+    import pyqtgraph as pg
+    from acq4.Manager import Manager
+
+    pg.mkQApp()  # for event loop
+    cam = VimbaXCamera(Manager(), {'id': 'DEV_000F315B9827'}, 'test')
     try:
         cam.setParam('binningX', 1)
         cam.setParam('binningY', 1)
@@ -307,18 +308,18 @@ def main():
         fut = cam.driverSupportedFixedFrameAcquisition(5)
         res = fut.getResult()
         print(len(res), res[0].data().shape)
-            # import ipdb; ipdb.set_trace()
-            # with cam.ensureRunning():
-            #     fut = cam.acquireFrames(5)
-            #     frames = fut.getResult()
-            #     print(len(frames), frames[0].data().shape)
-            # with VmbSystem.get_instance() as _v:
-            #     _cam = _v.get_all_cameras()[0]
-            #     print(f'Camera ID: {_cam.get_id()}')
-            #     with _cam:
-            #         show_features(_cam)
-            #         for stream in _cam.get_streams():
-            #             show_features(stream, '\t')
+        # import ipdb; ipdb.set_trace()
+        with cam.ensureRunning():
+            fut = cam.acquireFrames(5)
+            frames = fut.getResult()
+            print(len(frames), frames[0].data().shape)
+        # with VmbSystem.get_instance() as _v:
+        #     _cam = _v.get_all_cameras()[0]
+        #     print(f'Camera ID: {_cam.get_id()}')
+        #     with _cam:
+        #         show_features(_cam)
+        #         for stream in _cam.get_streams():
+        #             show_features(stream, '\t')
     finally:
         # cam.quit()
         pass
