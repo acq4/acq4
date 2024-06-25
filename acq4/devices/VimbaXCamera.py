@@ -80,10 +80,11 @@ class VimbaXCamera(Camera):
         return x * bin_x, y * bin_y, w * bin_x, h * bin_y
 
     def quit(self):
+        if self._dev is not None:
+            self._dev.__exit__(None, None, None)
+            VmbSystem.get_instance().__exit__(None, None, None)
+            self._dev = None
         super().quit()
-        self._dev.__exit__(None, None, None)
-        VmbSystem.get_instance().__exit__(None, None, None)
-        self._dev = None
 
     def _updateParamCache(self, feature):
         # not in the mutex, because this is called from a C context that loses track its python context
