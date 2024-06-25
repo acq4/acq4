@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import annotations
 
 from collections import OrderedDict
-
-from pyqtgraph import SignalBlock
 
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
+from pyqtgraph import SignalBlock
 
 
 class LightSource(Device):
@@ -68,8 +66,12 @@ class LightSource(Device):
         """
         return [s['name'] for s in self.sourceConfigs if s['active']]
 
-    def loadPreset(self, conf):
-        chan = conf.get('channel', None)
+    def loadPreset(self, conf: str | dict):
+        if conf == 'off':
+            for c in self.sourceConfigs:
+                self.setSourceActive(c, False)
+            return
+        chan = conf['channel']
         for c in self.sourceConfigs:
             self.setSourceActive(c, c == chan)
         if 'brightness' in conf:
