@@ -293,7 +293,7 @@ class WholeCellState(PatchPipetteState):
     def cleanup(self):
         patchrec = self.dev.patchRecord()
         patchrec['wholeCellStopTime'] = ptime.time()
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class BrokenState(PatchPipetteState):
@@ -308,7 +308,7 @@ class BrokenState(PatchPipetteState):
 
     def initialize(self):
         self.dev.setTipBroken(True)
-        PatchPipetteState.initialize(self)
+        super().initialize()
 
 
 class FouledState(PatchPipetteState):
@@ -321,7 +321,7 @@ class FouledState(PatchPipetteState):
 
     def initialize(self):
         self.dev.setTipClean(False)
-        PatchPipetteState.initialize(self)
+        super().initialize()
 
 
 class BathState(PatchPipetteState):
@@ -342,7 +342,7 @@ class BathState(PatchPipetteState):
     """
     stateName = 'bath'
     def __init__(self, *args, **kwds):
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     _parameterDefaultOverrides = {
         'initialPressure': 3500.,  # 0.5 PSI
@@ -476,7 +476,7 @@ class CellDetectState(PatchPipetteState):
         self.lastMove = 0.0
         self.stepCount = 0
         self.advanceSteps = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
@@ -684,7 +684,7 @@ class CellDetectState(PatchPipetteState):
             self.contAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class SealState(PatchPipetteState):
@@ -774,7 +774,7 @@ class SealState(PatchPipetteState):
             if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
                 self.config['pressureLimit'] = self.config['maxVacuum']
         self.dev.clean = False
-        PatchPipetteState.initialize(self)
+        super().initialize()
 
     def run(self):
         self.monitorTestPulse()
@@ -896,7 +896,7 @@ class SealState(PatchPipetteState):
 
     def cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class CellAttachedState(PatchPipetteState):
@@ -1119,7 +1119,7 @@ class BreakInState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class ResealAnalysis(object):
@@ -1299,7 +1299,7 @@ class ResealState(PatchPipetteState):
     }
 
     def __init__(self, *args, **kwds):
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
         self._moveFuture = None
         self._pressureFuture = None
         self._lastResistance = None
@@ -1522,7 +1522,7 @@ class BlowoutState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after blowout")
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class CleanState(PatchPipetteState):
@@ -1560,7 +1560,7 @@ class CleanState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     def run(self):
         self.monitorTestPulse()
@@ -1638,7 +1638,7 @@ class CleanState(PatchPipetteState):
         
         self.resetPosition()
 
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class NucleusCollectState(PatchPipetteState):
@@ -1668,7 +1668,7 @@ class NucleusCollectState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     def run(self):
         config = self.config.copy()
@@ -1709,5 +1709,4 @@ class NucleusCollectState(PatchPipetteState):
             printExc("Error resetting pressure after collection")
         
         self.resetPosition()
-            
-        PatchPipetteState.cleanup(self)
+        super().cleanup()

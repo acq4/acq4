@@ -1,13 +1,7 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import weakref
 
-import six
-
-
-from pyqtgraph.util.mutex import Mutex
 from acq4.util import Qt
+from pyqtgraph.util.mutex import Mutex
 
 
 class InterfaceMixin(object):
@@ -61,7 +55,7 @@ class InterfaceDirectory(Qt.QObject):
         
         Raises NameError if the name is already in use."""
         with self.lock:
-            if isinstance(types, six.string_types):
+            if isinstance(types, str):
                 types = [types]
             for t in types:
                 if t in self.typeList and name in self.typeList[t] and obj is not self.typeList[t][name]:
@@ -123,7 +117,7 @@ class InterfaceDirectory(Qt.QObject):
             if types is None:
                 types = self.typeList.keys()
             
-            elif isinstance(types, six.string_types):
+            elif isinstance(types, str):
                 return list(self.typeList.get(types, {}).keys())
                 
             ints = {}
