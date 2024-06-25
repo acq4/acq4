@@ -3,7 +3,7 @@ import time
 from collections import OrderedDict
 
 import pyqtgraph as pg
-from six.moves import map, range
+
 
 import acq4.util.debug as debug
 from acq4.devices.Device import TaskGui, Device, DeviceTask

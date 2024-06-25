@@ -1,17 +1,15 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 import collections
-import acq4.analysis.atlas.Atlas as Atlas
 import os
-from acq4.util import Qt
-import acq4.util.DataManager as DataManager
-from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
-import numpy as np
-import pyqtgraph as pg
-import scipy
-from acq4.util.debug import Profiler
-from six.moves import range
 
+import numpy as np
+import scipy
+
+import acq4.analysis.atlas.Atlas as Atlas
+import acq4.util.DataManager as DataManager
+import pyqtgraph as pg
+from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
+from acq4.util import Qt
+from acq4.util.debug import Profiler
 
 
 class AuditoryCortex(Atlas.Atlas):

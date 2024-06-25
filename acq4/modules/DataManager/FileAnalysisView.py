@@ -9,7 +9,7 @@ import acq4.analysis.modules as analysis
 import acq4.analysis.AnalysisHost as AnalysisHost
 import acq4.analysis.dataModels as models
 from pyqtgraph import FileDialog
-from six.moves import range
+
 
 Ui_Form = Qt.importTemplate('.AnalysisTemplate')
 

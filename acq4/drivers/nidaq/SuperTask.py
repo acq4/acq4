@@ -1,10 +1,10 @@
 from collections import OrderedDict
 
 import numpy as np
-import six
 import time
-from six.moves import map
+
 from acq4.util import ptime
+
 try:
     from PyDAQmx import DAQException
 except (NotImplementedError, ImportError):
@@ -67,7 +67,7 @@ class SuperTask:
                 mode = self.daq.Val_RSE
             elif typ in ["di", "do"]:
                 mode = self.daq.Val_ChanPerLine
-        elif isinstance(mode, six.string_types):
+        elif isinstance(mode, str):
             # decide which modes are allowed for this channel
             if typ == "ai":
                 allowed = ["RSE", "NRSE", "Diff", "PseudoDiff"]

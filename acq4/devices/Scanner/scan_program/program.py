@@ -1,9 +1,7 @@
+import importlib
 from collections import OrderedDict
 
-import importlib
 import numpy as np
-import six
-import time
 
 import pyqtgraph as pg
 import pyqtgraph.parametertree.parameterTypes as pTypes
@@ -70,7 +68,7 @@ class ScanProgram:
         may also be used to install new component types at runtime.
         """
         ## called when "Add Control.." combo is changed
-        if isinstance(component, six.string_types):
+        if isinstance(component, str):
             component = COMPONENTS[component](self)
         
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)

@@ -1,5 +1,5 @@
 from __future__ import print_function
-from six.moves import range
+
 __author__ = 'pbmanis'
 
 from collections import OrderedDict

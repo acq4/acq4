@@ -1,15 +1,16 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
+import collections
+import os
+import pickle
+import re
+
 import numpy as np
-import pickle, re, os
+
 import acq4.Manager
 import acq4.util.DataManager as DataManager
-import collections
-import acq4.util.functions as functions
 import acq4.util.advancedTypes as advancedTypes
-import six
-from six.moves import range
+import acq4.util.functions as functions
+from acq4.util import Qt
+
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -74,7 +75,7 @@ class SqliteDatabase:
     def select(self, table, fields='*', sql='', toDict=True, toArray=False):
         """fields should be a list of field names"""
         if fields != '*':
-            if isinstance(fields, six.string_types):
+            if isinstance(fields, str):
                 fields = fields.split(',')
             qf = []
             for f in fields:
@@ -513,7 +514,7 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, six.string_types):
+                elif isinstance(v, str):
                     typ = 'text'
                 else:
                     typ = 'blob'

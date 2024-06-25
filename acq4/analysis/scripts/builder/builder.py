@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import os
 import sys
-from six.moves import range
+
 
 md = os.path.abspath(os.path.split(__file__)[0])
 sys.path = [os.path.join(md, '..', '..', 'util')] + sys.path

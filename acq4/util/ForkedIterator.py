@@ -2,7 +2,7 @@ from __future__ import print_function
 import multiprocessing as m
 import time
 import numpy
-from six.moves import range
+
 
 class StopRemoteIteration:
     pass

@@ -1,16 +1,9 @@
-# -*- coding: utf-8 -*-
 """
 Mutex.py -  Stand-in extension of Qt's QMutex class
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
 """
-from __future__ import print_function
-
-import six
+from acq4.util import Qt
 from pyqtgraph.util.mutex import Mutex as PGMutex
 from pyqtgraph.util.mutex import RecursiveMutex as PGRecursiveMutex
-
-from acq4.util import Qt
 
 
 class Mutex(PGMutex):
@@ -96,7 +89,7 @@ class ThreadsafeWrapper(object):
     def __wrap_object__(self, obj):
         if not self.__TSOrecursive__:
             return obj
-        if obj.__class__ in [int, float, str, six.text_type, tuple]:
+        if obj.__class__ in [int, float, str, str, tuple]:
             return obj
         if id(obj) not in self.__TSOwrapped_objs__:
             self.__TSOwrapped_objs__[id(obj)] = threadsafe(
@@ -118,7 +111,7 @@ def threadsafe(obj, *args, **kargs):
     """Return a thread-safe wrapper around obj. (see ThreadsafeWrapper)
     args and kargs are passed directly to ThreadsafeWrapper.__init__()
     This factory function is necessary for wrapping special methods (like __getitem__)"""
-    if type(obj) in [int, float, str, six.text_type, tuple, type(None), bool]:
+    if type(obj) in [int, float, str, str, tuple, type(None), bool]:
         return obj
     clsName = 'Threadsafe_' + obj.__class__.__name__
     attrs = {}

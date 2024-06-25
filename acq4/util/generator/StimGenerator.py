@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 StimGenerator.py -  Stimulus waveform generator + Qt widget
 Copyright 2010  Luke Campagnola
@@ -11,17 +9,18 @@ entering python code used to generate waveforms. Functions available
 for evaluation are provided in waveforms.py.
 """
 
-import sys, types, re
-import numpy as np
-from acq4.util import Qt
 from collections import OrderedDict
-from . import waveforms
 
-from .StimParamSet import StimParamSet
-from .SeqParamSet import SequenceParamSet
-import six
+import numpy as np
+import re
+import sys
+import types
 
 import pyqtgraph.units as units
+from acq4.util import Qt
+from . import waveforms
+from .SeqParamSet import SequenceParamSet
+from .StimParamSet import StimParamSet
 
 Ui_Form = Qt.importTemplate('.GeneratorTemplate')
 
@@ -265,7 +264,7 @@ class StimGenerator(Qt.QWidget):
                 #self.ui.advancedBtn.setChecked(True)
                 self.ui.functionText.setPlainText(state['function'])
             if 'params' in state:
-                if isinstance(state['params'], six.string_types):  ## for backward compatibility
+                if isinstance(state['params'], str):  ## for backward compatibility
                     state['params'] = seqListParse(state['params'])
                 #self.ui.advancedBtn.setChecked(True)
                 #self.ui.paramText.setPlainText(state['params'])

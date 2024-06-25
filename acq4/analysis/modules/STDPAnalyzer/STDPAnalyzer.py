@@ -8,7 +8,7 @@ import numpy as np
 from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from . import STDPFileLoader
-from six.moves import range
+
 
 Ui_Control = Qt.importTemplate('.STDPControlTemplate')
 Ui_Plots = Qt.importTemplate('.STDPPlotsTemplate')

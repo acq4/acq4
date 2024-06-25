@@ -1,5 +1,5 @@
 from __future__ import print_function
-from six.moves import range
+
 __author__ = 'pbmanis'
 """
 Copyright 2014  Paul Manis and Luke Campagnola

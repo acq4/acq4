@@ -1,13 +1,10 @@
-import time
+import ctypes
+import os
 from collections import OrderedDict
 from ctypes import byref, sizeof, c_long, c_ulong, c_ulonglong
 
-import ctypes
-import os
-import six
 import sys
 from numpy import empty, uint16, ascontiguousarray
-from six.moves import range, zip
 
 from acq4.util.Mutex import Mutex
 from acq4.util.clibrary import CParser, CLibrary
@@ -295,7 +292,7 @@ class QCameraClass:
     def convertUnitsToAcq4(self, param, value):
         if param in self.unitConversionDict:
             #print "        0 convertUnits: param:", param, "value:", value
-            if type(value) in list(six.integer_types) + [float]:
+            if type(value) in [int, float]:
                 #print "        1 convertUnits: param:", param, "value:", value*self.unitConversionDict[param]
                 return value*self.unitConversionDict[param]
             elif type(value) == list:

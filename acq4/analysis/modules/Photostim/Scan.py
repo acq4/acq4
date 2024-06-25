@@ -1,14 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
 import numpy as np
+import time
+
+import acq4.util.Canvas as Canvas
+import acq4.util.functions as fn
 import pyqtgraph as pg
 import pyqtgraph.multiprocess as mp
-import six
-import time, os
-import acq4.util.Canvas as Canvas
-import collections
-import acq4.util.functions as fn
+from acq4.util import Qt
+
 
 def loadScanSequence(fh, host):
     ## Load a scan (or sequence of scans) from fh,
@@ -486,7 +484,7 @@ class Scan(Qt.QObject):
         pen = pg.mkPen(pen)
         
         items = []
-        if isinstance(fh, six.string_types):
+        if isinstance(fh, str):
             fh = self.source()[fh]
         if fh.isDir():
             fh = self.dataModel.getClampFile(fh)

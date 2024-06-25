@@ -2,8 +2,8 @@ import numpy as np
 import re
 
 import pyqtgraph as pg
-from six.moves import range
-from six.moves import zip
+
+
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt

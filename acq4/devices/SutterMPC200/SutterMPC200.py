@@ -5,7 +5,7 @@ from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from pyqtgraph import debug
-from six.moves import range
+
 
 
 def __reload__(old):

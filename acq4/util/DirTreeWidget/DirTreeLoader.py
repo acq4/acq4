@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-import six
-
 import acq4.util.DataManager as DataManager
 from acq4.util import Qt
 from acq4.util.debug import printExc
@@ -18,7 +13,7 @@ class DirTreeLoader(Qt.QWidget):
         Qt.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        if isinstance(baseDir, six.string_types):
+        if isinstance(baseDir, str):
             baseDir = DataManager.getDirHandle(baseDir, create=create)
         self.baseDir = baseDir
         self.currentFile = None

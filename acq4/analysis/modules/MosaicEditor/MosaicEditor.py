@@ -19,7 +19,7 @@ import acq4.analysis.atlas as atlas
 from acq4.util.Canvas.Canvas import Canvas
 from acq4.util.Canvas import items
 import acq4
-from six.moves import range
+
 
 Ui_Form = Qt.importTemplate('.MosaicEditorTemplate')
 

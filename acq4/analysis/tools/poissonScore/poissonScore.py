@@ -1,5 +1,5 @@
 from __future__ import print_function
-from six.moves import map
+
 """
 Description:
     
@@ -102,7 +102,7 @@ Notes on probability computation:
 import numpy as np
 import scipy.stats as stats
 import pyqtgraph as pg
-from six.moves import range
+
 import pyqtgraph.multiprocess as mp
 import os
 

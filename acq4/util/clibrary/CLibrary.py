@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from six.moves import map
-from six.moves import range
 """
 CLibrary.py -  Provides CLibrary class
 Copyright 2010  Luke Campagnola
@@ -14,9 +10,10 @@ function calling based on C header definitions.
 import ctypes
 from ctypes import c_wchar_p, pointer, c_ubyte, c_long, c_longlong, c_short, c_char, c_int, c_void_p, Union, \
     c_ulonglong, c_wchar, cast, c_ushort, c_float, c_double, c_uint, POINTER, c_char_p, c_longdouble, Structure, c_ulong
-import sys, os, platform
 
-import six
+import os
+import platform
+import sys
 
 
 def find_lib(name, paths=None, dirHints=None):
@@ -267,7 +264,7 @@ class CLibrary:
             ## apply pointers and arrays
             while len(mods) > 0:
                 m = mods.pop(0)
-                if isinstance(m, six.string_types):  ## pointer or reference
+                if isinstance(m, str):  ## pointer or reference
                     if m[0] == '*' or m[0] == '&':
                         for i in m:
                             cls = POINTER(cls)
@@ -392,7 +389,7 @@ class CFunction:
         """Return the ctype required for the specified argument.
         arg can be either an integer  or the name of the argument.
         """
-        if isinstance(arg, six.string_types):
+        if isinstance(arg, str):
             arg = self.argInds[arg]
         return self.lib._ctype(self.sig[1][arg][1])
     

@@ -2,7 +2,7 @@ from __future__ import print_function
 import os, sys
 
 from acq4.util.generator.StimGenerator import StimGenerator
-from six.moves import range
+
 
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(md, '..'))

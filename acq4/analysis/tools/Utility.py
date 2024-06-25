@@ -1,8 +1,3 @@
-from __future__ import print_function
-from six.moves import filter
-from six.moves import map
-from six.moves import range
-from six.moves import zip
 """
 Utils.py - general utility routines
 - power spectrum
@@ -38,8 +33,6 @@ then call Utils.xxxxx()
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-import six
-import sys, re, os
 import numpy
 import numpy.ma as ma
 #import numpy.linalg.lstsq
@@ -356,7 +349,7 @@ def flatten(l, ltypes=(list, tuple)):
 
 def unique(seq, keepstr=True):
     t = type(seq)
-    if isinstance(seq, six.string_types):
+    if isinstance(seq, str):
         t = (list, ''.join)[bool(keepstr)]
     seen = []
     return t(c for c in seq if not (c in seen or seen.append(c)))
@@ -763,7 +756,8 @@ def analyzeIV(t, V, I, tw, thr):
             'Ispike': numpy.array(ispikes), 'Nspike': numpy.array(nspikes), 
             'FSL': numpy.array(fsl), 'FISI': numpy.array(fisi)})
 
-import os, sys, types, re, fnmatch, itertools
+import os, sys, fnmatch
+
 
 class ScriptError(Exception): pass
 

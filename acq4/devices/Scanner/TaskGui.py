@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.parametertree.parameterTypes as pTypes
-from six.moves import range
+
 
 from acq4.Manager import getManager
 from acq4.devices.Device import TaskGui
