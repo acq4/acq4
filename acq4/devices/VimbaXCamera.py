@@ -15,6 +15,11 @@ class VimbaXCamera(Camera):
     """Camera class for VimbaX cameras. See https://github.com/alliedvision/VmbPy for driver install instructions.
     This isn't necessarily production-ready code, and has only been written for use on a test rig."""
 
+    @classmethod
+    def listCameras(cls):
+        with VmbSystem.get_instance() as vmb:
+            return [c.get_id() for c in vmb.get_all_cameras()]
+
     def __init__(self, dm, config, name):
         self._dev: VmbCamera | None = None
         self._lock = RLock()
@@ -289,7 +294,8 @@ def main():
     from acq4.Manager import Manager
 
     pg.mkQApp()  # for event loop
-    cam = VimbaXCamera(Manager(), {'id': 'DEV_000F315B9827'}, 'test')
+    id_ = VimbaXCamera.listCameras()[0]
+    cam = VimbaXCamera(Manager(), {'id': id_}, 'test')
     try:
         cam.setParam('binningX', 1)
         cam.setParam('binningY', 1)
@@ -308,11 +314,10 @@ def main():
         fut = cam.driverSupportedFixedFrameAcquisition(5)
         res = fut.getResult()
         print(len(res), res[0].data().shape)
-        # import ipdb; ipdb.set_trace()
-        with cam.ensureRunning():
-            fut = cam.acquireFrames(5)
-            frames = fut.getResult()
-            print(len(frames), frames[0].data().shape)
+        # with cam.ensureRunning():
+        #     fut = cam.acquireFrames(5)
+        #     frames = fut.getResult()
+        #     print(len(frames), frames[0].data().shape)
         # with VmbSystem.get_instance() as _v:
         #     _cam = _v.get_all_cameras()[0]
         #     print(f'Camera ID: {_cam.get_id()}')
@@ -321,8 +326,7 @@ def main():
         #         for stream in _cam.get_streams():
         #             show_features(stream, '\t')
     finally:
-        # cam.quit()
-        pass
+        cam.quit()
 
 
 def _bin_test(cam, b, w, h):
