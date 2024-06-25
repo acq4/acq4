@@ -14,7 +14,7 @@ from copy import deepcopy
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.debug import printExc
-from acq4.util.future import Future
+from acq4.util.future import Future, future_wrap
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect, units
 
@@ -1341,7 +1341,7 @@ class ResealState(PatchPipetteState):
             self.waitFor(self._moveFuture)
             self.waitFor(self._pressureFuture)
 
-    @Future.wrap
+    @future_wrap
     def startRollingResistanceThresholds(self, _future: Future):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self.monitorTestPulse()
