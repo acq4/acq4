@@ -62,7 +62,7 @@ class PressureControl(Device):
             if rate is None:
                 duration = self.regulatorSettlingTime
             else:
-                duration = abs(end_pressure - start_pressure) / rate
+                duration = abs(end_pressure - start_pressure) / abs(rate)
 
         print(f"Ramping pressure from {start_pressure} to {end_pressure} over {duration} seconds")
         start_time = ptime.time()
