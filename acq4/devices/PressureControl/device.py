@@ -62,7 +62,7 @@ class PressureControl(Device):
             if rate is None:
                 duration = self.regulatorSettlingTime
             else:
-                duration = abs(end_pressure - start_pressure) / rate
+                duration = abs(end_pressure - start_pressure) / abs(rate)
 
         start_time = ptime.time()
         frac_done = 0
