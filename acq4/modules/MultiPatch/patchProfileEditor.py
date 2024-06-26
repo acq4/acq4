@@ -32,7 +32,7 @@ class ProfileEditor(qt.QWidget):
                 profile[state_name] = data
             else:
                 profile.setdefault(state_name, {})
-                profile[state_name].setdefault(param_name, data)
+                profile[state_name][param_name] = data
                 if not param.valueModifiedSinceResetToDefault():
                     del profile[state_name][param_name]
 
