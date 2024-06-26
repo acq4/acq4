@@ -171,7 +171,10 @@ class AutomationDebugWindow(Qt.QMainWindow):
         x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
         y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
         _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
-        depth = _future.waitFor(self.scopeDevice.findSurfaceDepth(self.cameraDevice)).getResult()
+        # TODO don't know why this hangs when using waitFor, but it does
+        depth = self.scopeDevice.findSurfaceDepth(
+            self.cameraDevice, searchDistance=50*µm, searchStep=15*µm, block=True
+        ).getResult()
         depth -= 50 * µm
         self.cameraDevice.setFocusDepth(depth)
         neurons_fut = _future.waitFor(self._detectNeuronsFlat())
