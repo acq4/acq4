@@ -75,7 +75,7 @@ class FilterWheel(Device, OptomechDevice):
                     if ports is None:
                         ports = devports
                     elif set(ports) != set(devports):
-                        raise Exception("FilterSet %r does not have the expected ports (%r vs %r)" % (filt, devports, ports))
+                        raise Exception(f"{filt!r} does not have the expected ports ({devports!r} vs {ports!r})")
             else:
                 raise TypeError("Slot definition must be str or dict; got: %r" % slot)
 
@@ -173,6 +173,15 @@ class FilterWheel(Device, OptomechDevice):
 
     def _getPosition(self):
         raise NotImplementedError("Method must be implemented in subclass")
+
+    def loadPreset(self, name):
+        """Load a preset filter wheel position by name."""
+        idx = None
+        for i, n in self._slotNames.items():
+            if n == name:
+                idx = i
+                break
+        self.setPosition(idx)
 
     def _positionChanged(self, pos):
         filt = self.getFilter(pos)
