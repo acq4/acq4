@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 import scipy.optimize as opt
-from six.moves import range
+
 
 from acq4.util.functions import logSpace, downsample as fnDownsample
 

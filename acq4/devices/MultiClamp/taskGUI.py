@@ -7,7 +7,7 @@ from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.debug import printExc
-from six.moves import range
+
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 

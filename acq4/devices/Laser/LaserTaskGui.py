@@ -5,7 +5,7 @@ from acq4.devices.DAQGeneric import DAQGenericTaskGui
 from acq4.util.SequenceRunner import runSequence
 from pyqtgraph.functions import siFormat
 from acq4.util.HelpfulException import HelpfulException
-from six.moves import range
+
 
 Ui_Form = Qt.importTemplate('.taskTemplate')
 

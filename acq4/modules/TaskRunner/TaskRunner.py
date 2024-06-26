@@ -6,9 +6,6 @@ import os
 import six
 import sys
 import time
-from six.moves import map
-from six.moves import range
-from six.moves import reduce
 
 import acq4.util.DirTreeWidget as DirTreeWidget
 import pyqtgraph as pg

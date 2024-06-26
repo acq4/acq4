@@ -2,7 +2,7 @@ import os.path
 from collections import OrderedDict
 import numpy as np
 import weakref
-from six.moves import range
+
 
 import acq4.Manager as Manager
 import pyqtgraph as pg

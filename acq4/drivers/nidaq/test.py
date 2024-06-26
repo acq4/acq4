@@ -3,7 +3,7 @@ import numpy as np
 import os
 import sys
 import time
-from six.moves import range
+
 
 # Workaround for symlinks not working in windows
 modPath = os.path.split(__file__)[0]

@@ -11,7 +11,7 @@ import threading
 from acq4.drivers.MultiClamp.MultiClampTelegraph import wmlib, MultiClampTelegraph
 from acq4.util.clibrary import winDefs, CParser, find_lib, CLibrary
 from acq4.util.debug import printExc
-from six.moves import map
+
 
 DEBUG=False ## Global flag for debugging hangups
 if DEBUG:

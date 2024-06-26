@@ -4,7 +4,7 @@ from __future__ import print_function
 from collections import OrderedDict
 
 import numpy as np
-from six.moves import range
+
 
 import pyqtgraph as pg
 from acq4.analysis.AnalysisModule import AnalysisModule

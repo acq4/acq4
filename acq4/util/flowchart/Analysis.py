@@ -2,8 +2,8 @@ from collections import OrderedDict
 
 import numpy as np
 import scipy
-from six.moves import map
-from six.moves import range
+
+
 
 import acq4.util.functions as functions
 import pyqtgraph as pg

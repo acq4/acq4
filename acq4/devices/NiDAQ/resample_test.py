@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 from pyqtgraph import PlotWindow
-from six.moves import zip
+
 
 sys.path.append('../../util')
 sys.path.append('../..')

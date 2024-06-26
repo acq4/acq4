@@ -4,7 +4,6 @@ import scipy.optimize
 import six
 import sys
 import time
-from six.moves import range
 
 import acq4.Manager as Manager
 from MetaArray import MetaArray

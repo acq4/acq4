@@ -1,12 +1,11 @@
-from __future__ import print_function
-from acq4.util import Qt
-from .Device import Device
-from acq4.util.Mutex import Mutex
-from acq4.Interfaces import InterfaceMixin
-import pyqtgraph as pg
 import collections
+
 import numpy as np
-import six
+
+import pyqtgraph as pg
+from acq4.Interfaces import InterfaceMixin
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 
 
 class OptomechDevice(InterfaceMixin):
@@ -222,7 +221,7 @@ class OptomechDevice(InterfaceMixin):
                 self.__parent.__children.remove(self)
 
             # look up device from its name
-            if isinstance(parent, six.string_types):
+            if isinstance(parent, str):
                 parent = self.__devManager.getDevice(parent)
             
             # connect to the new parent
@@ -624,7 +623,7 @@ class OptomechDevice(InterfaceMixin):
                 return None
             elif hasattr(dev, 'implements') and dev.implements('OptomechDevice'):
                 return dev
-            elif isinstance(dev, six.string_types):
+            elif isinstance(dev, str):
                 return self.__subdevices[dev]
             else:
                 raise Exception("Invalid argument: %s" % str(dev))
@@ -637,7 +636,7 @@ class OptomechDevice(InterfaceMixin):
         if dev is None:
             dev = self.__subdevice
             return {self.name(): dev}
-        if isinstance(dev, six.string_types):
+        if isinstance(dev, str):
             return {self.name(): self.__subdevices[dev]}
             
     def setCurrentSubdevice(self, dev):

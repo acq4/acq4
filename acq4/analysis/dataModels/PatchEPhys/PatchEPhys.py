@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from MetaArray import MetaArray
-from six.moves import range
+
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),

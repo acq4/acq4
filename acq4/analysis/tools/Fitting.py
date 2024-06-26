@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-from six.moves import range
+
 
 """
 Python class wrapper for data fitting.

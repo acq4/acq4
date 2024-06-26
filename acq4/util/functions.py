@@ -25,7 +25,7 @@ import scipy.optimize
 import scipy.signal
 from scipy import stats, signal
 from scipy.signal import deconvolve
-from six.moves import range
+
 
 from MetaArray import MetaArray
 from acq4.util import Qt
@@ -2058,7 +2058,7 @@ def suggestDType(x, singleValue=False):
         return float
     elif isinstance(x, int) or isinstance(x, np.compat.long):
         return int
-    #elif isinstance(x, six.string_types):  ## don't try to guess correct string length; use object instead.
+    #elif isinstance(x, str):  ## don't try to guess correct string length; use object instead.
         #return '<U%d' % len(x)
     else:
         return object

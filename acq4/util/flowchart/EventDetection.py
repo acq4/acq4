@@ -5,7 +5,7 @@ from pyqtgraph.flowchart.library.common import CtrlNode, PlottingCtrlNode
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine
 import numpy as np
 import acq4.util.functions as functions
-from six.moves import range
+
 
 class Threshold(CtrlNode):
     """Absolute threshold detection filter. Returns indexes where data crosses threshold."""

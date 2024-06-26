@@ -5,7 +5,7 @@ import weakref
 
 import numpy
 from pyqtgraph import SpinBox, WidgetGroup, mkPen
-from six.moves import range
+
 
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence

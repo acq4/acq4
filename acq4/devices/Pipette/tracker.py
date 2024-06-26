@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 import scipy
 import time
-from six.moves import range
+
 
 import pyqtgraph as pg
 from acq4.Manager import getManager

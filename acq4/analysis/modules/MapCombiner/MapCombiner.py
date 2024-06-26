@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from six.moves import range
+
 """
 For combining photostimulation maps across cells and displaying against 3D atlas.
 

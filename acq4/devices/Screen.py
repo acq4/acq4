@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from acq4.devices.Device import Device, DeviceTask, TaskGui
 from acq4.util import Qt
-from six.moves import range
+
 
 class Screen(Device):
     """

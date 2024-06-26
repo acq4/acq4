@@ -1,5 +1,5 @@
 import time
-from six.moves import range
+
 
 from acq4.util import ptime
 from acq4.devices.Camera import Camera, CameraTask

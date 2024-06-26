@@ -11,8 +11,8 @@ from acq4.util import Qt
 import pyqtgraph.parametertree.parameterTypes as pTypes
 from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType, ParameterSystem, SystemSolver
 from .component import ScanProgramComponent
-from six.moves import map
-from six.moves import range
+
+
 
 
 class RectScanComponent(ScanProgramComponent):

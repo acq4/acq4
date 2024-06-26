@@ -481,18 +481,20 @@ class ImageSequencerCtrl(Qt.QWidget):
             self._manuallyStopped = True
 
     def threadStopped(self, future):
-        self.ui.startBtn.setText("Start")
-        self.ui.startBtn.setChecked(False)
-        self.setRunning(False)
-        self.updateStatus()
-        if self._future is not None:
-            fut = self._future
-            self._future.sigFinished.disconnect(self.threadStopped)
-            self._future.sigStateChanged.disconnect(self.threadMessage)
-            self._future = None
-            if not self._manuallyStopped:
-                fut.wait(timeout=1)  # to raise errors if any happened
-                self._manuallyStopped = False
+        try:
+            self.ui.startBtn.setText("Start")
+            self.ui.startBtn.setChecked(False)
+            self.setRunning(False)
+            self.updateStatus()
+            if self._future is not None:
+                fut = self._future
+                self._future.sigFinished.disconnect(self.threadStopped)
+                self._future.sigStateChanged.disconnect(self.threadMessage)
+                self._future = None
+                if not self._manuallyStopped:
+                    fut.wait(timeout=1)  # to raise errors if any happened
+        finally:
+            self._manuallyStopped = False
 
     def setRunning(self, b):
         self.ui.startBtn.setEnabled(True)

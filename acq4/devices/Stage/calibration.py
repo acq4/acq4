@@ -2,8 +2,8 @@ import numpy as np
 import scipy.optimize
 import scipy.stats
 import time
-from six.moves import range
-from six.moves import zip
+
+
 
 import pyqtgraph as pg
 from acq4.Manager import getManager

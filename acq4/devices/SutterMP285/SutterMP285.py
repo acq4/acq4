@@ -1,23 +1,18 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 import os
-import time
 from copy import deepcopy
 
 import numpy as np
-import six
+import time
 
-import pyqtgraph as pg
+
 import acq4.util.debug as debug
+import pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from six.moves import range
 
 Ui_Form = Qt.importTemplate('.devTemplate')
 
@@ -42,7 +37,7 @@ class SutterMP285(Device, OptomechDevice):
 
         self.scale = config.pop('scale', (1, 1, 1))
         # Interpret "COM1" as port 0
-        if isinstance(self.port, six.string_types) and self.port.lower()[:3] == 'com':
+        if isinstance(self.port, str) and self.port.lower()[:3] == 'com':
             self.port = int(self.port[3:]) - 1
         
         self.baud = config.get('baud', 9600)   ## 9600 is probably factory default

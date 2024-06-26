@@ -293,7 +293,7 @@ class WholeCellState(PatchPipetteState):
     def cleanup(self):
         patchrec = self.dev.patchRecord()
         patchrec['wholeCellStopTime'] = ptime.time()
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class BrokenState(PatchPipetteState):
@@ -308,7 +308,7 @@ class BrokenState(PatchPipetteState):
 
     def initialize(self):
         self.dev.setTipBroken(True)
-        PatchPipetteState.initialize(self)
+        super().initialize()
 
 
 class FouledState(PatchPipetteState):
@@ -321,7 +321,7 @@ class FouledState(PatchPipetteState):
 
     def initialize(self):
         self.dev.setTipClean(False)
-        PatchPipetteState.initialize(self)
+        super().initialize()
 
 
 class BathState(PatchPipetteState):
@@ -342,7 +342,7 @@ class BathState(PatchPipetteState):
     """
     stateName = 'bath'
     def __init__(self, *args, **kwds):
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     _parameterDefaultOverrides = {
         'initialPressure': 3500.,  # 0.5 PSI
@@ -476,7 +476,7 @@ class CellDetectState(PatchPipetteState):
         self.lastMove = 0.0
         self.stepCount = 0
         self.advanceSteps = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
@@ -684,7 +684,7 @@ class CellDetectState(PatchPipetteState):
             self.contAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class SealState(PatchPipetteState):
@@ -761,7 +761,7 @@ class SealState(PatchPipetteState):
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (None, 0)]"},  # TODO
+        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (0, 0)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
@@ -774,7 +774,7 @@ class SealState(PatchPipetteState):
             if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
                 self.config['pressureLimit'] = self.config['maxVacuum']
         self.dev.clean = False
-        PatchPipetteState.initialize(self)
+        super().initialize()
 
     def run(self):
         self.monitorTestPulse()
@@ -896,7 +896,7 @@ class SealState(PatchPipetteState):
 
     def cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class CellAttachedState(PatchPipetteState):
@@ -949,7 +949,8 @@ class CellAttachedState(PatchPipetteState):
         self.monitorTestPulse()
         patchrec = self.dev.patchRecord()
         config = self.config
-        startTime = ptime.time()
+        last_measure = startTime = ptime.time()
+        cap_avg = None
         delay = config['autoBreakInDelay']
         while True:
             if delay is not None and ptime.time() - startTime > delay:
@@ -968,7 +969,14 @@ class CellAttachedState(PatchPipetteState):
                 return config['spontaneousDetachmentState']
 
             cap = tp.analysis['capacitance']
-            if cap > config['capacitanceThreshold']:
+            dt = ptime.time() - last_measure
+            last_measure += dt
+            if cap_avg is None:
+                cap_avg = tp.analysis['capacitance']
+            cap_tau = 1  # seconds
+            cap_alpha = 1 - np.exp(-dt / cap_tau)
+            cap_avg = cap_avg * (1 - cap_alpha) + cap * cap_alpha
+            if cap_avg > config['capacitanceThreshold']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
@@ -1119,7 +1127,7 @@ class BreakInState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class ResealAnalysis(object):
@@ -1299,7 +1307,7 @@ class ResealState(PatchPipetteState):
     }
 
     def __init__(self, *args, **kwds):
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
         self._moveFuture = None
         self._pressureFuture = None
         self._lastResistance = None
@@ -1522,7 +1530,7 @@ class BlowoutState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after blowout")
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class CleanState(PatchPipetteState):
@@ -1560,7 +1568,7 @@ class CleanState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     def run(self):
         self.monitorTestPulse()
@@ -1638,7 +1646,7 @@ class CleanState(PatchPipetteState):
         
         self.resetPosition()
 
-        PatchPipetteState.cleanup(self)
+        super().cleanup()
 
 
 class NucleusCollectState(PatchPipetteState):
@@ -1668,7 +1676,7 @@ class NucleusCollectState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None
-        PatchPipetteState.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
 
     def run(self):
         config = self.config.copy()
@@ -1709,5 +1717,4 @@ class NucleusCollectState(PatchPipetteState):
             printExc("Error resetting pressure after collection")
         
         self.resetPosition()
-            
-        PatchPipetteState.cleanup(self)
+        super().cleanup()

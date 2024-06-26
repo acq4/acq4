@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from six.moves import zip
+
 """
 Description:
     
@@ -67,7 +67,7 @@ import acq4.analysis.modules.Photostim.Scan as Scan
 from acq4.analysis.modules.Photostim.Map import Map
 import acq4.analysis.tools.poissonScore as poissonScore
 import acq4.util.flowchart.EventDetection as FCEventDetection
-from six.moves import range
+
 
 
 class MapAnalyzer(AnalysisModule):
