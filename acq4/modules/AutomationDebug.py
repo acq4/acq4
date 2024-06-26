@@ -183,8 +183,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
             if self._previousBoxWidgets:
                 box = random.choice(self._previousBoxWidgets)
                 center = box.rect().center()
-                # tODO translate? depth?
                 center = (center.x(), center.y(), self.cameraDevice.getFocusDepth())
+                print(f"Setting pipette target to {center}")
                 self.pipetteDevice.setTarget(center)
         finally:
             self._setWorkingState(False)
