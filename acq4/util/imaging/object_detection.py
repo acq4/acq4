@@ -96,7 +96,7 @@ def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future
         rmt_array = rmt_process.client.transfer(shared_array)
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this.do_neuron_detection(rmt_array.data, transform, model)
+        return rmt_this.do_neuron_detection(rmt_array.data, transform, model, _timeout=60)
 
 
 def do_neuron_detection(data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose") -> list:
