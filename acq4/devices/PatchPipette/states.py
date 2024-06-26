@@ -949,7 +949,8 @@ class CellAttachedState(PatchPipetteState):
         self.monitorTestPulse()
         patchrec = self.dev.patchRecord()
         config = self.config
-        startTime = ptime.time()
+        last_measure = startTime = ptime.time()
+        cap_avg = None
         delay = config['autoBreakInDelay']
         while True:
             if delay is not None and ptime.time() - startTime > delay:
@@ -968,7 +969,14 @@ class CellAttachedState(PatchPipetteState):
                 return config['spontaneousDetachmentState']
 
             cap = tp.analysis['capacitance']
-            if cap > config['capacitanceThreshold']:
+            dt = ptime.time() - last_measure
+            last_measure += dt
+            if cap_avg is None:
+                cap_avg = tp.analysis['capacitance']
+            cap_tau = 1  # seconds
+            cap_alpha = 1 - np.exp(-dt / cap_tau)
+            cap_avg = cap_avg * (1 - cap_alpha) + cap * cap_alpha
+            if cap_avg > config['capacitanceThreshold']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
