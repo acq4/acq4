@@ -185,7 +185,12 @@ class PipetteMotionPlanner:
         return self.pip._movePath(self.path())
 
     def path(self):
-        raise NotImplementedError()
+        startPosGlobal = self.pip.globalPosition()
+        if isinstance(self.position, str):
+            endPosGlobal = self.pip.loadPosition(self.position)
+        else:
+            endPosGlobal = self.position
+        return self.safePath(startPosGlobal, endPosGlobal, self.speed)
 
 
 class SavedPositionMotionPlanner(PipetteMotionPlanner):

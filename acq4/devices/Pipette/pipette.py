@@ -557,10 +557,11 @@ class PipetteRecorder:
         self.pip = pip
         self.events = []
 
-        self.pip.sigTransformChanged.connect(self.recordPos)
-        self.pip.sigMoveStarted.connect(self.recordMoveStarted)
-        self.pip.sigMoveFinished.connect(self.recordMoveFinished)
-        self.pip.sigMoveRequested.connect(self.recordMoveRequested)
+        
+        self.pip.sigGlobalTransformChanged.connect(self.recordPos, Qt.Qt.DirectConnection)
+        self.pip.sigMoveStarted.connect(self.recordMoveStarted, Qt.Qt.DirectConnection)
+        self.pip.sigMoveFinished.connect(self.recordMoveFinished, Qt.Qt.DirectConnection)
+        self.pip.sigMoveRequested.connect(self.recordMoveRequested, Qt.Qt.DirectConnection)
 
         self.newEvent('init', {'position': tuple(self.pip.globalPosition()), 'direction': tuple(self.pip.globalDirection())})
 
@@ -587,7 +588,7 @@ class PipetteRecorder:
         self.events.append(newEv)
 
     def stop(self):
-        self.pip.sigTransformChanged.disconnect(self.recordPos)
+        self.pip.sigGlobalTransformChanged.disconnect(self.recordPos)
         self.pip.sigMoveStarted.disconnect(self.recordMoveStarted)
         self.pip.sigMoveFinished.disconnect(self.recordMoveFinished)
         self.pip.sigMoveRequested.disconnect(self.recordMoveRequested)
