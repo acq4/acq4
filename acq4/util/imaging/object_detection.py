@@ -158,8 +158,11 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -
 
 @click.command()
 @click.argument("image", required=True)
-@click.option("--model", default="cellpose", show_default=True, type=click.Choice(["cellpose", "yolo"]))
-def cli(image, model):
+@click.option("--model", default="cellpose", show_default=True, type=click.Choice(["cellpose", "yolo", "pipette"]))
+@click.option("--angle", default=0, show_default=True, type=float)
+@click.option("--z", default=0, show_default=True, type=int)
+@click.option("--display", is_flag=True, type=bool)
+def cli(image, model, angle, z, display):
     null_xform = SRTTransform3D()
     if image[-3:] == ".ma":
         image = MetaArray(file=image)
@@ -170,9 +173,25 @@ def cli(image, model):
         image = Image.open(image)
         data = np.array(image)
     print(f"image shape: {data.shape}")
-    neurons = do_neuron_detection(data, null_xform, model)
-    print(f"Detected {len(neurons)} neuron(s)")
-    print(neurons)
+    if model == "pipette":
+        # fill in 3 channels
+        data = np.stack([data[z], data[z], data[z]], axis=-1)
+        print(f"image reshaped to be: {data.shape}")
+        _x, _y, _z = do_pipette_tip_detection(data[np.newaxis, ...], angle * np.pi / 180)
+        print(f"Detected pipette tip at {_x}, {_y}, {_z}")
+        # wait for user input
+        input("Press Enter to continue...")
+    else:
+        neurons = do_neuron_detection(data, null_xform, model)
+        print(f"Detected {len(neurons)} neuron(s)")
+        print(neurons)
+        if display:
+            pg.mkQApp()
+            pg.image(data[0][:])
+            for neuron in neurons:
+                start, end = neuron
+                pg.plot([start[0], end[0]], [start[1], end[1]], pen="r")
+            pg.exec_()
 
 
 if __name__ == '__main__':
