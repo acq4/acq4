@@ -1386,12 +1386,10 @@ class ResealState(PatchPipetteState):
         baseline_future = self.startRollingResistanceThresholds()
         if config['extractNucleus'] is True:
             self.nuzzle()
-        dev.pressureDevice.setPressure(config['initialPressureSource'], config['initialPressure'])
         self.checkStop()
         self.setState("measuring baseline resistance")
         self.waitFor(baseline_future, timeout=self.config['repairTau'])
-        self._pressureFuture = dev.pressureDevice.rampPressure(
-            target=config['retractionPressure'], rate=config['pressureChangeRate'])
+        dev.pressureDevice.setPressure(source='regulator', pressure=config['retractionPressure'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
         recovery_future = None
