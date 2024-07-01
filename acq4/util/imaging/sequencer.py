@@ -478,6 +478,8 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.ui.startBtn.setText("Stopping...")
             self.ui.startBtn.setEnabled(False)
             self._future.stop()
+            self.imager.scopeDev.positionDevice().stop()
+            self.imager.scopeDev.focusDevice().stop()
             self._manuallyStopped = True
 
     def threadStopped(self, future):
