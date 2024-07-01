@@ -318,6 +318,8 @@ class MockCamera(Camera):
         return {k: self.paramRanges[k] for k in params}
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        if isinstance(params, list):
+            params = dict(params)
         dp = []
         ap = {}
         for k in params:
