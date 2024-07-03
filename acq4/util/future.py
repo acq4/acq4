@@ -228,7 +228,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         start = time.time()
         while True:
-            self.checkStop()
+            try:
+                self.checkStop()
+            except self.StopRequested:
+                future.stop(reason="parent task stop requested")
+                raise
             try:
                 future.wait(0.1)
                 break
