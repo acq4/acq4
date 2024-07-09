@@ -50,6 +50,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._state = 'starting'
         self._errorMonitorThread = None
         self._executingThread = None
+        self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
 
@@ -67,6 +68,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._taskDone(returnValue=func(*args, **kwds))
         except Exception as exc:
             self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
+
+    def propagateStopsInto(self, future: Future):
+        """Add a future to the list of futures that will be stopped if this future is stopped.
+        """
+        self._stopsToPropagate.append(future)
 
     def getResult(self, **kwds) -> FUTURE_RETVAL_TYPE:
         self.wait(**kwds)
@@ -111,6 +117,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if reason is not None:
             self._errorMessage = reason
         self._stopRequested = True
+        for f in self._stopsToPropagate:
+            f.stop(reason=reason)
 
     def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None, returnValue=None):
         """Called by subclasses when the task is done (regardless of the reason)
@@ -220,7 +228,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         start = time.time()
         while True:
-            self.checkStop()
+            try:
+                self.checkStop()
+            except self.StopRequested:
+                future.stop(reason="parent task stop requested")
+                raise
             try:
                 future.wait(0.1)
                 break
@@ -294,6 +306,8 @@ def future_wrap(
         future = Future()
         if kwds.pop('block', False):
             kwds['_future'] = future
+            if parent := kwds.pop('checkStopThrough', None):
+                parent.propagateStopsInto(future)
             future.executeAndSetReturn(func, args, kwds)
             future.wait()
         else:
