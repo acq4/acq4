@@ -101,6 +101,16 @@ class PatchPipetteStateManager(Qt.QObject):
     @classmethod
     def addProfile(cls, name: str, config: dict, overwrite=False):
         assert overwrite or name not in cls.profiles, f"Patch profile {name} already exists"
+        for state, state_config in config.items():
+            if state == 'copyFrom':
+                assert isinstance(state_config, str), f"Invalid copyFrom value {state_config!r} in profile {name}"
+                assert state_config in cls.profiles, f"Unknown profile {state_config!r} to copy from in profile {name}"
+                continue
+            assert state in cls.stateHandlers, f"Unknown patch state {state!r} in profile {name}"
+            assert isinstance(state_config, dict), f"Invalid configuration for state {state!r} in profile {name}"
+            for param, value in state_config.items():
+                assert isinstance(param, str), f"Invalid parameter name {param!r} in state {state!r} of profile {name}"
+                assert param in cls.getStateClass(state).defaultConfig(), f"Unknown parameter {param!r} in state {state!r} of profile {name}"
         cls.profiles[name] = config
 
     @classmethod
