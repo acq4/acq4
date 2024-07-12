@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from collections import deque
+from functools import cached_property
+
 from typing import Any, Optional
 
 import contextlib
@@ -237,6 +241,25 @@ class PatchPipetteState(Future):
         return f'<{type(self).__name__} "{self.stateName}">'
 
 
+class SteadyStateAnalysisBase(object):
+    def __init__(self, **kwds):
+        self._last_measurement: Optional[np.void] = None
+
+    def process_test_pulses(self, tps: list[PatchClampTestPulse]) -> np.ndarray:
+        return self.process_measurements(
+            np.array([(tp.start_time, tp.analysis['steady_state_resistance']) for tp in tps]))
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    @staticmethod
+    def _exponential_decay_avg(dt, prev_avg, resistance, tau):
+        alpha = 1 - np.exp(-dt / tau)
+        avg = prev_avg * (1 - alpha) + resistance * alpha
+        ratio = np.log10(avg / prev_avg)
+        return avg, ratio
+
+
 class OutState(PatchPipetteState):
     stateName = 'out'
 
@@ -414,6 +437,86 @@ class BathState(PatchPipetteState):
                 return 'fouled'
 
 
+class CellDetectAnalysis(SteadyStateAnalysisBase):
+    """Class to analyze test pulses and determine cell detection behavior."""
+    def __init__(
+            self,
+            cell_threshold_fast: float,
+            cell_threshold_slow: float,
+            slow_detection_steps: int,
+            obstacle_threshold: float,
+            break_threshold: float,
+    ):
+        super().__init__()
+        self._initial_resistance = None
+        self._cell_threshold_fast = cell_threshold_fast
+        self._cell_threshold_slow = cell_threshold_slow
+        self._slow_detection_steps = slow_detection_steps
+        self._obstacle_threshold = obstacle_threshold
+        self._break_threshold = break_threshold
+        self._measurment_count = 0
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(
+            len(measurements),
+            dtype=[
+                ('time', float),
+                ('resistance', float),
+                ('resistance_avg', float),
+                ('cell_detected_fast', bool),
+                ('cell_detected_slow', bool),
+                ('obstacle_detected', bool),
+                ('tip_is_broken', bool),
+            ])
+        for i, measurement in enumerate(measurements):
+            start_time, resistance = measurement
+            self._measurment_count += 1
+            if i == 0:
+                if self._last_measurement is None:
+                    ret_array[i] = (start_time, resistance, resistance, False, False, False, False)
+                    self._last_measurement = ret_array[i]
+                    self._initial_resistance = resistance
+                    continue
+                last_measurement = self._last_measurement
+            else:
+                last_measurement = ret_array[i - 1]
+
+            cell_detected_fast = resistance > self._cell_threshold_fast + self._initial_resistance
+            dt = start_time - last_measurement['time']
+            resistance_avg, _ = self._exponential_decay_avg(
+                dt, last_measurement['resistance_avg'], resistance, dt * self._slow_detection_steps)
+            cell_detected_slow = (
+                    self._measurment_count >= self._slow_detection_steps and
+                    resistance_avg > self._cell_threshold_slow + self._initial_resistance
+            )
+            obstacle_detected = resistance > self._obstacle_threshold + self._initial_resistance
+            tip_is_broken = resistance < self._initial_resistance + self._break_threshold
+
+            ret_array[i] = (
+                start_time,
+                resistance,
+                resistance_avg,
+                cell_detected_fast,
+                cell_detected_slow,
+                obstacle_detected,
+                tip_is_broken,
+            )
+        self._last_measurement = ret_array[-1]
+        return ret_array
+
+    def cell_detected_fast(self):
+        return self._last_measurement and self._last_measurement['cell_detected_fast']
+
+    def cell_detected_slow(self):
+        return self._last_measurement and self._last_measurement['cell_detected_slow']
+
+    def obstacle_detected(self):
+        return self._last_measurement and self._last_measurement['obstacle_detected']
+
+    def tip_is_broken(self):
+        return self._last_measurement and self._last_measurement['tip_is_broken']
+
+
 class CellDetectState(PatchPipetteState):
     """Handles cell detection:
 
@@ -421,16 +524,10 @@ class CellDetectState(PatchPipetteState):
     - monitor resistance for pipette break
 
     TODO:
-    - Obstacle avoidance
     - Cell tracking
 
     Parameters
     ----------
-    initialClampMode : str
-        Clamp mode to set when beginning this state--
-        'VC' or 'IC' (default 'VC')
-    initialVCHolding : float
-        Initial VC holding value to use when beginning this state (default 0)
     autoAdvance : bool
         If True, automatically advance the pipette while monitoring for cells (default True)
     advanceMode : str
@@ -444,6 +541,20 @@ class CellDetectState(PatchPipetteState):
         Time duration (seconds) to wait between steps when advanceContinuous=False(default 0.1)
     advanceStepDistance : float
         Distance (m) per step when advanceContinuous=False (default 1 um)
+    obstacleDetection : bool
+        If True, sidestep obstacles (default False)
+    obstacleRecoveryTime : float
+        Time (s) allowed after retreating from an obstacle to let resistance to return to normal (default 1 s)
+    obstacleResistanceThreshold : float
+        Resistance (Ohm) threshold above the initial resistance measurement for detecting an obstacle (default 1 MOhm)
+    sidestepLateralDistance : float
+        Distance (m) to sidestep an obstacle (default 10 µm)
+    sidestepBackupDistance : float
+        Distance (m) to backup before sidestepping (default 10 µm)
+    sidestepPassDistance : float
+        Distance (m) to pass an obstacle (default 20 µm)
+    minDetectionDistance : float
+        Minimum distance (m) from target before cell detection can be considered (default 50 µm)
     maxAdvanceDistance : float | None
         Maximum distance (m) to advance past starting point (default None)
     maxAdvanceDistancePastTarget : float | None
@@ -471,13 +582,6 @@ class CellDetectState(PatchPipetteState):
 
     """
     stateName = 'cell detect'
-    def __init__(self, *args, **kwds):
-        self.contAdvanceFuture = None
-        self.lastMove = 0.0
-        self.stepCount = 0
-        self.advanceSteps = None
-        super().__init__(*args, **kwds)
-
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
         'initialVCHolding': 0,
@@ -501,87 +605,77 @@ class CellDetectState(PatchPipetteState):
         'reserveDAQ': {'default': False, 'type': 'bool'},
         'cellDetectTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
         'DAQReservationTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
+        'obstacleDetection': {'default': False, 'type': 'bool'},
+        'obstacleRecoveryTime': {'default': 1, 'type': 'float', 'suffix': 's'},
+        'obstacleResistanceThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
+        'sidestepLateralDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
+        'sidestepBackupDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
+        'sidestepPassDistance': {'default': 20e-6, 'type': 'float', 'suffix': 'm'},
+        'minDetectionDistance': {'default': 50e-6, 'type': 'float', 'suffix': 'm'},
     }
 
-    def run(self):
-        if not self.config["reserveDAQ"]:
-            return self._do_cell_detect()
-        daq_name = self.dev.clampDevice.getDAQName("primary")
-        self.setState(f"cell detect: waiting for {daq_name} lock")
-        with getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]):
-            self.setState(f"cell detect: {daq_name} lock acquired")
-            return self._do_cell_detect()
+    def __init__(self, *args, **kwds):
+        super().__init__(*args, **kwds)
+        self._continuousAdvanceFuture = None
+        self.lastMove = 0.0
+        self.stepCount = 0
+        self.advanceSteps = None
+        self._analysis = CellDetectAnalysis(
+            self.config['fastDetectionThreshold'],
+            self.config['slowDetectionThreshold'],
+            self.config['slowDetectionSteps'],
+            self.config['obstacleResistanceThreshold'],
+            self.config['breakThreshold'],
+        )
+        self._lastTestPulse = None
+        self._startTime = None
+        self.direction = self._calc_direction()
 
-    def _do_cell_detect(self):
-        startTime = ptime.time()
+    def run(self):
+        with contextlib.ExitStack() as stack:
+            if self.config["reserveDAQ"]:
+                daq_name = self.dev.clampDevice.getDAQName("primary")
+                self.setState(f"cell detect: waiting for {daq_name} lock")
+                stack.enter_context(
+                    getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
+                self.setState(f"cell detect: {daq_name} lock acquired")
+
+            return self._run()
+
+    def _run(self):
         config = self.config
-        dev = self.dev
         self.monitorTestPulse()
 
-        dev.clampDevice.autoPipetteOffset()
-
-        patchrec = dev.patchRecord()
-        patchrec['attemptedCellDetect'] = True
-        initialResistance = None
-        recentTestPulses = deque(maxlen=config['slowDetectionSteps'] + 1)
-        patchrec['cellDetectInitialTarget'] = tuple(dev.pipetteDevice.targetPosition())
-
-        while True:
-            if config['cellDetectTimeout'] is not None and ptime.time() - startTime > config['cellDetectTimeout']:
-                self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
-                return config['fallbackState']
-
+        while not self.weTookTooLong():
+            if speed := self.targetCellFound():
+                return self._transition_to_seal(speed)
             self.checkStop()
-
-            # pull in all new test pulses (hopefully only one since the last time we checked)
-            tps = self.getTestPulses(timeout=0.2)
-            if len(tps) == 0:
-                continue
-            recentTestPulses.extend(tps)
-
-            tp = tps[-1]
-            ssr = tp.analysis['steady_state_resistance']
-            if initialResistance is None:
-                # take note of initial resistance
-                initialResistance = ssr
-                self.setState(f"cell detection: got initial resistance {ssr}")
-
-            # check for pipette break
-            self.setState("cell detection: check for pipette break")
-            if ssr < initialResistance + config['breakThreshold']:
+            self.processAtLeastOneTestPulse()
+            if self._analysis.tip_is_broken():
                 self._taskDone(interrupted=True, error="Pipette broken")
-                patchrec['detectedCell'] = False
+                self.dev.patchrec()['detectedCell'] = False
                 return 'broken'
-
-            # fast cell detection
-            self.setState("cell detection: check for cell proximity")
-            if ssr > initialResistance + config['fastDetectionThreshold']:
-                return self._transition_to_seal("cell detected (fast criteria)", patchrec)
-            # slow cell detection
-            if len(recentTestPulses) > config['slowDetectionSteps']:
-                res = np.array([tp.analysis['steady_state_resistance'] for tp in recentTestPulses])
-                if np.all(np.diff(res) > 0) and ssr - initialResistance > config['slowDetectionThreshold']:
-                    return self._transition_to_seal("cell detected (slow criteria)", patchrec)
-            self.checkStop()
-
+            if self.obstacleDetected():
+                try:
+                    self.avoidObstacle()
+                except TimeoutError:
+                    self._taskDone(interrupted=True, error="Fouled by obstacle")
+                    return 'fouled'
             if config['autoAdvance']:
                 if config['advanceContinuous']:
                     # Start continuous move if needed
-                    if self.contAdvanceFuture is None:
-                        self.setState("cell detection: continuous pipette advance")
+                    if self._continuousAdvanceFuture is None:
                         self.startContinuousMove()
-                    if self.contAdvanceFuture.isDone():
-                        self.contAdvanceFuture.wait()  # check for move errors
-                        return self._transition_to_fallback(patchrec)
+                    if self._continuousAdvanceFuture.isDone():
+                        self._continuousAdvanceFuture.wait()  # check for move errors
+                        return self._transition_to_fallback()
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
                         self.setState("cell detection: stepping pipette")
                         self.advanceSteps = self.getAdvanceSteps()
-                        print(len(self.advanceSteps))
-                        print(self.advanceSteps)
                     if self.stepCount >= len(self.advanceSteps):
-                        return self._transition_to_fallback(patchrec)
+                        return self._transition_to_fallback()
                     # make sure we obey advanceStepInterval
                     now = ptime.time()
                     if now - self.lastMove < config['advanceStepInterval']:
@@ -589,17 +683,89 @@ class CellDetectState(PatchPipetteState):
                     self.lastMove = now
 
                     self.singleStep()
+        self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
+        return config['fallbackState']
 
-    def _transition_to_fallback(self, patchrec):
+    def avoidObstacle(self):
+        if self._continuousAdvanceFuture is not None:
+            self._continuousAdvanceFuture.stop("Obstacle detected")
+            self._continuousAdvanceFuture = None
+
+        pip = self.dev.pipetteDevice
+        speed = self.config['advanceSpeed']
+
+        pos = np.array(pip.globalPosition())
+        direction = self.direction
+        self.waitFor(
+            pip._moveToGlobal(pos - self.config['sidestepBackupDistance'] * direction, speed=speed))
+
+        start_time = ptime.time()
+        while self._analysis.obstacle_detected():
+            self.processAtLeastOneTestPulse()
+            if ptime.time() - start_time < self.config['obstacleRecoveryTime']:
+                raise TimeoutError("Pipette fouled by obstacle")
+
+        pos = np.array(pip.globalPosition())
+        # pick a sidestep point orthogonal to the pipette direction on the xy plane
+        xy_perpendicular = np.array([-direction[1], direction[0], 0])
+        sidestep = self.config['sidestepLateralDistance'] * xy_perpendicular / np.linalg.norm(xy_perpendicular)
+        self.waitFor(pip._moveToGlobal(pos + sidestep, speed=speed))
+        pos = np.array(pip.globalPosition())
+        self.waitFor(pip._moveToGlobal(pos + self.config['sidestepPassDistance'] * direction, speed=speed))
+        pos = np.array(pip.globalPosition())
+        self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
+
+    def obstacleDetected(self):
+        return self.config['obstacleDetection'] and self._analysis.obstacle_detected()
+
+    def processAtLeastOneTestPulse(self):
+        while not (tps := self.getTestPulses(timeout=0.2)):
+            self.checkStop()
+        self._analysis.process_test_pulses(tps)
+        self._lastTestPulse = tps[-1]
+
+    def weTookTooLong(self):
+        if self._startTime is None:
+            self._startTime = ptime.time()
+        return self.config['cellDetectTimeout'] is not None and ptime.time() - self._startTime > self.config['cellDetectTimeout']
+
+    def targetCellFound(self) -> str | bool:
+        if self.closeEnoughToTargetToDetectCell():
+            if self._analysis.cell_detected_fast():
+                return 'fast'
+            if self._analysis.cell_detected_slow():
+                return 'slow'
+        return False
+
+    def closeEnoughToTargetToDetectCell(self):
+        pip = self.dev.pipetteDevice
+        target = np.array(pip.targetPosition())
+        pos = np.array(pip.globalPosition())
+        return np.linalg.norm(target - pos) < self.config['minDetectionDistance']
+
+    def _transition_to_fallback(self):
         self._taskDone(interrupted=True, error="No cell found before end of search path")
-        patchrec['detectedCell'] = False
+        self.dev.patchrec()['detectedCell'] = False
         return self.config['fallbackState']
 
-    def _transition_to_seal(self, reason, patchrec):
-        self.setState(reason)
+    def _transition_to_seal(self, speed):
+        self.setState(f"cell detected ({speed} criteria)")
         self._taskDone()
-        patchrec['detectedCell'] = True
+        self.dev.patchrec()['detectedCell'] = True
         return "seal"
+
+    def _calc_direction(self):
+        # what direction are we moving?
+        pip = self.dev.pipetteDevice
+        if self.config['advanceMode'] == 'vertical':
+            direction = np.array([0.0, 0.0, -1.0])
+        elif self.config['advanceMode'] == 'axial':
+            direction = pip.globalDirection()
+        elif self.config['advanceMode'] == 'target':
+            direction = np.array(pip.targetPosition()) - np.array(pip.globalPosition())
+        else:
+            raise ValueError(f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
+        return direction / np.linalg.norm(direction)
 
     def getSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
@@ -612,35 +778,24 @@ class CellDetectState(PatchPipetteState):
         surface = pip.scopeDevice().getSurfaceDepth()
         target = np.array(pip.targetPosition())
 
-        # what direction are we moving?
-        if config['advanceMode'] == 'vertical':
-            direction = np.array([0.0, 0.0, -1.0])
-        elif config['advanceMode'] == 'axial':
-            direction = pip.globalDirection()
-        elif config['advanceMode'] == 'target':
-            direction = target - pos
-        else:
-            raise ValueError("advanceMode must be 'vertical', 'axial', or 'target'  (got %r)" % config['advanceMode'])
-        direction = direction / np.linalg.norm(direction)
-
         endpoint = None
 
         # max search distance
         if config['maxAdvanceDistance'] is not None:
-            endpoint = pos + direction * config['maxAdvanceDistance']            
+            endpoint = pos + self.direction * config['maxAdvanceDistance']
 
         # max surface depth 
-        if config['maxAdvanceDepthBelowSurface'] is not None and direction[2] < 0:
+        if config['maxAdvanceDepthBelowSurface'] is not None and self.direction[2] < 0:
             endDepth = surface - config['maxAdvanceDepthBelowSurface']
             dz = endDepth - pos[2]
-            depthEndpt = pos + direction * (dz / direction[2])
+            depthEndpt = pos + self.direction * (dz / self.direction[2])
             # is the surface depth endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint-pos) > np.linalg.norm(depthEndpt-pos):
                 endpoint = depthEndpt
 
         # max distance past target
         if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
-            targetEndpt = target + direction * config['maxAdvanceDistancePastTarget']
+            targetEndpt = target + self.direction * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint-pos) > np.linalg.norm(targetEndpt-pos):
                 endpoint = targetEndpt
@@ -653,8 +808,9 @@ class CellDetectState(PatchPipetteState):
     def startContinuousMove(self):
         """Begin moving pipette continuously along search path.
         """
+        self.setState("cell detection: continuous pipette advance")
         endpoint = self.getSearchEndpoint()
-        self.contAdvanceFuture = self.dev.pipetteDevice._moveToGlobal(endpoint, speed=self.config['advanceSpeed'])
+        self._continuousAdvanceFuture = self.dev.pipetteDevice._moveToGlobal(endpoint, speed=self.config['advanceSpeed'])
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
@@ -680,8 +836,8 @@ class CellDetectState(PatchPipetteState):
         self.waitFor(fut)
 
     def cleanup(self):
-        if self.contAdvanceFuture is not None:
-            self.contAdvanceFuture.stop()
+        if self._continuousAdvanceFuture is not None:
+            self._continuousAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
         super().cleanup()
@@ -1130,14 +1286,14 @@ class BreakInState(PatchPipetteState):
         super().cleanup()
 
 
-class ResealAnalysis(object):
+class ResealAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine reseal behavior."""
     def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
+        super().__init__()
         self._stretch_threshold = stretch_threshold
         self._tear_threshold = tear_threshold
         self._detection_tau = detection_tau
         self._repair_tau = repair_tau
-        self._last_measurement: Optional[np.void] = None
 
     def is_stretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
@@ -1146,10 +1302,6 @@ class ResealAnalysis(object):
     def is_tearing(self) -> bool:
         """Return True if the resistance is decreasing."""
         return self._last_measurement and self._last_measurement['tearing']
-
-    def process_test_pulses(self, tps: list[PatchClampTestPulse]) -> np.ndarray:
-        return self.process_measurements(
-            np.array([(tp.start_time, tp.analysis['steady_state_resistance']) for tp in tps]))
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(
@@ -1178,18 +1330,10 @@ class ResealAnalysis(object):
 
             dt = start_time - last_measurement['time']
 
-            detection_alpha = 1 - np.exp(-dt / self._detection_tau)
-            detection_avg = (
-                    last_measurement['detect_avg'] * (1 - detection_alpha)
-                    + resistance * detection_alpha
-            )
-            detection_ratio = np.log10(detection_avg / last_measurement['detect_avg'])
-            repair_alpha = 1 - np.exp(-dt / self._repair_tau)
-            repair_avg = (
-                    last_measurement['repair_avg'] * (1 - repair_alpha)
-                    + resistance * repair_alpha
-            )
-            repair_ratio = np.log10(repair_avg / last_measurement['repair_avg'])
+            detection_avg, detection_ratio = self._exponential_decay_avg(
+                dt, last_measurement['detection_avg'], resistance, self._detection_tau)
+            repair_avg, repair_ratio = self._exponential_decay_avg(
+                dt, last_measurement['repair_avg'], resistance, self._repair_tau)
 
             is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
             is_tearing = detection_ratio < self._tear_threshold or repair_ratio < self._tear_threshold
