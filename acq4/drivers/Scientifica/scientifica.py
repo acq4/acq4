@@ -69,17 +69,22 @@ class Scientifica(SerialDevice):
         Sets Scientifica.availableDevices to a dict of {name: port} pairs.
 
         This works by searching for USB serial devices with device IDs used by Scientifica
-        (vid=0403, pid=6010) and sending a single serial request.
+        (vid:pid 0403:6010 or 10C4:EA70) and sending a single serial request.
         """
         import serial.tools.list_ports
         coms = serial.tools.list_ports.comports()
         devs = {}
         for com, name, ident in coms:
-            # several different ways this can appear:
-            #  VID_0403+PID_6010
-            #  VID_0403&PID_6010
-            #  VID:PID=0403:6010
-            if ('VID_0403' not in ident or 'PID_6010' not in ident) and '0403:6010' not in ident:
+            isScientifica = False
+            for vid,pid in [('0403', '6010'), ('10C4', 'EA70')]:
+                # several different ways this can appear:
+                #  VID_0403+PID_6010
+                #  VID_0403&PID_6010
+                #  VID:PID=0403:6010
+                if (f'VID_{vid}' in ident and f'PID_{pid}' in ident) or f'{vid}:{pid}' in ident:
+                    isScientifica = True
+                    break
+            if not isScientifica:
                 continue
             com = cls.normalizePortName(com)
             if com in cls.openDevices:
