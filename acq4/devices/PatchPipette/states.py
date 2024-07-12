@@ -716,7 +716,7 @@ class CellDetectState(PatchPipetteState):
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
     def obstacleDetected(self):
-        return self.config['obstacleDetection'] and self._analysis.obstacle_detected()
+        return self.config['obstacleDetection'] and not self.closeEnoughToTargetToDetectCell() and self._analysis.obstacle_detected()
 
     def processAtLeastOneTestPulse(self):
         while not (tps := self.getTestPulses(timeout=0.2)):
