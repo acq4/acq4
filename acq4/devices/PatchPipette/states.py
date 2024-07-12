@@ -241,10 +241,6 @@ class PatchPipetteState(Future):
         return f'<{type(self).__name__} "{self.stateName}">'
 
 
-class FouledError(Exception):
-    pass
-
-
 class SteadyStateAnalysisBase(object):
     def __init__(self, **kwds):
         self._last_measurement: Optional[np.void] = None
@@ -477,7 +473,7 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             self._measurment_count += 1
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, resistance, False, False, False)
+                    ret_array[i] = (start_time, resistance, resistance, False, False, False, False)
                     self._last_measurement = ret_array[i]
                     self._initial_resistance = resistance
                     continue
@@ -547,6 +543,8 @@ class CellDetectState(PatchPipetteState):
         Distance (m) per step when advanceContinuous=False (default 1 um)
     obstacleDetection : bool
         If True, sidestep obstacles (default False)
+    obstacleRecoveryTime : float
+        Time (s) allowed after retreating from an obstacle to let resistance to return to normal (default 1 s)
     obstacleResistanceThreshold : float
         Resistance (Ohm) threshold above the initial resistance measurement for detecting an obstacle (default 1 MOhm)
     sidestepLateralDistance : float
@@ -608,6 +606,7 @@ class CellDetectState(PatchPipetteState):
         'cellDetectTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
         'DAQReservationTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
         'obstacleDetection': {'default': False, 'type': 'bool'},
+        'obstacleRecoveryTime': {'default': 1, 'type': 'float', 'suffix': 's'},
         'obstacleResistanceThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'sidestepLateralDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'sidestepBackupDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
@@ -630,6 +629,7 @@ class CellDetectState(PatchPipetteState):
         )
         self._lastTestPulse = None
         self._startTime = None
+        self.direction = self._calc_direction()
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -658,7 +658,7 @@ class CellDetectState(PatchPipetteState):
             if self.obstacleDetected():
                 try:
                     self.avoidObstacle()
-                except FouledError:
+                except TimeoutError:
                     self._taskDone(interrupted=True, error="Fouled by obstacle")
                     return 'fouled'
             if config['autoAdvance']:
@@ -687,7 +687,33 @@ class CellDetectState(PatchPipetteState):
         return config['fallbackState']
 
     def avoidObstacle(self):
-        pass  # TODO
+        if self._continuousAdvanceFuture is not None:
+            self._continuousAdvanceFuture.stop("Obstacle detected")
+            self._continuousAdvanceFuture = None
+
+        pip = self.dev.pipetteDevice
+        speed = self.config['advanceSpeed']
+
+        pos = np.array(pip.globalPosition())
+        direction = self.direction
+        self.waitFor(
+            pip._moveToGlobal(pos - self.config['sidestepBackupDistance'] * direction, speed=speed))
+
+        start_time = ptime.time()
+        while self._analysis.obstacle_detected():
+            self.processAtLeastOneTestPulse()
+            if ptime.time() - start_time < self.config['obstacleRecoveryTime']:
+                raise TimeoutError("Pipette fouled by obstacle")
+
+        pos = np.array(pip.globalPosition())
+        # pick a sidestep point orthogonal to the pipette direction on the xy plane
+        xy_perpendicular = np.array([-direction[1], direction[0], 0])
+        sidestep = self.config['sidestepLateralDistance'] * xy_perpendicular / np.linalg.norm(xy_perpendicular)
+        self.waitFor(pip._moveToGlobal(pos + sidestep, speed=speed))
+        pos = np.array(pip.globalPosition())
+        self.waitFor(pip._moveToGlobal(pos + self.config['sidestepPassDistance'] * direction, speed=speed))
+        pos = np.array(pip.globalPosition())
+        self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
     def obstacleDetected(self):
         return self.config['obstacleDetection'] and self._analysis.obstacle_detected()
@@ -728,10 +754,9 @@ class CellDetectState(PatchPipetteState):
         self.dev.patchrec()['detectedCell'] = True
         return "seal"
 
-    @cached_property
-    def direction(self):
+    def _calc_direction(self):
         # what direction are we moving?
-        pip = self.pipetteDevice
+        pip = self.dev.pipetteDevice
         if self.config['advanceMode'] == 'vertical':
             direction = np.array([0.0, 0.0, -1.0])
         elif self.config['advanceMode'] == 'axial':
