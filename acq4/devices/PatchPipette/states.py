@@ -1322,8 +1322,8 @@ class ResealAnalysis(SteadyStateAnalysisBase):
 
             dt = start_time - last_measurement['time']
 
-            detection_avg, detection_ratio = self._exponential_decay_avg(
-                dt, last_measurement['detection_avg'], resistance, self._detection_tau)
+            detect_avg, detection_ratio = self._exponential_decay_avg(
+                dt, last_measurement['detect_avg'], resistance, self._detection_tau)
             repair_avg, repair_ratio = self._exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau)
 
@@ -1332,7 +1332,7 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             ret_array[i] = (
                 start_time,
                 resistance,
-                detection_avg,
+                detect_avg,
                 repair_avg,
                 detection_ratio,
                 repair_ratio,
