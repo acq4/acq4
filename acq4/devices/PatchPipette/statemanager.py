@@ -101,16 +101,28 @@ class PatchPipetteStateManager(Qt.QObject):
     @classmethod
     def addProfile(cls, name: str, config: dict, overwrite=False):
         assert overwrite or name not in cls.profiles, f"Patch profile {name} already exists"
+        mistakes = []
         for state, state_config in config.items():
             if state == 'copyFrom':
-                assert isinstance(state_config, str), f"Invalid copyFrom value {state_config!r} in profile {name}"
-                assert state_config in cls.profiles, f"Unknown profile {state_config!r} to copy from in profile {name}"
+                if not isinstance(state_config, str):
+                    mistakes.append(f"Invalid copyFrom value {state_config!r} in profile {name}")
+                if state_config not in cls.profiles:
+                    mistakes.append(f"Unknown profile {state_config!r} to copy from in profile {name}")
                 continue
-            assert state in cls.stateHandlers, f"Unknown patch state {state!r} in profile {name}"
-            assert isinstance(state_config, dict), f"Invalid configuration for state {state!r} in profile {name}"
+            if state not in cls.stateHandlers:
+                mistakes.append(f"Unknown patch state {state!r} in profile {name}")
+                continue
+            if not isinstance(state_config, dict):
+                mistakes.append(f"Invalid configuration for state {state!r} in profile {name}")
+                continue
             for param, value in state_config.items():
-                assert isinstance(param, str), f"Invalid parameter name {param!r} in state {state!r} of profile {name}"
-                assert param in cls.getStateClass(state).defaultConfig(), f"Unknown parameter {param!r} in state {state!r} of profile {name}"
+                if not isinstance(param, str):
+                    mistakes.append(f"Invalid parameter name {param!r} in state {state!r} of profile {name}")
+                    continue
+                if param not in cls.getStateClass(state).defaultConfig():
+                    mistakes.append(f"Unknown parameter {param!r} in state {state!r} of profile {name}")
+        if mistakes:
+            raise ValueError(f"Errors in profile {name}:\n" + "\n".join(mistakes))
         cls.profiles[name] = config
 
     @classmethod
