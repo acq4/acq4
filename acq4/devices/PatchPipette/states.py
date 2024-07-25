@@ -653,7 +653,7 @@ class CellDetectState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             if self._analysis.tip_is_broken():
                 self._taskDone(interrupted=True, error="Pipette broken")
-                self.dev.patchrec()['detectedCell'] = False
+                self.dev.patchRecord()['detectedCell'] = False
                 return 'broken'
             if self.obstacleDetected():
                 try:
@@ -745,13 +745,13 @@ class CellDetectState(PatchPipetteState):
 
     def _transition_to_fallback(self):
         self._taskDone(interrupted=True, error="No cell found before end of search path")
-        self.dev.patchrec()['detectedCell'] = False
+        self.dev.patchRecord()['detectedCell'] = False
         return self.config['fallbackState']
 
     def _transition_to_seal(self, speed):
         self.setState(f"cell detected ({speed} criteria)")
         self._taskDone()
-        self.dev.patchrec()['detectedCell'] = True
+        self.dev.patchRecord()['detectedCell'] = True
         return "seal"
 
     def _calc_direction(self):
