@@ -916,6 +916,8 @@ class CellAttachedState(PatchPipetteState):
         Capacitance (default 10pF) above which the pipette is considered to be whole-cell and immediately
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
+    minimumBreakInResistance : float
+        Minimum resistance (Ohms) to allow spontaneous break-in to occur. Default 1 GOhm.
     resistanceThreshold : float
         Steady state resistance threshold (default 100MΩ) below which the cell is considered to either be
         'spontaneousDetachmentState' or 'spontaneousBreakInState'.
@@ -939,6 +941,7 @@ class CellAttachedState(PatchPipetteState):
     _parameterTreeConfig = {
         'autoBreakInDelay': {'type': 'float', 'default': None, 'optional': True, 'suffix': 's'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
+        'minimumBreakInResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
         'resistanceThreshold': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
@@ -973,14 +976,14 @@ class CellAttachedState(PatchPipetteState):
             last_measure += dt
             if cap_avg is None:
                 cap_avg = tp.analysis['capacitance']
-            cap_tau = 1  # seconds
-            cap_alpha = 1 - np.exp(-dt / cap_tau)
+            cap_avg_tau = 1  # seconds
+            cap_alpha = 1 - np.exp(-dt / cap_avg_tau)
             cap_avg = cap_avg * (1 - cap_alpha) + cap * cap_alpha
-            if cap_avg > config['capacitanceThreshold']:
+            ssr = tp.analysis['steady_state_resistance']
+            if cap_avg > config['capacitanceThreshold'] and ssr < config['minimumBreakInResistance']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
-            ssr = tp.analysis['steady_state_resistance']
             if ssr < config['resistanceThreshold']:
                 self._taskDone(interrupted=True, error='Steady state resistance dropped below threshold.')
                 return config['spontaneousDetachmentState']
