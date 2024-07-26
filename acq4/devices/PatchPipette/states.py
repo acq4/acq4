@@ -703,7 +703,7 @@ class CellDetectState(PatchPipetteState):
         start_time = ptime.time()
         while self._analysis.obstacle_detected():
             self.processAtLeastOneTestPulse()
-            if ptime.time() - start_time < self.config['obstacleRecoveryTime']:
+            if ptime.time() - start_time > self.config['obstacleRecoveryTime']:
                 raise TimeoutError("Pipette fouled by obstacle")
 
         pos = np.array(pip.globalPosition())
