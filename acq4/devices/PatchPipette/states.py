@@ -687,6 +687,7 @@ class CellDetectState(PatchPipetteState):
         return config['fallbackState']
 
     def avoidObstacle(self):
+        self.setState("cell detect: avoiding obstacle")
         if self._continuousAdvanceFuture is not None:
             self._continuousAdvanceFuture.stop("Obstacle detected")
             self._continuousAdvanceFuture = None
