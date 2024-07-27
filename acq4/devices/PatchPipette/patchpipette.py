@@ -72,6 +72,7 @@ class PatchPipette(Device):
         self.calibrated = False
         self.waitingForSwap = False
         self._lastPos = None
+        self._emitTestPulseData = False
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -336,8 +337,13 @@ class PatchPipette(Device):
     def _autoBiasChanged(self, clamp, enabled, target):
         self.emitNewEvent('auto_bias_change', {'enabled': enabled, 'target': target})
 
+    def emitFullTestPulseData(self, emit):
+        self._emitTestPulseData = emit
+
     def _testPulseFinished(self, clamp, result):
         self.emitNewEvent('test_pulse', result.analysis)
+        if self._emitTestPulseData:
+            self.emitNewEvent('test_pulse_data', result.dump())
 
     def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict([

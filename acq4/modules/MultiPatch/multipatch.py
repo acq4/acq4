@@ -134,6 +134,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
         self.ui.cleanBtn.clicked.connect(self.cleanClicked)
+        self.ui.recordTestPulsesBtn.toggled.connect(self.recordTestPulsesToggled)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
@@ -566,6 +567,10 @@ class MultiPatchWindow(Qt.QWidget):
             sdir = man.getCurrentDir()
             self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
+
+    def recordTestPulsesToggled(self, rec):
+        for pip in self.selectedPipettes():
+            pip.emitFullTestPulseData(rec)
 
     def recordEvent(self, event):
         self.eventHistory.append(event)
