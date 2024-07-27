@@ -529,6 +529,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             row=len(self._plots_by_units) + 1,
             col=0,
         )
+        plot.addLegend()
         if self._plots_by_units:
             plot.setXLink(self._plots_by_units[list(self._plots_by_units.keys())[0]])
         else:
@@ -660,7 +661,12 @@ class MultiPatchLogWidget(Qt.QWidget):
                 time = test_pulses['event_time'] - self.startTime()
                 if len(time) > 0:
                     idx = next(i for i, m in enumerate(TEST_PULSE_METAARRAY_INFO) if m['name'] == ev.name)
-                    plot_item = plot.plot(time, test_pulses[ev.name], pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))))
+                    plot_item = plot.plot(
+                        time,
+                        test_pulses[ev.name],
+                        pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))),
+                        name=ev.name,
+                    )
                     self._plot_items_by_plot.setdefault(plot, []).append(plot_item)
         else:
             for item in self._plot_items_by_plot.get(plot, []):
@@ -675,7 +681,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 pressure = data.get('pressure', np.zeros(0, dtype=[('time', float), ('pressure', float)]))
                 time = pressure['time'] - self.startTime()
                 if len(time) > 0:
-                    plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))))
+                    plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))), name='Pressure')
         elif 'Pa' in self._plots_by_units:
             self._plots_by_units['Pa'].hide()
 
@@ -689,18 +695,20 @@ class MultiPatchLogWidget(Qt.QWidget):
                 movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
             analysis_plot.addItem(pg.InfiniteLine(
                 movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
+            names = False
             for ssr in self.testPulseAnalysisDataByState('steady_state_resistance'):
                 analyzer = ResealAnalysis(
                     self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
                 analysis = analyzer.process_measurements(ssr)
-                analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
-                resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
-                analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
-                resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
+                analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'), name=None if names else 'Detect Ratio')
+                resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'), name=None if names else 'Detect Avg')
+                analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Ratio')
+                resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Avg')
                 analysis_plot.plot(
-                    analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x')
+                    analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x', name=None if names else 'Stretching')
                 analysis_plot.plot(
-                    analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o')
+                    analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o', name=None if names else 'Tearing')
+                names = True
 
     def testPulseAnalysisDataByState(self, field: str):
         for data in self._devices.values():
@@ -727,6 +735,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         if state:
             resistance_plot = self.buildPlotForUnits('Ω')
             analysis_plot = self.buildPlotForUnits('')
+            names = False
             for ssr_chunk in self.testPulseAnalysisDataByState('steady_state_resistance'):
                 analyzer = CellDetectAnalysis(
                     cell_threshold_fast=1e6,
@@ -736,12 +745,12 @@ class MultiPatchLogWidget(Qt.QWidget):
                     break_threshold=-1e6,
                 )
                 analysis = analyzer.process_measurements(ssr_chunk)
-                resistance_plot.plot(analysis["time"], analysis["resistance_avg"], pen=pg.mkPen('b'))
+                resistance_plot.plot(analysis["time"], analysis["resistance_avg"], pen=pg.mkPen('b'), name=None if names else 'Resistance Avg')
                 # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_fast"]), pen=pg.mkPen('g'), symbol='o')
                 # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_slow"]), pen=pg.mkPen('b'), symbol='o')
-                analysis_plot.plot(analysis["time"], plottable_booleans(analysis["obstacle_detected"]), pen=pg.mkPen('r'), symbol='x')
+                analysis_plot.plot(analysis["time"], plottable_booleans(analysis["obstacle_detected"]), pen=pg.mkPen('r'), symbol='x', name=None if names else 'Obstacle Detected')
                 # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["tip_is_broken"]), pen=pg.mkPen('y'), symbol='x')
-
+                names = True
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
