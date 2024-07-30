@@ -12,6 +12,7 @@ from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
+from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -46,7 +47,7 @@ class MultiPatch(Module):
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
         self._eventStorageFile = None
-        self._testPulseStorageFile = None
+        self._testPulseStacks = {}
 
         self._calibratePips = []
         self._calibrateStagePositions = []
@@ -572,17 +573,19 @@ class MultiPatchWindow(Qt.QWidget):
             self.writeRecords(self.eventHistory)
 
     def recordTestPulsesToggled(self, rec):
-        if self._testPulseStorageFile:
-            self._testPulseStorageFile.close()
-            self._testPulseStorageFile = None
+        for stack in self._testPulseStacks.values():
+            stack.close()
+        self._testPulseStacks = {}
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
             name = sdir.createFile('TestPulses.hdf5', autoIncrement=True).name()
-            self._testPulseStorageFile = h5py.File(name, 'a')
+            container = h5py.File(name, 'a')
+            group = container.create_group('test_pulses')
             for dev in self.pips:
-                dev_gr = self._testPulseStorageFile.create_group(f"test_pulses/{dev.name()}")
+                dev_gr = group.create_group(dev.name())
                 dev_gr.attrs['device'] = dev.name()
+                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr)
         for pip in self.selectedPipettes():
             pip.emitFullTestPulseData(rec)
 
@@ -601,20 +604,9 @@ class MultiPatchWindow(Qt.QWidget):
             if rec['event'] != 'test_pulse_data':
                 if self._eventStorageFile:
                     self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
-            elif self._testPulseStorageFile:
-                data = np.column_stack((rec['time_values'], rec['data']))
-                tp = self._testPulseStorageFile.create_dataset(
-                    f"test_pulses/{rec['device']}/{rec['event_time']}",
-                    data=data,
-                    compression='gzip',
-                    compression_opts=9,
-                )
-                for k, v in rec.items():
-                    if k not in ('time_values', 'data', 'stimulus'):
-                        tp.attrs[k] = v or 0  # None values are not allowed
-                for k, v in rec['stimulus'].items():
-                    tp.attrs[f"stimulus_{k}"] = v
+            elif self._testPulseStacks:
+                self._testPulseStacks[rec['device']].append(rec['test_pulse'])
         if self._eventStorageFile:
             self._eventStorageFile.flush()
-        if self._testPulseStorageFile:
-            self._testPulseStorageFile.flush()
+        for stack in self._testPulseStacks.values():
+            stack.flush()

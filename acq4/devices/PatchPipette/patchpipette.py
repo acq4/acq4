@@ -344,7 +344,7 @@ class PatchPipette(Device):
     def _testPulseFinished(self, clamp, result: PatchClampTestPulse):
         self.emitNewEvent('test_pulse', result.analysis)
         if self._emitTestPulseData:
-            self.emitNewEvent('test_pulse_data', result.dump())
+            self.emitNewEvent('test_pulse_data', {'test_pulse': result})
 
     def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict([
