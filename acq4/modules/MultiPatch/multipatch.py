@@ -5,7 +5,11 @@ import os
 import re
 from typing import List
 
+import h5py
+import numpy as np
+
 import pyqtgraph as pg
+from MetaArray import MetaArray
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
@@ -43,7 +47,8 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
-        self.storageFile = None
+        self._eventStorageFile = None
+        self._testPulseStorageFile = None
 
         self._calibratePips = []
         self._calibrateStagePositions = []
@@ -558,22 +563,34 @@ class MultiPatchWindow(Qt.QWidget):
         self.recordEvent(event)
 
     def recordToggled(self, rec):
-        if self.storageFile is not None:
-            self.storageFile.close()
-            self.storageFile = None
+        if self._eventStorageFile is not None:
+            self._eventStorageFile.close()
+            self._eventStorageFile = None
             self.resetHistory()
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
-            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
+            self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
 
     def recordTestPulsesToggled(self, rec):
+        if self._testPulseStorageFile:
+            self._testPulseStorageFile.close()
+            self._testPulseStorageFile = None
+        if rec is True:
+            man = getManager()
+            sdir = man.getCurrentDir()
+            name = sdir.createFile('TestPulses.hdf5', autoIncrement=True).name()
+            self._testPulseStorageFile = h5py.File(name, 'a')
+            for dev in self.pips:
+                dev_gr = self._testPulseStorageFile.create_group(f"test_pulses/{dev.name()}")
+                dev_gr.attrs['device'] = dev.name()
         for pip in self.selectedPipettes():
             pip.emitFullTestPulseData(rec)
 
     def recordEvent(self, event):
-        self.eventHistory.append(event)
+        if event['event'] != 'test_pulse_data':
+            self.eventHistory.append(event)
         self.writeRecords([event])
 
     def resetHistory(self):
@@ -582,8 +599,24 @@ class MultiPatchWindow(Qt.QWidget):
             pip.clampDevice.resetTestPulseHistory()
 
     def writeRecords(self, recs):
-        if self.storageFile is None:
-            return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
-        self.storageFile.flush()
+            if rec['event'] != 'test_pulse_data':
+                if self._eventStorageFile:
+                    self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
+            elif self._testPulseStorageFile:
+                data = np.column_stack((rec['time_values'], rec['data']))
+                tp = self._testPulseStorageFile.create_dataset(
+                    f"test_pulses/{rec['device']}/{rec['event_time']}",
+                    data=data,
+                    compression='gzip',
+                    compression_opts=9,
+                )
+                for k, v in rec.items():
+                    if k not in ('time_values', 'data', 'stimulus'):
+                        tp.attrs[k] = v or 0  # None values are not allowed
+                for k, v in rec['stimulus'].items():
+                    tp.attrs[f"stimulus_{k}"] = v
+        if self._eventStorageFile:
+            self._eventStorageFile.flush()
+        if self._testPulseStorageFile:
+            self._testPulseStorageFile.flush()
