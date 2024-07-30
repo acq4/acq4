@@ -5,7 +5,6 @@ from collections import OrderedDict
 from typing import List
 
 import h5py
-import numpy as np
 
 import pyqtgraph as pg
 from acq4 import getManager
