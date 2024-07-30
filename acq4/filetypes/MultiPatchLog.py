@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 import json
 import os
 import re
 from typing import Any
 
+import h5py
 import numpy as np
 
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
 from acq4.util.target import Target
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -780,9 +784,34 @@ class MultiPatchLogWidget(Qt.QWidget):
                 row=1,
                 col=0,
             )
+            self._displayTestPulseDataAtTime(self._current_time)
         else:
             self._plots_widget.removeItem(self._full_test_pulse_plot)
             self._full_test_pulse_plot = None
+
+    def _displayTestPulseDataAtTime(self, when):
+        if self._full_test_pulse_plot is None:
+            return
+        self._full_test_pulse_plot.clear()
+        if tp := self.testPulseDataAtTime(when):
+            self._full_test_pulse_plot.setLabel('left', tp.plot_title, tp.plot_units)
+            self._full_test_pulse_plot.plot(tp['primary'].time_values, tp['primary'].data, name="raw")
+
+    def testPulseDataAtTime(self, when) -> PatchClampTestPulse | None:
+        # todo caches for searching and instantiating
+        for data in self._devices.values():
+            test_pulses: h5py.Dataset = data.get('full_test_pulses', [])
+            if tps_before_then := [tp for tp in test_pulses if float(tp) <= when + self.startTime()]:
+                print(f"Found {len(tps_before_then)} test pulses before {when}")
+                tp_data = test_pulses[tps_before_then[-1]]
+                load_dict = {}
+                load_dict.update(tp_data.attrs)
+                # todo this is ugly and brittle
+                load_dict['stimulus'] = {k[9:]: v for k, v in tp_data.attrs.items() if k.startswith('stimulus_')}
+                load_dict['time_values'] = tp_data[:, 0]
+                load_dict['data'] = tp_data[:, 1]
+                return PatchClampTestPulse.load(load_dict)
+        print(f"No test pulses found before {when}")
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
@@ -801,6 +830,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 self._pinned_image_z += 1
             else:
                 img.hide()
+        self._displayTestPulseDataAtTime(time)
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
