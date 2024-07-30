@@ -398,8 +398,7 @@ class PipettePathWidget(object):
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
-        state = next((s for s in self._states[::-1] if s[0] < time), None)
-        if state:
+        if state := next((s for s in self._states[::-1] if s[0] < time), None):
             self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
             self._displayTargetAtTime(time, pos[2])
 
@@ -735,7 +734,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         if state:
             resistance_plot = self.buildPlotForUnits('Ω')
             analysis_plot = self.buildPlotForUnits('')
-            names = False
+            legend_has_names = False
             for ssr_chunk in self.testPulseAnalysisDataByState('steady_state_resistance'):
                 analyzer = CellDetectAnalysis(
                     cell_threshold_fast=1e6,
@@ -745,12 +744,20 @@ class MultiPatchLogWidget(Qt.QWidget):
                     break_threshold=-1e6,
                 )
                 analysis = analyzer.process_measurements(ssr_chunk)
-                resistance_plot.plot(analysis["time"], analysis["resistance_avg"], pen=pg.mkPen('b'), name=None if names else 'Resistance Avg')
-                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_fast"]), pen=pg.mkPen('g'), symbol='o')
-                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_slow"]), pen=pg.mkPen('b'), symbol='o')
-                analysis_plot.plot(analysis["time"], plottable_booleans(analysis["obstacle_detected"]), pen=pg.mkPen('r'), symbol='x', name=None if names else 'Obstacle Detected')
-                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["tip_is_broken"]), pen=pg.mkPen('y'), symbol='x')
-                names = True
+                resistance_plot.plot(
+                    analysis["time"],
+                    analysis["resistance_avg"],
+                    pen=pg.mkPen('b'),
+                    name=None if legend_has_names else 'Resistance Avg',
+                )
+                analysis_plot.plot(
+                    analysis["time"],
+                    plottable_booleans(analysis["obstacle_detected"]),
+                    pen=pg.mkPen('r'),
+                    symbol='x',
+                    name=None if legend_has_names else 'Obstacle Detected',
+                )
+                legend_has_names = True
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
