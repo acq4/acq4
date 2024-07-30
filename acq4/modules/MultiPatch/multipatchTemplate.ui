@@ -261,7 +261,7 @@
      </layout>
     </widget>
    </item>
-   <item row="2" column="1" colspan="2">
+   <item row="2" column="2">
     <widget class="QPushButton" name="resetBtn">
      <property name="text">
       <string>Reset History</string>
@@ -282,6 +282,16 @@
     <widget class="QPushButton" name="recordBtn">
      <property name="text">
       <string>Record</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QPushButton" name="recordTestPulsesBtn">
+     <property name="text">
+      <string>Full Test Pulses</string>
      </property>
      <property name="checkable">
       <bool>true</bool>
