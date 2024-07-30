@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from typing import Any
 
@@ -187,6 +188,14 @@ class MultiPatchLogData(object):
 
         if filename is not None:
             self.process(filename)
+
+    def hasFullTestPulseData(self):
+        parent_dir = os.path.dirname(self._filename)
+        return os.path.exists(os.path.join(parent_dir, self.fullTestPulseFilename()))
+
+    def fullTestPulseFilename(self):
+        number = re.match(r'.*_(\d+).log$', self._filename)[1]
+        return f'TestPulses_{number}.hdf5'
 
     def process(self, filename) -> None:
         def possible_uses_for_type(event_type: str) -> list[str]:
@@ -506,6 +515,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
+        self._full_test_pulse_plot = None
         self._plots_by_units: dict[str, pg.PlotItem] = {}
         self._regions_by_plot: dict[pg.PlotItem, list[PipetteStateRegion]] = {}
         self._status_by_plot: dict[pg.PlotItem, list[pg.InfiniteLine]] = {}
@@ -525,7 +535,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         plot: pg.PlotItem = self._plots_widget.addPlot(
             name=units,
             labels=dict(bottom=('time', 's'), left=('', units)),
-            row=len(self._plots_by_units) + 1,
+            row=len(self._plots_by_units) + 2,
             col=0,
         )
         plot.addLegend()
@@ -629,6 +639,9 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayDetectAnalysis = Qt.QCheckBox('Cell Detect Analysis')
         self._displayDetectAnalysis.toggled.connect(self._toggleDetectAnalysis)
         self._ctrl_layout.addWidget(self._displayDetectAnalysis)
+        self._displayFullTestPulse = Qt.QCheckBox('Full Test Pulse Data')
+        self._displayFullTestPulse.toggled.connect(self._toggleFullTestPulse)
+        self._ctrl_layout.addWidget(self._displayFullTestPulse)
 
     def _toggleDisplayStateRegions(self, state: bool):
         for plot in self._plots_by_units.values():
@@ -759,6 +772,18 @@ class MultiPatchLogWidget(Qt.QWidget):
                 )
                 legend_has_names = True
 
+    def _toggleFullTestPulse(self, state: bool):
+        if state:
+            self._full_test_pulse_plot = self._plots_widget.addPlot(
+                name="Test Pulse",
+                labels=dict(bottom=('time', 's'), left=('', 'V')),
+                row=1,
+                col=0,
+            )
+        else:
+            self._plots_widget.removeItem(self._full_test_pulse_plot)
+            self._full_test_pulse_plot = None
+
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
 
@@ -791,6 +816,11 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             self._devices[dev] = log_data[dev]
+        if log_data.hasFullTestPulseData():
+            tp_data = log.parent()[log_data.fullTestPulseFilename()].read()
+            pulses = tp_data['test_pulses']
+            for dev in log_data.devices():
+                self._devices[dev]['full_test_pulses'] = pulses.get(dev, [])
         self.redraw()
 
     def redraw(self):
