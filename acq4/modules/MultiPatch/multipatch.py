@@ -1,15 +1,13 @@
-from collections import OrderedDict
-
 import json
 import os
 import re
+from collections import OrderedDict
 from typing import List
 
 import h5py
 import numpy as np
 
 import pyqtgraph as pg
-from MetaArray import MetaArray
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module

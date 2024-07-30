@@ -291,7 +291,7 @@
    <item row="2" column="1">
     <widget class="QPushButton" name="recordTestPulsesBtn">
      <property name="text">
-      <string>Full</string>
+      <string>Full Test Pulses</string>
      </property>
      <property name="checkable">
       <bool>true</bool>
