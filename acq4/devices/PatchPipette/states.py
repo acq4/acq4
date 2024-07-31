@@ -576,15 +576,20 @@ class CellDetectState(PatchPipetteState):
     sidestepPassDistance : float
         Distance (m) to pass an obstacle (default 20 µm)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 50 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
     maxAdvanceDistance : float | None
         Maximum distance (m) to advance past starting point (default None)
     maxAdvanceDistancePastTarget : float | None
         Maximum distance (m) to advance past target (default 10 um)
     maxAdvanceDepthBelowSurface : float | None
         Maximum depth (m) to advance below the sample surface (default None)
-    advanceSpeed : float
-        Speed (m/s) to advance the pipette when advanceContinuous=True (default 2 um/s)
+    aboveSurfaceSpeed : float
+        Speed (m/s) to advance the pipette when above the surface (default 20 um/s)
+    belowSurfaceSpeed : float
+        Speed (m/s) to advance the pipette when below the surface (default 5 um/s)
+    detectionSpeed : float
+        Speed (m/s) to advance the pipette if advanceContinuous=True and when close to the target/area-of-search
+        (default 2 um/s)
     fastDetectionThreshold : float
         Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
     slowDetectionThreshold : float
@@ -619,7 +624,9 @@ class CellDetectState(PatchPipetteState):
         'maxAdvanceDistance': {'default': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
         'maxAdvanceDistancePastTarget': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'maxAdvanceDepthBelowSurface': {'default': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
-        'advanceSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'aboveSurfaceSpeed': {'default': 20e-6, 'type': 'float', 'suffix': 'm/s'},
+        'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
+        'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
@@ -633,7 +640,7 @@ class CellDetectState(PatchPipetteState):
         'sidestepLateralDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'sidestepBackupDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'sidestepPassDistance': {'default': 20e-6, 'type': 'float', 'suffix': 'm'},
-        'minDetectionDistance': {'default': 50e-6, 'type': 'float', 'suffix': 'm'},
+        'minDetectionDistance': {'default': 15e-6, 'type': 'float', 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
@@ -687,7 +694,7 @@ class CellDetectState(PatchPipetteState):
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self._continuousAdvanceFuture is None:
-                        self.startContinuousMove()
+                        self._continuousAdvanceFuture = self.continuousMove()
                     if self._continuousAdvanceFuture.isDone():
                         self._continuousAdvanceFuture.wait()  # check for move errors
                         return self._transition_to_fallback()
@@ -715,7 +722,7 @@ class CellDetectState(PatchPipetteState):
             self._continuousAdvanceFuture = None
 
         pip = self.dev.pipetteDevice
-        speed = self.config['advanceSpeed']
+        speed = self.config['belowSurfaceSpeed']
 
         pos = np.array(pip.globalPosition())
         direction = self.direction
@@ -760,10 +767,17 @@ class CellDetectState(PatchPipetteState):
                 return 'slow'
         return False
 
-    def closeEnoughToTargetToDetectCell(self):
+    def aboveSurface(self, pos=None):
+        if pos is None:
+            pos = self.dev.pipetteDevice.globalPosition()
+        surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth() + self.config['minDetectionDistance']
+        return pos[2] > surface
+
+    def closeEnoughToTargetToDetectCell(self, pos=None):
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
-        pos = np.array(pip.globalPosition())
+        if pos is None:
+            pos = np.array(pip.globalPosition())
         return np.linalg.norm(target - pos) < self.config['minDetectionDistance']
 
     def _transition_to_fallback(self):
@@ -790,7 +804,20 @@ class CellDetectState(PatchPipetteState):
             raise ValueError(f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
         return direction / np.linalg.norm(direction)
 
-    def getSearchEndpoint(self):
+    def firstSurfacePosition(self):
+        """Return the first position along the pipette search path which could be below the surface."""
+        pip = self.dev.pipetteDevice
+        pos = np.array(pip.globalPosition())
+        surface = pip.scopeDevice().getSurfaceDepth() + self.config['minDetectionDistance']
+        return pos - self.direction * (pos[2] - surface)
+
+    def fastTravelEndpoint(self):
+        """Return the last position along the pipette search path to be traveled at full speed."""
+        pip = self.dev.pipetteDevice
+        target = np.array(pip.targetPosition())
+        return target - (self.direction * self.config['minDetectionDistance'])
+
+    def finalSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
         maxAdvanceDistance, maxAdvanceDepthBelowSurface, and maxAdvanceDistancePastTarget.
         """
@@ -828,18 +855,28 @@ class CellDetectState(PatchPipetteState):
 
         return endpoint
 
-    def startContinuousMove(self):
+    @Future.wrap
+    def continuousMove(self, _future):
         """Begin moving pipette continuously along search path.
         """
-        self.setState("cell detection: continuous pipette advance")
-        endpoint = self.getSearchEndpoint()
-        self._continuousAdvanceFuture = self.dev.pipetteDevice._moveToGlobal(endpoint, speed=self.config['advanceSpeed'])
+        self.setState("continuous pipette advance")
+        if self.aboveSurface():
+            speed = self.config['aboveSurfaceSpeed']
+            surface = self.firstSurfacePosition()
+            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed))
+        if not self.closeEnoughToTargetToDetectCell():
+            speed = self.config['belowSurfaceSpeed']
+            midway = self.fastTravelEndpoint()
+            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed))
+        speed = self.config['detectionSpeed']
+        endpoint = self.finalSearchEndpoint()
+        _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed))
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
         """
         config = self.config
-        endpoint = self.getSearchEndpoint()
+        endpoint = self.finalSearchEndpoint()
         pos = np.array(self.dev.pipetteDevice.globalPosition())
         diff = endpoint - pos
         dist = np.linalg.norm(diff)
@@ -855,8 +892,13 @@ class CellDetectState(PatchPipetteState):
 
         stepPos = self.advanceSteps[self.stepCount]
         self.stepCount += 1
-        fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
-        self.waitFor(fut)
+        if self.aboveSurface(stepPos):
+            speed = config['aboveSurfaceSpeed']
+        elif self.closeEnoughToTargetToDetectCell(stepPos):
+            speed = config['detectionSpeed']
+        else:
+            speed = config['belowSurfaceSpeed']
+        self.waitFor(dev.pipetteDevice._moveToGlobal(stepPos, speed=speed))
 
     def cleanup(self):
         if self._continuousAdvanceFuture is not None:
