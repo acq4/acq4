@@ -590,6 +590,16 @@ class CellDetectState(PatchPipetteState):
     detectionSpeed : float
         Speed (m/s) to advance the pipette if advanceContinuous=True and when close to the target/area-of-search
         (default 2 um/s)
+    preTargetWiggle : bool
+        If True, wiggle the pipette before reaching the target (default False)
+    preTargetWiggleRadius : float
+        Radius (m) of the wiggle (default 8 µm)
+    preTargetWiggleStep : float
+        Distance (m) to move between each wiggle (default 5 µm)
+    preTargetWiggleDuration : float
+        Time (s) to spend wiggling at each step (default 6 s)
+    preTargetWiggleSpeed : float
+        Speed (m/s) to move during the wiggle (default 5 µm/s)
     fastDetectionThreshold : float
         Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
     slowDetectionThreshold : float
@@ -627,6 +637,11 @@ class CellDetectState(PatchPipetteState):
         'aboveSurfaceSpeed': {'default': 20e-6, 'type': 'float', 'suffix': 'm/s'},
         'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'preTargetWiggle': {'default': False, 'type': 'bool'},
+        'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
+        'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
+        'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
+        'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
@@ -870,6 +885,18 @@ class CellDetectState(PatchPipetteState):
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed))
         speed = self.config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
+        if self.config['preTargetWiggle']:
+            distance = np.linalg.norm(endpoint - np.array(self.dev.pipetteDevice.globalPosition()))
+            count = int(distance / self.config['preTargetWiggleStep'])
+            for _ in range(count):
+                self.wiggle(
+                    speed=self.config['preTargetWiggleSpeed'],
+                    radius=self.config['preTargetWiggleRadius'],
+                    repetitions=1,
+                    duration=self.config['preTargetWiggleDuration'],
+                )
+                step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
+                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed))
         _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed))
 
     def getAdvanceSteps(self):
