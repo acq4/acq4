@@ -1,19 +1,17 @@
 from __future__ import annotations
 
+import contextlib
+import queue
+import threading
+import warnings
 from collections import deque
-from functools import cached_property
-
+from copy import deepcopy
 from typing import Any, Optional
 
-import contextlib
 import numpy as np
-import queue
 import scipy.stats
 import sys
-import threading
 import time
-import warnings
-from copy import deepcopy
 
 from acq4 import getManager
 from acq4.util import ptime
@@ -95,6 +93,7 @@ class PatchPipetteState(Future):
         Future.__init__(self)
 
         self.dev: PatchPipette = dev
+        self._moveFuture = None
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -239,6 +238,29 @@ class PatchPipetteState(Future):
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
+
+    def wiggle(self, speed, radius, repetitions, duration, extra=None):
+        def random_wiggle_direction():
+            """pick a random point on a circle perpendicular to the pipette axis"""
+            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
+                pass  # prevent division by zero
+            return radius * vec / np.linalg.norm(vec)
+
+        pos = np.array(self.dev.pipetteDevice.globalPosition())
+        prev_dir = random_wiggle_direction()
+        for _ in range(repetitions):
+            with contextlib.ExitStack() as stack:
+                if extra is not None:
+                    stack.enter_context(extra())
+                start = ptime.time()
+                while ptime.time() - start < duration:
+                    while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
+                        pass  # ensure different direction from previous
+                    self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=speed)
+                    prev_dir = direction
+                    self.waitFor(self._moveFuture)
+                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=speed)
+                self.waitFor(self._moveFuture)
 
 
 class SteadyStateAnalysisBase(object):
@@ -1445,7 +1467,6 @@ class ResealState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
-        self._moveFuture = None
         self._pressureFuture = None
         self._lastResistance = None
         self._firstSuccessTime = None
@@ -1460,31 +1481,24 @@ class ResealState(PatchPipetteState):
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
-        pos = np.array(self.dev.pipetteDevice.globalPosition())
         # TODO move back a little?
         pipette_direction = self.dev.pipetteDevice.globalDirection()
 
-        def random_wiggle_direction():
-            """pick a random point on a circle perpendicular to the pipette axis"""
-            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
-                pass  # prevent division by zero
-            return self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec)
-
-        prev_dir = random_wiggle_direction()
-        for _ in range(self.config['nuzzleRepetitions']):
+        @contextlib.contextmanager
+        def pressure_ramp():
             self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
             self._pressureFuture = self.dev.pressureDevice.rampPressure(
                 target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'])
-            start = ptime.time()
-            while ptime.time() - start < self.config['nuzzleDuration']:
-                while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
-                    pass  # ensure different direction from previous
-                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=self.config['nuzzleSpeed'])
-                prev_dir = direction
-                self.waitFor(self._moveFuture)
-            self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed'])
-            self.waitFor(self._moveFuture)
+            yield
             self.waitFor(self._pressureFuture)
+
+        self.wiggle(
+            speed=self.config['nuzzleSpeed'],
+            radius=self.config['nuzzleLateralWiggleRadius'],
+            duration=self.config['nuzzleDuration'],
+            repetitions=self.config['nuzzleRepetitions'],
+            extra=pressure_ramp,
+        )
 
     @Future.wrap
     def startRollingResistanceThresholds(self, _future: Future):
