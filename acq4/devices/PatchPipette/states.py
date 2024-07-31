@@ -759,7 +759,15 @@ class CellDetectState(PatchPipetteState):
         sidestep = self.config['sidestepLateralDistance'] * xy_perpendicular / np.linalg.norm(xy_perpendicular)
         self.waitFor(pip._moveToGlobal(pos + sidestep, speed=speed))
         pos = np.array(pip.globalPosition())
-        self.waitFor(pip._moveToGlobal(pos + self.config['sidestepPassDistance'] * direction, speed=speed))
+        move = pip._moveToGlobal(pos + self.config['sidestepPassDistance'] * direction, speed=speed)
+        while not move.isDone():
+            self.processAtLeastOneTestPulse()
+            if self._analysis.obstacle_detected():
+                move.stop("Obstacle detected while sidestepping")
+                move.wait()
+                return self.avoidObstacle()
+            self.checkStop()
+        self.waitFor(move)
         pos = np.array(pip.globalPosition())
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
