@@ -13,6 +13,7 @@ from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
 from acq4.util.target import Target
 from neuroanalysis.test_pulse import PatchClampTestPulse
+from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -631,7 +632,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', meta['name']).title()
             cb = Qt.QCheckBox(name)
             cb.name = meta['name']
-            cb.toggled.connect(self._toggleTestPulsePlot)
+            cb.toggled.connect(self._toggleTestPulseAnalysisPlot)
             self._testPulseAnalysisCheckboxes.append(cb)
             self._ctrl_layout.addWidget(cb)
         self._displayPressure = Qt.QCheckBox('Pressure')
@@ -667,7 +668,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                     plot.removeItem(line)
                 self._status_by_plot[plot] = []
 
-    def _toggleTestPulsePlot(self, state: bool):
+    def _toggleTestPulseAnalysisPlot(self, state: bool):
         ev = self.sender()
         meta = next(m for m in TEST_PULSE_METAARRAY_INFO if m['name'] == ev.name)
         plot = self.buildPlotForUnits(meta.get('units', ''))
@@ -798,20 +799,9 @@ class MultiPatchLogWidget(Qt.QWidget):
             self._full_test_pulse_plot.plot(tp['primary'].time_values, tp['primary'].data, name="raw")
 
     def testPulseDataAtTime(self, when) -> PatchClampTestPulse | None:
-        # todo caches for searching and instantiating
         for data in self._devices.values():
-            test_pulses: h5py.Dataset = data.get('full_test_pulses', [])
-            if tps_before_then := [tp for tp in test_pulses if float(tp) <= when + self.startTime()]:
-                print(f"Found {len(tps_before_then)} test pulses before {when}")
-                tp_data = test_pulses[tps_before_then[-1]]
-                load_dict = {}
-                load_dict.update(tp_data.attrs)
-                # todo this is ugly and brittle
-                load_dict['stimulus'] = {k[9:]: v for k, v in tp_data.attrs.items() if k.startswith('stimulus_')}
-                load_dict['time_values'] = tp_data[:, 0]
-                load_dict['data'] = tp_data[:, 1]
-                return PatchClampTestPulse.load(load_dict)
-        print(f"No test pulses found before {when}")
+            if test_pulses := data.get('full_test_pulses', None):
+                return test_pulses.at_time(when + self.startTime())
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
@@ -850,7 +840,8 @@ class MultiPatchLogWidget(Qt.QWidget):
             tp_data = log.parent()[log_data.fullTestPulseFilename()].read()
             pulses = tp_data['test_pulses']
             for dev in log_data.devices():
-                self._devices[dev]['full_test_pulses'] = pulses.get(dev, [])
+                dev_group = pulses.get(dev, None)
+                self._devices[dev]['full_test_pulses'] = H5BackedTestPulseStack(dev_group) if dev_group else None
         self.redraw()
 
     def redraw(self):
