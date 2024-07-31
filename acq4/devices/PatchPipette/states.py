@@ -239,7 +239,10 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
-    def wiggle(self, speed, radius, repetitions, duration, extra=None):
+    def wiggle(self, speed, radius, repetitions, duration, pipette_direction=None, extra=None):
+        if pipette_direction is None:
+            pipette_direction = self.dev.pipetteDevice.globalDirection()
+
         def random_wiggle_direction():
             """pick a random point on a circle perpendicular to the pipette axis"""
             while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
@@ -785,7 +788,7 @@ class CellDetectState(PatchPipetteState):
     def aboveSurface(self, pos=None):
         if pos is None:
             pos = self.dev.pipetteDevice.globalPosition()
-        surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth() + self.config['minDetectionDistance']
+        surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth()
         return pos[2] > surface
 
     def closeEnoughToTargetToDetectCell(self, pos=None):
@@ -823,7 +826,7 @@ class CellDetectState(PatchPipetteState):
         """Return the first position along the pipette search path which could be below the surface."""
         pip = self.dev.pipetteDevice
         pos = np.array(pip.globalPosition())
-        surface = pip.scopeDevice().getSurfaceDepth() + self.config['minDetectionDistance']
+        surface = pip.scopeDevice().getSurfaceDepth()
         return pos - self.direction * (pos[2] - surface)
 
     def fastTravelEndpoint(self):
@@ -878,26 +881,29 @@ class CellDetectState(PatchPipetteState):
         if self.aboveSurface():
             speed = self.config['aboveSurfaceSpeed']
             surface = self.firstSurfacePosition()
-            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed))
+            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
         if not self.closeEnoughToTargetToDetectCell():
             speed = self.config['belowSurfaceSpeed']
             midway = self.fastTravelEndpoint()
-            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed))
+            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
         speed = self.config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
         if self.config['preTargetWiggle']:
             distance = np.linalg.norm(endpoint - np.array(self.dev.pipetteDevice.globalPosition()))
             count = int(distance / self.config['preTargetWiggleStep'])
             for _ in range(count):
+                retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
+                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
                 self.wiggle(
                     speed=self.config['preTargetWiggleSpeed'],
                     radius=self.config['preTargetWiggleRadius'],
                     repetitions=1,
                     duration=self.config['preTargetWiggleDuration'],
+                    pipette_direction=self.direction,
                 )
                 step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
-                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed))
-        _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed))
+                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
+        _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
@@ -1551,7 +1557,6 @@ class ResealState(PatchPipetteState):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
         # TODO move back a little?
-        pipette_direction = self.dev.pipetteDevice.globalDirection()
 
         @contextlib.contextmanager
         def pressure_ramp():
