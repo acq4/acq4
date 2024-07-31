@@ -895,16 +895,19 @@ class CellDetectState(PatchPipetteState):
             speed = self.config['aboveSurfaceSpeed']
             surface = self.firstSurfacePosition()
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
+            self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             speed = self.config['belowSurfaceSpeed']
             midway = self.fastTravelEndpoint()
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
+            self.setState("moved to detection area")
         speed = self.config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
         if self.config['preTargetWiggle']:
             distance = np.linalg.norm(endpoint - np.array(self.dev.pipetteDevice.globalPosition()))
             count = int(distance / self.config['preTargetWiggleStep'])
             for _ in range(count):
+                self.setState("pre-target wiggle")
                 retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
                 self.wiggle(
