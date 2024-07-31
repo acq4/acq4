@@ -27,6 +27,7 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'fit_yoffset', 'type': 'float'},
     {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
+    {'name': 'start_time', 'type': 'float', 'units': 's'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
 TEST_PULSE_PARAMETER_CONFIG = []
