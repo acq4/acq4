@@ -187,21 +187,13 @@ class IrregularTimeSeries(object):
 
 class MultiPatchLogData(object):
     def __init__(self, filename=None):
-        self._filename = filename
         self._devices = {}
+        self.fullTestPulseStacks: dict[str, H5BackedTestPulseStack] = {}
         self._minTime = None
         self._maxTime = None
 
         if filename is not None:
             self.process(filename)
-
-    def hasFullTestPulseData(self):
-        parent_dir = os.path.dirname(self._filename)
-        return os.path.exists(os.path.join(parent_dir, self.fullTestPulseFilename()))
-
-    def fullTestPulseFilename(self):
-        number = re.match(r'.*_(\d+).log$', self._filename)[1]
-        return f'TestPulses_{number}.hdf5'
 
     def process(self, filename) -> None:
         def possible_uses_for_type(event_type: str) -> list[str]:
@@ -220,7 +212,7 @@ class MultiPatchLogData(object):
             # if event_type in {'move_requested'}:
             #     uses.append('move_request')
             if event_type in {'test_pulse'}:
-                uses.append('test_pulse')
+                uses += ['test_pulse', 'full_test_pulse']
             return uses
 
         with open(filename, 'rb') as fh:
@@ -246,6 +238,19 @@ class MultiPatchLogData(object):
                         if use == 'position':
                             time, *pos = self._prepare_event_for_use(event, use)
                             self._devices[dev]['position_ITS'][time] = pos
+                if 'full_test_pulse' in self._devices[dev]:
+                    h5_fns = {loc.split(":")[0] for loc in self._devices[dev]['full_test_pulse'] if loc}
+                    for h5_fn in h5_fns:
+                        h5_fn = os.path.join(os.path.dirname(filename), h5_fn)
+                        # TODO only open the file once, not once per device
+                        h5_file = h5py.File(h5_fn, 'r')
+                        # TODO find a way to stop duplicating the "test_pulses/{dev}" part
+                        dataset = h5_file[f"test_pulses/{dev}"]
+                        stack = H5BackedTestPulseStack(dataset)
+                        if dev in self.fullTestPulseStacks:
+                            self.fullTestPulseStacks[dev].merge(stack)
+                        else:
+                            self.fullTestPulseStacks[dev] = stack
 
     def devices(self) -> list[str]:
         return list(self._devices.keys())
@@ -306,6 +311,7 @@ class MultiPatchLogData(object):
                 count_for_use('test_pulse'),
                 dtype=TEST_PULSE_NUMPY_DTYPE,
             ),
+            'full_test_pulse': list(range(count_for_use('full_test_pulse'))),
         }
 
     @staticmethod
@@ -329,6 +335,8 @@ class MultiPatchLogData(object):
         #     return event_time, event['opts']
         if use == 'test_pulse':
             return tuple(event[info['name']] for info in TEST_PULSE_METAARRAY_INFO)
+        if use == 'full_test_pulse':
+            return event.get('full_test_pulse')
 
 
 class MultiPatchLog(FileType):
@@ -527,6 +535,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._status_by_plot: dict[pg.PlotItem, list[pg.InfiniteLine]] = {}
         self._plot_items_by_plot: dict[pg.PlotItem, list[pg.PlotDataItem]] = {}
         self._devices = {}
+        self._full_test_pulse_stacks = {}
         self._time_sliders = []
         ctrl_widget = Qt.QWidget(self)
         ctrl_widget.setMaximumWidth(200)
@@ -795,14 +804,15 @@ class MultiPatchLogWidget(Qt.QWidget):
         if self._full_test_pulse_plot is None:
             return
         self._full_test_pulse_plot.clear()
-        if tp := self.testPulseDataAtTime(when):
+        if tps := self.testPulsesAtTime(when):
+            tp = list(tps.values())[0]  # todo separate plots for each device
             self._full_test_pulse_plot.setLabel('left', tp.plot_title, tp.plot_units)
             self._full_test_pulse_plot.plot(tp['primary'].time_values, tp['primary'].data, name="raw")
 
-    def testPulseDataAtTime(self, when) -> PatchClampTestPulse | None:
-        for data in self._devices.values():
-            if test_pulses := data.get('full_test_pulses', None):
-                return test_pulses.at_time(when + self.startTime())
+    def testPulsesAtTime(self, when) -> dict[str, PatchClampTestPulse]:
+        abs_when = when + self.startTime()
+        possibilities = {dev: stack.at_time(abs_when) for dev, stack in self._full_test_pulse_stacks.items()}
+        return {dev: tp for dev, tp in possibilities.items() if tp is not None}
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
@@ -837,12 +847,13 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             self._devices[dev] = log_data[dev]
-        if log_data.hasFullTestPulseData():
-            tp_data = log.parent()[log_data.fullTestPulseFilename()].read()
-            pulses = tp_data['test_pulses']
-            for dev in log_data.devices():
-                dev_group = pulses.get(dev, None)
-                self._devices[dev]['full_test_pulses'] = H5BackedTestPulseStack(dev_group) if dev_group else None
+            stack = log_data.fullTestPulseStacks.get(dev, None)
+            if stack is None:
+                continue
+            if dev in self._full_test_pulse_stacks:
+                self._full_test_pulse_stacks[dev].merge(stack)
+            else:
+                self._full_test_pulse_stacks[dev] = stack
         self.redraw()
 
     def redraw(self):

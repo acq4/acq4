@@ -601,10 +601,18 @@ class MultiPatchWindow(Qt.QWidget):
 
     def writeRecords(self, recs):
         for rec in recs:
-            if 'full_test_pulse' in rec and self._testPulseStacks.get(rec['device'], None) is not None:
-                self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+            if 'full_test_pulse' in rec:
+                if self._testPulseStacks.get(rec['device'], None) is not None:
+                    location = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+                    if self._eventStorageFile:
+                        filename, path = location.split(':')
+                        filename = os.path.relpath(filename, os.path.dirname(self._eventStorageFile.name))
+                        location = f"{filename}:{path}"
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+                    rec['full_test_pulse'] = location
+                else:
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
             if self._eventStorageFile:
-                rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
                 self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
         if self._eventStorageFile:
             self._eventStorageFile.flush()
