@@ -153,6 +153,7 @@ class MultiPatchWindow(Qt.QWidget):
         else:
             self.xkdev = None
 
+        self.eventHistory = []
         self.resetHistory()
 
         if self.microscope:
@@ -589,9 +590,9 @@ class MultiPatchWindow(Qt.QWidget):
             pip.emitFullTestPulseData(rec)
 
     def recordEvent(self, event):
-        if event['event'] != 'test_pulse_data':
-            self.eventHistory.append(event)
         self.writeRecords([event])
+        event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
+        self.eventHistory.append(event)
 
     def resetHistory(self):
         self.eventHistory = []
@@ -600,11 +601,11 @@ class MultiPatchWindow(Qt.QWidget):
 
     def writeRecords(self, recs):
         for rec in recs:
-            if rec['event'] != 'test_pulse_data':
-                if self._eventStorageFile:
-                    self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
-            elif self._testPulseStacks:
-                self._testPulseStacks[rec['device']].append(rec['test_pulse'])
+            if 'full_test_pulse' in rec and self._testPulseStacks.get(rec['device'], None) is not None:
+                self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+            if self._eventStorageFile:
+                rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+                self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
         if self._eventStorageFile:
             self._eventStorageFile.flush()
         for stack in self._testPulseStacks.values():

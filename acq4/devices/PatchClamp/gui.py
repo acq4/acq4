@@ -45,7 +45,7 @@ class PatchClampDeviceGui(Qt.QWidget):
     def _handleTestPulseFinished(self, clamp, tp):
         if not self.ui.toggleMockAnalysis.isChecked():
             for k, v in tp.analysis.items():
-                if k == 'event_time':
+                if k in ('event_time', 'full_test_pulse'):
                     continue
                 self._mockAnalysisRoot[k] = v
 
