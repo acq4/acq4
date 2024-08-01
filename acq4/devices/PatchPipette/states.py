@@ -733,8 +733,8 @@ class CellDetectState(PatchPipetteState):
         self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
         return config['fallbackState']
 
-    def avoidObstacle(self):
-        self.setState("cell detect: avoiding obstacle")
+    def avoidObstacle(self, already_retracted=False):
+        self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._continuousAdvanceFuture is not None:
             self._continuousAdvanceFuture.stop("Obstacle detected")
             self._continuousAdvanceFuture = None
@@ -742,10 +742,13 @@ class CellDetectState(PatchPipetteState):
         pip = self.dev.pipetteDevice
         speed = self.config['belowSurfaceSpeed']
 
-        pos = np.array(pip.globalPosition())
+        init_pos = np.array(pip.globalPosition())
         direction = self.direction
-        self.waitFor(
-            pip._moveToGlobal(pos - self.config['sidestepBackupDistance'] * direction, speed=speed))
+        if already_retracted:
+            retract_pos = init_pos
+        else:
+            retract_pos = init_pos - self.config['sidestepBackupDistance'] * direction
+            self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
 
         start_time = ptime.time()
         while self._analysis.obstacle_detected():
@@ -753,13 +756,23 @@ class CellDetectState(PatchPipetteState):
             if ptime.time() - start_time > self.config['obstacleRecoveryTime']:
                 raise TimeoutError("Pipette fouled by obstacle")
 
-        pos = np.array(pip.globalPosition())
         # pick a sidestep point orthogonal to the pipette direction on the xy plane
         xy_perpendicular = np.array([-direction[1], direction[0], 0])
         sidestep = self.config['sidestepLateralDistance'] * xy_perpendicular / np.linalg.norm(xy_perpendicular)
-        self.waitFor(pip._moveToGlobal(pos + sidestep, speed=speed))
-        pos = np.array(pip.globalPosition())
-        self.waitFor(pip._moveToGlobal(pos + self.config['sidestepPassDistance'] * direction, speed=speed))
+        sidestep_pos = retract_pos + sidestep
+        self.waitFor(pip._moveToGlobal(sidestep_pos, speed=speed))
+
+        go_past_pos = sidestep_pos + self.config['sidestepPassDistance'] * direction
+        move = pip._moveToGlobal(go_past_pos, speed=speed)
+        while not move.isDone():
+            self.processAtLeastOneTestPulse()
+            if self._analysis.obstacle_detected():
+                move.stop("Obstacle detected while sidestepping")
+                move.wait()
+                self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
+                return self.avoidObstacle(already_retracted=True)
+            self.checkStop()
+        self.waitFor(move)
         pos = np.array(pip.globalPosition())
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
@@ -882,16 +895,19 @@ class CellDetectState(PatchPipetteState):
             speed = self.config['aboveSurfaceSpeed']
             surface = self.firstSurfacePosition()
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
+            self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             speed = self.config['belowSurfaceSpeed']
             midway = self.fastTravelEndpoint()
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
+            self.setState("moved to detection area")
         speed = self.config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
         if self.config['preTargetWiggle']:
             distance = np.linalg.norm(endpoint - np.array(self.dev.pipetteDevice.globalPosition()))
             count = int(distance / self.config['preTargetWiggleStep'])
             for _ in range(count):
+                self.setState("pre-target wiggle")
                 retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
                 self.wiggle(
