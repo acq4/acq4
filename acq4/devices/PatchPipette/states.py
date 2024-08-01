@@ -918,7 +918,7 @@ class SealState(PatchPipetteState):
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (None, 0)]"},  # TODO
+        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
