@@ -840,7 +840,11 @@ class CellDetectState(PatchPipetteState):
         pip = self.dev.pipetteDevice
         pos = np.array(pip.globalPosition())
         surface = pip.scopeDevice().getSurfaceDepth()
-        return pos - self.direction * (pos[2] - surface)
+        angle = pip.pitchRadians()
+        dz = pos[2] - surface
+        if dz <= 0:
+            return pos
+        return pos + self.direction * (dz / np.cos(angle))
 
     def fastTravelEndpoint(self):
         """Return the last position along the pipette search path to be traveled at full speed."""
