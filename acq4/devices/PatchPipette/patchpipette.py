@@ -308,7 +308,8 @@ class PatchPipette(Device):
     def quit(self):
         if self.clampDevice:
             self.clampDevice.enableTestPulse(False, block=True)
-        self._stateManager.quit()
+        if getattr(self, '_stateManager', None) is not None:
+            self._stateManager.quit()
 
     def goHome(self, speed, **kwds):
         self.setState('out')

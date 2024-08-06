@@ -94,13 +94,35 @@ class PatchPipetteStateManager(Qt.QObject):
             return
         cls._profilesLoadedFromConfig = True
         man = getManager()
-        for k,v in man.config.get('misc', {}).get('patchProfiles', {}).items():
+        for k, v in man.config.get('misc', {}).get('patchProfiles', {}).items():
             v = v.copy()
             cls.addProfile(name=k, config=v)
 
     @classmethod
     def addProfile(cls, name: str, config: dict, overwrite=False):
         assert overwrite or name not in cls.profiles, f"Patch profile {name} already exists"
+        mistakes = []
+        for state, state_config in config.items():
+            if state == 'copyFrom':
+                if not isinstance(state_config, str):
+                    mistakes.append(f"Invalid copyFrom value {state_config!r} in profile {name}")
+                if state_config not in cls.profiles:
+                    mistakes.append(f"Unknown profile {state_config!r} to copy from in profile {name}")
+                continue
+            if state not in cls.stateHandlers:
+                mistakes.append(f"Unknown patch state {state!r} in profile {name}")
+                continue
+            if not isinstance(state_config, dict):
+                mistakes.append(f"Invalid configuration for state {state!r} in profile {name}")
+                continue
+            for param, value in state_config.items():
+                if not isinstance(param, str):
+                    mistakes.append(f"Invalid parameter name {param!r} in state {state!r} of profile {name}")
+                    continue
+                if param not in cls.getStateClass(state).defaultConfig():
+                    mistakes.append(f"Unknown parameter {param!r} in state {state!r} of profile {name}")
+        if mistakes:
+            raise ValueError(f"Errors in profile {name}:\n" + "\n".join(mistakes))
         cls.profiles[name] = config
 
     @classmethod
