@@ -170,7 +170,7 @@ class Microscope(Device, OptomechDevice):
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
-            else:
+            elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
                     dev.loadPreset(state)
