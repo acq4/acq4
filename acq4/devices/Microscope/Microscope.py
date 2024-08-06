@@ -170,7 +170,7 @@ class Microscope(Device, OptomechDevice):
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
-            else:
+            elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
                     dev.loadPreset(state)
@@ -447,9 +447,9 @@ class ScopeGUI(Qt.QWidget):
             # hotkeys
             if 'hotkey' in preset_conf:
                 hotkey = preset_conf['hotkey']
-                dev = dev.dm.getDevice(hotkey["device"])
+                hotkey_dev = dev.dm.getDevice(hotkey["device"])
                 key = hotkey["key"]
-                dev.addKeyCallback(key, dev.loadPreset, (preset,))
+                hotkey_dev.addKeyCallback(key, dev.loadPreset, (preset,))
         self.updateSpins()
 
     def objectiveChanged(self, obj):
