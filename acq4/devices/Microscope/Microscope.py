@@ -447,9 +447,9 @@ class ScopeGUI(Qt.QWidget):
             # hotkeys
             if 'hotkey' in preset_conf:
                 hotkey = preset_conf['hotkey']
-                dev = dev.dm.getDevice(hotkey["device"])
+                hotkey_dev = dev.dm.getDevice(hotkey["device"])
                 key = hotkey["key"]
-                dev.addKeyCallback(key, dev.loadPreset, (preset,))
+                hotkey_dev.addKeyCallback(key, dev.loadPreset, (preset,))
         self.updateSpins()
 
     def objectiveChanged(self, obj):
