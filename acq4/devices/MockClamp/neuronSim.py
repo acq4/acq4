@@ -3,9 +3,9 @@ from __future__ import print_function
 Use NEURON to simulate a simple cell for testing with MockClamp
 """
 import numpy as np
-import sys, os
-from neuron import h
+import os
 import neuron
+from neuron import h
 import urllib.request
 import zipfile
 
@@ -102,7 +102,7 @@ def setup_clamp():
     icRec = h.Vector()
     icRec.record(soma(0.5)._ref_v)
 
-    vc = h.SEClamp(soma(0.5))
+    vc = h.SEClamp(soma(0.5))  # single electron
     vc.dur1 = 1e9
     vc.rs = 5  # Rs, in megohms
     #vc.amp1 = 0
@@ -164,7 +164,7 @@ def rmp_at_ic(icHolding):
 
 
 def run(cmd):
-    global h, soma, ic, vc, syn, icRec, vcRec, vcrs
+    global soma, ic, vc, syn, icRec, vcRec, vcrs
 
     # run a short simulation to settle the model
     # neuron.init()
@@ -180,12 +180,10 @@ def run(cmd):
     # h.finitialize(vrest * 1e3)
     # h.run(settle_time)
 
-    
     dt = cmd['dt'] * 1e3  ## convert s -> ms
     h.dt = dt
     data = cmd['data']
     mode = cmd['mode']
-
 
     # add extra data to let model settle
     extra = 100  # ms
@@ -199,12 +197,11 @@ def run(cmd):
     elif mode == 'VC':
         data[:n_extra] = cmd['vcHolding']
 
-
     #print "data:", data.min(), data.max()
 
     #times = h.Vector(np.linspace(h.t, h.t+len(data)*dt, len(data)))
     #print "times:", times.min(), times.max()
-    if mode == 'IC':
+    if mode in ('IC', 'I=0'):
         #ic.delay = h.t
         ic.delay = 0
         vc.rs = 1e9
@@ -225,9 +222,9 @@ def run(cmd):
         syn.gmax = 0.04 # umho
         syn.e = -7.0 # mV
         #syn.i --- nA
-        
+
     else:
-        raise Exception("Unknown mode '%s'" % mode)
+        raise ValueError(f"Unknown mode '{mode}'")
 
     #t2 = t + dt * (len(data)+2)
     #print "run until:", t2
@@ -251,7 +248,7 @@ def run(cmd):
     vcRec.clear()
 
     h.finitialize(vinit)
-    
+
     tstop = (dt*len(data)+2)
     h.continuerun(tstop)
     #neuron.run(t2)
@@ -269,7 +266,7 @@ def run(cmd):
     if len(out) != len(data):
         print("Warning: neuron sim output length mismatch: %d != %d" % (len(out), len(data)))
         out = np.pad(out, (0, len(data)-len(out)), 'constant', constant_values=(0, 0))
-    
+
     return out[n_extra:]
 
 
