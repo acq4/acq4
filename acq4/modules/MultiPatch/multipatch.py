@@ -603,13 +603,11 @@ class MultiPatchWindow(Qt.QWidget):
         for rec in recs:
             if 'full_test_pulse' in rec:
                 if self._testPulseStacks.get(rec['device'], None) is not None:
-                    location = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+                    filename, path = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
                     if self._eventStorageFile:
-                        filename, path = location.split(':')
                         filename = os.path.relpath(filename, os.path.dirname(self._eventStorageFile.name))
-                        location = f"{filename}:{path}"
                     rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
-                    rec['full_test_pulse'] = location
+                    rec['full_test_pulse'] = f"{filename}:{path}"
                 else:
                     rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
             if self._eventStorageFile:
