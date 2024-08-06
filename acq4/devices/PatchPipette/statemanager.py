@@ -94,7 +94,7 @@ class PatchPipetteStateManager(Qt.QObject):
             return
         cls._profilesLoadedFromConfig = True
         man = getManager()
-        for k,v in man.config.get('misc', {}).get('patchProfiles', {}).items():
+        for k, v in man.config.get('misc', {}).get('patchProfiles', {}).items():
             v = v.copy()
             cls.addProfile(name=k, config=v)
 
