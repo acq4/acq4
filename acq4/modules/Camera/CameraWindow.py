@@ -7,7 +7,7 @@ import weakref
 import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.StatusBar import StatusBar
 from acq4.util.debug import Profiler
 from acq4.util.imaging.sequencer import ImageSequencerCtrl
@@ -109,7 +109,7 @@ class CameraWindow(Qt.QMainWindow):
             self.statusBar().insertPermanentWidget(0, label)
 
         # Load previous window state
-        self.stateFile = os.path.join("modules", self.module.name + "_ui.cfg")
+        self.stateFile = os.path.join("modules", f"{self.module.name}_ui.cfg")
         uiState = module.manager.readConfigFile(self.stateFile)
         if "geometry" in uiState:
             geom = Qt.QRect(*uiState["geometry"])
@@ -480,7 +480,7 @@ class ROIPlotter(Qt.QWidget):
     def removeROI(self, roi):
         self.view.removeItem(roi)
         roi.sigRemoveRequested.disconnect(self.removeROI)
-        for i, r in enumerate(self.ROIs):
+        for r in self.ROIs:
             if r["roi"] is roi:
                 self.roiPlot.removeItem(r["plot"])
                 self.ROIs.remove(r)
