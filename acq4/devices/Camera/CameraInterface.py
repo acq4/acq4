@@ -22,10 +22,12 @@ class CameraInterface(CameraModuleInterface):
     The interface provides a control GUI via the controlWidget() method and 
     directly manages its own GraphicsItems within the camera module's view box.
     """
+    sigNewFrame = Qt.Signal(object, object)  # self, frame
 
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
 
+        camera.sigNewFrame.connect(self.handleNewFrame)
         self.module = module
         self.view = module.getView()
         self.hasQuit = False
@@ -111,7 +113,7 @@ class CameraInterface(CameraModuleInterface):
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  # note that this signal (from acq4.util.SpinBox) is delayed.
 
         # We get new frames by adding a processing step to the camera.
-        # This allow us to attach metadata (background+contrast info) to the frames before
+        # This allows us to attach metadata (background+contrast info) to the frames before
         # they are consumed by anyone else
         self.cam.addFrameProcessor(self.newFrame, final=True)
 
@@ -136,6 +138,9 @@ class CameraInterface(CameraModuleInterface):
 
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
+
+    def handleNewFrame(self, frame):
+        self.sigNewFrame.emit(self, frame)
 
     def controlWidget(self):
         return self.widget
