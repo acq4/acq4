@@ -63,7 +63,14 @@ class Manager(Qt.QObject):
     CREATED = False
     single = None
 
-    def __init__(self, configFile=None, argv=None):
+    @classmethod
+    def runFromCommandLine(self, argv=None):
+        """Run the Manager from the command line."""
+        m = Manager()
+        m.initFromCommandLine(argv)
+        return m
+
+    def __init__(self, configFile=None):
         self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
         # self.devices = OrderedDict()  # all currently loaded devices
         self.modules = OrderedDict()  # all currently running modules
@@ -87,34 +94,8 @@ class Manager(Qt.QObject):
 
             Manager.CREATED = True
             Manager.single = self
-
             self.logWindow = createLogWindow(self)
-
             self.documentation = Documentation()
-
-            if argv is not None:
-                try:
-                    opts, args = getopt.getopt(
-                        argv, 'c:a:x:m:b:s:d:nD',
-                        ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=',
-                         'disable=', 'no-manager', 'disable-all', 'exit-on-error'])
-                except getopt.GetoptError as err:
-                    print(str(err))
-                    print("""
-    Valid options are:
-        -x --exit-on-error Whether to exit immidiately on the first exception during initial Manager setup
-        -c --config=       Configuration file to load
-        -a --config-name=  Named configuration to load
-        -m --module=       Module name to load
-        -b --base-dir=     Base directory to use
-        -s --storage-dir=  Storage directory to use
-        -n --no-manager    Do not load manager module
-        -d --disable=      Disable the device specified
-        -D --disable-all   Disable all devices
-    """)
-                    raise
-            else:
-                opts = []
 
             Qt.QObject.__init__(self)
             atexit.register(self.quit)
@@ -123,71 +104,7 @@ class Manager(Qt.QObject):
             # Import all built-in module classes
             modules.importBuiltinClasses()
 
-            ## Handle command line options
-            loadModules = []
-            setBaseDir = None
-            setStorageDir = None
-            loadManager = True
-            loadConfigs = []
-            for o, a in opts:
-                if o in ['-c', '--config']:
-                    configFile = a
-                elif o in ['-a', '--config-name']:
-                    loadConfigs.append(a)
-                elif o in ['-m', '--module']:
-                    loadModules.append(a)
-                elif o in ['-b', '--baseDir']:
-                    setBaseDir = a
-                elif o in ['-s', '--storageDir']:
-                    setStorageDir = a
-                elif o in ['-n', '--noManager']:
-                    loadManager = False
-                elif o in ['-d', '--disable']:
-                    self.disableDevs.append(a)
-                elif o in ['-D', '--disable-all']:
-                    self.disableAllDevs = True
-                elif o == "--exit-on-error":
-                    self.exitOnError = True
-                else:
-                    print("Unhandled option", o, a)
-
-            ## Read in configuration file
-            if configFile is None:
-                configFile = self._getConfigFile()
-
-            self.configDir = os.path.dirname(configFile)
-            self.readConfig(configFile)
-
             logMsg('ACQ4 version %s started.' % __version__, importance=9)
-
-            ## Act on options if they were specified..
-            try:
-                for name in loadConfigs:
-                    self.loadDefinedConfig(name)
-
-                if setBaseDir is not None:
-                    self.setBaseDir(setBaseDir)
-                if setStorageDir is not None:
-                    self.setCurrentDir(setStorageDir)
-                if loadManager:
-                    self.showGUI()
-                    self.createWindowShortcut('F1', self.gui.win)
-                for m in loadModules:
-                    try:
-                        if m in self.definedModules:
-                            self.loadDefinedModule(m)
-                        else:
-                            self.loadModule(m)
-                    except:
-                        if not loadManager:
-                            self.showGUI()
-                        raise
-
-            except:
-                if self.exitOnError:
-                    raise
-                else:
-                    printExc("\nError while acting on command line options: (but continuing on anyway..)")
 
         except:
             Manager.CREATED = False
@@ -197,22 +114,99 @@ class Manager(Qt.QObject):
             else:
                 printExc("Error while configuring Manager:")
 
+    def initFromCommandLine(self, argv=None):
+        if argv is not None:
+            try:
+                opts, args = getopt.getopt(
+                    argv, 'c:a:x:m:b:s:d:nD',
+                    ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=',
+                     'disable=', 'no-manager', 'disable-all', 'exit-on-error'])
+            except getopt.GetoptError as err:
+                print(err)
+                print("""
+        Valid options are:
+            -x --exit-on-error Whether to exit immidiately on the first exception during initial Manager setup
+            -c --config=       Configuration file to load
+            -a --config-name=  Named configuration to load
+            -m --module=       Module name to load
+            -b --base-dir=     Base directory to use
+            -s --storage-dir=  Storage directory to use
+            -n --no-manager    Do not load manager module
+            -d --disable=      Disable the device specified
+            -D --disable-all   Disable all devices
+        """)
+                raise
+        else:
+            opts = []
 
+        ## Handle command line options
+        configFile = None
+        loadModules = []
+        setBaseDir = None
+        setStorageDir = None
+        loadManager = True
+        loadConfigs = []
+        for o, a in opts:
+            if o in ['-c', '--config']:
+                configFile = a
+            elif o in ['-a', '--config-name']:
+                loadConfigs.append(a)
+            elif o in ['-m', '--module']:
+                loadModules.append(a)
+            elif o in ['-b', '--baseDir']:
+                setBaseDir = a
+            elif o in ['-s', '--storageDir']:
+                setStorageDir = a
+            elif o in ['-n', '--noManager']:
+                loadManager = False
+            elif o in ['-d', '--disable']:
+                self.disableDevs.append(a)
+            elif o in ['-D', '--disable-all']:
+                self.disableAllDevs = True
+            elif o == "--exit-on-error":
+                self.exitOnError = True
+            else:
+                print("Unhandled option", o, a)
+
+        ## Read in configuration file
+        if configFile is None:
+            configFile = self._getConfigFile()
+
+        self.configDir = os.path.dirname(configFile)
+        self.readConfig(configFile)
+
+        ## Act on options if they were specified..
+        try:
+            for name in loadConfigs:
+                self.loadDefinedConfig(name)
+
+            if setBaseDir is not None:
+                self.setBaseDir(setBaseDir)
+            if setStorageDir is not None:
+                self.setCurrentDir(setStorageDir)
+            if loadManager:
+                self.showGUI()
+                self.createWindowShortcut('F1', self.gui.win)
+            for m in loadModules:
+                try:
+                    if m in self.definedModules:
+                        self.loadDefinedModule(m)
+                    else:
+                        self.loadModule(m)
+                except:
+                    if not loadManager:
+                        self.showGUI()
+                    raise
+
+        except:
+            if self.exitOnError:
+                raise
+            else:
+                printExc("\nError while acting on command line options: (but continuing on anyway..)")
         finally:
             if len(self.modules) == 0:
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")
-
-        win = self.modules[list(self.modules.keys())[0]].window()
-        self.quitShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+q'), win)
-        self.quitShortcut.setContext(Qt.Qt.ApplicationShortcut)
-        self.abortShortcut = Qt.QShortcut(Qt.QKeySequence('Esc'), win)
-        self.abortShortcut.setContext(Qt.Qt.ApplicationShortcut)
-        self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
-        self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
-        self.quitShortcut.activated.connect(self.quit)
-        self.abortShortcut.activated.connect(self.sigAbortAll)
-        self.reloadShortcut.activated.connect(self.reloadAll)
 
     def _getConfigFile(self):
         ## search all the default locations to find a configuration file.
@@ -676,6 +670,18 @@ class Manager(Qt.QObject):
         """Show the Manager GUI"""
         if self.gui is None:
             self.gui = self.loadModule('Manager', 'Manager', {})
+            # win = self.modules[list(self.modules.keys())[0]].window() ?
+            win = self.gui.window()
+            self.quitShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+q'), win)
+            self.quitShortcut.setContext(Qt.Qt.ApplicationShortcut)
+            self.abortShortcut = Qt.QShortcut(Qt.QKeySequence('Esc'), win)
+            self.abortShortcut.setContext(Qt.Qt.ApplicationShortcut)
+            self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
+            self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
+            self.quitShortcut.activated.connect(self.quit)
+            self.abortShortcut.activated.connect(self.sigAbortAll)
+            self.reloadShortcut.activated.connect(self.reloadAll)
+
         self.gui.show()
 
     def getCurrentDir(self):

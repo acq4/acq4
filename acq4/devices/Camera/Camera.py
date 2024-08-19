@@ -225,7 +225,7 @@ class Camera(DAQGeneric, OptomechDevice):
     def loadPreset(self, preset):
         presets = self.camConfig.get("presets", None)
         if presets is None or preset not in presets:
-            raise ValueError("No camera preset named %r" % preset)
+            raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
 
