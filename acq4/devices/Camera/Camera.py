@@ -113,7 +113,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.sigShowMessage.connect(self.showMessage)
 
         self._processingThread = FrameProcessingThread()
-        self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame)
+        self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame, type=Qt.Qt.DirectConnection)
         self._processingThread.start()
         self._processingThread.addFrameProcessor(self.addFrameInfo)
 
