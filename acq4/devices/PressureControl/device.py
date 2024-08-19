@@ -4,7 +4,7 @@ from typing import Optional
 from acq4.util import Qt, ptime
 from .widgets import PressureControlWidget
 from ..Device import Device
-from ...util.future import Future
+from ...util.future import Future, future_wrap
 
 
 class PressureControl(Device):
@@ -31,7 +31,7 @@ class PressureControl(Device):
         self.source = None
         self.sources = ("regulator", "user", "atmosphere")
 
-    @Future.wrap
+    @future_wrap
     def rampPressure(
         self,
         target: Optional[float] = None,
@@ -64,6 +64,7 @@ class PressureControl(Device):
             else:
                 duration = abs(end_pressure - start_pressure) / abs(rate)
 
+        print(f"Ramping pressure from {start_pressure} to {end_pressure} over {duration} seconds")
         start_time = ptime.time()
         frac_done = 0
         while frac_done < 1:

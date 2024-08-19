@@ -16,7 +16,7 @@ import time
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.debug import printExc
-from acq4.util.future import Future
+from acq4.util.future import Future, future_wrap
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect, units
 
@@ -777,7 +777,7 @@ class CellDetectState(PatchPipetteState):
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
     def obstacleDetected(self):
-        return self.config['obstacleDetection'] and self._analysis.obstacle_detected()
+        return self.config['obstacleDetection'] and not self.closeEnoughToTargetToDetectCell() and self._analysis.obstacle_detected()
 
     def processAtLeastOneTestPulse(self):
         while not (tps := self.getTestPulses(timeout=0.2)):
@@ -1605,7 +1605,7 @@ class ResealState(PatchPipetteState):
             extra=pressure_ramp,
         )
 
-    @Future.wrap
+    @future_wrap
     def startRollingResistanceThresholds(self, _future: Future):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self.monitorTestPulse()

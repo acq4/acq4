@@ -463,7 +463,7 @@ class Stage(Device, OptomechDevice):
         """Move the stage along a path with multiple waypoints.
 
         The format of *path* is a list of dicts, where each dict specifies keyword arguments
-        to self.move().
+        to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
         """
         return MovePathFuture(self, path)
 
@@ -681,42 +681,43 @@ class MovePathFuture(MoveFuture):
         Future.stop(self, reason=reason)
 
     def _movePath(self):
-        for i, step in enumerate(self.path):
-            step = step.copy()
-            explanation = step.pop('explanation', 'unnamed')
-            try:
-                fut: Future = self.dev.move(**step)
-                fut._pathStep = i
-                self._currentFuture = fut
-                while not fut.isDone():
-                    with contextlib.suppress(fut.Timeout):
-                        fut.wait(timeout=0.1)  # raises Timeout
-                        self.currentStep = i + 1
+        try:
+            for i, step in enumerate(self.path):
+                step = step.copy()
+                explanation = step.pop('explanation', 'unnamed')
+                try:
+                    fut: Future = self.dev.move(**step)
+                    fut._pathStep = i
+                    self._currentFuture = fut
+                    while not fut.isDone():
+                        with contextlib.suppress(fut.Timeout):
+                            fut.wait(timeout=0.1)  # raises Timeout
+                            self.currentStep = i + 1
+                        if self._stopRequested:
+                            fut.stop()
+                            break
+
                     if self._stopRequested:
-                        fut.stop()
-                        break
+                        self._taskDone(interrupted=True, error="Move was cancelled by external request")
+                        return
 
-                if self._stopRequested:
-                    self._taskDone(interrupted=True, error="Move was cancelled by external request")
-                    break
-
-                if fut.wasInterrupted():
+                    if fut.wasInterrupted():
+                        self._taskDone(
+                            interrupted=True,
+                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
+                            excInfo=fut._excInfo,
+                        )
+                        return
+                except Exception as exc:
                     self._taskDone(
                         interrupted=True,
-                        error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
-                        excInfo=fut._excInfo,
+                        error=f"Error moving to path step {i} ({explanation})",
+                        excInfo=(type(exc), exc, exc.__traceback__),
                     )
-                    break
-            except Exception as exc:
-                self._taskDone(
-                    interrupted=True,
-                    error=f"Error moving to path step {i} ({explanation})",
-                    excInfo=(type(exc), exc, exc.__traceback__),
-                )
-                break
-            finally:
-                if not self.isDone():
-                    self._taskDone()  # success!
+                    return
+        finally:
+            if not self.isDone():
+                self._taskDone()  # success!
 
     def undo(self):
         """Reverse the moves generated in this future and return a new future.

@@ -113,7 +113,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.sigShowMessage.connect(self.showMessage)
 
         self._processingThread = FrameProcessingThread()
-        self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame)
+        self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame, type=Qt.Qt.DirectConnection)
         self._processingThread.start()
         self._processingThread.addFrameProcessor(self.addFrameInfo)
 
@@ -1064,8 +1064,8 @@ class FrameAcquisitionFuture(Future):
         return self._frames[:]
 
     def getResult(self, timeout=None) -> list[Frame]:
-        if timeout is None and self._frame_count is None and not self.isDone():
-            raise ValueError("Must specify a timeout when still acquiring an unlimited number of frames.")
+        if timeout is None and self._frame_count is None and not self.isDone() and not self._stopRequested:
+            raise ValueError("Future is still acquiring indefinitely; please specify a timeout for getResult.")
         self.wait(timeout)
         return self._frames
 
