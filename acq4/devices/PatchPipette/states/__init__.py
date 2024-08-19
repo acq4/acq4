@@ -1,3 +1,4 @@
+from ._base import PatchPipetteState
 from .approach import ApproachState
 from .bath import BathState
 from .blowout import BlowoutState
@@ -16,6 +17,7 @@ from .out import OutState
 
 
 __all__ = [
+    'PatchPipetteState',
     'OutState',
     'ApproachState',
     'WholeCellState',

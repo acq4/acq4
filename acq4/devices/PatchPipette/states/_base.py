@@ -8,7 +8,6 @@ import threading
 from copy import deepcopy
 from typing import Any, Optional
 
-from acq4.util import ptime
 from acq4.util.debug import printExc
 from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
