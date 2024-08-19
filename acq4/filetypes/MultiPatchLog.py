@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 import json
+import os
 import re
 from typing import Any
 
+import h5py
 import numpy as np
 
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
 from acq4.util.target import Target
+from neuroanalysis.test_pulse import PatchClampTestPulse
+from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -21,6 +27,7 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'fit_yoffset', 'type': 'float'},
     {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
+    {'name': 'start_time', 'type': 'float', 'units': 's'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
 TEST_PULSE_PARAMETER_CONFIG = []
@@ -180,8 +187,8 @@ class IrregularTimeSeries(object):
 
 class MultiPatchLogData(object):
     def __init__(self, filename=None):
-        self._filename = filename
         self._devices = {}
+        self.fullTestPulseStacks: dict[str, H5BackedTestPulseStack] = {}
         self._minTime = None
         self._maxTime = None
 
@@ -205,7 +212,7 @@ class MultiPatchLogData(object):
             # if event_type in {'move_requested'}:
             #     uses.append('move_request')
             if event_type in {'test_pulse'}:
-                uses.append('test_pulse')
+                uses += ['test_pulse', 'full_test_pulse']
             return uses
 
         with open(filename, 'rb') as fh:
@@ -231,6 +238,19 @@ class MultiPatchLogData(object):
                         if use == 'position':
                             time, *pos = self._prepare_event_for_use(event, use)
                             self._devices[dev]['position_ITS'][time] = pos
+                if 'full_test_pulse' in self._devices[dev]:
+                    h5_fns = {loc.split(":")[0] for loc in self._devices[dev]['full_test_pulse'] if loc}
+                    for h5_fn in h5_fns:
+                        h5_fn = os.path.join(os.path.dirname(filename), h5_fn)
+                        # TODO only open the file once, not once per device
+                        h5_file = h5py.File(h5_fn, 'r')
+                        # TODO find a way to stop duplicating the "test_pulses/{dev}" part
+                        dataset = h5_file[f"test_pulses/{dev}"]
+                        stack = H5BackedTestPulseStack(dataset)
+                        if dev in self.fullTestPulseStacks:
+                            self.fullTestPulseStacks[dev].merge(stack)
+                        else:
+                            self.fullTestPulseStacks[dev] = stack
 
     def devices(self) -> list[str]:
         return list(self._devices.keys())
@@ -291,6 +311,7 @@ class MultiPatchLogData(object):
                 count_for_use('test_pulse'),
                 dtype=TEST_PULSE_NUMPY_DTYPE,
             ),
+            'full_test_pulse': list(range(count_for_use('full_test_pulse'))),
         }
 
     @staticmethod
@@ -314,6 +335,8 @@ class MultiPatchLogData(object):
         #     return event_time, event['opts']
         if use == 'test_pulse':
             return tuple(event[info['name']] for info in TEST_PULSE_METAARRAY_INFO)
+        if use == 'full_test_pulse':
+            return event.get('full_test_pulse')
 
 
 class MultiPatchLog(FileType):
@@ -398,8 +421,7 @@ class PipettePathWidget(object):
         self._arrow.setPos(pos[0], pos[1])
         self._label.setPos(pos[0], pos[1])
 
-        state = next((s for s in self._states[::-1] if s[0] < time), None)
-        if state:
+        if state := next((s for s in self._states[::-1] if s[0] < time), None):
             self._label.setText(f"{self._name}: {state[1]}\n{state[2]}")
             self._displayTargetAtTime(time, pos[2])
 
@@ -507,11 +529,13 @@ class MultiPatchLogWidget(Qt.QWidget):
         layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
+        self._full_test_pulse_plot = None
         self._plots_by_units: dict[str, pg.PlotItem] = {}
         self._regions_by_plot: dict[pg.PlotItem, list[PipetteStateRegion]] = {}
         self._status_by_plot: dict[pg.PlotItem, list[pg.InfiniteLine]] = {}
         self._plot_items_by_plot: dict[pg.PlotItem, list[pg.PlotDataItem]] = {}
         self._devices = {}
+        self._full_test_pulse_stacks = {}
         self._time_sliders = []
         ctrl_widget = Qt.QWidget(self)
         ctrl_widget.setMaximumWidth(200)
@@ -526,9 +550,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         plot: pg.PlotItem = self._plots_widget.addPlot(
             name=units,
             labels=dict(bottom=('time', 's'), left=('', units)),
-            row=len(self._plots_by_units) + 1,
+            row=len(self._plots_by_units) + 2,
             col=0,
         )
+        plot.addLegend()
         if self._plots_by_units:
             plot.setXLink(self._plots_by_units[list(self._plots_by_units.keys())[0]])
         else:
@@ -617,7 +642,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', meta['name']).title()
             cb = Qt.QCheckBox(name)
             cb.name = meta['name']
-            cb.toggled.connect(self._toggleTestPulsePlot)
+            cb.toggled.connect(self._toggleTestPulseAnalysisPlot)
             self._testPulseAnalysisCheckboxes.append(cb)
             self._ctrl_layout.addWidget(cb)
         self._displayPressure = Qt.QCheckBox('Pressure')
@@ -629,6 +654,9 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayDetectAnalysis = Qt.QCheckBox('Cell Detect Analysis')
         self._displayDetectAnalysis.toggled.connect(self._toggleDetectAnalysis)
         self._ctrl_layout.addWidget(self._displayDetectAnalysis)
+        self._displayFullTestPulse = Qt.QCheckBox('Full Test Pulse Data')
+        self._displayFullTestPulse.toggled.connect(self._toggleFullTestPulse)
+        self._ctrl_layout.addWidget(self._displayFullTestPulse)
 
     def _toggleDisplayStateRegions(self, state: bool):
         for plot in self._plots_by_units.values():
@@ -650,7 +678,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                     plot.removeItem(line)
                 self._status_by_plot[plot] = []
 
-    def _toggleTestPulsePlot(self, state: bool):
+    def _toggleTestPulseAnalysisPlot(self, state: bool):
         ev = self.sender()
         meta = next(m for m in TEST_PULSE_METAARRAY_INFO if m['name'] == ev.name)
         plot = self.buildPlotForUnits(meta.get('units', ''))
@@ -660,7 +688,12 @@ class MultiPatchLogWidget(Qt.QWidget):
                 time = test_pulses['event_time'] - self.startTime()
                 if len(time) > 0:
                     idx = next(i for i, m in enumerate(TEST_PULSE_METAARRAY_INFO) if m['name'] == ev.name)
-                    plot_item = plot.plot(time, test_pulses[ev.name], pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))))
+                    plot_item = plot.plot(
+                        time,
+                        test_pulses[ev.name],
+                        pen=pg.mkPen((idx, len(TEST_PULSE_NUMPY_DTYPE))),
+                        name=ev.name,
+                    )
                     self._plot_items_by_plot.setdefault(plot, []).append(plot_item)
         else:
             for item in self._plot_items_by_plot.get(plot, []):
@@ -675,7 +708,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 pressure = data.get('pressure', np.zeros(0, dtype=[('time', float), ('pressure', float)]))
                 time = pressure['time'] - self.startTime()
                 if len(time) > 0:
-                    plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))))
+                    plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))), name='Pressure')
         elif 'Pa' in self._plots_by_units:
             self._plots_by_units['Pa'].hide()
 
@@ -689,18 +722,20 @@ class MultiPatchLogWidget(Qt.QWidget):
                 movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
             analysis_plot.addItem(pg.InfiniteLine(
                 movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
+            names = False
             for ssr in self.testPulseAnalysisDataByState('steady_state_resistance'):
                 analyzer = ResealAnalysis(
                     self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
                 analysis = analyzer.process_measurements(ssr)
-                analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
-                resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
-                analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
-                resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
+                analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'), name=None if names else 'Detect Ratio')
+                resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'), name=None if names else 'Detect Avg')
+                analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Ratio')
+                resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Avg')
                 analysis_plot.plot(
-                    analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x')
+                    analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x', name=None if names else 'Stretching')
                 analysis_plot.plot(
-                    analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o')
+                    analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o', name=None if names else 'Tearing')
+                names = True
 
     def testPulseAnalysisDataByState(self, field: str):
         for data in self._devices.values():
@@ -727,6 +762,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         if state:
             resistance_plot = self.buildPlotForUnits('Ω')
             analysis_plot = self.buildPlotForUnits('')
+            legend_has_names = False
             for ssr_chunk in self.testPulseAnalysisDataByState('steady_state_resistance'):
                 analyzer = CellDetectAnalysis(
                     cell_threshold_fast=1e6,
@@ -736,12 +772,47 @@ class MultiPatchLogWidget(Qt.QWidget):
                     break_threshold=-1e6,
                 )
                 analysis = analyzer.process_measurements(ssr_chunk)
-                resistance_plot.plot(analysis["time"], analysis["resistance_avg"], pen=pg.mkPen('b'))
-                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_fast"]), pen=pg.mkPen('g'), symbol='o')
-                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_slow"]), pen=pg.mkPen('b'), symbol='o')
-                analysis_plot.plot(analysis["time"], plottable_booleans(analysis["obstacle_detected"]), pen=pg.mkPen('r'), symbol='x')
-                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["tip_is_broken"]), pen=pg.mkPen('y'), symbol='x')
+                resistance_plot.plot(
+                    analysis["time"],
+                    analysis["resistance_avg"],
+                    pen=pg.mkPen('b'),
+                    name=None if legend_has_names else 'Resistance Avg',
+                )
+                analysis_plot.plot(
+                    analysis["time"],
+                    plottable_booleans(analysis["obstacle_detected"]),
+                    pen=pg.mkPen('r'),
+                    symbol='x',
+                    name=None if legend_has_names else 'Obstacle Detected',
+                )
+                legend_has_names = True
 
+    def _toggleFullTestPulse(self, state: bool):
+        if state:
+            self._full_test_pulse_plot = self._plots_widget.addPlot(
+                name="Test Pulse",
+                labels=dict(bottom=('time', 's'), left=('', 'V')),
+                row=1,
+                col=0,
+            )
+            self._displayTestPulseDataAtTime(self._current_time)
+        else:
+            self._plots_widget.removeItem(self._full_test_pulse_plot)
+            self._full_test_pulse_plot = None
+
+    def _displayTestPulseDataAtTime(self, when):
+        if self._full_test_pulse_plot is None:
+            return
+        self._full_test_pulse_plot.clear()
+        if tps := self.testPulsesAtTime(when):
+            tp = list(tps.values())[0]  # todo separate plots for each device
+            self._full_test_pulse_plot.setLabel('left', tp.plot_title, tp.plot_units)
+            self._full_test_pulse_plot.plot(tp['primary'].time_values, tp['primary'].data, name="raw")
+
+    def testPulsesAtTime(self, when) -> dict[str, PatchClampTestPulse]:
+        abs_when = when + self.startTime()
+        possibilities = {dev: stack.at_time(abs_when) for dev, stack in self._full_test_pulse_stacks.items()}
+        return {dev: tp for dev, tp in possibilities.items() if tp is not None}
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
@@ -760,6 +831,7 @@ class MultiPatchLogWidget(Qt.QWidget):
                 self._pinned_image_z += 1
             else:
                 img.hide()
+        self._displayTestPulseDataAtTime(time)
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
@@ -775,6 +847,13 @@ class MultiPatchLogWidget(Qt.QWidget):
         self.loadImagesFromDir(log.parent())
         for dev in log_data.devices():
             self._devices[dev] = log_data[dev]
+            stack = log_data.fullTestPulseStacks.get(dev, None)
+            if stack is None:
+                continue
+            if dev in self._full_test_pulse_stacks:
+                self._full_test_pulse_stacks[dev].merge(stack)
+            else:
+                self._full_test_pulse_stacks[dev] = stack
         self.redraw()
 
     def redraw(self):

@@ -1,15 +1,17 @@
-from collections import OrderedDict
-
 import json
 import os
 import re
+from collections import OrderedDict
 from typing import List
+
+import h5py
 
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
+from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -43,7 +45,8 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
-        self.storageFile = None
+        self._eventStorageFile = None
+        self._testPulseStacks = {}
 
         self._calibratePips = []
         self._calibrateStagePositions = []
@@ -134,6 +137,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
         self.ui.cleanBtn.clicked.connect(self.cleanClicked)
+        self.ui.recordTestPulsesBtn.toggled.connect(self.recordTestPulsesToggled)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
@@ -149,6 +153,7 @@ class MultiPatchWindow(Qt.QWidget):
         else:
             self.xkdev = None
 
+        self.eventHistory = []
         self.resetHistory()
 
         if self.microscope:
@@ -557,19 +562,37 @@ class MultiPatchWindow(Qt.QWidget):
         self.recordEvent(event)
 
     def recordToggled(self, rec):
-        if self.storageFile is not None:
-            self.storageFile.close()
-            self.storageFile = None
+        if self._eventStorageFile is not None:
+            self._eventStorageFile.close()
+            self._eventStorageFile = None
             self.resetHistory()
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
-            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
+            self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
 
+    def recordTestPulsesToggled(self, rec):
+        for stack in self._testPulseStacks.values():
+            stack.close()
+        self._testPulseStacks = {}
+        if rec is True:
+            man = getManager()
+            sdir = man.getCurrentDir()
+            name = sdir.createFile('TestPulses.hdf5', autoIncrement=True).name()
+            container = h5py.File(name, 'a')
+            group = container.create_group('test_pulses')
+            for dev in self.pips:
+                dev_gr = group.create_group(dev.name())
+                dev_gr.attrs['device'] = dev.name()
+                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr)
+        for pip in self.selectedPipettes():
+            pip.emitFullTestPulseData(rec)
+
     def recordEvent(self, event):
-        self.eventHistory.append(event)
         self.writeRecords([event])
+        event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
+        self.eventHistory.append(event)
 
     def resetHistory(self):
         self.eventHistory = []
@@ -577,8 +600,19 @@ class MultiPatchWindow(Qt.QWidget):
             pip.clampDevice.resetTestPulseHistory()
 
     def writeRecords(self, recs):
-        if self.storageFile is None:
-            return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
-        self.storageFile.flush()
+            if 'full_test_pulse' in rec:
+                if self._testPulseStacks.get(rec['device'], None) is not None:
+                    filename, path = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+                    if self._eventStorageFile:
+                        filename = os.path.relpath(filename, os.path.dirname(self._eventStorageFile.name))
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+                    rec['full_test_pulse'] = f"{filename}:{path}"
+                else:
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+            if self._eventStorageFile:
+                self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
+        if self._eventStorageFile:
+            self._eventStorageFile.flush()
+        for stack in self._testPulseStacks.values():
+            stack.flush()

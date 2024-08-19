@@ -7,6 +7,7 @@ from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
 from acq4.util.Mutex import Mutex
+from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
 from ..Camera import Camera
@@ -72,6 +73,7 @@ class PatchPipette(Device):
         self.calibrated = False
         self.waitingForSwap = False
         self._lastPos = None
+        self._emitTestPulseData = False
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -337,8 +339,14 @@ class PatchPipette(Device):
     def _autoBiasChanged(self, clamp, enabled, target):
         self.emitNewEvent('auto_bias_change', {'enabled': enabled, 'target': target})
 
-    def _testPulseFinished(self, clamp, result):
-        self.emitNewEvent('test_pulse', result.analysis)
+    def emitFullTestPulseData(self, emit: bool):
+        self._emitTestPulseData = emit
+
+    def _testPulseFinished(self, clamp, result: PatchClampTestPulse):
+        data = result.analysis
+        if self._emitTestPulseData:
+            data['full_test_pulse'] = result
+        self.emitNewEvent('test_pulse', data)
 
     def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict([
