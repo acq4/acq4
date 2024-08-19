@@ -6,7 +6,8 @@ import pyqtgraph as pg
 
 
 class PipetteDetector(object):
-    def __init__(self, reference):
+    def __init__(self, reference, pipette):
+        self.pipette = pipette
         self.reference = reference
         self._filtered_ref = None
         
@@ -93,9 +94,6 @@ class PipetteDetector(object):
 
 
 class TemplateMatchPipetteDetector(PipetteDetector):
-    def __init__(self, reference):
-        PipetteDetector.__init__(self, reference)
-
     def estimateOffset(self, img, show=False):
         reference = self.reference
 
@@ -124,4 +122,14 @@ class TemplateMatchPipetteDetector(PipetteDetector):
         # import skimage.feature
         # return skimage.filter.sobel(img)
         img = scipy.ndimage.morphological_gradient(img, size=(3, 3))
+        return img
+
+
+class ResnetPipetteDetector(PipetteDetector):
+    def estimateOffset(self, img):
+        from acq4.util.imaging.object_detection import do_pipette_tip_detection
+        self.result = do_pipette_tip_detection(img, 90)
+        return self.result[:3]
+    
+    def filterImage(self, img):
         return img

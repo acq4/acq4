@@ -12,6 +12,7 @@ from PIL import Image
 
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
+import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
@@ -77,8 +78,77 @@ def _get_remote_process():
     # TODO how does cleanup happen?
     if _remote_process is None:
         # no local server forces no proxies, only serialization and shared mem
-        _remote_process = ProcessSpawner(name="ACQ4 Object Detection", start_local_server=False)
+        _remote_process = ProcessSpawner(name="ACQ4 Object Detection", start_local_server=False, qt=True)
     return _remote_process
+
+
+@Future.wrap
+def detect_pipette_tip(frame: Frame, angle: float, _future: Future) -> tuple[float, float, float]:
+    shared_array = _get_shared_array(frame.data())
+    with _lock:
+        rmt_process = _get_remote_process()
+        rmt_array = rmt_process.client.transfer(shared_array)
+        rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
+        _future.checkStop()
+        return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=60)
+
+
+
+_pipette_detection_model = None
+def get_pipette_detection_model():
+    global _pipette_detection_model
+    if _pipette_detection_model is None:
+        import torch, os
+        import acq4.util.pipette_detection.torch_model_04
+        from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
+
+        # initialize model
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = PipetteDetector()
+        model.to(device)
+
+        # load model weights
+        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
+        model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
+        model.load_state_dict(torch.load(model_file))
+
+        _pipette_detection_model = model
+    return _pipette_detection_model
+
+
+def do_pipette_tip_detection(data: np.ndarray, angle: float):
+    """
+    Parameters
+    ----------
+    data : image data shaped like [cols, rows]
+    angle : angle of pipette in degrees, measured wittershins relative to pointing directly rightward
+    """
+    import os
+    import torch
+    from acq4.util.pipette_detection.torch_model_04 import make_image_tensor, pos_normalizer
+    from acq4.util.pipette_detection.test_data import make_rotated_crop
+
+    model = get_pipette_detection_model()
+
+    # rotate and crop image
+    margin = (np.array(data.shape) - 400) // 2
+    crop = (slice(margin[0], margin[0]+400), slice(margin[1], margin[1]+400))
+    rot, tr = make_rotated_crop(data, -angle, crop)
+    # convert to 0-255 rgb
+    img = (rot - rot.min()) / (rot.max() - rot.min()) * 255
+    img = np.stack([img] * 3, axis=-1)[np.newaxis, ...]
+
+    # make prediction
+    image_tensor = make_image_tensor(img)
+    model.eval()  # set model to inference mode
+    with torch.no_grad():
+        pred = model(image_tensor).cpu().numpy()
+    z, y, x, snr = pos_normalizer.denormalize(pred)[0]
+
+    # unrotate/uncrop prediction
+    pos_xy = tr.imap([y, x])
+
+    return pos_xy, z, snr, locals()
 
 
 @future_wrap

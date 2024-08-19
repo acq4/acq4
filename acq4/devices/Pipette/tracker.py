@@ -253,7 +253,7 @@ class PipetteTracker(object):
         else:
             bg_frame = None
 
-        detector = self.detectorClass(reference)
+        detector = self.detectorClass(reference, self.dev)
 
         if searchRegion == 'near_tip':
             # generate suggested crop and pipette position

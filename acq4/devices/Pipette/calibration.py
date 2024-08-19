@@ -30,8 +30,8 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         center = imager.globalCenterPosition(mode='roi')
         pipVector = pipette.globalDirection()
         pipY = np.cross(pipVector, [0, 0, 1])
-        searchPos1 = center + pipVector * 1e-3 + pipY * 2e-3
-        searchPos2 = center + pipVector * 1e-3 - pipY * 2e-3
+        searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
+        searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
         # using a planner avoids possible collisions with the objective
         planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast')
         _future.waitFor(planner.move())
@@ -41,11 +41,11 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
 
         # analyze frames for center point
         # avg should be mostly flat with a symmetrical bumpy thing in the middle
-        avg = np.array([((frame.data() - bgFrame)**2).mean() for frame in frames])
+        avg = np.array([((frame.data() - bgFrame) ** 2).mean() for frame in frames])
 
         # Find the center of the bump
         cs = np.cumsum(avg - avg.min())
-        centerIndex = np.searchsorted(cs, cs.max()/2, 'left')
+        centerIndex = np.searchsorted(cs, cs.max() / 2, 'left')
 
         # get time of the frame with the center point
         centerTime = pipetteCameraDelay + frames[centerIndex].info()['time']
@@ -77,26 +77,25 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
 
         # now check each frame one at a time until the value of the frame reaches the 95th percentile of the remaining frames
         for endIndex in range(thirdIndex, len(avg2)):
-            pct = scipy.stats.percentileofscore(avg2[endIndex+1:], avg2[endIndex])
+            pct = scipy.stats.percentileofscore(avg2[endIndex + 1:], avg2[endIndex])
             if pct <= 95:
                 break
-        
+
         endTime = pipetteCameraDelay + frames2[endIndex].info()['time']
-        
+
         # find pipette position at end time
         endPipPos = getPipettePositionAtTime(posEvents2, endTime)
 
         # find center of mass when the pipette crossed the center of the frame
         cs2 = np.cumsum(np.abs(profile[endIndex]))
-        centerIndex2 = np.searchsorted(cs2, cs2.max()/2, 'left')
+        centerIndex2 = np.searchsorted(cs2, cs2.max() / 2, 'left')
         # centerPos = frames2[0].globalTransform().map(list(centerPosPx) + [0])
         yDistPx = centerIndex2 - len(interpCoords) // 2
         yDist = frames2[0].info()['pixelSize'][0] * yDistPx
 
-
         # # add 1/2 width of fov
         # halfFrameWidth = frames2[0].info()['pixelSize'][0] * (frames2[0].data().shape[0] //2)
-        # centerPipPos2 = endPipPos + pipVector * halfFrameWidth 
+        # centerPipPos2 = endPipPos + pipVector * halfFrameWidth
         centerPipPos2 = endPipPos + np.array([0, yDist, 0])
 
         # move to new center
@@ -107,16 +106,19 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         zStack = acquire_z_stack(imager, *z_range, block=True).getResult()
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
-        zProfile = zDiff.max(axis=2).max(axis=1)
-        zProfCs = np.cumsum(zProfile - zProfile.min())
-        zThreshold = 0.1 * zProfCs.max()
-        zIndex = np.searchsorted(zProfCs, zThreshold)
+        zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
+        zProfile -= scipy.stats.scoreatpercentile(zProfile, 20)
+        zThreshold = 0.75 * zProfile.max()
+        zIndex = np.argwhere(zProfile > zThreshold)[0, 0]
         tipFrame = zStack[zIndex]
-        
-        # find tip 
+
+        # find tip
         tipImg = zDiff[zIndex]
-        tipThreshold = 0.5 * (tipImg.max() + tipImg.min())
-        tipPixels = np.argwhere(tipImg > tipThreshold)
+        smoothTipImg = scipy.ndimage.gaussian_filter(tipImg, 2)
+        tipThreshold = scipy.stats.scoreatpercentile(smoothTipImg, 90)
+        # tipThreshold = 0.5 * (smoothTipImg.max() + smoothTipImg.min())
+        tipMask = scipy.ndimage.binary_erosion(smoothTipImg > tipThreshold)
+        tipPixels = np.argwhere(tipMask)
         imgVector = frame_pipette_direction(zStack[0], pipVector)[:2]
         tipPixelDistanceAlongPipette = np.dot(tipPixels, imgVector)
         tippestPixel = tipPixels[np.argmax(tipPixelDistanceAlongPipette)]
@@ -209,6 +211,6 @@ def getPipettePositionAtTime(events, time):
 
 
 
-    
+
 
 
