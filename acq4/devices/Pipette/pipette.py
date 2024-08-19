@@ -1,3 +1,5 @@
+import contextlib
+
 import json
 import numpy as np
 import weakref
@@ -10,13 +12,13 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
+from acq4.util.HelpfulException import HelpfulException
+from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
-from ...util.HelpfulException import HelpfulException
-from ...util.future import Future
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -446,7 +448,7 @@ class Pipette(Device, OptomechDevice):
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
 
-    @Future.wrap
+    @future_wrap
     def stepwiseAdvance(self, depth: float, maxSpeed: float = 10e-6, interval: float = 5, _future=None):
         """Retract in 1µm steps, allowing for manual user movements"""
         initial_direction = None
@@ -465,6 +467,31 @@ class Pipette(Device, OptomechDevice):
             if distance <= delta:
                 break
             _future.sleep(interval)
+
+    @future_wrap
+    def wiggle(self, speed, radius, repetitions, duration, pipette_direction=None, extra=None, _future=None):
+        if pipette_direction is None:
+            pipette_direction = self.globalDirection()
+
+        def random_wiggle_direction():
+            """pick a random point on a circle perpendicular to the pipette axis"""
+            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
+                pass  # prevent division by zero
+            return radius * vec / np.linalg.norm(vec)
+
+        pos = np.array(self.globalPosition())
+        prev_dir = random_wiggle_direction()
+        for _ in range(repetitions):
+            with contextlib.ExitStack() as stack:
+                if extra is not None:
+                    stack.enter_context(extra())
+                start = ptime.time()
+                while ptime.time() - start < duration:
+                    while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
+                        pass  # ensure different direction from previous
+                    _future.waitFor(self._moveToGlobal(pos=pos + direction, speed=speed))
+                    prev_dir = direction
+                _future.waitFor(self._moveToGlobal(pos=pos, speed=speed))
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.

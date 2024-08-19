@@ -113,7 +113,6 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
         f.wait()
 
 
-# MC this file doesn't handle typing correctly with Future.wrap, but I don't know why...
 @future_wrap
 def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
     sign = np.sign(end - start)

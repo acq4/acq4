@@ -3,14 +3,13 @@ import pickle
 import scipy
 import time
 
-
 import pyqtgraph as pg
 from acq4.Manager import getManager
-from acq4.util import Qt, ptime
+from acq4.util import Qt
+from acq4.util.future import Future, future_wrap
 from acq4.util.image_registration import imageTemplateMatch
+from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
-from ...util.future import Future
-from ...util.imaging.sequencer import acquire_z_stack
 
 
 class PipetteTracker(object):
@@ -142,7 +141,7 @@ class PipetteTracker(object):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()["pixelSize"][0] * 100
 
-    @Future.wrap
+    @future_wrap
     def takeReferenceFrames(
         self, zRange=None, zStep=None, imager=None, tipLength=None, _future: Future = None
     ):

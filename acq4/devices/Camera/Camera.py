@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import queue
-import threading
 from collections import deque
-from contextlib import contextmanager, ExitStack
-from typing import Callable, Optional
 
 import numpy as np
+import queue
+import threading
 import time
+from contextlib import contextmanager, ExitStack
+from typing import Callable, Optional
 
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
@@ -21,7 +21,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
-from acq4.util.future import Future
+from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.frame import Frame
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
@@ -336,7 +336,7 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError("ensureFreshFrames=True is not compatible with n=None")
         return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
 
-    @Future.wrap
+    @future_wrap
     def driverSupportedFixedFrameAcquisition(self, n: int = 1, _future: Future = None) -> list[Frame]:
         """Ask the camera driver to acquire a specific number of frames and return a Future.
 
@@ -372,7 +372,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 raise TimeoutError("Timed out waiting for frame processing thread to stop")
         DAQGeneric.quit(self)
 
-    @Future.wrap
+    @future_wrap
     def getEstimatedFrameRate(self, _future: Future):
         """Return the estimated frame rate of the camera.
         """
@@ -982,7 +982,7 @@ class AcquireThread(Thread):
                 pass
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
-    @Future.wrap
+    @future_wrap
     def getEstimatedFrameRate(self, _future: Future = None):
         """Return the estimated frame rate of the camera.
         """

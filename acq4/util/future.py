@@ -283,6 +283,7 @@ WRAPPED_FN_PARAMS = ParamSpec('WRAPPED_FN_PARAMS')
 WRAPPEND_FN_RETVAL_TYPE = TypeVar('WRAPPEND_FN_RETVAL_TYPE')
 
 
+# MC this doesn't handle typing correctly as Future.wrap, but I don't know why...
 def future_wrap(
         func: Callable[WRAPPED_FN_PARAMS, WRAPPEND_FN_RETVAL_TYPE]
 ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPEND_FN_RETVAL_TYPE]]:
@@ -291,7 +292,7 @@ def future_wrap(
     function, wait for other futures, and will be returned by the decorated function call. The function
     can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
     Usage:
-        @Future.wrap
+        @future_wrap
         def myFunc(arg1, arg2, _future=None):
             ...
             _future.checkStop()
@@ -315,9 +316,6 @@ def future_wrap(
         return future
 
     return wrapper
-
-
-Future.wrap = future_wrap
 
 
 class MultiFuture(Future):
