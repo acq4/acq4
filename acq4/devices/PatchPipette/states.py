@@ -761,7 +761,7 @@ class SealState(PatchPipetteState):
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (None, 0)]"},  # TODO
+        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (0, 0)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
@@ -916,6 +916,8 @@ class CellAttachedState(PatchPipetteState):
         Capacitance (default 10pF) above which the pipette is considered to be whole-cell and immediately
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
+    minimumBreakInResistance : float
+        Minimum resistance (Ohms) to allow spontaneous break-in to occur. Default 1 GOhm.
     resistanceThreshold : float
         Steady state resistance threshold (default 100MΩ) below which the cell is considered to either be
         'spontaneousDetachmentState' or 'spontaneousBreakInState'.
@@ -939,6 +941,7 @@ class CellAttachedState(PatchPipetteState):
     _parameterTreeConfig = {
         'autoBreakInDelay': {'type': 'float', 'default': None, 'optional': True, 'suffix': 's'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
+        'minimumBreakInResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
         'resistanceThreshold': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
@@ -949,7 +952,8 @@ class CellAttachedState(PatchPipetteState):
         self.monitorTestPulse()
         patchrec = self.dev.patchRecord()
         config = self.config
-        startTime = ptime.time()
+        last_measure = startTime = ptime.time()
+        cap_avg = None
         delay = config['autoBreakInDelay']
         while True:
             if delay is not None and ptime.time() - startTime > delay:
@@ -968,11 +972,18 @@ class CellAttachedState(PatchPipetteState):
                 return config['spontaneousDetachmentState']
 
             cap = tp.analysis['capacitance']
-            if cap > config['capacitanceThreshold']:
+            dt = ptime.time() - last_measure
+            last_measure += dt
+            if cap_avg is None:
+                cap_avg = tp.analysis['capacitance']
+            cap_avg_tau = 1  # seconds
+            cap_alpha = 1 - np.exp(-dt / cap_avg_tau)
+            cap_avg = cap_avg * (1 - cap_alpha) + cap * cap_alpha
+            ssr = tp.analysis['steady_state_resistance']
+            if cap_avg > config['capacitanceThreshold'] and ssr < config['minimumBreakInResistance']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
-            ssr = tp.analysis['steady_state_resistance']
             if ssr < config['resistanceThreshold']:
                 self._taskDone(interrupted=True, error='Steady state resistance dropped below threshold.')
                 return config['spontaneousDetachmentState']
