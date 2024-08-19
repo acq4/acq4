@@ -82,7 +82,7 @@ def _get_remote_process():
     return _remote_process
 
 
-@Future.wrap
+@future_wrap
 def detect_pipette_tip(frame: Frame, angle: float, _future: Future) -> tuple[float, float, float]:
     shared_array = _get_shared_array(frame.data())
     with _lock:

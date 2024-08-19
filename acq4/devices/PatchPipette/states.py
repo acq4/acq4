@@ -890,7 +890,7 @@ class CellDetectState(PatchPipetteState):
 
         return endpoint
 
-    @Future.wrap
+    @future_wrap
     def continuousMove(self, _future):
         """Begin moving pipette continuously along search path.
         """

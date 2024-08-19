@@ -1,14 +1,14 @@
 import numpy as np
 import scipy.interpolate
-from acq4.util.surface import find_surface, score_frames
-from .pipette import Pipette
+
 from acq4.devices.Camera import Camera
-from .planners import PipetteMotionPlanner
-from acq4.util.future import Future
+from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
+from .pipette import Pipette
+from .planners import PipetteMotionPlanner
 
 
-@Future.wrap
+@future_wrap
 def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.8e-3, pipetteCameraDelay=0, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.

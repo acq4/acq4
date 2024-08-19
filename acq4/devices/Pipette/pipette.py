@@ -10,13 +10,13 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
+from acq4.util.HelpfulException import HelpfulException
+from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
-from ...util.HelpfulException import HelpfulException
-from ...util.future import Future
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -446,7 +446,7 @@ class Pipette(Device, OptomechDevice):
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
 
-    @Future.wrap
+    @future_wrap
     def stepwiseAdvance(self, depth: float, maxSpeed: float = 10e-6, interval: float = 5, _future=None):
         """Retract in 1µm steps, allowing for manual user movements"""
         initial_direction = None
