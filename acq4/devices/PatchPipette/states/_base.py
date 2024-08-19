@@ -234,32 +234,6 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
-    def wiggle(self, speed, radius, repetitions, duration, pipette_direction=None, extra=None):
-        if pipette_direction is None:
-            pipette_direction = self.dev.pipetteDevice.globalDirection()
-
-        def random_wiggle_direction():
-            """pick a random point on a circle perpendicular to the pipette axis"""
-            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
-                pass  # prevent division by zero
-            return radius * vec / np.linalg.norm(vec)
-
-        pos = np.array(self.dev.pipetteDevice.globalPosition())
-        prev_dir = random_wiggle_direction()
-        for _ in range(repetitions):
-            with contextlib.ExitStack() as stack:
-                if extra is not None:
-                    stack.enter_context(extra())
-                start = ptime.time()
-                while ptime.time() - start < duration:
-                    while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
-                        pass  # ensure different direction from previous
-                    self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=speed)
-                    prev_dir = direction
-                    self.waitFor(self._moveFuture)
-                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=speed)
-                self.waitFor(self._moveFuture)
-
 
 class SteadyStateAnalysisBase(object):
     def __init__(self, **kwds):

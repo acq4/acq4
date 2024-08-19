@@ -1,3 +1,5 @@
+import contextlib
+
 import json
 import numpy as np
 import weakref
@@ -465,6 +467,31 @@ class Pipette(Device, OptomechDevice):
             if distance <= delta:
                 break
             _future.sleep(interval)
+
+    @future_wrap
+    def wiggle(self, speed, radius, repetitions, duration, pipette_direction=None, extra=None, _future=None):
+        if pipette_direction is None:
+            pipette_direction = self.globalDirection()
+
+        def random_wiggle_direction():
+            """pick a random point on a circle perpendicular to the pipette axis"""
+            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
+                pass  # prevent division by zero
+            return radius * vec / np.linalg.norm(vec)
+
+        pos = np.array(self.globalPosition())
+        prev_dir = random_wiggle_direction()
+        for _ in range(repetitions):
+            with contextlib.ExitStack() as stack:
+                if extra is not None:
+                    stack.enter_context(extra())
+                start = ptime.time()
+                while ptime.time() - start < duration:
+                    while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
+                        pass  # ensure different direction from previous
+                    _future.waitFor(self._moveToGlobal(pos=pos + direction, speed=speed))
+                    prev_dir = direction
+                _future.waitFor(self._moveToGlobal(pos=pos, speed=speed))
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.

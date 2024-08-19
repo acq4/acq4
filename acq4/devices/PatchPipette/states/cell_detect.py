@@ -461,12 +461,14 @@ class CellDetectState(PatchPipetteState):
                 self.setState("pre-target wiggle")
                 retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
-                self.wiggle(
-                    speed=self.config['preTargetWiggleSpeed'],
-                    radius=self.config['preTargetWiggleRadius'],
-                    repetitions=1,
-                    duration=self.config['preTargetWiggleDuration'],
-                    pipette_direction=self.direction,
+                self.waitFor(
+                    self.dev.pipetteDevice.wiggle(
+                        speed=self.config['preTargetWiggleSpeed'],
+                        radius=self.config['preTargetWiggleRadius'],
+                        repetitions=1,
+                        duration=self.config['preTargetWiggleDuration'],
+                        pipette_direction=self.direction,
+                    )
                 )
                 step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)

@@ -198,12 +198,14 @@ class ResealState(PatchPipetteState):
             yield
             self.waitFor(self._pressureFuture)
 
-        self.wiggle(
-            speed=self.config['nuzzleSpeed'],
-            radius=self.config['nuzzleLateralWiggleRadius'],
-            duration=self.config['nuzzleDuration'],
-            repetitions=self.config['nuzzleRepetitions'],
-            extra=pressure_ramp,
+        self.waitFor(
+            self.dev.pipetteDevice.wiggle(
+                speed=self.config['nuzzleSpeed'],
+                radius=self.config['nuzzleLateralWiggleRadius'],
+                duration=self.config['nuzzleDuration'],
+                repetitions=self.config['nuzzleRepetitions'],
+                extra=pressure_ramp,
+            )
         )
 
     @future_wrap
