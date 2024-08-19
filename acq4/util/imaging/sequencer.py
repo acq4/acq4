@@ -240,7 +240,7 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = acquire_z_stack(imager, *z_stack, block=True).getResult()
+                        stack = acquire_z_stack(imager, *z_stack, block=True, checkStopThrough=_future).getResult()
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
@@ -321,7 +321,7 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
     """
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
-    _set_focus_depth(imager, start, direction, 'fast')
+    _set_focus_depth(imager, start, direction, 'fast', _future)
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
@@ -331,7 +331,7 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
         frames_fut = imager.acquireFrames()
         with imager.ensureRunning(ensureFreshFrames=True):
             _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-            _set_focus_depth(imager, stop, direction, speed)
+            _set_focus_depth(imager, stop, direction, speed, _future)
             _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
             frames_fut.stop()
             frames = _future.waitFor(frames_fut).getResult(timeout=10)

@@ -48,6 +48,7 @@ class Microscope(Device, OptomechDevice):
         OptomechDevice.__init__(self, dm, config, name)
 
         self.config = config
+        self.presets = config.get('presets', {})
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.switchDevice = None
         self.currentSwitchPosition = None
@@ -162,6 +163,18 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
+    def loadPreset(self):
+        btn = self.sender()
+        name = btn.objectName()
+        conf = self.presets[name]
+        for dev_name, state in conf.items():
+            if dev_name == "objective":
+                self.setObjectiveIndex(state)
+            elif dev_name != "hotkey":
+                dev = self.dm.getDevice(dev_name)
+                if hasattr(dev, "loadPreset"):
+                    dev.loadPreset(state)
+
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
         iface.objectiveChanged((self.currentObjective, None))
@@ -232,9 +245,9 @@ class Microscope(Device, OptomechDevice):
         return acquire_z_stack(imager, *z_range, block=block)
 
     @future_wrap
-    def findSurfaceDepth(self, imager: "Device", _future: Future) -> float:
+    def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
         """Set the surface of the sample based on how focused the images are."""
-        z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
+        z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
         z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
@@ -338,7 +351,7 @@ class Objective(OptomechDevice):
         if 'scale' in config:
             self.setScale(config['scale'])
 
-    def deviceTransform(self):
+    def deviceTransform(self, subdev=None):
         return pg.SRTTransform3D(OptomechDevice.deviceTransform(self))
 
     def setOffset(self, pos):
@@ -426,6 +439,17 @@ class ScopeGUI(Qt.QWidget):
             xyss.sigValueChanged.connect(self.scaleSpinChanged)
             zss.sigValueChanged.connect(self.scaleSpinChanged)
 
+        for preset, preset_conf in dev.presets.items():
+            btn = Qt.QPushButton(preset)
+            btn.setObjectName(preset)
+            self.ui.presetLayout.addWidget(btn)
+            btn.clicked.connect(dev.loadPreset)
+            # hotkeys
+            if 'hotkey' in preset_conf:
+                hotkey = preset_conf['hotkey']
+                hotkey_dev = dev.dm.getDevice(hotkey["device"])
+                key = hotkey["key"]
+                hotkey_dev.addKeyCallback(key, dev.loadPreset, (preset,))
         self.updateSpins()
 
     def objectiveChanged(self, obj):

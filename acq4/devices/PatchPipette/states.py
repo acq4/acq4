@@ -1,19 +1,17 @@
 from __future__ import annotations
 
+import contextlib
+import queue
+import threading
+import warnings
 from collections import deque
-from functools import cached_property
-
+from copy import deepcopy
 from typing import Any, Optional
 
-import contextlib
 import numpy as np
-import queue
 import scipy.stats
 import sys
-import threading
 import time
-import warnings
-from copy import deepcopy
 
 from acq4 import getManager
 from acq4.util import ptime
@@ -95,6 +93,7 @@ class PatchPipetteState(Future):
         Future.__init__(self)
 
         self.dev: PatchPipette = dev
+        self._moveFuture = None
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -239,6 +238,32 @@ class PatchPipetteState(Future):
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
+
+    def wiggle(self, speed, radius, repetitions, duration, pipette_direction=None, extra=None):
+        if pipette_direction is None:
+            pipette_direction = self.dev.pipetteDevice.globalDirection()
+
+        def random_wiggle_direction():
+            """pick a random point on a circle perpendicular to the pipette axis"""
+            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
+                pass  # prevent division by zero
+            return radius * vec / np.linalg.norm(vec)
+
+        pos = np.array(self.dev.pipetteDevice.globalPosition())
+        prev_dir = random_wiggle_direction()
+        for _ in range(repetitions):
+            with contextlib.ExitStack() as stack:
+                if extra is not None:
+                    stack.enter_context(extra())
+                start = ptime.time()
+                while ptime.time() - start < duration:
+                    while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
+                        pass  # ensure different direction from previous
+                    self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=speed)
+                    prev_dir = direction
+                    self.waitFor(self._moveFuture)
+                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=speed)
+                self.waitFor(self._moveFuture)
 
 
 class SteadyStateAnalysisBase(object):
@@ -554,15 +579,30 @@ class CellDetectState(PatchPipetteState):
     sidestepPassDistance : float
         Distance (m) to pass an obstacle (default 20 µm)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 50 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
     maxAdvanceDistance : float | None
         Maximum distance (m) to advance past starting point (default None)
     maxAdvanceDistancePastTarget : float | None
         Maximum distance (m) to advance past target (default 10 um)
     maxAdvanceDepthBelowSurface : float | None
         Maximum depth (m) to advance below the sample surface (default None)
-    advanceSpeed : float
-        Speed (m/s) to advance the pipette when advanceContinuous=True (default 2 um/s)
+    aboveSurfaceSpeed : float
+        Speed (m/s) to advance the pipette when above the surface (default 20 um/s)
+    belowSurfaceSpeed : float
+        Speed (m/s) to advance the pipette when below the surface (default 5 um/s)
+    detectionSpeed : float
+        Speed (m/s) to advance the pipette if advanceContinuous=True and when close to the target/area-of-search
+        (default 2 um/s)
+    preTargetWiggle : bool
+        If True, wiggle the pipette before reaching the target (default False)
+    preTargetWiggleRadius : float
+        Radius (m) of the wiggle (default 8 µm)
+    preTargetWiggleStep : float
+        Distance (m) to move between each wiggle (default 5 µm)
+    preTargetWiggleDuration : float
+        Time (s) to spend wiggling at each step (default 6 s)
+    preTargetWiggleSpeed : float
+        Speed (m/s) to move during the wiggle (default 5 µm/s)
     fastDetectionThreshold : float
         Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
     slowDetectionThreshold : float
@@ -597,7 +637,14 @@ class CellDetectState(PatchPipetteState):
         'maxAdvanceDistance': {'default': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
         'maxAdvanceDistancePastTarget': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'maxAdvanceDepthBelowSurface': {'default': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
-        'advanceSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'aboveSurfaceSpeed': {'default': 20e-6, 'type': 'float', 'suffix': 'm/s'},
+        'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
+        'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'preTargetWiggle': {'default': False, 'type': 'bool'},
+        'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
+        'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
+        'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
+        'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
@@ -611,7 +658,7 @@ class CellDetectState(PatchPipetteState):
         'sidestepLateralDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'sidestepBackupDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'sidestepPassDistance': {'default': 20e-6, 'type': 'float', 'suffix': 'm'},
-        'minDetectionDistance': {'default': 50e-6, 'type': 'float', 'suffix': 'm'},
+        'minDetectionDistance': {'default': 15e-6, 'type': 'float', 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
@@ -665,7 +712,7 @@ class CellDetectState(PatchPipetteState):
                 if config['advanceContinuous']:
                     # Start continuous move if needed
                     if self._continuousAdvanceFuture is None:
-                        self.startContinuousMove()
+                        self._continuousAdvanceFuture = self.continuousMove()
                     if self._continuousAdvanceFuture.isDone():
                         self._continuousAdvanceFuture.wait()  # check for move errors
                         return self._transition_to_fallback()
@@ -686,19 +733,22 @@ class CellDetectState(PatchPipetteState):
         self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
         return config['fallbackState']
 
-    def avoidObstacle(self):
-        self.setState("cell detect: avoiding obstacle")
+    def avoidObstacle(self, already_retracted=False):
+        self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._continuousAdvanceFuture is not None:
             self._continuousAdvanceFuture.stop("Obstacle detected")
             self._continuousAdvanceFuture = None
 
         pip = self.dev.pipetteDevice
-        speed = self.config['advanceSpeed']
+        speed = self.config['belowSurfaceSpeed']
 
-        pos = np.array(pip.globalPosition())
+        init_pos = np.array(pip.globalPosition())
         direction = self.direction
-        self.waitFor(
-            pip._moveToGlobal(pos - self.config['sidestepBackupDistance'] * direction, speed=speed))
+        if already_retracted:
+            retract_pos = init_pos
+        else:
+            retract_pos = init_pos - self.config['sidestepBackupDistance'] * direction
+            self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
 
         start_time = ptime.time()
         while self._analysis.obstacle_detected():
@@ -706,13 +756,23 @@ class CellDetectState(PatchPipetteState):
             if ptime.time() - start_time > self.config['obstacleRecoveryTime']:
                 raise TimeoutError("Pipette fouled by obstacle")
 
-        pos = np.array(pip.globalPosition())
         # pick a sidestep point orthogonal to the pipette direction on the xy plane
         xy_perpendicular = np.array([-direction[1], direction[0], 0])
         sidestep = self.config['sidestepLateralDistance'] * xy_perpendicular / np.linalg.norm(xy_perpendicular)
-        self.waitFor(pip._moveToGlobal(pos + sidestep, speed=speed))
-        pos = np.array(pip.globalPosition())
-        self.waitFor(pip._moveToGlobal(pos + self.config['sidestepPassDistance'] * direction, speed=speed))
+        sidestep_pos = retract_pos + sidestep
+        self.waitFor(pip._moveToGlobal(sidestep_pos, speed=speed))
+
+        go_past_pos = sidestep_pos + self.config['sidestepPassDistance'] * direction
+        move = pip._moveToGlobal(go_past_pos, speed=speed)
+        while not move.isDone():
+            self.processAtLeastOneTestPulse()
+            if self._analysis.obstacle_detected():
+                move.stop("Obstacle detected while sidestepping")
+                move.wait()
+                self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
+                return self.avoidObstacle(already_retracted=True)
+            self.checkStop()
+        self.waitFor(move)
         pos = np.array(pip.globalPosition())
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
@@ -738,10 +798,17 @@ class CellDetectState(PatchPipetteState):
                 return 'slow'
         return False
 
-    def closeEnoughToTargetToDetectCell(self):
+    def aboveSurface(self, pos=None):
+        if pos is None:
+            pos = self.dev.pipetteDevice.globalPosition()
+        surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth()
+        return pos[2] > surface
+
+    def closeEnoughToTargetToDetectCell(self, pos=None):
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
-        pos = np.array(pip.globalPosition())
+        if pos is None:
+            pos = np.array(pip.globalPosition())
         return np.linalg.norm(target - pos) < self.config['minDetectionDistance']
 
     def _transition_to_fallback(self):
@@ -768,7 +835,24 @@ class CellDetectState(PatchPipetteState):
             raise ValueError(f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
         return direction / np.linalg.norm(direction)
 
-    def getSearchEndpoint(self):
+    def firstSurfacePosition(self):
+        """Return the first position along the pipette search path which could be below the surface."""
+        pip = self.dev.pipetteDevice
+        pos = np.array(pip.globalPosition())
+        surface = pip.scopeDevice().getSurfaceDepth()
+        angle = pip.pitchRadians()
+        dz = pos[2] - surface
+        if dz <= 0:
+            return pos
+        return pos + self.direction * (dz / np.cos(angle))
+
+    def fastTravelEndpoint(self):
+        """Return the last position along the pipette search path to be traveled at full speed."""
+        pip = self.dev.pipetteDevice
+        target = np.array(pip.targetPosition())
+        return target - (self.direction * self.config['minDetectionDistance'])
+
+    def finalSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account 
         maxAdvanceDistance, maxAdvanceDepthBelowSurface, and maxAdvanceDistancePastTarget.
         """
@@ -806,18 +890,46 @@ class CellDetectState(PatchPipetteState):
 
         return endpoint
 
-    def startContinuousMove(self):
+    @Future.wrap
+    def continuousMove(self, _future):
         """Begin moving pipette continuously along search path.
         """
-        self.setState("cell detection: continuous pipette advance")
-        endpoint = self.getSearchEndpoint()
-        self._continuousAdvanceFuture = self.dev.pipetteDevice._moveToGlobal(endpoint, speed=self.config['advanceSpeed'])
+        self.setState("continuous pipette advance")
+        if self.aboveSurface():
+            speed = self.config['aboveSurfaceSpeed']
+            surface = self.firstSurfacePosition()
+            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
+            self.setState("moved to surface")
+        if not self.closeEnoughToTargetToDetectCell():
+            speed = self.config['belowSurfaceSpeed']
+            midway = self.fastTravelEndpoint()
+            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
+            self.setState("moved to detection area")
+        speed = self.config['detectionSpeed']
+        endpoint = self.finalSearchEndpoint()
+        if self.config['preTargetWiggle']:
+            distance = np.linalg.norm(endpoint - np.array(self.dev.pipetteDevice.globalPosition()))
+            count = int(distance / self.config['preTargetWiggleStep'])
+            for _ in range(count):
+                self.setState("pre-target wiggle")
+                retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
+                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
+                self.wiggle(
+                    speed=self.config['preTargetWiggleSpeed'],
+                    radius=self.config['preTargetWiggleRadius'],
+                    repetitions=1,
+                    duration=self.config['preTargetWiggleDuration'],
+                    pipette_direction=self.direction,
+                )
+                step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
+                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
+        _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
         """
         config = self.config
-        endpoint = self.getSearchEndpoint()
+        endpoint = self.finalSearchEndpoint()
         pos = np.array(self.dev.pipetteDevice.globalPosition())
         diff = endpoint - pos
         dist = np.linalg.norm(diff)
@@ -833,8 +945,13 @@ class CellDetectState(PatchPipetteState):
 
         stepPos = self.advanceSteps[self.stepCount]
         self.stepCount += 1
-        fut = dev.pipetteDevice._moveToGlobal(stepPos, speed=config['advanceSpeed'])
-        self.waitFor(fut)
+        if self.aboveSurface(stepPos):
+            speed = config['aboveSurfaceSpeed']
+        elif self.closeEnoughToTargetToDetectCell(stepPos):
+            speed = config['detectionSpeed']
+        else:
+            speed = config['belowSurfaceSpeed']
+        self.waitFor(dev.pipetteDevice._moveToGlobal(stepPos, speed=speed))
 
     def cleanup(self):
         if self._continuousAdvanceFuture is not None:
@@ -918,7 +1035,7 @@ class SealState(PatchPipetteState):
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
-        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100)]"},  # TODO
+        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (0, 0)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
@@ -1073,6 +1190,8 @@ class CellAttachedState(PatchPipetteState):
         Capacitance (default 10pF) above which the pipette is considered to be whole-cell and immediately
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
+    minimumBreakInResistance : float
+        Minimum resistance (Ohms) to allow spontaneous break-in to occur. Default 1 GOhm.
     resistanceThreshold : float
         Steady state resistance threshold (default 100MΩ) below which the cell is considered to either be
         'spontaneousDetachmentState' or 'spontaneousBreakInState'.
@@ -1096,6 +1215,7 @@ class CellAttachedState(PatchPipetteState):
     _parameterTreeConfig = {
         'autoBreakInDelay': {'type': 'float', 'default': None, 'optional': True, 'suffix': 's'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
+        'minimumBreakInResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
         'resistanceThreshold': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
@@ -1106,7 +1226,8 @@ class CellAttachedState(PatchPipetteState):
         self.monitorTestPulse()
         patchrec = self.dev.patchRecord()
         config = self.config
-        startTime = ptime.time()
+        last_measure = startTime = ptime.time()
+        cap_avg = None
         delay = config['autoBreakInDelay']
         while True:
             if delay is not None and ptime.time() - startTime > delay:
@@ -1125,11 +1246,18 @@ class CellAttachedState(PatchPipetteState):
                 return config['spontaneousDetachmentState']
 
             cap = tp.analysis['capacitance']
-            if cap > config['capacitanceThreshold']:
+            dt = ptime.time() - last_measure
+            last_measure += dt
+            if cap_avg is None:
+                cap_avg = tp.analysis['capacitance']
+            cap_avg_tau = 1  # seconds
+            cap_alpha = 1 - np.exp(-dt / cap_avg_tau)
+            cap_avg = cap_avg * (1 - cap_alpha) + cap * cap_alpha
+            ssr = tp.analysis['steady_state_resistance']
+            if cap_avg > config['capacitanceThreshold'] and ssr < config['minimumBreakInResistance']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
-            ssr = tp.analysis['steady_state_resistance']
             if ssr < config['resistanceThreshold']:
                 self._taskDone(interrupted=True, error='Steady state resistance dropped below threshold.')
                 return config['spontaneousDetachmentState']
@@ -1445,7 +1573,6 @@ class ResealState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
-        self._moveFuture = None
         self._pressureFuture = None
         self._lastResistance = None
         self._firstSuccessTime = None
@@ -1460,31 +1587,23 @@ class ResealState(PatchPipetteState):
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
-        pos = np.array(self.dev.pipetteDevice.globalPosition())
         # TODO move back a little?
-        pipette_direction = self.dev.pipetteDevice.globalDirection()
 
-        def random_wiggle_direction():
-            """pick a random point on a circle perpendicular to the pipette axis"""
-            while np.linalg.norm(vec := np.cross(pipette_direction, np.random.uniform(-1, 1, size=3))) == 0:
-                pass  # prevent division by zero
-            return self.config['nuzzleLateralWiggleRadius'] * vec / np.linalg.norm(vec)
-
-        prev_dir = random_wiggle_direction()
-        for _ in range(self.config['nuzzleRepetitions']):
+        @contextlib.contextmanager
+        def pressure_ramp():
             self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
             self._pressureFuture = self.dev.pressureDevice.rampPressure(
                 target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'])
-            start = ptime.time()
-            while ptime.time() - start < self.config['nuzzleDuration']:
-                while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
-                    pass  # ensure different direction from previous
-                self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos + direction, speed=self.config['nuzzleSpeed'])
-                prev_dir = direction
-                self.waitFor(self._moveFuture)
-            self._moveFuture = self.dev.pipetteDevice._moveToGlobal(pos=pos, speed=self.config['nuzzleSpeed'])
-            self.waitFor(self._moveFuture)
+            yield
             self.waitFor(self._pressureFuture)
+
+        self.wiggle(
+            speed=self.config['nuzzleSpeed'],
+            radius=self.config['nuzzleLateralWiggleRadius'],
+            duration=self.config['nuzzleDuration'],
+            repetitions=self.config['nuzzleRepetitions'],
+            extra=pressure_ramp,
+        )
 
     @Future.wrap
     def startRollingResistanceThresholds(self, _future: Future):
