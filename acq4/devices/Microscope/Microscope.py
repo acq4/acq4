@@ -245,9 +245,9 @@ class Microscope(Device, OptomechDevice):
         return acquire_z_stack(imager, *z_range, block=block)
 
     @future_wrap
-    def findSurfaceDepth(self, imager: "Device", _future: Future) -> float:
+    def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
         """Set the surface of the sample based on how focused the images are."""
-        z_range = (self.getSurfaceDepth() + 200 * µm, self.getSurfaceDepth() - 200 * µm, 5 * µm)
+        z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
         z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
