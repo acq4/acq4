@@ -623,9 +623,12 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayPressure = Qt.QCheckBox('Pressure')
         self._displayPressure.toggled.connect(self._togglePressurePlot)
         self._ctrl_layout.addWidget(self._displayPressure)
-        self._displayAnalysis = Qt.QCheckBox('Reseal Analysis')
-        self._displayAnalysis.toggled.connect(self._toggleAnalysis)
-        self._ctrl_layout.addWidget(self._displayAnalysis)
+        self._displayResealAnalysis = Qt.QCheckBox('Reseal Analysis')
+        self._displayResealAnalysis.toggled.connect(self._toggleResealAnalysis)
+        self._ctrl_layout.addWidget(self._displayResealAnalysis)
+        self._displayDetectAnalysis = Qt.QCheckBox('Cell Detect Analysis')
+        self._displayDetectAnalysis.toggled.connect(self._toggleDetectAnalysis)
+        self._ctrl_layout.addWidget(self._displayDetectAnalysis)
 
     def _toggleDisplayStateRegions(self, state: bool):
         for plot in self._plots_by_units.values():
@@ -676,7 +679,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         elif 'Pa' in self._plots_by_units:
             self._plots_by_units['Pa'].hide()
 
-    def _toggleAnalysis(self, state: bool):
+    def _toggleResealAnalysis(self, state: bool):
         from acq4.devices.PatchPipette.states import ResealAnalysis
 
         if state:
@@ -686,33 +689,59 @@ class MultiPatchLogWidget(Qt.QWidget):
                 movable=False, pos=self._stretch_threshold, angle=0, pen=pg.mkPen('w')))
             analysis_plot.addItem(pg.InfiniteLine(
                 movable=False, pos=self._tear_threshold, angle=0, pen=pg.mkPen('w')))
-            for data in self._devices.values():
-                test_pulses = data.get('test_pulse', np.zeros(0, dtype=TEST_PULSE_NUMPY_DTYPE))
-                states = data.get('state', [])
-                time = test_pulses['event_time'] - self.startTime()
-                if len(time) > 0:
-                    measurements = np.concatenate(
-                        (time[:, np.newaxis], test_pulses['steady_state_resistance'][:, np.newaxis]), axis=1)
-                    # break the analysis up by state changes
-                    state_times = [s[0] - self.startTime() for s in states if s[2] == '']
-                    start_indexes = np.searchsorted(time, state_times)
-                    start_indexes = np.concatenate(([0], start_indexes, [len(states)]))
-                    for i in range(len(start_indexes) - 1):
-                        start = start_indexes[i]
-                        end = start_indexes[i + 1]
-                        if start >= end - 1:
-                            continue
-                        analyzer = ResealAnalysis(
-                            self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
-                        analysis = analyzer.process_measurements(measurements[start:end])
-                        analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
-                        resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
-                        analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
-                        resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
-                        analysis_plot.plot(
-                            analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x')
-                        analysis_plot.plot(
-                            analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o')
+            for ssr in self.testPulseAnalysisDataByState('steady_state_resistance'):
+                analyzer = ResealAnalysis(
+                    self._stretch_threshold, self._tear_threshold, self._detection_τ, self._repair_τ)
+                analysis = analyzer.process_measurements(ssr)
+                analysis_plot.plot(analysis["time"], analysis["detect_ratio"], pen=pg.mkPen('b'))
+                resistance_plot.plot(analysis["time"], analysis["detect_avg"], pen=pg.mkPen('b'))
+                analysis_plot.plot(analysis["time"], analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255))
+                resistance_plot.plot(analysis["time"], analysis["repair_avg"], pen=pg.mkPen(90, 140, 255))
+                analysis_plot.plot(
+                    analysis["time"], plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x')
+                analysis_plot.plot(
+                    analysis["time"], plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o')
+
+    def testPulseAnalysisDataByState(self, field: str):
+        for data in self._devices.values():
+            test_pulses = data.get('test_pulse', np.zeros(0, dtype=TEST_PULSE_NUMPY_DTYPE))
+            states = data.get('state', [])
+            time = test_pulses['event_time'] - self.startTime()
+            if len(time) > 0:
+                measurements = np.concatenate(
+                    (time[:, np.newaxis], test_pulses[field][:, np.newaxis]), axis=1)
+                # break the analysis up by state changes
+                state_times = [s[0] - self.startTime() for s in states if s[2] == '']
+                start_indexes = np.searchsorted(time, state_times)
+                start_indexes = np.concatenate(([0], start_indexes, [len(states)]))
+                for i in range(len(start_indexes) - 1):
+                    start = start_indexes[i]
+                    end = start_indexes[i + 1]
+                    if start >= end - 1:
+                        continue
+                    yield measurements[start:end]
+
+    def _toggleDetectAnalysis(self, state: bool):
+        from acq4.devices.PatchPipette.states import CellDetectAnalysis
+
+        if state:
+            resistance_plot = self.buildPlotForUnits('Ω')
+            analysis_plot = self.buildPlotForUnits('')
+            for ssr_chunk in self.testPulseAnalysisDataByState('steady_state_resistance'):
+                analyzer = CellDetectAnalysis(
+                    cell_threshold_fast=1e6,
+                    cell_threshold_slow=200e3,
+                    slow_detection_steps=3,
+                    obstacle_threshold=1e6,
+                    break_threshold=-1e6,
+                )
+                analysis = analyzer.process_measurements(ssr_chunk)
+                resistance_plot.plot(analysis["time"], analysis["resistance_avg"], pen=pg.mkPen('b'))
+                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_fast"]), pen=pg.mkPen('g'), symbol='o')
+                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["cell_detected_slow"]), pen=pg.mkPen('b'), symbol='o')
+                analysis_plot.plot(analysis["time"], plottable_booleans(analysis["obstacle_detected"]), pen=pg.mkPen('r'), symbol='x')
+                # analysis_plot.plot(analysis["time"], plottable_booleans(analysis["tip_is_broken"]), pen=pg.mkPen('y'), symbol='x')
+
 
     def timeChanged(self, slider: pg.InfiniteLine):
         self.setTime(slider.getXPos())
