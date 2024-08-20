@@ -1,3 +1,5 @@
+import numpy as np
+
 from acq4.devices.Keyboard import Keyboard
 from acq4.util import Qt
 
@@ -7,7 +9,7 @@ class MockKeyboard(Keyboard):
         pass
 
     def getBacklights(self):
-        pass
+        return np.zeros((100, 100, 2), dtype='ubyte')
 
     def setBacklight(self, key, blue=None, red=None):
         pass
