@@ -25,6 +25,9 @@ class Keyboard(Device):
         self._callbacks.setdefault(key, []).append((callback, args))
         self.sigCallbacksChanged.emit(self)
 
+    def setIntensity(self, b1, b2):
+        raise NotImplementedError()
+
     def setBacklights(self, state, **kwds):
         raise NotImplementedError()
 

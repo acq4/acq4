@@ -12,6 +12,9 @@ class MockKeyboard(Keyboard):
     def setBacklight(self, key, blue=None, red=None):
         pass
 
+    def setIntensity(self, b1, b2):
+        pass
+
     def getState(self):
         pass
 
