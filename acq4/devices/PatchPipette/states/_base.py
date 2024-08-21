@@ -233,6 +233,17 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
+    def surfaceIntersectionPosition(self, direction):
+        """Return the intersection of the pipette path with the surface."""
+        pip = self.dev.pipetteDevice
+        pos = np.array(pip.globalPosition())
+        surface = pip.scopeDevice().getSurfaceDepth()
+        angle = pip.pitchRadians()
+        dz = pos[2] - surface
+        if dz <= 0:
+            return pos
+        return pos + direction * (dz / np.cos(angle))
+
 
 class SteadyStateAnalysisBase(object):
     def __init__(self, **kwds):

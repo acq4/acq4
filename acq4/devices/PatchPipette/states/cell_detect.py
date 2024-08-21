@@ -315,7 +315,6 @@ class CellDetectState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             if self._analysis.obstacle_detected():
                 move.stop("Obstacle detected while sidestepping")
-                move.wait()
                 self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
                 return self.avoidObstacle(already_retracted=True)
             self.checkStop()
@@ -382,17 +381,6 @@ class CellDetectState(PatchPipetteState):
             raise ValueError(f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
         return direction / np.linalg.norm(direction)
 
-    def firstSurfacePosition(self):
-        """Return the first position along the pipette search path which could be below the surface."""
-        pip = self.dev.pipetteDevice
-        pos = np.array(pip.globalPosition())
-        surface = pip.scopeDevice().getSurfaceDepth()
-        angle = pip.pitchRadians()
-        dz = pos[2] - surface
-        if dz <= 0:
-            return pos
-        return pos + self.direction * (dz / np.cos(angle))
-
     def fastTravelEndpoint(self):
         """Return the last position along the pipette search path to be traveled at full speed."""
         pip = self.dev.pipetteDevice
@@ -444,7 +432,7 @@ class CellDetectState(PatchPipetteState):
         self.setState("continuous pipette advance")
         if self.aboveSurface():
             speed = self.config['aboveSurfaceSpeed']
-            surface = self.firstSurfacePosition()
+            surface = self.surfaceIntersectionPosition(self.direction)
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():

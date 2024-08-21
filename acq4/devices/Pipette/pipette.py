@@ -450,7 +450,7 @@ class Pipette(Device, OptomechDevice):
 
     @future_wrap
     def stepwiseAdvance(self, depth: float, maxSpeed: float = 10e-6, interval: float = 5, _future=None):
-        """Retract in 1µm steps, allowing for manual user movements"""
+        """Retract/advance in 1µm steps, allowing for manual user movements"""
         initial_direction = None
         while True:
             pos = self.globalPosition()
