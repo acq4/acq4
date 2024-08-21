@@ -123,9 +123,11 @@ class ResealState(PatchPipetteState):
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
     resealSuccessResistance : float
-        Resistance (Ohms) above which the reseal is considered successful (default is 1e9)
+        Resistance (Ω) above which the reseal is considered successful (default is 500MΩ)
     resealSuccessDuration : float
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
+    postSuccessRetractionSpeed : float
+        Speed in m/s to move pipette after successful reseal (default is 6 µm / s)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
     slurpRetractionSpeed : float
@@ -160,8 +162,9 @@ class ResealState(PatchPipetteState):
         'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
-        'resealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
+        'resealSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
+        'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
@@ -293,8 +296,12 @@ class ResealState(PatchPipetteState):
 
             self.sleep(0.2)
 
-        self.setState("slurping in nucleus")
+        self.setState("reseal deemed successful")
         self.cleanup()
+        self._moveFuture = self._retractFromTissue()
+        self.waitFor(self._moveFuture)
+
+        self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
         self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
         self.sleep(config['slurpDuration'])
@@ -302,6 +309,13 @@ class ResealState(PatchPipetteState):
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
         self.sleep(np.inf)
+
+    def _retractFromTissue(self):
+        # move out of the tissue more quickly
+        dev = self.dev
+        direction = dev.pipetteDevice.globalDirection()
+        return dev.pipetteDevice._moveToGlobal(
+            self.surfaceIntersectionPosition(direction), speed=self.config['postSuccessRetractionSpeed'])
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
