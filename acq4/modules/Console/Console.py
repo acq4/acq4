@@ -43,7 +43,13 @@ class Console(Module):
         mp = os.path.dirname(__file__)
         self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.win.resize(800,500)
-        self.cw = ConsoleWidget(namespace=self.localNamespace, text=msg, editor=codeEditorCommand(), module=self)
+        self.cw = ConsoleWidget(
+            namespace=self.localNamespace,
+            text=msg,
+            editor=codeEditorCommand(),
+            module=self,
+            allowNonGuiExecution=True,
+        )
         self.win.setCentralWidget(self.cw)
         self.win.setWindowTitle('ACQ4 Console')
 
@@ -69,7 +75,7 @@ class Console(Module):
         Module.quit(self)
 
 
-## reimplement history save/restore methods
+# reimplement history save/restore methods
 class ConsoleWidget(console.ConsoleWidget):
     def __init__(self, *args, **kargs):
         self.module = kargs.pop('module')
