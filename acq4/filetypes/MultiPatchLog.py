@@ -245,8 +245,8 @@ class MultiPatchLogData(object):
                         # TODO only open the file once, not once per device
                         h5_file = h5py.File(h5_fn, 'r')
                         # TODO find a way to stop duplicating the "test_pulses/{dev}" part
-                        dataset = h5_file[f"test_pulses/{dev}"]
-                        stack = H5BackedTestPulseStack(dataset)
+                        data_group = h5_file[f"test_pulses/{dev}"]
+                        stack = H5BackedTestPulseStack(data_group)
                         if dev in self.fullTestPulseStacks:
                             self.fullTestPulseStacks[dev].merge(stack)
                         else:
@@ -790,6 +790,20 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def _toggleFullTestPulse(self, state: bool):
         if state:
+            # hint: to save a test pulse for use in e.g. unit tests:
+            #    import h5py
+            #    from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
+            #
+            #    widget = man.getModule("Data Manager").ui.dataViewWidget._multiPatchLogWidget
+            #    tp = widget.testPulsesAtTime(SOMETIME)['PatchPipette1']
+            #    f = h5py.File("/WHEREVER/THIS/IS/neuroanalysis/test_data/TP_NAME.h5", "a")
+            #    gr = f.create_group("test_pulses")
+            #    tps = H5BackedTestPulseStack(gr)
+            #    tps.append(tp)
+            #    f.close()
+            #    del(tps)
+            #    del(gr)
+
             self._full_test_pulse_plot = self._plots_widget.addPlot(
                 name="Test Pulse",
                 title='man.getModule("Data Manager").ui.dataViewWidget._multiPatchLogWidget.testPulsesAtTime(...)',
