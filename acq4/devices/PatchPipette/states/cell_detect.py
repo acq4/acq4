@@ -421,7 +421,10 @@ class CellDetectState(PatchPipetteState):
                 endpoint = targetEndpt
 
         if endpoint is None:
-            raise Exception("Cell detect state requires one of maxAdvanceDistance, maxAdvanceDepthBelowSurface, or maxAdvanceDistancePastTarget.")
+            raise ValueError(
+                "Cell detect state requires one of maxAdvanceDistance, maxAdvanceDepthBelowSurface, or"
+                " maxAdvanceDistancePastTarget."
+            )
 
         return endpoint
 
