@@ -399,44 +399,22 @@ class PlotWidget(Qt.QWidget):
         if self._analysisLabel is not None:
             self.plot.plotItem.vb.removeItem(self._analysisLabel)
             self._analysisLabel = None
-        analysis_by_mode = {
-            'ss resistance': ('steady_state_resistance', u'Ω', 'Rss'),
-            'peak resistance': ('access_resistance', u'Ω', 'Rp'),
-            'holding current': ('baseline_current', 'A', 'Ih'),
-            'holding potential': ('baseline_potential', 'V', 'Vh'),
-            'time constant': ('time_constant', 's', 'Tau'),
-            'capacitance': ('capacitance', 'F', 'Cap'),
-        }
-        abbrevs = {v[0]: v[1:] for v in analysis_by_mode.values()}
         if self.mode == 'test pulse':
             self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
-            self._plotTestPulse(tp)
-            if tp.analysis is None:  # calling tp.analysis actually initiates the analysis needed for the plots
-                return
-            if tp.fit_trace_with_transient is not None:
-                trans_fit = tp.fit_trace_with_transient
-                self.plot.plot(trans_fit.time_values, trans_fit.data, pen='r')
-            if tp.main_fit_trace is not None:
-                main_fit = tp.main_fit_trace
-                self.plot.plot(main_fit.time_values, main_fit.data, pen='b')
-                asymptote = tp.analysis['fit_yoffset']
-                self.plot.addItem(pg.InfiniteLine(
-                    (0, asymptote),
-                    angle=0,
-                    pen=pg.mkPen((180, 180, 240), dash=[3, 4]),
-                ))
-                text = "Estimated:<br/>" + "<br/>".join([
-                    f"{abbrevs[key][1]}: {pg.siFormat(val, suffix=abbrevs[key][0])}"
-                    for key, val in tp.analysis.items()
-                    if val is not None and key in abbrevs
-                ])
-                self._analysisLabel = pg.LabelItem(text.strip(), color=(180, 180, 240))
-                self._analysisLabel.setParentItem(self.plot.plotItem.vb)
-                self._analysisLabel.setPos(5, 5)
+            tp.plot(self.plot, label=False)
+            self._analysisLabel = tp.label_for_plot(self.plot)
 
         else:
-            key, units, _ = analysis_by_mode[self.mode]
+            analysis_by_mode = {
+                'ss resistance': ('steady_state_resistance', u'Ω'),
+                'peak resistance': ('access_resistance', u'Ω'),
+                'holding current': ('baseline_current', 'A'),
+                'holding potential': ('baseline_potential', 'V'),
+                'time constant': ('time_constant', 's'),
+                'capacitance': ('capacitance', 'F'),
+            }
+            key, units = analysis_by_mode[self.mode]
             self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
