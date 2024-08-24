@@ -459,7 +459,8 @@ class CellDetectState(PatchPipetteState):
                         repetitions=1,
                         duration=self.config['preTargetWiggleDuration'],
                         pipette_direction=self.direction,
-                    )
+                    ),
+                    timeout=None,
                 )
                 step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)

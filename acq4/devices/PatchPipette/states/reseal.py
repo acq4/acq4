@@ -207,7 +207,8 @@ class ResealState(PatchPipetteState):
                 duration=self.config['nuzzleDuration'],
                 repetitions=self.config['nuzzleRepetitions'],
                 extra=pressure_ramp,
-            )
+            ),
+            timeout=None,
         )
 
     @future_wrap
