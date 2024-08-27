@@ -173,7 +173,7 @@ class TestPulseThread(Thread):
         mode = task.command[self._clampName]['mode']
         params = self.paramsForMode(mode)
         result: MetaArray = task.getResult()[self._clampName]
-        start_time = result.infoCopy()[2]['DAQ']['primary']['startTime']  # TODO what the shit is this
+        start_time = result.infoCopy()[2]['DAQ']['primary']['startTime']  # TODO what is this
         pri = result['Channel': 'primary'].asarray()
         pulse_len = len(pri) // params['average']
 
