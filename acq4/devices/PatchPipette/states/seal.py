@@ -85,9 +85,8 @@ class SealState(PatchPipetteState):
         Capacitance (Farads) above which the pipette is considered to be whole-cell and
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
-    nSlopeSamples : int
-        Number of consecutive test pulse measurements over which the rate of change
-        in seal resistance is measured (for automatic pressure control).
+    resistanceMonitorTau : float
+        Time constant (seconds) for exponential averaging of resistance measurements. Default 1s.
     autoSealTimeout : float
         Maximum timeout (seconds) before the seal attempt is aborted,
         transitioning to *fallbackState*.
