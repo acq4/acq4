@@ -1,15 +1,57 @@
 from __future__ import annotations
 
-from collections import deque
-
 import numpy as np
-import scipy.stats
-import time
-import warnings
 
 from acq4.util import ptime
 from pyqtgraph import units
-from ._base import PatchPipetteState
+from ._base import PatchPipetteState, SteadyStateAnalysisBase
+
+
+class SealAnalysis(SteadyStateAnalysisBase):
+    def __init__(self, tau, success_at, hold_at):
+        super().__init__()
+        self._tau = tau
+        self._success_at = success_at
+        self._hold_at = hold_at
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(measurements.shape[0], dtype=[
+            ('time', float),
+            ('steady_state_resistance', float),
+            ('resistance_avg', float),
+            ('resistance_ratio', float),
+            ('success', bool),
+            ('hold', bool),
+        ])
+        for i, m in enumerate(measurements):
+            t, resistance = m
+            if self._last_measurement is None:
+                resistance_avg = resistance
+            else:
+                dt = t - self._last_measurement['time']
+                resistance_avg = self.exponential_decay_avg(
+                    dt, self._last_measurement['resistance_avg'], resistance, self._tau)
+            success = resistance_avg > self._success_at
+            hold = resistance_avg > self._hold_at
+            ret_array[i] = (
+                t,
+                resistance,
+                resistance_avg,
+                resistance / resistance_avg,
+                success,
+                hold,
+            )
+
+        return ret_array
+
+    def success(self):
+        return self._last_measurement and self._last_measurement['success']
+
+    def hold(self):
+        return self._last_measurement and self._last_measurement['hold']
+
+    def resistance_ratio(self):
+        return self._last_measurement['resistance_ratio'] if self._last_measurement else float('nan')
 
 
 class SealState(PatchPipetteState):
@@ -52,20 +94,21 @@ class SealState(PatchPipetteState):
     pressureLimit : float
         The largest vacuum pressure (pascals, expected negative value) to apply during sealing.
         When this pressure is reached, the pressure is reset to 0 and the ramp starts over after a delay.
-    pressureChangeRates : list
-        A list of (seal_resistance_threshold, pressure_change) tuples that determine how much to
-        change the current seal pressure based on the rate of change in seal resistance.
-        For each iteration, select the first tuple in the list where the current rate of
-        change in seal resistance is _less_ than the threshold specified in the tuple.
+    pressureChangeByRatio : list
+        A list of (ssr_ratio_threshold, pressure_change) tuples that determine how much to change the current
+        seal pressure based on the rate of change in seal resistance. For each iteration, the rate of change will
+        be selected as the one associated with the lowest ssr_ratio_threshold that is less than the current
+        ratio. Default is [(1, -100), (1.05, 0), (float('inf'), 200)] ("increase suction if we're losing
+        resistance, no change if resistance is growing slowly, decrease it otherwise").
     delayBeforePressure : float
         Wait time (seconds) at beginning of seal state before applying negative pressure.
     delayAfterSeal : float
         Wait time (seconds) after GOhm seal is acquired, before transitioning to next state.
     afterSealPressure : float
-        Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial formamtion.
+        Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial
+        formation.
     resetDelay : float
         Wait time (seconds) after pressureLimit is reached, before restarting pressure ramp.
-
     """
     stateName = 'seal'
 
@@ -82,10 +125,10 @@ class SealState(PatchPipetteState):
         'holdingPotential': {'type': 'float', 'default': -70e-3},
         'sealThreshold': {'type': 'float', 'default': 1e9},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
-        'nSlopeSamples': {'type': 'int', 'default': 5},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
-        'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (0, 0)]"},  # TODO
+        'resistanceMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
+        'pressureChangeByRatio': {'type': 'str', 'default': "[(1, -100), (1.05, 0), (float('inf'), 200)]"},
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
@@ -94,16 +137,18 @@ class SealState(PatchPipetteState):
 
     def __init__(self, dev, config):
         super().__init__(dev, config)
-        self._recentTestPulses = deque(maxlen=config['nSlopeSamples'])
-        self._initialTP = None
+        self._analysis = SealAnalysis(
+            tau=config['resistanceMonitorTau'],
+            success_at=config['sealThreshold'],
+            hold_at=config['holdingThreshold'],
+        )
+        self._initialized = False
         self._patchrec = dev.patchRecord()
-        self.sealSuccessful = False
-        self.readyToHold = False
         self.pressure = config['startingPressure']
-        if isinstance(config['pressureChangeRates'], str):
-            config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
+        if isinstance(config['pressureChangeByRatio'], str):
+            config['pressureChangeByRatio'] = eval(config['pressureChangeByRatio'], units.__dict__)
         # sort pressure change rates by resistance slope thresholds
-        self._pressureChangeRates = sorted(config['pressureChangeRates'], key=lambda x: x[0])
+        self._pressureChangeByRatio = sorted(config['pressureChangeByRatio'], key=lambda x: x[0])
 
     def initialize(self):
         self.dev.setTipClean(False)
@@ -111,20 +156,17 @@ class SealState(PatchPipetteState):
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
-        self._recentTestPulses.extend(tps)
+        self._analysis.process_test_pulses(tps)
 
-        tp = self._initialTP = tps[-1]
+        tp = tps[-1]
         ssr = tp.analysis['steady_state_resistance']
         cap = tp.analysis['capacitance']
-        if self._initialTP is None:
-            initialResistance = ssr
-            self._patchrec['resistanceBeforeSeal'] = initialResistance
+        if not self._initialized:
+            self._patchrec['resistanceBeforeSeal'] = ssr
             self._patchrec['capacitanceBeforeSeal'] = cap
-            self._initialTP = tp
+            self._initialized = True
         self._patchrec['resistanceBeforeBreakin'] = ssr
         self._patchrec['capacitanceBeforeBreakin'] = cap
-        self.sealSuccessful = ssr > self.config['sealThreshold']
-        self.readyToHold = ssr > self.config['holdingThreshold']
         return tps
 
     def run(self):
@@ -141,11 +183,11 @@ class SealState(PatchPipetteState):
 
         self._patchrec['attemptedSeal'] = True
 
-        while not self.sealSuccessful:
+        while not self._analysis.success():
             self.checkStop()
             self.processAtLeastOneTestPulse()
 
-            if self.readyToHold and not holdingSet:
+            if not holdingSet and self._analysis.hold():
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
@@ -191,32 +233,25 @@ class SealState(PatchPipetteState):
                 self.dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
             else:
                 self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        else:
-            raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
-
-    def relativeResistanceChangeRate(self):
-        res = np.array([tp.analysis['steady_state_resistance'] for tp in self._recentTestPulses])
-        times = np.array([tp.start_time for tp in self._recentTestPulses])
-        return scipy.stats.linregress(times, res).slope / res.mean()
 
     def updatePressure(self):
         config = self.config
         dev = self.dev
         self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
 
-        # decide how much to adjust pressure based on rate of change in seal resistance
-        slope_ish = self.relativeResistanceChangeRate()
-        for max_slope, change in self._pressureChangeRates:
-            if max_slope is None or slope_ish < max_slope:
-                self.pressure += change
-                break
-
-        # here, if the pressureLimit has been achieved and we are still sealing, cycle back to starting
-        # pressure and redo the pressure change
         if self.pressure <= config['pressureLimit']:
+            # if the pressureLimit has been achieved, cycle back to starting pressure and redo the
+            # pressure change process.
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
             self.sleep(config['resetDelay'])
             self.pressure = config['startingPressure']
+        else:
+            # decide how much to adjust pressure based on rate of change in seal resistance
+            ratio = self._analysis.resistance_ratio()
+            for max_ratio, change in self._pressureChangeByRatio:
+                if max_ratio is None or ratio < max_ratio:
+                    self.pressure += change
+                    break
 
         dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
 
