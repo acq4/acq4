@@ -242,13 +242,9 @@ class ResealState(PatchPipetteState):
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
-        while True:
-            self.checkStop()
-            tps = self.getTestPulses(timeout=0.2)
-            if len(tps) > 0:
-                break
-            self.sleep(0.2)
+        tps = super().processAtLeastOneTestPulse()
         self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
+        return tps
 
     def run(self):
         config = self.config

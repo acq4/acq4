@@ -326,10 +326,10 @@ class CellDetectState(PatchPipetteState):
         return self.config['obstacleDetection'] and not self.closeEnoughToTargetToDetectCell() and self._analysis.obstacle_detected()
 
     def processAtLeastOneTestPulse(self):
-        while not (tps := self.getTestPulses(timeout=0.2)):
-            self.checkStop()
+        tps = super().processAtLeastOneTestPulse()
         self._analysis.process_test_pulses(tps)
         self._lastTestPulse = tps[-1]
+        return tps
 
     def weTookTooLong(self):
         if self._startTime is None:

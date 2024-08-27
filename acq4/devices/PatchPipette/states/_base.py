@@ -176,6 +176,12 @@ class PatchPipetteState(Future):
         """
         self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
 
+    def processAtLeastOneTestPulse(self):
+        """Wait for at least one test pulse to be processed."""
+        while not (tps := self.getTestPulses(timeout=0.2)):
+            self.checkStop()
+        return tps
+
     def testPulseFinished(self, clamp, result):
         self.testPulseResults.put(result)
 
