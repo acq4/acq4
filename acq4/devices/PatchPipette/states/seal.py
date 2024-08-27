@@ -194,10 +194,10 @@ class SealState(PatchPipetteState):
         else:
             raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
 
-    def resistanceSlope(self):
+    def relativeResistanceChangeRate(self):
         res = np.array([tp.analysis['steady_state_resistance'] for tp in self._recentTestPulses])
         times = np.array([tp.start_time for tp in self._recentTestPulses])
-        return scipy.stats.linregress(times, res).slope
+        return scipy.stats.linregress(times, res).slope / res.mean()
 
     def updatePressure(self):
         config = self.config
@@ -205,9 +205,9 @@ class SealState(PatchPipetteState):
         self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
 
         # decide how much to adjust pressure based on rate of change in seal resistance
-        slope = self.resistanceSlope()
+        slope_ish = self.relativeResistanceChangeRate()
         for max_slope, change in self._pressureChangeRates:
-            if max_slope is None or slope < max_slope:
+            if max_slope is None or slope_ish < max_slope:
                 self.pressure += change
                 break
 

@@ -259,9 +259,9 @@ class SteadyStateAnalysisBase(object):
         raise NotImplementedError()
 
     @staticmethod
-    def _exponential_decay_avg(dt, prev_avg, resistance, tau):
+    def exponential_decay_avg(dt, prev_avg, value, tau):
         alpha = 1 - np.exp(-dt / tau)
-        avg = prev_avg * (1 - alpha) + resistance * alpha
+        avg = prev_avg * (1 - alpha) + value * alpha
         ratio = np.log10(avg / prev_avg)
         return avg, ratio
 

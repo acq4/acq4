@@ -52,9 +52,9 @@ class ResealAnalysis(SteadyStateAnalysisBase):
 
             dt = start_time - last_measurement['time']
 
-            detect_avg, detection_ratio = self._exponential_decay_avg(
+            detect_avg, detection_ratio = self.exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau)
-            repair_avg, repair_ratio = self._exponential_decay_avg(
+            repair_avg, repair_ratio = self.exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau)
 
             is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
