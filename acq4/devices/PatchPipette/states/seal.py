@@ -85,7 +85,6 @@ class SealState(PatchPipetteState):
         'nSlopeSamples': {'type': 'int', 'default': 5},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
-        'maxVacuum': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},  # TODO Deprecated. Remove after 2024-10-01
         'pressureChangeRates': {'type': 'str', 'default': "[(-1e6, 200), (0.5e6, -100), (0, 0)]"},  # TODO
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
@@ -94,10 +93,6 @@ class SealState(PatchPipetteState):
     }
 
     def initialize(self):
-        if self.config['maxVacuum'] != self.defaultConfig()['maxVacuum']:
-            warnings.warn("maxVacuum parameter is deprecated; use pressureLimit instead", DeprecationWarning)
-            if self.config['pressureLimit'] != self.defaultConfig()['pressureLimit']:
-                self.config['pressureLimit'] = self.config['maxVacuum']
         self.dev.clean = False
         super().initialize()
 
