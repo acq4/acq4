@@ -92,127 +92,133 @@ class SealState(PatchPipetteState):
         'resetDelay': {'type': 'float', 'default': 5.0, 'suffix': 's'},
     }
 
-    def initialize(self):
-        self.dev.clean = False
-        super().initialize()
-
-    def run(self):
-        self.monitorTestPulse()
-        config = self.config
-        dev: "PatchPipette" = self.dev
-
-        recentTestPulses = deque(maxlen=config['nSlopeSamples'])
-        while True:
-            initialTP = dev.clampDevice.lastTestPulse()
-            if initialTP is not None:
-                break
-            self.checkStop()
-            time.sleep(0.05)
-
-        initialResistance = initialTP.analysis['steady_state_resistance']
-        patchrec = dev.patchRecord()
-        patchrec['resistanceBeforeSeal'] = initialResistance
-        patchrec['capacitanceBeforeSeal'] = initialTP.analysis['capacitance']
-        startTime = ptime.time()
-        pressure = config['startingPressure']
-
+    def __init__(self, dev, config):
+        super().__init__(dev, config)
+        self._recentTestPulses = deque(maxlen=config['nSlopeSamples'])
+        self._initialTP = None
+        self._patchrec = dev.patchRecord()
+        self.sealSuccessful = False
+        self.readyToHold = False
+        self.pressure = config['startingPressure']
         if isinstance(config['pressureChangeRates'], str):
             config['pressureChangeRates'] = eval(config['pressureChangeRates'], units.__dict__)
         # sort pressure change rates by resistance slope thresholds
-        pressureChangeRates = sorted(config['pressureChangeRates'], key=lambda x: x[0])
+        self._pressureChangeRates = sorted(config['pressureChangeRates'], key=lambda x: x[0])
 
-        mode = config['pressureMode']
-        self.setState(f'beginning seal (mode: {mode!r})')
-        if mode == 'user':
-            dev.pressureDevice.setPressure(source='user', pressure=0)
-        elif mode == 'auto':
-            if config['delayBeforePressure'] == 0:
-                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            else:
-                dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        else:
-            raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
+    def initialize(self):
+        self.dev.setTipClean(False)
+        super().initialize()
 
-        dev.setTipClean(False)
+    def processAtLeastOneTestPulse(self):
+        tps = super().processAtLeastOneTestPulse()
+        self._recentTestPulses.extend(tps)
 
-        patchrec['attemptedSeal'] = True
+        tp = self._initialTP = tps[-1]
+        ssr = tp.analysis['steady_state_resistance']
+        cap = tp.analysis['capacitance']
+        if self._initialTP is None:
+            initialResistance = ssr
+            self._patchrec['resistanceBeforeSeal'] = initialResistance
+            self._patchrec['capacitanceBeforeSeal'] = cap
+            self._initialTP = tp
+        self._patchrec['resistanceBeforeBreakin'] = ssr
+        self._patchrec['capacitanceBeforeBreakin'] = cap
+        self.sealSuccessful = ssr > self.config['sealThreshold']
+        self.readyToHold = ssr > self.config['holdingThreshold']
+        return tps
+
+    def run(self):
+        config = self.config
+        dev = self.dev
         holdingSet = False
 
-        while True:
+        self.monitorTestPulse()
+        self.processAtLeastOneTestPulse()
+
+        startTime = ptime.time()
+        self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
+        self.setInitialPressure()
+
+        self._patchrec['attemptedSeal'] = True
+
+        while not self.sealSuccessful:
             self.checkStop()
+            self.processAtLeastOneTestPulse()
 
-            # pull in all new test pulses (hopefully only one since the last time we checked)
-            tps = self.getTestPulses(timeout=0.2)
-            recentTestPulses.extend(tps)
-            if len(tps) == 0:
-                continue
-            tp = tps[-1]
-
-            ssr = tp.analysis['steady_state_resistance']
-            cap = tp.analysis['capacitance']
-
-            patchrec['resistanceBeforeBreakin'] = ssr
-            patchrec['capacitanceBeforeBreakin'] = cap
-
-            if ssr > config['holdingThreshold'] and not holdingSet:
+            if self.readyToHold and not holdingSet:
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
 
-            # seal detected?
-            if ssr > config['sealThreshold']:
-                self.setState('gigaohm seal detected')
-
-                # delay for a short period, possibly applying pressure to allow seal to stabilize
-                if config['delayAfterSeal'] > 0:
-                    if config['afterSealPressure'] == 0:
-                        dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-                    else:
-                        dev.pressureDevice.setPressure(source='regulator', pressure=config['afterSealPressure'])
-                    self.sleep(config['delayAfterSeal'])
-
-                dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-
-                dev.clampDevice.autoCapComp()
-
-                self._taskDone()
-                patchrec['sealSuccessful'] = True
-                return 'cell attached'
-
-            if mode == 'auto':
+            if config['pressureMode'] == 'auto':
                 dt = ptime.time() - startTime
                 if dt < config['delayBeforePressure']:
                     # delay at atmospheric pressure before starting suction
                     continue
 
                 if dt > config['autoSealTimeout']:
-                    patchrec['sealSuccessful'] = False
+                    self._patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
                     return config['fallbackState']
 
-                # update pressure
-                res = np.array([tp.analysis['steady_state_resistance'] for tp in recentTestPulses])
-                times = np.array([tp.start_time for tp in recentTestPulses])
-                slope = scipy.stats.linregress(times, res).slope
-                pressure = np.clip(pressure, config['pressureLimit'], 0)
+                self.updatePressure()
 
-                # decide how much to adjust pressure based on rate of change in seal resistance
-                for max_slope, change in pressureChangeRates:
-                    if max_slope is None or slope < max_slope:
-                        pressure += change
-                        break
+        # Success!
+        self.setState('gigaohm seal detected')
 
-                # here, if the pressureLimit has been achieved and we are still sealing, cycle back to starting
-                # pressure and redo the pressure change
-                if pressure <= config['pressureLimit']:
-                    dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-                    self.sleep(config['resetDelay'])
-                    pressure = config['startingPressure']
-                    dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                    continue
+        # delay for a short period, possibly applying pressure to allow seal to stabilize
+        if config['delayAfterSeal'] > 0:
+            if config['afterSealPressure'] == 0:
+                dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+            else:
+                dev.pressureDevice.setPressure(source='regulator', pressure=config['afterSealPressure'])
+            self.sleep(config['delayAfterSeal'])
 
-                self.setState(f'Rpip slope: {slope / 1e6:g} MOhm/sec   Pressure: {pressure:g} Pa')
-                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+
+        dev.clampDevice.autoCapComp()
+
+        self._taskDone()
+        self._patchrec['sealSuccessful'] = True
+        return 'cell attached'
+
+    def setInitialPressure(self):
+        mode = self.config['pressureMode']
+        if mode == 'user':
+            self.dev.pressureDevice.setPressure(source='user', pressure=0)
+        elif mode == 'auto':
+            if self.config['delayBeforePressure'] == 0:
+                self.dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
+            else:
+                self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        else:
+            raise ValueError(f"pressureMode must be 'auto' or 'user' (got '{mode}')")
+
+    def resistanceSlope(self):
+        res = np.array([tp.analysis['steady_state_resistance'] for tp in self._recentTestPulses])
+        times = np.array([tp.start_time for tp in self._recentTestPulses])
+        return scipy.stats.linregress(times, res).slope
+
+    def updatePressure(self):
+        config = self.config
+        dev = self.dev
+        self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
+
+        # decide how much to adjust pressure based on rate of change in seal resistance
+        slope = self.resistanceSlope()
+        for max_slope, change in self._pressureChangeRates:
+            if max_slope is None or slope < max_slope:
+                self.pressure += change
+                break
+
+        # here, if the pressureLimit has been achieved and we are still sealing, cycle back to starting
+        # pressure and redo the pressure change
+        if self.pressure <= config['pressureLimit']:
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+            self.sleep(config['resetDelay'])
+            self.pressure = config['startingPressure']
+
+        dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
 
     def cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
