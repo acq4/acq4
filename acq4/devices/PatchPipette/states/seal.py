@@ -29,7 +29,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 resistance_avg = resistance
             else:
                 dt = t - self._last_measurement['time']
-                resistance_avg = self.exponential_decay_avg(
+                resistance_avg, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg'], resistance, self._tau)
             success = resistance_avg > self._success_at
             hold = resistance_avg > self._hold_at
