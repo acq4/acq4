@@ -41,6 +41,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 success,
                 hold,
             )
+            self._last_measurement = ret_array[i]
 
         return ret_array
 
