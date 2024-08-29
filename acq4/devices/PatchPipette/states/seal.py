@@ -70,8 +70,10 @@ class SealAnalysis(SteadyStateAnalysisBase):
             t, resistance = m
             if self._last_measurement is None:
                 resistance_avg = resistance
+                ratio = 1
             else:
                 dt = t - self._last_measurement['time']
+                ratio = resistance / self._last_measurement['resistance_avg']
                 resistance_avg, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg'], resistance, self._tau)
             success = resistance_avg > self._success_at
@@ -80,7 +82,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 t,
                 resistance,
                 resistance_avg,
-                resistance / resistance_avg,
+                ratio,
                 success,
                 hold,
             )
