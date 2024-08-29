@@ -3,13 +3,42 @@ from __future__ import annotations
 import contextlib
 import numpy as np
 
+import pyqtgraph as pg
 from acq4.util import ptime
+from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
 class ResealAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine reseal behavior."""
+
+    @classmethod
+    def plot_items(cls, *args, **kwargs):
+        representative = cls(*args, **kwargs)
+        return {
+            '': [
+                pg.InfiniteLine(movable=False, pos=representative._stretch_threshold, angle=0, pen=pg.mkPen('w')),
+                pg.InfiniteLine(movable=False, pos=representative._tear_threshold, angle=0, pen=pg.mkPen('w'))
+            ]
+        }
+
+    @classmethod
+    def plots_for_data(cls, data, *args, **kwargs):
+        plots = {'Ω': [], '': []}
+        names = False
+        for d in data:
+            analyzer = ResealAnalysis(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(dict(x=analysis["time"], y=analysis["detect_avg"], pen=pg.mkPen('b'), name=None if names else 'Detect Avg'))
+            plots['Ω'].append(dict(x=analysis["time"], y=analysis["repair_avg"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Avg'))
+            plots[''].append(dict(x=analysis["time"], y=analysis["detect_ratio"], pen=pg.mkPen('b'), name=None if names else 'Detect Ratio'))
+            plots[''].append(dict(x=analysis["time"], y=analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Ratio'))
+            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x', name=None if names else 'Stretching'))
+            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o', name=None if names else 'Tearing'))
+            names = True
+        return plots
+
     def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
         super().__init__()
         self._stretch_threshold = stretch_threshold

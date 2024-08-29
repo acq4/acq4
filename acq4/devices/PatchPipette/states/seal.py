@@ -1,13 +1,56 @@
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from acq4.util import ptime
+import pyqtgraph as pg
+from acq4.util.functions import plottable_booleans
 from pyqtgraph import units
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
 class SealAnalysis(SteadyStateAnalysisBase):
+    @classmethod
+    def plot_items(cls, tau, success_at, hold_at):
+        return {'Ω': [
+            pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
+            pg.InfiniteLine(movable=False, pos=hold_at, angle=0, pen=pg.mkPen('w')),
+        ]}
+
+    @classmethod
+    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, list[dict[str, Any]]]:
+        plots = {
+            'Ω': [],
+            '': [],
+        }
+        labels = False
+        for d in data:
+            analyzer = cls(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(dict(
+                x=analysis["time"],
+                y=analysis["resistance_avg"],
+                pen=pg.mkPen('b'),
+                name=None if labels else 'Resistance Avg',
+            ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=analysis["resistance_ratio"],
+                pen=pg.mkPen('r'),
+                name=None if labels else 'Resistance Ratio',
+            ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["success"]),
+                symbol='o',
+                pen=pg.mkPen('g'),
+                name=None if labels else 'Seal Success',
+            ))
+            labels = True
+        return plots
+
     def __init__(self, tau, success_at, hold_at):
         super().__init__()
         self._tau = tau

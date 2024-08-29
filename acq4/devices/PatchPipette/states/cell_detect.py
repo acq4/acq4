@@ -1,16 +1,43 @@
 from __future__ import annotations
 
+from typing import Any
+
 import contextlib
 import numpy as np
 
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
+from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
 class CellDetectAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine cell detection behavior."""
+    @classmethod
+    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+        plots = {'Ω': [], '': []}
+        names = False
+        for d in data:
+            analyzer = cls(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(dict(
+                x=analysis["time"],
+                y=analysis["resistance_avg"],
+                pen=pg.mkPen('b'),
+                name=None if names else 'Resistance Avg',
+            ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["obstacle_detected"]),
+                pen=pg.mkPen('r'),
+                symbol='x',
+                name=None if names else 'Obstacle Detected',
+            ))
+            names = True
+        return plots
+
     def __init__(
             self,
             cell_threshold_fast: float,

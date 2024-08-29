@@ -8,6 +8,7 @@ import threading
 from copy import deepcopy
 from typing import Any, Optional
 
+from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
@@ -248,6 +249,16 @@ class PatchPipetteState(Future):
 
 
 class SteadyStateAnalysisBase(object):
+    @classmethod
+    def plot_items(cls, *args, **kwargs) -> dict[str, iter[Qt.QGraphicsItem]]:
+        """Returns data-independent plot items grouped by plot units."""
+        return {}
+
+    @classmethod
+    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+        """Given a list of datasets and init args, return the plotting arguments grouped by plot units."""
+        return {}
+
     def __init__(self, **kwds):
         self._last_measurement: Optional[np.void] = None
 
