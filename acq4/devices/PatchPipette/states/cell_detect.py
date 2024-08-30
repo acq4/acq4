@@ -37,6 +37,13 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 symbol='x',
                 name=None if names else 'Obstacle Detected',
             ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["cell_detected_fast"] | analysis["cell_detected_slow"]),
+                pen=pg.mkPen('g'),
+                symbol='o',
+                name=None if names else 'Cell Detected',
+            ))
             names = True
         return plots
 
