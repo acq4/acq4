@@ -7,7 +7,8 @@ import numpy as np
 from acq4.util import ptime
 import pyqtgraph as pg
 from acq4.util.functions import plottable_booleans
-from pyqtgraph import units
+from neuroanalysis.data import TSeries
+from pyqtgraph.units import kPa
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -100,6 +101,15 @@ class SealAnalysis(SteadyStateAnalysisBase):
         return self._last_measurement['resistance_ratio'] if self._last_measurement else float('nan')
 
 
+def find_closest(data, values):
+    indices = np.searchsorted(data, values, side="left")
+    indices = np.clip(indices, 1, len(data) - 1)
+    left = data[indices - 1]
+    right = data[indices]
+    indices -= values - left < right - values  # this is why we can't have nice things, LLM
+    return indices
+
+
 class SealState(PatchPipetteState):
     """Handles sealing onto cell
 
@@ -137,14 +147,7 @@ class SealState(PatchPipetteState):
         Maximum timeout (seconds) before the seal attempt is aborted,
         transitioning to *fallbackState*.
     pressureLimit : float
-        The largest vacuum pressure (pascals, expected negative value) to apply during sealing.
-        When this pressure is reached, the pressure is reset to 0 and the ramp starts over after a delay.
-    pressureChangeByRatio : list
-        A list of (ssr_ratio_threshold, pressure_change) tuples that determine how much to change the current
-        seal pressure based on the rate of change in seal resistance. For each iteration, the rate of change will
-        be selected as the one associated with the lowest ssr_ratio_threshold that is less than the current
-        ratio. Default is [(1, -100), (1.05, 0), (float('inf'), 200)] ("increase suction if we're losing
-        resistance, no change if resistance is growing slowly, decrease it otherwise").
+        The largest allowable vacuum pressure (pascals, expected negative value) to apply during sealing.
     delayBeforePressure : float
         Wait time (seconds) at beginning of seal state before applying negative pressure.
     delayAfterSeal : float
@@ -152,8 +155,12 @@ class SealState(PatchPipetteState):
     afterSealPressure : float
         Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial
         formation.
-    resetDelay : float
-        Wait time (seconds) after pressureLimit is reached, before restarting pressure ramp.
+    pressureScanInterval : float
+        Interval (seconds) between pressure scans during automatic pressure control. Default 10s.
+    pressureScanRadius : float
+        Maximum distance (Pascals) from current pressure to scan during automatic pressure control. Default 5kPa.
+    pressureScanDuration : float
+        Duration (seconds) for each pressure scan during automatic pressure control. Default 5s.
     """
     stateName = 'seal'
 
@@ -173,11 +180,12 @@ class SealState(PatchPipetteState):
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'resistanceMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
-        'pressureChangeByRatio': {'type': 'str', 'default': "[(1, -100), (1.05, 0), (float('inf'), 200)]"},
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
-        'resetDelay': {'type': 'float', 'default': 5.0, 'suffix': 's'},
+        'pressureScanInterval': {'type': 'float', 'default': 10.0, 'suffix': 's'},
+        'pressureScanRadius': {'type': 'float', 'default': 5 * kPa, 'suffix': 'Pa'},
+        'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
     }
 
     def __init__(self, dev, config):
@@ -190,18 +198,24 @@ class SealState(PatchPipetteState):
         self._initialized = False
         self._patchrec = dev.patchRecord()
         self.pressure = config['startingPressure']
-        if isinstance(config['pressureChangeByRatio'], str):
-            config['pressureChangeByRatio'] = eval(config['pressureChangeByRatio'], units.__dict__)
-        # sort pressure change rates by resistance slope thresholds
-        self._pressureChangeByRatio = sorted(config['pressureChangeByRatio'], key=lambda x: x[0])
+        self._lastPressureScan = None
+        self._pressures = [[], []]
+        self._resistances = [np.zeros(0), np.zeros(0)]
 
     def initialize(self):
         self.dev.setTipClean(False)
+        self.dev.pressureDevice.sigPressureChanged.connect(self._handlePressureChanged)
         super().initialize()
+
+    def _handlePressureChanged(self, dev, source, pressure):
+        self._pressures[0].append(ptime.time())
+        self._pressures[1].append(pressure)
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
-        self._analysis.process_test_pulses(tps)
+        analysis = self._analysis.process_test_pulses(tps)
+        self._resistances[0] = np.concatenate([self._resistances[0], analysis['time']])
+        self._resistances[1] = np.concatenate([self._resistances[1], analysis['steady_state_resistance']])
 
         tp = tps[-1]
         ssr = tp.analysis['steady_state_resistance']
@@ -282,23 +296,42 @@ class SealState(PatchPipetteState):
     def updatePressure(self):
         config = self.config
         dev = self.dev
+
+        # every few seconds, slowly scan across the pressure neighborhood to find the best pressure
+        if self._lastPressureScan is None or ptime.time() - self._lastPressureScan > self.config['pressureScanInterval']:
+            low = max(self.pressure - self.config['pressureScanRadius'], self.config['pressureLimit'])
+            high = min(self.pressure + self.config['pressureScanRadius'], 0)
+            self.dev.pressureDevice.setPressure(source='regulator', pressure=low)
+            self.processAtLeastOneTestPulse()
+            start = ptime.time()
+            self.waitFor(self.dev.pressureDevice.rampPressure(target=high, duration=self.config['pressureScanDuration']))
+            end = ptime.time()
+            self.processAtLeastOneTestPulse()
+            self.pressure = self.best_pressure(start, end)
+            self.setState(f'scanned for pressure: {self.pressure / kPa:0.1f} kPa')
+            self._lastPressureScan = end
+
         self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
-
-        if self.pressure <= config['pressureLimit']:
-            # if the pressureLimit has been achieved, cycle back to starting pressure and redo the
-            # pressure change process.
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-            self.sleep(config['resetDelay'])
-            self.pressure = config['startingPressure']
-        else:
-            # decide how much to adjust pressure based on rate of change in seal resistance
-            ratio = self._analysis.resistance_ratio()
-            for max_ratio, change in self._pressureChangeByRatio:
-                if max_ratio is None or ratio < max_ratio:
-                    self.pressure += change
-                    break
-
         dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
+
+    def best_pressure(self, start: float, end: float) -> float:
+        pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
+        pressures = pressures.time_slice(start, pressures.t_end)
+        self._pressures = [pressures.time_values.tolist(), pressures.data.tolist()]
+        pressures = pressures.time_slice(start, end)
+
+        resistances = TSeries(self._resistances[1], time_values=self._resistances[0])
+        resistances = resistances.time_slice(start, resistances.t_end)
+        self._resistances = [resistances.time_values, resistances.data]
+        resistances = resistances.time_slice(start, end)
+
+        dRss = np.diff(np.log(resistances.data))
+        closest_indices = find_closest(pressures.time_values, resistances.time_values)
+        p_like_r = pressures.data[closest_indices][1:]
+        curve = np.polynomial.Polynomial.fit(p_like_r, dRss, 2).convert().coef
+        if curve[0] >= 0:
+            return self.pressure
+        return -curve[1] / (2 * curve[0])
 
     def cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
