@@ -26,9 +26,15 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             analysis = analyzer.process_measurements(d)
             plots['Ω'].append(dict(
                 x=analysis["time"],
-                y=analysis["resistance_avg"],
+                y=analysis["baseline_avg"],
+                pen=pg.mkPen('#88F'),
+                name=None if names else 'Baseline Detect Avg',
+            ))
+            plots['Ω'].append(dict(
+                x=analysis["time"],
+                y=analysis["slow_avg"],
                 pen=pg.mkPen('b'),
-                name=None if names else 'Resistance Avg',
+                name=None if names else 'Slow Detection Avg',
             ))
             plots[''].append(dict(
                 x=analysis["time"],
@@ -49,6 +55,7 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
 
     def __init__(
             self,
+            baseline_tau: float,
             cell_threshold_fast: float,
             cell_threshold_slow: float,
             slow_detection_steps: int,
@@ -56,7 +63,7 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             break_threshold: float,
     ):
         super().__init__()
-        self._initial_resistance = None
+        self._baseline_tau = baseline_tau
         self._cell_threshold_fast = cell_threshold_fast
         self._cell_threshold_slow = cell_threshold_slow
         self._slow_detection_steps = slow_detection_steps
@@ -70,7 +77,8 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             dtype=[
                 ('time', float),
                 ('resistance', float),
-                ('resistance_avg', float),
+                ('baseline_avg', float),
+                ('slow_avg', float),
                 ('cell_detected_fast', bool),
                 ('cell_detected_slow', bool),
                 ('obstacle_detected', bool),
@@ -81,29 +89,31 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             self._measurment_count += 1
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, resistance, False, False, False, False)
+                    ret_array[i] = (start_time, resistance, resistance, resistance, False, False, False, False)
                     self._last_measurement = ret_array[i]
-                    self._initial_resistance = resistance
                     continue
                 last_measurement = self._last_measurement
             else:
                 last_measurement = ret_array[i - 1]
 
-            cell_detected_fast = resistance > self._cell_threshold_fast + self._initial_resistance
             dt = start_time - last_measurement['time']
-            resistance_avg, _ = self.exponential_decay_avg(
-                dt, last_measurement['resistance_avg'], resistance, dt * self._slow_detection_steps)
+            baseline_avg, _ = self.exponential_decay_avg(
+                dt, last_measurement['baseline_avg'], resistance, self._baseline_tau)
+            cell_detected_fast = resistance > self._cell_threshold_fast + baseline_avg
+            slow_avg, _ = self.exponential_decay_avg(
+                dt, last_measurement['slow_avg'], resistance, dt * self._slow_detection_steps)
             cell_detected_slow = (
                     self._measurment_count >= self._slow_detection_steps and
-                    resistance_avg > self._cell_threshold_slow + self._initial_resistance
+                    slow_avg > self._cell_threshold_slow + baseline_avg
             )
-            obstacle_detected = resistance > self._obstacle_threshold + self._initial_resistance
-            tip_is_broken = resistance < self._initial_resistance + self._break_threshold
+            obstacle_detected = resistance > self._obstacle_threshold + baseline_avg
+            tip_is_broken = resistance < baseline_avg + self._break_threshold
 
             ret_array[i] = (
                 start_time,
                 resistance,
-                resistance_avg,
+                baseline_avg,
+                slow_avg,
                 cell_detected_fast,
                 cell_detected_slow,
                 obstacle_detected,
@@ -186,6 +196,8 @@ class CellDetectState(PatchPipetteState):
         Time (s) to spend wiggling at each step (default 6 s)
     preTargetWiggleSpeed : float
         Speed (m/s) to move during the wiggle (default 5 µm/s)
+    baselineResistanceTau : float
+        Time constant (s) for rolling average of pipette resistance (default 20 s) from which to calculate cell detection
     fastDetectionThreshold : float
         Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
     slowDetectionThreshold : float
@@ -228,6 +240,7 @@ class CellDetectState(PatchPipetteState):
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
         'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
+        'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
@@ -251,6 +264,7 @@ class CellDetectState(PatchPipetteState):
         self.stepCount = 0
         self.advanceSteps = None
         self._analysis = CellDetectAnalysis(
+            self.config['baselineResistanceTau'],
             self.config['fastDetectionThreshold'],
             self.config['slowDetectionThreshold'],
             self.config['slowDetectionSteps'],

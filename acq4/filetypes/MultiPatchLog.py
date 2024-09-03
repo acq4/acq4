@@ -758,6 +758,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             CellDetectAnalysis,
             self._detectAnalysisItems,
             state,
+            baseline_tau=20,
             cell_threshold_fast=1e6,
             cell_threshold_slow=200e3,
             slow_detection_steps=3,
