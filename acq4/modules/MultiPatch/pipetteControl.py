@@ -403,7 +403,7 @@ class PlotWidget(Qt.QWidget):
             self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             tp.plot(self.plot, label=False)
-            self._analysisLabel = tp.label_for_plot(self.plot)
+            self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
 
         else:
             analysis_by_mode = {
