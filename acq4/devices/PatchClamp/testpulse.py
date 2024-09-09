@@ -36,7 +36,7 @@ class TestPulseThread(Thread):
             'autoBiasFollowRate': 0.5,
             'autoBiasMinCurrent': -1.5e-9,
             'autoBiasMaxCurrent': 1.5e9,
-            'autoBiasVCCarryover': 0.7,
+            'autoBiasVCCarryover': 1.0,
             'sampleRate': 500000,
             'downsample': 20,
             'vcPreDuration': 5e-3,
