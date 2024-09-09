@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from functools import reduce
 
 import gc
 import numpy as np
