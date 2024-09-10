@@ -2,9 +2,6 @@ import numpy as np
 import re
 
 import pyqtgraph as pg
-
-
-
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
 from neuroanalysis.data import TSeries
