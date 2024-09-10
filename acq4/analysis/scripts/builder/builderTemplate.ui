@@ -32,7 +32,7 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <layout class="QGridLayout" name="gridLayout_5">
+      <layout class="QGridLayout" name="imgLayout">
        <item row="0" column="0">
         <widget class="GraphicsView" name="view">
          <property name="sizePolicy">

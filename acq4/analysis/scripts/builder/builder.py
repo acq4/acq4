@@ -42,6 +42,8 @@ vb = pg.ViewBox()
 ui.view.setCentralItem(vb)
 vb.setAspectLocked(True)
 vb.invertY(False)
+hist = pg.HistogramLUTWidget(gradientPosition="left")
+ui.imgLayout.addWidget(hist, 0, 1)
 
 dataImg = pg.ImageItem()
 labelImg = pg.ImageItem()  # mode=Qt.QPainter.CompositionMode_Plus)
@@ -103,24 +105,23 @@ def keyPressEvent(ev):
         ev.ignore()
 
 
-ui.helpText.setHtml("""
-<dl>
-<dt>Mouse:</dt>
-<dd>Left-click and drag to draw</dd>
-<dd>Shift-click and drag to erase</dd>
-<dt>Right/Left:</dt>
-<dd>switch to next/prev frame</dd>
-<dt>Ctrl+Right/Left:</dt>
-<dd>switch to next/prev frame, also copying label</dd>
-<dt>Up/Down:</dt>
-<dd>increase/decrease label number</dd>
-<dt>Plus/Minus:</dt>
-<dd>increase/decrease radius</dd>
-<dt>Space:</dt>
-<dd>toggle label display</dd>
-<dt>g:</dt>
-<dd>toggle greyscale</dd>
-""")
+ui.helpText.setHtml("""<dl>
+    <dt>Mouse:</dt>
+    <dd>Left-click and drag to draw</dd>
+    <dd>Shift-click and drag to erase</dd>
+    <dt>Right/Left:</dt>
+    <dd>switch to next/prev frame</dd>
+    <dt>Ctrl+Right/Left:</dt>
+    <dd>switch to next/prev frame, also copying label</dd>
+    <dt>Up/Down:</dt>
+    <dd>increase/decrease label number</dd>
+    <dt>Plus/Minus:</dt>
+    <dd>increase/decrease radius</dd>
+    <dt>Space:</dt>
+    <dd>toggle label display</dd>
+    <dt>g:</dt>
+    <dd>toggle greyscale</dd>
+</dl>""")
 
 
 cw.keyPressEvent = keyPressEvent
@@ -235,7 +236,7 @@ def updateImage():
         img = data.view(np.ndarray)[ui.zSlider.value()].mean(axis=2)
     else:
         img = data.view(np.ndarray)[ui.zSlider.value()]
-    dataImg.setImage(img, levels=None)
+    dataImg.setImage(img, autoLevels=False)
     if labelImg.isVisible():
         updateLabelImage()
 
@@ -350,4 +351,5 @@ def updateKernel():
 
 init()
 imageChanged()
+hist.setImageItem(dataImg)
 pg.exec()
