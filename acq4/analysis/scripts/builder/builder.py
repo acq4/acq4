@@ -1,7 +1,7 @@
+import os
 import sys
 
 import numpy as np
-import os
 
 import pyqtgraph as pg
 from MetaArray import MetaArray
@@ -24,12 +24,11 @@ win.resize(800, 600)
 ui.labelTree.header().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
 
 dataFile = sys.argv[1]
+win.setWindowTitle(f"Annotations: {dataFile}")
 labelFile = f'{os.path.splitext(dataFile)[0]}.labels.ma'
 
 data = MetaArray(file=dataFile, mmap=True)
-# data must have axes (anterior, dorsal, right)
 if not os.path.exists(labelFile):
-    # todo check that shape is correct
     label = MetaArray(np.zeros(data.shape, dtype=np.uint16), info=data.infoCopy()[:3] + [{'labels': {}}])
     label.write(labelFile, mappable=True)
 label = MetaArray(file=labelFile, mmap=True, writable=True)
@@ -54,8 +53,6 @@ vb.addItem(labelImg)
 
 
 def connectSignals():
-    for r in [ui.rightRadio, ui.dorsalRadio, ui.rostralRadio]:
-        r.toggled.connect(imageChanged)
     ui.zSlider.valueChanged.connect(updateImage)
     ui.radiusSpin.valueChanged.connect(updateKernel)
     ui.greyCheck.toggled.connect(updateImage)
@@ -86,7 +83,11 @@ def keyPressEvent(ev):
         if mod & Qt.Qt.ControlModifier:
             copyLabel(-1)
         ui.zSlider.setValue(ui.zSlider.value() - 1)
-    elif k == Qt.Qt.Key_Equal:
+    elif k == Qt.Qt.Key_Up:
+        ui.labelSpin.setValue(ui.labelSpin.value() + 1)
+    elif k == Qt.Qt.Key_Down:
+        ui.labelSpin.setValue(ui.labelSpin.value() - 1)
+    elif k == Qt.Qt.Key_Plus:
         ui.radiusSpin.setValue(ui.radiusSpin.value() + 1)
     elif k == Qt.Qt.Key_Minus:
         ui.radiusSpin.setValue(ui.radiusSpin.value() - 1)
@@ -100,6 +101,26 @@ def keyPressEvent(ev):
         ui.greyCheck.toggle()
     else:
         ev.ignore()
+
+
+ui.helpText.setHtml("""
+<dl>
+<dt>Mouse:</dt>
+<dd>Left-click and drag to draw</dd>
+<dd>Shift-click and drag to erase</dd>
+<dt>Right/Left:</dt>
+<dd>switch to next/prev frame</dd>
+<dt>Ctrl+Right/Left:</dt>
+<dd>switch to next/prev frame, also copying label</dd>
+<dt>Up/Down:</dt>
+<dd>increase/decrease label number</dd>
+<dt>Plus/Minus:</dt>
+<dd>increase/decrease radius</dd>
+<dt>Space:</dt>
+<dd>toggle label display</dd>
+<dt>g:</dt>
+<dd>toggle greyscale</dd>
+""")
 
 
 cw.keyPressEvent = keyPressEvent
@@ -215,7 +236,6 @@ def updateImage():
     else:
         img = data.view(np.ndarray)[ui.zSlider.value()]
     dataImg.setImage(img, levels=None)
-    # labelImg.updateImage(label.view(np.ndarray)[ui.zSlider.value()], copy=False, white=10, black=0)
     if labelImg.isVisible():
         updateLabelImage()
 
@@ -235,7 +255,7 @@ def renderLabels(z, sl=None, overlay=False):
     val = ui.labelSlider.value() / 128.
 
     for k, v in labelInfo.items():
-        if not v['item'].checkState(0) == Qt.Qt.Checked:
+        if v['item'].checkState(0) != Qt.Qt.Checked:
             continue
         c = pg.colorTuple(v['btn'].color())
         mask = (lsl & (2 ** k) > 0)
