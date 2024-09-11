@@ -424,7 +424,7 @@ class PlotWidget(Qt.QWidget):
             self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
     def _plotTestPulse(self, tp):
-        pri: TSeries = tp['primary']
+        pri: TSeries = tp.recording['primary']
         self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
         self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
