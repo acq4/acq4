@@ -400,8 +400,10 @@ class PlotWidget(Qt.QWidget):
             self.plot.plotItem.vb.removeItem(self._analysisLabel)
             self._analysisLabel = None
         if self.mode == 'test pulse':
+            self.plot.clear()
             self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
+            self.plot.clear()
             tp.plot(self.plot, label=False)
             self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
 
