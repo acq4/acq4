@@ -245,8 +245,8 @@ class MultiPatchLogData(object):
                         # TODO only open the file once, not once per device
                         h5_file = h5py.File(h5_fn, 'r')
                         # TODO find a way to stop duplicating the "test_pulses/{dev}" part
-                        dataset = h5_file[f"test_pulses/{dev}"]
-                        stack = H5BackedTestPulseStack(dataset)
+                        data_group = h5_file[f"test_pulses/{dev}"]
+                        stack = H5BackedTestPulseStack(data_group)
                         if dev in self.fullTestPulseStacks:
                             self.fullTestPulseStacks[dev].merge(stack)
                         else:
@@ -530,6 +530,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._visual_field = self._plots_widget.addPlot()
         self._visual_field.setAspectLocked(ratio=1.0001)  # workaround weird bug with qt
         self._full_test_pulse_plot = None
+        self._test_pulse_label = None
         self._plots_by_units: dict[str, pg.PlotItem] = {}
         self._regions_by_plot: dict[pg.PlotItem, list[PipetteStateRegion]] = {}
         self._status_by_plot: dict[pg.PlotItem, list[pg.InfiniteLine]] = {}
@@ -789,25 +790,47 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def _toggleFullTestPulse(self, state: bool):
         if state:
+            # hint: to save a test pulse for use in e.g. unit tests:
+            #    import h5py
+            #    from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
+            #
+            #    widget = man.getModule("Data Manager").ui.dataViewWidget._multiPatchLogWidget
+            #    tp = widget.testPulsesAtTime(SOMETIME)['PatchPipette1']
+            #    f = h5py.File("/WHEREVER/THIS/IS/neuroanalysis/test_data/TP_NAME.h5", "a")
+            #    gr = f.create_group("test_pulses")
+            #    tps = H5BackedTestPulseStack(gr)
+            #    tps.append(tp)
+            #    f.close()
+            #    del(tps)
+            #    del(gr)
+
             self._full_test_pulse_plot = self._plots_widget.addPlot(
                 name="Test Pulse",
+                title='Test Pulse',
                 labels=dict(bottom=('time', 's'), left=('', 'V')),
                 row=1,
                 col=0,
             )
+            self._full_test_pulse_plot.addLegend()
             self._displayTestPulseDataAtTime(self._current_time)
         else:
             self._plots_widget.removeItem(self._full_test_pulse_plot)
             self._full_test_pulse_plot = None
 
     def _displayTestPulseDataAtTime(self, when):
-        if self._full_test_pulse_plot is None:
+        plot = self._full_test_pulse_plot
+        if plot is None:
             return
-        self._full_test_pulse_plot.clear()
+        plot.clear()
+        if self._test_pulse_label is not None:
+            plot.vb.removeItem(self._test_pulse_label)
+            self._test_pulse_label = None
+
         if tps := self.testPulsesAtTime(when):
             tp = list(tps.values())[0]  # todo separate plots for each device
-            self._full_test_pulse_plot.setLabel('left', tp.plot_title, tp.plot_units)
-            self._full_test_pulse_plot.plot(tp['primary'].time_values, tp['primary'].data, name="raw")
+            tp.plot(plot, label=False)
+            self._test_pulse_label = tp.label_for_plot(plot)
+            plot.setLabel('left', tp.plot_title, tp.plot_units)
 
     def testPulsesAtTime(self, when) -> dict[str, PatchClampTestPulse]:
         abs_when = when + self.startTime()

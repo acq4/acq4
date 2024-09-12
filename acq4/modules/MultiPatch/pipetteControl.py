@@ -399,44 +399,24 @@ class PlotWidget(Qt.QWidget):
         if self._analysisLabel is not None:
             self.plot.plotItem.vb.removeItem(self._analysisLabel)
             self._analysisLabel = None
-        analysis_by_mode = {
-            'ss resistance': ('steady_state_resistance', u'Ω', 'Rss'),
-            'peak resistance': ('access_resistance', u'Ω', 'Rp'),
-            'holding current': ('baseline_current', 'A', 'Ih'),
-            'holding potential': ('baseline_potential', 'V', 'Vh'),
-            'time constant': ('time_constant', 's', 'Tau'),
-            'capacitance': ('capacitance', 'F', 'Cap'),
-        }
-        abbrevs = {v[0]: v[1:] for v in analysis_by_mode.values()}
         if self.mode == 'test pulse':
+            self.plot.clear()
             self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
-            self._plotTestPulse(tp)
-            if tp.analysis is None:  # calling tp.analysis actually initiates the analysis needed for the plots
-                return
-            if tp.fit_trace_with_transient is not None:
-                trans_fit = tp.fit_trace_with_transient
-                self.plot.plot(trans_fit.time_values, trans_fit.data, pen='r')
-            if tp.main_fit_trace is not None:
-                main_fit = tp.main_fit_trace
-                self.plot.plot(main_fit.time_values, main_fit.data, pen='b')
-                asymptote = tp.analysis['fit_yoffset']
-                self.plot.addItem(pg.InfiniteLine(
-                    (0, asymptote),
-                    angle=0,
-                    pen=pg.mkPen((180, 180, 240), dash=[3, 4]),
-                ))
-                text = "Estimated:<br/>" + "<br/>".join([
-                    f"{abbrevs[key][1]}: {pg.siFormat(val, suffix=abbrevs[key][0])}"
-                    for key, val in tp.analysis.items()
-                    if val is not None and key in abbrevs
-                ])
-                self._analysisLabel = pg.LabelItem(text.strip(), color=(180, 180, 240))
-                self._analysisLabel.setParentItem(self.plot.plotItem.vb)
-                self._analysisLabel.setPos(5, 5)
+            self.plot.clear()
+            tp.plot(self.plot, label=False)
+            self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
 
         else:
-            key, units, _ = analysis_by_mode[self.mode]
+            analysis_by_mode = {
+                'ss resistance': ('steady_state_resistance', u'Ω'),
+                'peak resistance': ('access_resistance', u'Ω'),
+                'holding current': ('baseline_current', 'A'),
+                'holding potential': ('baseline_potential', 'V'),
+                'time constant': ('time_constant', 's'),
+                'capacitance': ('capacitance', 'F'),
+            }
+            key, units = analysis_by_mode[self.mode]
             self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
@@ -444,7 +424,7 @@ class PlotWidget(Qt.QWidget):
             self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
     def _plotTestPulse(self, tp):
-        pri: TSeries = tp['primary']
+        pri: TSeries = tp.recording['primary']
         self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
         self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
@@ -454,6 +434,7 @@ class PlotWidget(Qt.QWidget):
         self.mode = mode
         with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
             self.modeCombo.setText(mode)
+        self.tpLabel.setVisible(True)
         if mode in ['test pulse', 'tp analysis']:
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
@@ -463,29 +444,24 @@ class PlotWidget(Qt.QWidget):
             self.plot.enableAutoRange(True, False)
             self.plot.setYRange(6, 10)
             self.plot.setLabels(left=('Rss', u'Ω'))
-            self.tpLabel.setVisible(True)
         elif mode == 'holding current':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Ihold', u'A'))
-            self.tpLabel.setVisible(True)
         elif mode == 'holding potential':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Vhold', u'V'))
-            self.tpLabel.setVisible(True)
         elif mode == 'time constant':
             self.plot.setLogMode(y=True, x=False)
             self.plot.enableAutoRange(False, True)
             self.plot.setYRange(-5, -2)
             self.plot.setLabels(left=('Tau', u's'))
-            self.tpLabel.setVisible(True)
         elif mode == 'capacitance':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(False, True)
             self.plot.setYRange(0, 100e-12)
             self.plot.setLabels(left=('Capacitance', u'F'))
-            self.tpLabel.setVisible(True)
 
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()
