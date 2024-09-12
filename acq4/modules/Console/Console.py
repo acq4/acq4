@@ -79,8 +79,12 @@ class Console(Module):
 class ConsoleWidget(console.ConsoleWidget):
     def __init__(self, *args, **kargs):
         self.module = kargs.pop('module')
-        console.ConsoleWidget.__init__(self, *args, **kargs)
-        
+        try:
+            console.ConsoleWidget.__init__(self, *args, **kargs)
+        except TypeError:
+            kargs.pop('allowNonGuiExecution')
+            console.ConsoleWidget.__init__(self, *args, **kargs)
+
     def saveHistory(self, history):
         self.module.manager.writeConfigFile({'history': history}, self.module.configFile)
         
