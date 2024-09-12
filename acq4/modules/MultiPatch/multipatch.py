@@ -149,7 +149,7 @@ class MultiPatchWindow(Qt.QWidget):
         if xkdevname is not None:
             self.xkdev = getManager().getDevice(xkdevname)
             self.xkdev.sigStateChanged.connect(self.xkeysStateChanged)
-            self.xkdev.dev.setIntensity(255, 255)
+            self.xkdev.setIntensity(255, 255)
         else:
             self.xkdev = None
 

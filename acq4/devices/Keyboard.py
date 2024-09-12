@@ -4,6 +4,7 @@ from acq4.devices.Device import Device
 
 class Keyboard(Device):
     sigStateChanged = Qt.Signal(object, object)  # self, changes
+    sigCallbacksChanged = Qt.Signal(object)  # self
 
     def __init__(self, man, config, name):
         super().__init__(man, config, name)
@@ -22,6 +23,10 @@ class Keyboard(Device):
 
     def addKeyCallback(self, key, callback, args=()):
         self._callbacks.setdefault(key, []).append((callback, args))
+        self.sigCallbacksChanged.emit(self)
+
+    def setIntensity(self, b1, b2):
+        raise NotImplementedError()
 
     def setBacklights(self, state, **kwds):
         raise NotImplementedError()

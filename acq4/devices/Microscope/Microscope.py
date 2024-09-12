@@ -163,9 +163,7 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    def loadPreset(self):
-        btn = self.sender()
-        name = btn.objectName()
+    def loadPreset(self, name):
         conf = self.presets[name]
         for dev_name, state in conf.items():
             if dev_name == "objective":
@@ -174,6 +172,11 @@ class Microscope(Device, OptomechDevice):
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
                     dev.loadPreset(state)
+
+    def handlePresetHotkey(self, kb_dev, changes, name):
+        key, pressed = changes.get('keys', [])[0]
+        if pressed:
+            self.loadPreset(name)
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -443,14 +446,19 @@ class ScopeGUI(Qt.QWidget):
             btn = Qt.QPushButton(preset)
             btn.setObjectName(preset)
             self.ui.presetLayout.addWidget(btn)
-            btn.clicked.connect(dev.loadPreset)
+            btn.clicked.connect(self.loadPreset)
             # hotkeys
             if 'hotkey' in preset_conf:
                 hotkey = preset_conf['hotkey']
                 hotkey_dev = dev.dm.getDevice(hotkey["device"])
                 key = hotkey["key"]
-                hotkey_dev.addKeyCallback(key, dev.loadPreset, (preset,))
+                hotkey_dev.addKeyCallback(key, dev.handlePresetHotkey, (preset,))
         self.updateSpins()
+
+    def loadPreset(self):
+        btn = self.sender()
+        name = btn.objectName()
+        self.dev.loadPreset(name)
 
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio
