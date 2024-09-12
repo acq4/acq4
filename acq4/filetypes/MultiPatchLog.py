@@ -806,7 +806,7 @@ class MultiPatchLogWidget(Qt.QWidget):
 
             self._full_test_pulse_plot = self._plots_widget.addPlot(
                 name="Test Pulse",
-                title='man.getModule("Data Manager").ui.dataViewWidget._multiPatchLogWidget.testPulsesAtTime(...)',
+                title='Test Pulse',
                 labels=dict(bottom=('time', 's'), left=('', 'V')),
                 row=1,
                 col=0,
