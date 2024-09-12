@@ -64,7 +64,10 @@ class XKeys(Keyboard):
 
         self.dev.setCallback(self._stateChanged)
 
-        self.dev.setIntensity(255, 255)
+        self.setIntensity(255, 255)
+
+    def setIntensity(self, b1, b2):
+        self.dev.setIntensity(b1, b2)
 
     def setBacklights(self, state, **kwds):
         self.dev.setBacklights(state, **kwds)

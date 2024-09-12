@@ -129,7 +129,7 @@ class PatchClamp(Device):
             newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
             self._testPulseHistory = newTPH
         analysis = result.analysis
-        self._testPulseHistory[self._testPulseHistorySize]['event_time'] = result.start_time
+        self._testPulseHistory[self._testPulseHistorySize]['event_time'] = result.recording.start_time
         for k in analysis:
             val = analysis[k]
             if val is None:
