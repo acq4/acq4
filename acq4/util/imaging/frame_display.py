@@ -86,12 +86,12 @@ class FrameDisplay(Qt.QObject):
     def newFrame(self, frame):
         # integrate new frame into background
         self.bgCtrl.includeNewFrame(frame)
-        # possibly draw the frame and update auto gain (rate limited)
-        self.checkForDraw(frame)
+        # store the frame for the next draw
+        self.nextFrame = frame
         # annotate frame with background and contrast info
         frame.addInfo(backgroundInfo=self.bgCtrl.deferredSave(), contrastInfo=self.contrastCtrl.saveState())
 
-    def checkForDraw(self, frame=None):
+    def checkForDraw(self):
         if self.hasQuit:
             return
         try:
@@ -99,9 +99,11 @@ class FrameDisplay(Qt.QObject):
             t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
                 return
+            frame = self.nextFrame
             # if there is no new frame and no controls have changed, just exit
             if frame is None and not self._updateFrame:
                 return
+            self.nextFrame = None
             self._updateFrame = False
 
             prof = Profiler()
