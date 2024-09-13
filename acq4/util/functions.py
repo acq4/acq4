@@ -2056,7 +2056,7 @@ def suggestDType(x, singleValue=False):
         return x.dtype
     elif isinstance(x, float):
         return float
-    elif isinstance(x, int) or isinstance(x, np.compat.long):
+    elif isinstance(x, int) or isinstance(x, np.integer):
         return int
     #elif isinstance(x, str):  ## don't try to guess correct string length; use object instead.
         #return '<U%d' % len(x)
