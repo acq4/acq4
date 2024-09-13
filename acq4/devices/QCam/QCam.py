@@ -1,13 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 import time
 
 from acq4.devices.Camera import Camera
 from acq4.drivers.QImaging.QImagingDriver import QCamDriverClass
-from acq4.util.Mutex import Mutex
 
 
 class QCam(Camera):

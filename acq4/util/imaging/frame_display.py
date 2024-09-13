@@ -134,9 +134,9 @@ class FrameDisplay(Qt.QObject):
     def _drawFrameInGui(self, data):
         # We will now draw a new frame (even if the frame is unchanged)
         t = ptime.time()
-        if (self.lastDrawTime is not None) and (t - self.lastDrawTime < self._sPerFrame):
-            return
         if self.lastDrawTime is not None:
+            if t - self.lastDrawTime < self._sPerFrame:
+                return
             fps = 1.0 / (t - self.lastDrawTime)
             self.displayFps = fps
         self.lastDrawTime = t

@@ -140,7 +140,7 @@ class ImagingCtrl(Qt.QWidget):
 
         self.recordThread.newFrame(frame)
         if self.ui.recordStackBtn.isChecked():
-            self.ui.stackSizeLabel.setText("%d frames" % self.recordThread.stackSize)
+            self.ui.stackSizeLabel.setText(f"{self.recordThread.stackSize:d} frames")
 
         self.frameDisplay.newFrame(frame)
         self.sigUpdateUi.emit()

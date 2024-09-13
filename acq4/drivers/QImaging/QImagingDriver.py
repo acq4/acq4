@@ -748,7 +748,6 @@ class QCameraClass:
         #s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
         imForm = self.getParam('qprmImageFormat')
         #print 'mkFrame: s', s
-        
 
         if imForm in ['qfmtMono16']:
             s = self.getImageSize() ## ImageSize returns the size in bytes
@@ -771,17 +770,14 @@ class QCameraClass:
         array = array.transpose()
         #print 'array.size', array.size, 'array.shape', array.shape
         frame.pBuffer = array.ctypes.data ###sets the frame buffer pointer to point to the array? So camera writes data directly into the array?
-        #for x in array:
-            #x = 1000
         #print 'mkFrame: frame.shape', frame.shape
-        
-        
-        return (frame, array)
+
+        return frame, array
     
     def grabFrame(self):
         s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2]
         #s = lib.GetInfo(handle, lib.qinfImageSize)[2]
-        (f, a) = self.mkFrame()
+        f, a = self.mkFrame()
         self.call(lib.GrabFrame, self.handle, byref(f))
         #w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
         #frame.shape = (s/w, w)
