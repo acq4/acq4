@@ -24,14 +24,12 @@ class ImageFile(FileType):
         Return the file name written (this allows the function to modify the requested file name)
         """
         fileName = cls.addExtension(fileName)
-        ext = os.path.splitext(fileName)[1].lower()[1:]
-        
         img = Image.fromarray(data)
         img.save(os.path.join(dirHandle.name(), fileName))
-        
+
+        # ext = os.path.splitext(fileName)[1].lower()[1:]
         #if ext in ['tif', 'tiff']:
-            #d = data.transpose()
-            #tiff = libtiff.TIFFimage(d, description='')
+            #tiff = libtiff.TIFFimage(data, description='')
             #tiff.write_file(os.path.join(dirHandle.name(), fileName), compression='none')
         #else:
             #ims = data.tostring()
@@ -48,29 +46,19 @@ class ImageFile(FileType):
         if arr.ndim == 0:
             raise ValueError("Image has no data. Either 1) this is not a valid image or 2) PIL does not support this image type.")
 
-        transp = list(range(arr.ndim))    ## switch axis order y,x to x,y
         if arr.ndim == 2:
-            transp[0] = 1
-            transp[1] = 0
             axisHint = ['x', 'y']
         elif arr.ndim == 3:
             if len(img.getbands()) > 1:
-                transp[0] = 1
-                transp[1] = 0
                 axisHint = ['x', 'y']
             else:
-                transp[1] = 2
-                transp[2] = 1
                 axisHint = ['t', 'x', 'y']
         elif arr.ndim == 4:
-            transp[1] = 2
-            transp[2] = 1
             axisHint = ['t', 'x', 'y']
         else:
             raise ValueError(f"Bad image size: {arr.ndim}")
-        arr = arr.transpose(tuple(transp))
         axisHint.append(img.getbands())
 
-        arr = Array(arr) ## allow addition of new attributes
+        arr = Array(arr)  # allow addition of new attributes
         arr.axisHint = arr
         return arr
