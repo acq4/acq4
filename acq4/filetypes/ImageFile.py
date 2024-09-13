@@ -1,22 +1,22 @@
 import os
 
-from MetaArray import MetaArray as MA
 from PIL import Image
 from numpy import array, ndarray
 
+from MetaArray import MetaArray as MA
 from .FileType import FileType
 
 
-class Array(ndarray):  ## just allows us to add some dynamic attributes
+class Array(ndarray):  # just allows us to add some dynamic attributes
     def __new__(cls, arr):
         return arr.view(cls)
 
 
 class ImageFile(FileType):
     
-    extensions = ['.png', '.tif', '.jpg']   ## list of extensions handled by this class
-    dataTypes = [MA, ndarray]    ## list of python types handled by this class
-    priority = 50      ## medium priority; MetaArray should be used for writing arrays if possible;
+    extensions = ['.png', '.tif', '.jpg']  # list of extensions handled by this class
+    dataTypes = [MA, ndarray]  # list of python types handled by this class
+    priority = 50  # medium priority; MetaArray should be used for writing arrays if possible;
     
     @classmethod
     def write(cls, data, dirHandle, fileName, **args):
@@ -28,14 +28,15 @@ class ImageFile(FileType):
         img.save(os.path.join(dirHandle.name(), fileName))
 
         # ext = os.path.splitext(fileName)[1].lower()[1:]
-        #if ext in ['tif', 'tiff']:
-            #tiff = libtiff.TIFFimage(data, description='')
-            #tiff.write_file(os.path.join(dirHandle.name(), fileName), compression='none')
-        #else:
-            #ims = data.tostring()
-            #img = Qt.QImage(buffer(ims), data.shape[1], data.shape[0], Qt.QImage.Format_ARGB32)
-            #w = Qt.QImageWriter(os.path.join(dirHandle.name(), fileName), ext)
-            #w.write(img)
+        # if ext in ['tif', 'tiff']:
+        #     tiff = libtiff.TIFFimage(data, description='')
+        #     tiff.write_file(os.path.join(dirHandle.name(), fileName), compression='none')
+        # else:
+        #     ims = data.tostring()
+        #     img = Qt.QImage(buffer(ims), data.shape[1], data.shape[0], Qt.QImage.Format_ARGB32)
+        #     w = Qt.QImageWriter(os.path.join(dirHandle.name(), fileName), ext)
+        #     w.write(img)
+
         return fileName
         
     @classmethod
@@ -44,7 +45,8 @@ class ImageFile(FileType):
         img = Image.open(fileHandle.name())
         arr = array(img)
         if arr.ndim == 0:
-            raise ValueError("Image has no data. Either 1) this is not a valid image or 2) PIL does not support this image type.")
+            raise ValueError(
+                "Image has no data. Either 1) this is not a valid image or 2) PIL does not support this image type.")
 
         if arr.ndim == 2:
             axisHint = ['x', 'y']
