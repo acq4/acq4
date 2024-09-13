@@ -767,7 +767,6 @@ class QCameraClass:
         #print 'size:', s, "height:", self.getParam('regionH'), 'width:', self.getParam('regionW'), 'binning:', self.getParam('binning')[0]
         #array.shape=(self.getParam('regionH'), self.getParam('regionW') )
         array.shape = (self.getParam('regionH')/self.getParam('binning')[0], -1)
-        array = array.transpose()
         #print 'array.size', array.size, 'array.shape', array.shape
         frame.pBuffer = array.ctypes.data ###sets the frame buffer pointer to point to the array? So camera writes data directly into the array?
         #print 'mkFrame: frame.shape', frame.shape

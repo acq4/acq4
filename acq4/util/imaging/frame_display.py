@@ -30,7 +30,7 @@ class FrameDisplay(Qt.QObject):
         self._maxFPS = maxFPS
         self._sPerFrame = 1.0 / maxFPS
         self._msPerFrame = int(self._sPerFrame * 1000)
-        self._imageItem = pg.ImageItem()  # Implicitly depends on global setConfigOption state
+        self._imageItem = pg.ImageItem(axisOrder='row-major')
         self._imageItem.setAutoDownsample(True)
         self.contrastCtrl = self.contrastClass()
         self.contrastCtrl.setImageItem(self._imageItem)

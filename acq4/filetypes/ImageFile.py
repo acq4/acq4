@@ -26,7 +26,7 @@ class ImageFile(FileType):
         fileName = cls.addExtension(fileName)
         ext = os.path.splitext(fileName)[1].lower()[1:]
         
-        img = Image.fromarray(data.transpose())
+        img = Image.fromarray(data)
         img.save(os.path.join(dirHandle.name(), fileName))
         
         #if ext in ['tif', 'tiff']:

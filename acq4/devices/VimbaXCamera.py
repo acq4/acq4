@@ -189,11 +189,11 @@ class VimbaXCamera(Camera):
         with self._lock:
             with contextlib.suppress(queue.Empty):
                 while f := self._frameQueue.get_nowait():
-                    arr = f.as_numpy_ndarray()
+                    arr = f.as_numpy_ndarray()[:, :, 0]
                     frames.append({
                         'id': f.get_id(),
                         # MC: color data will blow this up
-                        'data': arr.reshape(arr.shape[:-1]).T,
+                        'data': arr,
                         'time': f.get_timestamp(),
                     })
                     with contextlib.suppress(ValueError):
@@ -212,7 +212,7 @@ class VimbaXCamera(Camera):
 
     def _acquireFrames(self, n) -> np.ndarray:
         def reshape(f):
-            arr = f.as_numpy_ndarray()[:, :, 0].T
+            arr = f.as_numpy_ndarray()[:, :, 0]
             return arr[np.newaxis, ...]
         with self._lock:
             # MC: color data will be lost here!
