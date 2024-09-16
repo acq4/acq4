@@ -108,7 +108,6 @@ class FrameDisplay(Qt.QObject):
             self._updateFrame = False
 
             prof = Profiler('FrameDisplay.checkForDraw')
-            prof(f"fps: {1 / (t - (self.lastDrawTime or 0))}")
 
             # If there are no new frames and no previous frames, then there is nothing to draw.
             if self.currentFrame is None and frame is None:
