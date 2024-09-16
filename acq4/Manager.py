@@ -139,6 +139,8 @@ class Manager(Qt.QObject):
         else:
             opts = []
 
+        pg.setConfigOption('imageAxisOrder', 'row-major')
+        pg.setConfigOption('useNumba', True)
         ## Handle command line options
         configFile = None
         loadModules = []
