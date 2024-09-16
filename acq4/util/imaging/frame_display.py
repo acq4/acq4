@@ -82,12 +82,15 @@ class FrameDisplay(Qt.QObject):
         return self.currentFrame.getImage()
 
     def newFrame(self, frame):
+        prof = Profiler('FrameDisplay.newFrame')
         # integrate new frame into background
         self.bgCtrl.includeNewFrame(frame)
+        prof('bgCtrl.includeNewFrame')
         # store the frame for the next draw
         self.nextFrame = frame
         # annotate frame with background and contrast info
         frame.addInfo(backgroundInfo=self.bgCtrl.deferredSave(), contrastInfo=self.contrastCtrl.saveState())
+        prof.finish()
 
     def checkForDraw(self):
         if self.hasQuit:
@@ -104,8 +107,8 @@ class FrameDisplay(Qt.QObject):
             self.nextFrame = None
             self._updateFrame = False
 
-            prof = Profiler()
-            prof()
+            prof = Profiler('FrameDisplay.checkForDraw')
+            prof(f"fps: {1 / (t - (self.lastDrawTime or 0))}")
 
             # If there are no new frames and no previous frames, then there is nothing to draw.
             if self.currentFrame is None and frame is None:
@@ -134,6 +137,7 @@ class FrameDisplay(Qt.QObject):
     def _drawFrameInGui(self, data):
         # We will now draw a new frame (even if the frame is unchanged)
         t = ptime.time()
+        prof = Profiler('FrameDisplay._drawFrameInGui')
         if self.lastDrawTime is not None:
             if t - self.lastDrawTime < self._sPerFrame:
                 return
@@ -143,9 +147,10 @@ class FrameDisplay(Qt.QObject):
         if shouldUseCuda():
             self._imageItem.updateImage(cupy.asarray(data))
         else:
-            self._imageItem.updateImage(data.copy())
-
+            self._imageItem.updateImage(data)
+        prof()
         self.imageUpdated.emit(self.currentFrame)
+        prof.finish()
 
     def quit(self):
         self._imageItem = None

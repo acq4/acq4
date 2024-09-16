@@ -1,6 +1,7 @@
 import numpy as np
 
 from acq4.util import Qt
+from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate(".contrast_ctrl_template")
 
@@ -123,6 +124,7 @@ class ContrastCtrl(Qt.QWidget):
 
         if not self.useAutoGain:
             return
+        prof = Profiler('ContrastCtrl.updateWithImage')
         cw = self.centerAutoGainWeight
         (w, h) = data.shape
         center = data[w // 2 - w // 6 : w // 2 + w // 6, h // 2 - h // 6 : h // 2 + h // 6]
@@ -133,6 +135,7 @@ class ContrastCtrl(Qt.QWidget):
             sl = [slice(None, None)] * data.ndim
             sl[ax] = slice(None, None, 2)
             reduced = reduced[tuple(sl)]
+        prof("image size reduced")
 
         minVal = reduced.min() * (1.0 - cw) + center.min() * cw
         maxVal = reduced.max() * (1.0 - cw) + center.max() * cw
@@ -145,6 +148,7 @@ class ContrastCtrl(Qt.QWidget):
             minVal = valid.min() * (1.0 - cw) + center.min() * cw
             maxVal = valid.max() * (1.0 - cw) + center.max() * cw
 
+        prof("min/max found")
         # Smooth min/max range to avoid noise
         if self.lastMinMax is None:
             minVal = minVal
@@ -163,7 +167,9 @@ class ContrastCtrl(Qt.QWidget):
 
         self.ignoreLevelChange = True
         self._cached_state = None
+        prof("levels computed")
         self.sigAutoGainChanged.emit()  # ask GUI to update for new levels
+        prof.finish()
 
     def _updateGuiAutoGainLevels(self):
         # Called by signal when processing a new frame causes auto gain levels to change
