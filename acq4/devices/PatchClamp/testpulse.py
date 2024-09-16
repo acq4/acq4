@@ -259,7 +259,7 @@ class TestPulseThread(Thread):
 
     def updateAutoBias(self, tp: PatchClampTestPulse):
         analysis = tp.analysis
-        mode = tp.clamp_mode
+        mode = tp.recording.clamp_mode
         if mode.upper() == 'VC':
             # set ic holding from baseline current, multiplied by some factor for a little more added safety.
             self._clampDev.setHolding('IC', analysis['baseline_current'] * self._params['autoBiasVCCarryover'])

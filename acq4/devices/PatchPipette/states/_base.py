@@ -240,7 +240,7 @@ class SteadyStateAnalysisBase(object):
 
     def process_test_pulses(self, tps: list[PatchClampTestPulse]) -> np.ndarray:
         return self.process_measurements(
-            np.array([(tp.start_time, tp.analysis['steady_state_resistance']) for tp in tps]))
+            np.array([(tp.recording.start_time, tp.analysis['steady_state_resistance']) for tp in tps]))
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
