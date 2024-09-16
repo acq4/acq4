@@ -2079,7 +2079,7 @@ def isFloat(x):
     return isinstance(x, float) or isinstance(x, np.floating)
 
 def isInt(x):
-    for typ in [int, np.compat.long, np.integer]:
+    for typ in [int, np.integer]:
         if isinstance(x, typ):
             return True
     return False
