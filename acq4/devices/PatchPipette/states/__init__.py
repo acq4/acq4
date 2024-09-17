@@ -11,7 +11,7 @@ from .fouled import FouledState
 from .move_nucleus_to_home import MoveNucleusToHomeState
 from .nucleus_collect import NucleusCollectState
 from .reseal import ResealAnalysis, ResealState
-from .seal import SealState
+from .seal import SealAnalysis, SealState
 from .whole_cell import WholeCellState
 from .out import OutState
 
@@ -26,6 +26,7 @@ __all__ = [
     'BathState',
     'CellDetectAnalysis',
     'CellDetectState',
+    'SealAnalysis',
     'SealState',
     'CellAttachedState',
     'BreakInState',

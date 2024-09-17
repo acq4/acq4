@@ -1,18 +1,61 @@
 from __future__ import annotations
 
+from threading import Lock
+
+from typing import Any
+
 import contextlib
 import numpy as np
 
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
+from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
 class CellDetectAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine cell detection behavior."""
+    @classmethod
+    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+        plots = {'Ω': [], '': []}
+        names = False
+        for d in data:
+            analyzer = cls(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(dict(
+                x=analysis["time"],
+                y=analysis["baseline_avg"],
+                pen=pg.mkPen('#88F'),
+                name=None if names else 'Baseline Detect Avg',
+            ))
+            plots['Ω'].append(dict(
+                x=analysis["time"],
+                y=analysis["slow_avg"],
+                pen=pg.mkPen('b'),
+                name=None if names else 'Slow Detection Avg',
+            ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["obstacle_detected"]),
+                pen=pg.mkPen('r'),
+                symbol='x',
+                name=None if names else 'Obstacle Detected',
+            ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["cell_detected_fast"] | analysis["cell_detected_slow"]),
+                pen=pg.mkPen('g'),
+                symbol='o',
+                name=None if names else 'Cell Detected',
+            ))
+            names = True
+        return plots
+
     def __init__(
             self,
+            baseline_tau: float,
             cell_threshold_fast: float,
             cell_threshold_slow: float,
             slow_detection_steps: int,
@@ -20,7 +63,7 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             break_threshold: float,
     ):
         super().__init__()
-        self._initial_resistance = None
+        self._baseline_tau = baseline_tau
         self._cell_threshold_fast = cell_threshold_fast
         self._cell_threshold_slow = cell_threshold_slow
         self._slow_detection_steps = slow_detection_steps
@@ -34,7 +77,8 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             dtype=[
                 ('time', float),
                 ('resistance', float),
-                ('resistance_avg', float),
+                ('baseline_avg', float),
+                ('slow_avg', float),
                 ('cell_detected_fast', bool),
                 ('cell_detected_slow', bool),
                 ('obstacle_detected', bool),
@@ -45,29 +89,31 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             self._measurment_count += 1
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, resistance, False, False, False, False)
+                    ret_array[i] = (start_time, resistance, resistance, resistance, False, False, False, False)
                     self._last_measurement = ret_array[i]
-                    self._initial_resistance = resistance
                     continue
                 last_measurement = self._last_measurement
             else:
                 last_measurement = ret_array[i - 1]
 
-            cell_detected_fast = resistance > self._cell_threshold_fast + self._initial_resistance
             dt = start_time - last_measurement['time']
-            resistance_avg, _ = self._exponential_decay_avg(
-                dt, last_measurement['resistance_avg'], resistance, dt * self._slow_detection_steps)
+            baseline_avg, _ = self.exponential_decay_avg(
+                dt, last_measurement['baseline_avg'], resistance, self._baseline_tau)
+            cell_detected_fast = resistance > self._cell_threshold_fast + baseline_avg
+            slow_avg, _ = self.exponential_decay_avg(
+                dt, last_measurement['slow_avg'], resistance, dt * self._slow_detection_steps)
             cell_detected_slow = (
                     self._measurment_count >= self._slow_detection_steps and
-                    resistance_avg > self._cell_threshold_slow + self._initial_resistance
+                    slow_avg > self._cell_threshold_slow + baseline_avg
             )
-            obstacle_detected = resistance > self._obstacle_threshold + self._initial_resistance
-            tip_is_broken = resistance < self._initial_resistance + self._break_threshold
+            obstacle_detected = resistance > self._obstacle_threshold + baseline_avg
+            tip_is_broken = resistance < baseline_avg + self._break_threshold
 
             ret_array[i] = (
                 start_time,
                 resistance,
-                resistance_avg,
+                baseline_avg,
+                slow_avg,
                 cell_detected_fast,
                 cell_detected_slow,
                 obstacle_detected,
@@ -150,6 +196,8 @@ class CellDetectState(PatchPipetteState):
         Time (s) to spend wiggling at each step (default 6 s)
     preTargetWiggleSpeed : float
         Speed (m/s) to move during the wiggle (default 5 µm/s)
+    baselineResistanceTau : float
+        Time constant (s) for rolling average of pipette resistance (default 20 s) from which to calculate cell detection
     fastDetectionThreshold : float
         Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
     slowDetectionThreshold : float
@@ -192,6 +240,7 @@ class CellDetectState(PatchPipetteState):
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
         'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
+        'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
@@ -215,6 +264,7 @@ class CellDetectState(PatchPipetteState):
         self.stepCount = 0
         self.advanceSteps = None
         self._analysis = CellDetectAnalysis(
+            self.config['baselineResistanceTau'],
             self.config['fastDetectionThreshold'],
             self.config['slowDetectionThreshold'],
             self.config['slowDetectionSteps'],
@@ -224,6 +274,7 @@ class CellDetectState(PatchPipetteState):
         self._lastTestPulse = None
         self._startTime = None
         self.direction = self._calc_direction()
+        self._wiggleLock = Lock()
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -315,7 +366,6 @@ class CellDetectState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             if self._analysis.obstacle_detected():
                 move.stop("Obstacle detected while sidestepping")
-                move.wait()
                 self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
                 return self.avoidObstacle(already_retracted=True)
             self.checkStop()
@@ -327,10 +377,10 @@ class CellDetectState(PatchPipetteState):
         return self.config['obstacleDetection'] and not self.closeEnoughToTargetToDetectCell() and self._analysis.obstacle_detected()
 
     def processAtLeastOneTestPulse(self):
-        while not (tps := self.getTestPulses(timeout=0.2)):
-            self.checkStop()
+        tps = super().processAtLeastOneTestPulse()
         self._analysis.process_test_pulses(tps)
         self._lastTestPulse = tps[-1]
+        return tps
 
     def weTookTooLong(self):
         if self._startTime is None:
@@ -338,7 +388,7 @@ class CellDetectState(PatchPipetteState):
         return self.config['cellDetectTimeout'] is not None and ptime.time() - self._startTime > self.config['cellDetectTimeout']
 
     def targetCellFound(self) -> str | bool:
-        if self.closeEnoughToTargetToDetectCell():
+        if self.closeEnoughToTargetToDetectCell() and not self._wiggleLock.locked():
             if self._analysis.cell_detected_fast():
                 return 'fast'
             if self._analysis.cell_detected_slow():
@@ -382,17 +432,6 @@ class CellDetectState(PatchPipetteState):
             raise ValueError(f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
         return direction / np.linalg.norm(direction)
 
-    def firstSurfacePosition(self):
-        """Return the first position along the pipette search path which could be below the surface."""
-        pip = self.dev.pipetteDevice
-        pos = np.array(pip.globalPosition())
-        surface = pip.scopeDevice().getSurfaceDepth()
-        angle = pip.pitchRadians()
-        dz = pos[2] - surface
-        if dz <= 0:
-            return pos
-        return pos + self.direction * (dz / np.cos(angle))
-
     def fastTravelEndpoint(self):
         """Return the last position along the pipette search path to be traveled at full speed."""
         pip = self.dev.pipetteDevice
@@ -433,7 +472,10 @@ class CellDetectState(PatchPipetteState):
                 endpoint = targetEndpt
 
         if endpoint is None:
-            raise Exception("Cell detect state requires one of maxAdvanceDistance, maxAdvanceDepthBelowSurface, or maxAdvanceDistancePastTarget.")
+            raise ValueError(
+                "Cell detect state requires one of maxAdvanceDistance, maxAdvanceDepthBelowSurface, or"
+                " maxAdvanceDistancePastTarget."
+            )
 
         return endpoint
 
@@ -444,7 +486,7 @@ class CellDetectState(PatchPipetteState):
         self.setState("continuous pipette advance")
         if self.aboveSurface():
             speed = self.config['aboveSurfaceSpeed']
-            surface = self.firstSurfacePosition()
+            surface = self.surfaceIntersectionPosition(self.direction)
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
@@ -461,15 +503,17 @@ class CellDetectState(PatchPipetteState):
                 self.setState("pre-target wiggle")
                 retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
-                self.waitFor(
-                    self.dev.pipetteDevice.wiggle(
-                        speed=self.config['preTargetWiggleSpeed'],
-                        radius=self.config['preTargetWiggleRadius'],
-                        repetitions=1,
-                        duration=self.config['preTargetWiggleDuration'],
-                        pipette_direction=self.direction,
+                with self._wiggleLock:
+                    self.waitFor(
+                        self.dev.pipetteDevice.wiggle(
+                            speed=self.config['preTargetWiggleSpeed'],
+                            radius=self.config['preTargetWiggleRadius'],
+                            repetitions=1,
+                            duration=self.config['preTargetWiggleDuration'],
+                            pipette_direction=self.direction,
+                        ),
+                        timeout=None,
                     )
-                )
                 step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
                 _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
         _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)

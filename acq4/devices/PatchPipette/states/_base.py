@@ -8,6 +8,7 @@ import threading
 from copy import deepcopy
 from typing import Any, Optional
 
+from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
@@ -176,6 +177,12 @@ class PatchPipetteState(Future):
         """
         self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
 
+    def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
+        """Wait for at least one test pulse to be processed."""
+        while not (tps := self.getTestPulses(timeout=0.2)):
+            self.checkStop()
+        return tps
+
     def testPulseFinished(self, clamp, result):
         self.testPulseResults.put(result)
 
@@ -233,8 +240,25 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
+    def surfaceIntersectionPosition(self, direction):
+        """Return the intersection of the direction unit vector with the surface."""
+        pip = self.dev.pipetteDevice
+        pos = np.array(pip.globalPosition())
+        surface = pip.scopeDevice().getSurfaceDepth()
+        return pos - direction * (surface - pos[2])
+
 
 class SteadyStateAnalysisBase(object):
+    @classmethod
+    def plot_items(cls, *args, **kwargs) -> dict[str, iter[Qt.QGraphicsItem]]:
+        """Returns data-independent plot items grouped by plot units."""
+        return {}
+
+    @classmethod
+    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+        """Given a list of datasets and init args, return the plotting arguments grouped by plot units."""
+        return {}
+
     def __init__(self, **kwds):
         self._last_measurement: Optional[np.void] = None
 
@@ -246,9 +270,9 @@ class SteadyStateAnalysisBase(object):
         raise NotImplementedError()
 
     @staticmethod
-    def _exponential_decay_avg(dt, prev_avg, resistance, tau):
+    def exponential_decay_avg(dt, prev_avg, value, tau):
         alpha = 1 - np.exp(-dt / tau)
-        avg = prev_avg * (1 - alpha) + resistance * alpha
+        avg = prev_avg * (1 - alpha) + value * alpha
         ratio = np.log10(avg / prev_avg)
         return avg, ratio
 

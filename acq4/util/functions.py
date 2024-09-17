@@ -1,31 +1,23 @@
-# -*- coding: utf-8 -*-
 """
 functions.py - Miscellaneous homeless functions
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
 
 Most Interesting Contents:
 siFormat / siEval  - functions for dealing with numbers in SI notation
 downsample - multidimensional downsampling by mean
 rmsMatch / fastRmsMatch - recursive template matching
 makeDispMap / matchDistortImg - for measuring and correcting motion/distortion between two images
-
-
 """
-from __future__ import print_function
+from __future__ import annotations
 
 import math
-import re
-import time
-
 import numpy as np
 import numpy.ma
 import scipy.ndimage
 import scipy.optimize
 import scipy.signal
+import time
 from scipy import stats, signal
 from scipy.signal import deconvolve
-
 
 from MetaArray import MetaArray
 from acq4.util import Qt
@@ -2313,16 +2305,8 @@ def getSpikeTemplate(ivc, traces):
     return traces[thrIndex][['Time', 'Inp0'], start:stop]
 
 
-
-
-
-
-
-
-
-
-if __name__ == '__main__':
-    pass
-    
-    
-    
+def plottable_booleans(data) -> np.ndarray:
+    data = data.astype(float)
+    data[data < 1] = np.nan
+    data -= 1
+    return data

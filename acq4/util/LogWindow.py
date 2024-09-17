@@ -312,7 +312,7 @@ class LogWindow(Qt.QMainWindow):
             if dh.exists("log.txt"):
                 self.logFile = dh["log.txt"]
                 try:
-                    tempCount = max(e["id"] for e in configfile.readConfigFile(self.logFile.name()).values())
+                    tempCount = max(e["id"] for e in configfile.readConfigFile(self.logFile.name()).values()) + 1
                 except IndexError:
                     tempCount = 0
                 newTemp = {}
