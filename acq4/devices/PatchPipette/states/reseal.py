@@ -3,13 +3,42 @@ from __future__ import annotations
 import contextlib
 import numpy as np
 
+import pyqtgraph as pg
 from acq4.util import ptime
+from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
 class ResealAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine reseal behavior."""
+
+    @classmethod
+    def plot_items(cls, *args, **kwargs):
+        representative = cls(*args, **kwargs)
+        return {
+            '': [
+                pg.InfiniteLine(movable=False, pos=representative._stretch_threshold, angle=0, pen=pg.mkPen('w')),
+                pg.InfiniteLine(movable=False, pos=representative._tear_threshold, angle=0, pen=pg.mkPen('w'))
+            ]
+        }
+
+    @classmethod
+    def plots_for_data(cls, data, *args, **kwargs):
+        plots = {'Ω': [], '': []}
+        names = False
+        for d in data:
+            analyzer = ResealAnalysis(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(dict(x=analysis["time"], y=analysis["detect_avg"], pen=pg.mkPen('b'), name=None if names else 'Detect Avg'))
+            plots['Ω'].append(dict(x=analysis["time"], y=analysis["repair_avg"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Avg'))
+            plots[''].append(dict(x=analysis["time"], y=analysis["detect_ratio"], pen=pg.mkPen('b'), name=None if names else 'Detect Ratio'))
+            plots[''].append(dict(x=analysis["time"], y=analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Ratio'))
+            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x', name=None if names else 'Stretching'))
+            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o', name=None if names else 'Tearing'))
+            names = True
+        return plots
+
     def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
         super().__init__()
         self._stretch_threshold = stretch_threshold
@@ -52,9 +81,9 @@ class ResealAnalysis(SteadyStateAnalysisBase):
 
             dt = start_time - last_measurement['time']
 
-            detect_avg, detection_ratio = self._exponential_decay_avg(
+            detect_avg, detection_ratio = self.exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau)
-            repair_avg, repair_ratio = self._exponential_decay_avg(
+            repair_avg, repair_ratio = self.exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau)
 
             is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
@@ -123,9 +152,11 @@ class ResealState(PatchPipetteState):
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
     resealSuccessResistance : float
-        Resistance (Ohms) above which the reseal is considered successful (default is 1e9)
+        Resistance (Ω) above which the reseal is considered successful (default is 500MΩ)
     resealSuccessDuration : float
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
+    postSuccessRetractionSpeed : float
+        Speed in m/s to move pipette after successful reseal (default is 6 µm / s)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
     slurpRetractionSpeed : float
@@ -160,8 +191,9 @@ class ResealState(PatchPipetteState):
         'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
-        'resealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
+        'resealSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
+        'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
@@ -188,7 +220,6 @@ class ResealState(PatchPipetteState):
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
         self.setState("nuzzling")
-        # TODO move back a little?
 
         @contextlib.contextmanager
         def pressure_ramp():
@@ -205,7 +236,8 @@ class ResealState(PatchPipetteState):
                 duration=self.config['nuzzleDuration'],
                 repetitions=self.config['nuzzleRepetitions'],
                 extra=pressure_ramp,
-            )
+            ),
+            timeout=None,
         )
 
     @future_wrap
@@ -239,13 +271,9 @@ class ResealState(PatchPipetteState):
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
-        while True:
-            self.checkStop()
-            tps = self.getTestPulses(timeout=0.2)
-            if len(tps) > 0:
-                break
-            self.sleep(0.2)
+        tps = super().processAtLeastOneTestPulse()
         self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
+        return tps
 
     def run(self):
         config = self.config
@@ -293,8 +321,12 @@ class ResealState(PatchPipetteState):
 
             self.sleep(0.2)
 
-        self.setState("slurping in nucleus")
+        self.setState("reseal deemed successful")
         self.cleanup()
+        self._moveFuture = self._retractFromTissue()
+        self.waitFor(self._moveFuture)
+
+        self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
         self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
         self.sleep(config['slurpDuration'])
@@ -302,6 +334,13 @@ class ResealState(PatchPipetteState):
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
         self.sleep(np.inf)
+
+    def _retractFromTissue(self):
+        # move out of the tissue more quickly
+        dev = self.dev
+        direction = dev.pipetteDevice.globalDirection()
+        return dev.pipetteDevice._moveToGlobal(
+            self.surfaceIntersectionPosition(direction), speed=self.config['postSuccessRetractionSpeed'])
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
