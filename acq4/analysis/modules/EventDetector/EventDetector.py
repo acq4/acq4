@@ -1,18 +1,15 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-from pyqtgraph.flowchart import Flowchart
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
 import os
-import numpy as np
 from collections import OrderedDict
-import acq4.util.debug as debug
-import acq4.util.FileLoader as FileLoader
-import acq4.util.DatabaseGui as DatabaseGui
-import pyqtgraph as pg
-from acq4.util.HelpfulException import HelpfulException
 
+import numpy as np
+
+import acq4.util.DatabaseGui as DatabaseGui
+import acq4.util.debug as debug
+import pyqtgraph as pg
+from acq4.util import Qt
+from acq4.util.AnalysisModule import AnalysisModule
+from acq4.util.HelpfulException import HelpfulException
+from pyqtgraph.flowchart import Flowchart
 
 
 class EventDetector(AnalysisModule):
@@ -35,7 +32,7 @@ class EventDetector(AnalysisModule):
     
     """
     def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector", dbCtrl=None):
-        AnalysisModule.__init__(self, host)
+        super().__init__(host)
         
         if flowchartDir is None:
             flowchartDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")

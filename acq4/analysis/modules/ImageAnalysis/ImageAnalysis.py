@@ -7,7 +7,7 @@ import numpy as np
 
 
 import pyqtgraph as pg
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from acq4.util import Qt
 
 

@@ -11,7 +11,7 @@ import acq4.analysis.modules.EventDetector as EventDetector
 import pyqtgraph as pg
 import acq4.util.ColorMapper as ColorMapper
 import acq4.util.debug as debug
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from pyqtgraph import multiprocess
 from pyqtgraph.flowchart import Flowchart
 from acq4.util import Qt

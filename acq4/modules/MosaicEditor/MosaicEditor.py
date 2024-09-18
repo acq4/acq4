@@ -12,7 +12,7 @@ import weakref
 import acq4.analysis.atlas as atlas
 import acq4.util.DataManager as DataManager
 import pyqtgraph as pg
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.Canvas import items

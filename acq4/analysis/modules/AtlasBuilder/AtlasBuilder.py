@@ -1,17 +1,14 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from collections import OrderedDict
 
-from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.util import Qt
+from acq4.util.AnalysisModule import AnalysisModule
 
 Ui_Form = Qt.importTemplate('.ctrlTemplate')
 
 
 class AtlasBuilder(AnalysisModule):
     def __init__(self, host):
-        AnalysisModule.__init__(self, host)
+        super().__init__(host)
         
         self.ctrlWidget = Qt.QWidget()
         self.ctrl = Ui_Form()

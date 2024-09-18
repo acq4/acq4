@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from acq4.util import Qt
 import os
 import acq4.util.database as database

@@ -10,7 +10,6 @@ from acq4.util.debug import printExc
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.Manager import getManager, Task
-from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
 from acq4.util.functions import downsample
 
 
@@ -200,7 +199,7 @@ class TestPulseThread(Thread):
         else:
             extra_kwds = {
                 'holding_current': holding,
-                'bridge_balance': getBridgeBalanceCompensation(result),
+                'bridge_balance': get_bridge_balance_compensation(result),
             }
         cmd -= holding  # neuroanalysis will double-count the baseline otherwise
         cmd = TSeries(
@@ -279,3 +278,70 @@ class TestPulseThread(Thread):
             newHolding = np.clip(newHolding, self._params['autoBiasMinCurrent'], self._params['autoBiasMaxCurrent'])
 
             self._clampDev.setHolding(mode, newHolding)
+
+
+def get_bridge_balance_compensation(data_handle):
+    """Return the bridge balance compensation setting for current clamp data, if bridge balance compensation was enabled.
+
+            data_handle    A MetaArray file or clamp file handle."""
+
+    if hasattr(data_handle, 'implements') and data_handle.implements('MetaArray'):
+        data = data_handle
+    elif is_clamp_file(data_handle):
+        data = data_handle.read(readAllData=False)
+    else:
+        raise ValueError(f'{data_handle} not a clamp file.')
+
+    mode = get_clamp_mode(data)
+    if mode not in ic_modes:
+        raise ValueError(f"Data is in {mode} mode, not a current clamp mode, and therefore bridge balance "
+                         f"compensation is not applicable.")
+
+    info = data.infoCopy()[-1]
+    bridgeEnabled = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalEnable', None)
+    if bridgeEnabled is None:
+        raise ValueError('Could not find whether BridgeBalance compensation was enabled for the given data.')
+    elif not bridgeEnabled:
+        return 0.0
+    else:
+        bridge = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalResist', None)
+        if bridge is not None:
+            return bridge
+        else:
+            raise Exception('Could not find BridgeBalanceCompensation value for the given data.')
+
+
+def get_clamp_mode(data_handle):
+    """Given a clamp file handle or MetaArray, return the recording mode."""
+    if hasattr(data_handle, 'implements') and data_handle.implements('MetaArray'):
+        data = data_handle
+    elif is_clamp_file(data_handle):
+        data = data_handle.read(readAllData=False)
+    else:
+        raise ValueError(f'{data_handle} not a clamp file.')
+    info = data._info[-1]
+    if 'ClampState' in info:
+        return info['ClampState']['mode']
+    try:
+        return info['mode']
+    except KeyError as e:
+        raise KeyError('PatchEPhys, getClampMode: Cannot determine clamp mode for this data') from e
+
+
+def is_clamp_file(fh):
+    if fh.shortName() not in deviceNames['Clamp'] and fh.shortName()[:-3] not in deviceNames['Clamp']:
+        return False
+    else:
+        return True
+
+
+deviceNames = {
+    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe', 'MultiClamp1', 'MultiClamp2'),
+    'Camera': ('Camera',),
+    'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P'),
+    'LED-Blue': ('LED-Blue',),
+}
+
+# current and voltage clamp modes that are know to us
+ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow', 'i=0', 'I=0']
+vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes

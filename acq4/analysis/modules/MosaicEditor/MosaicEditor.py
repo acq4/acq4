@@ -12,7 +12,7 @@ import scipy.stats
 
 import acq4.util.debug as debug
 import pyqtgraph as pg
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from acq4.util import Qt
 import acq4.util.DataManager as DataManager
 import acq4.analysis.atlas as atlas
