@@ -10,9 +10,10 @@ for f in os.listdir(mdir):
         MODULES.append(f)
     elif f.endswith('.py'):
         f = os.path.splitext(f)[0]
-        if f not in ['__init__', 'AnalysisModule']:
+        if f not in ['__init__', 'TaskRunnerAnalysisModule', '__pycache__']:
             print(f)
             MODULES.append(f)
+
 
 def createAnalysisModule(name, runner):
     """
@@ -28,10 +29,10 @@ def createAnalysisModule(name, runner):
     if name not in MODULES:
         raise Exception('No analysis module named %s' % name)
     mod = __import__('acq4.modules.TaskRunner.analysisModules.' + name, fromlist=['*'])
-    
+
     # Look for Modname+Module first, for backward compatibility
     cls = getattr(mod, name + 'Module', None)
-    
+
     # Then look for the first object that is a subclass of AnalysisModule
     if cls is None:
         for obj in mod.__dict__.values():
@@ -41,6 +42,5 @@ def createAnalysisModule(name, runner):
                     break
             except Exception:
                 pass
-    
-    return cls(runner)
 
+    return cls(runner)
