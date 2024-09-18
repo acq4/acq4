@@ -1,7 +1,6 @@
-from __future__ import print_function
 import os
 
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 
 mdir = os.path.split(__file__)[0]
 MODULES = []
