@@ -11,6 +11,8 @@ from pyqtgraph import disconnect
 from acq4.util.debug import printExc
 from . import states
 
+from typing import Union
+
 
 class PatchPipetteStateManager(Qt.QObject):
     """Used to handle state transitions and to spawn background threads for pipette automation
@@ -104,7 +106,7 @@ class PatchPipetteStateManager(Qt.QObject):
         cls.profiles[name] = config
 
     @classmethod
-    def getStateConfig(cls, state: str, profile: str|None):
+    def getStateConfig(cls, state: str, profile: Union[str, None]):
         """Return the configuration options for the given state and profile, or just the defaults if no profile is specified.
         """
         if profile is None:
