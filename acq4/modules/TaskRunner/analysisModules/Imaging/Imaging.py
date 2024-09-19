@@ -222,8 +222,6 @@ class ImagingModule(TaskRunnerAnalysisModule):
             if ds > 1:
                 imageData = pg.downsample(imageData, ds, axis=2)
 
-            # Collected as (frame, row, col) but pg prefers images like (frame, col, row)
-            imageData = imageData.transpose((0, 2, 1, 3)[:imageData.ndim])
             result['image'] = imageData
 
             # compute global transform
