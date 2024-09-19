@@ -7,7 +7,7 @@ import pyqtgraph as pg
 from MetaArray import MetaArray
 from acq4.util import Qt
 
-Ui_Form = Qt.loadUiType(os.path.join(os.path.dirname(__file__), 'builderTemplate.ui'))[0]
+Ui_Form = Qt.loadUiType(os.path.join(os.path.dirname(__file__), 'imageAnnotation.ui'))[0]
 
 if callable(getattr(Qt.QApplication, "setGraphicsSystem", None)):
     Qt.QApplication.setGraphicsSystem('raster')
