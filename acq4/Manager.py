@@ -19,9 +19,6 @@ import time
 import weakref
 from collections import OrderedDict
 
-import six
-from six.moves import map
-
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
@@ -32,6 +29,7 @@ from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
 from .util import DataManager, ptime, Qt
+from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.debug import logExc, logMsg, createLogWindow
 
@@ -65,7 +63,14 @@ class Manager(Qt.QObject):
     CREATED = False
     single = None
 
-    def __init__(self, configFile=None, argv=None):
+    @classmethod
+    def runFromCommandLine(self, argv=None):
+        """Run the Manager from the command line."""
+        m = Manager()
+        m.initFromCommandLine(argv)
+        return m
+
+    def __init__(self, configFile=None):
         self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
         # self.devices = OrderedDict()  # all currently loaded devices
         self.modules = OrderedDict()  # all currently running modules
@@ -89,34 +94,8 @@ class Manager(Qt.QObject):
 
             Manager.CREATED = True
             Manager.single = self
-
             self.logWindow = createLogWindow(self)
-
             self.documentation = Documentation()
-
-            if argv is not None:
-                try:
-                    opts, args = getopt.getopt(
-                        argv, 'c:a:x:m:b:s:d:nD',
-                        ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=',
-                         'disable=', 'no-manager', 'disable-all', 'exit-on-error'])
-                except getopt.GetoptError as err:
-                    print(str(err))
-                    print("""
-    Valid options are:
-        -x --exit-on-error Whether to exit immidiately on the first exception during initial Manager setup
-        -c --config=       Configuration file to load
-        -a --config-name=  Named configuration to load
-        -m --module=       Module name to load
-        -b --base-dir=     Base directory to use
-        -s --storage-dir=  Storage directory to use
-        -n --no-manager    Do not load manager module
-        -d --disable=      Disable the device specified
-        -D --disable-all   Disable all devices
-    """)
-                    raise
-            else:
-                opts = []
 
             Qt.QObject.__init__(self)
             atexit.register(self.quit)
@@ -125,71 +104,7 @@ class Manager(Qt.QObject):
             # Import all built-in module classes
             modules.importBuiltinClasses()
 
-            ## Handle command line options
-            loadModules = []
-            setBaseDir = None
-            setStorageDir = None
-            loadManager = True
-            loadConfigs = []
-            for o, a in opts:
-                if o in ['-c', '--config']:
-                    configFile = a
-                elif o in ['-a', '--config-name']:
-                    loadConfigs.append(a)
-                elif o in ['-m', '--module']:
-                    loadModules.append(a)
-                elif o in ['-b', '--baseDir']:
-                    setBaseDir = a
-                elif o in ['-s', '--storageDir']:
-                    setStorageDir = a
-                elif o in ['-n', '--noManager']:
-                    loadManager = False
-                elif o in ['-d', '--disable']:
-                    self.disableDevs.append(a)
-                elif o in ['-D', '--disable-all']:
-                    self.disableAllDevs = True
-                elif o == "--exit-on-error":
-                    self.exitOnError = True
-                else:
-                    print("Unhandled option", o, a)
-
-            ## Read in configuration file
-            if configFile is None:
-                configFile = self._getConfigFile()
-
-            self.configDir = os.path.dirname(configFile)
-            self.readConfig(configFile)
-
             logMsg('ACQ4 version %s started.' % __version__, importance=9)
-
-            ## Act on options if they were specified..
-            try:
-                for name in loadConfigs:
-                    self.loadDefinedConfig(name)
-
-                if setBaseDir is not None:
-                    self.setBaseDir(setBaseDir)
-                if setStorageDir is not None:
-                    self.setCurrentDir(setStorageDir)
-                if loadManager:
-                    self.showGUI()
-                    self.createWindowShortcut('F1', self.gui.win)
-                for m in loadModules:
-                    try:
-                        if m in self.definedModules:
-                            self.loadDefinedModule(m)
-                        else:
-                            self.loadModule(m)
-                    except:
-                        if not loadManager:
-                            self.showGUI()
-                        raise
-
-            except:
-                if self.exitOnError:
-                    raise
-                else:
-                    printExc("\nError while acting on command line options: (but continuing on anyway..)")
 
         except:
             Manager.CREATED = False
@@ -199,22 +114,99 @@ class Manager(Qt.QObject):
             else:
                 printExc("Error while configuring Manager:")
 
+    def initFromCommandLine(self, argv=None):
+        if argv is not None:
+            try:
+                opts, args = getopt.getopt(
+                    argv, 'c:a:x:m:b:s:d:nD',
+                    ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=',
+                     'disable=', 'no-manager', 'disable-all', 'exit-on-error'])
+            except getopt.GetoptError as err:
+                print(err)
+                print("""
+        Valid options are:
+            -x --exit-on-error Whether to exit immidiately on the first exception during initial Manager setup
+            -c --config=       Configuration file to load
+            -a --config-name=  Named configuration to load
+            -m --module=       Module name to load
+            -b --base-dir=     Base directory to use
+            -s --storage-dir=  Storage directory to use
+            -n --no-manager    Do not load manager module
+            -d --disable=      Disable the device specified
+            -D --disable-all   Disable all devices
+        """)
+                raise
+        else:
+            opts = []
 
+        ## Handle command line options
+        configFile = None
+        loadModules = []
+        setBaseDir = None
+        setStorageDir = None
+        loadManager = True
+        loadConfigs = []
+        for o, a in opts:
+            if o in ['-c', '--config']:
+                configFile = a
+            elif o in ['-a', '--config-name']:
+                loadConfigs.append(a)
+            elif o in ['-m', '--module']:
+                loadModules.append(a)
+            elif o in ['-b', '--baseDir']:
+                setBaseDir = a
+            elif o in ['-s', '--storageDir']:
+                setStorageDir = a
+            elif o in ['-n', '--noManager']:
+                loadManager = False
+            elif o in ['-d', '--disable']:
+                self.disableDevs.append(a)
+            elif o in ['-D', '--disable-all']:
+                self.disableAllDevs = True
+            elif o == "--exit-on-error":
+                self.exitOnError = True
+            else:
+                print("Unhandled option", o, a)
+
+        ## Read in configuration file
+        if configFile is None:
+            configFile = self._getConfigFile()
+
+        self.configDir = os.path.dirname(configFile)
+        self.readConfig(configFile)
+
+        ## Act on options if they were specified..
+        try:
+            for name in loadConfigs:
+                self.loadDefinedConfig(name)
+
+            if setBaseDir is not None:
+                self.setBaseDir(setBaseDir)
+            if setStorageDir is not None:
+                self.setCurrentDir(setStorageDir)
+            if loadManager:
+                self.showGUI()
+                self.createWindowShortcut('F1', self.gui.win)
+            for m in loadModules:
+                try:
+                    if m in self.definedModules:
+                        self.loadDefinedModule(m)
+                    else:
+                        self.loadModule(m)
+                except:
+                    if not loadManager:
+                        self.showGUI()
+                    raise
+
+        except:
+            if self.exitOnError:
+                raise
+            else:
+                printExc("\nError while acting on command line options: (but continuing on anyway..)")
         finally:
             if len(self.modules) == 0:
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")
-
-        win = self.modules[list(self.modules.keys())[0]].window()
-        self.quitShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+q'), win)
-        self.quitShortcut.setContext(Qt.Qt.ApplicationShortcut)
-        self.abortShortcut = Qt.QShortcut(Qt.QKeySequence('Esc'), win)
-        self.abortShortcut.setContext(Qt.Qt.ApplicationShortcut)
-        self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
-        self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
-        self.quitShortcut.activated.connect(self.quit)
-        self.abortShortcut.activated.connect(self.sigAbortAll)
-        self.reloadShortcut.activated.connect(self.reloadAll)
 
     def _getConfigFile(self):
         ## search all the default locations to find a configuration file.
@@ -223,7 +215,7 @@ class Manager(Qt.QObject):
             cf = os.path.join(path, 'default.cfg')
             if os.path.isfile(cf):
                 return cf
-        raise Exception("Could not find config file in: %s" % CONFIGPATH)
+        raise FileNotFoundError(f"Could not find default.cfg file in any of: {CONFIGPATH}")
 
     def _appDataDir(self):
         # return the user application data directory
@@ -244,8 +236,6 @@ class Manager(Qt.QObject):
         self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
-        # self.configure(cfg)
-
         self.configure(self.config)
 
         self.configFile = configFile
@@ -290,14 +280,22 @@ class Manager(Qt.QObject):
         self.sigConfigChanged.emit()
 
     def _loadConfig(self, cfg):
+        # Handle custom import prior to loading devices
         if 'imports' in cfg:
-            if isinstance(cfg["imports"], str):
-                cfg["imports"] = [cfg["imports"]]
-            for mod in cfg["imports"]:
-                __import__(mod)
+            try:
+                if isinstance(cfg["imports"], str):
+                    cfg["imports"] = [cfg["imports"]]
+                for mod in cfg["imports"]:
+                    __import__(mod)
+            except:
+                if self.exitOnError:
+                    raise
+                else:
+                    printExc("Error in ACQ4 configuration:")
+
         for key, val in cfg.items():
             try:
-                # Handle custom import / exec
+                # Hand custom exec
                 if key == 'execFiles':
                     if isinstance(val, str):
                         val = [val]
@@ -308,11 +306,11 @@ class Manager(Qt.QObject):
                 elif key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
-                            print("    --> Ignoring device '%s' -- disabled by request" % k)
-                            logMsg("    --> Ignoring device '%s' -- disabled by request" % k)
+                            print(f"    --> Ignoring device '{k}' -- disabled by request")
+                            logMsg(f"    --> Ignoring device '{k}' -- disabled by request")
                             continue
-                        print("  === Configuring device '%s' ===" % k)
-                        logMsg("  === Configuring device '%s' ===" % k)
+                        print(f"  === Configuring device '{k}' ===")
+                        logMsg(f"  === Configuring device '{k}' ===")
                         try:
                             conf = cfg['devices'][k]
                             try:
@@ -338,8 +336,8 @@ class Manager(Qt.QObject):
 
                 ## set new storage directory
                 elif key == 'storageDir':
-                    print("=== Setting base directory: %s ===" % cfg['storageDir'])
-                    logMsg("=== Setting base directory: %s ===" % cfg['storageDir'])
+                    print(f"=== Setting base directory: {cfg['storageDir']} ===")
+                    logMsg(f"=== Setting base directory: {cfg['storageDir']} ===")
                     self.setBaseDir(cfg['storageDir'])
 
                 elif key == 'defaultCompression':
@@ -353,9 +351,9 @@ class Manager(Qt.QObject):
                         assert cstr in [None, 'gzip', 'szip', 'lzf']
                     except Exception:
                         raise Exception(
-                            "'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '%s'" % comp)
+                            f"'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '{comp}'")
 
-                    print("=== Setting default HDF5 compression: %s ===" % comp)
+                    print(f"=== Setting default HDF5 compression: {comp} ===")
                     from MetaArray import MetaArray
                     MetaArray.defaultCompression = comp
 
@@ -486,7 +484,7 @@ class Manager(Qt.QObject):
                 # .. do stuff
 
         """
-        devices = [self.getDevice(d) if isinstance(d, six.string_types) else d for d in devices]
+        devices = [self.getDevice(d) if isinstance(d, str) else d for d in devices]
         return DeviceLocker(self, devices, timeout=timeout)
 
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
@@ -545,7 +543,7 @@ class Manager(Qt.QObject):
         with self.lock:
             try:
                 f = self.getModule("Data Manager").selectedFile()
-                if not isinstance(f, DataManager.DirHandle):
+                if not isinstance(f, DirHandle):
                     f = f.parent()
             except Exception:
                 f = False
@@ -554,12 +552,11 @@ class Manager(Qt.QObject):
                     raise
             return f
 
-    def getModule(self, name):
-        """Return an already loaded module"""
+    def getModule(self, name: str):
+        """Return a module"""
         with self.lock:
-            name = str(name)
             if name not in self.modules:
-                raise Exception("No module named %s" % name)
+                self.loadDefinedModule(name)
             return self.modules[name]
 
     def getCurrentDatabase(self):
@@ -602,13 +599,10 @@ class Manager(Qt.QObject):
         self.removeWindowShortcut(mod.window())
         self.sigModulesChanged.emit()
         self.sigModuleHasQuit.emit(mod.name)
-        # print "Module", mod.name, "has quit"
 
     def unloadModule(self, name):
         try:
-            # print "    request quit.."
             self.getModule(name).quit()
-            # print "    request quit done"
         except:
             print(f"Error while requesting module '{name}' quit.")
             if self.exitOnError:
@@ -623,7 +617,6 @@ class Manager(Qt.QObject):
             else:
                 return
         self.sigModulesChanged.emit()
-        # print "Unloaded module", name
 
     def reloadAll(self):
         """Reload all python code"""
@@ -671,7 +664,7 @@ class Manager(Qt.QObject):
         t.execute()
         return t.getResult()
 
-    def createTask(self, cmd):
+    def createTask(self, cmd) -> "Task":
         """
         Creates a new Task instance from the specified command structure.
         """
@@ -683,6 +676,18 @@ class Manager(Qt.QObject):
         """Show the Manager GUI"""
         if self.gui is None:
             self.gui = self.loadModule('Manager', 'Manager', {})
+            # win = self.modules[list(self.modules.keys())[0]].window() ?
+            win = self.gui.window()
+            self.quitShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+q'), win)
+            self.quitShortcut.setContext(Qt.Qt.ApplicationShortcut)
+            self.abortShortcut = Qt.QShortcut(Qt.QKeySequence('Esc'), win)
+            self.abortShortcut.setContext(Qt.Qt.ApplicationShortcut)
+            self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
+            self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
+            self.quitShortcut.activated.connect(self.quit)
+            self.abortShortcut.activated.connect(self.sigAbortAll)
+            self.reloadShortcut.activated.connect(self.reloadAll)
+
         self.gui.show()
 
     def getCurrentDir(self):
@@ -711,9 +716,9 @@ class Manager(Qt.QObject):
             except TypeError:
                 pass
 
-        if isinstance(d, six.string_types):
+        if isinstance(d, str):
             self.currentDir = self.baseDir.getDir(d, create=True)
-        elif isinstance(d, DataManager.DirHandle):
+        elif isinstance(d, DirHandle):
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
@@ -753,9 +758,9 @@ class Manager(Qt.QObject):
         Set the base directory for data storage. 
         """
         with self.lock:
-            if isinstance(d, six.string_types):
+            if isinstance(d, str):
                 dh = self.dirHandle(d, create=False)
-            elif isinstance(d, DataManager.DirHandle):
+            elif isinstance(d, DirHandle):
                 dh = d
             else:
                 raise Exception("Invalid argument type: ", type(d), d)
@@ -805,7 +810,7 @@ class Manager(Qt.QObject):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
         with self.lock:
             fields = OrderedDict()
-            if isinstance(file, DataManager.DirHandle):
+            if isinstance(file, DirHandle):
                 info = file.info()
                 if 'dirType' in info:
                     # infoKeys.remove('dirType')
@@ -856,7 +861,7 @@ class Manager(Qt.QObject):
                     try:
                         d.quit()
                     except:
-                        print(f"Error while requesting device '{d.name}' quit.")
+                        print(f"Error while requesting device '{d.name()}' quit.")
                         if self.exitOnError:
                             raise
                         else:
@@ -950,14 +955,12 @@ class Task:
         Task.id += 1
 
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
-        # print "Task command", command
         self.devNames = list(command.keys())
         self.devNames.remove('protocol')
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
 
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
         self.tasks = {}
-        # print "devNames: ", self.devNames
 
         for devName in self.devNames:
             task = self.devs[devName].createTask(self.command[devName], self)
@@ -968,7 +971,7 @@ class Task:
 
     @staticmethod
     def getDevName(obj):
-        if isinstance(obj, six.string_types):
+        if isinstance(obj, str):
             return obj
         elif isinstance(obj, Device):
             return obj.name()
@@ -1022,9 +1025,9 @@ class Task:
 
     def execute(self, block=True, processEvents=True):
         """Start the task.
-        
+
         If block is true, then the function blocks until the task is complete.
-        if processEvents is true, then Qt events are processed while waiting for the task to complete.        
+        if processEvents is true, then Qt events are processed while waiting for the task to complete.
         """
         with self.taskLock:
             self.startedDevs = []
@@ -1032,16 +1035,12 @@ class Task:
             self.abortRequested = False
             self._done = False  # cached output of isDone()
 
-            # print "======  Executing task %d:" % self.id
-            # print self.cfg
-            # print "======================="
 
             ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
             from acq4.util.debug import Profiler
             prof = Profiler('Manager.Task.execute', disabled=True)
             try:
 
-                # print self.id, "Task.execute:", self.tasks
                 ## Reserve all hardware
                 self.reserveDevices()
 
@@ -1053,13 +1052,11 @@ class Task:
                 ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
                 ## This is how we allow multiple devices to communicate and decide how to operate together.
                 ## Each task may modify the startOrder list to suit its needs.
-                # print "Configuring subtasks.."
                 for devName in configOrder:
                     self.tasks[devName].configure()
-                    prof.mark('configure %s' % devName)
+                    prof.mark(f'configure {devName}')
 
                 startOrder = self.getStartOrder()
-                # print "done"
 
                 if 'leadTime' in self.cfg:
                     time.sleep(self.cfg['leadTime'])
@@ -1069,9 +1066,7 @@ class Task:
                 self.result = None
 
                 ## Start tasks in specific order
-                # print "Starting tasks.."
                 for devName in startOrder:
-                    # print "  ", devName
                     try:
                         self.startedDevs.append(devName)
                         self.tasks[devName].start()
@@ -1079,22 +1074,16 @@ class Task:
                         self.startedDevs.remove(devName)
                         print(f"Error starting device '{devName}'; aborting task.")
                         raise
-                    prof.mark('start %s' % devName)
+                    prof.mark(f'start {devName}')
                 self.startTime = ptime.time()
-
-                # print "  %d Task started" % self.id
 
                 if not block:
                     prof.finish()
-                    # print "  %d Not blocking; execute complete" % self.id
                     return
 
                 ## Wait until all tasks are done
-                # print "Waiting for all tasks to finish.."
-
                 lastProcess = ptime.time()
                 isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
-                # print "isGuiThread:", isGuiThread
                 while not self.isDone():
                     now = ptime.time()
                     elapsed = now - self.startTime
@@ -1103,17 +1092,14 @@ class Task:
                             Qt.QApplication.processEvents()
                             lastProcess = ptime.time()
 
-                    if elapsed < self.cfg[
-                        'duration'] - 10e-3:  ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    ## If the task duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    if elapsed < self.cfg['duration'] - 10e-3:
                         sleep = min(10e-3, self.cfg['duration'] - elapsed - 5e-3)
                     else:
                         sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the task finishes
-                    # print "sleep for", sleep
                     time.sleep(sleep)
-                # print "all tasks finshed."
 
                 self.stop()
-                # print "  %d execute complete" % self.id
             except:
                 printExc("==========  Error in task execution:  ==============")
                 self.abort()
@@ -1128,7 +1114,7 @@ class Task:
         If the task run time exceeds the timeout duration, then raise RuntimeError.
         """
         with self.taskLock:
-            # If we previously returned True or raised an exception, then 
+            # If we previously returned True or raised an exception, then
             # just repeat that result.
             if self._done is True:
                 return True
@@ -1152,25 +1138,19 @@ class Task:
             if getattr(self, 'test_endless', False):
                 return False
 
-            # print "Manager.Task.isDone"
             if not self.abortRequested:
                 t = ptime.time()
                 if self.startTime is None or t - self.startTime < self.cfg['duration']:
-                    # print "  not done yet"
                     return False
                 # else:
-                # print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
             # else:
-            # print "  aborted, checking tasks.."
             d = self._tasksDone()
-            # print "  tasks say:", d
             self._done = d
             return d
 
     def _tasksDone(self):
         for t in self.tasks:
             if not self.tasks[t].isDone():
-                # print "Task %s not finished" % t
                 return False
         if self.stopTime is None:
             self.stopTime = ptime.time()
@@ -1214,19 +1194,16 @@ class Task:
                     raise Exception("Cannot get result; task is still running.")
 
                 if not abort and self.result is None:
-                    # print "Get results.."
                     ## Let each device generate its own output structure.
                     result = {'protocol': {'startTime': self.startTime}}
                     for devName in self.tasks:
                         try:
                             result[devName] = self.tasks[devName].getResult()
                         except:
-                            printExc("Error getting result for task %s (will "
-                                     "set result=None for this task):" % devName)
+                            printExc(f"Error getting result for task {devName} (will set result=None for this task):")
                             result[devName] = None
                         prof.mark("get result: " + devName)
                     self.result = result
-                    # print "RESULT 1:", self.result
 
                     ## Store data if requested
                     if 'storeData' in self.cfg and self.cfg['storeData'] is True:
@@ -1235,7 +1212,7 @@ class Task:
                             self.tasks[t].storeResult(self.cfg['storageDir'])
                     prof.mark("store data")
             finally:
-                ## Regardless of any other problems, at least make sure we 
+                ## Regardless of any other problems, at least make sure we
                 ## release hardware for future use
                 if self.stopTime is None:
                     self.stopTime = ptime.time()
@@ -1246,8 +1223,6 @@ class Task:
 
             if abort:
                 gc.collect()  ## it is often the case that now is a good time to garbage-collect.
-            # print "tasks:", self.tasks
-            # print "RESULT:", self.result
 
     def getResult(self):
         with self.taskLock:
@@ -1276,30 +1251,30 @@ class Task:
     @staticmethod
     def toposort(deps, cost=None):
         """Topological sort. Arguments are:
-        deps       Dictionary describing dependencies where a:[b,c] means "a 
+        deps       Dictionary describing dependencies where a:[b,c] means "a
                     depends on b and c"
         cost       Optional dictionary of per-node cost values. This will be used
-                    to sort independent graph branches by total cost. 
-                
+                    to sort independent graph branches by total cost.
+
         Examples::
 
             # Sort the following graph:
-            # 
+            #
             #   B ──┬─────> C <── D
-            #       │       │       
+            #       │       │
             #   E <─┴─> A <─┘
-            #     
+            #
             deps = {'a': ['b', 'c'], 'c': ['b', 'd'], 'e': ['b']}
             toposort(deps)
             => ['b', 'e', 'd', 'c', 'a']
-            
+
             # This example is underspecified; there are several orders
             # that correctly satisfy the graph. However, we may use the
             # 'cost' argument to impose more constraints on the sort order.
-            
+
             # Let each node have the following cost:
             cost = {'a': 0, 'b': 0, 'c': 1, 'e': 1, 'd': 3}
-            
+
             # Then the total cost of following any node is its own cost plus
             # the cost of all nodes that follow it:
             #   A = cost[a]
@@ -1307,7 +1282,7 @@ class Task:
             #   C = cost[c] + cost[a]
             #   D = cost[d] + cost[c] + cost[a]
             #   E = cost[e]
-            # If we sort independent branches such that the highest cost comes 
+            # If we sort independent branches such that the highest cost comes
             # first, the output is:
             toposort(deps, cost=cost)
             => ['d', 'b', 'c', 'e', 'a']

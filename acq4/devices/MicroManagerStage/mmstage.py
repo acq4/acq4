@@ -10,6 +10,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
+from ...util.debug import printExc
 
 
 class MicroManagerStage(Stage):
@@ -131,6 +132,10 @@ class MicroManagerStage(Stage):
             except:
                 printExc("Error stopping axis %s:" % ax)
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1 / self.monitor.minInterval
+
     def setUserSpeed(self, v):
         """Set the maximum speed of the stage (m/sec) when under manual control.
 
@@ -173,7 +178,7 @@ class MicroManagerStage(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
@@ -184,7 +189,7 @@ class MicroManagerStage(Stage):
 
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveX=moveZ)
+            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveZ=moveZ)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -205,6 +210,7 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
+        self.minInterval = 100e-3
 
         Thread.__init__(self)
 
@@ -221,8 +227,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         lastPos = None
         while True:
             try:
@@ -234,13 +239,13 @@ class MonitorThread(Thread):
                 pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
                 if pos != lastPos:
                     # if there was a change, then loop more rapidly for a short time.
-                    interval = minInterval
+                    interval = self.minInterval
                     lastPos = pos
                 else:
                     interval = min(maxInterval, interval * 2)
 
                 time.sleep(interval)
-            except:
+            except Exception:
                 debug.printExc('Error in MicromanagerStage monitor thread:')
                 time.sleep(maxInterval)
 
@@ -257,7 +262,7 @@ class MicroManagerMoveFuture(MoveFuture):
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.lock:
             if moveXY:
-                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[0:1])
+                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:1])
             if moveXY:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
 
@@ -311,7 +316,7 @@ class MicroManagerMoveFuture(MoveFuture):
             # not actually stopped! This should not happen.
             raise RuntimeError("Interrupted move but manipulator is still running!")
         else:
-            raise Exception("Unknown status: %s" % status)
+            raise ValueError(f"Unknown status: {status}")
 
     def errorMessage(self):
         return self._errorMsg

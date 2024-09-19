@@ -4,7 +4,7 @@ from __future__ import print_function
 import sys
 
 from acq4.util.clibrary import winDefs, CParser, CLibrary
-from six.moves import map
+
 
 sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 import ctypes

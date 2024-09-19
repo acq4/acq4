@@ -1,10 +1,10 @@
-from __future__ import print_function
-import pyqtgraph.units as units
-from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
-import pyqtgraph as pg
+import collections
 import numpy as np
+import sys
+
 import acq4.util.functions as fn
-import sys, collections
+import pyqtgraph.units as units
+from pyqtgraph.parametertree.parameterTypes import GroupParameter
 
 
 class SequenceParamSet(GroupParameter):
@@ -56,13 +56,14 @@ class SequenceParamSet(GroupParameter):
         for ch in self:
             state[ch.name()] = ch.getState()
         return state
-        
+
 
 class SeqEvalError(Exception):  ## raised when a sequence parameter field fails to evaluate
     def __init__(self, name, exc):
         Exception.__init__(self)
         self.name = name
         self.exc = str(exc)
+
 
 class SeqParameter(GroupParameter):
     def __init__(self, **args):
@@ -78,7 +79,7 @@ class SeqParameter(GroupParameter):
         
         args['children'] = [
             {'name': 'default', 'type': 'str', 'value': '0'},
-            {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list', 'eval']},
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range', 'list', 'eval']},
             {'name': 'start', 'type': 'str', 'value': '0', 'visible': False}, 
             {'name': 'stop', 'type': 'str', 'value': '0', 'visible': False}, 
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
@@ -97,8 +98,7 @@ class SeqParameter(GroupParameter):
             'list': ['default', 'sequence', 'list', 'randomize'],
             'eval': ['default', 'sequence', 'expression']
         }
-        
-        
+
     def treeStateChanged(self, param, changes):
         ## catch changes to 'sequence' so we can hide/show other params.
         ## Note: it would be easier to just catch self.sequence.sigValueChanged,
@@ -107,7 +107,7 @@ class SeqParameter(GroupParameter):
         with self.treeChangeBlocker():
             ## queue up change 
             GroupParameter.treeStateChanged(self, param, changes)
-            
+
             ## if needed, add some more changes before releasing the signal
             for param, change, data in changes:
                 ## if the sequence value changes, hide/show other parameters
@@ -118,6 +118,7 @@ class SeqParameter(GroupParameter):
                             ch.show()
                         else:
                             ch.hide()
+
     #def seqChanged(self):
         #with self.treeChangeBlocker():
             #vis = self.visibleParams[self['sequence']]
@@ -185,8 +186,3 @@ class SeqParameter(GroupParameter):
                 continue
             state[name] = val
         return state
-
-
-
-
-

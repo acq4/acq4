@@ -1,11 +1,12 @@
 import time
-from acq4.util import Qt, ptime
-from ..Stage import Stage, MoveFuture
+
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from pyqtgraph import debug
-from six.moves import range
+
+from ..Stage import Stage, MoveFuture
 
 
 def __reload__(old):
@@ -126,7 +127,11 @@ class SutterMPC200(Stage):
         # self._monitor.stop()  # this was never set to anything but None
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / SutterMPC200._monitor.minInterval
+
+    def _move(self, pos, speed, linear, **kwds):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
             speed = self.slowSpeed
@@ -163,7 +168,8 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
-        
+        self.minInterval = 100e-3
+
         self.nextMoveId = 0
         self.moveRequest = None
         self._moveStatus = {}
@@ -215,8 +221,7 @@ class MonitorThread(Thread):
             return start, stat
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         
         while True:
             try:
@@ -230,7 +235,7 @@ class MonitorThread(Thread):
                 if moveRequest is None:
                     # just check for position update
                     if self.dev._checkPositionChange() is not False:
-                        interval = minInterval
+                        interval = self.minInterval
                     else:
                         interval = min(maxInterval, interval*2)
                 else:
@@ -314,4 +319,3 @@ class MPC200MoveFuture(MoveFuture):
         if self._moveStatus[1] in (None, False):
             self._moveStatus = SutterMPC200._monitor.moveStatus(self._id)
         return self._moveStatus
-        

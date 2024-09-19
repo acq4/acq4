@@ -5,7 +5,7 @@ import weakref
 
 import numpy
 from pyqtgraph import SpinBox, WidgetGroup, mkPen
-from six.moves import range
+
 
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
@@ -287,6 +287,8 @@ class OutputChannelGui(DaqChannelGui):
         hv = self.getHoldingValue()
         if hv is not None:
             if not self.ui.holdingCheck.isChecked():
+                if self.config['type'] == 'do':
+                    hv = int(hv)
                 self.ui.holdingSpin.setValue(hv)
             self.ui.waveGeneratorWidget.setOffset(hv)
 

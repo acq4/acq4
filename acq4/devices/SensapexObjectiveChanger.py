@@ -94,7 +94,7 @@ class ObjectiveChangeFuture(Future):
                     self._start = ptime.time()
                     dev.dev.set_lens_position(target)
             try:
-                self._checkStop(delay=0.2)
+                self.checkStop(delay=0.2)
             except self.StopRequested:
                 self._taskDone(interrupted=True, error="Stop requested before operation finished.")
                 break

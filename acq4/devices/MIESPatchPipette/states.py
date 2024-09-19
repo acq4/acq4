@@ -5,7 +5,7 @@ import acq4.devices.PatchPipette.states as states
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
 
-class MIESPatchPipetteBathState(PatchPipetteState):
+class BathStateMIES(PatchPipetteState):
     stateName = 'bath'
 
     def initialize(self):
@@ -14,7 +14,7 @@ class MIESPatchPipetteBathState(PatchPipetteState):
         self.dev.mies.setApproach(self.dev._headstage)
 
 
-class MIESPatchPipetteSealState(PatchPipetteState):
+class SealStateMIES(PatchPipetteState):
     stateName = 'seal'
 
     def initialize(self):
@@ -25,8 +25,8 @@ class MIESPatchPipetteSealState(PatchPipetteState):
 
 class MIESPatchPipetteStateManager(PatchPipetteStateManager):
     stateHandlers = PatchPipetteStateManager.stateHandlers.copy()
-    stateHandlers['seal'] = MIESPatchPipetteSealState
-    stateHandlers['bath'] = MIESPatchPipetteBathState
+    stateHandlers['seal'] = SealStateMIES
+    stateHandlers['bath'] = BathStateMIES
     # stateHandlers = OrderedDict([
     #     # ('out', states.PatchPipetteOutState),
     #     # ('bath', MIESPatchPipetteBathState),

@@ -1,6 +1,5 @@
 import numpy as np
 import time
-from six.moves import range
 
 import acq4.util.ptime as ptime
 from acq4.Manager import logMsg

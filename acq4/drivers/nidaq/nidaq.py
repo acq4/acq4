@@ -1,12 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function, division
-
 import ctypes
 from inspect import signature
 
 import PyDAQmx
 import numpy as np
-import six
 
 dataTypeConversions = {
     '<f8': 'F64',
@@ -163,7 +159,7 @@ class _NIDAQ:
             "chanperline": PyDAQmx.Val_ChanPerLine,
             "chanforalllines": PyDAQmx.Val_ChanForAllLines,
         }
-        if isinstance(mode, six.string_types):
+        if isinstance(mode, str):
             mode = mode.lower()
             mode = modes.get(mode, None)
         return mode

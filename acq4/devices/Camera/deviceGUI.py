@@ -40,7 +40,7 @@ class CameraDeviceGui(Qt.QWidget):
                         step = 1
                     else:
                         raise TypeError("Invalid parameter specification for '%s': %s" % (k, repr(p)))
-                    if type(mx) in [int, np.compat.long] and type(mn) in [int, np.compat.long]:
+                    if type(mx) in [int, np.integer] and type(mn) in [int, np.integer]:
                         params.append({'name': k, 'type': 'int', 'value': val, 'limits': (mn, mx), 'step': step})
                     else:
                         params.append({'name': k, 'type': 'float', 'value': val, 'limits': (mn, mx), 'dec': True, 'step': 1})
@@ -49,13 +49,12 @@ class CameraDeviceGui(Qt.QWidget):
                             params[-1]['siPrefix'] = True
                             params[-1]['minStep'] = 1e-6
                 elif type(p[0]) is list:
-                    #print k, val, p
-                    params.append({'name': k, 'type': 'list', 'value': val, 'values': p[0]})
+                    params.append({'name': k, 'type': 'list', 'value': val, 'limits': p[0]})
                 else:
                     print("    Ignoring parameter '%s': %s" % (k, str(p)))
                     continue
         
-        self.paramSet = Parameter(name='cameraParams', type='group', children=params)
+        self.paramSet = Parameter.create(name='cameraParams', type='group', children=params)
         self.paramWidget = ParameterTree()
         self.paramWidget.setParameters(self.paramSet, showTop=False)
         self.layout.addWidget(self.paramWidget)
@@ -64,18 +63,15 @@ class CameraDeviceGui(Qt.QWidget):
         self.dev.sigParamsChanged.connect(self.paramsChanged)
             
     def stateChanged(self, param, changes):
-        #print "tree state changed:"
-        ## called when state is changed by user
+        # called when state is changed by user
         vals = collections.OrderedDict()
         for param, change, data in changes:
             if change == 'value':
-                #print param.name(), param.value()
-                vals[param.name()] = param.value()
+                vals[param.name()] = param.value() if param.hasValue() else None
         
         self.dev.setParams(vals)    
         
     def paramsChanged(self, params):
-        #print "Camera param changed:", params
         ## Called when state of camera has changed
         for p in list(params.keys()):  ## flatten out nested dicts
             if isinstance(params[p], dict):

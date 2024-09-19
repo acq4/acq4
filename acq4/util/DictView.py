@@ -1,12 +1,6 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
 from collections import OrderedDict
 
-import six
-from six.moves import map
-from six.moves import range
-from six.moves import zip
+from acq4.util import Qt
 
 
 class DictView(Qt.QTreeWidget):
@@ -30,7 +24,7 @@ class DictView(Qt.QTreeWidget):
         
     def mkNode(self, name, v):
         if type(v) is list and len(v) > 0 and isinstance(v[0], dict):
-            inds = list(map(six.text_type, range(len(v))))
+            inds = list(map(str, range(len(v))))
             v = OrderedDict(zip(inds, v))
         if isinstance(v, dict):
             #print "\nadd tree", k, v
@@ -40,7 +34,7 @@ class DictView(Qt.QTreeWidget):
                 node.addChild(newNode)
         else:
             #print "\nadd value", k, str(v)
-            node = Qt.QTreeWidgetItem([six.text_type(name), six.text_type(v)])
+            node = Qt.QTreeWidgetItem([str(name), str(v)])
         return node
         
     def close(self):

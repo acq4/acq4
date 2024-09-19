@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
+import contextlib
 import os
 
 from acq4.util import Qt
 from acq4.util.debug import printExc
-from six.moves import range
 
 
 class DirTreeWidget(Qt.QTreeWidget):
@@ -207,15 +204,11 @@ class DirTreeWidget(Qt.QTreeWidget):
             node = node[dirs.pop(0)] 
 
     def watch(self, handle):
-        #Qt.QObject.connect(handle, Qt.SIGNAL('delayedChange'), self.dirChanged)
         handle.sigDelayedChange.connect(self.dirChanged)
 
     def unwatch(self, handle):
-        #Qt.QObject.disconnect(handle, Qt.SIGNAL('delayedChange'), self.dirChanged)
-        try:
+        with contextlib.suppress(Exception):
             handle.sigDelayedChange.disconnect(self.dirChanged)
-        except:
-            pass
 
     def dirChanged(self, handle, changes):
         if handle is self.baseDir:

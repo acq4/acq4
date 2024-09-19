@@ -2,12 +2,13 @@ import numpy as np
 import pickle
 import scipy
 import time
-from six.moves import range
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
+from acq4.util.future import Future, future_wrap
 from acq4.util.image_registration import imageTemplateMatch
+from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
 
 
@@ -31,46 +32,13 @@ class PipetteTracker(object):
         except Exception:
             self.reference = {}
 
-    def takeFrame(self, imager=None):
+    def takeFrame(self, imager=None, ensureFreshFrames=True):
         """Acquire one frame from an imaging device.
 
         This method guarantees that the frame is exposed *after* this method is called.
         """
         imager = self._getImager(imager)
-
-        restart = False
-        if imager.isRunning():
-            restart = True
-            imager.stop()
-        frame = imager.acquireFrames(1)
-        if restart:
-            imager.start()
-        return frame
-
-    def getNextFrame(self, imager=None):
-        """Return the next frame available from the imager. 
-
-        Note: the frame may have been exposed before this method was called.
-        """
-        imager = self._getImager(imager)
-        self.__nextFrame = None
-
-        def newFrame(f):
-            self.__nextFrame = f
-
-        imager.sigNewFrame.connect(newFrame)
-        try:
-            start = ptime.time()
-            while ptime.time() < start + 5.0:
-                Qt.QApplication.processEvents()
-                frame = self.__nextFrame
-                if frame is not None:
-                    self.__nextFrame = None
-                    return frame
-                time.sleep(0.01)
-            raise RuntimeError("Did not receive frame from imager.")
-        finally:
-            pg.disconnect(imager.sigNewFrame, newFrame)
+        return imager.acquireFrames(1, ensureFreshFrames=ensureFreshFrames).getResult()[0]
 
     def _getImager(self, imager=None):
         if imager is None:
@@ -164,7 +132,7 @@ class PipetteTracker(object):
         minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding)
 
         # clipped image region
-        subimg = frame.data()[0, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
+        subimg = frame.data()[minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
 
         return subimg, tipRelPos
 
@@ -173,127 +141,58 @@ class PipetteTracker(object):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()["pixelSize"][0] * 100
 
+    @future_wrap
     def takeReferenceFrames(
-        self, zRange=None, zStep=None, imager=None, average=4, tipLength=None, minFocusAccuracy=500e-9
+        self, zRange=None, zStep=None, imager=None, tipLength=None, _future: Future = None
     ):
         """Collect a series of images of the pipette tip at various focal depths.
 
         The collected images are used as reference templates for determining the most likely location 
         and focal depth of the tip after the calibration is no longer valid.
 
-        The focus first is moved in +z by half of *zRange*, then stepped downward by *zStep* until the
-        entire *zRange* is covered. Images of the pipette tip are acquired and stored at each step.
-
         This method assumes that the tip is in focus near the center of the camera frame, and that its
         position is well-calibrated. Ideally, the illumination is flat and the area surrounding the tip
         is free of any artifacts.
         """
         imager = self._getImager(imager)
-
-        # Take an initial frame with the tip in focus.
         centerFrame = self.takeFrame()
 
         if tipLength is None:
             tipLength = self.suggestTipLength(centerFrame)
 
+        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(centerFrame, padding=tipLength * 0.15, tipLength=tipLength)
+        center = centerFrame.data()[minImgPos[0]: maxImgPos[0], minImgPos[1]: maxImgPos[1]]
         if zRange is None:
             zRange = tipLength * 1.5
+        zStart = self.dev.globalPosition()[2] + zRange / 2
+        zEnd = self.dev.globalPosition()[2] - zRange / 2
         if zStep is None:
-            zStep = zRange / 30.0
+            zStep = zRange / 30
 
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(
-            centerFrame, padding=tipLength * 0.15, tipLength=tipLength
-        )
-        center = centerFrame.data()[0, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
+        # collect pipette stack
+        frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
+        pxSize = frames[0].info()["pixelSize"]
+        frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
-        # Decide how many frames to collect and at what z depths
-        nFrames = (int(zRange / zStep) // 2) * 2
-        pos = self.dev.globalPosition()
-        zStart = pos[2] + zStep * (nFrames // 2)
-        frames = []
-        bg_frames = []
-        corr = []
+        # collect background stack
+        _future.waitFor(self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow"))
+        bg_frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
+        bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
 
-        print("Collecting %d frames of %0.2fum tip length at %0.2fum resolution." % (nFrames, tipLength*1e6, zStep*1e6))
+        # return pipette to original position
+        self.dev._moveToLocal([tipLength * 3, 0, 0], "slow")
 
-        # Stop camera if it is currently running
-        restart = False
-        if imager.isRunning():
-            restart = True
-            imager.stop()
-
-        scope = self.dev.scopeDevice()
-        try:
-            with pg.ProgressDialog("Acquiring reference frames...", 0, nFrames * 2 + 1) as dlg:
-                # collect 2 stacks of images (second stack is for background subtraction)
-                for j in range(2):
-                    # Set initial focus above start point to reduce hysteresis in focus mechanism
-                    scope.setFocusDepth(zStart + 10e-6).wait()
-
-                    # Acquire multiple frames at different depths
-                    for i in range(nFrames):
-                        # pos[2] = zStart - zStep * i
-                        # self.dev._moveToGlobal(pos, 'slow').wait()
-                        focus = zStart - zStep * i
-                        scope.setFocusDepth(focus, "slow").wait()
-                        # verify this worked!
-                        time.sleep(
-                            0.3
-                        )  # temporary: allow time for position updates to catch up (hopefully we fix this in the near future)
-                        focusError = abs(scope.getFocusDepth() - focus)
-                        if focusError > max(zStep * 0.2, minFocusAccuracy):
-                            raise Exception("Requested focus missed (%0.2f um error)" % (focusError * 1e6))
-
-                        frame = imager.acquireFrames(average)
-                        img = (
-                            frame.data()[:, minImgPos[0] : maxImgPos[0], minImgPos[1] : maxImgPos[1]]
-                            .astype(float)
-                            .mean(axis=0)
-                        )
-                        if j == 0:
-                            frames.append(img)
-                            corr.append(imageTemplateMatch(img, center)[1])
-                        else:
-                            bg_frames.append(img)
-                        dlg += 1
-                        if dlg.wasCanceled():
-                            return
-
-                    if j == 0:
-                        # move tip out-of-frame to collect background images
-                        self.dev._moveToLocal([-tipLength * 3, 0, 0], "slow").wait()
-                    else:
-                        self.dev._moveToLocal([tipLength * 3, 0, 0], "slow")
-
-        finally:
-            # restart camera if it was running
-            if restart:
-                imager.start()
-            scope.setFocusDepth(pos[2])
-
-        # find the index of the frame that most closely matches the initial, tip-focused frame
-        maxInd = np.argmax(corr)
-
-        # stack all frames into a 3D array
-        frames = np.dstack(frames).transpose((2, 0, 1))
-        bg_frames = np.dstack(bg_frames).transpose((2, 0, 1))
-
-        # subtract background
-        # frames -= bg_frame.data()
-
-        # generate downsampled frame versions
-        # (for now we generate these on the fly..)
-        # ds = [frames] + [pg.downsample(pg.downsample(frames, n, axis=1), n, axis=2) for n in [2, 4, 8]]
+        # find frame that most closely matches center frame
+        maxInd = np.argmax([imageTemplateMatch(f, center)[1] for f in frames])
 
         key = imager.getDeviceStateKey()
         self.reference[key] = {
-            "frames": frames - bg_frames,
+            "frames": frames - bg_frames.mean(axis=0),
             "zStep": zStep,
             "centerInd": maxInd,
             "centerPos": tipRelPos,
-            "pixelSize": frame.info()["pixelSize"],
+            "pixelSize": pxSize,
             "tipLength": tipLength,
-            # 'downsampledFrames' = ds,
         }
 
         # Store with pickle because configfile does not support arrays
@@ -301,23 +200,42 @@ class PipetteTracker(object):
             pickle.dump(self.reference, fh)
 
     def measureTipPosition(
-        self, padding=50e-6, threshold=0.6, frame=None, pos=None, tipLength=None, show=False, movePipette=False
+        self, frame, searchRegion="near_tip", padding=50e-6, threshold=0.6, pos=None, tipLength=None, movePipette=False
     ):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
 
-        Return `((x, y, z), corr)`, where *corr* is a measure of the performance of the result (can be used to detect bad results).
+        Parameters
+        -----------
+        frame : Frame
+            A frame acquired from an imager (e.g. using tracker.takeFrame() or imager.acquireFrames(1))
+            Note that the frame must be acquired under simliar conditions to those used previously to collect
+            a reference image set (same objective, filter, lighting, etc.).
+        searchRegion : str
+            May be "near_tip" to search near the expected position of the pipette, or "full_frame" 
+            to search the entire camera field of view.
+        padding : float
+            Distance (m) around expected tip position to search. Applies only when searchRegion=="near_tip".
+        threshold : float
+            If the confidence of the match is less than *threshold*, then raise RuntimeError.
+        pos : array-like
+            Expected position of tip in global coordinates
+        tipLength : float
+            Length (m) of tip to be imaged in order to provide sufficient data to the matching algorithm.
+            This is also used when deciding how far to move the pipette when movePipette==True.
+        movePipette : bool
+            If True, then take two frames with the pipette moved away for the second frame to allow background subtraction
 
-        If the strength of the match is less than *threshold*, then raise RuntimeError.
+        Returns
+        -------
+        tipPos : array-like
+            (x, y, z) predicted location of pipette tip in global coordinates
+        confidence : float
+            Indicates confidence in tipPos (arbitrary units)
+
 
         If movePipette, then take two frames with the pipette moved away for the second frame to allow background subtraction
         """
-        # Grab one frame (if it is not already supplied) and crop it to the region around the pipette tip.
-        if frame is None:
-            frame = self.takeFrame()
-        elif frame == "next":
-            frame = self.getNextFrame()
-
         # load up template images
         reference = self._getReference()
 
@@ -334,12 +252,17 @@ class PipetteTracker(object):
         else:
             bg_frame = None
 
-        # generate suggested crop and pipette position
-        minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
+        detector = self.detectorClass(reference, self.dev)
 
-        # apply machine vision algorithm
-        detector = self.detectorClass(reference)
-        tipPos, performance = detector.findPipette(frame, minImgPos, maxImgPos, pos, bg_frame)
+        if searchRegion == 'near_tip':
+            # generate suggested crop and pipette position
+            minImgPos, maxImgPos, tipRelPos = self.getTipImageArea(frame, padding, pos=pos, tipLength=tipLength)
+            # apply machine vision algorithm
+            tipPos, performance = detector.findPipette(frame, bg_frame, minImgPos, maxImgPos, pos)
+        elif searchRegion == 'entire_frame':
+            tipPos, performance = detector.findPipette(frame, bg_frame)
+        else:
+            raise ValueError("searchRegion must be 'near_tip' or 'entire_frame'")
 
         if performance < threshold:
             raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (performance, threshold))
@@ -355,7 +278,7 @@ class PipetteTracker(object):
         else:
             expectedTipPos = pos
 
-        measuredTipPos, corr = self.measureTipPosition(padding, threshold, frame, pos=pos, movePipette=movePipette)
+        measuredTipPos, corr = self.measureTipPosition(frame, padding, threshold, pos=pos, movePipette=movePipette)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
     def _getReference(self):
@@ -379,7 +302,8 @@ class PipetteTracker(object):
             ref = self._getReference()
             kwds["padding"] = ref["tipLength"]
         if "frame" not in kwds:
-            kwds["frame"] = "next"
+            kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
+        
         try:
             tipPos, corr = self.measureTipPosition(**kwds)
         except RuntimeError:
@@ -391,6 +315,8 @@ class PipetteTracker(object):
         tr.translate(pg.Vector(localError))
         self.dev.setDeviceTransform(tr)
         return localError, corr
+
+    
 
     def mapErrors(
         self,
@@ -487,7 +413,7 @@ class PipetteTracker(object):
                         dlg += 1
 
                         if show:
-                            imv.setImage(frame.data()[0])
+                            imv.setImage(frame.data())
                             p1 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos))
                             p2 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos + err[tuple(ind)]))
                             p3 = frame.globalTransform().inverted()[0].map(pg.Vector(reportedPos))

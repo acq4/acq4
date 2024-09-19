@@ -1,40 +1,40 @@
-from __future__ import print_function
-
-import time
+from typing import Callable, Optional
 
 import numpy as np
+import time
+from MetaArray import MetaArray
 
 from acq4 import Manager
 from acq4.util import Qt
 from acq4.util import debug
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from MetaArray import MetaArray
 
 try:
     import acq4.filetypes.ImageFile
+
     HAVE_IMAGEFILE = True
 except ImportError:
     HAVE_IMAGEFILE = False
 
 
 class RecordThread(Thread):
-    """Class for offloading image recording to a worker thread.
-    """
-    # sigShowMessage = Qt.Signal(object)
+    """Class for offloading image recording to a worker thread."""
+
     sigRecordingFailed = Qt.Signal()
     sigRecordingFinished = Qt.Signal(object, object)  # file handle, num frames
     sigSavedFrame = Qt.Signal(object)
-    
+
     def __init__(self, ui):
         Thread.__init__(self)
         self.m = Manager.getManager()
-        
+
+        self.stopThread = False
         self._stackSize = 0  # size of currently recorded stack
         self._recording = False
         self.currentFrame = None
         self.frameLimit = None
-        
+
         # Interaction with worker thread:
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.newFrames = []  # list of frames and the files they should be sored / appended to.
@@ -52,7 +52,7 @@ class RecordThread(Thread):
         the recording will stop.
         """
         if self.recording:
-            raise Exception("Already recording; cannot start a new stack.")
+            raise RuntimeError("Already recording; cannot start a new stack.")
 
         self.frameLimit = frameLimit
         self._stackSize = 0
@@ -76,10 +76,15 @@ class RecordThread(Thread):
         return self._recording
 
     def saveFrame(self):
-        """Ask the recording thread to save the most recently acquired frame.
-        """
+        """Ask the recording thread to save the most recently acquired frame."""
         with self.lock:
-            self.newFrames.append({'frame': self.currentFrame, 'dir': self.m.getCurrentDir(), 'stack': False})
+            self.newFrames.append(
+                {
+                    'frame': self.currentFrame,
+                    'dir': self.m.getCurrentDir(),
+                    'stack': False,
+                }
+            )
 
     def newFrame(self, frame=None):
         """Inform the recording thread that a new frame has arrived.
@@ -95,10 +100,9 @@ class RecordThread(Thread):
                 self.newFrames.append({'frame': self.currentFrame, 'dir': self.m.getCurrentDir(), 'stack': True})
                 self._stackSize += 1
             framesLeft = len(self.newFrames)
-        if self.recording:
-            if self.frameLimit is not None and self._stackSize >= self.frameLimit:
-                self.frameLimit = None
-                self.stopRecording()
+        if self.recording and self.frameLimit is not None and self._stackSize >= self.frameLimit:
+            self.frameLimit = None
+            self.stopRecording()
         return framesLeft
 
     @property
@@ -117,24 +121,22 @@ class RecordThread(Thread):
             self.stopThread = True
             self.newFrames = []
             self.currentFrame = None
-    
+
     def run(self):
         # run is invoked in the worker thread automatically after calling start()
-        self.stopThread = False
-        
         while True:
             with self.lock:
                 if self.stopThread:
                     break
                 newFrames = self.newFrames[:]
                 self.newFrames = []
-            
+
             try:
                 self.handleFrames(newFrames)
-            except:
-                debug.printExc('Error in image recording thread:')
+            except Exception:
+                debug.printExc("Error in image recording thread:")
                 self.sigRecordingFailed.emit()
-                
+
             time.sleep(100e-3)
 
     def handleFrames(self, frames):
@@ -144,27 +146,24 @@ class RecordThread(Thread):
 
         recFrames = []
         for frame in frames:
-
             if frame is False:
                 # stop current recording
                 if len(recFrames) > 0:
-                    ## write prior frames now
+                    # write prior frames now
                     self.writeFrames(recFrames, dh)
                     recFrames = []
 
                 if self.currentStack is not None:
                     dur = self.lastFrameTime - self.startFrameTime
                     if dur > 0:
-                        fps = (self.currentFrameNum+1) / dur
+                        fps = (self.currentFrameNum + 1) / dur
                     else:
                         fps = 0
                     self.currentStack.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': fps})
-                    # self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentStack.name(), self.currentFrameNum, dur)) 
                     self.sigRecordingFinished.emit(self.currentStack, self.currentFrameNum)
                     self.currentStack = None
                     self.currentFrameNum = 0
                 continue
-
 
             data = frame['frame'].getImage()
             info = frame['frame'].info()
@@ -177,7 +176,7 @@ class RecordThread(Thread):
                     fileName = 'image.tif' if HAVE_IMAGEFILE else 'image.ma'
                     fh = frame['frame'].saveImage(dh, fileName)
                     self.sigSavedFrame.emit(fh.name())
-                except:
+                except Exception:
                     self.sigSavedFrame.emit(False)
                     raise
                 continue
@@ -186,7 +185,7 @@ class RecordThread(Thread):
                 # Store frame to current (or new) stack
                 recFrames.append((data, info))
                 self.lastFrameTime = info['time']
-            
+
         if len(recFrames) > 0:
             self.writeFrames(recFrames, dh)
             self.currentFrameNum += len(recFrames)
@@ -200,14 +199,21 @@ class RecordThread(Thread):
         times = [f[1]['time'] for f in frames]
         translations = np.array([f[1]['transform'].getTranslation() for f in frames])
         arrayInfo = [
-            {'name': 'Time', 'values': np.array(times) - self.startFrameTime, 'units': 's', 'translation': translations},
+            {
+                'name': 'Time',
+                'values': np.array(times) - self.startFrameTime,
+                'units': 's',
+                'translation': translations,
+            },
             {'name': 'X'},
-            {'name': 'Y'}
+            {'name': 'Y'},
         ]
-        imgs = [f[0][np.newaxis,...] for f in frames]
-        
+        imgs = [f[0][np.newaxis, ...] for f in frames]
+
         data = MetaArray(np.concatenate(imgs, axis=0), info=arrayInfo)
         if newRec:
-            self.currentStack = dh.writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time', appendKeys=['translation'])
+            self.currentStack = dh.writeFile(
+                data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time', appendKeys=['translation']
+            )
         else:
             data.write(self.currentStack.name(), appendAxis='Time', appendKeys=['translation'])

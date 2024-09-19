@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
+import numpy as np
 import threading
 import time
+from typing import Optional
 
-import numpy as np
 import pyqtgraph as pg
-from pyqtgraph import Transform3D, solve3DTransform
-
-from acq4.util import ptime
-from acq4.util import Qt
 from acq4.drivers.sensapex import UMP, version_info
+from acq4.util import Qt
+from acq4.util import ptime
+from pyqtgraph import Transform3D, solve3DTransform
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
@@ -68,7 +65,7 @@ class Sensapex(Stage):
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
 
-        self._lastMove = None
+        self._lastMove: Optional[SensapexMoveFuture] = None
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
@@ -122,9 +119,13 @@ class Sensapex(Stage):
             self.dev.stop()
             # also stop the last move since it might be stepwise and just keep requesting more steps
             lastMove = self._lastMove
+            self._lastMove = None  # prevent recursion, since lastMove.stop() will call this method again
             if lastMove is not None:
                 lastMove.stop()
-            self._lastMove = None
+
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / self.dev.ump.poller.interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -175,7 +176,7 @@ class Sensapex(Stage):
             UMP.get_ump().poller.stop()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         if self._force_linear_movement:
             linear = True
         if self._force_nonlinear_movement:
@@ -187,6 +188,30 @@ class Sensapex(Stage):
 
     def deviceInterface(self, win):
         return SensapexInterface(self, win)
+
+    def checkLimits(self, pos):
+        """Raise an exception if *pos* (in local coordinates) is outside the configured limits.
+        Suggest zero calibration for significantly out-of-bounds requests."""
+        likely_miscalibration_tolerance = 200  # device coordinates in µm
+        suggestion = "Does this device need to have its zero calibration run?"
+        for axis, limit in enumerate(self._limits):
+            ax_name = 'xyz'[axis]
+            x = pos[axis]
+            if x is None:
+                continue
+            if limit[0] is not None:
+                msg = f"Position requested for device {self.name()} too small: {pos} {ax_name} axis < {limit[0]}"
+                if x + likely_miscalibration_tolerance < limit[0]:
+                    raise ValueError(f"{msg}\n{suggestion}")
+                if x < limit[0]:
+                    raise ValueError(msg)
+
+            if limit[1] is not None:
+                msg = f"Position requested for device {self.name()} too large: {pos} {ax_name} axis > {limit[1]}"
+                if x - likely_miscalibration_tolerance > limit[1]:
+                    raise ValueError(f"{msg}\n{suggestion}")
+                elif x > limit[1]:
+                    raise ValueError(msg)
 
 
 class SensapexMoveFuture(MoveFuture):
@@ -239,7 +264,7 @@ class SensapexMoveFuture(MoveFuture):
         lastTarget = self.startPos
         print(f"stepwise speed: {speed}  delta: {delta}  distance: {distance}  duration: {duration}")
         while True:
-            # where should be be at this point?
+            # where should we be at this point?
             elapsedTime = ptime.time() - self.startTime
             fractionComplete = min(1.0, elapsedTime / duration)
             currentTarget = self.startPos + delta * fractionComplete
@@ -247,7 +272,7 @@ class SensapexMoveFuture(MoveFuture):
             # rate-limit move requests
             minStepUm = 0.5
             distanceToMove = np.linalg.norm(currentTarget - lastTarget)
-            if distanceToMove < minStepUm:
+            if fractionComplete < 1 and distanceToMove < minStepUm:
                 time.sleep((minStepUm - distanceToMove) / speed)
                 continue
 

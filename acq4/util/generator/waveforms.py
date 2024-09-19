@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from six.moves import range
+
 """
 waveforms.py -  Waveform functions used by StimGenerator
 Copyright 2010  Luke Campagnola

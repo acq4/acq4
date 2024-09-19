@@ -1,102 +1,108 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+from typing import Optional
 
 import pyqtgraph as pg
+from acq4.filetypes.MultiPatchLog import MultiPatchLogWidget
 from acq4.util import Qt
+from acq4.util.DataManager import FileHandle
 from acq4.util.DictView import DictView
-from six.moves import map
 
 
 class FileDataView(Qt.QSplitter):
     def __init__(self, parent):
         Qt.QSplitter.__init__(self, parent)
-        #self.manager = Manager.getManager()
         self.setOrientation(Qt.Qt.Vertical)
-        self.current = None
-        self.currentType = None
-        self.widgets = []
-        self.dictWidget = None
-        #self.plots = []
+        self._current = None
+        self._widgets = []
+        self._dictWidget = None
+        self._cursorText = None
+        self._imageWidget: Optional[pg.ImageView] = None
+        self._multiPatchLogWidget = None
 
-    def setCurrentFile(self, file):
-        #print "=============== set current file ============"
-        if file is self.current:
+    def setCurrentFile(self, fh: FileHandle):
+        if fh is self._current:
             return
-            
-        ## What if we just want to update the data display?
-        #self.clear()
-        
-        if file is None:
-            self.current = None
+        self._current = fh
+        if fh is None or fh.isDir() or (typ := fh.fileType()) is None:
+            self.clear()
             return
-            
-        if file.isDir():
-            ## Sequence or not?
-            return
-        else:
-            typ = file.fileType()
-            if typ is None:
-                return
-            else:
-                image = False
-                with pg.BusyCursor():
-                    data = file.read()
-                if typ == 'ImageFile': 
-                    image = True
-                elif typ == 'MetaArray':
-                    if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
-                        image = True
-                    elif data.ndim > 2:
-                        image = True
-                else:
-                    return
-                        
-        
+
         with pg.BusyCursor():
-            if image:
-                if self.currentType == 'image' and len(self.widgets) > 0:
-                    try:
-                        self.widgets[0].setImage(data, autoRange=False)
-                    except:
-                        print("widget types:", list(map(type, self.widgets)))
-                        raise
+            if typ == 'MultiPatchLog':
+                self.displayMultiPatchLog(fh)
+                return
+
+            data = fh.read()
+            if typ == 'ImageFile':
+                self.displayDataAsImage(data)
+                self.displayMetaInfoForData(data)
+            elif typ == 'MetaArray':
+                if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
+                    self.displayDataAsImage(data)
+                elif data.ndim > 2:
+                    self.displayDataAsImage(data)
                 else:
-                    self.clear()
-                    w = pg.ImageView(self)
-                    #print "add image:", w.ui.roiPlot.plotItem
-                    #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
-                    self.addWidget(w)
-                    w.setImage(data)
-                    self.widgets.append(w)
-                self.currentType = 'image'
-            else:
-                self.clear()
-                w = pg.MultiPlotWidget(self)
-                self.addWidget(w)
-                w.plot(data)
-                self.currentType = 'plot'
-                self.widgets.append(w)
-                #print "add mplot:", w.mPlotItem.plots
-                
-                #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
-        
-        if (hasattr(data, 'implements') and data.implements('MetaArray')):
-            if self.dictWidget is None:
-                w = DictView(data._info)
-                self.dictWidget = w
-                #w.setText(str(data._info[-1]))
-                self.addWidget(w)
-                self.widgets.append(w)
-                h = self.size().height()
-                self.setSizes([int(h*0.8), int(h*0.2)])
-            else:
-                self.dictWidget.setData(data._info)
-            
-        
+                    self.displayDataAsPlot(data)
+                self.displayMetaInfoForData(data)
+
+    def displayMetaInfoForData(self, data):
+        if not hasattr(data, 'implements') or not data.implements('MetaArray'):
+            return
+        info = data.infoCopy()
+        if self._dictWidget is None:
+            w = DictView(info)
+            self._dictWidget = w
+            self.addWidget(w)
+            self._widgets.append(w)
+            h = self.size().height()
+            self.setSizes([int(h * 0.8), int(h * 0.2)])
+        else:
+            self._dictWidget.setData(info)
+
+    def displayDataAsPlot(self, data):
+        self.clear()
+        w = pg.MultiPlotWidget(self)
+        self.addWidget(w)
+        w.plot(data)
+        self._widgets.append(w)
+
+    def displayDataAsImage(self, data):
+        if self._imageWidget is None:
+            self.clear()
+            w = pg.ImageView(self)
+            self._imageWidget = w
+            self._imageWidget.scene.sigMouseMoved.connect(self.noticeMouseMove)
+            self._cursorText = pg.TextItem()
+            self._imageWidget.scene.addItem(self._cursorText)
+            self.addWidget(w)
+            self._widgets.append(w)
+        self._imageWidget.setImage(data, autoRange=False)
+
+    def noticeMouseMove(self, pos):
+        if self._imageWidget is None:
+            return
+        view = self._imageWidget.getView()
+        if not view.sceneBoundingRect().contains(pos):
+            return
+        self._cursorText.setPos(pos.x() + 12, pos.y())
+        pos = view.mapSceneToView(pos)
+        self._cursorText.setText(f'({int(pos.x())}, {int(pos.y())})', color='y')
+
+    def displayMultiPatchLog(self, fh):
+        self.clear()
+        self._multiPatchLogWidget = MultiPatchLogWidget(self)
+        self.addWidget(self._multiPatchLogWidget)
+        self._widgets.append(self._multiPatchLogWidget)
+        self._multiPatchLogWidget.show()
+        self._multiPatchLogWidget.addLog(fh)
+
     def clear(self):
-        for w in self.widgets:
+        for w in self._widgets:
             w.close()
             w.setParent(None)
-        self.widgets = []
-        self.dictWidget = None
-                
+        if self._imageWidget is not None:
+            self._imageWidget.scene.sigMouseMoved.disconnect(self.noticeMouseMove)
+        self._widgets = []
+        self._dictWidget = None
+        self._imageWidget = None
+        self._cursorText = None
+        self._multiPatchLogWidget = None

@@ -1,16 +1,19 @@
 from collections import OrderedDict
 
 import numpy as np
-import time
+from typing import Optional
 
+from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
-from acq4.util.Mutex import Mutex
 from acq4.util import ptime
+from acq4.util.Mutex import Mutex
+from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
-from .testpulse import TestPulseThread
 from ..Camera import Camera
 from ..Device import Device
+from ..Pipette import Pipette
+from ..PressureControl import PressureControl
 
 
 class PatchPipette(Device):
@@ -29,10 +32,7 @@ class PatchPipette(Device):
     """
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
     sigActiveChanged = Qt.Signal(object, object)  # self, active
-    sigTestPulseFinished = Qt.Signal(object, object)  # self, TestPulse
-    sigTestPulseEnabled = Qt.Signal(object, object)  # self, enabled
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
-    sigAutoBiasChanged = Qt.Signal(object, object, object)  # self, enabled, target
     sigMoveStarted = Qt.Signal(object)  # self
     sigMoveFinished = Qt.Signal(object, object)  # self, position
     sigTargetChanged = Qt.Signal(object, object)  # self, target
@@ -48,14 +48,19 @@ class PatchPipette(Device):
 
     # These attributes can be modified to customize state management and test pulse acquisition
     defaultStateManagerClass = PatchPipetteStateManager
-    defaultTestPulseThreadClass = TestPulseThread
 
     def __init__(self, deviceManager, config, name):
         pipName = config.pop('pipetteDevice', None)
-        self.pipetteDevice = deviceManager.getDevice(pipName)
+        self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
-        self.clampDevice = None if clampName is None else deviceManager.getDevice(clampName)
+        if clampName is None:
+            self.clampDevice: Optional[PatchClamp] = None
+        else:
+            self.clampDevice: Optional[PatchClamp] = deviceManager.getDevice(clampName)
+            self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
+            self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
+            self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
 
         Device.__init__(self, deviceManager, config, name)
         self._eventLog = []  # chronological record of events 
@@ -67,20 +72,18 @@ class PatchPipette(Device):
         self.clean = False
         self.calibrated = False
         self.waitingForSwap = False
+        self._lastPos = None
+        self._emitTestPulseData = False
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
         self._pipetteRecord = None
 
-        self.pressureDevice = None
+        self.pressureDevice: Optional[PressureControl] = None
         if 'pressureDevice' in config:
             self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
-        
-        self._lastTestPulse = None
-        self._testPulseThread = None
-        self._initTestPulse(config.get('testPulse', {}))
 
         self._initStateManager()
 
@@ -89,6 +92,8 @@ class PatchPipette(Device):
         self.pipetteDevice.sigMoveFinished.connect(self._pipetteMoveFinished)
         self.pipetteDevice.sigMoveRequested.connect(self._pipetteMoveRequested)
         self.pipetteDevice.sigTargetChanged.connect(self._pipetteTargetChanged)
+        self.pipetteDevice.parentDevice().sigPositionChanged.connect(self._manipulatorTransformChanged)
+        self.pipetteDevice.parentDevice().sigOrientationChanged.connect(self._manipulatorTransformChanged)
 
         deviceManager.declareInterface(name, ['patchpipette'], self)
 
@@ -173,7 +178,8 @@ class PatchPipette(Device):
         """Ready to begin a new patch attempt; reset TP history and patch record.
         """
         self.finishPatchRecord()
-        self.resetTestPulseHistory()
+        if self.clampDevice:
+            self.clampDevice.resetTestPulseHistory()
         self.emitNewEvent('new_patch_attempt', {})
 
     def _resetPatchRecord(self):
@@ -228,13 +234,6 @@ class PatchPipette(Device):
     def setSelected(self):
         pass
 
-    def seal(self):
-        """Attempt to seal onto a cell.
-
-        * switches to VC holding after passing 100 MOhm
-        * increase suction if seal does not form
-        """
-
     def setState(self, state, setActive=True):
         """Attempt to set the state (out, bath, seal, whole cell, etc.) of this patch pipette.
 
@@ -280,9 +279,11 @@ class PatchPipette(Device):
         self.calibrated = True
         self.emitNewEvent('pipette_calibrated')
 
-    def _pipetteTransformChanged(self, pip, movedDevice):
-        pos = pip.globalPosition()
-        self.emitNewEvent('pipette_transform_changed', {'globalPosition': pos})
+    def _manipulatorTransformChanged(self, dev, *args):
+        pos = np.array(self.pipetteDevice.globalPosition())
+        if self._lastPos is None or np.linalg.norm(pos - self._lastPos) > 1e-6:
+            self._lastPos = pos
+            self.emitNewEvent('pipette_transform_changed', {'globalPosition': tuple(pos)})
 
     def setActive(self, active):
         if self.active == active:
@@ -295,87 +296,8 @@ class PatchPipette(Device):
         """Return a widget with a UI to put in the device rack"""
         return PatchPipetteDeviceGui(self, win)
 
-    def _testPulseFinished(self, dev, result):
-        self._lastTestPulse = result
-        if self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
-            newTPH = np.empty(self._testPulseHistory.shape[0]*2, dtype=self._testPulseHistory.dtype)
-            newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
-            self._testPulseHistory = newTPH
-        analysis = result.analysis()
-        self._testPulseHistory[self._testPulseHistorySize]['time'] = result.startTime()
-        for k in analysis:
-            self._testPulseHistory[self._testPulseHistorySize][k] = analysis[k]
-        self._testPulseHistorySize += 1
-
-        self.sigTestPulseFinished.emit(self, result)
-        self.emitNewEvent('test_pulse', result.analysis())
-
-    def _initTestPulse(self, params):
-        self.resetTestPulseHistory()
-        if self.clampDevice is None:
-            self._testPulseThread = None
-            return
-        self._testPulseThread = self.defaultTestPulseThreadClass(self, params)
-        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
-        self._testPulseThread.started.connect(self.testPulseEnabledChanged)
-        self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
-
-    def testPulseHistory(self):
-        return self._testPulseHistory[:self._testPulseHistorySize].copy()
-
-    def resetTestPulseHistory(self):
-        self._lastTestPulse = None
-        self._testPulseHistory = np.empty(1000, dtype=[
-            ('time', 'float'),
-            ('baselinePotential', 'float'),
-            ('baselineCurrent', 'float'),
-            ('peakResistance', 'float'),
-            ('steadyStateResistance', 'float'),
-            ('fitExpAmp', 'float'),
-            ('fitExpTau', 'float'),
-            ('fitExpXOffset', 'float'),
-            ('fitExpYOffset', 'float'),
-            ('capacitance', 'float'),
-        ])
-            
-        self._testPulseHistorySize = 0
-
-    def enableTestPulse(self, enable=True, block=False):
-        if enable:
-            self._testPulseThread.start()
-        elif self._testPulseThread is not None:
-            self._testPulseThread.stop(block=block)
-
-    def testPulseEnabled(self):
-        return self._testPulseThread.isRunning()
-
-    def testPulseEnabledChanged(self):
-        en = self.testPulseEnabled()
-        self.sigTestPulseEnabled.emit(self, en)
-        self.emitNewEvent('test_pulse_enabled', {'enabled': en})
-
-    def setTestPulseParameters(self, **params):
-        self._testPulseThread.setParameters(**params)
-
-    def lastTestPulse(self):
-        return self._lastTestPulse
-
-    def enableAutoBias(self, enable=True):
-        self.setTestPulseParameters(autoBiasEnabled=enable)
-        self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
-        self.emitNewEvent('auto_bias_enabled', OrderedDict([('enabled', enable), ('target', self.autoBiasTarget())]))
-
-    def autoBiasEnabled(self):
-        return self._testPulseThread.getParameter('autoBiasEnabled')
-
-    def setAutoBiasTarget(self, v):
-        self.setTestPulseParameters(autoBiasTarget=v)
-        enabled = self.autoBiasEnabled()
-        self.sigAutoBiasChanged.emit(self, enabled, v)
-        self.emitNewEvent('auto_bias_target_changed', OrderedDict([('enabled', enabled), ('target', v)]))
-
-    def autoBiasTarget(self):
-        return self._testPulseThread.getParameter('autoBiasTarget')
+    def clampStateChanged(self, state):
+        self.emitNewEvent('clamp_state_change', state)
 
     def _initStateManager(self):
         # allow external modification of state manager class
@@ -386,8 +308,10 @@ class PatchPipette(Device):
         return self._stateManager
 
     def quit(self):
-        self.enableTestPulse(False, block=True)
-        self._stateManager.quit()
+        if self.clampDevice:
+            self.clampDevice.enableTestPulse(False, block=True)
+        if getattr(self, '_stateManager', None) is not None:
+            self._stateManager.quit()
 
     def goHome(self, speed, **kwds):
         self.setState('out')
@@ -411,6 +335,18 @@ class PatchPipette(Device):
     def _pipetteTargetChanged(self, pip, pos):
         self.sigTargetChanged.emit(self, pos)
         self.emitNewEvent('target_changed', {'target_position': [pos[0], pos[1], pos[2]]})
+
+    def _autoBiasChanged(self, clamp, enabled, target):
+        self.emitNewEvent('auto_bias_change', {'enabled': enabled, 'target': target})
+
+    def emitFullTestPulseData(self, emit: bool):
+        self._emitTestPulseData = emit
+
+    def _testPulseFinished(self, clamp, result: PatchClampTestPulse):
+        data = result.analysis
+        if self._emitTestPulseData:
+            data['full_test_pulse'] = result
+        self.emitNewEvent('test_pulse', data)
 
     def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict([

@@ -3,7 +3,7 @@ from __future__ import print_function, division
 import weakref
 from threading import Lock, Thread, Event
 
-from six.moves import queue
+
 
 from .future import Future
 

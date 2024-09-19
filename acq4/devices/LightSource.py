@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import annotations
 
 from collections import OrderedDict
-
-from pyqtgraph import SignalBlock
 
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
+from pyqtgraph import SignalBlock
 
 
 class LightSource(Device):
@@ -56,9 +54,6 @@ class LightSource(Device):
         Device.__init__(self, dm, config, name)
         self.sourceConfigs = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
         self._lock = Mutex.Mutex()
-        if config.get("mock", False):
-            for key,sourceConfig in config.get('sources', {}).items():
-                self.addSource(key, sourceConfig)
 
     def deviceInterface(self, win):
         return LightSourceDevGui(self)
@@ -89,6 +84,17 @@ class LightSource(Device):
         """Return the names of all active light sources.
         """
         return [s['name'] for s in self.sourceConfigs if s['active']]
+
+    def loadPreset(self, conf: str | dict):
+        if conf == 'off':
+            for c in self.sourceConfigs:
+                self.setSourceActive(c, False)
+            return
+        chan = conf['channel']
+        for c in self.sourceConfigs:
+            self.setSourceActive(c, c == chan)
+        if 'brightness' in conf:
+            self.setSourceBrightness(chan, conf['brightness'])
 
     def sourceActive(self, name):
         """Return True if the named light source is currently active.

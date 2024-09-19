@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import os
 import traceback
-import weakref
+from contextlib import contextmanager
+from typing import Optional
 
 import acq4
 from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
+from acq4.util.optional_weakref import Weakref
 
 
 class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
@@ -30,7 +32,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
-        Device._deviceCreationOrder.append(weakref.ref(self))
+        Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
             
     def name(self):
@@ -86,6 +88,14 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         fileName = os.path.join(self.configPath(), filename)
         return self.dm.appendConfigFile(data, fileName)
 
+    @contextmanager
+    def reserved(self):
+        self.reserve()
+        try:
+            yield
+        finally:
+            self.release()
+
     def reserve(self, block=True, timeout=20):
         """Reserve this device globally.
 
@@ -139,7 +149,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         return {'input': None, 'output': None}
     
     def __repr__(self):
-        return '<%s "%s">' % (self.__class__.__name__, self.name())
+        return f'<{self.__class__.__name__} "{self.name()}">'
     
 
 class DeviceTask(object):
@@ -160,7 +170,7 @@ class DeviceTask(object):
         operating synchronously.
         """
         self.dev = dev
-        self.__parentTask = weakref.ref(parentTask)
+        self.__parentTask = Weakref(parentTask)
         
     def parentTask(self):
         return self.__parentTask()
@@ -227,7 +237,6 @@ class DeviceTask(object):
         """
         return [], []
 
-    
     def start(self):
         """
         This method instructs the device to begin execution of the task.
@@ -346,7 +355,7 @@ class TaskGui(Qt.QWidget):
         """
         return {}
         
-    def generateTask(self, params: "Dict | None" = None) -> dict:
+    def generateTask(self, params: Optional[dict] = None) -> dict:
         """
         This method should convert params' index-values back into task-values, along with any default work non-sequenced
         tasks need. WARNING! Long sequences will not automatically lock the UI or preserve the state of your parameter

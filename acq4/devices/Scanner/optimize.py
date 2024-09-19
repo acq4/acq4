@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy as np
-from six.moves import range
+
 #from debug import Profiler
 
 def opt2(locs, minTime, minDist, deadTime, greed=1.0, seed=None, compMethod='rms'):

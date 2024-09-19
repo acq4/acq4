@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from MetaArray import MetaArray
-from six.moves import range
+
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),
@@ -24,7 +24,7 @@ deviceNames = {
 }
 
 # current and voltage clamp modes that are know to us
-ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow']
+ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow', 'i=0', 'I=0']
 vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
 
 """Function library for formalizing the raw data structures used in analysis.
@@ -397,14 +397,13 @@ def getBridgeBalanceCompensation(data_handle):
     mode = getClampMode(data)
     global ic_modes
     if mode not in ic_modes:
-        raise Exception(
-            "Data is in %s mode, not a current clamp mode, and therefore bridge balance compensation is not applicable." % str(
-                mode))
+        raise ValueError(f"Data is in {mode} mode, not a current clamp mode, and therefore bridge balance "
+                         f"compensation is not applicable.")
 
     info = data.infoCopy()[-1]
     bridgeEnabled = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalEnable', None)
     if bridgeEnabled is None:
-        raise Exception('Could not find whether BridgeBalance compensation was enabled for the given data.')
+        raise ValueError('Could not find whether BridgeBalance compensation was enabled for the given data.')
     elif not bridgeEnabled:
         return 0.0
     else:

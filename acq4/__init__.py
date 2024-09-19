@@ -1,6 +1,5 @@
 import os
 import sys
-from .util import pg_setup
 
 __version__ = '0.9.3'
 

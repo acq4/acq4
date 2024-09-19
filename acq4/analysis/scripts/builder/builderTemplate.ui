@@ -32,7 +32,7 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <layout class="QGridLayout" name="gridLayout_5">
+      <layout class="QGridLayout" name="imgLayout">
        <item row="0" column="0">
         <widget class="GraphicsView" name="view">
          <property name="sizePolicy">
@@ -72,29 +72,8 @@
           <string>View</string>
          </property>
          <layout class="QGridLayout" name="gridLayout">
-          <item row="1" column="1">
-           <widget class="QRadioButton" name="dorsalRadio">
-            <property name="text">
-             <string>Dorsal</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QRadioButton" name="rostralRadio">
-            <property name="text">
-             <string>Rostral</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QRadioButton" name="rightRadio">
-            <property name="text">
-             <string>Right</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
+          <item row="0" rowspan="3" column="0" colspan="2">
+            <widget class="QTextBrowser" name="helpText" />
           </item>
           <item row="4" column="1">
            <widget class="QCheckBox" name="greyCheck">

@@ -1,17 +1,15 @@
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
-from __future__ import print_function
-from __future__ import division
-import serial, struct, time, collections, re
-import numpy as np
+
+import contextlib
+import re
+from typing import Optional
 
 from acq4.util.Mutex import RecursiveMutex as RLock
 from acq4.util.debug import printExc
 from ..SerialDevice import SerialDevice
-from six.moves import map
-from six.moves import range
-
+from ...util.typing import Number
 
 # Data provided by Scientifica
 _device_types = """
@@ -65,23 +63,28 @@ class Scientifica(SerialDevice):
     availableDevices = None
 
     @classmethod
-    def enumerateDevices(cls):
+    def enumerateDevices(cls) -> dict[str, str]:
         """Generate a list of all Scientifica devices found in the system.
 
         Sets Scientifica.availableDevices to a dict of {name: port} pairs.
 
         This works by searching for USB serial devices with device IDs used by Scientifica
-        (vid=0403, pid=6010) and sending a single serial request.
+        (vid:pid 0403:6010 or 10C4:EA70) and sending a single serial request.
         """
         import serial.tools.list_ports
         coms = serial.tools.list_ports.comports()
         devs = {}
         for com, name, ident in coms:
-            # several different ways this can appear:
-            #  VID_0403+PID_6010
-            #  VID_0403&PID_6010
-            #  VID:PID=0403:6010
-            if ('VID_0403' not in ident or 'PID_6010' not in ident) and '0403:6010' not in ident:
+            isScientifica = False
+            for vid,pid in [('0403', '6010'), ('10C4', 'EA70')]:
+                # several different ways this can appear:
+                #  VID_0403+PID_6010
+                #  VID_0403&PID_6010
+                #  VID:PID=0403:6010
+                if (f'VID_{vid}' in ident and f'PID_{pid}' in ident) or f'{vid}:{pid}' in ident:
+                    isScientifica = True
+                    break
+            if not isScientifica:
                 continue
             com = cls.normalizePortName(com)
             if com in cls.openDevices:
@@ -93,11 +96,14 @@ class Scientifica(SerialDevice):
                     devs[s.getDescription()] = com
                     s.close()
                 except Exception:
-                    printExc("Error while initializing Scientifica device at %s (the device at this port will not be available):" % com)
+                    printExc(
+                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):"
+                    )
 
         cls.availableDevices = devs
+        return devs
 
-    def __init__(self, port=None, name=None, baudrate=None, ctrl_version=2):
+    def __init__(self, port=None, name=None, baudrate=None, ctrl_version: Optional[Number] = 2):
         self.lock = RLock()
 
         if name is not None:
@@ -107,16 +113,17 @@ class Scientifica(SerialDevice):
             if self.availableDevices is None:
                 self.enumerateDevices()
             if name not in self.availableDevices:
-                raise ValueError('Could not find Scientifica device with description "%s". Options are: %s' % 
-                    (name, list(self.availableDevices.keys())))
+                raise ValueError(
+                    f'Could not find Scientifica device with description "{name}". Options are: {list(self.availableDevices.keys())}'
+                )
             port = self.availableDevices[name]
 
         if port is None:
             raise ValueError("Must specify either name or port.")
-            
+
         self.port = self.normalizePortName(port)
         if self.port in self.openDevices:
-            raise RuntimeError("Port %s is already in use by %s" % (port, self.openDevices[self.port]))
+            raise RuntimeError(f"Port {port} is already in use by {self.openDevices[self.port]}")
 
         # try both baudrates, regardless of the requested rate
         # (but try the requested rate first)
@@ -126,12 +133,12 @@ class Scientifica(SerialDevice):
         elif baudrate == 38400:
             baudrates = [38400, 9600]
         else:
-            raise ValueError('invalid baudrate %s' % baudrate)
+            raise ValueError(f'invalid baudrate {baudrate}')
 
         # Attempt connection
         connected = False
         for baudrate in baudrates:
-            try:
+            with contextlib.suppress(TimeoutError):
                 SerialDevice.__init__(self, port=self.port, baudrate=baudrate)
                 try:
                     sci = self.send('scientifica', timeout=0.2)
@@ -141,21 +148,24 @@ class Scientifica(SerialDevice):
 
                 if sci != b'Y519':
                     # Device responded, not scientifica.
-                    raise ValueError("Received unexpected response from device at %s. (Is this a scientifica device?)" % port)
+                    raise ValueError(
+                        f"Received unexpected response from device at {port}. (Is this a scientifica device?)"
+                    )
                 connected = True
                 break
-            except TimeoutError:
-                pass
-
         if not connected:
-            raise RuntimeError("No response received from Scientifica device at %s. (tried baud rates: %s)" % (port, ', '.join(map(str, baudrates))))
+            raise RuntimeError(
+                f"No response received from Scientifica device at {port}. (tried baud rates: {', '.join(map(str, baudrates))})"
+            )
 
         Scientifica.openDevices[self.port] = self
         self._version = float(self.send('ver'))
         if ctrl_version is not None and ((self._version >= 3) != (ctrl_version >= 3)):
             name = self.getDescription()
-            err = RuntimeError("Scientifica device %s uses controller version %s, but version %s was requested. Warning: speed and acceleration"
-                               " parameter values are NOT compatible between controller versions." % (name, self._version, ctrl_version))
+            err = RuntimeError(
+                f"Scientifica device {name} uses controller version {self._version}, but version {ctrl_version}"
+                f" was requested. Warning: speed and acceleration parameter values are NOT compatible between"
+                f" controller versions.")
             err.dev_version = self._version
             raise err
 
@@ -166,7 +176,7 @@ class Scientifica(SerialDevice):
         SerialDevice.close(self)
         del Scientifica.openDevices[port]
 
-    def send(self, msg, timeout=5):
+    def send(self, msg, timeout=5.0):
         with self.lock:
             self.write(msg + '\r')
             try:
@@ -177,7 +187,7 @@ class Scientifica(SerialDevice):
                 raise
             if result.startswith(b'E,'):
                 errno = int(result.strip()[2:])
-                exc = RuntimeError("Received error %d from Scientifica controller (request: %r)" % (errno, msg))
+                exc = RuntimeError(f"Received error {errno:d} from Scientifica controller (request: {msg!r})")
                 exc.errno = errno
                 raise exc
             return result
@@ -190,16 +200,52 @@ class Scientifica(SerialDevice):
         if it is unknown.
         """
         types = {
-            '1': 'linear', '2': 'ums', '3': 'mmtp', '4': 'slicemaster', '5': 'patchstar',
-            '6': 'mmsp', '7': 'mmsp_z', '1.05': 'patchstar', '1.08': 'microstar', '1.09': 'ums', '1.10': 'imtp',
-            '1.11': 'slice_scope', '1.12': 'condenser', '1.13': 'mmbp', '1.14': 'ivm_manipulator',
-            '3.01': 'linear', '3.02': 'ums', '3.03': 'mmtp', '3.04': 'slicemaster', '3.05': 'patchstar',
-            '3.06': 'mmsp', '3.07': 'mmsp_z', '3.08': 'microstar', '3.09': 'ums', '3.10': 'imtp',
-            '3.11': 'slicescope', '3.12': 'condenser', '3.13': 'mmbp', '3.14': 'ivm_manipulator', '3.15': 'custom',
-            '3.16': 'extended_patchstar', '3.17': 'ivm_mini',
+            '1': 'linear',
+            '2': 'ums',
+            '3': 'mmtp',
+            '4': 'slicemaster',
+            '5': 'patchstar',
+            '6': 'mmsp',
+            '7': 'mmsp_z',
+            '1.05': 'patchstar',
+            '1.08': 'microstar',
+            '1.09': 'ums',
+            '1.10': 'imtp',
+            '1.11': 'slice_scope',
+            '1.12': 'condenser',
+            '1.13': 'mmbp',
+            '1.14': 'ivm_manipulator',
+            '3.01': 'linear',
+            '3.02': 'ums',
+            '3.03': 'mmtp',
+            '3.04': 'slicemaster',
+            '3.05': 'patchstar',
+            '3.06': 'mmsp',
+            '3.07': 'mmsp_z',
+            '3.08': 'microstar',
+            '3.09': 'ums',
+            '3.10': 'imtp',
+            '3.11': 'slicescope',
+            '3.12': 'condenser',
+            '3.13': 'mmbp',
+            '3.14': 'ivm_manipulator',
+            '3.15': 'custom',
+            '3.16': 'extended_patchstar',
+            '3.17': 'ivm_mini',
+            '3.18': 'slicescope_2',
+            '3.19': 'ivm_3000_rotary',
+            '3.20': 'patchscope_pro',
+            '3.21': 'patchscope_pro_turret',
+            '3.22': 'ivm_3000',
         }
         typ = self.send('type').decode()
         return types.get(typ, typ)
+
+    def hasSeparateZSpeed(self):
+        return self.getType() not in [
+            'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
+            'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',
+        ]
 
     def getDescription(self):
         """Return this device's description string.
@@ -209,7 +255,7 @@ class Scientifica(SerialDevice):
     def setDescription(self, desc):
         """Set this device's description string.
         """
-        return self.send('desc %s' % desc)
+        return self.send(f'desc {desc}')
 
     def getPos(self, _tryagain=True):
         """Get current manipulator position reported by controller in micrometers.
@@ -239,6 +285,8 @@ class Scientifica(SerialDevice):
     _param_commands = {
         'maxSpeed': ('TOP', 'TOP %f', float),
         'minSpeed': ('FIRST', 'FIRST %f', float),
+        'maxZSpeed': ('TOPZ', 'TOPZ %f', float),
+        'minZSpeed': ('FIRSTZ', 'FIRSTZ %f', float),
         'accel': ('ACC', 'ACC %f', float),
         'joyAccel': ('JACC', 'JACC %f', float),
         'joyFastScale': ('JSPEED', 'JSPEED %f', float),
@@ -254,8 +302,7 @@ class Scientifica(SerialDevice):
 
     @staticmethod
     def boolToInt(v):
-        v = bool(v)
-        return 0 if v is False else 1
+        return 1 if bool(v) else 0
 
     @staticmethod
     def intToBool(v):
@@ -279,6 +326,8 @@ class Scientifica(SerialDevice):
             * minSpeed: Initial speed for stage movement under both programmatic and manual control.
               This value is equal to `max_speed (um/sec) * 2 * userScale[axis]`. Must be between 1000
               and 50,000.
+            * maxZSpeed: As per `maxSpeed`, but for the distinct Z axis on some devices.
+            * minZSpeed: As per `minSpeed`, but for the distinct Z axis on some devices.
             * accel: Acceleration for stage movement under both programmatic and manual control.
               This value is equal to `accel (um^2/sec) * userScale[axis] / 250`. Must be between
               10 and 1,000.
@@ -294,6 +343,8 @@ class Scientifica(SerialDevice):
             * approachMode: Boolean indicating whether the manipulator is in approach mode. This can be
               set programmatically or by toggling the approach switch on the input device (but to
               prevent user confusion, setting this value programmatically is discouraged).
+            * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
+            * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
 
         Notes
         -----
@@ -381,7 +432,7 @@ class Scientifica(SerialDevice):
 
     def _readAxisScale(self):
         # read and record axis scale factors
-        self._axis_scale = tuple([self.getAxisScale(i) for i in (0, 1, 2)])
+        self._axis_scale = tuple(self.getAxisScale(i) for i in (0, 1, 2))
 
     def getSpeed(self):
         """Return the maximum speed of the stage along the X axis in um/sec.
@@ -402,9 +453,10 @@ class Scientifica(SerialDevice):
         speed will also be different.
         """
         if self._version < 3:
-            self.setParam('maxSpeed', speed * 2 * abs(self._axis_scale[0]))
-        else:
-            self.setParam('maxSpeed', speed)
+            speed = speed * 2 * abs(self._axis_scale[0])
+        self.setParam('maxSpeed', speed)
+        if self.hasSeparateZSpeed():
+            self.setParam('maxZSpeed', speed)
 
     def moveTo(self, pos, speed=None):
         """Set the position of the manipulator.
@@ -430,9 +482,7 @@ class Scientifica(SerialDevice):
                 else:
                     pos[i] = int(pos[i] * 100)  # convert to units of 0.01 um
 
-            if speed is None:
-                speed = self.getSpeed()
-            else:
+            if speed is not None:
                 self.setSpeed(speed)
 
             # Send move command
@@ -480,4 +530,3 @@ class Scientifica(SerialDevice):
             self.write('BAUD %s\r' % baudkey)
             self.close()
             self.open(baudrate=baudrate)
-

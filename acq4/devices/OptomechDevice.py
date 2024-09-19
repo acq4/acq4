@@ -1,12 +1,11 @@
-from __future__ import print_function
-from acq4.util import Qt
-from .Device import Device
-from acq4.util.Mutex import Mutex
-from acq4.Interfaces import InterfaceMixin
-import pyqtgraph as pg
 import collections
+
 import numpy as np
-import six
+
+import pyqtgraph as pg
+from acq4.Interfaces import InterfaceMixin
+from acq4.util import Qt
+from acq4.util.Mutex import Mutex
 
 
 class OptomechDevice(InterfaceMixin):
@@ -223,7 +222,7 @@ class OptomechDevice(InterfaceMixin):
                 self.__parent.__children.remove(self)
 
             # look up device from its name
-            if isinstance(parent, six.string_types):
+            if isinstance(parent, str):
                 parent = self.__devManager.getDevice(parent)
             
             # connect to the new parent
@@ -331,11 +330,11 @@ class OptomechDevice(InterfaceMixin):
                 elif len(obj) == 3:
                     obj = Qt.QVector3D(*obj)
                 else:
-                    raise TypeError("Cannot map %s of length %d." % (type(obj).__name__, len(obj)))
+                    raise TypeError(f"Cannot map {type(obj).__name__} of length {len(obj)}.")
             elif isinstance(obj[0], np.ndarray):
                 obj = np.concatenate([x[np.newaxis, ...] for x in obj])
             else:
-                raise Exception ('Cannot map--object of type %s ' % str(type(obj[0])))
+                raise TypeError(f'Cannot map--object of type {type(obj[0])}')
 
         if isinstance(obj, Qt.QPointF):
             ret = tr.map(obj)
@@ -349,11 +348,10 @@ class OptomechDevice(InterfaceMixin):
             return ret
 
         elif isinstance(obj, np.ndarray):
-            m2 = pg.transformCoordinates(tr, obj)
-            return m2
+            return pg.transformCoordinates(tr, obj)
         else:
-            raise Exception('Cannot map--object of type %s ' % str(type(obj))) 
-    
+            raise TypeError(f'Cannot map--object of type {type(obj)}')
+
     def deviceTransform(self, subdev=None):
         """
         Return this device's affine transformation matrix. 
@@ -626,7 +624,7 @@ class OptomechDevice(InterfaceMixin):
                 return None
             elif hasattr(dev, 'implements') and dev.implements('OptomechDevice'):
                 return dev
-            elif isinstance(dev, six.string_types):
+            elif isinstance(dev, str):
                 return self.__subdevices[dev]
             else:
                 raise Exception("Invalid argument: %s" % str(dev))
@@ -639,7 +637,7 @@ class OptomechDevice(InterfaceMixin):
         if dev is None:
             dev = self.__subdevice
             return {self.name(): dev}
-        if isinstance(dev, six.string_types):
+        if isinstance(dev, str):
             return {self.name(): self.__subdevices[dev]}
             
     def setCurrentSubdevice(self, dev):

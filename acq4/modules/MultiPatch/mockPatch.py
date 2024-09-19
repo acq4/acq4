@@ -1,23 +1,16 @@
 import numpy as np
-from acq4.devices.PatchPipette.testpulse import TestPulse
+
+from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt, ptime
 
 
 class MockPatch(object):
-    def __init__(self, pipette):
+    def __init__(self, pipette: PatchPipette):
         self.pipette = pipette
-        self.enabled = False
+        self.pipette.clampDevice.sigTestPulseFinished.connect(self._onTestPulse)
         self.widget = MockPatchUI(self)
-
+        self._enabled = False
         self.resetState()
-
-        pipette._testPulseThread.setParameters(testPulseClass=self.createTestPulse)
-    
-    def createTestPulse(self, dev, taskParams, result):
-        tp = TestPulse(dev, taskParams, result)
-        if self.enabled:
-            tp._analysis = self.generateAnalysis()
-        return tp
 
     def resetState(self):
         self.radius = 7e-6
@@ -88,11 +81,31 @@ class MockPatch(object):
 
         i = (holding - self.membranePotential) / ssr
 
-        return {'baselinePotential': holding, 'baselineCurrent': i, 'peakResistance': pr, 'steadyStateResistance': ssr, 'capacitance': cap}
+        return {
+            'baseline_potential': holding,
+            'baseline_current': i,
+            'access_resistance': pr,
+            'input_resistance': ssr - pr,
+            'steady_state_resistance': ssr,
+            'capacitance': cap,
+            'fit_amplitude': 0,
+            'time_constant': cap * ssr,
+            'fit_yoffset': 0,
+            'fit_xoffset': 0,
+        }
+
+    def _onTestPulse(self, tp):
+        # TODO this won't be triggered in time to impact the current test pulse? maybe that's good enough?
+        if self._enabled:
+            self.pipette.clampDevice.mockTestPulseAnalysis(**self.generateAnalysis())
+
+    def setEnabled(self, enabled):
+        self.resetState()
+        self._enabled = enabled
 
 
 class MockPatchUI(Qt.QWidget):
-    def __init__(self, mp):
+    def __init__(self, mp: MockPatch):
         self.mockpatch = mp
 
         Qt.QWidget.__init__(self)
@@ -112,4 +125,4 @@ class MockPatchUI(Qt.QWidget):
         self.foulBtn.setCheckable(True)
 
     def enableClicked(self):
-        self.mockpatch.enabled = self.enableBtn.isChecked()
+        self.mockpatch.setEnabled(self.enableBtn.isChecked())

@@ -5,7 +5,7 @@ import os
 from collections import OrderedDict
 
 import numpy as np
-from six.moves import range
+
 
 import acq4.analysis.modules.EventDetector as EventDetector
 import pyqtgraph as pg

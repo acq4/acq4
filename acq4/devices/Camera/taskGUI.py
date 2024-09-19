@@ -29,7 +29,7 @@ class CameraTaskGui(DAQGenericTaskGui):
             p.plotItem.ctrl.maxTracesSpin.setValue(1)
             p.plotItem.ctrl.forgetTracesCheck.setChecked(True)
         
-        tModes = self.dev.listParams('triggerMode')[0]
+        tModes = self.dev.listParams(['triggerMode'])['triggerMode'][0]
         for m in tModes:
             self.ui.triggerModeCombo.addItem(m)
         
@@ -85,7 +85,7 @@ class CameraTaskGui(DAQGenericTaskGui):
             task['pushState'] = None
             task['popState'] = None
         if state['fixedFrameEnabled']:
-            task['minFrames'] = state['minFrames']
+            task['minFrames'] = int(state['minFrames'])
         return task
         
     def taskSequenceStarted(self):

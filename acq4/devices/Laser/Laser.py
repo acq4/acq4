@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from scipy import stats
-from six.moves import range
+
 
 from MetaArray import MetaArray
 from acq4.Manager import getManager, logMsg

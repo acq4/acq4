@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from six.moves import range
+
 
 from acq4.util import Qt
 import pyqtgraph as pg

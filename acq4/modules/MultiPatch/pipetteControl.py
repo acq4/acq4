@@ -1,11 +1,11 @@
+import numpy as np
 import re
 
 import pyqtgraph as pg
-from six.moves import range
-from six.moves import zip
-
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
+from neuroanalysis.data import TSeries
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
@@ -31,7 +31,7 @@ class PipetteControl(Qt.QWidget):
     sigLockChanged = Qt.Signal(object, object)
     sigPlotModesChanged = Qt.Signal(object)  # mode list
 
-    def __init__(self, pipette, mainWin, parent=None):
+    def __init__(self, pipette: PatchPipette, mainWin, parent=None):
         Qt.QWidget.__init__(self, parent)
         self.pip = pipette
         self.mainWin = mainWin
@@ -40,15 +40,29 @@ class PipetteControl(Qt.QWidget):
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
-            self.pip.sigTestPulseFinished.connect(self.updatePlots)
-            self.pip.sigAutoBiasChanged.connect(self.autoBiasChanged)
+            self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
+            self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
             if self.pip.pressureDevice is not None:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
 
-        self.ui.holdingSpin.setOpts(
+        self.ui.vcHoldingSpin.setOpts(
+            bounds=[None, None],
+            decimals=0,
+            siPrefix=True,
+            format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
+            **_vc_mode_opts,
+        )
+        self.ui.icHoldingSpin.setOpts(
+            bounds=[None, None],
+            decimals=0,
+            siPrefix=True,
+            format='{scaledValue:.3g} {siPrefix:s}{suffix:s}',
+            **_ic_mode_opts,
+        )
+        self.ui.autoBiasTargetSpin.setOpts(
             bounds=[None, None],
             decimals=0,
             siPrefix=True,
@@ -57,15 +71,7 @@ class PipetteControl(Qt.QWidget):
         )
         self.ui.autoOffsetBtn.clicked.connect(self.autoOffsetRequested)
         self.ui.autoPipCapBtn.clicked.connect(self.autoPipCapRequested)
-
-        self.displayWidgets = [
-            self.ui.stateText,
-            self.ui.modeText,
-            self.ui.holdingSpin,
-            self.ui.pressureWidget.pressureSpin,
-        ]
-        for w in self.displayWidgets:
-            w.setFixedHeight(20)
+        self.ui.autoBridgeBalanceBtn.clicked.connect(self.autoBridgeBalanceRequested)
 
         n = re.sub(r'[^\d]+', '', pipette.name())
         self.ui.activeBtn.setText(n)
@@ -75,8 +81,20 @@ class PipetteControl(Qt.QWidget):
         self.ui.lockBtn.clicked.connect(self.lockClicked)
         self.ui.tipBtn.clicked.connect(self.focusTipBtnClicked)
         self.ui.targetBtn.clicked.connect(self.focusTargetBtnClicked)
+
+        self.modeGroup = Qt.QButtonGroup()
+        self.modeGroup.addButton(self.ui.vcBtn, 0)
+        self.modeGroup.addButton(self.ui.icBtn, 1)
+        self.modeGroup.addButton(self.ui.i0Btn, 2)
+        self.modeGroup.idClicked.connect(self.modeBtnClicked)
+
+        self._lockAutoBias = False  # prevent autoBias from being disabled when IC holding is changed automatically
         self.ui.autoBiasBtn.clicked.connect(self.autoBiasClicked)
-        self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
+        self.ui.autoBiasVcBtn.clicked.connect(self.autoBiasVcClicked)
+        self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingSpinChanged)
+        self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
+        self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
+
         self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
@@ -87,7 +105,6 @@ class PipetteControl(Qt.QWidget):
                 self.stateMenu.addAction(state, self.stateActionClicked)
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
-        self._pc2 = MousePressCatch(self.ui.modeText, self.modeTextClicked)
 
         self.plots = [
             PlotWidget(mode='test pulse'), 
@@ -106,7 +123,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
             self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
-            self.autoBiasChanged(self.pip, self.pip.autoBiasEnabled(), self.pip.autoBiasTarget())
+            self._updateAutoBiasUi()
+            self._updateActiveHoldingUi()
 
     def active(self):
         return self.ui.activeBtn.isChecked()
@@ -147,8 +165,8 @@ class PipetteControl(Qt.QWidget):
 
     def updatePlots(self):
         """Update the pipette data plots."""
-        tp = self.pip.lastTestPulse()
-        tph = self.pip.testPulseHistory()
+        tp = self.pip.clampDevice.lastTestPulse()
+        tph = self.pip.clampDevice.testPulseHistory()
         for plt in self.plots:
             plt.newTestPulse(tp, tph)
 
@@ -157,90 +175,83 @@ class PipetteControl(Qt.QWidget):
         state = pipette.getState()
         self.ui.stateText.setText(state.stateName)
 
-    def clampStateChanged(self, state):
-        if self.clampMode() != state['mode']:
-            self.ui.modeText.setText(state['mode'])
-            self.updateHoldingInfo(mode=state['mode'])
+    def clampHoldingChanged(self, mode, val):
+        try:
+            self._lockAutoBias = True
+            # don't allow this update to disable auto bias
+            self._setHoldingSpin(mode, val)
+        finally:
+            self._lockAutoBias = False
+        if mode == 'VC' and self.pip.clampDevice.autoBiasTarget() is None:
+            self.ui.autoBiasTargetSpin.setValue(val)
 
-    def clampHoldingChanged(self, clamp, mode):
-        clamp = self.pip.clampDevice
-        currentMode = str(self.ui.modeText.text()).upper()
-        if mode != currentMode:
-            return
-        self.updateHoldingInfo(mode=mode)
-        # hval = clamp.getHolding(mode)
-        # if currentMode == 'IC':
-        #     if self.pip.autoBiasEnabled():
-        #         self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
-        #     else:
-        #         self._setHoldingSpin(hval, 'A')
-        # elif currentMode == 'VC':
-        #     self._setHoldingSpin(hval, 'V')
-
-    def autoBiasChanged(self, pip, enabled, target):
-        self.updateAutoBiasSpin()
-        with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
-            self.ui.autoBiasBtn.setChecked(enabled)
-
-    def updateAutoBiasSpin(self):
-        if self.pip.autoBiasEnabled() and self.clampMode() == 'IC':
-            biasTarget = self.pip.autoBiasTarget()
-            self._setHoldingSpin(biasTarget, 'V')
-
-    def holdingSpinChanged(self):
+    def vcHoldingSpinChanged(self, value):
         # NOTE: The spin emits a delayed signal when the user changes its value. 
         # That means if we are not careful, some other signal could reset the value
         # of the spin before it has even emitted the change signal, causing the user's
         # requested change to be cancelled.
-        val = self.ui.holdingSpin.value()
-        mode = self.clampMode()
-        if mode == 'VC' or (mode == 'IC' and self.pip.autoBiasEnabled()):
-            print("Set auto bias target:", val)
-            self.pip.setAutoBiasTarget(val)
-        if not (mode == 'IC' and self.pip.autoBiasEnabled()):
-            self.pip.clampDevice.setHolding(mode, val)
+        with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+            self.pip.clampDevice.setHolding('VC', value)
 
-    def clampMode(self):
+    def icHoldingSpinChanged(self, value):
+        if not self._lockAutoBias:
+            self.pip.clampDevice.enableAutoBias(False)
+        with pg.SignalBlock(self.pip.clampDevice.sigHoldingChanged, self.clampHoldingChanged):
+            self.pip.clampDevice.setHolding('IC', value)
+
+    def autoBiasSpinChanged(self, value):
+        if not self.ui.autoBiasVcBtn.isChecked():
+            self.pip.clampDevice.setAutoBiasTarget(value)
+        
+    def selectedClampMode(self):
         """Return the currently displayed clamp mode (not necessarily the same as the device clamp mode)
         """
-        return str(self.ui.modeText.text()).upper()
+        return [None, 'VC', 'IC', 'I=0'][self.modeGroup.checkedId() + 1]
 
-    def updateHoldingInfo(self, mode=None):
-        clamp = self.pip.clampDevice
-        if mode is None:
-            mode = clamp.getMode()
-        hval = clamp.getHolding(mode)
+    def modeBtnClicked(self, btnId):
+        mode = self.selectedClampMode()
+        with pg.SignalBlock(self.pip.clampDevice.sigStateChanged, self.clampStateChanged):
+            self.pip.clampDevice.setMode(mode)
+        self._updateActiveHoldingUi()
 
-        if self.pip.autoBiasEnabled():
-            if mode == 'VC':
-                spinVal = hval
-                units = 'V'
-                self.ui.autoBiasBtn.setText('bias: vc')
+    def clampStateChanged(self, state):
+        mode = self.selectedClampMode()
+        if mode != state['mode']:
+            btnId = {'VC': 0, 'IC': 1, 'I=0': 2}[state['mode']]
+            with pg.SignalBlock(self.modeGroup.idClicked, self.modeBtnClicked):
+                self.modeGroup.button(btnId).setChecked(True)
+
+            self._updateActiveHoldingUi()
+
+    def _updateActiveHoldingUi(self):
+        # color the holding controls that are currently active
+        mode = self.selectedClampMode()
+        bias_mode = 'VC' if self.ui.autoBiasVcBtn.isChecked() else 'manual'
+        bias_enabled = self.ui.autoBiasBtn.isChecked()
+        active_style = "SpinBox {background-color: #DFD;}"
+
+        # reset all controls first
+        self.ui.vcHoldingSpin.setStyleSheet("")
+        self.ui.icHoldingSpin.setStyleSheet("")
+        self.ui.autoBiasTargetSpin.setStyleSheet("")
+        if mode == 'VC':
+            self.ui.vcHoldingSpin.setStyleSheet(active_style)
+        elif mode == 'IC':
+            if bias_enabled:
+                if bias_mode == 'manual':
+                    self.ui.autoBiasTargetSpin.setStyleSheet(active_style)
+                else:
+                    self.ui.vcHoldingSpin.setStyleSheet(active_style)
             else:
-                biasTarget = self.pip.autoBiasTarget()
-                spinVal = biasTarget
-                units = 'V'
-                self.ui.autoBiasBtn.setText('bias: %dpA' % int(hval*1e12))
-            self.ui.autoBiasBtn.setChecked(True)
-        else:
-            if mode == 'VC':
-                spinVal = hval
-                units = 'V'
-            else:
-                spinVal = hval
-                units = 'A'
-            self.ui.autoBiasBtn.setChecked(False)
-            self.ui.autoBiasBtn.setText('bias: off')
+                self.ui.icHoldingSpin.setStyleSheet(active_style)
 
-        self._setHoldingSpin(spinVal, units)
-
-    def _setHoldingSpin(self, value, units):
-        with pg.SignalBlock(self.ui.holdingSpin.valueChanged, self.holdingSpinChanged):
-            self.ui.holdingSpin.setValue(value)
-            if units == 'V':
-                self.ui.holdingSpin.setOpts(**_vc_mode_opts)
-            else:
-                self.ui.holdingSpin.setOpts(**_ic_mode_opts)
+    def _setHoldingSpin(self, mode, value):
+        if mode == 'VC':
+            with pg.SignalBlock(self.ui.vcHoldingSpin.valueChanged, self.vcHoldingSpinChanged):
+                self.ui.vcHoldingSpin.setValue(value)
+        elif mode == 'IC':
+            with pg.SignalBlock(self.ui.icHoldingSpin.valueChanged, self.icHoldingSpinChanged):
+                self.ui.icHoldingSpin.setValue(value)
 
     def stateActionClicked(self):
         state = str(self.sender().text())
@@ -252,19 +263,6 @@ class PipetteControl(Qt.QWidget):
 
     def stateTextClicked(self, sender, event):
         self.stateMenu.popup(sender.mapToGlobal(event.pos()))
-
-    def modeTextClicked(self, sender, event):
-        if self.clampMode() == 'VC':
-            self.pip.clampDevice.setMode('IC')
-            self.pip.setTestPulseParameters(clampMode='IC')
-            if self.pip.autoBiasEnabled():
-                self.ui.holdingSpin.setOpts(**_vc_mode_opts)
-            else:
-                self.ui.holdingSpin.setOpts(**_ic_mode_opts)
-        else:
-            self.pip.clampDevice.setMode('VC')
-            self.pip.setTestPulseParameters(clampMode='VC')
-            self.ui.holdingSpin.setOpts(**_vc_mode_opts)
 
     def focusTipBtnClicked(self, state):
         speed = self.mainWin.selectedSpeed(default='fast')
@@ -282,9 +280,34 @@ class PipetteControl(Qt.QWidget):
         for plt in self.plots:
             plt.hideHeader()
 
-    def autoBiasClicked(self):
-        self.pip.enableAutoBias(self.ui.autoBiasBtn.isChecked())
-        self.updateHoldingInfo()
+    def autoBiasClicked(self, enabled):
+        self.pip.clampDevice.enableAutoBias(enabled)
+        self._updateAutoBiasUi()
+
+    def autoBiasVcClicked(self, enabled):
+        if enabled:
+            self.pip.clampDevice.setAutoBiasTarget(None)
+        else:
+            self.pip.clampDevice.setAutoBiasTarget(self.ui.autoBiasTargetSpin.value())
+            self.ui.autoBiasTargetSpin.setEnabled(True)
+        self.ui.autoBiasTargetSpin.setValue(self.ui.vcHoldingSpin.value())
+        self._updateAutoBiasUi()
+
+    def _updateAutoBiasUi(self):
+        # auto bias changed elsewhere; update UI to reflect new state
+        with pg.SignalBlock(self.ui.autoBiasBtn.clicked, self.autoBiasClicked):
+            self.ui.autoBiasBtn.setChecked(self.pip.clampDevice.autoBiasEnabled())
+        target = self.pip.clampDevice.autoBiasTarget()
+        with pg.SignalBlock(self.ui.autoBiasVcBtn.clicked, self.autoBiasVcClicked):
+            self.ui.autoBiasVcBtn.setChecked(target is None)
+        if target is None:
+            self.ui.autoBiasTargetSpin.setEnabled(False)
+        else:
+            with pg.SignalBlock(self.ui.autoBiasTargetSpin.valueChanged, self.autoBiasSpinChanged):
+                self.ui.autoBiasTargetSpin.setValue(target)
+            self.ui.autoBiasTargetSpin.setEnabled(True)
+
+        self._updateActiveHoldingUi()
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
@@ -312,6 +335,9 @@ class PipetteControl(Qt.QWidget):
     def autoPipCapRequested(self):
         self.pip.clampDevice.autoCapComp()
 
+    def autoBridgeBalanceRequested(self):
+        self.pip.clampDevice.autoBridgeBalance()
+
     def brokenCheckChanged(self, checked):
         self.pip.setTipBroken(self.ui.brokenCheck.isChecked())
 
@@ -337,6 +363,7 @@ class PlotWidget(Qt.QWidget):
     def __init__(self, mode):
         Qt.QWidget.__init__(self)
         self.mode = None
+        self._analysisLabel = None
         self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
@@ -365,36 +392,38 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo.hide()
         # self.closeBtn.hide()
 
-    def newTestPulse(self, tp, history):
-        if self.mode in ['test pulse', 'tp analysis']:
-            data = tp.data
-            pri = data['Channel': 'primary']
-            units = pri._info[-1]['ClampState']['primaryUnits'] 
-            self.plot.plot(pri.xvals('Time'), pri.asarray(), clear=True)
-            self.plot.setLabels(left=('', units))
+    def newTestPulse(self, tp: PatchClampTestPulse, history):
+        if self._analysisLabel is not None:
+            self.plot.plotItem.vb.removeItem(self._analysisLabel)
+            self._analysisLabel = None
+        if self.mode == 'test pulse':
+            self.plot.clear()
+            self._plotTestPulse(tp)
+        elif self.mode == 'tp analysis':
+            self.plot.clear()
+            tp.plot(self.plot, label=False)
+            self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
 
-            if self.mode == 'tp analysis':
-                t,y = tp.getFitData()
-                self.plot.plot(t, y, pen='b')
-
-        elif self.mode in ['ss resistance', 'peak resistance', 'holding current', 'holding potential', 'time constant', 'capacitance']:
-            key,units = {
-                'ss resistance': ('steadyStateResistance', u'Ω'),
-                'peak resistance': ('peakResistance', u'Ω'),
-                'holding current': ('baselineCurrent', 'A'),
-                'holding potential': ('baselinePotential', 'V'),
-                'time constant': ('fitExpTau', 's'),
+        else:
+            analysis_by_mode = {
+                'ss resistance': ('steady_state_resistance', u'Ω'),
+                'peak resistance': ('access_resistance', u'Ω'),
+                'holding current': ('baseline_current', 'A'),
+                'holding potential': ('baseline_potential', 'V'),
+                'time constant': ('time_constant', 's'),
                 'capacitance': ('capacitance', 'F'),
-            }[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=units))
+            }
+            key, units = analysis_by_mode[self.mode]
+            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+            val = tp.analysis[key]
+            if val is None:
+                val = np.nan
+            self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
-        elif self.mode in ['ss resistance', 'peak resistance']:
-            key = {'ss resistance': 'steadyStateResistance', 'peak resistance': 'peakResistance'}[self.mode]
-            self.plot.plot(history['time'] - history['time'][0], history[key], clear=True)
-            tpa = tp.analysis()
-            self.tpLabel.setPlainText(pg.siFormat(tpa[key], suffix=u'Ω'))
+    def _plotTestPulse(self, tp):
+        pri: TSeries = tp.recording['primary']
+        self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
+        self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
 
     def setMode(self, mode):
         if self.mode == mode:
@@ -402,6 +431,7 @@ class PlotWidget(Qt.QWidget):
         self.mode = mode
         with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
             self.modeCombo.setText(mode)
+        self.tpLabel.setVisible(True)
         if mode in ['test pulse', 'tp analysis']:
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
@@ -411,29 +441,24 @@ class PlotWidget(Qt.QWidget):
             self.plot.enableAutoRange(True, False)
             self.plot.setYRange(6, 10)
             self.plot.setLabels(left=('Rss', u'Ω'))
-            self.tpLabel.setVisible(True)
         elif mode == 'holding current':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Ihold', u'A'))
-            self.tpLabel.setVisible(True)
         elif mode == 'holding potential':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Vhold', u'V'))
-            self.tpLabel.setVisible(True)
         elif mode == 'time constant':
             self.plot.setLogMode(y=True, x=False)
             self.plot.enableAutoRange(False, True)
             self.plot.setYRange(-5, -2)
             self.plot.setLabels(left=('Tau', u's'))
-            self.tpLabel.setVisible(True)
         elif mode == 'capacitance':
             self.plot.setLogMode(y=False, x=False)
             self.plot.enableAutoRange(False, True)
             self.plot.setYRange(0, 100e-12)
             self.plot.setLabels(left=('Capacitance', u'F'))
-            self.tpLabel.setVisible(True)
 
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()

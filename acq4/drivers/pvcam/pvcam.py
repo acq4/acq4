@@ -1,22 +1,15 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-import atexit
 import ctypes
 import os
 import platform
 import re
-import sys
-import time
 from collections import OrderedDict
 from ctypes import create_string_buffer, byref, c_int, c_ulong, c_byte, c_ubyte, c_short, c_ushort, c_uint, \
     c_double, c_char_p, c_void_p
 
+import atexit
 import numpy
-import six
-from six.moves import filter
-from six.moves import range
-from six.moves import zip
+import sys
+import time
 
 from acq4.util.Mutex import Mutex
 from acq4.util.clibrary import CParser, winDefs, CLibrary
@@ -215,7 +208,7 @@ class _PVCamClass:
     def paramFromString(self, p):
         """Return the driver's param ID for the given parameter name."""
         
-        if isinstance(p, six.string_types):
+        if isinstance(p, str):
             if p == 'bitDepth':
                 p = 'BIT_DEPTH'
             try:
@@ -384,7 +377,7 @@ class _CameraClass:
             return self.paramAttrs.copy()
         else:
             unList = False
-            if isinstance(params, six.string_types):
+            if isinstance(params, str):
                 params = [params]
                 unList = True
                 #try:
@@ -456,7 +449,7 @@ class _CameraClass:
         
         ## If this is an enum parameter, convert string values to int before setting
         if paramName in self.enumTable:
-            if isinstance(value, six.string_types):
+            if isinstance(value, str):
                 strVal = value
                 value = self.enumTable[paramName][0][value]
             else:
@@ -481,7 +474,7 @@ class _CameraClass:
         param = self.pvcam.paramFromString(paramName)
         self._assertParamReadable(param)
 
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             try:
                 value = getattr(LIB, value)
             except:

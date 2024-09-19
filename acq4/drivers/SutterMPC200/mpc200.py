@@ -1,7 +1,7 @@
 import numpy as np
 import struct
 import time
-from six.moves import range
+
 
 try:
     # this is nicer because it provides deadlock debugging information

@@ -1,12 +1,13 @@
-import math
+import contextlib
+import functools
+import sys
+
 import numpy as np
 import threading
 from typing import Tuple
-import functools
 
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
-import numpy as np
 from acq4.util.Mutex import Mutex
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
@@ -51,6 +52,12 @@ class Stage(Device, OptomechDevice):
         self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
         self._inverseBaseTransform = None
 
+        m = pg.SRTTransform3D(self._baseTransform)
+        angle, axis = m.getRotation()
+        scale = m.getScale()
+        if tuple(scale) != (1, 1, 1) or angle != 0:
+            raise ValueError("Stage transform must be only translation.")
+
         self._stageTransform = Qt.QMatrix4x4()
         self._invStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
@@ -94,7 +101,7 @@ class Stage(Device, OptomechDevice):
                 try:
                     js = dm.getDevice(jsname)
                 except Exception:
-                    print('Joystick device "%s" not found; disabling control from this device.' % jsname)
+                    print(f'Joystick device "{jsname}" not found; disabling control from this device.')
                     continue
                 jsdevs.add(js)
                 self._jsAxes.add((js, jsaxis))
@@ -204,8 +211,7 @@ class Stage(Device, OptomechDevice):
         devices with more complex kinematics need to reimplement this method.
         """ 
         tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
-        pos = pg.Vector(self.inverseAxisTransform().map(tr))
-        return pos
+        return pg.Vector(self.inverseAxisTransform().map(tr))
 
     def axisTransform(self) -> pg.Transform3D:
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
@@ -233,7 +239,7 @@ class Stage(Device, OptomechDevice):
         self.sigOrientationChanged.emit(self)
 
     @functools.lru_cache
-    def calculatedAxisOrientation(self, axis: str) -> float:
+    def calculatedAxisOrientation(self, axis: str):
         """Return the pitch and yaw of a stage axis.
 
         The pitch is returned in degrees relative to global horizontal (positive values point downward), 
@@ -241,7 +247,7 @@ class Stage(Device, OptomechDevice):
 
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
-        assert axis in ('+x', '-x', '+y', '-y', '+z', '-z')
+        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z'}
         m = self.axisTransform().matrix()
         axis_index = {'x': 0, 'y': 1, 'z': 2}[axis[1]]
         axis_sign = 1 if axis[0] == '+' else -1
@@ -271,8 +277,7 @@ class Stage(Device, OptomechDevice):
         stagePos.
         """
         offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
-        m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
-        return m
+        return pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -316,6 +321,12 @@ class Stage(Device, OptomechDevice):
     def _updateTransform(self):
         ## this informs rigidly-connected devices that they have moved
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
+
+    @property
+    def positionUpdatesPerSecond(self):
+        """Return the rate at which the device reports position updates.
+        """
+        raise NotImplementedError()
 
     def getPosition(self, refresh=False):
         """Return the position of the stage as reported by the controller.
@@ -388,7 +399,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, position, speed=None, progress=False, linear=False, **kwds):
+    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> Future:
         """Move the device to a new position.
         
         *position* specifies the absolute position in the stage coordinate system (as defined by the device)
@@ -414,7 +425,7 @@ class Stage(Device, OptomechDevice):
         mfut = self._move(position, speed=speed, linear=linear, **kwds)
 
         if progress:
-            self._progressDialog = Qt.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
+            self._progressDialog = Qt.QProgressDialog(f"{self.name()} moving...", None, 0, 100)
             self._progressDialog.mf = mfut
             self._progressTimer.start(100)
 
@@ -434,7 +445,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, **kwds) -> Future:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -452,7 +463,7 @@ class Stage(Device, OptomechDevice):
         """Move the stage along a path with multiple waypoints.
 
         The format of *path* is a list of dicts, where each dict specifies keyword arguments
-        to self.move().
+        to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
         """
         return MovePathFuture(self, path)
 
@@ -460,7 +471,7 @@ class Stage(Device, OptomechDevice):
         """Helper function to convert absolute position (possibly
         containing Nones) to an absolute position.
         """
-        if any([x is None for x in abs]):
+        if any(x is None for x in abs):
             pos = self.getPosition()
             for i,x in enumerate(abs):
                 if x is not None:
@@ -530,17 +541,22 @@ class Stage(Device, OptomechDevice):
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")
 
-    def checkLimits(self, pos):
-        """Raise an exception if *pos* is outside the configured limits"""
+    def checkGlobalLimits(self, globalPos):
+        """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
+        stagePos = self.mapGlobalToDevicePosition(globalPos)
+        self.checkLimits(stagePos)
+
+    def checkLimits(self, stagePos):
+        """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyz'[axis]
-            x = pos[axis]
+            x = stagePos[axis]
             if x is None:
                 continue
             if limit[0] is not None and x < limit[0]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis < {limit[0]}")
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}")
             if limit[1] is not None and x > limit[1]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis > {limit[1]}")
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}")
 
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
@@ -550,7 +566,7 @@ class Stage(Device, OptomechDevice):
     def goHome(self, speed='fast'):
         homePos = self.homePosition()
         if homePos is None:
-            raise Exception("No home position set for %s" % self.name())
+            raise RuntimeError(f"No home position set for {self.name()}")
         return self.moveToGlobal(homePos, speed=speed)
 
     def setHomePosition(self, pos=None):
@@ -626,7 +642,7 @@ class MoveFuture(Future):
         """
         if not self.isDone():
             self.dev.stop()
-            Future.stop(self, reason=reason)
+            super().stop(reason=reason)
 
 
 class MovePathFuture(MoveFuture):
@@ -636,14 +652,11 @@ class MovePathFuture(MoveFuture):
         self.path = path
         self.currentStep = 0
         self._currentFuture = None
-        self._done = False
-        self._wasInterrupted = False
-        self._errorMessage = None
 
         for step in self.path:
             if step.get("globalPos") is not None:
                 step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
-        for i,step in enumerate(self.path):
+        for i, step in enumerate(self.path):
             try:
                 self.dev.checkMove(**step)
             except Exception as exc:
@@ -656,14 +669,7 @@ class MovePathFuture(MoveFuture):
         fut = self._currentFuture
         if fut is None:
             return 0.0
-        pd = (100 * fut._pathStep + fut.percentDone()) / len(self.path)
-        return pd
-
-    def isDone(self):
-        return self._done
-
-    def wasInterrupted(self):
-        return self._wasInterrupted
+        return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
     def errorMessage(self):
         return self._errorMessage
@@ -677,33 +683,41 @@ class MovePathFuture(MoveFuture):
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
-                fut = self.dev.move(**step)
-                fut._pathStep = i
-                self._currentFuture = fut
-                while not fut.isDone():
-                    try:
-                        fut.wait(timeout=0.1)
-                        self.currentStep = i + 1
-                    except fut.Timeout:
-                        pass
-                    if self._stopRequested:
-                        fut.stop()
-                        break
-                
-                if self._stopRequested:
-                    self._errorMessage = "Move was cancelled"
-                    self._wasInterrupted = True
-                    break
+                step = step.copy()
+                explanation = step.pop('explanation', 'unnamed')
+                try:
+                    fut: Future = self.dev.move(**step)
+                    fut._pathStep = i
+                    self._currentFuture = fut
+                    while not fut.isDone():
+                        with contextlib.suppress(fut.Timeout):
+                            fut.wait(timeout=0.1)  # raises Timeout
+                            self.currentStep = i + 1
+                        if self._stopRequested:
+                            fut.stop()
+                            break
 
-                if fut.wasInterrupted():
-                    self._errorMessage = "Path step %d/%d: %s" % (i+1, len(self.path), fut.errorMessage())
-                    self._wasInterrupted = True
-                    break
-        except Exception as exc:
-            self._errorMessage = "Error in path move thread: %s" % exc
-            self._wasInterrupted = True
+                    if self._stopRequested:
+                        self._taskDone(interrupted=True, error="Move was cancelled by external request")
+                        return
+
+                    if fut.wasInterrupted():
+                        self._taskDone(
+                            interrupted=True,
+                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
+                            excInfo=fut._excInfo,
+                        )
+                        return
+                except Exception as exc:
+                    self._taskDone(
+                        interrupted=True,
+                        error=f"Error moving to path step {i} ({explanation})",
+                        excInfo=(type(exc), exc, exc.__traceback__),
+                    )
+                    return
         finally:
-            self._done = True
+            if not self.isDone():
+                self._taskDone()  # success!
 
     def undo(self):
         """Reverse the moves generated in this future and return a new future.
@@ -713,6 +727,7 @@ class MovePathFuture(MoveFuture):
         for i in range(min(self.currentStep, len(self.path)-1), -1, -1):
             step = fwdPath[i+1].copy()
             step['position'] = fwdPath[i]['position']
+            step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
         return self.dev.movePath(revPath)
 

@@ -1,5 +1,4 @@
-from __future__ import print_function
-from pyqtgraph.canvas.CanvasItem import CanvasItem as OrigCanvasItem
+from ..orig_canvas.CanvasItem import CanvasItem as OrigCanvasItem
 
 
 class CanvasItem(OrigCanvasItem):

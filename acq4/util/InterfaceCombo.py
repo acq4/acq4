@@ -1,12 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-import six
-
-from acq4.util import Qt
-from acq4.Manager import getManager
 import pyqtgraph.parametertree as parametertree
 import pyqtgraph.parametertree.parameterTypes as ptypes
+from acq4.Manager import getManager
+from acq4.util import Qt
+
 
 ### TODO: inherit from util/ComboBox instead.
 
@@ -27,7 +23,7 @@ class InterfaceCombo(Qt.QComboBox):
             self.setTypes(types)
         
     def setTypes(self, types):
-        if isinstance(types, six.string_types):
+        if isinstance(types, str):
             types = [types]
         self.types = types
         self.updateList()

@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import numpy
 import sip
 from pyqtgraph import mkPen, disconnect
@@ -10,7 +7,7 @@ from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.debug import printExc
-from six.moves import range
+
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 
@@ -92,9 +89,9 @@ class MultiClampTaskGui(TaskGui):
         if not self.ui.holdingSpin.isEnabled():
             self.ui.holdingSpin.setValue(state['holding'])
         if not self.ui.primaryGainSpin.isEnabled():
-            self.ui.primaryGainSpin.setValue(state['primaryGain'])
+            self.ui.primaryGainSpin.setValue(int(state['primaryGain']))
         if not self.ui.secondaryGainSpin.isEnabled():
-            self.ui.secondaryGainSpin.setValue(state['secondaryGain'])
+            self.ui.secondaryGainSpin.setValue(int(state['secondaryGain']))
             
         psig = ssig = None
         if not self.ui.primarySignalCombo.isEnabled():
@@ -103,12 +100,11 @@ class MultiClampTaskGui(TaskGui):
             ssig = state['secondarySignal']
         self.setSignals(psig, ssig)
 
-    def devHoldingChanged(self, dev, mode):
+    def devHoldingChanged(self, mode, val):
         if mode != self.getMode():
             return
         if not self.ui.holdingSpin.isEnabled():
-            state = self.dev.getLastState(mode)
-            self.ui.holdingSpin.setValue(state['holding'])
+            self.ui.holdingSpin.setValue(val)
 
     def saveState(self):
         state = self.stateGroup.state().copy()
@@ -126,7 +122,7 @@ class MultiClampTaskGui(TaskGui):
                 self.setSignals(state['primarySignal'], state['secondarySignal'])
             self.stateGroup.setState(state)
             self.devStateChanged()
-        except:
+        except Exception:
             printExc('Error while restoring MultiClamp task GUI state:')
         finally:
             self._block_update = block

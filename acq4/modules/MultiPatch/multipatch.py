@@ -1,18 +1,21 @@
-from collections import OrderedDict
-
 import json
 import os
 import re
+from collections import OrderedDict
 from typing import List
+
+import h5py
 
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
+from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
+from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
@@ -42,7 +45,8 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
-        self.storageFile = None
+        self._eventStorageFile = None
+        self._testPulseStacks = {}
 
         self._calibratePips = []
         self._calibrateStagePositions = []
@@ -79,7 +83,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
                 pip.sigNewEvent.connect(self.pipetteEvent)
-                pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
+                pip.clampDevice.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
             ctrl = PipetteControl(pip, self)
             if i > 0:
                 ctrl.hideHeader()
@@ -129,9 +133,11 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.cellDetectBtn.clicked.connect(self.cellDetectClicked)
         self.ui.sealBtn.clicked.connect(self.sealClicked)   
         self.ui.collectBtn.clicked.connect(self.collectClicked)
+        self.ui.nucleusHomeBtn.clicked.connect(self.nucleusHomeClicked)
         self.ui.breakInBtn.clicked.connect(self.breakInClicked)
         self.ui.reSealBtn.clicked.connect(self.reSealClicked)
         self.ui.cleanBtn.clicked.connect(self.cleanClicked)
+        self.ui.recordTestPulsesBtn.toggled.connect(self.recordTestPulsesToggled)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
         # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
@@ -143,10 +149,11 @@ class MultiPatchWindow(Qt.QWidget):
         if xkdevname is not None:
             self.xkdev = getManager().getDevice(xkdevname)
             self.xkdev.sigStateChanged.connect(self.xkeysStateChanged)
-            self.xkdev.dev.setIntensity(255, 255)
+            self.xkdev.setIntensity(255, 255)
         else:
             self.xkdev = None
 
+        self.eventHistory = []
         self.resetHistory()
 
         if self.microscope:
@@ -241,12 +248,12 @@ class MultiPatchWindow(Qt.QWidget):
                 pip = pip.pipetteDevice
             pip.goHome(speed, raiseErrors=True)
 
-    def moveIdle(self):
-        speed = self.selectedSpeed(default='fast')
-        for pip in self.selectedPipettes():
-            if isinstance(pip, PatchPipette):
-                pip = pip.pipetteDevice
-            pip.goIdle(speed, raiseErrors=True)
+    # def moveIdle(self):
+    #     speed = self.selectedSpeed(default='fast')
+    #     for pip in self.selectedPipettes():
+    #         if isinstance(pip, PatchPipette):
+    #             pip = pip.pipetteDevice
+    #         pip.goIdle(speed, raiseErrors=True)
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -368,12 +375,12 @@ class MultiPatchWindow(Qt.QWidget):
                 pip = pip.pipetteDevice
             pip.hideMarkers(hide)
 
-    def pipetteTestPulseEnabled(self, pip, enabled):
+    def pipetteTestPulseEnabled(self, clamp, enabled):
         self.updateSelectedPipControls()
 
     # def testPulseClicked(self):
     #     for pip in self.selectedPipettes():
-    #         pip.enableTestPulse(self.ui.testPulseBtn.isChecked())
+    #         pip.clampDevice.enableTestPulse(self.ui.testPulseBtn.isChecked())
 
     def pipetteActiveChanged(self, active):
         self.selectionChanged()
@@ -403,12 +410,12 @@ class MultiPatchWindow(Qt.QWidget):
             self.ui.selectedGroupBox.setEnabled(False)
         else:
             if solo:
-                self.ui.selectedGroupBox.setTitle("Selected: %s" % (pips[0].name()))
+                self.ui.selectedGroupBox.setTitle(f"Selected: {pips[0].name()}")
             elif len(pips) > 1:
                 self.ui.selectedGroupBox.setTitle("Selected: multiple")
             self.ui.selectedGroupBox.setEnabled(True)
             self.updateSelectedPipControls()
-        
+
         self.updateXKeysBacklight()
 
     def updateSelectedPipControls(self):
@@ -453,16 +460,16 @@ class MultiPatchWindow(Qt.QWidget):
         self.xkdev.setBacklights(bl, axis=1)
 
     def xkeysStateChanged(self, dev, changes):
-        for k,v in changes.items():
+        actions = {0: 'activeBtn', 1: 'lockBtn', 2: 'selectBtn', 3: 'tipBtn', 4: 'targetBtn'}
+        for k, v in changes.items():
             if k == 'keys':
                 for key, state in v:
-                    if state is True:
+                    if state:
                         if key[1] > 3:
-                            row = key[0]
                             col = key[1] - 4
                             if col >= len(self.pips):
                                 continue
-                            actions = {0:'activeBtn', 1:'lockBtn', 2:'selectBtn', 3:'tipBtn', 4:'targetBtn'}
+                            row = key[0]
                             if row in actions:
                                 btnName = actions[row]
                                 btn = getattr(self.pipCtrls[col].ui, btnName)
@@ -505,7 +512,13 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in pips:
             if isinstance(pip, PatchPipette):
                 pip.setState('collect')
-                
+
+    def nucleusHomeClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            if isinstance(pip, PatchPipette):
+                pip.setState('home with nucleus')
+
     def breakInClicked(self):
         pips = self.selectedPipettes()
         for pip in pips:
@@ -549,30 +562,59 @@ class MultiPatchWindow(Qt.QWidget):
         self.recordEvent(event)
 
     def recordToggled(self, rec):
-        if self.storageFile is not None:
-            self.storageFile.close()
-            self.storageFile = None
+        if self._eventStorageFile is not None:
+            self._eventStorageFile.close()
+            self._eventStorageFile = None
             self.resetHistory()
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
-            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
+            self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
+
+    def recordTestPulsesToggled(self, rec):
+        for stack in self._testPulseStacks.values():
+            stack.close()
+        self._testPulseStacks = {}
+        if rec is True:
+            man = getManager()
+            sdir = man.getCurrentDir()
+            name = sdir.createFile('TestPulses.hdf5', autoIncrement=True).name()
+            container = h5py.File(name, 'a')
+            group = container.create_group('test_pulses')
+            for dev in self.pips:
+                dev_gr = group.create_group(dev.name())
+                dev_gr.attrs['device'] = dev.name()
+                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr)
+        for pip in self.selectedPipettes():
+            pip.emitFullTestPulseData(rec)
 
     def recordEvent(self, event):
         if not self.eventHistory:
             self.resetHistory()
-        self.eventHistory.append(event)
         self.writeRecords([event])
+        event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
+        self.eventHistory.append(event)
 
     def resetHistory(self):
         self.eventHistory = []
         for pip in self.selectedPipettes():
-            pip.resetTestPulseHistory()
+            pip.clampDevice.resetTestPulseHistory()
 
     def writeRecords(self, recs):
-        if self.storageFile is None:
-            return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec).encode("utf8") + b",\n")
-        self.storageFile.flush()
+            if 'full_test_pulse' in rec:
+                if self._testPulseStacks.get(rec['device'], None) is not None:
+                    filename, path = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+                    if self._eventStorageFile:
+                        filename = os.path.relpath(filename, os.path.dirname(self._eventStorageFile.name))
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+                    rec['full_test_pulse'] = f"{filename}:{path}"
+                else:
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+            if self._eventStorageFile:
+                self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
+        if self._eventStorageFile:
+            self._eventStorageFile.flush()
+        for stack in self._testPulseStacks.values():
+            stack.flush()

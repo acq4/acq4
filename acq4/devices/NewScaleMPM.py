@@ -12,6 +12,7 @@ class NewScaleMPM(Stage):
     def __init__(self, man, config: dict, name):
         self.dev = NewScaleMPM_driver(config['ipAddress'])
         self._lastPos = None
+        self._interval = 0.1
         Stage.__init__(self, man, config, name)
         man.sigAbortAll.connect(self.stop)
 
@@ -37,6 +38,10 @@ class NewScaleMPM(Stage):
         """
         with self.lock:
             self.dev.halt()
+
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1 / self._interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -64,7 +69,7 @@ class NewScaleMPM(Stage):
         Stage.quit(self)
         self.dev.close()
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         with self.lock:
             speed = self._interpretSpeed(speed)
             self._lastMove = NewScaleMoveFuture(self, pos, speed, linear)
@@ -76,8 +81,7 @@ class NewScaleMPM(Stage):
                 self._getPosition()
             except socket.timeout:
                 print("timeout in newscale monitor thread")
-                pass
-            time.sleep(0.1)
+            time.sleep(self._interval)
 
 
 class NewScaleMoveFuture(MoveFuture):

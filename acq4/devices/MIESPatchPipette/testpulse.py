@@ -68,8 +68,8 @@ class TestPulse(object):
             'startTime': data[0],
         }
         self.analysis_l = {
-            'steadyStateResistance': data[1],
-            'peakResistance': data[2],
+            'steady_state_resistance': data[1],
+            'peak_resistance': data[2],
             'capacitance': 0,
         }
 

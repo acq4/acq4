@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from six.moves import range
+
 """
 Used for measuring illumination depth profiles from photobleached tissue.
 """

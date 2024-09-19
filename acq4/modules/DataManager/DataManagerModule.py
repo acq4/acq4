@@ -1,12 +1,6 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
+import contextlib
 import os
 import time
-
-import six
-from pyqtgraph import FileDialog
-from six.moves import range
 
 from acq4.Manager import logMsg
 from acq4.modules.Module import Module
@@ -14,8 +8,10 @@ from acq4.util import Qt
 from acq4.util.DataManager import getDataManager, getHandle, DirHandle
 from acq4.util.StatusBar import StatusBar
 from acq4.util.debug import printExc
+from pyqtgraph import FileDialog
 from . import FileAnalysisView
 from . import FileLogView
+from ...util.HelpfulException import HelpfulException
 
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 
@@ -23,7 +19,7 @@ Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 class Window(Qt.QMainWindow):
     sigClosed = Qt.Signal()
 
-    def closeEvent(self, ev):
+    def closeEvent(self, ev, **kwargs):
         ev.accept()
         self.sigClosed.emit()
 
@@ -66,7 +62,6 @@ class DataManager(Module):
         self.selFile = None
         self.updateNewFolderList()
 
-        ## Make all connections needed
         self.manager.sigBaseDirChanged.connect(self.baseDirChanged)
         self.manager.sigConfigChanged.connect(self.updateNewFolderList)
         self.manager.sigCurrentDirChanged.connect(self.currentDirChanged)
@@ -79,6 +74,7 @@ class DataManager(Module):
         self.ui.selectDirBtn.clicked.connect(self.showFileDialog)
         self.ui.setCurrentDirBtn.clicked.connect(self.setCurrentClicked)
         self.ui.setLogDirBtn.clicked.connect(self.setLogDir)
+        self.ui.loadPinnedImagesBtn.clicked.connect(self.loadPinnedImages)
         self.win.sigClosed.connect(self.quit)
 
         self.win.setStatusBar(StatusBar())
@@ -98,11 +94,8 @@ class DataManager(Module):
             self.ui.baseDirText.setText(dh.name())
         self.ui.fileTreeWidget.setBaseDirHandle(dh)
 
-    def loadLog(self, *args, **kwargs):
-        pass
-
     def selectFile(self, path):
-        if isinstance(path, six.string_types):
+        if isinstance(path, str):
             path = getHandle(path)
         self.ui.fileTreeWidget.select(path)
 
@@ -112,39 +105,43 @@ class DataManager(Module):
             d = d.parent()
         self.manager.setLogDir(d)
 
+    def loadPinnedImages(self):
+        cam_mod = self.manager.getModule("Camera")
+        current_dir = self.manager.getCurrentDir()
+        for f in current_dir.representativeFramesForAllImages():
+            cam_mod.ui.displayPinnedFrame(f)
+
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
 
     def setCurrentClicked(self):
-        # print "click"
         handle = self.selectedFile()
         if handle is None:
-            # print "no selection"
             return
         if not handle.isDir():
             handle = handle.parent()
         self.manager.setCurrentDir(handle)
 
     def currentDirChanged(self, name=None, change=None, args=()):
+        newDir = None
         if change in [None, 'moved', 'renamed', 'parent']:
             try:
                 newDir = self.manager.getCurrentDir()
-            except:
-                newDir = None
-                dirName = ""
-            else:
                 dirName = newDir.name(relativeTo=self.baseDir)
-            self.ui.currentDirText.setText(str(dirName))
+            except Exception:
+                dirName = ""
+            self.ui.currentDirText.setText(dirName)
             self.ui.fileTreeWidget.setCurrentDir(newDir)
-        elif change == 'log':
-            self.updateLogView(*args)
-        if change == None:
-            try:
+        elif change == 'children':
+            with contextlib.suppress(HelpfulException):
                 newDir = self.manager.getCurrentDir()
-            except:
-                newDir = None
-            else:
-                self.loadLog(newDir, self.ui.logView)
+
+        has_images = newDir is not None and newDir.hasMatchingChildren(
+            lambda f: f.fileType() == "ImageFile" or f.shortName().startswith("ImageSequence_") or (
+                f.fileType() == "MetaArray" and 'pixelSize' in f.info()
+            )
+        )
+        self.ui.loadPinnedImagesBtn.setEnabled(has_images)
 
     def showFileDialog(self):
         bd = self.manager.getBaseDir()
@@ -158,11 +155,11 @@ class DataManager(Module):
 
     def baseDirTextChanged(self):
         path = str(self.ui.baseDirText.text())
-        if path.strip() == '':
+        if not path.strip():
             self.baseDirChanged()
             return
         if not os.path.isdir(path):
-            raise ValueError("Path %s does not exist" % path)
+            raise ValueError(f"Path {path} does not exist")
         self.setBaseDir(path)
 
     def setBaseDir(self, dirName):
@@ -170,13 +167,13 @@ class DataManager(Module):
             if len(dirName) == 1:
                 dirName = dirName[0]
             else:
-                raise Exception("Caught. Please to be examined: %s" % str(dirName))
+                raise ValueError(f"Invalid dirName: {dirName}")
         if dirName is None:
             return
         if os.path.isdir(dirName):
             self.manager.setBaseDir(dirName)
         else:
-            raise Exception("Storage directory is invalid")
+            raise ValueError("Storage directory is invalid")
 
     def selectedFile(self):
         """Return the currently selected file"""
@@ -241,11 +238,8 @@ class DataManager(Module):
     def fileSelectionChanged(self):
         # print "file selection changed"
         if self.selFile is not None:
-            try:
+            with contextlib.suppress(TypeError):
                 self.selFile.sigChanged.disconnect(self.selectedFileAltered)
-            except TypeError:
-                pass
-
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.
         self.loadFile(fh)

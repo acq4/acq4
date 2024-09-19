@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import glob
 import os
 import sys
@@ -11,6 +8,14 @@ _mmc = None
 # default location to search for micromanager
 microManagerPaths = glob.glob("C:\\Program Files\Micro-Manager-2*")
 
+
+def versionWarning():
+    """Used to warn the user of possible mismatch between MicroManager and pymmcore API versions"""
+    import pymmcore
+    return f"""
+        Check that the MicroManager API version number (help->about in the MicroManager GUI)
+        matches the pymmcore API version number ({pymmcore.__version__.split('.')[3]})
+    """
 
 class MicroManagerError(Exception):
     pass

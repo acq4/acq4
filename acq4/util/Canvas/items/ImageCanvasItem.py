@@ -1,14 +1,14 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 from collections import OrderedDict
-from acq4.util import Qt
-from .CanvasItem import CanvasItem
+
 import numpy as np
-import scipy.ndimage as ndimage
+from MetaArray import MetaArray
+
+import acq4.util.DataManager
+import acq4.util.debug as debug
 import pyqtgraph as pg
 import pyqtgraph.flowchart
-import acq4.util.DataManager as DataManager
-import acq4.util.debug as debug
+from acq4.util import Qt
+from .CanvasItem import CanvasItem
 from .itemtypes import registerItemType
 
 
@@ -36,7 +36,7 @@ class ImageCanvasItem(CanvasItem):
             item = image
         elif isinstance(image, np.ndarray):
             self.data = image
-        elif isinstance(image, DataManager.FileHandle):
+        elif isinstance(image, acq4.util.DataManager.FileHandle):
             opts['handle'] = image
             self.handle = image
             self.data = self.handle.read()
@@ -117,7 +117,7 @@ class ImageCanvasItem(CanvasItem):
         self.timeControls = [self.timeSlider]
 
         if self.data is not None:
-            if isinstance(self.data, pg.metaarray.MetaArray):
+            if isinstance(self.data, MetaArray):
                 self.filter.setInput(self.data.asarray())
             else:
                 self.filter.setInput(self.data)
@@ -172,9 +172,9 @@ class ImageCanvasItem(CanvasItem):
         if showTime:
             self.timeSlider.setMinimum(0)
             self.timeSlider.setMaximum(data.shape[0]-1)
-            self.graphicsItem().setImage(data[self.timeSlider.value()], autoLevels=self.autoBtn.isChecked())
+            self.graphicsItem().setImage(data[self.timeSlider.value()].asarray(), autoLevels=self.autoBtn.isChecked())
         else:
-            self.graphicsItem().setImage(data, autoLevels=self.autoBtn.isChecked())
+            self.graphicsItem().setImage(data.asarray(), autoLevels=self.autoBtn.isChecked())
 
         for widget in self.timeControls:
             widget.setVisible(showTime)

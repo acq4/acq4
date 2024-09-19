@@ -1,22 +1,17 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from six.moves import range
-
 """
 Main ACQ4 invocation script
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 print("Loading ACQ4...")
-import os, sys
+import os
+import sys
 
 if __package__ is None:
     import acq4
 
     __package__ = 'acq4'
 
-from .util import Qt
+from .util import pg_setup  
 from .Manager import Manager
 from .util.debug import installExceptionHandler
 
@@ -47,6 +42,7 @@ import pyqtgraph as pg
 
 app = pg.mkQApp()
 
+
 ## Install a simple message handler for Qt errors:
 def messageHandler(*args):
     if len(args) == 2:  # Qt4
@@ -63,10 +59,9 @@ def messageHandler(*args):
     try:
         logf = "crash.log"
 
-        fh = open(logf, 'a')
-        fh.write(msg + '\n')
-        fh.write('\n'.join(traceback.format_stack()))
-        fh.close()
+        with open(logf, 'a') as fh:
+            fh.write(msg + '\n')
+            fh.write('\n'.join(traceback.format_stack()))
     except:
         print("Failed to write crash log:")
         traceback.print_exc()
@@ -87,8 +82,6 @@ except AttributeError:
     pg.QtCore.qInstallMessageHandler(messageHandler)
 
 
-
-
 ## Prevent Windows 7 from grouping ACQ4 windows under a single generic python icon in the taskbar
 if sys.platform == 'win32':
     import ctypes
@@ -106,16 +99,16 @@ from pyqtgraph.util.garbage_collector import GarbageCollector
 gc = GarbageCollector(interval=1.0, debug=False)
 
 ## Create Manager. This configures devices and creates the main manager window.
-man = Manager(argv=sys.argv[1:])
+man = Manager.runFromCommandLine(argv=sys.argv[1:])
 
 # If example config was loaded, offer more help to the user.
-message = """\
+message = f"""\
 <center><b>Demo mode:</b><br>\
-ACQ4 is running from an example configuration file at:<br><pre>%s</pre><br>\
+ACQ4 is running from an example configuration file at:<br><pre>{man.configFile}</pre><br>\
 This configuration defines several simulated devices that allow you to test the capabilities of ACQ4.<br>\
 See the <a href="http://acq4.org/documentation/userGuide/configuration.html">ACQ4 documentation</a> \
 for more information.</center>
-""" % man.configFile
+"""
 if man.configFile.endswith(os.path.join('example', 'default.cfg')):
     mbox = Qt.QMessageBox()
     mbox.setText(message)

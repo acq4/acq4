@@ -3,7 +3,7 @@ import numpy as np
 import math
 from pyqtgraph.debug import Profiler
 import acq4.util.functions as utilFn
-from six.moves import range
+
 
 
 

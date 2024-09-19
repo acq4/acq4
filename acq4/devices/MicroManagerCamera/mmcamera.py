@@ -1,15 +1,12 @@
+import time
 from collections import OrderedDict
+from functools import lru_cache
 
 import numpy as np
-import six
-import time
-from functools import lru_cache
-from six.moves import range
 
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
 from acq4.util import micromanager
-from acq4.util.Mutex import RecursiveMutex
 from acq4.util.debug import printExc
 from acq4.util.micromanager import MicroManagerError
 from pyqtgraph.debug import Profiler
@@ -31,10 +28,20 @@ triggerModes = {
 class MicroManagerCamera(Camera):
     """Camera device that uses MicroManager to provide imaging.
 
-    Configuration keys:
+    Requires pymmcore to be installed along with MicroManager with the same API version.
+    To configure a new camera:
+    1. First make sure your pymmcore API version matches the MicroManager API version.
+        - MicroManager API version can be found in the MicroManager GUI under Help -> About.
+        - pymmcore API version can be found by running `import pymmcore; print(pymmcore.__version__.split('.')[3])`
+        - If versions are not matched, then download a different version of MicroManager that matches the pymmcore version.
+    2. Next make sure you can load and operate the camera via the MicroManager GUI. 
+        - When selecting your camera in the hardware wizard, take note of the adapter name and device name
+    3. Configure the camera in the ACQ4 configuration file::
 
-    * mmAdapterName
-    * mmDeviceName
+        Camera:
+            driver: 'MicroManagerCamera'
+            mmAdapterName: 'HamamatsuHam'
+            mmDeviceName: 'HamamatsuHam_DCAM'
     """
 
     def __init__(self, manager, config, name):
@@ -45,7 +52,6 @@ class MicroManagerCamera(Camera):
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
         self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
-        self.camLock = RecursiveMutex()  ## Lock to protect access to camera
         self._config = config
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
@@ -59,7 +65,10 @@ class MicroManagerCamera(Camera):
         if adapterName not in allAdapters:
             raise ValueError("Adapter name '%s' is not valid. Options are: %s" % (adapterName, allAdapters))
         deviceName = self._config['mmDeviceName']
-        allDevices = self.mmc.getAvailableDevices(adapterName)
+        try:
+            allDevices = self.mmc.getAvailableDevices(adapterName)
+        except Exception as e:
+            raise RuntimeError(f"Error getting available devices for MicroManager adapter '{adapterName}'. {micromanager.versionWarning()}") from e
         if deviceName not in allDevices:
             raise ValueError("Device name '%s' is not valid for adapter '%s'. Options are: %s" % (
                 deviceName, adapterName, allDevices))
@@ -91,20 +100,19 @@ class MicroManagerCamera(Camera):
     def _acquireFrames(self, n=1):
         if self.isRunning():
             self.stop()
-        self.mmc.setCameraDevice(self.camName)
-        self.mmc.startSequenceAcquisition(n, 0, True)
-        frames = []
-        frameTimes = []
-        timeoutStart = ptime.time()
-        while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
-            if self.mmc.getRemainingImageCount() > 0:
-                frameTimes.append(ptime.time())
-                timeoutStart = frameTimes[-1]
-                frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
-            else:
-                if ptime.time() - timeoutStart > 10.0:
-                    raise Exception("Timed out waiting for camera frame.")
-                time.sleep(0.005)
+        with self.camLock:
+            self.mmc.setCameraDevice(self.camName)
+            self.mmc.startSequenceAcquisition(n, 0, True)
+            frames = []
+            timeoutStart = ptime.time()
+            while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
+                if self.mmc.getRemainingImageCount() > 0:
+                    timeoutStart = ptime.time()
+                    frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+                elif ptime.time() - timeoutStart > 10.0:
+                    raise TimeoutError("Timed out waiting for camera frame.")
+                else:
+                    time.sleep(0.005)
         if len(frames) < n:
             printExc(
                 f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})",
@@ -129,14 +137,14 @@ class MicroManagerCamera(Camera):
         frames = []
         with self.camLock:
             for i in range(nFrames):
-                frame = {}
-                frame['time'] = self.lastFrameTime + (dt * (i + 1))
-                frame['id'] = self.frameId
-                frame['data'] = self.mmc.popNextImage().T
-                frames.append(frame)
+                frames.append({
+                    'time': self.lastFrameTime + (dt * (i + 1)),
+                    'id': self.frameId,
+                    'data': self.mmc.popNextImage().T,
+                })
                 self.frameId += 1
 
-        self.lastFrame = frame
+        self.lastFrame = frames[-1]
         self.lastFrameTime = now
         return frames
 
@@ -262,7 +270,7 @@ class MicroManagerCamera(Camera):
         """List properties of specified parameters, or of all parameters if None"""
         if params is None:
             return self._allParams.copy()
-        if isinstance(params, six.string_types):
+        if isinstance(params, str):
             return self._allParams[params]
         return dict([(p, self._allParams[p]) for p in params])
 

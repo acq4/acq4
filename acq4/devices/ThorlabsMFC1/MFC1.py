@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
-from ..Stage import Stage, StageInterface, MoveFuture
+import time
+
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
+from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from pyqtgraph import debug
-import time
+from ..Stage import Stage, StageInterface, MoveFuture
+
 
 class ChangeNotifier(Qt.QObject):
     sigPosChanged = Qt.Signal(object, object, object)
@@ -66,7 +66,7 @@ class ThorlabsMFC1(Stage):
             self.posChanged([0, 0, pos])
         return [0, 0, pos]
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         pos = self._toAbsolutePosition(pos)
         limits = self.getLimits()[2]
         if limits[0] is not None:
@@ -74,6 +74,10 @@ class ThorlabsMFC1(Stage):
         if limits[1] is not None:
             pos[2] = min(pos[2], limits[1])
         return MFC1MoveFuture(self, pos, speed)
+
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1 / self._monitor.minInterval
 
     def targetPosition(self):
         return [0, 0, self.dev.target_position() * self.scale[2]]
@@ -120,6 +124,7 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
+        self.minInterval = 100e-3
         Thread.__init__(self)
 
     def start(self):
@@ -135,8 +140,7 @@ class MonitorThread(Thread):
             self.interval = i
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         lastPos = None
         while True:
             try:
@@ -147,7 +151,7 @@ class MonitorThread(Thread):
                 pos = self.dev._getPosition()[2]
                 if pos != lastPos:
                     # stage is moving; request more frequent updates
-                    interval = minInterval
+                    interval = self.minInterval
                 else:
                     interval = min(maxInterval, interval*2)
                 lastPos = pos
@@ -226,6 +230,3 @@ class MFC1MoveFuture(MoveFuture):
         if self._moveStatus['status'] in (None, 'moving'):
             self._moveStatus = self.dev.dev.move_status(self.id)
         return self._moveStatus
-        
-
-

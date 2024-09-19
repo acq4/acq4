@@ -1,6 +1,6 @@
-from __future__ import print_function
 import numpy as np
-from acq4.modules.MultiPatch.logfile import MultiPatchLog, IrregularTimeSeries
+
+from acq4.util.MultiPatchLog import IrregularTimeSeries
 
 
 def test_timeseries_index():

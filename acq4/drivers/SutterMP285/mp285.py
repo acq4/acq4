@@ -1,7 +1,7 @@
 from __future__ import print_function
 import serial, struct, time, collections, threading
 from ..SerialDevice import SerialDevice
-from six.moves import range
+
 
 ErrorVals = {
     0: ('SP Over-run', 'The previous character was not unloaded before the latest was received.'),

@@ -1,64 +1,75 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import print_function, with_statement
-
 import os
-
-import pyqtgraph.multiprocess as mp
-from acq4.devices.AxoPatch200 import CancelException
+import teleprox
+from typing import Literal
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
-from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-
-Ui_MockClampDevGui = Qt.importTemplate('.devTemplate')
+from pyqtgraph.WidgetGroup import WidgetGroup
 
 ivModes = {'I=0': 'IC', 'VC': 'VC', 'IC': 'IC'}
 modeNames = ['VC', 'I=0', 'IC']
 
 
 class MockClamp(PatchClamp):
+    """
+    MockClamp is a class that simulates a patch clamp amplifier.
 
+
+    Configuration examples::
+
+        # Simuator imported from neuroanalysis
+        simulator: 'neuroanalysis'
+
+        # simulator using neuron with cell model downloaded from AllenSDK
+        simulator: 'neuron'
+        condaEnv: 'allensdk'
+        modelId: 491623973  # mouse L5 pvalb perisomatic
+
+    """
     def __init__(self, dm, config, name):
+        self.daqConfig = {
+            'command': config['Command'],
+            'primary': config['ScaledSignal'],
+        }
 
         PatchClamp.__init__(self, dm, config, name)
 
         # Generate config to use for DAQ 
         self.devLock = Mutex(Mutex.Recursive)
 
-        self.daqConfig = {
-            'command': config['Command'],
-            'primary': config['ScaledSignal'],
-        }
-
         self.holding = {
             'VC': config.get('vcHolding', -0.05),
             'IC': config.get('icHolding', 0.0)
         }
 
-        self.mode = 'I=0'
+        self.mode: Literal['VC', 'IC', 'I=0'] = 'I=0'
 
         self.config = config
 
         # create a daq device under the hood
-        self.daqDev = DAQGeneric(dm, self.daqConfig, '{}Daq'.format(name))
+        self.daqDev = DAQGeneric(dm, self.daqConfig, f'{name}Daq')
 
         try:
             self.setHolding()
-        except:
+        except Exception:
             printExc("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
-        self.process = mp.Process()
-        rsys = self.process._import('sys')
-        rsys._setProxyOptions(returnType='proxy')  # need to access remote path by proxy, not by value
+        self.process = teleprox.ProcessSpawner(conda_env=config.get('condaEnv', None))
+        rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
         if config['simulator'] == 'builtin':
-            self.simulator = self.process._import('hhSim')
+            self.simulator = self.process.client._import('hhSim')
         elif config['simulator'] == 'neuron':
-            self.simulator = self.process._import('neuronSim')
+            self.simulator = self.process.client._import('neuronSim')
+            if 'modelId' in config:
+                self.simulator.load_allen(config['modelId'])
+            else:
+                self.simulator.load_default()
+        elif config['simulator'] == 'neuroanalysis':
+            self.simulator = self.process.client._import('neuroanalysisSim')
 
         dm.declareInterface(name, ['clamp'], self)
 
@@ -68,29 +79,26 @@ class MockClamp(PatchClamp):
     def taskInterface(self, taskRunner):
         return MockClampTaskGui(self, taskRunner)
 
-    def deviceInterface(self, win):
-        return MockClampDevGui(self)
-
     def setHolding(self, mode=None, value=None, force=False):
         global ivModes
         with self.devLock:
             currentMode = self.getMode()
             if mode is None:
                 mode = currentMode
+            mode = mode.upper()
             ivMode = ivModes[mode]  ## determine vc/ic
 
-            if value is None:
-                value = self.holding[ivMode]
-            else:
+            if value is not None:
                 self.holding[ivMode] = value
 
-            if ivMode == ivModes[currentMode] or force:
+            # if ivMode == ivModes[currentMode] or force:
                 # gain = self.getCmdGain(mode)
                 ## override the scale since getChanScale won't necessarily give the correct value
                 ## (we may be about to switch modes)
                 # DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
-                pass
-            self.sigHoldingChanged.emit('primary', self.holding.copy())
+                # pass
+            self.sigHoldingChanged.emit(ivMode, value)
+            self.sigStateChanged.emit(self.getState())
 
     def setChanHolding(self, chan, value=None):
         if chan == 'command':
@@ -104,18 +112,30 @@ class MockClamp(PatchClamp):
         else:
             return self.daqDev.getChanHolding(chan)
 
-    def getHolding(self, mode=None):
+    def getHolding(self, mode: str = None):
         global ivModes
         with self.devLock:
             if mode is None:
                 mode = self.getMode()
-            ivMode = ivModes[mode]  ## determine vc/ic
+            mode = mode.upper()
+            if mode == 'I=0':
+                return 0.0
+            ivMode = ivModes[mode]  # determine vc/ic
             return self.holding[ivMode]
 
     def getState(self):
+        mode = self.getMode()
         return {
-            'mode': self.getMode(),
+            'mode': mode,
+            'holding': self.getHolding(mode)
         }
+
+    def getParam(self, name):
+        return {'HoldingEnable': True}.get(name)
+
+    def getLastState(self, mode=None):
+        mode = mode or self.getMode()
+        return {'mode': mode, 'holding': self.getHolding(mode)}
 
     def listModes(self):
         global modeNames
@@ -131,15 +151,14 @@ class MockClamp(PatchClamp):
         startIvMode = ivModes[startMode]
         ivMode = ivModes[mode]
         if (startIvMode == 'VC' and ivMode == 'IC') or (startIvMode == 'IC' and ivMode == 'VC'):
-            ## switch to I=0 first
-            # self.requestModeSwitch('I=0')
+            # switch to I=0 first. TODO why?
             self.mode = 'I=0'
 
-        self.setHolding(ivMode, force=True)  ## we're in I=0 mode now, so it's ok to force the holding value.
+        self.setHolding(ivMode)
 
         ### TODO:
         ### If mode switches back the wrong direction, we need to reset the holding value and cancel.
-        self.mode = ivMode
+        self.mode = mode
         self.sigStateChanged.emit(self.getState())
 
     def getMode(self):
@@ -153,9 +172,7 @@ class MockClamp(PatchClamp):
         else:
             units = ['A', 'V']
 
-        if chan == 'command':
-            return units[0]
-        elif chan == 'secondary':
+        if chan in ['command', 'secondary']:
             return units[0]
         elif chan == 'primary':
             return units[1]
@@ -165,7 +182,7 @@ class MockClamp(PatchClamp):
 
     def quit(self):
         # self.process.send(None)
-        self.process.close()
+        self.process.stop()
         self.daqDev.quit()
 
     def getDAQName(self, channel):
@@ -200,7 +217,7 @@ class MockClampTask(DAQGenericTask):
             if 'holding' in cmd:
                 daqP['command'] = {'command': cmd['command'], 'holding': cmd['holding']}
             else:
-                daqP['command'] = {'command': cmd['command']}
+                daqP['command'] = {'command': cmd['command'], 'holding': dev.getHolding(cmd['mode'])}
         daqP['command']['lowLevelConf'] = {'mockFunc': self.write}
 
         cmd['daqProtocol']['primary'] = {'record': True, 'lowLevelConf': {'mockFunc': self.read}}
@@ -222,10 +239,10 @@ class MockClampTask(DAQGenericTask):
             'mode': mode,
             'primaryUnits': 'A' if mode == 'VC' else 'V',
             # copying multiclamp format here, but should eventually pick something more universal 
-            'ClampParams': ({
+            'ClampParams': ({} if mode == 'VC' else {
                                 'BridgeBalResist': 0,
                                 'BridgeBalEnable': True,
-                            } if mode == 'IC' else {}),
+                            }),
         }
 
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
@@ -233,12 +250,17 @@ class MockClampTask(DAQGenericTask):
 
     def read(self):
         ## Called by DAQGeneric to simulate a read-from-DAQ
-        res = self.job.result(timeout=30)._getValue()
-        return res
+        return self.job.result(timeout=30)
 
     def write(self, data, dt):
         ## Called by DAQGeneric to simulate a write-to-DAQ
-        self.job = self.clampDev.simulator.run({'data': data, 'dt': dt, 'mode': self.cmd['mode']}, _callSync='async')
+        self.job = self.clampDev.simulator.run({
+            'data': data, 
+            'dt': dt, 
+            'mode': self.cmd['mode'],
+            'vcHolding': self.clampDev.getHolding('VC'),
+            'icHolding': self.clampDev.getHolding('IC'),
+        }, _sync='async')
 
     def isDone(self):
         ## check on neuron process
@@ -306,12 +328,12 @@ class MockClampTaskGui(DAQGenericTaskGui):
 
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
-        state = {}
-        state['daqState'] = DAQGenericTaskGui.saveState(self)
-        state['mode'] = self.getMode()
-        # state['holdingEnabled'] = self.ctrl.holdingCheck.isChecked()
-        # state['holding'] = self.ctrl.holdingSpin.value()
-        return state
+        return {
+            'daqState': DAQGenericTaskGui.saveState(self),
+            'mode': self.getMode(),
+            # 'holdingEnabled': self.ctrl.holdingCheck.isChecked(),
+            # 'holding': self.ctrl.holdingSpin.value(),
+        }
 
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
@@ -329,13 +351,7 @@ class MockClampTaskGui(DAQGenericTaskGui):
 
     def generateTask(self, params=None):
         daqTask = DAQGenericTaskGui.generateTask(self, params)
-
-        task = {
-            'mode': self.getMode(),
-            'daqProtocol': daqTask
-        }
-
-        return task
+        return {'mode': self.getMode(), 'daqProtocol': daqTask}
 
     def modeChanged(self):
         global ivModes
@@ -372,76 +388,4 @@ class MockClampTaskGui(DAQGenericTaskGui):
         if chan == 'command':
             return self.clampDev.getHolding(self.getMode())
         else:
-            raise Exception("Can't get holding value for channel %s" % chan)
-
-
-class MockClampDevGui(Qt.QWidget):
-    def __init__(self, dev):
-        Qt.QWidget.__init__(self)
-        self.dev = dev
-        self.ui = Ui_MockClampDevGui()
-        self.ui.setupUi(self)
-        self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)
-        self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
-        # self.ui.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
-        self.modeRadios = {
-            'VC': self.ui.vcModeRadio,
-            'IC': self.ui.icModeRadio,
-            'I=0': self.ui.i0ModeRadio,
-        }
-        self.updateStatus()
-
-        for v in self.modeRadios.values():
-            v.toggled.connect(self.modeRadioChanged)
-        self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingChanged)
-        self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingChanged)
-        self.dev.sigHoldingChanged.connect(self.devHoldingChanged)
-        self.dev.sigStateChanged.connect(self.devStateChanged)
-
-    def updateStatus(self):
-        global modeNames
-        mode = self.dev.getMode()
-        if mode is None:
-            return
-        vcHold = self.dev.getHolding('VC')
-        icHold = self.dev.getHolding('IC')
-        self.modeRadios[mode].setChecked(True)
-        # self.ui.modeCombo.setCurrentIndex(self.ui.modeCombo.findText(mode))
-        self.ui.vcHoldingSpin.setValue(vcHold)
-        self.ui.icHoldingSpin.setValue(icHold)
-
-    def devHoldingChanged(self, chan, hval):
-        if isinstance(hval, dict):
-            self.ui.vcHoldingSpin.blockSignals(True)
-            self.ui.icHoldingSpin.blockSignals(True)
-            self.ui.vcHoldingSpin.setValue(hval['VC'])
-            self.ui.icHoldingSpin.setValue(hval['IC'])
-            self.ui.vcHoldingSpin.blockSignals(False)
-            self.ui.icHoldingSpin.blockSignals(False)
-
-    def devStateChanged(self):
-        mode = self.dev.getMode()
-        for r in self.modeRadios.values():
-            r.blockSignals(True)
-        # self.ui.modeCombo.blockSignals(True)
-        # self.ui.modeCombo.setCurrentIndex(self.ui.modeCombo.findText(mode))
-        self.modeRadios[mode].setChecked(True)
-        # self.ui.modeCombo.blockSignals(False)
-        for r in self.modeRadios.values():
-            r.blockSignals(False)
-
-    def vcHoldingChanged(self):
-        self.dev.setHolding('VC', self.ui.vcHoldingSpin.value())
-
-    def icHoldingChanged(self):
-        self.dev.setHolding('IC', self.ui.icHoldingSpin.value())
-
-    def modeRadioChanged(self, m):
-        try:
-            if not m:
-                return
-            for mode, r in self.modeRadios.items():
-                if r.isChecked():
-                    self.dev.setMode(mode)
-        except CancelException:
-            self.updateStatus()
+            raise ValueError(f"Can't get holding value for channel {chan}")
