@@ -17,7 +17,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
 from pyqtgraph.util.mutex import Mutex
 
-"""
+r"""
 Thanks to: Jason Yamada-Hanff  https://github.com/yamad/igor-mode
 
 Main documentation:  Igor Pro Folder\Miscellaneous\Windows Automation\Automation Server.ihf
@@ -219,7 +219,7 @@ class ZMQIgorBridge(object):
         self._currentMessageID = 0
         self.address = "{}:{}".format(host, port)
         self._socket = self._context.socket(zmq.DEALER)
-        self._socket.setsockopt(zmq.IDENTITY, "igorbridge")
+        self._socket.setsockopt(zmq.IDENTITY, b"igorbridge")
         self._socket.setsockopt(zmq.SNDTIMEO, 1000)
         self._socket.setsockopt(zmq.RCVTIMEO, 0)
         self._socket.connect(self.address)
@@ -288,7 +288,7 @@ class ZMQIgorBridge(object):
                 return val
 
     def parseWave(self, jsonWave):
-        dtype = self._types.get(jsonWave["type"], np.float)
+        dtype = self._types.get(jsonWave["type"], float)
         shape = jsonWave["dimension"]["size"]
         raw = np.array(jsonWave["data"]["raw"], dtype=dtype)
         return raw.reshape(shape, order="F")
