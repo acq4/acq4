@@ -1,18 +1,16 @@
-from __future__ import print_function
-
-from acq4.util import Qt
 from collections import OrderedDict
-from acq4.analysis.AnalysisModule import AnalysisModule
-import pyqtgraph as pg
-import numpy as np
-from acq4.util.functions import measureResistance, measureResistanceWithExponentialFit
-from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
-from . import STDPFileLoader
 
+import numpy as np
+
+import pyqtgraph as pg
+from acq4.util import Qt
+from acq4.util.AnalysisModule import AnalysisModule
+from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
+from acq4.util.functions import measureResistanceWithExponentialFit
+from . import STDPFileLoader
 
 Ui_Control = Qt.importTemplate('.STDPControlTemplate')
 Ui_Plots = Qt.importTemplate('.STDPPlotsTemplate')
-
 
 
 class STDPAnalyzer(AnalysisModule):

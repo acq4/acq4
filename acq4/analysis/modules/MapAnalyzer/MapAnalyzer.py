@@ -55,7 +55,7 @@ Changes to event detector:
 
 
 from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
 import acq4.util.DatabaseGui as DatabaseGui

@@ -12,3 +12,4 @@ config/*
 !config/example/
 crash.log
 .vscode/
+acq4/devices/MockClamp/models/

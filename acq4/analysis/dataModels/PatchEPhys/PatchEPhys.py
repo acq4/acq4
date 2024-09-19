@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import os
 import re
 
 import numpy as np
 
 from MetaArray import MetaArray
-
+from acq4.devices.PatchClamp.testpulse import get_clamp_mode, is_clamp_file, deviceNames, ic_modes, vc_modes
 
 protocolNames = {
     'IV Curve': ('cciv.*', 'vciv.*'),
@@ -15,17 +12,6 @@ protocolNames = {
     'Photostim Power Series': (),
 }
 
-# note: make sure the names, if single, are followed by ',', so as to enforce elements of tuple
-deviceNames = {
-    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe', 'MultiClamp1', 'MultiClamp2'),
-    'Camera': ('Camera',),
-    'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P'),
-    'LED-Blue': ('LED-Blue',),
-}
-
-# current and voltage clamp modes that are know to us
-ic_modes = ['IC', 'CC', 'IClamp', 'ic', 'I-Clamp Fast', 'I-Clamp Slow', 'i=0', 'I=0']
-vc_modes = ['VC', 'VClamp', 'vc']  # list of VC modes
 
 """Function library for formalizing the raw data structures used in analysis.
 This provides a layer of abstraction between the raw data and the analysis routines.
@@ -241,13 +227,6 @@ def getClampFile(protoDH):
     return None
 
 
-def isClampFile(fh):
-    if fh.shortName() not in deviceNames['Clamp'] and fh.shortName()[:-3] not in deviceNames['Clamp']:
-        return False
-    else:
-        return True
-
-
 def getClampCommand(data, generateEmpty=True):
     """Returns the command data from a clamp MetaArray.
     If there was no command specified, the function will return all zeros if generateEmpty=True (default)."""
@@ -259,7 +238,7 @@ def getClampCommand(data, generateEmpty=True):
     else:
         if generateEmpty:
             tVals = data.xvals('Time')
-            mode = getClampMode(data)
+            mode = get_clamp_mode(data)
             if 'v' in mode.lower():
                 units = 'V'
             else:
@@ -277,44 +256,11 @@ def getClampPrimary(data):
         return data['Channel': 'scaled']
 
 
-def getClampMode(data_handle, dir_handle=None):
-    """Given a clamp file handle or MetaArray, return the recording mode."""
-    if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
-        data = data_handle
-    elif isClampFile(data_handle):
-        data = data_handle.read(readAllData=False)
-    else:
-        raise Exception('%s not a clamp file.' % data_handle)
-    # if isClampFile(data_handle):
-    #     data = data_handle.read(readAllData=False)
-    # else:
-    #     data = data_handle
-    info = data._info[-1]
-    if 'ClampState' in info:
-        return info['ClampState']['mode']
-    else:
-
-        try:
-            mode = info['mode']  # if the mode is in the info (sometimes), return that
-            return mode
-        except KeyError:
-            raise KeyError('PatchEPhys, getClampMode: Cannot determine clamp mode for this data')
-            # if dir_handle is not None:
-            #     devs =  dir_handle.info()['devices'].keys()  # get devices in parent directory
-            #     for dev in devs:  # for all the devices
-            #         if dev in deviceNames['Clamp']:  # are any clamps?
-            #            # print 'device / keys: ', dev, dir_handle.info()['devices'][dev].keys()
-            #             #print  'mode: ', dir_handle.info()['devices'][dev]['mode']
-            #             return dir_handle.info()['devices'][dev]['mode']
-            # else:
-            #     return 'vc'  # None  kludge to handle simulations, which don't seem to fully fill the structures.
-
-
 def getClampHoldingLevel(data_handle):
     """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
     TODO: This function should add in the amplifier's internal holding value, if available?
     """
-    if not isClampFile(data_handle):
+    if not is_clamp_file(data_handle):
         raise Exception('%s not a clamp file.' % data_handle.shortName())
 
     data = data_handle.read(readAllData=False)
@@ -347,7 +293,7 @@ def getClampState(data_handle):
     """
     Return the full clamp state
     """
-    if not isClampFile(data_handle):
+    if not is_clamp_file(data_handle):
         raise Exception('%s not a clamp file.' % data_handle.shortName())
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
@@ -362,7 +308,7 @@ def getWCCompSettings(data_handle):
     return the compensation settings, if available
     Settings are returned as a group in a dictionary
     """
-    if not isClampFile(data_handle):
+    if not is_clamp_file(data_handle):
         raise Exception('%s not a clamp file.' % data_handle.shortName())
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
@@ -382,41 +328,9 @@ def getWCCompSettings(data_handle):
                 'CompEnable': 0, 'CompCorrection': 0., 'CompBW': 50000.}
 
 
-def getBridgeBalanceCompensation(data_handle):
-    """Return the bridge balance compensation setting for current clamp data, if bridge balance compensation was enabled.
-
-            data_handle    A MetaArray file or clamp file handle."""
-
-    if (hasattr(data_handle, 'implements') and data_handle.implements('MetaArray')):
-        data = data_handle
-    elif isClampFile(data_handle):
-        data = data_handle.read(readAllData=False)
-    else:
-        raise Exception('%s not a clamp file.' % data_handle)
-
-    mode = getClampMode(data)
-    global ic_modes
-    if mode not in ic_modes:
-        raise ValueError(f"Data is in {mode} mode, not a current clamp mode, and therefore bridge balance "
-                         f"compensation is not applicable.")
-
-    info = data.infoCopy()[-1]
-    bridgeEnabled = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalEnable', None)
-    if bridgeEnabled is None:
-        raise ValueError('Could not find whether BridgeBalance compensation was enabled for the given data.')
-    elif not bridgeEnabled:
-        return 0.0
-    else:
-        bridge = info.get('ClampState', {}).get('ClampParams', {}).get('BridgeBalResist', None)
-        if bridge is not None:
-            return bridge
-        else:
-            raise Exception('Could not find BridgeBalanceCompensation value for the given data.')
-
-
 def getSampleRate(data_handle):
     """given clamp data, return the data sampling rate """
-    if not isClampFile(data_handle):
+    if not is_clamp_file(data_handle):
         raise Exception('%s not a clamp file.' % data_handle.shortName())
     data = data_handle.read(readAllData=False)
     info = data._info[-1]
@@ -700,7 +614,7 @@ class GetClamps():
                 raise Exception("Error loading data for protocol %s:" % directory_name)
             data_file = data_file_handle.read()
 
-            self.data_mode = getClampMode(data_file, dir_handle=dh)
+            self.data_mode = get_clamp_mode(data_file, dir_handle=dh)
             if self.data_mode is None:
                 self.data_mode = ic_modes[0]  # set a default mode
             if self.data_mode in ['vc']:  # should be "AND something"  - this is temp fix for Xuying's old data

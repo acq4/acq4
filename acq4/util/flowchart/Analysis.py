@@ -3,12 +3,9 @@ from collections import OrderedDict
 import numpy as np
 import scipy
 
-
-
 import acq4.util.functions as functions
 import pyqtgraph as pg
 from MetaArray import MetaArray
-from acq4.analysis.tools.Fitting import Fitting
 from acq4.util import Qt
 from pyqtgraph.flowchart import Node
 from pyqtgraph.flowchart.library.common import CtrlNode
@@ -520,6 +517,8 @@ class CaEventFitter(EventFitter):
             
             ## Use Paul's fitting algorithm so that we can put bounds/constraints on the fit params
             #print "event:", i, 'amp bounds:', bounds[4]
+            from acq4.analysis.tools.Fitting import Fitting
+
             fitter = Fitting()
             fitResults = fitter.FitRegion([1], 0, times, yVals, fitPars=guessFit, fitFunc='exppulse', bounds=bounds, method='SLSQP', dataType='xy')
             fitParams, xPts, yPts, names = fitResults

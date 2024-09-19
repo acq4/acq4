@@ -4,10 +4,10 @@ import os
 import numpy as np
 import scipy
 
-import acq4.analysis.atlas.Atlas as Atlas
+import acq4.util.atlas.Atlas as Atlas
 import acq4.util.DataManager as DataManager
 import pyqtgraph as pg
-from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
+from acq4.util.atlas.AuditoryCortex.CortexROI import CortexROI
 from acq4.util import Qt
 from acq4.util.debug import Profiler
 

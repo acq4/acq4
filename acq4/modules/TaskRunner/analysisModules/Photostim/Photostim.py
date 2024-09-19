@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import weakref
 
 import numpy as np
@@ -8,15 +5,15 @@ import scipy.ndimage
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
-from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
+from acq4.modules.TaskRunner.analysisModules.TaskRunnerAnalysisModule import TaskRunnerAnalysisModule
 from acq4.util import Qt
 
 Ui_Form = Qt.importTemplate('.PhotostimTemplate')
 
 
-class PhotostimModule(AnalysisModule):
+class PhotostimModule(TaskRunnerAnalysisModule):
     def __init__(self, *args):
-        AnalysisModule.__init__(self, *args)
+        TaskRunnerAnalysisModule.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.postGuiInit()
@@ -47,7 +44,7 @@ class PhotostimModule(AnalysisModule):
         self.ui.recomputeBtn.clicked.connect(self.recompute)
         
     def quit(self):
-        AnalysisModule.quit(self)
+        TaskRunnerAnalysisModule.quit(self)
         for k in self.tasks:
             self.tasks[k].close()
         self.tasks.clear()
@@ -127,7 +124,7 @@ class PhotostimModule(AnalysisModule):
             sp.recalculate(allFrames=True)
 
     def quit(self):
-        AnalysisModule.quit(self)
+        TaskRunnerAnalysisModule.quit(self)
         for p in self.tasks.values():
             p.close()
             
@@ -141,7 +138,7 @@ class PhotostimModule(AnalysisModule):
         return str(self.ui.scannerDevCombo.currentText())
 
     def saveState(self):
-        state = AnalysisModule.saveState(self)
+        state = TaskRunnerAnalysisModule.saveState(self)
 
         # remove some unnecessary information
         state['colorMapper'].pop('fields', None)

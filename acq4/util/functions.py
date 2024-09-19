@@ -1,7 +1,7 @@
 """
 functions.py - Miscellaneous homeless functions
 
-Most Interesting Contents:
+Some Interesting Contents:
 siFormat / siEval  - functions for dealing with numbers in SI notation
 downsample - multidimensional downsampling by mean
 rmsMatch / fastRmsMatch - recursive template matching
@@ -16,6 +16,7 @@ import scipy.ndimage
 import scipy.optimize
 import scipy.signal
 import time
+
 from scipy import stats, signal
 from scipy.signal import deconvolve
 
@@ -165,7 +166,6 @@ def pspFunc(v, x, risePower=2.0):
     """
     
     if len(v) > 4:
-        from acq4.analysis.scripts.pspFitTest import processExtraVars
         v = processExtraVars(v)
     
     ## determine scaling factor needed to achieve correct amplitude
@@ -2310,3 +2310,21 @@ def plottable_booleans(data) -> np.ndarray:
     data[data < 1] = np.nan
     data -= 1
     return data
+
+
+def processExtraVars(v):
+    ##  allows using some extra variables to help fitters converge
+    ##  v = [amp, xoff, rise, fall, xshift, decayshift]
+    ##    xshift is a variable that shifts the onset of the PSP without affecting the decay curve
+    ##    decayshift (in)decreases the decay before 1/e and (de)increases the decay after 1/e
+
+    if len(v) == 4:
+        return v
+
+    v2 = v[:4]
+
+    ## xshift
+    v2[1] += v[4]
+    v2[0] *= np.exp(-v[4]/v[3])
+
+    return v2

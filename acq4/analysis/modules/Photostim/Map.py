@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
+import acq4.devices.PatchClamp.testpulse
 from acq4.util import Qt
 from collections import OrderedDict
 import pyqtgraph as pg
@@ -159,7 +161,7 @@ class Map:
             
         data = file.read()
         info = data._info[-1]
-        rec['mode'] = dm.getClampMode(file)
+        rec['mode'] = acq4.devices.PatchClamp.testpulse.get_clamp_mode(file)
         rec['holding'] = dm.getClampHoldingLevel(file)
         #if 'ClampState' in info:
         #    rec['mode'] = info['ClampState']['mode']

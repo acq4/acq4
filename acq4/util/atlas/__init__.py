@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 import os
+
 
 def listAtlases():
     d = os.path.split(__file__)[0]
@@ -12,13 +11,8 @@ def listAtlases():
         elif f[-3:] == '.py' and f not in ignores:
             files.append(f[:-3])
     return files
-    
-def getAtlasClass(modName):
-    mod = __import__('acq4.analysis.atlas.'+modName, fromlist=['*'])
-    cls = getattr(mod, modName)
-    #print id(cls)
-    return cls
 
-#def load(modName, ):
-    #cls = getModuleClass(modName)
-    #return cls(host)
+
+def getAtlasClass(modName):
+    mod = __import__('acq4.util.atlas.' + modName, fromlist=['*'])
+    return getattr(mod, modName)

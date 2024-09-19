@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-from __future__ import print_function
-
-
 """
 Python class wrapper for data fitting.
 Includes the following external methods:
@@ -10,15 +7,13 @@ FitRegion performs the fitting
 Note that FitRegion will plot on top of the current data using MPlots routines
 if the current curve and the current plot instance are passed.
 
-"""
-# January, 2009
-# Paul B. Manis, Ph.D.
-# UNC Chapel Hill
-# Department of Otolaryngology/Head and Neck Surgery
-# Supported by NIH Grants DC000425-22 and DC004551-07 to PBM.
-# Copyright Paul Manis, 2009
-#
-"""
+January, 2009
+Paul B. Manis, Ph.D.
+UNC Chapel Hill
+Department of Otolaryngology/Head and Neck Surgery
+Supported by NIH Grants DC000425-22 and DC004551-07 to PBM.
+Copyright Paul Manis, 2009
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -31,16 +26,14 @@ if the current curve and the current plot instance are passed.
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""
-"""
+
     Additional Terms:
     The author(s) would appreciate that any modifications to this program, or
-    corrections of erros, be reported to the principal author, Paul Manis, at
+    corrections of errors, be reported to the principal author, Paul Manis, at
     pmanis@med.unc.edu, with the subject line "Fitting Modifications".
 
 """
 
-import sys
 import numpy
 import scipy
 import scipy.optimize
@@ -52,25 +45,13 @@ except ImportError:
     HAVE_OPENOPT = False
     print("There was an error importing openopt. Continuing....")
 
-import ctypes
 import numpy.random
-
-
-#from numba import autojit
 
 usingMPlot = False
 if usingMPlot:
     import MPlot # we include plotting as part of the fitting
 
-def debug_trace():
-  '''Set a tracepoint in the Python debugger that works with Qt'''
-  if pyqt:
-      from PyQt4.QtCore import pyqtRemoveInputHook
-  from pdb import set_trace
-  if pyqt:
-      pyqtRemoveInputHook()
-  set_trace()
-      
+
 class Fitting():
     # dictionary contains:
     # name of function: function call, initial parameters, iterations, plot color, then x and y for testing
@@ -531,8 +512,8 @@ p[4]*numpy.exp(-(p[5] + x)/p[6]))**2.0
                 yfit = func[0](plsq, xfit, C=fixedPars)
                 yy = func[0](plsq, tx, C=fixedPars) # calculate function
                 self.fitSum2Err = numpy.sum((dy - yy)**2)
-                if usingMPlot and FitPlot != None and plotInstance != None:
-                    self.FitPlot(xFit = xfit, yFit = yfit, fitFunc = fund[0],
+                if usingMPlot and self.FitPlot != None and plotInstance != None:
+                    self.FitPlot(xFit = xfit, yFit = yfit, fitFunc = func[0],
                             fitPars = plsq, plot = fitPlot, plotInstance = plotInstance)
                 xp.append(plsq) # parameter list
                 xf.append(xfit) # x plot point list

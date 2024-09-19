@@ -31,10 +31,10 @@ Example 1: we can create a very simple analysis module that prints the data stru
     #. Create a new file `acq4/modules/TaskRunner/analysisModules/TestAnalysis/__init__.py`
     #. Within this file, define a subclass of AnalysisModule::
         
-           from ..AnalysisModule import AnalysisModule
+           from ..TaskRunnerAnalysisModule import TaskRunnerAnalysisModule
            from pprint import pprint
            
-           class TestAnalysisModule(AnalysisModule):
+           class TestAnalysisModule(TaskRunnerAnalysisModule):
                def newFrame(self, data):
                    print("== Received new task results ==")
                    pprint(data)
