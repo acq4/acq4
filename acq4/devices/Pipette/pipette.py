@@ -96,7 +96,7 @@ class Pipette(Device, OptomechDevice):
         }
         parent = self.parentDevice()
         if not isinstance(parent, Stage):
-            raise Exception("Pipette device requires some type of translation stage as its parentDevice.")
+            raise Exception(f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
 
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}

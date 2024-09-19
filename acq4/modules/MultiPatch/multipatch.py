@@ -560,6 +560,8 @@ class MultiPatchWindow(Qt.QWidget):
             self.writeRecords(self.eventHistory)
 
     def recordEvent(self, event):
+        if not self.eventHistory:
+            self.resetHistory()
         self.eventHistory.append(event)
         self.writeRecords([event])
 
