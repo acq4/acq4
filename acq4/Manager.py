@@ -290,15 +290,15 @@ class Manager(Qt.QObject):
         self.sigConfigChanged.emit()
 
     def _loadConfig(self, cfg):
+        if 'imports' in cfg:
+            if isinstance(cfg["imports"], str):
+                cfg["imports"] = [cfg["imports"]]
+            for mod in cfg["imports"]:
+                __import__(mod)
         for key, val in cfg.items():
             try:
                 # Handle custom import / exec
-                if key == 'imports':
-                    if isinstance(val, str):
-                        val = [val]
-                    for mod in val:
-                        __import__(mod)
-                elif key == 'execFiles':
+                if key == 'execFiles':
                     if isinstance(val, str):
                         val = [val]
                     for pyfile in val:
@@ -315,7 +315,10 @@ class Manager(Qt.QObject):
                         logMsg("  === Configuring device '%s' ===" % k)
                         try:
                             conf = cfg['devices'][k]
-                            driverName = conf['driver']
+                            try:
+                                driverName = conf['driver']
+                            except KeyError:
+                                raise KeyError(f"No driver specified for device {k}")
                             if 'config' in conf:  # for backward compatibility
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
@@ -431,6 +434,9 @@ class Manager(Qt.QObject):
                 return configfile.appendConfigFile(data, fileName)
             else:
                 raise Exception("Could not find file %s" % fileName)
+
+    def updateConfig(self, config: dict):
+        self.config.update(config)
 
     def configFileName(self, name):
         return os.path.join(self.configDir, name)
