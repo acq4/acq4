@@ -244,7 +244,9 @@ class Manager(Qt.QObject):
         self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
-        self.configure(cfg)
+        # self.configure(cfg)
+
+        self.configure(self.config)
 
         self.configFile = configFile
         print("\n============= Manager configuration complete =================\n")
