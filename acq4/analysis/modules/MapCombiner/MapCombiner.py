@@ -20,8 +20,8 @@ import numpy as np
 #from acq4.analysis.modules.Photostim.Map import Map
 #import acq4.analysis.tools.poissonScore as poissonScore
 #import flowchart.EventDetection as FCEventDetection
-import acq4.analysis.atlas.CochlearNucleus as CN
-from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
+import acq4.util.atlas.CochlearNucleus as CN
+
 
 class MapCombiner(AnalysisModule):
     def __init__(self, host):

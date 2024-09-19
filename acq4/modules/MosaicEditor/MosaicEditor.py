@@ -9,7 +9,7 @@ import scipy
 import scipy.stats
 import weakref
 
-import acq4.analysis.atlas as atlas
+import acq4.util.atlas as atlas
 import acq4.util.DataManager as DataManager
 import pyqtgraph as pg
 from acq4.util.AnalysisModule import AnalysisModule
