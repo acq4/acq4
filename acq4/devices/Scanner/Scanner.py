@@ -141,8 +141,11 @@ class Scanner(Device, OptomechDevice):
         cal = self.getCalibration(laser, opticState)
         
         if cal is None:
-            raise HelpfulException("The scanner device '%s' is not calibrated for this combination of laser and objective (%s, %s)" % (self.name(), laser, str(opticState)))
-            
+            raise HelpfulException(
+                f"The scanner device '{self.name()}' is not calibrated for this combination of laser and objective"
+                f" ({laser}, {opticState})"
+            )
+
         ## map from global coordinates to parent
         parentPos = self.mapGlobalToParent((x,y))
         if isinstance(parentPos, Qt.QPointF):
@@ -294,7 +297,7 @@ class ScannerTask(DeviceTask):
             ## If position arrays are given, translate into voltages
             if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
                 if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
-                    raise Exception('xPosition and yPosition must be given together or not at all.')
+                    raise ValueError('xPosition and yPosition must be given together or not at all.')
                 self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
                 prof.mark('position arrays')
             
@@ -306,7 +309,7 @@ class ScannerTask(DeviceTask):
                 
             ## If shuttering is requested, generate proper arrays and shutter the laser now
             if self.cmd.get('simulateShutter', False):
-                self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
+                self.generateShutterArrays(self.daqTasks[self.cmd['laser']], self.cmd['duration'])
                 prof.mark('shutter')
             prof.finish()
         
@@ -426,5 +429,3 @@ class ScannerTask(DeviceTask):
     def storeResult(self, dirHandle):
         result = self.getResult()
         dirHandle.setInfo({self.dev.name(): result})
-        
-        

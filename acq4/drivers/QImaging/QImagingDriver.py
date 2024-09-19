@@ -944,8 +944,8 @@ if __name__ == '__main__':
 #a.shape = (camerainfo['qinfCcdHeight'], camerainfo['qinfCcdWidth'])
 #print "create window"
 #imw1 = gw.ImageWindow()
-#imw1.setImage(a.transpose())
-##imw1.setImage(concatenate([a.transpose()[newaxis] for a in arrays]))
+#imw1.setImage(a)
+##imw1.setImage(concatenate([a[newaxis] for a in arrays]))
 #print "show window"
 #imw1.show()
 #

@@ -262,7 +262,7 @@ class ScannerDeviceGui(Qt.QWidget):
                     #print "   ..skipping; too close to edge", x, y
                     continue
                 
-                frame[x,y] = -1  ## mark location of peak in image
+                frame[x, y] = -1  ## mark location of peak in image
                 
                 ## convert pixel location to coordinate system of scanner's parent
                 globalPos = frameTransform.map(pg.Point(x, y))  ## Map from frame pixel location to global coordinates

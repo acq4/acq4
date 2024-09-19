@@ -28,6 +28,7 @@ class SelectBox(ROI):
             self.addRotateHandle([0, 1], center)
             self.addRotateHandle([1, 0], center)
 
+
 class CanvasItem(QtCore.QObject):
     
     sigResetUserTransform = QtCore.Signal(object)
