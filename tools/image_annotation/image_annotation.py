@@ -14,7 +14,7 @@ if callable(getattr(Qt.QApplication, "setGraphicsSystem", None)):
 label_cache = None
 
 
-def main():
+def main(filename):
     pg.mkQApp()
 
     win = Qt.QMainWindow()
@@ -27,7 +27,6 @@ def main():
 
     ui.labelTree.header().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
 
-    filename = sys.argv[1]
     win.setWindowTitle(f"Annotations: {filename}")
     base_name = os.path.splitext(filename)[0]
     label_file = f'{base_name}.labels.ma'
@@ -336,4 +335,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1])
