@@ -21,14 +21,14 @@ n2 = fc.createNode('Subtract')
 n3 = fc.createNode('Abs')
 n4 = fc.createNode('Add')
 
-fc.connectTerminals(fc.dataIn, n1.A)
-fc.connectTerminals(fc.dataIn, n1.B)
-fc.connectTerminals(fc.dataIn, n2.A)
-fc.connectTerminals(n1.Out, n4.A)
-fc.connectTerminals(n1.Out, n2.B)
-fc.connectTerminals(n2.Out, n3.In)
-fc.connectTerminals(n3.Out, n4.B)
-fc.connectTerminals(n4.Out, fc.dataOut)
+fc.connectTerminals(fc['dataIn'], n1['A'])
+fc.connectTerminals(fc['dataIn'], n1['B'])
+fc.connectTerminals(fc['dataIn'], n2['A'])
+fc.connectTerminals(n1['Out'], n4['A'])
+fc.connectTerminals(n1['Out'], n2['B'])
+fc.connectTerminals(n2['Out'], n3['In'])
+fc.connectTerminals(n3['Out'], n4['B'])
+fc.connectTerminals(n4['Out'], fc['dataOut'])
 
 
 def process(**kargs):
