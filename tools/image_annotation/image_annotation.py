@@ -198,6 +198,41 @@ def main(filename):
         label._info[-1]['labels'] = meta
         label.writeMeta(label_file)
 
+    def write_cellpose_masks():
+        from cellpose.gui.gui import MainW
+        parent: MainW = None
+        flow_threshold, cellprob_threshold = parent.get_thresholds()
+        dat = {
+            "outlines":
+                parent.outpix,
+            "colors":
+                parent.cellcolors[1:],
+            "masks":
+                parent.cellpix,
+            "current_channel": (parent.color - 2) % 5,
+            "filename":
+                parent.filename,
+            "flows":
+                parent.flows,
+            "zdraw":
+                parent.zdraw,
+            "model_path": 0,
+            "flow_threshold":
+                flow_threshold,
+            "cellprob_threshold":
+                cellprob_threshold,
+            "normalize_params":
+                parent.get_normalize_params(),
+            "restore":
+                parent.restore,
+            "ratio":
+                parent.ratio,
+            "diameter": 35,
+        }
+        if parent.restore is not None:
+            dat["img_restore"] = parent.stack_filtered
+        np.save(f"{base_name}_seg.npy", dat)
+
     def itemSelected(item):
         ui.labelTree.editItem(item, 1)
 
