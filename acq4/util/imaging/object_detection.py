@@ -54,7 +54,7 @@ def normalize(image: Image, min_in=None, max_in=None):
     offset_h = int(image.shape[1] * 0.3)
     margin_w = int(image.shape[0] * 0.4)
     margin_h = int(image.shape[1] * 0.4)
-    image = image[offset_w:offset_w + margin_w, offset_h:offset_h + margin_h]
+    image = image[offset_h:offset_h + margin_h, offset_w:offset_w + margin_w]
     return Image.fromarray(image.astype(np.uint8))
 
 
@@ -123,7 +123,6 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
     data : image data shaped like [cols, rows]
     angle : angle of pipette in degrees, measured wittershins relative to pointing directly rightward
     """
-    import os
     import torch
     from acq4.util.pipette_detection.torch_model_04 import make_image_tensor, pos_normalizer
     from acq4.util.pipette_detection.test_data import make_rotated_crop
@@ -146,7 +145,7 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
     z, y, x, snr = pos_normalizer.denormalize(pred)[0]
 
     # unrotate/uncrop prediction
-    pos_xy = tr.imap([y, x])
+    pos_xy = tr.imap([x, y])
 
     return pos_xy, z, snr, locals()
 
