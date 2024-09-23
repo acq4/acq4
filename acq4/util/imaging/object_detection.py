@@ -7,15 +7,16 @@ import click
 import numpy as np
 import scipy.stats
 import tifffile
-from MetaArray import MetaArray
 from PIL import Image
 
+import pyqtgraph as pg
+from MetaArray import MetaArray
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
-import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
+
 
 _lock = RLock()
 _remote_process: Optional[ProcessSpawner] = None

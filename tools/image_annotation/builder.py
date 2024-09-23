@@ -7,6 +7,8 @@ import pyqtgraph as pg
 from MetaArray import MetaArray
 from acq4.util import Qt
 
+
+pg.setConfigOption('imageAxisOrder', 'row-major')
 Ui_Form = Qt.loadUiType(os.path.join(os.path.dirname(__file__), 'builderTemplate.ui'))[0]
 
 if callable(getattr(Qt.QApplication, "setGraphicsSystem", None)):

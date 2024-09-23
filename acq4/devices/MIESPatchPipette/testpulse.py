@@ -1,5 +1,3 @@
-from __future__ import print_function
-import time
 from acq4.util import Qt
 
 

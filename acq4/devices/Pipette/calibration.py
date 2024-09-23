@@ -171,7 +171,7 @@ def interpolate_orthogonal_line(frames, bgFrame, pipVector):
     interpCoords = start + np.arange(int(radiusPx*2))[:, np.newaxis] * orthoVector[np.newaxis, :]
 
     profile = np.empty((len(frames), interpCoords.shape[0]))
-    for i,frame in enumerate(frames):
+    for i, frame in enumerate(frames):
         profile[i] = scipy.interpolate.interpn(
             points=(np.arange(frame.shape[0]), np.arange(frame.shape[1])),
             values=frame.data() - bgFrame,
@@ -181,6 +181,7 @@ def interpolate_orthogonal_line(frames, bgFrame, pipVector):
             fill_value=0,
         )
     return profile, interpCoords
+
 
 def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
     with imager.ensureRunning():

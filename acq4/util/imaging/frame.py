@@ -93,7 +93,7 @@ class Frame:
         to its imager device coordinates. This transform takes into account
         the camera's region and binning settings.
         """
-        return SRTTransform3D(self._info['frameTransform'])
+        return SRTTransform3D(self._info['frameTransform'])  # TODO .T
         
     def globalTransform(self):
         """Return the transform that maps this frame's image coordinates (row, col)
