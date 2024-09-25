@@ -573,9 +573,12 @@ class MultiPatchWindow(Qt.QWidget):
             self.writeRecords(self.eventHistory)
 
     def recordTestPulsesToggled(self, rec):
+        files = {}
         for stack in self._testPulseStacks.values():
-            stack.close()
+            files.update(stack.files)
         self._testPulseStacks = {}
+        for f in files:
+            f.close()
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
