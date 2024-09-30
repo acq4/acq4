@@ -588,7 +588,7 @@ class MultiPatchWindow(Qt.QWidget):
             for dev in self.pips:
                 dev_gr = group.create_group(dev.name())
                 dev_gr.attrs['device'] = dev.name()
-                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr)
+                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr, readable=False)
         for pip in self.selectedPipettes():
             pip.emitFullTestPulseData(rec)
 
