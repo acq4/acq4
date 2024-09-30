@@ -343,7 +343,7 @@ class PatchPipette(Device):
     def _testPulseFinished(self, clamp, result: PatchClampTestPulse):
         data = result.analysis
         if self._emitTestPulseData:
-            data['full_test_pulse'] = result
+            data = {'full_test_pulse': result, **data}  # copy it so we don't modify the original
         self.emitNewEvent('test_pulse', data)
 
     def emitNewEvent(self, eventType, eventData=None):
