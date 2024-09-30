@@ -153,12 +153,12 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
 
 @future_wrap
 def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future: Future = None) -> list:
-    if isinstance(frames, Frame):
-        data = frames.data()[np.newaxis, ...]
-        transform = frames.globalTransform()
-    else:
+    if do_3d := not isinstance(frames, Frame):
         data = np.stack([frame.data() for frame in frames])
         transform = frames[0].globalTransform()
+    else:
+        data = frames.data()[np.newaxis, ...]
+        transform = frames.globalTransform()
     shared_array = _get_shared_array(data)
     _future.checkStop()
     with _lock:
@@ -166,14 +166,14 @@ def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future
         rmt_array = rmt_process.client.transfer(shared_array)
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this.do_neuron_detection(rmt_array.data, transform, model, _timeout=60)
+        return rmt_this.do_neuron_detection(rmt_array.data, transform, model, do_3d, _timeout=60)
 
 
-def do_neuron_detection(data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose") -> list:
-    if model == 'yolo':
+def do_neuron_detection(data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose", do_3d: bool = False) -> list:
+    if model == 'cellpose':
+        return _do_neuron_detection_cellpose(data, transform, do_3d)
+    elif model == 'yolo':
         return _do_neuron_detection_yolo(data, transform)
-    elif model == 'cellpose':
-        return _do_neuron_detection_cellpose(data, transform)
     else:
         raise ValueError(f"Unknown model {model}")
 
@@ -201,13 +201,22 @@ def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> li
     return [xyxy_to_rect(box) for box in boxes]  # TODO filter by class? score?
 
 
-def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D) -> list:
+def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, do_3d: bool = False) -> list:
     from cellpose import models
 
     model = models.Cellpose(gpu=True, model_type="cyto3")
-    masks_pred, flows, styles, diams = model.eval([data], diameter=30, niter=2000)
+    data = data[:, np.newaxis, :, 0:-2]  # add channel dimension, weird the shape
+    masks_pred, flows, styles, diams = model.eval(
+        [data],
+        diameter=35,
+        # niter=2000,
+        channel_axis=1,
+        z_axis=0 if do_3d else None,
+        stitch_threshold=0.25 if do_3d else None,
+    )
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
 
+    # TODO 3D bboxes?
     def bbox(num) -> tuple[tuple[float, float], tuple[float, float]]:
         match = mask == num
         rows = np.any(match, axis=-1)
@@ -252,7 +261,8 @@ def cli(image, model, angle, z, display):
         # wait for user input
         input("Press Enter to continue...")
     else:
-        neurons = do_neuron_detection(data, null_xform, model)
+        do_3d = data.ndim == 4 or (data.ndim == 3 and data.shape[-1] > 3)
+        neurons = do_neuron_detection(data, null_xform, model, do_3d)
         print(f"Detected {len(neurons)} neuron(s)")
         print(neurons)
         if display:
