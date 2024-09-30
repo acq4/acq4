@@ -88,29 +88,31 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
     if depth is None:
         return
 
+    if isinstance(speed, str):
+        speed = imager.getFocusDevice()._interpretSpeed(speed)
     dz = depth - imager.getFocusDepth()
+    timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
     if direction > 0 and dz > 0:
         # stack goes downward
-        f = imager.setFocusDepth(depth + 20e-6, speed)
-        if future is not None:
-            future.waitFor(f)
-        else:
-            f.wait()
+        move = imager.setFocusDepth(depth + 20e-6, speed)
     elif direction < 0 and dz < 0:
         # stack goes upward
-        f = imager.setFocusDepth(depth - 20e-6, speed)
-        if future is not None:
-            future.waitFor(f)
-        else:
-            f.wait()
-
-    f = imager.setFocusDepth(depth, speed=speed)
-    if future is not None:
-        future.waitFor(f)
+        move = imager.setFocusDepth(depth - 20e-6, speed)
     else:
-        f.wait()
+        move = imager.setFocusDepth(depth, speed)
+
+    if future is not None:
+        future.waitFor(move, timeout=timeout)
+    else:
+        move.wait(timeout=timeout)
+
+    move = imager.setFocusDepth(depth, speed)  # maybe redundant
+    if future is not None:
+        future.waitFor(move, timeout=timeout)
+    else:
+        move.wait(timeout=timeout)
 
 
 @future_wrap
