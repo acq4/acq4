@@ -63,9 +63,7 @@ class PatchPipette(Device):
             self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
 
         Device.__init__(self, deviceManager, config, name)
-        self._eventLog = []  # chronological record of events 
-        self._eventLogLock = Mutex()
-        
+
         # current state variables
         self.active = False
         self.broken = False
@@ -357,8 +355,3 @@ class PatchPipette(Device):
         if eventData is not None:
             newEv.update(eventData)
         self.sigNewEvent.emit(self, newEv)
-
-        self._eventLog.append(newEv)
-
-    def eventLog(self):
-        return self._eventLog
