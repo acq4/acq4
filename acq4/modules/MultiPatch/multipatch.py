@@ -573,7 +573,7 @@ class MultiPatchWindow(Qt.QWidget):
             self.writeRecords(self.eventHistory)
 
     def recordTestPulsesToggled(self, rec):
-        files = {}
+        files = set()
         for stack in self._testPulseStacks.values():
             files.update(stack.files)
         self._testPulseStacks = {}
