@@ -46,7 +46,7 @@ class Sensapex(Stage):
         # create handle to this manipulator
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
-        self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None))
+        self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
 
         Stage.__init__(self, man, config, name)
         # Read position updates on a timer to rate-limit
