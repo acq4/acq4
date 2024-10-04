@@ -22,7 +22,7 @@ Refactoring begun 3/21/2015
 import os
 import os.path
 import gc
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from acq4.util import DataManager
 from pyqtgraph import configfile
 from acq4.util import Qt

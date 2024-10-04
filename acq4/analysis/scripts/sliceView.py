@@ -3,9 +3,8 @@ from __future__ import print_function
 import acq4.util.Qt as Qt
 import pyqtgraph as pg
 import numpy as np
-import pyqtgraph.opengl as gl 
 import acq4.Manager
-import acq4.analysis.atlas.CochlearNucleus as cn
+import acq4.util.atlas.CochlearNucleus as cn
 
 man = acq4.Manager.getManager()
 initialized = False

@@ -7,7 +7,7 @@ import os
 
 import acq4.util.debug as debug
 from MetaArray import MetaArray
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from acq4.util import Qt
 from acq4.util.Canvas.items.ImageCanvasItem import ImageCanvasItem
 from acq4.util.ColorMapper import ColorMapper

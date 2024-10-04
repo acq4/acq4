@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-__author__ = 'pbmanis'
-
 """
 ChR2TraceAnalyzer provides a platform for the analysis of voltage or current traces.
 The module provides standard tools to access data and databases, and flowcharts.
@@ -13,23 +9,24 @@ The specifics of the analysis depends on the choice of the flowchart.
 12/5/2013-4/19/2014 pbmanis
 """
 
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
-
+import glob
+import os
 from collections import OrderedDict
-import pyqtgraph as pg
 
+import acq4.analysis.scripts.chr2analysis as ChR2
+import acq4.util.flowchart as fc  # was pyqtgraph.flowchart - but it does not have the same filters ??????????
+import pyqtgraph as pg
+from acq4.util import Qt
+from acq4.util.AnalysisModule import AnalysisModule
 from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.util.FileLoader import FileLoader
-import acq4.util.flowchart as fc  # was pyqtgraph.flowchart - but it does not have the same filters ??????????
 
-import os
-import glob
-import acq4.analysis.scripts.chr2analysis as ChR2
+__author__ = 'pbmanis'
+
 
 class ChR2TraceAnalyzer(AnalysisModule):
     def __init__(self, host):
-        AnalysisModule.__init__(self, host)
+        super().__init__(host)
         self.ChR2 = ChR2.ChR2() # create instance of the analysis
 
         fcpath = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")

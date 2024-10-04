@@ -1,22 +1,19 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import weakref
 
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 
 from acq4.Manager import getManager
-from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
+from acq4.modules.TaskRunner.analysisModules.TaskRunnerAnalysisModule import TaskRunnerAnalysisModule
 from acq4.util import Qt
 from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.UncagingTemplate')
 
 
-class UncagingModule(AnalysisModule):
+class UncagingModule(TaskRunnerAnalysisModule):
     def __init__(self, *args):
-        AnalysisModule.__init__(self, *args)
+        TaskRunnerAnalysisModule.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.postGuiInit()
@@ -42,7 +39,7 @@ class UncagingModule(AnalysisModule):
         #self.man.sigModulesChanged.connect(self.fillModuleList)
         
     def quit(self):
-        AnalysisModule.quit(self)
+        TaskRunnerAnalysisModule.quit(self)
         for k in self.tasks:
             self.tasks[k].close()
         self.tasks.clear()
@@ -51,7 +48,7 @@ class UncagingModule(AnalysisModule):
     def quit(self):
         # Qt.QObject.disconnect(getManager(), Qt.SIGNAL('modulesChanged'), self.fillModuleList)
         # getManager().sigModulesChanged.disconnect(self.fillModuleList)
-        AnalysisModule.quit(self)
+        TaskRunnerAnalysisModule.quit(self)
         for p in self.tasks.values():
             p.close()
 

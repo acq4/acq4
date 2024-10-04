@@ -7,7 +7,7 @@ For combining photostimulation maps across cells and displaying against 3D atlas
 
 """
 from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
 #import DatabaseGui
@@ -20,8 +20,8 @@ import numpy as np
 #from acq4.analysis.modules.Photostim.Map import Map
 #import acq4.analysis.tools.poissonScore as poissonScore
 #import flowchart.EventDetection as FCEventDetection
-import acq4.analysis.atlas.CochlearNucleus as CN
-from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
+import acq4.util.atlas.CochlearNucleus as CN
+
 
 class MapCombiner(AnalysisModule):
     def __init__(self, host):

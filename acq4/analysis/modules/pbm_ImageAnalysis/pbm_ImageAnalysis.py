@@ -26,10 +26,8 @@ from __future__ import print_function
 
 import matplotlib.pyplot as PL
 
-
-
 from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import os
 import shutil

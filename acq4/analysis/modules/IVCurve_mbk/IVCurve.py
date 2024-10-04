@@ -9,7 +9,7 @@ from collections import OrderedDict
 import numpy as np
 
 import acq4.util.debug as debug
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 from pyqtgraph import mkPen
 from pyqtgraph.flowchart import Flowchart
 
