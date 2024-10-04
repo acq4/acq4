@@ -79,11 +79,11 @@ class ZeissFilterWheelFuture(FilterWheelFuture):
             return True
 
     def _atTarget(self):
-        # sometimes we transiently return 0 at the end of a move; just wait a little longer
+        # sometimes we transiently return 0 (converted to None) at the end of a move; just wait a little longer
         start = ptime.time()
         while True:
-            pos = self.dev._getPosition()
-            if pos != 0 or ptime.time() - start > 1.0:
+            pos = self.dev.getPosition()
+            if pos is not None or ptime.time() - start > 1.0:
                 break
 
         return pos == self.position
