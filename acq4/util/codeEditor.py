@@ -11,39 +11,39 @@ editorCommands = {
                 r"C:\Program Files\JetBrains\Pycharm*\bin\pycharm64.exe",
                 r"C:\Users\{user}\AppData\Local\Programs\JetBrains\Pycharm*\bin\pycharm64.exe",
             ],
-            'command': '"{bin}" --line {lineNum} {fileName}',
+            'command': '"{bin}" --line {lineNum} "{fileName}"',
         },
         'linux': {
             'bin_globs': ['/snap/bin/pycharm-community'],
-            'command': '"{bin}" --line {lineNum} {fileName}',
+            'command': '"{bin}" --line {lineNum} "{fileName}"',
         }
     },
     'vscode': {
         'win32': {
-            'command': 'code -g {fileName}:{lineNum}',
+            'command': 'code -g "{fileName}":{lineNum}',
         },
         'linux': {
-            'command': 'code -g {fileName}:{lineNum}',
+            'command': 'code -g "{fileName}":{lineNum}',
         },
         'darwin': {
-            'command': 'code -g {fileName}:{lineNum}',
+            'command': 'code -g "{fileName}":{lineNum}',
         },
     },
     'sublime': {
         'win32': {
             'bin_globs': [
-                'C:\Program Files\Sublime Text\subl.exe',
-                'C:\Program Files (x86)\Sublime Text\subl.exe',
+                'C:\\Program Files\\Sublime Text\\subl.exe',
+                'C:\\Program Files (x86)\\Sublime Text\\subl.exe',
             ],
-            'command': '"{bin}" {fileName}:{lineNum}',
+            'command': '"{bin}" "{fileName}":{lineNum}',
         },
         'darwin': {
             'bin_globs': ['/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl'],
-            'command': '"{bin}" {fileName}:{lineNum}',
+            'command': '"{bin}" "{fileName}":{lineNum}',
         },
         'linux': {
             'bin_globs': ['/usr/bin/subl', '/usr/local/bin/subl'],
-            'command': '"{bin}" {fileName}:{lineNum}',
+            'command': '"{bin}" "{fileName}":{lineNum}',
         },
     }
 }
@@ -61,7 +61,7 @@ def codeEditorCommand():
     
         <default.cfg>:
             misc:
-                codeEditor: r'"C:\Program Files\MyEditor\editor.exe" {{fileName}}:{{lineNum}}'
+                codeEditor: r'"C:\\Program Files\\MyEditor\\editor.exe" {{fileName}}:{{lineNum}}'
     """
     man = getManager()
     cmd = man.config.get('misc', {}).get('codeEditor', None)

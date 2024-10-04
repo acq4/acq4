@@ -26,6 +26,25 @@ class LightSource(Device):
         Whether or not the device supports setting brightness.
     xkey | tuple
         Configuration for hotkey light source toggle
+
+    Configuration example::
+
+        LEDLights:
+            driver: 'LightSource'  # Note: LightSource is abstract; you need a subclass
+            sources:
+                Blue:
+                    adjustableBrightness: True
+                    model: 'Thorlabs M470L3'
+                    wavelength: 470*nm
+                    xkey: ('XKeyDevice', 7, 8)
+                Green:
+                    adjustableBrightness: True
+                    model: 'Thorlabs M470L3'
+                    wavelength: 470*nm
+                    xkey: ('XKeyDevice', 7, 8)
+
+
+
     """
 
     # emitted when the on/off/brightness status of a light changes
@@ -147,6 +166,8 @@ class LightSourceDevGui(Qt.QWidget):
             conf = self.dev.sourceConfigs[name]
             if conf.get("adjustableBrightness", False):
                 slider = Qt.QSlider()
+                slider.setMaximum(100)
+                slider.setMinimum(0)
                 slider.setObjectName(name)
                 slider_cont = Qt.QGridLayout()
                 self.sourceBrightnessSliders[name] = slider
@@ -164,7 +185,7 @@ class LightSourceDevGui(Qt.QWidget):
 
     def _sliderChanged(self, value):
         slider = self.sender()
-        self.dev.setSourceBrightness(slider.objectName(), value)
+        self.dev.setSourceBrightness(slider.objectName(), value / slider.maximum())
 
     def _updateValuesToMatchDev(self):
         for name in self.dev.sourceConfigs:
@@ -174,7 +195,7 @@ class LightSourceDevGui(Qt.QWidget):
             if name in self.sourceBrightnessSliders:
                 slider = self.sourceBrightnessSliders[name]
                 with SignalBlock(slider.valueChanged, self._sliderChanged):
-                    slider.setValue(int(self.dev.getSourceBrightness(name) * 99))
+                    slider.setValue(int(self.dev.getSourceBrightness(name) * slider.maximum()))
 
 
 class LightSourceTaskGui(TaskGui):

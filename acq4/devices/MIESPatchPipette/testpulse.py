@@ -20,8 +20,9 @@ class MIESTestPulseThread(Qt.QObject):
 
     def newTestPulse(self, data):
         """Got the signal from MIES that data is available, update"""
-        tp = TestPulse(self.dev, {}, data[:, self._headstage])
+        tp = TestPulse(self.dev, data[:, self._headstage])
 
+        # print(f"bms-debug: {tp}")
         self.sigTestPulseFinished.emit(self.dev, tp)
 
     def parseTPData(self, data):
@@ -66,9 +67,10 @@ class TestPulse(object):
         self.result = {
             'startTime': data[0],
         }
-        self.analysis = {
+        self.analysis_l = {
             'steady_state_resistance': data[1],
             'peak_resistance': data[2],
+            'capacitance': 0,
         }
 
     @property
@@ -82,7 +84,9 @@ class TestPulse(object):
         return self.taskParams['clampMode']
 
     def analysis(self):
-        return self.analysis.copy()
+
+        # print(f"bms-debug: inside TestPulse (MIES)")
+        return self.analysis_l.copy()
 
     def getFitData(self):
         return None

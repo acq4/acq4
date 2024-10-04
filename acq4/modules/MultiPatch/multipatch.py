@@ -593,6 +593,8 @@ class MultiPatchWindow(Qt.QWidget):
             pip.emitFullTestPulseData(rec)
 
     def recordEvent(self, event):
+        if not self.eventHistory:
+            self.resetHistory()
         self.writeRecords([event])
         event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
         self.eventHistory.append(event)

@@ -12,7 +12,7 @@ class LEDLightSource(LightSource):
         self._channelsByName = {}  # name: (dev, chan)
         self._channelNames = {} # (dev, chan): name
 
-        for name, conf in config['leds'].items():
+        for name, conf in config.get('sources', config.get('leds', {})).items():
             device, chan = conf.pop("channel")
             dev = dm.getDevice(device)
             dev.sigHoldingChanged.connect(self._mkcb(dev))

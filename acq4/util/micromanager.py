@@ -6,7 +6,7 @@ import sys
 _mmc = None
 
 # default location to search for micromanager
-microManagerPaths = glob.glob("C:\\Program Files\Micro-Manager*")
+microManagerPaths = glob.glob("C:\\Program Files\Micro-Manager-2*")
 
 
 def versionWarning():

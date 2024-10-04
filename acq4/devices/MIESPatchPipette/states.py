@@ -9,32 +9,36 @@ class BathStateMIES(PatchPipetteState):
     stateName = 'bath'
 
     def initialize(self):
-        self.mies.selectHeadstage(self._headstage)
-        self.mies.setApproach(self._headstage)
+        PatchPipetteState.initialize(self)
+        self.dev.mies.selectHeadstage(self.dev._headstage)
+        self.dev.mies.setApproach(self.dev._headstage)
 
 
 class SealStateMIES(PatchPipetteState):
     stateName = 'seal'
 
     def initialize(self):
-        self.dev.mies.selectHeadstage(self._headstage)
-        self.dev.mies.setSeal(self._headstage)
+        PatchPipetteState.initialize(self)
+        self.dev.mies.selectHeadstage(self.dev._headstage)
+        self.dev.mies.setSeal(self.dev._headstage)
 
 
 class MIESPatchPipetteStateManager(PatchPipetteStateManager):
-    stateHandlers = OrderedDict([
-        ('out', states.OutState),
-        ('bath', BathStateMIES),
-        ('approach', states.ApproachState),
-        # ('cell detect', states.CellDetectState),
-        ('seal', SealStateMIES),
-        # ('cell attached', states.CellAttachedState),
-        # ('break in', states.BreakInState),
-        # ('whole cell', states.WholeCellState),
-        # ('reseal', states.ResealState),
-        # ('blowout', states.BlowoutState),
-        # ('broken', states.BrokenState),
-        # ('fouled', states.FouledState),
-        # ('clean', states.CleanState),
-    ])
-
+    stateHandlers = PatchPipetteStateManager.stateHandlers.copy()
+    stateHandlers['seal'] = SealStateMIES
+    stateHandlers['bath'] = BathStateMIES
+    # stateHandlers = OrderedDict([
+    #     # ('out', states.PatchPipetteOutState),
+    #     # ('bath', MIESPatchPipetteBathState),
+    #     # ('approach', states.PatchPipetteApproachState),
+    #     # ('cell detect', states.PatchPipetteCellDetectState),
+        # ('seal', MIESPatchPipetteSealState),
+    #     # ('cell attached', states.PatchPipetteCellAttachedState),
+    #     # ('break in', states.PatchPipetteBreakInState),
+    #     # ('whole cell', states.PatchPipetteWholeCellState),
+    #     # ('reseal', states.PatchPipetteResealState),
+    #     # ('blowout', states.PatchPipetteBlowoutState),
+    #     # ('broken', states.PatchPipetteBrokenState),
+    #     # ('fouled', states.PatchPipetteFouledState),
+    #     # ('clean', states.PatchPipetteCleanState),
+    # ])
