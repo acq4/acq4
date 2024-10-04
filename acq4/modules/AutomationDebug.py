@@ -257,7 +257,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         ).getResult()
         depth -= 50 * µm
         self.cameraDevice.setFocusDepth(depth)
-        neurons_fut = _future.waitFor(self._detectNeuronsFlat())
+        neurons_fut = _future.waitFor(self._detectNeuronsZStack())
         self._displayBoundingBoxes(neurons_fut.getResult())
 
     def _handleAutoFinish(self, fut: Future):
