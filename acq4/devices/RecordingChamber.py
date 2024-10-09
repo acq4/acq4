@@ -33,13 +33,14 @@ class RecordingChamber(Device, OptomechDevice):
     def get3DModel(self):
         from acq4.modules.Visualize3D import TruncatedConeVisual
 
-        return TruncatedConeVisual(
-            self.globalTransform,
+        cone = TruncatedConeVisual(
             bottom_radius=self.radius,
             top_radius=self.radius,
-            height=self.config.get("height", 6*mm),
+            height=self.config.get("height", 6 * mm),
             close_bottom=True,
         )
+        cone.connectToTransformUpdates(self, self.globalTransform)
+        return cone
 
     def globalCenter(self):
         return np.array(self.globalPosition())

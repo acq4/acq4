@@ -253,7 +253,6 @@ class Pipette(Device, OptomechDevice):
         from acq4.modules.Visualize3D import TruncatedConeVisual
 
         cone = TruncatedConeVisual(
-            self.globalTransform,
             color=(0, 1, 0.2, 1),
             pitch=self.pitchAngle(),
             yaw=self.yawAngle(),
@@ -261,7 +260,7 @@ class Pipette(Device, OptomechDevice):
             top_radius=1.3e-3,
             height=100e-3,
         )
-        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
+        cone.connectToTransformUpdates(self, self.globalTransform)
         return cone
 
     def resetGlobalPosition(self, pos):

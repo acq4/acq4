@@ -193,14 +193,13 @@ class Microscope(Device, OptomechDevice):
             radius = obj.radius
             z_offset = obj.focalDistance
         cone = TruncatedConeVisual(
-            self.parentDevice().globalTransform,
             offset=(0, 0, z_offset),
             bottom_radius=radius,
             top_radius=30e-3,
             height=100e-3,
             color=(0, 0.7, 0.9, 0.4),
         )
-        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
+        cone.connectToTransformUpdates(self, self.parentDevice().globalTransform)
         return cone
 
     def selectObjective(self, obj):

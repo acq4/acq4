@@ -72,7 +72,6 @@ def truncated_cone(
 class TruncatedConeVisual:
     def __init__(
         self,
-        transform_getter: Callable[[], SRTTransform3D],
         color=(1, 0.7, 0.1, 0.4),
         offset=(0, 0, 0),
         pitch=0,
@@ -90,7 +89,11 @@ class TruncatedConeVisual:
         vertices = transform.map(vertices)[:, :3]
 
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
+        self._transform_getter = None
+
+    def connectToTransformUpdates(self, dev: OptomechDevice, transform_getter: Callable[[], SRTTransform3D]):
         self._transform_getter = transform_getter
+        dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
 
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
         xform = self._transform_getter()
@@ -125,7 +128,6 @@ if __name__ == "__main__":
     window = MainWindow()
 
     objective = TruncatedConeVisual(
-        lambda: SRTTransform3D(),
         bottom_radius=10e-3,
         top_radius=35e-3,
         height=80e-3,
@@ -136,7 +138,6 @@ if __name__ == "__main__":
     window.add(objective)
 
     pipette = TruncatedConeVisual(
-        lambda: SRTTransform3D(),
         bottom_radius=1e-6,
         top_radius=1.1e-3,
         height=50e-3,
@@ -147,7 +148,6 @@ if __name__ == "__main__":
     window.add(pipette)
 
     chamber = TruncatedConeVisual(
-        lambda: SRTTransform3D(),
         bottom_radius=50e-3,
         top_radius=50e-3,
         height=13e-3,
