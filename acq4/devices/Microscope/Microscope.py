@@ -183,6 +183,20 @@ class Microscope(Device, OptomechDevice):
         iface.objectiveChanged((self.currentObjective, None))
         return iface
 
+    def get3DModel(self):
+        from acq4.modules.Visualize3D import TruncatedConeVisual
+
+        if (obj := self.getObjective()) is None:
+            radius = 8e-3
+            z_offset = 20e-3
+        else:
+            radius = obj.radius
+            z_offset = obj.focalDistance
+        cone = TruncatedConeVisual(
+            offset=(0, 0, z_offset), bottom_radius=radius, top_radius=30e-3, height=100e-3, color=(0, 0.7, 0.9, 0.4))
+        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
+        return cone
+
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
         ##This is _not_ the same as objectiveIndexChanged.
@@ -385,6 +399,10 @@ class Objective(OptomechDevice):
     @property
     def radius(self):
         return self._config.get('radius')
+
+    @property
+    def focalDistance(self):
+        return self._config.get('focalDistance')
 
     def __repr__(self):
         return (f"<Objective {self._scope.name()}.{self.name()} "

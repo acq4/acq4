@@ -1,9 +1,11 @@
 import numpy as np
+
 import pyqtgraph as pg
-from .OptomechDevice import OptomechDevice
-from .Device import Device
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
+from pyqtgraph.units import mm
+from .Device import Device
+from .OptomechDevice import OptomechDevice
 
 
 class RecordingChamber(Device, OptomechDevice):
@@ -27,8 +29,21 @@ class RecordingChamber(Device, OptomechDevice):
         """
         return RecordingChamberCameraInterface(self, mod)
 
+    def get3DModel(self):
+        from acq4.modules.Visualize3D import TruncatedConeVisual
+
+        return TruncatedConeVisual(
+            bottom_radius=self.radius,
+            top_radius=self.radius,
+            height=self.config.get("height", 6*mm),
+            close_bottom=True,
+        )
+
     def globalCenter(self):
-        return np.array(self.mapToGlobal([0, 0, 0]))
+        return np.array(self.globalPosition())
+
+    def globalPosition(self):
+        return self.mapToGlobal([0, 0, 0])
 
     def containsPoint(self, pt):
         """Return True if the x,y coordinates in *pt* lie within

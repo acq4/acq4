@@ -56,7 +56,12 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
     def taskInterface(self, task):
         """Return a widget with a UI to put in the task rack"""
         return TaskGui(self, task)
-        
+
+    def get3DModel(self):
+        """Return a 3D model to be displayed in the 3D visualization window.
+        """
+        return None
+
     def configPath(self):
         """Return the path used for storing configuration data for this device.
 

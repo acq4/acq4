@@ -249,6 +249,20 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
+    def get3DModel(self):
+        from acq4.modules.Visualize3D import TruncatedConeVisual
+
+        cone = TruncatedConeVisual(
+            color=(0, 1, 0.2, 1),
+            pitch=self.pitchAngle(),
+            yaw=self.yawAngle(),
+            bottom_radius=1e-6,
+            top_radius=1.3e-3,
+            height=100e-3,
+        )
+        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
+        return cone
+
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
 
