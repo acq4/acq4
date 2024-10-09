@@ -34,6 +34,7 @@ class RecordingChamber(Device, OptomechDevice):
         from acq4.modules.Visualize3D import TruncatedConeVisual
 
         return TruncatedConeVisual(
+            self.globalTransform,
             bottom_radius=self.radius,
             top_radius=self.radius,
             height=self.config.get("height", 6*mm),

@@ -1,4 +1,5 @@
 import sys
+from typing import Callable
 
 import numpy as np
 from vispy import scene
@@ -8,6 +9,7 @@ from vispy.visuals.transforms import MatrixTransform
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from pyqtgraph import SRTTransform3D
 
 
 class Visualize3D(Module):
@@ -44,10 +46,12 @@ def truncated_cone(
     faces = []
     for i in range(segments):
         next_i = (i + 1) % segments
-        faces.extend((
-            [i, next_i, segments + next_i],
-            [i, segments + next_i, segments + i],
-        ))
+        faces.extend(
+            (
+                [i, next_i, segments + next_i],
+                [i, segments + next_i, segments + i],
+            )
+        )
 
     if close_bottom:
         bottom_center = len(vertices)
@@ -66,7 +70,16 @@ def truncated_cone(
 
 
 class TruncatedConeVisual:
-    def __init__(self, color=(1, 0.7, 0.1, 0.4), offset=(0, 0, 0), pitch=0, yaw=0, roll=0, **kwargs):
+    def __init__(
+        self,
+        transform_getter: Callable[[], SRTTransform3D],
+        color=(1, 0.7, 0.1, 0.4),
+        offset=(0, 0, 0),
+        pitch=0,
+        yaw=0,
+        roll=0,
+        **kwargs,
+    ):
         vertices, faces = truncated_cone(**kwargs)
 
         transform = MatrixTransform()
@@ -77,12 +90,11 @@ class TruncatedConeVisual:
         vertices = transform.map(vertices)[:, :3]
 
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
+        self._transform_getter = transform_getter
 
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
-        print(f"{dev} has transformed to {dev.globalPosition()}")
-        xform = dev.globalTransform()
+        xform = self._transform_getter()
         new_xform = MatrixTransform(np.array(xform.data()).reshape((4, 4)))
-        new_xform.map
         self.mesh.transform = new_xform
 
 
@@ -113,11 +125,18 @@ if __name__ == "__main__":
     window = MainWindow()
 
     objective = TruncatedConeVisual(
-        bottom_radius=10e-3, top_radius=35e-3, height=80e-3, close_top=True, close_bottom=True, offset=(0, 0, 40e-3)
+        lambda: SRTTransform3D(),
+        bottom_radius=10e-3,
+        top_radius=35e-3,
+        height=80e-3,
+        close_top=True,
+        close_bottom=True,
+        offset=(0, 0, 40e-3),
     )
     window.add(objective)
 
     pipette = TruncatedConeVisual(
+        lambda: SRTTransform3D(),
         bottom_radius=1e-6,
         top_radius=1.1e-3,
         height=50e-3,
@@ -128,7 +147,12 @@ if __name__ == "__main__":
     window.add(pipette)
 
     chamber = TruncatedConeVisual(
-        bottom_radius=50e-3, top_radius=50e-3, height=13e-3, close_bottom=True, offset=(0, 0, -10e-6)
+        lambda: SRTTransform3D(),
+        bottom_radius=50e-3,
+        top_radius=50e-3,
+        height=13e-3,
+        close_bottom=True,
+        offset=(0, 0, -10e-6),
     )
     window.add(chamber)
 

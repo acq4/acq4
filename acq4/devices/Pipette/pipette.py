@@ -253,6 +253,7 @@ class Pipette(Device, OptomechDevice):
         from acq4.modules.Visualize3D import TruncatedConeVisual
 
         cone = TruncatedConeVisual(
+            self.globalTransform,
             color=(0, 1, 0.2, 1),
             pitch=self.pitchAngle(),
             yaw=self.yawAngle(),
