@@ -115,6 +115,10 @@ class MainWindow(Qt.QMainWindow):
 
         grid = visuals.GridLines()
         self.view.add(grid)
+
+        self.axis = visuals.XYZAxis(parent=self.view.scene)
+        self.axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
+
         self._displayed = []
 
     def add(self, conic: TruncatedConeVisual):
@@ -128,29 +132,29 @@ if __name__ == "__main__":
     window = MainWindow()
 
     objective = TruncatedConeVisual(
+        offset=(0, 0, 100e-3),
         bottom_radius=10e-3,
         top_radius=35e-3,
         height=80e-3,
         close_top=True,
         close_bottom=True,
-        offset=(0, 0, 40e-3),
     )
     window.add(objective)
 
     pipette = TruncatedConeVisual(
         bottom_radius=1e-6,
         top_radius=1.1e-3,
-        height=50e-3,
-        offset=(1e-3, -1e-3, 13e-3),
+        height=80e-3,
+        offset=(0, 0, 13e-3),
         yaw=90 - 27,
         pitch=45,
     )
     window.add(pipette)
 
     chamber = TruncatedConeVisual(
-        bottom_radius=50e-3,
-        top_radius=50e-3,
-        height=13e-3,
+        bottom_radius=20e-3,
+        top_radius=20e-3,
+        height=3e-3,
         close_bottom=True,
         offset=(0, 0, -10e-6),
     )

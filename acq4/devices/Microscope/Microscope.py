@@ -187,15 +187,17 @@ class Microscope(Device, OptomechDevice):
         from acq4.modules.Visualize3D import TruncatedConeVisual
 
         if (obj := self.getObjective()) is None:
-            radius = 8e-3
+            bottom_radius = 8e-3
+            top_radius = 30e-3
             z_offset = 20e-3
         else:
-            radius = obj.radius
+            bottom_radius = obj.bottomRadius
+            top_radius = obj.topRadius
             z_offset = obj.focalDistance
         cone = TruncatedConeVisual(
             offset=(0, 0, z_offset),
-            bottom_radius=radius,
-            top_radius=30e-3,
+            bottom_radius=bottom_radius,
+            top_radius=top_radius,
             height=100e-3,
             color=(0, 0.7, 0.9, 0.4),
         )
@@ -404,6 +406,14 @@ class Objective(OptomechDevice):
     @property
     def radius(self):
         return self._config.get('radius')
+
+    @property
+    def topRadius(self):
+        return self._config.get('topRadius')
+
+    @property
+    def bottomRadius(self):
+        return self._config.get('bottomRadius')
 
     @property
     def focalDistance(self):

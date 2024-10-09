@@ -255,7 +255,7 @@ class Pipette(Device, OptomechDevice):
         cone = TruncatedConeVisual(
             color=(0, 1, 0.2, 1),
             pitch=self.pitchAngle(),
-            yaw=self.yawAngle(),
+            yaw=90 - self.yawAngle(),
             bottom_radius=1e-6,
             top_radius=1.3e-3,
             height=100e-3,
