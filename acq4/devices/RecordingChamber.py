@@ -14,19 +14,20 @@ class RecordingChamber(Device, OptomechDevice):
     Configuration options:
 
     * radius: The radius of the recording chamber (m)
-    * transform: Transformtion setting the position/orientation of the chamber
+    * height: The height of the recording chamber (m)
+    * transform: Transformation setting the position/orientation of the chamber
         pos: x,y,z position of recording chamber
     """
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
         self.config = config
-        self.radius = config['radius']
+        self.radius = config["radius"]
 
     def cameraModuleInterface(self, mod):
-        """Return an object to interact with camera module.
-        """
+        """Return an object to interact with camera module."""
         return RecordingChamberCameraInterface(self, mod)
 
     def get3DModel(self):

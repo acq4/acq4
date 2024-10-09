@@ -66,7 +66,7 @@ class OptomechDevice(InterfaceMixin):
     about the filters in place between the camera and the sample, as well as the filters in the
     illumination path.
     """
-    
+
     ## these signals are proxied from the OptomechDevice object
     ## we do this to avoid QObject double-inheritance issues.
     class SignalProxyObject(Qt.QObject):

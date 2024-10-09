@@ -1,10 +1,9 @@
 import contextlib
 import functools
-import sys
-
-import numpy as np
 import threading
 from typing import Tuple
+
+import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import Qt, ptime

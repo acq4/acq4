@@ -1,6 +1,8 @@
 from __future__ import annotations
-import numpy as np
+
 from typing import TYPE_CHECKING, Union
+
+import numpy as np
 
 from acq4.util.future import MultiFuture
 
@@ -151,11 +153,11 @@ class PipettePathGenerator:
 
 
 class PipetteMotionPlanner:
-    """Pipette motion planners are responsible for safely executing movement of the pipette and (optionally) the microscope
-     focus to specific locations.
+    """Pipette motion planners are responsible for safely executing movement of the pipette and (optionally) the
+    microscope focus to specific locations.
 
-    For example, moving to a pipette search position involves setting the focus to a certain height, followed by inserting
-    the pipette tip diagonally near the
+    For example, moving to a pipette search position involves setting the focus to a certain height, followed by
+    positioning the pipette tip at that height and in the field of view.
     """
     def __init__(self, pip: Pipette, position: Union[np.ndarray, str], speed: float, **kwds):
         self.pip = pip
