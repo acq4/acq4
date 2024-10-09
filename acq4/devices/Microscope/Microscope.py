@@ -183,6 +183,9 @@ class Microscope(Device, OptomechDevice):
         iface.objectiveChanged((self.currentObjective, None))
         return iface
 
+    def physicalTransform(self, subdev=None):
+        return self.parentDevice().deviceTransform(subdev)
+
     def get3DModel(self):
         from acq4.modules.Visualize3D import TruncatedConeVisual
 
@@ -201,7 +204,7 @@ class Microscope(Device, OptomechDevice):
             height=100e-3,
             color=(0, 0.7, 0.9, 0.4),
         )
-        cone.connectToTransformUpdates(self, self.parentDevice().globalTransform)
+        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
         return cone
 
     def selectObjective(self, obj):

@@ -39,7 +39,7 @@ class RecordingChamber(Device, OptomechDevice):
             height=self.config.get("height", 6 * mm),
             close_bottom=True,
         )
-        cone.connectToTransformUpdates(self, self.globalTransform)
+        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
         return cone
 
     def globalCenter(self):

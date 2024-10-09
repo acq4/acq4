@@ -91,14 +91,9 @@ class TruncatedConeVisual:
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
         self._transform_getter = None
 
-    def connectToTransformUpdates(self, dev: OptomechDevice, transform_getter: Callable[[], SRTTransform3D]):
-        self._transform_getter = transform_getter
-        dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
-
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
-        xform = self._transform_getter()
-        new_xform = MatrixTransform(np.array(xform.data()).reshape((4, 4)))
-        self.mesh.transform = new_xform
+        xform = dev.globalPhysicalTransform()
+        self.mesh.transform = MatrixTransform(np.array(xform.data()).reshape((4, 4)))
 
 
 class MainWindow(Qt.QMainWindow):

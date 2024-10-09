@@ -133,16 +133,15 @@ class OptomechDevice(InterfaceMixin):
         # keep track of children so that we can inform them quickly when a parent transform has changed
         self.__children = []
 
-        # Cached transforms from this device to global
-        # 0 indicates the cache is invalid. None indicates the transform is non-affine,
         # and might not be cacheable.
-        self.__globalTransform: TransformCache = 0
-        self.__inverseGlobalTransform: TransformCache = 0
-
         # Transformation from this device to its parent (or to global if there is no parent)
         self.__transform: pg.SRTTransform3D = pg.SRTTransform3D()
-        # Cached inverse of __transform
+        # 0 indicates the cache is invalid. None indicates the transform is non-affine,
         self.__inverseTransform: TransformCache = 0
+        self.__globalTransform: TransformCache = 0
+        self.__inverseGlobalTransform: TransformCache = 0
+        self.__globalPhysicalTransform: TransformCache = 0
+        self.__inverseGlobalPhysicalTransform: TransformCache = 0
 
         # Contains {port: [list of optics]} describing the optics (usually filters) for each port
         self.__optics = {}
@@ -422,13 +421,12 @@ class OptomechDevice(InterfaceMixin):
         If *subdev* is given, it must be a dictionary of {deviceName: subdevice} or
         {deviceName: subdeviceName} pairs specifying the state to compute.
         """
-        gt = self.__globalTransform
         if subdev is not None:
             return self.__computeGlobalTransform(subdev)
-        if gt == 0:
-            gt = self.__computeGlobalTransform()
-            self.__globalTransform = gt
-        return gt * 1  # *1 makes a copy
+        if self.__globalTransform == 0:
+            self.__globalTransform = self.__computeGlobalTransform()
+        return self.__globalTransform * 1  # *1 makes a copy
+
     def __computeGlobalTransform(self, subdev=None, inverse=False):
         # subdev must be a dict
         parent = self.parentDevice()
@@ -466,6 +464,65 @@ class OptomechDevice(InterfaceMixin):
                     raise ValueError("Transform is not invertible.")
                 self.__inverseGlobalTransform = inv
         return self.__inverseGlobalTransform * 1  # *1 makes a copy
+
+    def physicalTransform(self, subdev=None):
+        """
+        Return the transform mapping from local device coordinates to physical coordinates.
+        This is the same as deviceTransform. Override this if your device has optical transformations.
+        """
+        return self.deviceTransform(subdev)
+
+    def inversePhysicalTransform(self, subdev=None):
+        """
+        See physicalTransform; this method returns the inverse.
+        """
+        return self.inverseDeviceTransform(subdev)
+
+    def globalPhysicalTransform(self, subdev=None):
+        """
+        Return the transform mapping from local device coordinates to global physical coordinates.
+        This is the same as globalTransform, except that the transform is not affected by the
+        current subdevice selection.
+        """
+        if subdev is not None:
+            return self.__computeGlobalPhysicalTransform(subdev)
+        if self.__globalPhysicalTransform == 0:
+            self.__globalPhysicalTransform = self.__computeGlobalPhysicalTransform()
+        return self.__globalPhysicalTransform * 1  # *1 makes a copy
+
+    def inverseGlobalPhysicalTransform(self, subdev=None):
+        """
+        See globalPhysicalTransform; this method returns the inverse.
+        """
+        if subdev is not None:
+            return self.__computeGlobalPhysicalTransform(subdev, inverse=True)
+        if self.__inverseGlobalPhysicalTransform == 0:
+            tr = self.globalPhysicalTransform()
+            inv, invertible = tr.inverted()
+            if not invertible:
+                raise ValueError("Transform is not invertible.")
+            self.__inverseGlobalPhysicalTransform = inv
+        return self.__inverseGlobalPhysicalTransform * 1
+
+    def __computeGlobalPhysicalTransform(self, subdev=None, inverse=False):
+        parent = self.parentDevice()
+        if parent is None:
+            parentTr = pg.SRTTransform3D()
+        else:
+            parentTr = parent.globalPhysicalTransform(subdev)
+        if parentTr is None:
+            return None
+        deviceTr = self.physicalTransform(subdev)
+        if deviceTr is None:
+            return None
+        transform = parentTr * deviceTr
+
+        if not inverse:
+            return transform
+        inv, invertible = transform.inverted()
+        if not invertible:
+            raise ValueError("Transform is not invertible.")
+        return inv
 
     def listOptics(self, port='default'):
         """Return a list of Optics this device adds to the optical
@@ -571,6 +628,8 @@ class OptomechDevice(InterfaceMixin):
                 self.__inverseTransform = 0
             self.__globalTransform = 0
             self.__inverseGlobalTransform = 0
+            self.__globalPhysicalTransform = 0
+            self.__inverseGlobalPhysicalTransform = 0
 
         # child global transforms must also be invalidated before any change signals are emitted
         for ch in self.__children:

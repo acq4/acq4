@@ -260,7 +260,7 @@ class Pipette(Device, OptomechDevice):
             top_radius=1.3e-3,
             height=100e-3,
         )
-        cone.connectToTransformUpdates(self, self.globalTransform)
+        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
         return cone
 
     def resetGlobalPosition(self, pos):
