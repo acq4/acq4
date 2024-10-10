@@ -65,16 +65,15 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         """
         return {}
 
-    def getGeometry(self) -> list:
+    def getGeometries(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window.
         """
         from acq4.modules.Visualize3D import create_geometry
 
-        args = self.defaultGeometryArgs()
+        defaults = self.defaultGeometryArgs()
         if 'geometry' in self._config:
-            args = {**args, **self._config['geometry']}
-        if args:
-            return create_geometry(**args)
+            args = {**self._config['geometry']}
+            return create_geometry(defaults=defaults, **args)
         return []
 
     def configPath(self):

@@ -1,12 +1,13 @@
 import numpy as np
 from vispy import scene
 from vispy.scene import visuals
-from vispy.visuals.transforms import MatrixTransform
+from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from pyqtgraph import SRTTransform3D
 
 
 class Visualize3D(Module):
@@ -69,46 +70,30 @@ class TruncatedConeVisual:
     def __init__(
         self,
         color=(1, 0.7, 0.1, 0.4),
-        offset=(0, 0, 0),
-        pitch=0,
-        yaw=0,
-        roll=0,
+        transform=None,
         **kwargs,
     ):
         vertices, faces = truncated_cone(**kwargs)
-
-        transform = MatrixTransform()
-        transform.translate(offset)
-        transform.rotate(pitch, (1, 0, 0))
-        transform.rotate(yaw, (0, 1, 0))
-        transform.rotate(roll, (0, 0, 1))
-        vertices = transform.map(vertices)[:, :3]
+        self._drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
+        self._deviceTransform = MatrixTransform()
 
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
+        self.mesh.transform = ChainTransform(self._drawingTransform, self._deviceTransform)
 
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
         xform = dev.globalPhysicalTransform()
-        self.mesh.transform = MatrixTransform(np.array(xform.data()).reshape((4, 4)))
+        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
 
 
 def _convert_to_args(**config) -> dict:
-    if "transform" in config:
-        xform = config.pop("transform")
-        if "pos" in xform:
-            config["offset"] = xform["pos"]
-        if "pitch" in xform:
-            config["pitch"] = xform["pitch"]
-        if "yaw" in xform:
-            config["yaw"] = xform["yaw"]
-        if "roll" in xform:
-            config["roll"] = xform["roll"]
+    # TODO delete this function and use cylinders
     if "radius" in config:
         config["bottom_radius"] = config.pop("radius")
         config["top_radius"] = config["bottom_radius"]
     return config
 
 
-def create_geometry(**config):
+def create_geometry(defaults=None, **config):
     """Create 3D mesh from a configuration. Format example::
 
         geometry:
@@ -130,19 +115,25 @@ def create_geometry(**config):
     If no components are specified beyond the default arguments, a single geometry is created.
     TODO Alternately, geometry can be a filename.
     """
+    if defaults is None:
+        defaults = {}
+    defaults = _convert_to_args(**defaults)
     config = _convert_to_args(**config)
-    defaults = {}
     for key in list(config.keys()):
         if key in truncated_cone.__code__.co_varnames or key in TruncatedConeVisual.__init__.__code__.co_varnames:
             defaults[key] = config.pop(key)
     if len(config) < 1:
-        print(defaults)
         return [TruncatedConeVisual(**defaults)]
     objects = []
     for obj in config.values():
         obj = _convert_to_args(**obj)
         args = {**defaults, **obj}
-        objects.append(TruncatedConeVisual(**args))
+        kid_args = args.pop("children", {})
+        cone = TruncatedConeVisual(**args)
+        objects.append(cone)
+        if kid_args:
+            for kid in create_geometry(defaults=defaults, **kid_args):
+                kid.mesh.parent = cone.mesh
     return objects
 
 
@@ -167,7 +158,7 @@ class MainWindow(Qt.QMainWindow):
         self._deviceGeometries = {}
 
     def add(self, dev: Device):
-        for conic in dev.getGeometry():
+        for conic in dev.getGeometries():
             dev.sigGlobalTransformChanged.connect(conic.handleTransformUpdate)
             conic.handleTransformUpdate(dev, dev)
             self._deviceGeometries.setdefault(dev, []).append(conic)

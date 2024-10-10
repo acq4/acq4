@@ -250,7 +250,7 @@ class Pipette(Device, OptomechDevice):
         return iface
 
     def defaultGeometryArgs(self):
-        return {'color': (0, 1, 0.2, 1), 'transform': {'pitch': 90 - self.pitchAngle(), 'yaw': self.yawAngle()}}
+        return {'color': (0, 1, 0.2, 1)}
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.

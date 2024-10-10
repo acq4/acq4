@@ -31,7 +31,7 @@ class RecordingChamber(Device, OptomechDevice):
         return RecordingChamberCameraInterface(self, mod)
 
     def defaultGeometryArgs(self):
-        return {"color": (0.05, 0.05, 0.05, 0.7), "radius": self.radius, "height": 6 * mm, "close_bottom": True}
+        return {"color": (0.05, 0.05, 0.05, 0.7), "radius": self.radius, "close_bottom": True}
 
     def globalCenter(self):
         return np.array(self.globalPosition())

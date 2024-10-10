@@ -187,10 +187,10 @@ class Microscope(Device, OptomechDevice):
     def physicalTransform(self, subdev=None):
         return self.parentDevice().deviceTransform(subdev)
 
-    def getGeometry(self):
+    def getGeometries(self):
         if (obj := self.getObjective()) is None:
             return []
-        return obj.getRealGeometry()
+        return obj.getRealGeometries()
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -370,11 +370,11 @@ class Objective(Device, OptomechDevice):
     def defaultGeometryArgs(self):
         return {'color': (0, 0.7, 0.9, 0.4)}
 
-    def getGeometry(self):
-        return []
+    def getGeometries(self):
+        return []  # Microscopes are in charge of deciding which objective to display
 
-    def getRealGeometry(self):
-        return Device.getGeometry(self)
+    def getRealGeometries(self):
+        return Device.getGeometries(self)
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
