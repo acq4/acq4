@@ -148,6 +148,7 @@ class Microscope(Device, OptomechDevice):
 
         self.setCurrentSubdevice(self.currentObjective)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
+        self.sigGeometryChanged.emit(self)
 
     def getObjective(self) -> "Objective":
         """Return the currently active Objective."""

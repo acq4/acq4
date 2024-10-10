@@ -17,6 +17,8 @@ from acq4.util.optional_weakref import Weakref
 class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
     """Abstract class defining the standard interface for Device subclasses."""
 
+    sigGeometryChanged = Qt.Signal(object)  # self
+
     # used to ensure devices are shut down in the correct order
     _deviceCreationOrder = []
 

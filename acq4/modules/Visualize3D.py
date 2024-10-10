@@ -1,15 +1,14 @@
 import sys
-from typing import Callable
 
 import numpy as np
 from vispy import scene
 from vispy.scene import visuals
 from vispy.visuals.transforms import MatrixTransform
 
+from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from pyqtgraph import SRTTransform3D
 
 
 class Visualize3D(Module):
@@ -24,10 +23,8 @@ class Visualize3D(Module):
         self.win.show()
         for dev in manager.listDevices():
             dev = manager.getDevice(dev)
-            for model in dev.getGeometry():
-                dev.sigGlobalTransformChanged.connect(model.handleTransformUpdate)
-                model.handleTransformUpdate(dev, dev)
-                self.win.add(model)
+            self.win.add(dev)
+            dev.sigGeometryChanged.connect(self.win.handleGeometryChange)
 
 
 def truncated_cone(
@@ -107,9 +104,9 @@ def _convert_to_args(**config) -> dict:
             config["yaw"] = xform["yaw"]
         if "roll" in xform:
             config["roll"] = xform["roll"]
-    if 'radius' in config:
-        config['bottom_radius'] = config.pop('radius')
-        config['top_radius'] = config['bottom_radius']
+    if "radius" in config:
+        config["bottom_radius"] = config.pop("radius")
+        config["top_radius"] = config["bottom_radius"]
     return config
 
 
@@ -169,11 +166,20 @@ class MainWindow(Qt.QMainWindow):
         self.axis = visuals.XYZAxis(parent=self.view.scene)
         self.axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
 
-        self._displayed = []
+        self._deviceGeometries = {}
 
-    def add(self, conic: TruncatedConeVisual):
-        self._displayed.append(conic)
-        self.view.add(conic.mesh)
+    def add(self, dev: Device):
+        for conic in dev.getGeometry():
+            dev.sigGlobalTransformChanged.connect(conic.handleTransformUpdate)
+            conic.handleTransformUpdate(dev, dev)
+            self._deviceGeometries.setdefault(dev, []).append(conic)
+            self.view.add(conic.mesh)
+
+    def handleGeometryChange(self, dev: Device):
+        for conic in self._deviceGeometries[dev]:
+            conic.mesh.parent = None
+        self._deviceGeometries[dev] = []
+        self.add(dev)
 
 
 if __name__ == "__main__":
