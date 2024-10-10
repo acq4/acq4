@@ -1,5 +1,3 @@
-import sys
-
 import numpy as np
 from vispy import scene
 from vispy.scene import visuals
@@ -180,41 +178,3 @@ class MainWindow(Qt.QMainWindow):
             conic.mesh.parent = None
         self._deviceGeometries[dev] = []
         self.add(dev)
-
-
-if __name__ == "__main__":
-    app = Qt.QApplication(sys.argv)
-
-    window = MainWindow()
-
-    objective = TruncatedConeVisual(
-        offset=(0, 0, 100e-3),
-        bottom_radius=10e-3,
-        top_radius=35e-3,
-        height=80e-3,
-        close_top=True,
-        close_bottom=True,
-    )
-    window.add(objective)
-
-    pipette = TruncatedConeVisual(
-        bottom_radius=1e-6,
-        top_radius=1.1e-3,
-        height=80e-3,
-        offset=(0, 0, 13e-3),
-        yaw=90 - 27,
-        pitch=45,
-    )
-    window.add(pipette)
-
-    chamber = TruncatedConeVisual(
-        bottom_radius=20e-3,
-        top_radius=20e-3,
-        height=3e-3,
-        close_bottom=True,
-        offset=(0, 0, -10e-6),
-    )
-    window.add(chamber)
-
-    window.show()
-    sys.exit(app.exec_())
