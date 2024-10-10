@@ -149,7 +149,7 @@ class Microscope(Device, OptomechDevice):
         self.setCurrentSubdevice(self.currentObjective)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
-    def getObjective(self):
+    def getObjective(self) -> "Objective":
         """Return the currently active Objective."""
         with self.lock:
             if self.currentSwitchPosition not in self.selectedObjectives:
@@ -186,26 +186,10 @@ class Microscope(Device, OptomechDevice):
     def physicalTransform(self, subdev=None):
         return self.parentDevice().deviceTransform(subdev)
 
-    def get3DModel(self):
-        from acq4.modules.Visualize3D import TruncatedConeVisual
-
+    def getGeometry(self):
         if (obj := self.getObjective()) is None:
-            bottom_radius = 8e-3
-            top_radius = 30e-3
-            z_offset = 20e-3
-        else:
-            bottom_radius = obj.bottomRadius
-            top_radius = obj.topRadius
-            z_offset = obj.focalDistance
-        cone = TruncatedConeVisual(
-            offset=(0, 0, z_offset),
-            bottom_radius=bottom_radius,
-            top_radius=top_radius,
-            height=100e-3,
-            color=(0, 0.7, 0.9, 0.4),
-        )
-        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
-        return cone
+            return []
+        return obj.getRealGeometry()
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -363,7 +347,7 @@ class Microscope(Device, OptomechDevice):
         return self._positionDevice
 
 
-class Objective(OptomechDevice):
+class Objective(Device, OptomechDevice):
 
     def __init__(self, config, scope, key):
         self._config = config
@@ -371,7 +355,8 @@ class Objective(OptomechDevice):
         self._key = key
         name = config['name']
 
-        OptomechDevice.__init__(self, scope.dm, {}, name)
+        Device.__init__(self, scope.dm, config, name)
+        OptomechDevice.__init__(self, scope.dm, config, name)
 
         if 'offset' in config:
             self.setOffset(config['offset'])
@@ -379,7 +364,16 @@ class Objective(OptomechDevice):
             self.setScale(config['scale'])
 
     def deviceTransform(self, subdev=None):
-        return pg.SRTTransform3D(OptomechDevice.deviceTransform(self))
+        return pg.SRTTransform3D(super().deviceTransform(subdev))
+
+    def defaultGeometryArgs(self):
+        return {'color': (0, 0.7, 0.9, 0.4)}
+
+    def getGeometry(self):
+        return []
+
+    def getRealGeometry(self):
+        return Device.getGeometry(self)
 
     def setOffset(self, pos):
         tr = self.deviceTransform()

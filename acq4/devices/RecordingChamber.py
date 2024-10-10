@@ -30,17 +30,8 @@ class RecordingChamber(Device, OptomechDevice):
         """Return an object to interact with camera module."""
         return RecordingChamberCameraInterface(self, mod)
 
-    def get3DModel(self):
-        from acq4.modules.Visualize3D import TruncatedConeVisual
-
-        cone = TruncatedConeVisual(
-            bottom_radius=self.radius,
-            top_radius=self.radius,
-            height=self.config.get("height", 6 * mm),
-            close_bottom=True,
-        )
-        self.sigGlobalTransformChanged.connect(cone.handleTransformUpdate)
-        return cone
+    def defaultGeometryArgs(self):
+        return {"color": (0.05, 0.05, 0.05, 0.7), "radius": self.radius, "height": 6 * mm, "close_bottom": True}
 
     def globalCenter(self):
         return np.array(self.globalPosition())

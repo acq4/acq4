@@ -34,7 +34,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self.dm.declareInterface(name, ['device'], self)
         Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
-            
+        self._config = config
+
     def name(self):
         """Return the string name of this device.
         """
@@ -57,10 +58,22 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         """Return a widget with a UI to put in the task rack"""
         return TaskGui(self, task)
 
-    def get3DModel(self):
+    def defaultGeometryArgs(self):
+        """Return a dictionary of default arguments to be used when creating a 3D model for this device.
+        """
+        return {}
+
+    def getGeometry(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window.
         """
-        return None
+        from acq4.modules.Visualize3D import create_geometry
+
+        args = self.defaultGeometryArgs()
+        if 'geometry' in self._config:
+            args = {**args, **self._config['geometry']}
+        if args:
+            return create_geometry(**args)
+        return []
 
     def configPath(self):
         """Return the path used for storing configuration data for this device.

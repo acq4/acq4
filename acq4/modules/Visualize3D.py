@@ -24,7 +24,8 @@ class Visualize3D(Module):
         self.win.show()
         for dev in manager.listDevices():
             dev = manager.getDevice(dev)
-            if model := dev.get3DModel():
+            for model in dev.getGeometry():
+                dev.sigGlobalTransformChanged.connect(model.handleTransformUpdate)
                 model.handleTransformUpdate(dev, dev)
                 self.win.add(model)
 
@@ -89,11 +90,65 @@ class TruncatedConeVisual:
         vertices = transform.map(vertices)[:, :3]
 
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
-        self._transform_getter = None
 
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
         xform = dev.globalPhysicalTransform()
         self.mesh.transform = MatrixTransform(np.array(xform.data()).reshape((4, 4)))
+
+
+def _convert_to_args(**config) -> dict:
+    if "transform" in config:
+        xform = config.pop("transform")
+        if "pos" in xform:
+            config["offset"] = xform["pos"]
+        if "pitch" in xform:
+            config["pitch"] = xform["pitch"]
+        if "yaw" in xform:
+            config["yaw"] = xform["yaw"]
+        if "roll" in xform:
+            config["roll"] = xform["roll"]
+    if 'radius' in config:
+        config['bottom_radius'] = config.pop('radius')
+        config['top_radius'] = config['bottom_radius']
+    return config
+
+
+def create_geometry(**config):
+    """Create 3D mesh from a configuration. Format example::
+
+        geometry:
+            color: (1, 0.7, 0.1, 0.4)  # default arguments at top level
+            transform:
+                pitch: 45
+            radius: 20 * mm            # radius expands to top and bottom radii
+            component_1:               # arbitrary names for components
+                height: 3 * mm
+                top_radius: 40 * mm    # overrides top-level defaults
+                transform:
+                    pos: 0, 0, -10 * um
+            fuse:                      # some devices may expect specific component names
+                height: 80 * mm
+                close_bottom: True
+                transform:
+                    pos: 0, 0, -83 * mm
+
+    If no components are specified beyond the default arguments, a single geometry is created.
+    TODO Alternately, geometry can be a filename.
+    """
+    config = _convert_to_args(**config)
+    defaults = {}
+    for key in list(config.keys()):
+        if key in truncated_cone.__code__.co_varnames or key in TruncatedConeVisual.__init__.__code__.co_varnames:
+            defaults[key] = config.pop(key)
+    if len(config) < 1:
+        print(defaults)
+        return [TruncatedConeVisual(**defaults)]
+    objects = []
+    for obj in config.values():
+        obj = _convert_to_args(**obj)
+        args = {**defaults, **obj}
+        objects.append(TruncatedConeVisual(**args))
+    return objects
 
 
 class MainWindow(Qt.QMainWindow):
