@@ -69,6 +69,7 @@ def truncated_cone(
 class TruncatedConeVisual:
     def __init__(
         self,
+        name: str,
         color=(1, 0.7, 0.1, 0.4),
         transform=None,
         **kwargs,
@@ -123,13 +124,14 @@ def create_geometry(defaults=None, **config):
         if key in truncated_cone.__code__.co_varnames or key in TruncatedConeVisual.__init__.__code__.co_varnames:
             defaults[key] = config.pop(key)
     if len(config) < 1:
+        defaults.setdefault("name", "geometry")
         return [TruncatedConeVisual(**defaults)]
     objects = []
-    for obj in config.values():
+    for name, obj in config.items():
         obj = _convert_to_args(**obj)
         args = {**defaults, **obj}
         kid_args = args.pop("children", {})
-        cone = TruncatedConeVisual(**args)
+        cone = TruncatedConeVisual(name=name, **args)
         objects.append(cone)
         if kid_args:
             for kid in create_geometry(defaults=defaults, **kid_args):
