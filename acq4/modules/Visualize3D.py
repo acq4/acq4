@@ -78,7 +78,7 @@ class TruncatedConeVisual:
         self._deviceTransform = MatrixTransform()
 
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
-        self.mesh.transform = ChainTransform(self._drawingTransform, self._deviceTransform)
+        self.mesh.transform = ChainTransform(self._deviceTransform, self._drawingTransform)
 
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
         xform = dev.globalPhysicalTransform()
