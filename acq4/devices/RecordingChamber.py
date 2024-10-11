@@ -3,7 +3,6 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
-from pyqtgraph.units import mm
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 
@@ -31,7 +30,7 @@ class RecordingChamber(Device, OptomechDevice):
         return RecordingChamberCameraInterface(self, mod)
 
     def defaultGeometryArgs(self):
-        return {"color": (0.05, 0.05, 0.05, 0.7), "radius": self.radius, "close_bottom": True}
+        return {"color": (0.1, 0.1, 0.1, 0.7), "radius": self.radius, "close_bottom": True}
 
     def globalCenter(self):
         return np.array(self.globalPosition())
