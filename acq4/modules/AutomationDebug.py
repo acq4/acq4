@@ -162,9 +162,11 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        from acq4.util.visual_tracker import CV2ImageTracker, ObjectStack
+        _future.sleep(0.1)
+        from acq4.util.visual_tracker import CV2ImageTracker, ObjectStack, ImageStack
 
         pipette = self.pipetteDevice
+        pix = self.cameraDevice.getPixelSize()
         target = pipette.targetPosition()
         start = target[2] - 10e-6
         stop = target[2] + 10e-6
@@ -175,22 +177,23 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
         while True:
             stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step)).getResult()
+            stack_data = np.array([frame.data().T for frame in stack])
             start, stop = stop, start
             if tracker is None:
-                z = stack.shape[0] // 2
+                z = len(stack) // 2
                 target_frame = stack[z]
                 relative_target = target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,)
                 obj_stack = ObjectStack(
-                    stack,
-                    self.cameraDevice.getPixelSize(),
+                    stack_data,
+                    pix,
                     step,
-                    relative_target,
+                    tuple(reversed(relative_target)),
                     tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
                     feature_radius=12e-6,
                 )
                 tracker = CV2ImageTracker()
                 tracker.set_tracked_object(obj_stack)
-            result = tracker.next_frame(stack)
+            result = tracker.next_frame(ImageStack(stack_data, pix, step))
             z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
             frame = stack[z]
             target = frame.mapFromFrameToGlobal((x, y))

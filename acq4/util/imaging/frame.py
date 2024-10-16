@@ -109,7 +109,10 @@ class Frame:
     def mapFromGlobalToFrame(self, obj):
         """Map *obj* from global coordinates to the frame's data coordinates.
         """
-        return self.globalTransform().inverted().map(obj)
+        inverted, invertible = self.globalTransform().inverted()
+        if not invertible:
+            raise ValueError("Global transform is not invertible.")
+        return inverted.map(obj)
 
     @property
     def time(self):
