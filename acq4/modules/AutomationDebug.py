@@ -162,7 +162,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        from cell_tracker import CV2ImageTracker, ObjectStack
+        from acq4.util.visual_tracker import CV2ImageTracker, ObjectStack
 
         pipette = self.pipetteDevice
         target = pipette.targetPosition()
