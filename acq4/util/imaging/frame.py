@@ -106,6 +106,11 @@ class Frame:
         """
         return self.globalTransform().map(obj)
 
+    def mapFromGlobalToFrame(self, obj):
+        """Map *obj* from global coordinates to the frame's data coordinates.
+        """
+        return self.globalTransform().inverted().map(obj)
+
     @property
     def time(self):
         return self._info['time']

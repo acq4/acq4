@@ -86,14 +86,22 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 self._cameraSelector.addItem(name)
         pipette_layout.addWidget(self._pipetteSelector, 0, 0)
         pipette_layout.addWidget(self._cameraSelector, 0, 1)
-        self._testPipetteBtn = FeedbackButton('Test pipette calibration')
+
+        self._trackFeaturesBtn = FeedbackButton("Track target by features")
+        self._trackFeaturesBtn.clicked.connect(self.trackFeatures)
+        self._trackingFeatures = False
+        self._featureTrackingFuture = None
+        pipette_layout.addWidget(self._trackFeaturesBtn, 1, 0, 1, 2)
+
+        self._testPipetteBtn = FeedbackButton("Test pipette calibration")
         self._testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
         self._testing_pipette = False
         self._testPipetteBtn.clicked.connect(self.togglePipetteCalibration)
-        pipette_layout.addWidget(self._testPipetteBtn, 1, 0, 1, 2)
+        pipette_layout.addWidget(self._testPipetteBtn, 2, 0, 1, 2)
+
         self._pipetteLog = Qt.QTextEdit()
         self._pipetteLog.setReadOnly(True)
-        pipette_layout.addWidget(self._pipetteLog, 2, 0, 1, 2)
+        pipette_layout.addWidget(self._pipetteLog, 3, 0, 1, 2)
 
         self.show()
 
@@ -126,16 +134,77 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 calibrtion_fut = calibratePipette(pipette, camera, camera.scopeDev)
                 _future.waitFor(calibrtion_fut)
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self._pipetteLog.append(f'Calibration complete: {error*1e6:.2g}µm error')
+                self._pipetteLog.append(f"Calibration complete: {error*1e6:.2g}µm error")
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
-                    self._pipetteLog.append(f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]')
+                    self._pipetteLog.append(
+                        f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
+                    )
 
             except Exception as e:
                 if self._testing_pipette:
                     raise
-                self._pipetteLog.append('Calibration interrupted by user request')
+                self._pipetteLog.append("Calibration interrupted by user request")
+
+    def trackFeatures(self):
+        if self._trackingFeatures:
+            self._trackingFeatures = False
+            self._trackFeaturesBtn.setText("Track target by features")
+            self._trackFeaturesBtn.setStyleSheet("")
+            self._featureTrackingFuture.stop()
+        else:
+            self._trackingFeatures = True
+            self._trackFeaturesBtn.setText("Stop tracking")
+            self._trackFeaturesBtn.setStyleSheet("QPushButton {background-color: green; color: white}")
+            self._featureTrackingFuture = self.doFeatureTracking()
+            self._featureTrackingFuture.sigFinished.connect(self._handleFeatureTrackingFinish)
+
+    @future_wrap
+    def doFeatureTracking(self, _future: Future):
+        from cell_tracker import CV2ImageTracker, ObjectStack
+
+        pipette = self.pipetteDevice
+        target = pipette.targetPosition()
+        start = target[2] - 10e-6
+        stop = target[2] + 10e-6
+        step = 1e-6
+        tracker = None
+
+        _future.waitFor(pipette.focusTarget())
+
+        while True:
+            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step)).getResult()
+            start, stop = stop, start
+            if tracker is None:
+                z = stack.shape[0] // 2
+                target_frame = stack[z]
+                relative_target = target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,)
+                obj_stack = ObjectStack(
+                    stack,
+                    self.cameraDevice.getPixelSize(),
+                    step,
+                    relative_target,
+                    tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
+                    feature_radius=12e-6,
+                )
+                tracker = CV2ImageTracker()
+                tracker.set_tracked_object(obj_stack)
+            result = tracker.next_frame(stack)
+            z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
+            frame = stack[z]
+            target = frame.mapFromFrameToGlobal((x, y))
+            pipette.setTarget(target)
+            self._pipetteLog.append(f"Updated target to {target}")
+
+    def _handleFeatureTrackingFinish(self, fut: Future):
+        try:
+            fut.wait()  # to raise errors
+        finally:
+            self._trackingFeatures = False
+            self._featureTrackingFuture = None
+            self._trackFeaturesBtn.setText("Track target by features")
+            self._trackFeaturesBtn.setStyleSheet("")
 
     def _handleCalibrationFinish(self, fut: Future):
         try:
