@@ -17,6 +17,8 @@ from pyqtgraph.units import µm
 
 
 class AutomationDebugWindow(Qt.QMainWindow):
+    sigLogMessage = Qt.Signal(str)
+
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
         self.failedCalibrations = []
@@ -101,6 +103,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
         self._pipetteLog = Qt.QTextEdit()
         self._pipetteLog.setReadOnly(True)
+        self.sigLogMessage.connect(self._pipetteLog.append)
         pipette_layout.addWidget(self._pipetteLog, 3, 0, 1, 2)
 
         self.show()
@@ -134,18 +137,18 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 calibrtion_fut = calibratePipette(pipette, camera, camera.scopeDev)
                 _future.waitFor(calibrtion_fut)
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self._pipetteLog.append(f"Calibration complete: {error*1e6:.2g}µm error")
+                self.sigLogMessage.emit(f"Calibration complete: {error*1e6:.2g}µm error")
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
-                    self._pipetteLog.append(
+                    self.sigLogMessage.emit(
                         f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
                     )
 
             except Exception as e:
                 if self._testing_pipette:
                     raise
-                self._pipetteLog.append("Calibration interrupted by user request")
+                self.sigLogMessage.emit("Calibration interrupted by user request")
 
     def trackFeatures(self):
         if self._trackingFeatures:
@@ -200,7 +203,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
             pipette.setTarget(target)
-            self._pipetteLog.append(f"Updated target to ({x}, {y}, {z}): {target}")
+            self.sigLogMessage.emit(f"Updated target to ({x}, {y}, {z}): {target}")
 
     def _handleFeatureTrackingFinish(self, fut: Future):
         try:
