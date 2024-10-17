@@ -152,7 +152,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
             self._trackingFeatures = False
             self._trackFeaturesBtn.setText("Track target by features")
             self._trackFeaturesBtn.setStyleSheet("")
-            self._featureTrackingFuture.stop()
+            self._featureTrackingFuture.stop()  # TODO force kill the thread after a timeout
         else:
             self._trackingFeatures = True
             self._trackFeaturesBtn.setText("Stop tracking")
@@ -163,10 +163,10 @@ class AutomationDebugWindow(Qt.QMainWindow):
     @future_wrap
     def doFeatureTracking(self, _future: Future):
         _future.sleep(0.1)
-        from acq4.util.visual_tracker import CV2ImageTracker, ObjectStack, ImageStack
+        from acq4.util.visual_tracker import PyrLK3DTracker, ObjectStack, ImageStack
 
         pipette = self.pipetteDevice
-        pix = self.cameraDevice.getPixelSize()
+        pix = self.cameraDevice.getPixelSize()[0]  # assume square pixels
         target = pipette.targetPosition()
         start = target[2] - 10e-6
         stop = target[2] + 10e-6
@@ -176,29 +176,31 @@ class AutomationDebugWindow(Qt.QMainWindow):
         _future.waitFor(pipette.focusTarget())
 
         while True:
-            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step)).getResult()
+            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step), timeout=60).getResult()
+            # get the closest frame to the target depth
+            depths = [abs(f.depth - target[2]) for f in stack]
+            z = np.argmin(depths)
+            target_frame = stack[z]
+            relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
             stack_data = np.array([frame.data().T for frame in stack])
             start, stop = stop, start
             if tracker is None:
-                z = len(stack) // 2
-                target_frame = stack[z]
-                relative_target = target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,)
                 obj_stack = ObjectStack(
-                    stack_data,
-                    pix,
-                    step,
-                    tuple(reversed(relative_target)),
+                    img_stack=stack_data,
+                    px_size=pix,
+                    z_step=step,
+                    obj_center=relative_target,
                     tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
                     feature_radius=12e-6,
                 )
-                tracker = CV2ImageTracker()
+                tracker = PyrLK3DTracker()
                 tracker.set_tracked_object(obj_stack)
             result = tracker.next_frame(ImageStack(stack_data, pix, step))
             z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
-            frame = stack[z]
-            target = frame.mapFromFrameToGlobal((x, y))
+            frame = stack[round(z)]
+            target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
             pipette.setTarget(target)
-            self._pipetteLog.append(f"Updated target to {target}")
+            self._pipetteLog.append(f"Updated target to ({x}, {y}, {z}): {target}")
 
     def _handleFeatureTrackingFinish(self, fut: Future):
         try:
