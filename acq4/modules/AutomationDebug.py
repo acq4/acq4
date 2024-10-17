@@ -93,6 +93,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._trackFeaturesBtn.clicked.connect(self.trackFeatures)
         self._trackingFeatures = False
         self._featureTrackingFuture = None
+        self._featureTracker = None
         pipette_layout.addWidget(self._trackFeaturesBtn, 1, 0, 1, 2)
 
         self._testPipetteBtn = FeedbackButton("Test pipette calibration")
@@ -196,7 +197,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
                     tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
                     feature_radius=12e-6,
                 )
-                tracker = PyrLK3DTracker()
+                tracker = self._featureTracker = PyrLK3DTracker()
                 tracker.set_tracked_object(obj_stack)
             result = tracker.next_frame(ImageStack(stack_data, pix, step))
             z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
