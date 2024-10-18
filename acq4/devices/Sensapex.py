@@ -421,15 +421,6 @@ class SensapexInterface(Qt.QWidget):
     def setHomeClicked(self):
         self.dev.setHomePosition()
 
-    def calibrateClicked(self):
-        if self.calibrateWindow is None:
-            if self.dev.isManipulator:
-                self.calibrateWindow = ManipulatorAxesCalibrationWindow(self.dev)
-            else:
-                self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
-        self.calibrateWindow.show()
-        self.calibrateWindow.raise_()
-
     def calibrateZeroClicked(self):
         self.dev.dev.calibrate_zero_position()
 
