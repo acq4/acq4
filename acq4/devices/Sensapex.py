@@ -1,7 +1,8 @@
-import numpy as np
 import threading
 import time
 from typing import Optional
+
+import numpy as np
 
 import pyqtgraph as pg
 from acq4.drivers.sensapex import UMP, version_info
@@ -420,6 +421,15 @@ class SensapexInterface(Qt.QWidget):
 
     def setHomeClicked(self):
         self.dev.setHomePosition()
+
+    def calibrateClicked(self):
+        if self.calibrateWindow is None:
+            if self.dev.isManipulator:
+                self.calibrateWindow = ManipulatorAxesCalibrationWindow(self.dev)
+            else:
+                self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
+        self.calibrateWindow.show()
+        self.calibrateWindow.raise_()
 
     def calibrateZeroClicked(self):
         self.dev.dev.calibrate_zero_position()
