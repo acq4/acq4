@@ -199,6 +199,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 )
                 tracker = self._featureTracker = PyrLK3DTracker()
                 tracker.set_tracked_object(obj_stack)
+                continue
             result = tracker.next_frame(ImageStack(stack_data, pix, step))
             z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
             frame = stack[round(z)]
