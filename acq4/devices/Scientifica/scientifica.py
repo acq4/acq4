@@ -1,3 +1,5 @@
+import contextlib
+
 import numpy as np
 import time
 
@@ -5,8 +7,9 @@ from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from pyqtgraph import debug, SpinBox
-from ..Stage import Stage, MoveFuture, StageInterface
+from pyqtgraph import debug, SpinBox, SRTTransform3D, siFormat
+from ..Stage import Stage, MoveFuture, StageInterface, StageAxesCalibrationWindow, ManipulatorAxesCalibrationWindow
+from ...util.future import future_wrap, Future
 
 
 class Scientifica(Stage):
@@ -319,6 +322,99 @@ class ScientificaMoveFuture(MoveFuture):
         return self._errorMsg
 
 
+class ScientificaCalibrationWindow(StageAxesCalibrationWindow):
+    def __init__(self, device: Stage):
+        super().__init__(device)
+        self._timer = None
+        if device.getStoredLocation('zLimit') is None:
+            limit_text = 'Save Z limit'
+        else:
+            limit_text = 'Calibrate using Z limit'
+        self._zLimitCalibrateBtn = Qt.QPushButton(limit_text)
+        self._zLimitCalibrateBtn.setToolTip(
+            'This will raise the stage to its Z limit and use that to set the global transform. The first time you use '
+            'this, the stage should already be calibrated. That calibration will be restored thereafter. ACQ4 limits '
+            'will be disabled for the duration of this operation. This will take ~20s.'
+        )
+        self._layout.addWidget(self._zLimitCalibrateBtn, 2, 0)
+        self._zLimitCalibrateBtn.clicked.connect(self.calibrateZLimit)
+        self._savedLimits = None
+        self._calibrationFuture = None
+        self._transformAdjustment = None
+
+        self._clearSavedZLimitBtn = Qt.QPushButton('Clear saved Z limit')
+        self._clearSavedZLimitBtn.setToolTip(
+            'If the stage has genuinely changed its position, you should clear the old calibration.')
+        self._layout.addWidget(self._clearSavedZLimitBtn, 2, 1)
+        self._clearSavedZLimitBtn.clicked.connect(self.clearSavedZLimit)
+
+    def calibrateZLimit(self):
+        self._zLimitCalibrateBtn.setEnabled(False)
+        self._zLimitCalibrateBtn.setText('Calibrating...')
+        self._calibrationFuture = self._doZLimitCalibration()
+        self._calibrationFuture.sigFinished.connect(self._zLimitCalibrationFinished)
+
+    @future_wrap
+    def _doZLimitCalibration(self, _future: Future):
+        with self._dev.lock:
+            self._savedLimits = self._dev.getLimits()
+            try:
+                self._dev.setLimits(None, None, None)
+                pos = self._dev.globalPosition()
+                pos[2] += 1e27  # move to a very high position
+                with contextlib.suppress(Future.Timeout, RuntimeError):
+                    _future.waitFor(self._dev.moveToGlobal(pos, 'fast'), timeout=20)
+                self._dev.stop()
+                if self._dev.getStoredLocation('zLimit') is None:
+                    self._dev.setStoredLocation('zLimit')
+                else:
+                    expected = self._dev.getStoredLocation('zLimit')[2]
+                    actual = self._dev.globalPosition()[2]
+                    diff = self._transformAdjustment = expected - actual
+                    xform = SRTTransform3D(self._dev.deviceTransform())
+                    xform.setTranslate(np.array(xform.getTranslation()) + [0, 0, diff])
+                    self._dev.setDeviceTransform(xform)
+            finally:
+                self._dev.setLimits(*self._savedLimits)
+
+    def _zLimitCalibrationFinished(self):
+        try:
+            self._calibrationFuture.wait()
+            if self._transformAdjustment is not None:
+                alert = Qt.QMessageBox()
+                alert.setWindowTitle('Z calibrated')
+                if abs(self._transformAdjustment) > 1e-15:
+                    alert.setText(
+                        f"Z limit calibration adjusted transform by {siFormat(self._transformAdjustment, suffix='m')}. "
+                        f"You should adjust devices.cfg to match."
+                    )
+                else:
+                    alert.setText('Z limit calibration detected to appreciable slippage.')
+                alert.setStandardButtons(Qt.QMessageBox.Ok)
+                alert.exec_()
+        finally:
+            self._calibrationFuture = None
+            self._zLimitCalibrateBtn.setEnabled(True)
+            self._zLimitCalibrateBtn.setText('Calibrate using Z limit')
+
+    def clearSavedZLimit(self):
+        self._clearSavedZLimitBtn.setEnabled(False)
+        self._dev.clearStoredLocation('zLimit')
+        self._clearSavedZLimitBtn.setText('Cleared')
+        self._zLimitCalibrateBtn.setText('Save Z limit')
+        self._clearSavedZLimitBtn.setStyleSheet('background-color: green; color: white;')
+        self._timer = Qt.QTimer()
+        self._timer.timeout.connect(self._resetClearSavedZLimitBtn)
+        self._timer.setSingleShot(True)
+        self._timer.start(4000)
+
+    def _resetClearSavedZLimitBtn(self):
+        self._clearSavedZLimitBtn.setEnabled(True)
+        self._clearSavedZLimitBtn.setText('Clear saved Z limit')
+        self._clearSavedZLimitBtn.setStyleSheet('')
+        self._timer = None
+
+
 class ScientificaGUI(StageInterface):
     def __init__(self, dev, win):
         StageInterface.__init__(self, dev, win)
@@ -343,3 +439,11 @@ class ScientificaGUI(StageInterface):
         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
         self.speedSpin.valueChanged.connect(self.dev.setDefaultSpeed)
 
+    def calibrateClicked(self):
+        if self.calibrateWindow is None:
+            if self.dev.isManipulator:
+                self.calibrateWindow = ManipulatorAxesCalibrationWindow(self.dev)
+            else:
+                self.calibrateWindow = ScientificaCalibrationWindow(self.dev)
+        self.calibrateWindow.show()
+        self.calibrateWindow.raise_()
