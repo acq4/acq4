@@ -36,7 +36,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self.dm.declareInterface(name, ['device'], self)
         Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
-        self._config = config
+        self._geometry = config.get('geometry', {})
 
     def name(self):
         """Return the string name of this device.
@@ -71,8 +71,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         from acq4.modules.Visualize3D import create_geometry
 
         defaults = self.defaultGeometryArgs()
-        if 'geometry' in self._config:
-            args = {**self._config['geometry']}
+        if self._geometry:
+            args = {**self._geometry}
             return create_geometry(defaults=defaults, **args)
         return []
 
