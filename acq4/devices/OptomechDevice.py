@@ -170,6 +170,7 @@ class OptomechDevice(InterfaceMixin):
                 except Exception as ex:
                     if "No device named" in ex.args[0]:
                         print("Cannot set parent device %s; no device by that name." % repr(config['parentDevice']))
+                        print("Available devices:", dm.listDevices())
                     else:
                         raise
             
