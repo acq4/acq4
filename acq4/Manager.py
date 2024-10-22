@@ -315,8 +315,8 @@ class Manager(Qt.QObject):
                             conf = cfg['devices'][k]
                             try:
                                 driverName = conf['driver']
-                            except KeyError:
-                                raise KeyError(f"No driver specified for device {k}")
+                            except KeyError as exc:
+                                raise KeyError(f"No driver specified for device {k}") from exc
                             if 'config' in conf:  # for backward compatibility
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
