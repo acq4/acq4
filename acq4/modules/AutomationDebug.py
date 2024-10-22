@@ -175,6 +175,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         start = target[2] - 10e-6
         stop = target[2] + 10e-6
         step = 1e-6
+        direction = 1
         tracker = None
 
         _future.waitFor(pipette.focusTarget())
@@ -200,7 +201,10 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 tracker = self._featureTracker = PyrLK3DTracker()
                 tracker.set_tracked_object(obj_stack)
                 continue
-            result = tracker.next_frame(ImageStack(stack_data, pix, step))
+            if direction < 0:
+                stack_data = stack_data[::-1]
+            direction *= -1
+            result = tracker.next_frame(ImageStack(stack_data, pix, step * direction))
             z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
