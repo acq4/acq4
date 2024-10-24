@@ -74,8 +74,8 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 ratio = 1
             else:
                 dt = t - self._last_measurement['time']
-                ratio = resistance / self._last_measurement['resistance_avg']
-                resistance_avg, _ = self.exponential_decay_avg(
+                # ratio = resistance / self._last_measurement['resistance_avg']
+                resistance_avg, ratio = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg'], resistance, self._tau)
             success = resistance_avg > self._success_at
             hold = resistance_avg > self._hold_at
@@ -99,6 +99,15 @@ class SealAnalysis(SteadyStateAnalysisBase):
 
     def resistance_ratio(self):
         return self._last_measurement['resistance_ratio'] if self._last_measurement else float('nan')
+
+
+def find_optimal_pressure(pressures, resistances) -> float:
+    win = 3
+    dRss = np.diff(np.log(np.convolve(resistances.data, np.ones(win) / win, mode='valid')))
+    closest_indices = find_closest(pressures.time_values, resistances.time_values)
+    p_like_r = pressures.data[closest_indices][1:]
+    p_like_r = np.convolve(p_like_r, np.ones(win) / win, mode='valid')
+    return float(p_like_r[np.argmax(dRss)])
 
 
 def find_closest(data, values):
@@ -305,33 +314,39 @@ class SealState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             start = ptime.time()
             self.waitFor(self.dev.pressureDevice.rampPressure(target=high, duration=self.config['pressureScanDuration']))
+            turnaround = ptime.time()
+            self.waitFor(self.dev.pressureDevice.rampPressure(target=low, duration=self.config['pressureScanDuration']))
             end = ptime.time()
             self.processAtLeastOneTestPulse()
-            self.pressure = self.best_pressure(start, end)
+            self.pressure = self.best_pressure(start, turnaround, end)
             self.setState(f'scanned for pressure: {self.pressure / kPa:0.1f} kPa')
             self._lastPressureScan = end
 
         self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
         dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
 
-    def best_pressure(self, start: float, end: float) -> float:
+    def best_pressure(self, start: float, turnaround: float, end: float) -> float:
+        pressures, resistances = self._trim_data_caches(start)
+
+        best_forwards = find_optimal_pressure(
+            pressures.time_slice(start, turnaround),
+            resistances.time_slice(start, turnaround),
+        )
+        best_backwards = find_optimal_pressure(
+            pressures.time_slice(turnaround, end),
+            resistances.time_slice(turnaround, end),
+        )
+
+        return np.clip((best_forwards + best_backwards) / 2, self.config['pressureLimit'], 0)
+
+    def _trim_data_caches(self, start):
         pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
         pressures = pressures.time_slice(start, pressures.t_end)
         self._pressures = [pressures.time_values.tolist(), pressures.data.tolist()]
-        pressures = pressures.time_slice(start, end)
-
         resistances = TSeries(self._resistances[1], time_values=self._resistances[0])
         resistances = resistances.time_slice(start, resistances.t_end)
         self._resistances = [resistances.time_values, resistances.data]
-        resistances = resistances.time_slice(start, end)
-
-        dRss = np.diff(np.log(resistances.data))
-        closest_indices = find_closest(pressures.time_values, resistances.time_values)
-        p_like_r = pressures.data[closest_indices][1:]
-        curve = np.polynomial.Polynomial.fit(p_like_r, dRss, 2).convert().coef
-        if curve[0] >= 0:
-            return self.pressure
-        return -curve[1] / (2 * curve[0])
+        return pressures, resistances
 
     def cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
