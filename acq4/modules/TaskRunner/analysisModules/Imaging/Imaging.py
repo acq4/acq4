@@ -5,16 +5,16 @@ from MetaArray import MetaArray
 from acq4.Manager import getManager
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program.rect import RectScan
-from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
+from acq4.modules.TaskRunner.analysisModules.TaskRunnerAnalysisModule import TaskRunnerAnalysisModule
 from acq4.util import Qt
 from pyqtgraph.parametertree import ParameterTree, Parameter
 
 Ui_Form = Qt.importTemplate('.imagingTemplate')
 
 
-class ImagingModule(AnalysisModule):
+class ImagingModule(TaskRunnerAnalysisModule):
     def __init__(self, *args):
-        AnalysisModule.__init__(self, *args)
+        TaskRunnerAnalysisModule.__init__(self, *args)
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.splitter = Qt.QSplitter()
@@ -86,7 +86,7 @@ class ImagingModule(AnalysisModule):
         
     def quit(self):
         self.clear()
-        AnalysisModule.quit(self)
+        TaskRunnerAnalysisModule.quit(self)
         
     def saveState(self):
         return self.params.saveState(filter='user')

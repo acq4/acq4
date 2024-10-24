@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 
 
 class PatchAnalysisModule(AnalysisModule):

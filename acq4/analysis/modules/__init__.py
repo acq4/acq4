@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 import os
 
+
 def listModules():
-    d = os.path.split(__file__)[0]
+    d = os.path.dirname(__file__)
     files = []
     for f in os.listdir(d):
         if os.path.isdir(os.path.join(d, f)):
@@ -12,12 +11,12 @@ def listModules():
             files.append(f[:-3])
     files.sort()
     return files
-    
+
+
 def getModuleClass(modName):
-    mod = __import__('acq4.analysis.modules.'+modName, fromlist=['*'])
-    cls = getattr(mod, modName)
-    #print id(cls)
-    return cls
+    mod = __import__(f'acq4.analysis.modules.{modName}', fromlist=['*'])
+    return getattr(mod, modName)
+
 
 def load(modName, host):
     cls = getModuleClass(modName)

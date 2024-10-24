@@ -1,22 +1,21 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 """
 Used for measuring illumination depth profiles from photobleached tissue.
 """
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
+
+import numpy as np
+import scipy.optimize
+
+import acq4.util.functions as fn
 import pyqtgraph as pg
 from MetaArray import MetaArray
-import numpy as np
-import acq4.util.functions as fn
-#import pyqtgraph.ProgressDialog as ProgressDialog
-import scipy.optimize
+from acq4.util import Qt
+from acq4.util.AnalysisModule import AnalysisModule
+
 
 class DepthProfiler(AnalysisModule):
     def __init__(self, host):
-        AnalysisModule.__init__(self, host)
+        super().__init__(host)
         
         self.ctrl = Qt.QWidget()
         l = Qt.QVBoxLayout()

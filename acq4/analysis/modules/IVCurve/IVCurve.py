@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import acq4.devices.PatchClamp.testpulse
+
 """
 IVCurve: Analysis module that analyzes current-voltage and firing
 relationships from current clamp data.
@@ -22,7 +24,7 @@ import functools
 import numpy as np
 import scipy
 from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util.AnalysisModule import AnalysisModule
 import pyqtgraph as pg
 import acq4.util.matplotlibexporter as matplotlibexporter
 import acq4.analysis.tools.Utility as Utility  # pbm's utilities...
@@ -557,10 +559,10 @@ class IVCurve(AnalysisModule):
                 self.cmd_plot.plot(x=self.Clamps.time_base, y=acmdwave, downSample=10, downSampleMethod='mean',
                                    pen=pg.intColor(colindxs[i], len(cmdindxs), maxValue=255))
 
-        if self.Clamps.data_mode in self.dataModel.ic_modes:
+        if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.ic_modes:
             self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
             self.label_up(self.cmd_plot, 'T (s)', 'I (%s)' % self.Clamps.command_units, 'Data')
-        elif self.Clamps.data_mode in self.dataModel.vc_modes:  # voltage clamp
+        elif self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.vc_modes:  # voltage clamp
             self.label_up(self.data_plot, 'T (s)', 'I (A)', 'Data')
             self.label_up(self.cmd_plot, 'T (s)', 'V (%s)' % self.Clamps.command_units, 'Data')
         else:  # mode is not known: plot both as V
@@ -748,9 +750,10 @@ class IVCurve(AnalysisModule):
             clearFlag = False
         self.analysis_summary['FI_Curve'] = None
         # print '***** analyzing Spikes'
-        if self.Clamps.data_mode not in self.dataModel.ic_modes or self.Clamps.time_base is None:
+        if self.Clamps.data_mode not in acq4.devices.PatchClamp.testpulse.ic_modes or self.Clamps.time_base is None:
             print('IVCurve::analyzeSpikes: Cannot count spikes, ' +
-                  'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ', self.dataModel.ic_modes, 'tx is: ', self.tx)
+                  'and dataMode is ', self.Clamps.data_mode, 'and ICModes are: ',
+                  acq4.devices.PatchClamp.testpulse.ic_modes, 'tx is: ', self.tx)
             self.spikecount = []
             self.fiPlot.plot(x=[], y=[], clear=clearFlag, pen='w',
                              symbolSize=6, symbolPen='b',
@@ -1045,7 +1048,7 @@ class IVCurve(AnalysisModule):
 
         if len(self.Clamps.commandLevels) == 0:  # probably not ready yet to do the update.
             return
-        if self.Clamps.data_mode not in self.dataModel.ic_modes:  # only permit in IC
+        if self.Clamps.data_mode not in acq4.devices.PatchClamp.testpulse.ic_modes:  # only permit in IC
             return
         rgnpk = list(self.regions['lrwin0']['region'].getRegion())
         Func = 'exp1'  # single exponential fit with DC offset.
@@ -1314,9 +1317,9 @@ class IVCurve(AnalysisModule):
                 self.ctrl.IVCurve_Rin.setText(u'No valid points')
         self.yleak = np.zeros(len(self.ivss))
         if self.ctrl.IVCurve_subLeak.isChecked():
-            if self.Clamps.data_mode in self.dataModel.ic_modes:
+            if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.ic_modes:
                 sf = 1e-12
-            elif self.Clamps.data_mode in self.dataModel.vc_modes:
+            elif self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.vc_modes:
                 sf = 1e-3
             else:
                 sf = 1.0
@@ -1359,7 +1362,7 @@ class IVCurve(AnalysisModule):
         # but only in current clamp
         nospk = []
         peak_pos = None
-        if self.Clamps.data_mode in self.dataModel.ic_modes:
+        if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.ic_modes:
             threshold = self.ctrl.IVCurve_SpikeThreshold.value() * 1e-3
             ntr = len(self.Clamps.traces)
             if not self.spikes_counted:
@@ -1477,7 +1480,7 @@ class IVCurve(AnalysisModule):
             self.IV_plot.clear()
         (pen, filledbrush, emptybrush, symbol, n, clearFlag) = \
             self.map_symbol()
-        if self.Clamps.data_mode in self.dataModel.ic_modes:
+        if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.ic_modes:
             if (len(self.ivss) > 0 and
                     self.ctrl.IVCurve_showHide_lrss.isChecked()):
                 self.IV_plot.plot(self.ivss_cmd * 1e12, self.ivss * 1e3,
@@ -1491,7 +1494,7 @@ class IVCurve(AnalysisModule):
                                   symbolSize=6, symbolPen=pen,
                                   symbolBrush=emptybrush)
             self.label_up(self.IV_plot, 'I (pA)', 'V (mV)', 'I-V (CC)')
-        if self.Clamps.data_mode in self.dataModel.vc_modes:
+        if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.vc_modes:
             if (len(self.ivss) > 0 and
                     self.ctrl.IVCurve_showHide_lrss.isChecked()):
                 self.IV_plot.plot(self.ivss_cmd * 1e3, self.ivss * 1e9,
@@ -1517,7 +1520,7 @@ class IVCurve(AnalysisModule):
             (pen, filledbrush, emptybrush, symbol, n, clearFlag) = \
                 self.map_symbol()
             mode = self.ctrl.IVCurve_RMPMode.currentIndex()
-            if self.Clamps.data_mode in self.dataModel.ic_modes:
+            if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.ic_modes:
                 sf = 1e3
                 self.RMP_plot.setLabel('left', 'V mV')
             else:
@@ -1549,7 +1552,7 @@ class IVCurve(AnalysisModule):
         Draw the spike counts to the FI and FSL windows
         Note: x axis can be I, T, or  # spikes
         """
-        if self.Clamps.data_mode in self.dataModel.vc_modes:
+        if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.vc_modes:
             self.fiPlot.clear()  # no plots of spikes in VC
             self.fslPlot.clear()
             return
@@ -1638,7 +1641,7 @@ class IVCurve(AnalysisModule):
         """
         
         # Dictionary structure: key = information about 
-        if self.Clamps.data_mode in self.dataModel.ic_modes or self.Clamps.data_mode == 'vc':
+        if self.Clamps.data_mode in acq4.devices.PatchClamp.testpulse.ic_modes or self.Clamps.data_mode == 'vc':
             data_template = self.data_template
         else:
           data_template = (

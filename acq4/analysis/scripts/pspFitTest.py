@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import os
 import sys
 import time
@@ -8,7 +6,7 @@ import numpy as np
 import scipy.optimize as opt
 
 
-from acq4.util.functions import logSpace, downsample as fnDownsample
+from acq4.util.functions import logSpace, downsample as fnDownsample, processExtraVars
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'util'))
 sys.path.append(path)
@@ -207,24 +205,6 @@ def errFn(v, x, y, risePower):
     err = abs(y - fit) * (fit + 3.0)
     err = (err**2).sum()
     return err
-
-
-def processExtraVars(v):
-    ##  allows using some extra variables to help fitters converge
-    ##  v = [amp, xoff, rise, fall, xshift, decayshift]
-    ##    xshift is a variable that shifts the onset of the PSP without affecting the decay curve
-    ##    decayshift (in)decreases the decay before 1/e and (de)increases the decay after 1/e
-    
-    if len(v) == 4:
-        return v
-    
-    v2 = v[:4]
-    
-    ## xshift
-    v2[1] += v[4]
-    v2[0] *= np.exp(-v[4]/v[3])
-    
-    return v2
 
 
 def makeGuess(x, y):
