@@ -170,11 +170,10 @@ class OptomechDevice(InterfaceMixin):
                         raise TypeError(f"Invalid parent device specification: {parent!r}")
 
                 except Exception as ex:
-                    if "No device named" in ex.args[0]:
-                        print(f"Cannot set parent device {config['parentDevice']!r}; no device by that name.")
-                    else:
+                    if "No device named" not in ex.args[0]:
                         raise
-
+                    print(f"Cannot set parent device {config['parentDevice']!r}; no device by that name.")
+                    print("Available devices:", dm.listDevices())
             if 'transform' in config:
                 self.setDeviceTransform(config['transform'])
 
