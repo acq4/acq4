@@ -77,14 +77,23 @@ class AutomationDebugWindow(Qt.QMainWindow):
         pipette_layout = Qt.QGridLayout()
         pipette_space.setLayout(pipette_layout)
 
+        self._pipetteSelector = Qt.QComboBox()
+        self._cameraSelector = Qt.QComboBox()
+        for name, dev in self.module.manager.devices.items():
+            if isinstance(dev, Pipette):
+                self._pipetteSelector.addItem(name)
+            elif isinstance(dev, Camera):
+                self._cameraSelector.addItem(name)
+        pipette_layout.addWidget(self._pipetteSelector, 0, 0)
+        pipette_layout.addWidget(self._cameraSelector, 0, 1)
         self._testPipetteBtn = FeedbackButton('Test pipette calibration')
         self._testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
         self._testing_pipette = False
         self._testPipetteBtn.clicked.connect(self.togglePipetteCalibration)
-        pipette_layout.addWidget(self._testPipetteBtn, 0, 0)
+        pipette_layout.addWidget(self._testPipetteBtn, 1, 0, 1, 2)
         self._pipetteLog = Qt.QTextEdit()
         self._pipetteLog.setReadOnly(True)
-        pipette_layout.addWidget(self._pipetteLog, 1, 0)
+        pipette_layout.addWidget(self._pipetteLog, 2, 0, 1, 2)
 
         self.show()
 
@@ -106,8 +115,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def doPipetteCalibrationTest(self, _future):
-        camera = self.module.manager.getDevice('Camera')
-        pipette = self.module.manager.getDevice('Pipette1')
+        camera = self.cameraDevice
+        pipette = self.pipetteDevice
         true_tip_position = pipette.globalPosition()
         fake_tip_position = true_tip_position + np.random.uniform(-100e-6, 100e-6, 3)
         pipette.resetGlobalPosition(fake_tip_position)
@@ -148,7 +157,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @property
     def cameraDevice(self) -> Camera:
-        return self.module.manager.getDevice('Camera')  # TODO
+        return self.module.manager.getDevice(self._cameraSelector.currentText())
 
     @property
     def scopeDevice(self) -> Microscope:
@@ -156,7 +165,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @property
     def pipetteDevice(self) -> Pipette:
-        return self.module.manager.getDevice('Pipette1')  # TODO
+        return self.module.manager.getDevice(self._pipetteSelector.currentText())
 
     def _setTopLeft(self):
         cam = self.cameraDevice
