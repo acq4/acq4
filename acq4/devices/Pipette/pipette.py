@@ -249,6 +249,9 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
+    def defaultGeometryArgs(self):
+        return {'color': (0, 1, 0.2, 1)}
+
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
 
