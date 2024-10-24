@@ -1,6 +1,7 @@
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
+from __future__ import annotations
 
 import contextlib
 import re

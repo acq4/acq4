@@ -1,14 +1,16 @@
+from __future__ import annotations
+
 import contextlib
+import time
 
 import numpy as np
-import time
 
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from pyqtgraph import debug, SpinBox, SRTTransform3D, siFormat
-from ..Stage import Stage, MoveFuture, StageInterface, StageAxesCalibrationWindow, ManipulatorAxesCalibrationWindow
+from pyqtgraph import debug, SpinBox, FeedbackButton
+from ..Stage import Stage, MoveFuture, StageInterface
 from ...util.future import future_wrap, Future
 
 
@@ -17,7 +19,7 @@ class Scientifica(Stage):
     A Scientifica motorized device.
 
     This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
-    The device may be identified either by its serial port or by its description 
+    The device may be identified either by its serial port or by its description
     string:
 
         port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
@@ -27,20 +29,21 @@ class Scientifica(Stage):
     The optional 'baudrate' parameter is used to set the baudrate of the device.
     Both valid rates will be attempted when initially connecting.
     """
+
     def __init__(self, man, config, name):
-        # can specify 
-        port = config.pop('port', None)
-        name = config.pop('name', None)
+        # can specify
+        port = config.pop("port", None)
+        name = config.pop("name", None)
 
         # if user has not provided scale values, we can make a guess
-        config.setdefault('scale', (1e-6, 1e-6, 1e-6))
+        config.setdefault("scale", (1e-6, 1e-6, 1e-6))
 
-        baudrate = config.pop('baudrate', None)
-        ctrl_version = config.pop('version', 2)
+        baudrate = config.pop("baudrate", None)
+        ctrl_version = config.pop("version", 2)
         try:
             self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
         except RuntimeError as err:
-            if hasattr(err, 'dev_version'):
+            if hasattr(err, "dev_version"):
                 raise RuntimeError(
                     f"You must add `version={int(err.dev_version)}` to the configuration for this "
                     f"device and double-check any speed/acceleration parameters."
@@ -68,22 +71,22 @@ class Scientifica(Stage):
         # self.dev.send('APPROACH %s' % approach)  # reset approach bit; setting angle enables it
 
         # set any extra parameters specified in the config
-        params = config.get('params', {})
+        params = config.get("params", {})
         for param, val in params.items():
-            if param == 'currents':
+            if param == "currents":
                 assert len(val) == 2
                 self.dev.setCurrents(*val)
-            elif param == 'axisScale':
+            elif param == "axisScale":
                 assert len(val) == 3
                 for i, x in enumerate(val):
                     self.dev.setAxisScale(i, x)
             else:
                 self.dev.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * 1e-6))
+        self.setUserSpeed(config.get("userSpeed", self.dev.getSpeed() * 1e-6))
 
         # whether to monitor for changes to a MOC
-        self.monitorObj = config.get('monitorObjective', False)
+        self.monitorObj = config.get("monitorObjective", False)
         if self.monitorObj is True:
             self.objectiveState = None
             self._checkObjective()
@@ -94,22 +97,21 @@ class Scientifica(Stage):
         self.monitor.start()
 
     def axes(self):
-        return 'x', 'y', 'z'
+        return "x", "y", "z"
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
-        if 'capabilities' in self.config:
-            return self.config['capabilities']
+        if "capabilities" in self.config:
+            return self.config["capabilities"]
         else:
             return {
-                'getPos': (True, True, True),
-                'setPos': (True, True, True),
-                'limits': (False, False, False),
+                "getPos": (True, True, True),
+                "setPos": (True, True, True),
+                "limits": (False, False, False),
             }
 
     def stop(self):
-        """Stop the manipulator immediately.
-        """
+        """Stop the manipulator immediately."""
         with self.lock:
             self.dev.stop()
             if self._lastMove is not None:
@@ -117,8 +119,7 @@ class Scientifica(Stage):
             self._lastMove = None
 
     def abort(self):
-        """Stop the manipulator immediately.
-        """
+        """Stop the manipulator immediately."""
         self.dev.stop()
         if self._lastMove is not None:
             self._lastMove._stopped()
@@ -161,7 +162,7 @@ class Scientifica(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
-        if hasattr(self, 'monitor'):  # in case __init__ failed
+        if hasattr(self, "monitor"):  # in case __init__ failed
             self.monitor.stop()
         Stage.quit(self)
 
@@ -178,28 +179,27 @@ class Scientifica(Stage):
         return ScientificaGUI(self, win)
 
     def startMoving(self, vel):
-        """Begin moving the stage at a continuous velocity.
-        """
+        """Begin moving the stage at a continuous velocity."""
         s = [int(1e8 * v) for v in vel]
-        self.dev.send('VJ -%d %d %d' % tuple(s))
+        self.dev.send("VJ -%d %d %d" % tuple(s))
 
     def _checkObjective(self):
         with self.lock:
-            obj = int(self.dev.send('obj'))
+            obj = int(self.dev.send("obj"))
             if obj != self.objectiveState:
                 self.objectiveState = obj
-                self.sigSwitchChanged.emit(self, {'objective': obj})
+                self.sigSwitchChanged.emit(self, {"objective": obj})
 
     def getSwitch(self, name):
-        if name == 'objective' and self.monitorObj:
+        if name == "objective" and self.monitorObj:
             return self.objectiveState
         else:
             return Stage.getSwitch(self, name)
 
 
 class MonitorThread(Thread):
-    """Thread to poll for manipulator position changes.
-    """
+    """Thread to poll for manipulator position changes."""
+
     def __init__(self, dev, monitorObj):
         self.dev = dev
         self.lock = Mutex(recursive=True)
@@ -221,7 +221,7 @@ class MonitorThread(Thread):
     def setInterval(self, i):
         with self.lock:
             self.interval = i
-    
+
     def run(self):
         interval = self.minInterval
         lastPos = None
@@ -238,20 +238,20 @@ class MonitorThread(Thread):
                     interval = self.minInterval
                     lastPos = pos
                 else:
-                    interval = min(maxInterval, interval*2)
+                    interval = min(maxInterval, interval * 2)
 
                 if self.monitorObj is True:
                     self.dev._checkObjective()
 
                 time.sleep(interval)
             except Exception:
-                debug.printExc('Error in Scientifica monitor thread:')
+                debug.printExc("Error in Scientifica monitor thread:")
                 time.sleep(maxInterval)
-                
+
 
 class ScientificaMoveFuture(MoveFuture):
-    """Provides access to a move-in-progress on a Scientifica manipulator.
-    """
+    """Provides access to a move-in-progress on a Scientifica manipulator."""
+
     def __init__(self, dev, pos, speed, userSpeed):
         MoveFuture.__init__(self, dev, pos, speed)
         self._interrupted = False
@@ -263,15 +263,13 @@ class ScientificaMoveFuture(MoveFuture):
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
             self.dev.dev.setSpeed(userSpeed / 1e-6)
-        
+
     def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
+        """Return True if the move was interrupted before completing."""
         return self._interrupted
 
     def isDone(self):
-        """Return True if the move is complete.
-        """
+        """Return True if the move is complete."""
         return self._getStatus() != 0
 
     def _getStatus(self):
@@ -289,7 +287,7 @@ class ScientificaMoveFuture(MoveFuture):
             return 0
         # did we reach target?
         pos = self.dev._getPosition()
-        dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
+        dif = ((np.array(pos) - np.array(self.targetPos)) ** 2).sum() ** 0.5
         self._finished = True
         if dif < 1.0:  # reached target
             return 1
