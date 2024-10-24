@@ -216,16 +216,12 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, d
     )
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
 
-    # TODO 3D bboxes?
-    def bbox(num) -> tuple[tuple[float, float], tuple[float, float]]:
+    def bbox(num) -> tuple[tuple[float, ...], tuple[float, ...]]:
         match = mask == num
-        rows = np.any(match, axis=-1)
-        cols = np.any(match, axis=-2)
-        rmin, rmax = np.where(rows)[0][[0, -1]]
-        cmin, cmax = np.where(cols)[0][[0, -1]]
-        start = transform.map((rmin, cmin))
-        end = transform.map((rmax, cmax))
-        return start, end
+        coords = np.array(np.where(match)).T
+        start = coords.min(axis=0)
+        end = coords.max(axis=0)
+        return transform.map(tuple(start[::-1])), transform.map(tuple(end[::-1]))
 
     cell_num = 1
     boxes = []
