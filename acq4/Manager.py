@@ -313,7 +313,10 @@ class Manager(Qt.QObject):
                         logMsg(f"  === Configuring device '{k}' ===")
                         try:
                             conf = cfg['devices'][k]
-                            driverName = conf['driver']
+                            try:
+                                driverName = conf['driver']
+                            except KeyError as exc:
+                                raise KeyError(f"No driver specified for device {k}") from exc
                             if 'config' in conf:  # for backward compatibility
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
@@ -429,6 +432,9 @@ class Manager(Qt.QObject):
                 return configfile.appendConfigFile(data, fileName)
             else:
                 raise Exception("Could not find file %s" % fileName)
+
+    def updateConfig(self, config: dict):
+        self.config.update(config)
 
     def configFileName(self, name):
         return os.path.join(self.configDir, name)
