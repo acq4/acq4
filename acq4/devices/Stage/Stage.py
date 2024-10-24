@@ -561,7 +561,7 @@ class Stage(Device, OptomechDevice):
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
         """
-        return self.readConfigFile('stored_locations').get('home', None)
+        return self.getStoredLocation('home')
 
     def goHome(self, speed='fast'):
         homePos = self.homePosition()
@@ -572,11 +572,23 @@ class Stage(Device, OptomechDevice):
     def setHomePosition(self, pos=None):
         """Set the home position in global coordinates.
         """
+        self.setStoredLocation('home', pos)
+
+    def getStoredLocation(self, name):
+        return self.readConfigFile('stored_locations').get(name, None)
+
+    def setStoredLocation(self, name: str, pos=None):
         if pos is None:
             pos = self.globalPosition()
         locations = self.readConfigFile('stored_locations')
-        locations['home'] = list(pos)
+        locations[name] = list(pos)
         self.writeConfigFile(locations, 'stored_locations')
+
+    def clearStoredLocation(self, name):
+        locations = self.readConfigFile('stored_locations')
+        if name in locations:
+            del locations[name]
+            self.writeConfigFile(locations, 'stored_locations')
 
     def joystickChanged(self, js, event):
         if 'axis' in event:

@@ -1,9 +1,6 @@
 import numpy as np
 import scipy.optimize
 import scipy.stats
-import time
-
-
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
@@ -15,11 +12,11 @@ from acq4.util.target import Target
 
 class StageAxesCalibrationWindow(Qt.QWidget):
     def __init__(self, device: Stage):
-        super(StageAxesCalibrationWindow, self).__init__()
+        super().__init__()
         self._dev = device
         self._camera = device.getPreferredImagingDevice()
         self._automation = AutomatedStageCalibration(device)
-        self.setWindowTitle("Calibrate Axes for %s" % device.name())
+        self.setWindowTitle(f"Calibrate Axes for {device.name()}")
         self._layout = Qt.QGridLayout()
         self.setLayout(self._layout)
         self.resize(600, 300)

@@ -14,13 +14,13 @@ def runInThread(thread, func, *args, **kwds):
 
 
 def runInGuiThread(func, *args, **kwds):
-    """Run a function the main GUI thread and return the result.
-    """
+    """Run a function the main GUI thread and return the result."""
     return ThreadCallFuture(None, func, *args, **kwds)()
 
 
 class ThreadCallFuture(Future):
     sigRequestCall = Qt.Signal()
+
     def __init__(self, thread, func, *args, **kwds):
         Future.__init__(self)
         self.func = func
@@ -40,7 +40,7 @@ class ThreadCallFuture(Future):
             self._taskDone()
         except Exception as exc:
             self.exc = exc
-            err = ''.join(traceback.format_exception(*sys.exc_info()))
+            err = "".join(traceback.format_exception(*sys.exc_info()))
             self._taskDone(interrupted=True, error=err)
 
     def __call__(self):
@@ -49,5 +49,3 @@ class ThreadCallFuture(Future):
             raise self.exc
         else:
             return self.ret
-
-
