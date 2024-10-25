@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import functools
+import sys
 import threading
+import time
 import traceback
 from typing import Callable, Generic, TypeVar, ParamSpec
 
-import sys
-import time
-
 from acq4.util import Qt, ptime
+from pyqtgraph import FeedbackButton
 
 FUTURE_RETVAL_TYPE = TypeVar('FUTURE_RETVAL_TYPE')
 WAITING_RETVAL_TYPE = TypeVar('WAITING_RETVAL_TYPE')
@@ -344,3 +344,69 @@ class MultiFuture(Future):
 
     def currentState(self):
         return "; ".join([f.currentState() or '' for f in self.futures])
+
+
+class FutureButton(FeedbackButton):
+    """A button that starts a Future when clicked and displays feedback based on the Future's state."""
+    sigFinished = Qt.Signal(object)  # future
+    sigStateChanged = Qt.Signal(object, object)  # future, state
+
+    def __init__(self, future_producer: Callable[[...], Future], *args, stoppable: bool = False, success=None, error=None, processing=None):
+        """Create a new FutureButton.
+
+        Parameters
+        ----------
+        future_producer : Callable[[], Future]
+            A function that takes no arguments and returns a Future instance.
+        *args
+            Arguments to pass to FeedbackButton.__init__.
+        stoppable : bool
+            If True, the Future can be stopped by clicking the button while it is in progress.
+        success : str | None
+            The message to display when the Future completes successfully. If None, the default message is "Success".
+        error : str | None
+            The message to display when the Future fails. If None, the default message is the error message from the Future.
+        processing : str | None
+            The message to display while the Future is in progress. If None, the default message is "Processing...".
+        """
+        super().__init__(*args)
+        self._future = None
+        self._futureProducer = future_producer
+        self._stoppable = stoppable
+        self._userRequestedStop = False
+        self._success = success
+        self._error = error
+        self._processing = processing
+        self.clicked.connect(self._controlTheFuture)
+
+    def setEnabled(self, enabled):
+        # TODO this is a bad hack to prevent the button from being disabled while the future is running
+        super().setEnabled((self._future is not None and self._stoppable) or enabled)
+
+    def _controlTheFuture(self):
+        if self._future is None:
+            self.processing(self._processing or "Processing...")
+            self._future = self._futureProducer()
+            self._future.sigFinished.connect(self._futureFinished)
+            if self._future.isDone():  # futures may immediately complete before we can connect to the signal
+                self._futureFinished(self._future)
+            self._future.sigStateChanged.connect(self._futureStateChanged)
+        else:
+            self._userRequestedStop = True
+            self._future.stop(f"User clicked '{self.text()}' button")
+
+    def _futureFinished(self, future):
+        self._future = None
+        self.sigFinished.emit(future)
+        if not future.wasInterrupted():
+            self.success(self._success or "Success")
+        else:
+            self.failure(self._error or future.errorMessage()[:80])
+            if self._userRequestedStop:
+                self._userRequestedStop = False
+            else:
+                future.wait()  # throw errors
+
+    def _futureStateChanged(self, future, state):
+        self.setText(state, temporary=True)
+        self.sigStateChanged.emit(future, state)
