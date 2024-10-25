@@ -1,6 +1,7 @@
-import numpy as np
 import os
 import random
+
+import numpy as np
 
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
@@ -9,16 +10,19 @@ from acq4.devices.Pipette.calibration import calibratePipette
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future, future_wrap, FutureButton
 from acq4.util.imaging.sequencer import acquire_z_stack
-from pyqtgraph import FeedbackButton
 from pyqtgraph import mkPen, SpinBox
 from pyqtgraph.units import µm
 
 
 class AutomationDebugWindow(Qt.QMainWindow):
+    sigWorking = Qt.Signal(bool)
+    sigPipetteLog = Qt.Signal(str)
+
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
+        self.sigWorking.connect(self._setWorkingState)
         self.failedCalibrations = []
         self._layout = Qt.FlowLayout()
         widget = Qt.QWidget()
@@ -32,12 +36,12 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._clearBtn.clicked.connect(self.clearBoundingBoxes)
         self._layout.addWidget(self._clearBtn)
 
-        self._zStackDetectBtn = Qt.QPushButton('Neurons in z-stack?')
-        self._zStackDetectBtn.clicked.connect(self.startZStackDetect)
+        self._zStackDetectBtn = FutureButton(self._detectNeuronsZStack, 'Neurons in z-stack?')
+        self._zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
         self._layout.addWidget(self._zStackDetectBtn)
 
-        self._flatDetectBtn = Qt.QPushButton('Neurons in single frame?')
-        self._flatDetectBtn.clicked.connect(self.startFlatDetect)
+        self._flatDetectBtn = FutureButton(self._detectNeuronsFlat, 'Neurons in single frame?')
+        self._flatDetectBtn.sigFinished.connect(self._handleDetectResults)
         self._layout.addWidget(self._flatDetectBtn)
 
         auto_space = Qt.QWidget(self)
@@ -68,8 +72,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         auto_layout.addWidget(self._yBottomSpin, 1, 3)
 
-        self._autoTargetBtn = Qt.QPushButton('Find a \nrandom target')
-        self._autoTargetBtn.clicked.connect(self.startAutoTarget)
+        self._autoTargetBtn = FutureButton(self._autoTarget, 'Find a \nrandom target')
+        self._autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
         auto_layout.addWidget(self._autoTargetBtn, 0, 4, 1, 2)
 
         pipette_space = Qt.QWidget(self)
@@ -86,64 +90,50 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 self._cameraSelector.addItem(name)
         pipette_layout.addWidget(self._pipetteSelector, 0, 0)
         pipette_layout.addWidget(self._cameraSelector, 0, 1)
-        self._testPipetteBtn = FeedbackButton('Test pipette calibration')
+        self._testPipetteBtn = FutureButton(
+            self.doPipetteCalibrationTest,
+            "Test pipette calibration",
+            stoppable=True,
+            processing="Interrupt pipette\ncalibration test"
+        )
         self._testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
-        self._testing_pipette = False
-        self._testPipetteBtn.clicked.connect(self.togglePipetteCalibration)
+        self._testPipetteBtn.sigFinished.connect(self._handleCalibrationFinish)
         pipette_layout.addWidget(self._testPipetteBtn, 1, 0, 1, 2)
+        self._testing_pipette = False
         self._pipetteLog = Qt.QTextEdit()
         self._pipetteLog.setReadOnly(True)
         pipette_layout.addWidget(self._pipetteLog, 2, 0, 1, 2)
+        self.sigPipetteLog.connect(self._pipetteLog.append)
 
         self.show()
 
-    def togglePipetteCalibration(self):
-        if self._testing_pipette:
-            self._setWorkingState(False)
-            self._testing_pipette = False
-            self._testPipetteBtn.setStyleSheet("")
-            if self._pipetteFuture is not None:
-                self._pipetteFuture.stop()
-        else:
-            self._setWorkingState(True)
-            self._testing_pipette = True
-            self._pipetteFuture = self.doPipetteCalibrationTest()
-            self._pipetteFuture.sigFinished.connect(self._handleCalibrationFinish)
-            self._testPipetteBtn.setEnabled(True)
-            self._testPipetteBtn.setText('Interrupt pipette\ncalibration test')
-            self._testPipetteBtn.setStyleSheet("QPushButton {background-color: green}")
-
     @future_wrap
     def doPipetteCalibrationTest(self, _future):
+        self.sigWorking.emit(True)
         camera = self.cameraDevice
         pipette = self.pipetteDevice
         true_tip_position = pipette.globalPosition()
         fake_tip_position = true_tip_position + np.random.uniform(-100e-6, 100e-6, 3)
         pipette.resetGlobalPosition(fake_tip_position)
         pipette.moveTo("home", "fast")
-        while self._testing_pipette:
+        while True:
             try:
-                calibrtion_fut = calibratePipette(pipette, camera, camera.scopeDev)
-                _future.waitFor(calibrtion_fut)
+                _future.waitFor(calibratePipette(pipette, camera, camera.scopeDev))
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self._pipetteLog.append(f'Calibration complete: {error*1e6:.2g}µm error')
+                self.sigPipetteLog.emit(f'Calibration complete: {error*1e6:.2g}µm error')
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
-                    self._pipetteLog.append(f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]')
-
+                    self.sigPipetteLog.emit(f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]')
+            except Future.StopRequested:
+                self.sigPipetteLog.emit('Calibration interrupted by user request')
+                break
             except Exception as e:
-                if self._testing_pipette:
-                    raise
-                self._pipetteLog.append('Calibration interrupted by user request')
+                self.sigPipetteLog.emit('Error!')
+                raise e
 
     def _handleCalibrationFinish(self, fut: Future):
-        try:
-            fut.wait()  # to raise errors
-        finally:
-            self._setWorkingState(False)
-            self._testing_pipette = False
-            self._testPipetteBtn.setText('Test pipette calibration')
+        self.sigWorking.emit(False)
 
     def _setWorkingState(self, working: bool):
         self.module.manager.getModule('Camera').window()  # make sure camera window is open
@@ -181,32 +171,17 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._xRightSpin.setValue(bound.x())
         self._yBottomSpin.setValue(bound.y())
 
-    def startZStackDetect(self):
-        self._setWorkingState(True)
-        neurons_fut = self._detectNeuronsZStack()
-        neurons_fut.sigFinished.connect(self._handleFlatResults)
-
-    def startFlatDetect(self):
-        self._setWorkingState(True)
-        neurons_fut = self._detectNeuronsFlat()
-        neurons_fut.sigFinished.connect(self._handleFlatResults)
-
-    def startAutoTarget(self):
-        self._setWorkingState(True)
-        target_fut = self._autoTarget()
-        target_fut.sigFinished.connect(self._handleAutoFinish)
-
     def clearBoundingBoxes(self):
         cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
         for widget in self._previousBoxWidgets:
             cam_win.removeItem(widget)
         self._previousBoxWidgets = []
 
-    def _handleFlatResults(self, neurons_fut: Future) -> list:
+    def _handleDetectResults(self, neurons_fut: Future) -> list:
         try:
             self._displayBoundingBoxes(neurons_fut.getResult())
         finally:
-            self._setWorkingState(False)
+            self.sigWorking.emit(False)
         return self._previousBoxWidgets
 
     def _displayBoundingBoxes(self, bounding_boxes):
@@ -227,6 +202,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def _detectNeuronsFlat(self, _future: Future):
+        self.sigWorking.emit(True)
         from acq4.util.imaging.object_detection import detect_neurons
 
         with self.cameraDevice.ensureRunning():
@@ -237,6 +213,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
+        self.sigWorking.emit(True)
         from acq4.util.imaging.object_detection import detect_neurons
 
         depth = self.cameraDevice.getFocusDepth()
@@ -248,6 +225,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def _autoTarget(self, _future):
+        self.sigWorking.emit(True)
         x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
         y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
         _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
@@ -270,18 +248,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 print(f"Setting pipette target to {center}")
                 self.pipetteDevice.setTarget(center)
         finally:
-            self._setWorkingState(False)
-
-    @future_wrap
-    def _detectNeuronsZStack(self, _future: Future) -> list:
-        from acq4.util.imaging.object_detection import detect_neurons
-
-        depth = self.cameraDevice.getFocusDepth()
-        start = depth - 10 * µm
-        stop = depth + 10 * µm
-        z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
-        self.cameraDevice.setFocusDepth(depth)  # no need to wait
-        return _future.waitFor(detect_neurons(z_stack)).getResult()
+            self.sigWorking.emit(False)
 
     @future_wrap
     def _autoTarget(self, _future):
