@@ -385,8 +385,8 @@ class FutureButton(FeedbackButton):
 
     def _controlTheFuture(self):
         if self._future is None:
-            self.processing(self._processing or "Processing...")
             self._future = self._futureProducer()
+            self.processing(self._processing or "Processing...")
             self._future.sigFinished.connect(self._futureFinished)
             if self._future.isDone():  # futures may immediately complete before we can connect to the signal
                 self._futureFinished(self._future)
