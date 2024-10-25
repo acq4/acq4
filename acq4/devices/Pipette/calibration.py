@@ -182,6 +182,7 @@ def interpolate_orthogonal_line(frames, bgFrame, pipVector):
         )
     return profile, interpCoords
 
+
 def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
     with imager.ensureRunning():
         pipRecorder = None
@@ -206,11 +207,4 @@ def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
 def getPipettePositionAtTime(events, time):
     pipTimes = [ev['event_time'] for ev in events]
     pipIndex = np.searchsorted(pipTimes, time, 'left')
-    pipPos = events[pipIndex]['position']
-    return pipPos
-
-
-
-
-
-
+    return events[pipIndex]['position']
