@@ -351,7 +351,7 @@ class FutureButton(FeedbackButton):
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
-    def __init__(self, future_producer: Callable[[...], Future], *args, stoppable: bool = False, success=None, error=None, processing=None):
+    def __init__(self, future_producer: Callable[[...], Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
         """Create a new FutureButton.
 
         Parameters
@@ -364,7 +364,7 @@ class FutureButton(FeedbackButton):
             If True, the Future can be stopped by clicking the button while it is in progress.
         success : str | None
             The message to display when the Future completes successfully. If None, the default message is "Success".
-        error : str | None
+        failure : str | None
             The message to display when the Future fails. If None, the default message is the error message from the Future.
         processing : str | None
             The message to display while the Future is in progress. If None, the default message is "Processing...".
@@ -375,7 +375,7 @@ class FutureButton(FeedbackButton):
         self._stoppable = stoppable
         self._userRequestedStop = False
         self._success = success
-        self._error = error
+        self._failure = failure
         self._processing = processing
         self.clicked.connect(self._controlTheFuture)
 
@@ -401,7 +401,7 @@ class FutureButton(FeedbackButton):
         if not future.wasInterrupted():
             self.success(self._success or "Success")
         else:
-            self.failure(self._error or future.errorMessage()[:80])
+            self.failure(self._failure or future.errorMessage()[:80])
             if self._userRequestedStop:
                 self._userRequestedStop = False
             else:
