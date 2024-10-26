@@ -13,7 +13,7 @@ from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationW
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from ... import getManager
-from ...util.future import Future
+from ...util.future import Future, FutureButton
 
 
 class Stage(Device, OptomechDevice):
@@ -607,9 +607,6 @@ class Stage(Device, OptomechDevice):
 class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
-    class Timeout(Exception):
-        """Raised by wait() if the timeout period elapses.
-        """
 
     def __init__(self, dev, pos, speed):
         Future.__init__(self)
@@ -643,6 +640,7 @@ class MoveFuture(Future):
         if not self.isDone():
             self.dev.stop()
             super().stop(reason=reason)
+            self._taskDone(interrupted=True, error=reason)
 
 
 class MovePathFuture(MoveFuture):
@@ -788,9 +786,8 @@ class StageInterface(Qt.QWidget):
         self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.goHomeBtn = Qt.QPushButton('Home')
+        self.goHomeBtn = FutureButton(self.goHomeClicked, 'Home', stoppable=True, processing='Going home...')
         self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
-        self.goHomeBtn.clicked.connect(self.goHomeClicked)
 
         self.setHomeBtn = Qt.QPushButton('Set Home')
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
@@ -842,7 +839,7 @@ class StageInterface(Qt.QWidget):
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
     def goHomeClicked(self):
-        self.dev.goHome()
+        return self.dev.goHome()
 
     def setHomeClicked(self):
         self.dev.setHomePosition()

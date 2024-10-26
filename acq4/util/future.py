@@ -401,7 +401,7 @@ class FutureButton(FeedbackButton):
         if not future.wasInterrupted():
             self.success(self._success or "Success")
         else:
-            self.failure(self._failure or future.errorMessage()[:80])
+            self.failure(self._failure or (future.errorMessage() or '')[:80])
             if self._userRequestedStop:
                 self._userRequestedStop = False
             else:
