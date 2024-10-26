@@ -270,27 +270,3 @@ class MockStageThread(Thread):
     def _setPosition(self, pos):
         self.pos = np.array(pos)
         self.positionChanged.emit(self.pos)
-
-
-#class MockStageInterface(Qt.QWidget):
-    #def __init__(self, dev, win, keys=None):
-        #self.win = win
-        #self.dev = dev
-        #Qt.QWidget.__init__(self)
-        #self.layout = Qt.QGridLayout()
-        #self.setLayout(self.layout)
-        #self.btn = pg.JoystickButton()
-        #self.layout.addWidget(self.btn, 0, 0)
-        #self.label = Qt.QLabel()
-        #self.layout.addWidget(self.label)
-        #self.dev.sigPositionChanged.connect(self.update)
-        #self.btn.sigStateChanged.connect(self.btnChanged)
-        #self.label.setFixedWidth(300)
-        
-    #def btnChanged(self, btn, state):
-        #self.dev.setSpeed((state[0] * 0.0001, state[1] * 0.0001))
-        
-    #def update(self):
-        #pos = self.dev.getPosition()
-        #text = [pg.siFormat(x, suffix='m', precision=5) for x in pos]
-        #self.label.setText(", ".join(text))
