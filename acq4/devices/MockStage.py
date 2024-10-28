@@ -163,7 +163,7 @@ class MockMoveFuture(MoveFuture):
         self._taskDone()
 
     def mockInterrupt(self):
-        self._taskDone(interrupted=True)
+        self._taskDone(interrupted=True, error='Move interrupted')
 
 
 class MockStageThread(Thread):
