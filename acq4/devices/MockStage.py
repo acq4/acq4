@@ -119,7 +119,7 @@ class MockStage(Stage):
         
     def _interruptMove(self):
         if self._lastMove is not None and not self._lastMove.isDone():
-            self._lastMove._interrupted = True
+            self._lastMove.mockInterrupt()
 
     def setUserSpeed(self, v):
         pass
@@ -159,24 +159,14 @@ class MockMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self.targetPos = pos
-        self._finished = False
-        self._interrupted = False
-        self._errorMsg = None
-        
+
         self.dev.stageThread.setTarget(self, pos, speed)
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
 
-    def isDone(self):
-        """Return True if the move is complete or was interrupted.
-        """
-        return self._finished or self._interrupted
+    def mockFinish(self):
+        self._taskDone()
 
-    def errorMessage(self):
-        return self._errorMsg
+    def mockInterrupt(self):
+        self._taskDone(interrupted=True)
 
 
 class MockStageThread(Thread):
@@ -256,7 +246,7 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.currentMove._finished = True
+                    self.currentMove.mockFinish()
                     self.stop()
                 else:
                     unit = dif / dist
