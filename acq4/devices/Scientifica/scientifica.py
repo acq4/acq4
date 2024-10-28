@@ -308,6 +308,7 @@ class ScientificaMoveFuture(MoveFuture):
                 break
             elif status == 0 and ptime.time() < startTime + 0.15:
                 # allow 150ms to stop
+                self.sleep(0.05)
                 continue
             elif status == 0:
                 # not actually stopped! This should not happen.
