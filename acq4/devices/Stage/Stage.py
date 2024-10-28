@@ -603,17 +603,33 @@ class Stage(Device, OptomechDevice):
         self.setVelocity(vel)
 
 
+class CallOnce:
+    """Used to prevent a callable from being called more than once."""
+    def __init__(self):
+        self.called = False
+
+    def __enter__(self):
+        if self.called:
+            return False
+        self.called = True
+        return True
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.called = False
+
+
 class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
 
-    def __init__(self, dev, pos, speed):
-        Future.__init__(self)
+    def __init__(self, dev: Stage, pos, speed):
+        super().__init__()
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
         self.targetPos = np.asarray(pos)
         self.startPos = np.asarray(dev.getPosition())
+        self._isStopCallable = CallOnce()
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -636,15 +652,15 @@ class MoveFuture(Future):
     def stop(self, reason="stop requested"):
         """Stop the move in progress.
         """
-        if not self.isDone():
-            self.dev.stop()
-            super().stop(reason=reason)
-            self._taskDone(interrupted=True, error=reason)
+        with self._isStopCallable as can_stop:
+            if can_stop and not self.isDone():
+                self.dev.stop()
+                super().stop(reason=reason)
 
 
 class MovePathFuture(MoveFuture):
     def __init__(self, dev: Stage, path):
-        MoveFuture.__init__(self, dev, None, None)
+        super().__init__(dev, None, None)
 
         self.path = path
         self.currentStep = 0
