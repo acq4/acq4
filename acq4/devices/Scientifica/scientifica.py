@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 import time
 
@@ -27,7 +29,7 @@ class Scientifica(Stage):
     def __init__(self, man, config, name):
         # can specify 
         port = config.pop('port', None)
-        name = config.pop('name', None)
+        name = config.pop('name', name)
 
         # if user has not provided scale values, we can make a guess
         config.setdefault('scale', (1e-6, 1e-6, 1e-6))
@@ -49,10 +51,10 @@ class Scientifica(Stage):
         if baudrate is not None and self.dev.getBaudrate() != baudrate:
             self.dev.setBaudrate(baudrate)
 
-        self._lastMove = None
+        self._lastMove: Optional[ScientificaMoveFuture] = None
         man.sigAbortAll.connect(self.abort)
 
-        Stage.__init__(self, man, config, name)
+        super().__init__(man, config, name)
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
@@ -77,13 +79,14 @@ class Scientifica(Stage):
             else:
                 self.dev.setParam(param, val)
 
+        self.userSpeed = None
         self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * 1e-6))
 
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get('monitorObjective', False)
         if self.monitorObj is True:
             self.objectiveState = None
-            self._checkObjective()
+            self.checkObjective()
 
         # thread for polling position changes
 
@@ -108,17 +111,14 @@ class Scientifica(Stage):
         """Stop the manipulator immediately.
         """
         with self.lock:
-            self.dev.stop()
-            if self._lastMove is not None:
-                self._lastMove._stopped()
-            self._lastMove = None
+            self.abort()
 
     def abort(self):
         """Stop the manipulator immediately.
         """
         self.dev.stop()
         if self._lastMove is not None:
-            self._lastMove._stopped()
+            self._lastMove.interrupt()
             self._lastMove = None
 
     def setUserSpeed(self, v):
@@ -150,6 +150,10 @@ class Scientifica(Stage):
 
         return pos
 
+    def checkForMoveComplete(self, refresh=True):
+        if self._lastMove is not None and not self._lastMove.isDone():
+            self._lastMove.checkForComplete(refresh=refresh)
+
     def targetPosition(self):
         with self.lock:
             if self._lastMove is None or self._lastMove.isDone():
@@ -180,7 +184,7 @@ class Scientifica(Stage):
         s = [int(1e8 * v) for v in vel]
         self.dev.send('VJ -%d %d %d' % tuple(s))
 
-    def _checkObjective(self):
+    def checkObjective(self):
         with self.lock:
             obj = int(self.dev.send('obj'))
             if obj != self.objectiveState:
@@ -200,7 +204,7 @@ class MonitorThread(Thread):
     def __init__(self, dev, monitorObj):
         self.dev = dev
         self.lock = Mutex(recursive=True)
-        self.monitorObj = monitorObj
+        self._monitorObjective = monitorObj
         self.stopped = False
         self.interval = 300e-3
         self.minInterval = 100e-3
@@ -229,16 +233,18 @@ class MonitorThread(Thread):
                         break
                     maxInterval = self.interval
 
-                pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
+                pos = self.dev.getPosition(refresh=True)  # this causes sigPositionChanged to be emitted
                 if pos != lastPos:
                     # if there was a change, then loop more rapidly for a short time.
                     interval = self.minInterval
                     lastPos = pos
                 else:
+                    # we just refreshed our position, so no need to do it again immediately
+                    self.dev.checkForMoveComplete(refresh=False)
                     interval = min(maxInterval, interval*2)
 
-                if self.monitorObj is True:
-                    self.dev._checkObjective()
+                if self._monitorObjective is True:
+                    self.dev.checkObjective()
 
                 time.sleep(interval)
             except Exception:
@@ -249,35 +255,32 @@ class MonitorThread(Thread):
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
-    def __init__(self, dev, pos, speed, userSpeed):
-        MoveFuture.__init__(self, dev, pos, speed)
-        self._interrupted = False
+    def __init__(self, dev: Scientifica, pos, speed: float, userSpeed: float):
+        super().__init__(dev, pos, speed)
         self._errorMsg = None
-        self._finished = False
         pos = np.array(pos)
         with self.dev.dev.lock:
             self.dev.dev.moveTo(pos, speed / 1e-6)
             # reset to user speed immediately after starting move
             # (the move itself will run with the previous speed)
             self.dev.dev.setSpeed(userSpeed / 1e-6)
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
 
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus() != 0
+    def checkForComplete(self, refresh=True):
+        if self.isDone():
+            return
+        status = self._getStatus(refresh=refresh)
+        if status == 1:
+            self._taskDone()
+        elif status == -1:
+            self._taskDone(interrupted=True, error=self._errorMsg)
 
-    def _getStatus(self):
+    def _getStatus(self, refresh=True):
         """Check status of move unless we already know it is complete.
         Return:
             0: still moving; 1: finished successfully; -1: finished unsuccessfully
         """
-        if self._finished:
-            if self._interrupted:
+        if self.isDone():
+            if self.wasInterrupted():
                 return -1
             else:
                 return 1
@@ -285,27 +288,24 @@ class ScientificaMoveFuture(MoveFuture):
             # Still moving
             return 0
         # did we reach target?
-        pos = self.dev._getPosition()
-        dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
-        self._finished = True
+        pos = self.dev.getPosition(refresh=refresh)
+        dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
         if dif < 1.0:  # reached target
             return 1
-        else:  # missed
-            self._interrupted = True
-            self._errorMsg = f"Move did not complete (target={self.targetPos}, position={pos}, dif={dif})."
-            return -1
+        # missed
+        return -1
 
-    def _stopped(self):
+    def interrupt(self):
         # Called when the manipulator is stopped, possibly interrupting this move.
         startTime = ptime.time()
         while True:
             status = self._getStatus()
             if status == 1:
                 # finished; ignore stop
-                return
+                break
             elif status == -1:
                 self._errorMsg = "Move was interrupted before completion."
-                return
+                break
             elif status == 0 and ptime.time() < startTime + 0.15:
                 # allow 150ms to stop
                 continue
@@ -314,6 +314,7 @@ class ScientificaMoveFuture(MoveFuture):
                 raise RuntimeError("Interrupted move but manipulator is still running!")
             else:
                 raise ValueError(f"Unknown status: {status}")
+        self.checkForComplete()
 
     def errorMessage(self):
         return self._errorMsg

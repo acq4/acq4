@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import contextlib
 import functools
-import sys
-
-import numpy as np
 import threading
 from typing import Tuple
+
+import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
@@ -59,7 +60,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError("Stage transform must be only translation.")
 
         self._stageTransform = Qt.QMatrix4x4()
-        self._invStageTransform = Qt.QMatrix4x4()
+        self._inverseStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
 
         self.config = config
@@ -335,9 +336,7 @@ class Stage(Device, OptomechDevice):
         current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
         """
-        if self._lastPos is None:
-            refresh = True
-        if refresh:
+        if self._lastPos is None or refresh:
             return self._getPosition()
         with self.lock:
             return self._lastPos[:]
@@ -399,7 +398,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> Future:
+    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
         
         *position* specifies the absolute position in the stage coordinate system (as defined by the device)
@@ -445,7 +444,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds) -> Future:
+    def _move(self, pos, speed, linear, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -487,7 +486,7 @@ class Stage(Device, OptomechDevice):
         print(vel)
 
     def stop(self):
-        """Stop moving the device immediately.
+        """Stop moving the device immediately. Beware of infinite recursion if you call MoveFuture.stop() from here.
         """
         raise NotImplementedError()
 
@@ -669,13 +668,11 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def errorMessage(self):
-        return self._errorMessage
-
     def stop(self, reason=None):
         fut = self._currentFuture
         if fut is not None:
             fut.stop(reason=reason)
+        # skip MoveFuture.stop to avoid the mess with dev.stop()
         Future.stop(self, reason=reason)
 
     def _movePath(self):
