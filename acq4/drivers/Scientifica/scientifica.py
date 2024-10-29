@@ -1,6 +1,7 @@
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
+from __future__ import annotations
 
 import contextlib
 import re
@@ -489,10 +490,15 @@ class Scientifica(SerialDevice):
             self.write(b'ABS %d %d %d\r' % tuple(pos))
             self.readUntil(b'\r')
 
-    def zeroPosition(self):
-        """Reset the stage coordinates to (0, 0, 0) without moving the stage.
-        """
-        self.send('ZERO')
+    def zeroPosition(self, axis: str | None = None):
+        """Reset the stage coordinates to (0, 0, 0) without moving the stage. If *axis* is given,
+        then only that axis is zeroed."""
+        if axis is None:
+            self.send('ZERO')
+        elif axis.upper() not in 'XYZ':
+            raise ValueError(f"Invalid axis: {axis!r}")
+        else:
+            self.send(f'P{axis.upper()} 0')
 
     def getCurrents(self):
         """Return a tuple of the (run, standby) current values.
