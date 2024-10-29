@@ -75,15 +75,15 @@ class Scientifica(SerialDevice):
         coms = serial.tools.list_ports.comports()
         devs = {}
         for com, name, ident in coms:
-            isScientifica = False
-            for vid,pid in [('0403', '6010'), ('10C4', 'EA70')]:
-                # several different ways this can appear:
-                #  VID_0403+PID_6010
-                #  VID_0403&PID_6010
-                #  VID:PID=0403:6010
-                if (f'VID_{vid}' in ident and f'PID_{pid}' in ident) or f'{vid}:{pid}' in ident:
-                    isScientifica = True
-                    break
+            # several different ways this can appear:
+            #  VID_0403+PID_6010
+            #  VID_0403&PID_6010
+            #  VID:PID=0403:6010
+            isScientifica = any(
+                (f'VID_{vid}' in ident and f'PID_{pid}' in ident)
+                or f'{vid}:{pid}' in ident
+                for vid, pid in [('0403', '6010'), ('10C4', 'EA70')]
+            )
             if not isScientifica:
                 continue
             com = cls.normalizePortName(com)

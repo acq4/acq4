@@ -604,7 +604,7 @@ class Stage(Device, OptomechDevice):
 
 
 class CallOnce:
-    """Used to prevent a callable from being called more than once."""
+    """Used to prevent a callable from being called more than once in a stack. Note that this is not a mutex."""
     def __init__(self):
         self.called = False
 
@@ -652,8 +652,8 @@ class MoveFuture(Future):
     def stop(self, reason="stop requested"):
         """Stop the move in progress.
         """
-        with self._isStopCallable as can_stop:
-            if can_stop and not self.isDone():
+        with self._isStopCallable as can_call_stop:
+            if can_call_stop and not self.isDone():
                 self.dev.stop()
                 super().stop(reason=reason)
 
