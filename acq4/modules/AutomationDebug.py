@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import random
 
@@ -17,7 +19,7 @@ from pyqtgraph.units import µm
 
 
 class AutomationDebugWindow(Qt.QMainWindow):
-    sigWorking = Qt.Signal(bool)
+    sigWorking = Qt.Signal(object)  # a btn that is busy or False to signify no longer working
     sigLogMessage = Qt.Signal(str)
 
     def __init__(self, module: "AutomationDebug"):
@@ -36,11 +38,11 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._clearBtn.clicked.connect(self.clearBoundingBoxes)
         self._layout.addWidget(self._clearBtn)
 
-        self._zStackDetectBtn = FutureButton(self._detectNeuronsZStack, 'Neurons in z-stack?')
+        self._zStackDetectBtn = FutureButton(self._detectNeuronsZStack, 'Neurons in z-stack?', stoppable=True)
         self._zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
         self._layout.addWidget(self._zStackDetectBtn)
 
-        self._flatDetectBtn = FutureButton(self._detectNeuronsFlat, 'Neurons in single frame?')
+        self._flatDetectBtn = FutureButton(self._detectNeuronsFlat, 'Neurons in single frame?', stoppable=True)
         self._flatDetectBtn.sigFinished.connect(self._handleDetectResults)
         self._layout.addWidget(self._flatDetectBtn)
 
@@ -72,7 +74,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         auto_layout.addWidget(self._yBottomSpin, 1, 3)
 
-        self._autoTargetBtn = FutureButton(self._autoTarget, 'Find a \nrandom target')
+        self._autoTargetBtn = FutureButton(self._autoTarget, 'Find a \nrandom target', stoppable=True)
         self._autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
         auto_layout.addWidget(self._autoTargetBtn, 0, 4, 1, 2)
 
@@ -92,7 +94,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         pipette_layout.addWidget(self._cameraSelector, 0, 1)
 
         self._trackFeaturesBtn = FutureButton(
-            self.doFeatureTracking, "Track target by features", processing="Stop tracking")
+            self.doFeatureTracking, "Track target by features", processing="Stop tracking", stoppable=True)
         self._trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
         pipette_layout.addWidget(self._trackFeaturesBtn, 1, 0, 1, 2)
@@ -116,7 +118,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def doPipetteCalibrationTest(self, _future):
-        self.sigWorking.emit(True)
+        self.sigWorking.emit(self._testPipetteBtn)
         camera = self.cameraDevice
         pipette = self.pipetteDevice
         true_tip_position = pipette.globalPosition()
@@ -137,16 +139,12 @@ class AutomationDebugWindow(Qt.QMainWindow):
             except Future.StopRequested:
                 self.sigLogMessage.emit('Calibration interrupted by user request')
                 break
-            except Exception:
-                if self._testing_pipette:
-                    raise
-                self.sigLogMessage.emit("Calibration interrupted by user request")
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
         from acq4.util.visual_tracker import PyrLK3DTracker, ObjectStack, ImageStack
 
-        self.sigWorking.emit(True)
+        self.sigWorking.emit(self._trackFeaturesBtn)
         pipette = self.pipetteDevice
         pix = self.cameraDevice.getPixelSize()[0]  # assume square pixels
         target = pipette.targetPosition()
@@ -195,15 +193,15 @@ class AutomationDebugWindow(Qt.QMainWindow):
     def _handleCalibrationFinish(self, fut: Future):
         self.sigWorking.emit(False)
 
-    def _setWorkingState(self, working: bool):
+    def _setWorkingState(self, working: bool | Qt.QPushButton):
+        print(f"Setting working state to {working!r}")
         if working:
             self.module.manager.getModule("Camera").window()  # make sure camera window is open
-        self._clearBtn.setEnabled(not working)
-        self._zStackDetectBtn.setEnabled(not working)
-        self._flatDetectBtn.setEnabled(not working)
-        self._autoTargetBtn.setEnabled(not working)
-        self._testPipetteBtn.setEnabled(not working)
-        self._trackFeaturesBtn.setEnabled(not working)
+        self._zStackDetectBtn.setEnabled(working == self._zStackDetectBtn or not working)
+        self._flatDetectBtn.setEnabled(working == self._flatDetectBtn or not working)
+        self._autoTargetBtn.setEnabled(working == self._autoTargetBtn or not working)
+        self._testPipetteBtn.setEnabled(working == self._testPipetteBtn or not working)
+        self._trackFeaturesBtn.setEnabled(working == self._trackFeaturesBtn or not working)
 
     @property
     def cameraDevice(self) -> Camera:
@@ -240,6 +238,8 @@ class AutomationDebugWindow(Qt.QMainWindow):
     def _handleDetectResults(self, neurons_fut: Future) -> list:
         try:
             self._displayBoundingBoxes(neurons_fut.getResult())
+        except Future.StopRequested:
+            pass
         finally:
             self.sigWorking.emit(False)
         return self._previousBoxWidgets
@@ -262,7 +262,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def _detectNeuronsFlat(self, _future: Future):
-        self.sigWorking.emit(True)
+        self.sigWorking.emit(self._flatDetectBtn)
         from acq4.util.imaging.object_detection import detect_neurons
 
         with self.cameraDevice.ensureRunning():
@@ -273,7 +273,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
-        self.sigWorking.emit(True)
+        self.sigWorking.emit(self._zStackDetectBtn)
         from acq4.util.imaging.object_detection import detect_neurons
 
         depth = self.cameraDevice.getFocusDepth()
@@ -285,7 +285,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     @future_wrap
     def _autoTarget(self, _future):
-        self.sigWorking.emit(True)
+        self.sigWorking.emit(self._autoTargetBtn)
         x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
         y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
         _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
@@ -300,7 +300,6 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     def _handleAutoFinish(self, fut: Future):
         try:
-            fut.wait()  # to raise errors
             if self._previousBoxWidgets:
                 box = random.choice(self._previousBoxWidgets)
                 center = box.rect().center()
@@ -309,20 +308,6 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 self.pipetteDevice.setTarget(center)
         finally:
             self.sigWorking.emit(False)
-
-    @future_wrap
-    def _autoTarget(self, _future):
-        x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
-        y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
-        _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
-        # TODO don't know why this hangs when using waitFor, but it does
-        depth = self.scopeDevice.findSurfaceDepth(
-            self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
-        ).getResult()
-        depth -= 50 * µm
-        self.cameraDevice.setFocusDepth(depth)
-        neurons_fut = _future.waitFor(self._detectNeuronsFlat())
-        self._displayBoundingBoxes(neurons_fut.getResult())
 
     def quit(self):
         self.close()

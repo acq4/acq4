@@ -385,7 +385,7 @@ class FutureButton(FeedbackButton):
 
     def _controlTheFuture(self):
         if self._future is None:
-            self.processing(self._processing or "Processing...")
+            self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
             future = self._future = self._futureProducer()
             future.sigFinished.connect(self._futureFinished)
             if future.isDone():  # futures may immediately complete before we can connect to the signal
@@ -401,7 +401,7 @@ class FutureButton(FeedbackButton):
         if not future.wasInterrupted():
             self.success(self._success or "Success")
         else:
-            self.failure(self._failure or (future.errorMessage() or '')[:80])
+            self.failure(self._failure or (future.errorMessage() or 'Failed!')[:40])
             if self._userRequestedStop:
                 self._userRequestedStop = False
             else:
