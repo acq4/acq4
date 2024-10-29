@@ -63,21 +63,23 @@ def main(input_file):
     record = MetaArray(file=input_file)
     meta = record._info[0]
     x_es = set(meta['translation'][:, 0])
-    for target_x in x_es:
-        relevant = meta['translation'][:, 0] == target_x
-        relevant = relevant.nonzero()[0]
-        z_positions = meta['translation'][relevant, 2]
-        stacks = split_z_stacks(z_positions, 1e-7)
-        stacks = stacks[1:-1]  # the first and last stacks are usually incomplete
-        cell = record[relevant]
-        img_stacks = [np.array([cell[i] for i in st]) for st in stacks]
-        # reverse every other stack
-        for i, stack in enumerate(img_stacks):
-            if i % 2 == 0:
-                img_stacks[i] = stack[::-1]
-        os.makedirs(os.path.join(os.path.splitext(input_file)[0], f'x_{target_x}'), exist_ok=True)
-        for i, stack in enumerate(img_stacks):
-            np.save(os.path.join(os.path.splitext(input_file)[0], f'x_{target_x}', f'stack_{i}.npy'), stack)
+    with click.progressbar(x_es, label='Splitting stacks') as bar:
+        for target_x in bar:
+            relevant = meta['translation'][:, 0] == target_x
+            relevant = relevant.nonzero()[0]
+            z_positions = meta['translation'][relevant, 2]
+            stacks = split_z_stacks(z_positions, 1e-7)
+            stacks = stacks[1:-1]  # the first and last stacks are usually incomplete
+            cell = record[relevant]
+            img_stacks = [np.array([cell[i] for i in st]) for st in stacks]
+            # reverse every other stack
+            for i, stack in enumerate(img_stacks):
+                if i % 2 == 0:
+                    img_stacks[i] = stack[::-1]
+            os.makedirs(os.path.join(os.path.splitext(input_file)[0], f'x_{target_x}'), exist_ok=True)
+            with click.progressbar(img_stacks, label='Saving stacks') as img_bar:
+                for i, stack in enumerate(img_bar):
+                    np.save(os.path.join(os.path.splitext(input_file)[0], f'x_{target_x}', f'stack_{i:03d}.npy'), stack)
 
 
 if __name__ == '__main__':
