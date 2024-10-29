@@ -91,10 +91,9 @@ class AutomationDebugWindow(Qt.QMainWindow):
         pipette_layout.addWidget(self._pipetteSelector, 0, 0)
         pipette_layout.addWidget(self._cameraSelector, 0, 1)
 
-        self._trackFeaturesBtn = FeedbackButton("Track target by features")
-        self._trackFeaturesBtn.clicked.connect(self.trackFeatures)
-        self._trackingFeatures = False
-        self._featureTrackingFuture = None
+        self._trackFeaturesBtn = FutureButton(
+            self.doFeatureTracking, "Track target by features", processing="Stop tracking")
+        self._trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
         pipette_layout.addWidget(self._trackFeaturesBtn, 1, 0, 1, 2)
 
@@ -143,24 +142,11 @@ class AutomationDebugWindow(Qt.QMainWindow):
                     raise
                 self.sigLogMessage.emit("Calibration interrupted by user request")
 
-    def trackFeatures(self):
-        if self._trackingFeatures:
-            self._trackingFeatures = False
-            self._trackFeaturesBtn.setText("Track target by features")
-            self._trackFeaturesBtn.setStyleSheet("")
-            self._featureTrackingFuture.stop()  # TODO force kill the thread after a timeout
-        else:
-            self._trackingFeatures = True
-            self._trackFeaturesBtn.setText("Stop tracking")
-            self._trackFeaturesBtn.setStyleSheet("QPushButton {background-color: green; color: white}")
-            self._featureTrackingFuture = self.doFeatureTracking()
-            self._featureTrackingFuture.sigFinished.connect(self._handleFeatureTrackingFinish)
-
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        _future.sleep(0.1)
         from acq4.util.visual_tracker import PyrLK3DTracker, ObjectStack, ImageStack
 
+        self.sigWorking.emit(True)
         pipette = self.pipetteDevice
         pix = self.cameraDevice.getPixelSize()[0]  # assume square pixels
         target = pipette.targetPosition()
@@ -204,26 +190,20 @@ class AutomationDebugWindow(Qt.QMainWindow):
             self.sigLogMessage.emit(f"Updated target to ({x}, {y}, {z}): {target}")
 
     def _handleFeatureTrackingFinish(self, fut: Future):
-        try:
-            fut.wait()  # to raise errors
-        finally:
-            self._trackingFeatures = False
-            self._featureTrackingFuture = None
-            self._trackFeaturesBtn.setText("Track target by features")
-            self._trackFeaturesBtn.setStyleSheet("")
+        self.sigWorking.emit(False)
 
     def _handleCalibrationFinish(self, fut: Future):
         self.sigWorking.emit(False)
 
     def _setWorkingState(self, working: bool):
-        self.module.manager.getModule("Camera").window()  # make sure camera window is open
+        if working:
+            self.module.manager.getModule("Camera").window()  # make sure camera window is open
         self._clearBtn.setEnabled(not working)
         self._zStackDetectBtn.setEnabled(not working)
         self._flatDetectBtn.setEnabled(not working)
         self._autoTargetBtn.setEnabled(not working)
         self._testPipetteBtn.setEnabled(not working)
-        if not working:
-            self._testPipetteBtn.setStyleSheet("")
+        self._trackFeaturesBtn.setEnabled(not working)
 
     @property
     def cameraDevice(self) -> Camera:
