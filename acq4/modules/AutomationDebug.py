@@ -33,6 +33,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self.module = module
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
+        self._previousBoxBounds = []
 
         self._clearBtn = Qt.QPushButton("Clear")
         self._clearBtn.clicked.connect(self.clearBoundingBoxes)
@@ -234,6 +235,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         for widget in self._previousBoxWidgets:
             cam_win.removeItem(widget)
         self._previousBoxWidgets = []
+        self._previousBoxBounds = []
 
     def _handleDetectResults(self, neurons_fut: Future) -> list:
         try:
@@ -248,11 +250,12 @@ class AutomationDebugWindow(Qt.QMainWindow):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()
         for start, end in bounding_boxes:
-            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
+            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(start[0], start[1]), Qt.QPointF(end[0], end[1])))
             box.setPen(mkPen("r", width=2))
             box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
             cam_win.addItem(box)
             self._previousBoxWidgets.append(box)
+            self._previousBoxBounds.append((start, end))
             # TODO label boxes
             # label = TextItem('Neuron')
             # label.setPen(mkPen('r', width=1))
@@ -286,8 +289,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self._autoTargetBtn)
-        x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
-        y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
+        x, y = self._randomLocation()
         _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
         # TODO don't know why this hangs when using waitFor, but it does
         depth = self.scopeDevice.findSurfaceDepth(
@@ -295,19 +297,25 @@ class AutomationDebugWindow(Qt.QMainWindow):
         ).getResult()
         depth -= 50 * µm
         self.cameraDevice.setFocusDepth(depth)
-        neurons_fut = _future.waitFor(self._detectNeuronsFlat())
+        neurons_fut = _future.waitFor(self._detectNeuronsZStack())
         self._displayBoundingBoxes(neurons_fut.getResult())
 
     def _handleAutoFinish(self, fut: Future):
         try:
-            if self._previousBoxWidgets:
-                box = random.choice(self._previousBoxWidgets)
-                center = box.rect().center()
-                center = (center.x(), center.y(), self.cameraDevice.getFocusDepth())
+            if self._previousBoxBounds:
+                box = random.choice(self._previousBoxBounds)
+                center = np.array(box[0]) + np.array(box[1]) / 2
+                if center.ndim == 2:
+                    center = (center[0], center[1], self.cameraDevice.getFocusDepth())
                 print(f"Setting pipette target to {center}")
                 self.pipetteDevice.setTarget(center)
         finally:
             self.sigWorking.emit(False)
+
+    def _randomLocation(self):
+        x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
+        y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
+        return x, y
 
     def quit(self):
         self.close()
