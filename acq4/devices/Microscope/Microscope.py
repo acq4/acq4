@@ -11,7 +11,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from acq4.util.future import Future, MultiFuture, future_wrap
+from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.typing import Number
@@ -59,7 +59,7 @@ class Microscope(Device, OptomechDevice):
 
         self.objectives = collections.OrderedDict()
         ## Format of self.objectives is:
-        ## { 
+        ## {
         ##    switchPosition1: {objName1: objective1, objName2: objective, ...},
         ##    switchPosition2: {objName1: objective1, objName2: objective, ...},
         ## }
@@ -122,7 +122,7 @@ class Microscope(Device, OptomechDevice):
 
     def setObjectiveIndex(self, index):
         """Selects the objective currently in position *index*
-        
+
         This method is called when the user selects an objective index from the manager UI."""
         if self.switchDevice is not None and hasattr(self.switchDevice, 'setSwitch'):
             self.switchDevice.setSwitch(self.objSwitchId, int(index))
@@ -221,7 +221,7 @@ class Microscope(Device, OptomechDevice):
         # this is how much the focal plane needs to move (in the global frame)
         dif = z - self.getFocusDepth()
 
-        # this is the current global location of the focus device 
+        # this is the current global location of the focus device
         fd = self.focusDevice()
         fdpos = fd.globalPosition()
 
@@ -251,7 +251,7 @@ class Microscope(Device, OptomechDevice):
     def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
-        z_stack: list[Frame] = self.getZStack(imager, z_range, block=True).getResult()
+        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range, block=True)).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
@@ -548,15 +548,15 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
         # Note: this is placed here because there is currently no better place.
-        # Ideally, the sample orientation, height, and anatomical identity would be contained 
+        # Ideally, the sample orientation, height, and anatomical identity would be contained
         # in a Sample or Slice object elsewhere..
         self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
-        self.findSurfaceBtn = Qt.QPushButton('Find Surface')
+        self.findSurfaceBtn = FutureButton(
+            self.findSurface, 'Find Surface', stoppable=True, processing='Scanning...', failure='Failed!')
         self.layout.addWidget(self.findSurfaceBtn, 1, 0)
-        self.findSurfaceBtn.clicked.connect(self.findSurfaceClicked)
 
         self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
         self.layout.addWidget(self.depthLabel, 2, 0)
@@ -575,8 +575,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.getDevice().setSurfaceDepth(focus)
         self.transformChanged()
 
-    def findSurfaceClicked(self):
-        self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
+    def findSurface(self):
+        return self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
         self.surfaceLine.setValue(depth)

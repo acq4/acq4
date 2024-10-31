@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import contextlib
 import functools
-import sys
-
-import numpy as np
 import threading
 from typing import Tuple
+
+import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
@@ -13,7 +14,7 @@ from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationW
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from ... import getManager
-from ...util.future import Future
+from ...util.future import Future, FutureButton
 
 
 class Stage(Device, OptomechDevice):
@@ -59,7 +60,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError("Stage transform must be only translation.")
 
         self._stageTransform = Qt.QMatrix4x4()
-        self._invStageTransform = Qt.QMatrix4x4()
+        self._inverseStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
 
         self.config = config
@@ -335,9 +336,7 @@ class Stage(Device, OptomechDevice):
         current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
         """
-        if self._lastPos is None:
-            refresh = True
-        if refresh:
+        if self._lastPos is None or refresh:
             return self._getPosition()
         with self.lock:
             return self._lastPos[:]
@@ -399,7 +398,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> Future:
+    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
         
         *position* specifies the absolute position in the stage coordinate system (as defined by the device)
@@ -445,7 +444,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds) -> Future:
+    def _move(self, pos, speed, linear, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -487,7 +486,8 @@ class Stage(Device, OptomechDevice):
         print(vel)
 
     def stop(self):
-        """Stop moving the device immediately.
+        """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
+        recursions.
         """
         raise NotImplementedError()
 
@@ -561,7 +561,7 @@ class Stage(Device, OptomechDevice):
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
         """
-        return self.readConfigFile('stored_locations').get('home', None)
+        return self.getStoredLocation('home')
 
     def goHome(self, speed='fast'):
         homePos = self.homePosition()
@@ -572,11 +572,23 @@ class Stage(Device, OptomechDevice):
     def setHomePosition(self, pos=None):
         """Set the home position in global coordinates.
         """
+        self.setStoredLocation('home', pos)
+
+    def getStoredLocation(self, name):
+        return self.readConfigFile('stored_locations').get(name, None)
+
+    def setStoredLocation(self, name: str, pos=None):
         if pos is None:
             pos = self.globalPosition()
         locations = self.readConfigFile('stored_locations')
-        locations['home'] = list(pos)
+        locations[name] = list(pos)
         self.writeConfigFile(locations, 'stored_locations')
+
+    def clearStoredLocation(self, name):
+        locations = self.readConfigFile('stored_locations')
+        if name in locations:
+            del locations[name]
+            self.writeConfigFile(locations, 'stored_locations')
 
     def joystickChanged(self, js, event):
         if 'axis' in event:
@@ -604,20 +616,33 @@ class Stage(Device, OptomechDevice):
         self.setVelocity(vel)
 
 
+class CallOnce:
+    """Used to prevent a callable from being called more than once in a stack. Note that this is not a mutex."""
+    def __init__(self):
+        self.called = False
+
+    def __enter__(self):
+        if self.called:
+            return False
+        self.called = True
+        return True
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.called = False
+
+
 class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
-    class Timeout(Exception):
-        """Raised by wait() if the timeout period elapses.
-        """
 
-    def __init__(self, dev, pos, speed):
-        Future.__init__(self)
+    def __init__(self, dev: Stage, pos, speed):
+        super().__init__()
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
         self.targetPos = np.asarray(pos)
         self.startPos = np.asarray(dev.getPosition())
+        self._isStopCallable = CallOnce()
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -640,14 +665,15 @@ class MoveFuture(Future):
     def stop(self, reason="stop requested"):
         """Stop the move in progress.
         """
-        if not self.isDone():
-            self.dev.stop()
-            super().stop(reason=reason)
+        with self._isStopCallable as can_call_stop:
+            if can_call_stop and not self.isDone():
+                self.dev.stop()
+                super().stop(reason=reason)
 
 
 class MovePathFuture(MoveFuture):
     def __init__(self, dev: Stage, path):
-        MoveFuture.__init__(self, dev, None, None)
+        super().__init__(dev, None, None)
 
         self.path = path
         self.currentStep = 0
@@ -671,13 +697,11 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def errorMessage(self):
-        return self._errorMessage
-
     def stop(self, reason=None):
         fut = self._currentFuture
         if fut is not None:
             fut.stop(reason=reason)
+        # skip MoveFuture.stop to avoid the mess with dev.stop()
         Future.stop(self, reason=reason)
 
     def _movePath(self):
@@ -788,9 +812,8 @@ class StageInterface(Qt.QWidget):
         self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.goHomeBtn = Qt.QPushButton('Home')
+        self.goHomeBtn = FutureButton(self.goHomeClicked, 'Home', stoppable=True, processing='Going home...')
         self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
-        self.goHomeBtn.clicked.connect(self.goHomeClicked)
 
         self.setHomeBtn = Qt.QPushButton('Set Home')
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
@@ -842,7 +865,7 @@ class StageInterface(Qt.QWidget):
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
     def goHomeClicked(self):
-        self.dev.goHome()
+        return self.dev.goHome()
 
     def setHomeClicked(self):
         self.dev.setHomePosition()

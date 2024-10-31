@@ -1,6 +1,7 @@
 """
 Driver for communicating with Scientifica motorized devices by serial interface.
 """
+from __future__ import annotations
 
 import contextlib
 import re
@@ -75,15 +76,15 @@ class Scientifica(SerialDevice):
         coms = serial.tools.list_ports.comports()
         devs = {}
         for com, name, ident in coms:
-            isScientifica = False
-            for vid,pid in [('0403', '6010'), ('10C4', 'EA70')]:
-                # several different ways this can appear:
-                #  VID_0403+PID_6010
-                #  VID_0403&PID_6010
-                #  VID:PID=0403:6010
-                if (f'VID_{vid}' in ident and f'PID_{pid}' in ident) or f'{vid}:{pid}' in ident:
-                    isScientifica = True
-                    break
+            # several different ways this can appear:
+            #  VID_0403+PID_6010
+            #  VID_0403&PID_6010
+            #  VID:PID=0403:6010
+            isScientifica = any(
+                (f'VID_{vid}' in ident and f'PID_{pid}' in ident)
+                or f'{vid}:{pid}' in ident
+                for vid, pid in [('0403', '6010'), ('10C4', 'EA70')]
+            )
             if not isScientifica:
                 continue
             com = cls.normalizePortName(com)
@@ -489,10 +490,15 @@ class Scientifica(SerialDevice):
             self.write(b'ABS %d %d %d\r' % tuple(pos))
             self.readUntil(b'\r')
 
-    def zeroPosition(self):
-        """Reset the stage coordinates to (0, 0, 0) without moving the stage.
-        """
-        self.send('ZERO')
+    def zeroPosition(self, axis: str | None = None):
+        """Reset the stage coordinates to (0, 0, 0) without moving the stage. If *axis* is given,
+        then only that axis is zeroed."""
+        if axis is None:
+            self.send('ZERO')
+        elif axis.upper() not in ('X', 'Y', 'Z'):
+            raise ValueError(f"Invalid axis: {axis!r}")
+        else:
+            self.send(f'P{axis.upper()} 0')
 
     def getCurrents(self):
         """Return a tuple of the (run, standby) current values.

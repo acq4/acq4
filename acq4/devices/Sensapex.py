@@ -1,7 +1,8 @@
-import numpy as np
 import threading
 import time
 from typing import Optional
+
+import numpy as np
 
 import pyqtgraph as pg
 from acq4.drivers.sensapex import UMP, version_info
