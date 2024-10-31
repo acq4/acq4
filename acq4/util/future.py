@@ -379,9 +379,18 @@ class FutureButton(FeedbackButton):
         self._processing = processing
         self.clicked.connect(self._controlTheFuture)
 
-    def setEnabled(self, enabled):
-        # TODO this is a bad hack to prevent the button from being disabled while the future is running
-        super().setEnabled((self._future is not None and self._stoppable) or enabled)
+    def processing(self, message="Processing..", tip="", processEvents=True):
+        """Displays specified message on button to let user know the action is in progress. Threadsafe."""
+        # This had to be reimplemented to allow stoppable buttons to remain enabled.
+        isGuiThread = Qt.QtCore.QThread.currentThread() == Qt.QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            self.setEnabled(self._stoppable)
+            self.setText(message, temporary=True)
+            self.setToolTip(tip, temporary=True)
+            if processEvents:
+                Qt.QtWidgets.QApplication.processEvents()
+        else:
+            self.sigCallProcess.emit(message, tip, processEvents)
 
     def _controlTheFuture(self):
         if self._future is None:
