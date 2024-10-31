@@ -1,9 +1,10 @@
 import numpy as np
+
 import pyqtgraph as pg
-from .OptomechDevice import OptomechDevice
-from .Device import Device
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
+from .Device import Device
+from .OptomechDevice import OptomechDevice
 
 
 class RecordingChamber(Device, OptomechDevice):
@@ -12,23 +13,28 @@ class RecordingChamber(Device, OptomechDevice):
     Configuration options:
 
     * radius: The radius of the recording chamber (m)
-    * transform: Transformtion setting the position/orientation of the chamber
+    * height: The height of the recording chamber (m)
+    * transform: Transformation setting the position/orientation of the chamber
         pos: x,y,z position of recording chamber
     """
+
+    defaultGeometryArgs = {"color": (0.1, 0.1, 0.1, 0.7), "close_bottom": True}
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
+        self.radius = config["radius"]
         OptomechDevice.__init__(self, dm, config, name)
 
-        self.config = config
-        self.radius = config['radius']
-
     def cameraModuleInterface(self, mod):
-        """Return an object to interact with camera module.
-        """
+        """Return an object to interact with camera module."""
         return RecordingChamberCameraInterface(self, mod)
 
     def globalCenter(self):
-        return np.array(self.mapToGlobal([0, 0, 0]))
+        return np.array(self.globalPosition())
+
+    def globalPosition(self):
+        return self.mapToGlobal([0, 0, 0])
 
     def containsPoint(self, pt):
         """Return True if the x,y coordinates in *pt* lie within

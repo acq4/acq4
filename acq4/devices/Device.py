@@ -34,7 +34,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self.dm.declareInterface(name, ['device'], self)
         Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
-            
+
     def name(self):
         """Return the string name of this device.
         """
@@ -56,7 +56,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
     def taskInterface(self, task):
         """Return a widget with a UI to put in the task rack"""
         return TaskGui(self, task)
-        
+
     def configPath(self):
         """Return the path used for storing configuration data for this device.
 

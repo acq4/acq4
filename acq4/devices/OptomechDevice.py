@@ -1,3 +1,4 @@
+from __future__ import annotations
 import collections
 
 import numpy as np
@@ -6,6 +7,25 @@ import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
+
+TransformCache = "int | None | pg.SRTTransform3D"
+
+
+class Geometry:
+    def __init__(self, config, defaults):
+        self._config = config
+        self._defaults = defaults
+        self._geometries = []
+
+    def getGeometries(self) -> list:
+        """Return a 3D model to be displayed in the 3D visualization window.
+        """
+        from acq4.modules.Visualize3D import create_geometry
+
+        if self._config:
+            args = {**self._config}
+            return create_geometry(defaults=self._defaults, **args)
+        return []
 
 
 class OptomechDevice(InterfaceMixin):
@@ -66,17 +86,17 @@ class OptomechDevice(InterfaceMixin):
     about the filters in place between the camera and the sample, as well as the filters in the
     illumination path.
     """
-    
-    ## these signals are proxied from the OptomechDevice object
-    ## we do this to avoid QObject double-inheritance issues.
+
+    # these signals are proxied from the OptomechDevice object
+    # we do this to avoid QObject double-inheritance issues.
     class SignalProxyObject(Qt.QObject):
         # emitted when this device's transform changes
         sigTransformChanged = Qt.Signal(object)        # self
         # emitted when the transform for this device or any of its parents changes
         sigGlobalTransformChanged = Qt.Signal(object, object)  # self, changed device
-            
+
         # Emitted when the transform of a subdevice has changed
-        sigSubdeviceTransformChanged = Qt.Signal(object, object)  ## self, subdev
+        sigSubdeviceTransformChanged = Qt.Signal(object, object)  # self, subdev
         # Emitted when the transform of a subdevice or any (grand)parent's subdevice has changed
         sigGlobalSubdeviceTransformChanged = Qt.Signal(object, object, object)  # self, dev, subdev
 
@@ -86,19 +106,24 @@ class OptomechDevice(InterfaceMixin):
         sigGlobalOpticsChanged = Qt.Signal(object, object, object)  # self, changed device, port
 
         # Emitted when this device changes its current subdevice
-        sigSubdeviceChanged = Qt.Signal(object, object, object) ## self, new subdev, old subdev
+        sigSubdeviceChanged = Qt.Signal(object, object, object) # self, new subdev, old subdev
         # Emitted when this device or any (grand)parent changes its current subdevice
-        sigGlobalSubdeviceChanged = Qt.Signal(object, object, object, object) ## self, dev, new subdev, old subdev
-    
+        sigGlobalSubdeviceChanged = Qt.Signal(object, object, object, object) # self, dev, new subdev, old subdev
+
         # Emitted when this device changes its list of available subdevices
-        sigSubdeviceListChanged = Qt.Signal(object) ## self
+        sigSubdeviceListChanged = Qt.Signal(object) # self
         # Emitted when this device or any (grand)parent changes its list of available subdevices
-        sigGlobalSubdeviceListChanged = Qt.Signal(object, object) ## self, dev
-    
+        sigGlobalSubdeviceListChanged = Qt.Signal(object, object) # self, dev
+
+        sigGeometryChanged = Qt.Signal(object)  # self
+
+    # a dictionary of default arguments to be used when creating a 3D model for the device.
+    defaultGeometryArgs = {}
+
     def __init__(self, dm, config, name):
         object.__init__(self)
-        
-        ## create proxy object and wrap in its signals
+
+        # create proxy object and wrap in its signals
         self.__sigProxy = OptomechDevice.SignalProxyObject()
         self.sigTransformChanged = self.__sigProxy.sigTransformChanged
         self.sigGlobalTransformChanged = self.__sigProxy.sigGlobalTransformChanged
@@ -110,7 +135,8 @@ class OptomechDevice(InterfaceMixin):
         self.sigGlobalSubdeviceChanged = self.__sigProxy.sigGlobalSubdeviceChanged
         self.sigSubdeviceListChanged = self.__sigProxy.sigSubdeviceListChanged
         self.sigGlobalSubdeviceListChanged = self.__sigProxy.sigGlobalSubdeviceListChanged
-        
+        self.sigGeometryChanged = self.__sigProxy.sigGeometryChanged
+
         self.__devManager = dm
         self.__config = config
         self.__name = name
@@ -130,16 +156,15 @@ class OptomechDevice(InterfaceMixin):
         # keep track of children so that we can inform them quickly when a parent transform has changed
         self.__children = []
 
-        # Cached transforms from this device to global
-        # 0 indicates the cache is invalid. None indicates the transform is non-affine,
         # and might not be cacheable.
-        self.__globalTransform = 0
-        self.__inverseGlobalTransform = 0
-
         # Transformation from this device to its parent (or to global if there is no parent)
-        self.__transform = pg.SRTTransform3D()
-        # Cached inverse of __transform
-        self.__inverseTransform = 0
+        self.__transform: pg.SRTTransform3D = pg.SRTTransform3D()
+        # 0 indicates the cache is invalid. None indicates the transform is non-affine,
+        self.__inverseTransform: TransformCache = 0
+        self.__globalTransform: TransformCache = 0
+        self.__inverseGlobalTransform: TransformCache = 0
+        self.__globalPhysicalTransform: TransformCache = 0
+        self.__inverseGlobalPhysicalTransform: TransformCache = 0
 
         # Contains {port: [list of optics]} describing the optics (usually filters) for each port
         self.__optics = {}
@@ -149,7 +174,7 @@ class OptomechDevice(InterfaceMixin):
         self.__subdevice = None
 
         self.__lock = Mutex(recursive=True, debug=False)
-        
+
         self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
         self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
         self.sigOpticsChanged.connect(self.__emitGlobalOpticsChanged)
@@ -165,15 +190,13 @@ class OptomechDevice(InterfaceMixin):
                     elif isinstance(parent, dict) and 'name' in parent:
                         self.setParentDevice(parent['name'], port=parent.get('port', 'default'))
                     else:
-                        raise TypeError("Invalid parent device specification: %s" % repr(parent))
+                        raise TypeError(f"Invalid parent device specification: {parent!r}")
 
                 except Exception as ex:
-                    if "No device named" in ex.args[0]:
-                        print("Cannot set parent device %s; no device by that name." % repr(config['parentDevice']))
-                        print("Available devices:", dm.listDevices())
-                    else:
+                    if "No device named" not in ex.args[0]:
                         raise
-            
+                    print(f"Cannot set parent device {config['parentDevice']!r}; no device by that name.")
+                    print("Available devices:", dm.listDevices())
             if 'transform' in config:
                 self.setDeviceTransform(config['transform'])
 
@@ -181,10 +204,11 @@ class OptomechDevice(InterfaceMixin):
             assert isinstance(self.__ports, list)
             self.__optics = config.get('optics', {'default': []})
             assert isinstance(self.__optics, dict)
+        self.geometry = Geometry((config or {}).get('geometry', {}), self.defaultGeometryArgs)
 
         # declare that this device supports the OptomechDevice API
         self.addInterface('OptomechDevice')
-            
+
     def name(self):
         return self.__name
 
@@ -193,16 +217,16 @@ class OptomechDevice(InterfaceMixin):
         """
         return self.__ports[:]
 
-    def parentDevice(self):
+    def parentDevice(self) -> "OptomechDevice | None":
         """Return this device's parent, or None if there is no parent."""
         return self.__parent
-            
+
     def parentPort(self):
         """Return the port on this device's parent to which this device is attached.
         """
         return self.__parentPort
 
-    def setParentDevice(self, parent, port='default'):
+    def setParentDevice(self, parent: "str | OptomechDevice", port='default'):
         """Set the parent of this device.
 
         If *parent* is None, then the device has no parent and its transform is assumed to
@@ -224,7 +248,7 @@ class OptomechDevice(InterfaceMixin):
             # look up device from its name
             if isinstance(parent, str):
                 parent = self.__devManager.getDevice(parent)
-            
+
             # connect to the new parent
             self.__parent = None
             self.__parentPort = None
@@ -242,21 +266,20 @@ class OptomechDevice(InterfaceMixin):
             parent.__children.append(self)
             self.__parent = parent
             self.__parentPort = port
-        
+
     def mapToParentDevice(self, obj, subdev=None):
         """Map from local coordinates to the parent device (or to global if there is no parent)"""
         tr = self.deviceTransform(subdev)
         if tr is None:
-            raise Exception('Cannot map--device classes with no affine transform must override map methods.')
+            raise ValueError('Cannot map--device classes with no affine transform must override map methods.')
         return self._mapTransform(obj, tr)
-    
+
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
         tr = self.globalTransform(subdev)
         if tr is not None:
             return self._mapTransform(obj, tr)
-
-        ## If our transformation is nonlinear, then the local mapping step must be done separately.
+        # If our transformation is nonlinear, then the local mapping step must be done separately.
         subdev = self._subdevDict(subdev)
         o2 = self.mapToParentDevice(obj, subdev)
         parent = self.parentDevice()
@@ -264,37 +287,39 @@ class OptomechDevice(InterfaceMixin):
             return o2
         else:
             return parent.mapToGlobal(o2, subdev)
-    
+
     def mapToDevice(self, device, obj, subdev=None):
         """Map *obj* from local coordinates to *device*'s coordinate system."""
         subdev = self._subdevDict(subdev)
         return device.mapFromGlobal(self.mapToGlobal(obj, subdev), subdev)
-    
+
     def mapFromParentDevice(self, obj, subdev=None):
         """Map *obj* from parent coordinates (or from global if there is no parent) to local coordinates."""
         tr = self.inverseDeviceTransform(subdev)
         if tr is None:
-            raise Exception('Cannot map--device classes with no affine transform must override map methods.')
+            raise ValueError('Cannot map--device classes with no affine transform must override map methods.')
         return self._mapTransform(obj, tr)
-    
+
     def mapFromGlobal(self, obj, subdev=None):
         """Map *obj* from global to local coordinates."""
         tr = self.inverseGlobalTransform(subdev)
         if tr is not None:
             return self._mapTransform(obj, tr)
-    
-        ## If our transformation is nonlinear, then the local mapping step must be done separately.
-        subdev = self._subdevDict(subdev)
-        parent = self.parentDevice()
-        if parent is None:
-            obj = parent.mapFromGlobal(obj, subdev)
-        return self.mapFromParent(obj, subdev)
-    
+
+        # If our transformation is nonlinear, then the local mapping step must be done separately.
+        raise NotImplementedError("The rest of this method has never been tested.")
+        # subdev = self._subdevDict(subdev)
+        # parent = self.parentDevice()
+        # if parent is not None:
+        #     obj = parent.mapFromGlobal(obj, subdev)
+        # return self.mapFromParentDevice(obj, subdev)
+
     def mapFromDevice(self, device, obj, subdev=None):
-        """Map *obj* from the coordinate system of the specified *device* to local coordiantes."""
-        subdev = self._subdevDict(subdev)
-        return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
-    
+        """Map *obj* from the coordinate system of the specified *device* to local coordinates."""
+        raise NotImplementedError("This method has never been tested.")
+        # subdev = self._subdevDict(subdev)
+        # return self.mapFromGlobal(device.mapToGlobal(obj, subdev), subdev)
+
     def mapGlobalToParent(self, obj, subdev=None):
         """Map *obj* from global coordinates to the parent device coordinates.
         If this device has no parent, then *obj* is returned unchanged.
@@ -303,7 +328,7 @@ class OptomechDevice(InterfaceMixin):
             return obj
         else:
             return self.parentDevice().mapFromGlobal(obj, subdev)
-            
+
     def mapParentToGlobal(self, obj, subdev=None):
         """Map *obj* from parent device coordinates to global coordinates.
         If this device has no parent, then *obj* is returned unchanged.
@@ -312,7 +337,7 @@ class OptomechDevice(InterfaceMixin):
             return obj
         else:
             return self.parentDevice().mapToGlobal(obj, subdev)
-        
+
     def _mapTransform(self, obj, tr):
         """Map an object through a transform.
 
@@ -366,14 +391,14 @@ class OptomechDevice(InterfaceMixin):
         """
         with self.__lock:
             tr = self.__transform
-            
-            ## if a subdevice is specified, multiply by the subdevice's transform before returning
+
+            # if a subdevice is specified, multiply by the subdevice's transform before returning
             dev = self.getSubdevice(subdev)
             if dev is None:
                 return tr * 1  # *1 makes a copy
             else:
                 return tr * dev.deviceTransform()
-    
+
     def inverseDeviceTransform(self, subdev=None):
         """
         See deviceTransform; this method returns the inverse.
@@ -390,15 +415,15 @@ class OptomechDevice(InterfaceMixin):
                 invtr = inv
             self.__inverseTransform = invtr
         tr = Qt.QMatrix4x4(invtr)
-        if subdev == 0:  ## indicates we should skip any subdevices
+        if subdev == 0:  # indicates we should skip any subdevices
             return tr
-        ## if a subdevice is specified, multiply by the subdevice's transform before returning
+        # if a subdevice is specified, multiply by the subdevice's transform before returning
         dev = self.getSubdevice(subdev)
         if dev is None:
             return tr
         else:
-            return dev.inverseDeviceTransform() * tr 
-    
+            return dev.inverseDeviceTransform() * tr
+
     def setDeviceTransform(self, tr):
         if isinstance(tr, dict):
             allowed = {"pos", "scale", "angle", "axis"}
@@ -407,10 +432,10 @@ class OptomechDevice(InterfaceMixin):
         with self.__lock:
             self.__transform = pg.SRTTransform3D(tr)
             self.invalidateCachedTransforms()
-        
+
         self.sigTransformChanged.emit(self)
 
-    def globalTransform(self, subdev=None):
+    def globalTransform(self, subdev=None) -> pg.SRTTransform3D:
         """
         Return the transform mapping from local device coordinates to global coordinates.
         If the resulting transform is non-affine, then None is returned and the mapTo/mapFrom
@@ -419,17 +444,14 @@ class OptomechDevice(InterfaceMixin):
         If *subdev* is given, it must be a dictionary of {deviceName: subdevice} or
         {deviceName: subdeviceName} pairs specifying the state to compute.
         """
-        gt = self.__globalTransform
-        if subdev is None: ## return cached transform
-            if gt == 0:
-                gt = self.__computeGlobalTransform()
-                self.__globalTransform = gt
-            return gt * 1  # *1 makes a copy
-        else:
+        if subdev is not None:
             return self.__computeGlobalTransform(subdev)
+        if self.__globalTransform == 0:
+            self.__globalTransform = self.__computeGlobalTransform()
+        return self.__globalTransform * 1  # *1 makes a copy
 
     def __computeGlobalTransform(self, subdev=None, inverse=False):
-        ## subdev must be a dict
+        # subdev must be a dict
         parent = self.parentDevice()
         if parent is None:
             parentTr = pg.SRTTransform3D()
@@ -442,32 +464,88 @@ class OptomechDevice(InterfaceMixin):
             return None
         transform = (parentTr * 1) * deviceTr
 
-        if inverse:
-            inv, invertible = transform.inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            return inv
-        else:
+        if not inverse:
             return transform
-        
+        inv, invertible = transform.inverted()
+        if not invertible:
+            raise ValueError("Transform is not invertible.")
+        return inv
+
     def inverseGlobalTransform(self, subdev=None):
         """
         See globalTransform; this method returns the inverse.
         """
-        # dev = self.getSubdevice(subdev)
-        if subdev is None:  ## return cached transform
-            if self.__inverseGlobalTransform == 0:
-                tr = self.globalTransform()
-                if tr is None:
-                    self.__inverseGlobalTransform = None
-                else:
-                    inv, invertible = tr.inverted()
-                    if not invertible:
-                        raise Exception("Transform is not invertible.")
-                    self.__inverseGlobalTransform = inv
-            return self.__inverseGlobalTransform * 1  # *1 makes a copy
-        else:
+        if subdev is not None:
             return self.__computeGlobalTransform(subdev, inverse=True)
+        if self.__inverseGlobalTransform == 0:
+            tr = self.globalTransform()
+            if tr is None:
+                self.__inverseGlobalTransform = None
+            else:
+                inv, invertible = tr.inverted()
+                if not invertible:
+                    raise ValueError("Transform is not invertible.")
+                self.__inverseGlobalTransform = inv
+        return self.__inverseGlobalTransform * 1  # *1 makes a copy
+
+    def physicalTransform(self, subdev=None):
+        """
+        Return the transform mapping from local device coordinates to physical coordinates.
+        This is the same as deviceTransform. Override this if your device has optical transformations.
+        """
+        return self.deviceTransform(subdev)
+
+    def inversePhysicalTransform(self, subdev=None):
+        """
+        See physicalTransform; this method returns the inverse.
+        """
+        return self.inverseDeviceTransform(subdev)
+
+    def globalPhysicalTransform(self, subdev=None):
+        """
+        Return the transform mapping from local device coordinates to global physical coordinates.
+        This is the same as globalTransform, except that the transform is not affected by the
+        current subdevice selection.
+        """
+        if subdev is not None:
+            return self.__computeGlobalPhysicalTransform(subdev)
+        if self.__globalPhysicalTransform == 0:
+            self.__globalPhysicalTransform = self.__computeGlobalPhysicalTransform()
+        return self.__globalPhysicalTransform * 1  # *1 makes a copy
+
+    def inverseGlobalPhysicalTransform(self, subdev=None):
+        """
+        See globalPhysicalTransform; this method returns the inverse.
+        """
+        if subdev is not None:
+            return self.__computeGlobalPhysicalTransform(subdev, inverse=True)
+        if self.__inverseGlobalPhysicalTransform == 0:
+            tr = self.globalPhysicalTransform()
+            inv, invertible = tr.inverted()
+            if not invertible:
+                raise ValueError("Transform is not invertible.")
+            self.__inverseGlobalPhysicalTransform = inv
+        return self.__inverseGlobalPhysicalTransform * 1
+
+    def __computeGlobalPhysicalTransform(self, subdev=None, inverse=False):
+        parent = self.parentDevice()
+        if parent is None:
+            parentTr = pg.SRTTransform3D()
+        else:
+            parentTr = parent.globalPhysicalTransform(subdev)
+        if parentTr is None:
+            return None
+        deviceTr = self.physicalTransform(subdev)
+        if deviceTr is None:
+            return None
+        transform = parentTr * deviceTr
+
+        if not inverse:
+            return transform
+        inv, invertible = transform.inverted()
+        if not invertible:
+            raise ValueError("Transform is not invertible.")
+        return inv
 
     def listOptics(self, port='default'):
         """Return a list of Optics this device adds to the optical
@@ -507,47 +585,45 @@ class OptomechDevice(InterfaceMixin):
 
     def __emitGlobalTransformChanged(self):
         self.sigGlobalTransformChanged.emit(self, self)
-    
+
     def __emitGlobalSubdeviceTransformChanged(self, sender, subdev):
         #print "emit sigGlobalSubdeviceTransformChanged", sender, self, subdev
         self.sigGlobalSubdeviceTransformChanged.emit(self, self, subdev)
-    
+
     def __emitGlobalOpticsChanged(self, sender, port):
         self.sigGlobalOpticsChanged.emit(self, sender, port)
-    
+
     def __emitGlobalSubdeviceChanged(self, sender, newDev, oldDev):
         self.sigGlobalSubdeviceChanged.emit(self, sender, newDev, oldDev)
-    
+
     def __emitGlobalSubdeviceListChanged(self, device):
         self.sigGlobalSubdeviceListChanged.emit(self, device)
-    
+
     def __parentDeviceTransformChanged(self, sender, changed):
-        ## called when any (grand)parent's transform has changed.
+        # called when any (grand)parent's transform has changed.
         prof = pg.debug.Profiler(disabled=True)
         self.invalidateCachedTransforms()
         self.sigGlobalTransformChanged.emit(self, changed)
-        
+
     def __parentSubdeviceTransformChanged(self, sender, parent, subdev):
-        ## called when any (grand)parent's subdevice transform has changed.
+        # called when any (grand)parent's subdevice transform has changed.
         self.invalidateCachedTransforms()
         self.sigGlobalSubdeviceTransformChanged.emit(self, parent, subdev)
-        
+
     def __parentOpticsChanged(self, sender, device, port):
-        ## called when any (grand)parent's optics have changed
+        # called when any (grand)parent's optics have changed
         self.sigGlobalOpticsChanged.emit(self, device, port)
-        
+
     def __parentSubdeviceChanged(self, sender, parent, newDev, oldDev):
-        ## called when any (grand)parent's current subdevice has changed.
+        # called when any (grand)parent's current subdevice has changed.
         self.invalidateCachedTransforms()
         self.sigGlobalSubdeviceChanged.emit(self, parent, newDev, oldDev)
-        
+
     def __parentSubdeviceListChanged(self, sender, device):
-        ## called when any (grand)parent's subdevice list has changed.
+        # called when any (grand)parent's subdevice list has changed.
         self.sigGlobalSubdeviceListChanged.emit(self, device)
 
     def __subdeviceTransformChanged(self, subdev):
-        #print "Subdevice transform changed", self, subdev
-        #print "   -> emit sigSubdeviceTransformChanged"
         self.invalidateCachedTransforms()
         self.sigTransformChanged.emit(self)
         self.sigSubdeviceTransformChanged.emit(self, subdev)
@@ -575,6 +651,8 @@ class OptomechDevice(InterfaceMixin):
                 self.__inverseTransform = 0
             self.__globalTransform = 0
             self.__inverseGlobalTransform = 0
+            self.__globalPhysicalTransform = 0
+            self.__inverseGlobalPhysicalTransform = 0
 
         # child global transforms must also be invalidated before any change signals are emitted
         for ch in self.__children:
@@ -590,7 +668,7 @@ class OptomechDevice(InterfaceMixin):
             if self.__subdevice is None:
                 self.setCurrentSubdevice(subdev)
         self.sigSubdeviceListChanged.emit(self)
-    
+
     def removeSubdevice(self, subdev):
         self.invalidateCachedTransforms()
         subdev = self.getSubdevice(subdev)
@@ -601,7 +679,7 @@ class OptomechDevice(InterfaceMixin):
             if len(self.__subdevices) == 0:
                 self.setCurrentSubdevice(None)
         self.sigSubdeviceListChanged.emit(self)
-    
+
     def listSubdevices(self):
         with self.__lock:
             return list(self.__subdevices.values())
@@ -615,10 +693,10 @@ class OptomechDevice(InterfaceMixin):
         with self.__lock:
             if isinstance(dev, dict):
                 dev = dev.get(self.name(), None)
-            
+
             if dev is None:
                 dev = self.__subdevice
-                
+
             if dev is None:
                 return None
             elif hasattr(dev, 'implements') and dev.implements('OptomechDevice'):
@@ -626,11 +704,11 @@ class OptomechDevice(InterfaceMixin):
             elif isinstance(dev, str):
                 return self.__subdevices[dev]
             else:
-                raise Exception("Invalid argument: %s" % str(dev))
-        
-    def __subdevDict(self, dev):
-        ## Convert a variety of argument types to a 
-        ## dictionary {devName: subdevName}
+                raise TypeError(f"Invalid argument: {dev}")
+
+    def _subdevDict(self, dev):
+        # Convert a variety of argument types to a 
+        # dictionary {devName: subdevName}
         if isinstance(dev, dict):
             return dev
         if dev is None:
@@ -638,7 +716,7 @@ class OptomechDevice(InterfaceMixin):
             return {self.name(): dev}
         if isinstance(dev, str):
             return {self.name(): self.__subdevices[dev]}
-            
+
     def setCurrentSubdevice(self, dev):
         self.invalidateCachedTransforms()
         with self.__lock:
@@ -650,16 +728,14 @@ class OptomechDevice(InterfaceMixin):
                 self.__subdevice = dev
         self.sigSubdeviceChanged.emit(self, dev, oldDev)
         self.sigTransformChanged.emit(self)
-        
+
     def treeSubdeviceState(self):
         """return an ordered dict of {devName: subdevName} pairs indicating the currently
         selected subdevices throughout the tree."""
         devices = [self] + self.parentDevices()
-        #print 'OptomechDevice.treeSubdeviceState(), devices:', devices
         subdevs = collections.OrderedDict()
         for dev in devices:
             subdev = dev.getSubdevice()
-            #print "    ", dev, subdev
             if subdev is not None:
                 subdevs[dev.name()] = subdev.name()
         return subdevs
@@ -674,16 +750,15 @@ class OptomechDevice(InterfaceMixin):
             if len(subdev) > 0:
                 subdevs[dev] = subdev
         return subdevs
-        
+
     def getDeviceStateKey(self):
         """
         Return a tuple that uniquely identifies the state of all subdevice selections in the system.
         This may be used as a key for storing/retrieving calibration data.
         """
         state = self.treeSubdeviceState()
-        devs = list(state.keys())
-        devs.sort()
-        return tuple([dev + "__" + state[dev] for dev in devs])
+        devs = sorted(state.keys())
+        return tuple(f"{dev}__{state[dev]}" for dev in devs)
 
     def getFocusDepth(self):
         """Return the Z position of this device's origin, mapped to the global coordinate system.
@@ -695,7 +770,7 @@ class OptomechDevice(InterfaceMixin):
         """
         dev = self.getFocusDevice()
         if dev is None:
-            raise Exception("Device %s is not connected to a focus controller." % dev)
+            raise ValueError(f"Device {dev} is not connected to a focus controller.")
         dz = depth - self.getFocusDepth()
         dpos = dev.globalPosition()
         return dev.moveToGlobal([dpos[0], dpos[1], dpos[2]+dz], speed)
@@ -711,7 +786,7 @@ class OptomechDevice(InterfaceMixin):
             dev = dev.parentDevice()
         return None
 
-        
+
 class DeviceTreeItemGroup(pg.ItemGroup):
     """
     Extension of QGraphicsItemGroup that maintains a hierarchy of item groups
@@ -722,7 +797,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
     
     
     """
-    
+
     def __init__(self, device, includeSubdevices=True):
         """
         *item* must be a OptomechDevice instance. For the device and each
@@ -732,46 +807,44 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         will have one item group per subdevice.
         """
         pg.ItemGroup.__init__(self)
-        self.groups = {}  ## {device: {subdevice: items}}
+        self.groups = {}  # {device: {subdevice: items}}
         self.device = device
         self.includeSubdevs = includeSubdevices
         self.topItem = None
-        
+
         device.sigGlobalTransformChanged.connect(self.transformChanged)
         device.sigGlobalSubdeviceTransformChanged.connect(self.subdevTransformChanged)
         device.sigGlobalSubdeviceChanged.connect(self.subdevChanged)
         device.sigGlobalSubdeviceListChanged.connect(self.subdevListChanged)
         self.rebuildGroups()
-        
+
     def makeGroup(self, dev, subdev):
         """Construct a QGraphicsItemGroup for the specified device/subdevice.
         This is a good method to extend in subclasses."""
         newGroup = Qt.QGraphicsItemGroup()
         newGroup.setTransform(pg.SRTTransform(dev.deviceTransform(subdev)))
         return newGroup
-        
-        
-        
+
+
+
     def transformChanged(self, sender, device):
         for subdev, items in self.groups[device].items():
             tr = pg.SRTTransform(device.deviceTransform(subdev))
             for item in items:
                 item.setTransform(tr)
-        
-        
+
     def subdevTransformChanged(self, sender, device, subdev):
         tr = pg.SRTTransform(device.deviceTransform(subdev))
-        #print "subdevTransformChanged:", sender, device, subdev
         for item in self.groups[device][subdev]:
             item.setTransform(tr)
 
     def subdevChanged(self, sender, device, newSubdev, oldSubdev):
         pass
-            
+
     def subdevListChanged(self, sender, device):
         self.rebuildGroups()
-    
-    
+
+
     #def removeGroups(self, device, subdev, parentGroup=None):
         #rem = []
         #for group in self.groups[device][subdev]:
@@ -785,7 +858,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
             #scene = group.scene()
             #if scene is not None:
                 #scene.removeItem(group)
-    
+
     def rebuildGroups(self):
         """Create the tree of graphics items needed to display camera boundaries"""
         if self.topItem is not None:
@@ -794,7 +867,7 @@ class DeviceTreeItemGroup(pg.ItemGroup):
                 scene.removeItem(self.topItem)
                 self.topItem = None
         self.groups = {}
-        
+
         devices = self.device.parentDevices()
         parentItems = [self]
         for dev in devices[::-1]:
@@ -804,9 +877,9 @@ class DeviceTreeItemGroup(pg.ItemGroup):
                 subdevs = [None]
             newItems = []
             for subdev in subdevs:
-                ## create one new group per parent group
+                # create one new group per parent group
                 self.groups[dev][subdev] = []
-                
+
                 for parent in parentItems:
                     newGroup = self.makeGroup(dev, subdev)
                     self.groups[dev][subdev].append(newGroup)
@@ -814,15 +887,15 @@ class DeviceTreeItemGroup(pg.ItemGroup):
                     newGroup.setParentItem(parent)
                     if parent is self:
                         self.topItem = newGroup
-                    
+
             parentItems = newItems
-            
+
     def getGroups(self, device):
         """Return a list of all item groups for the given device"""
         groups = []
         for subdev, items in self.groups[device].items():
             groups.extend(items)
         return groups
-    
 
-        
+
+

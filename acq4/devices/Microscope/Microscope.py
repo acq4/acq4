@@ -5,7 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.OptomechDevice import OptomechDevice, Geometry
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
@@ -147,9 +147,11 @@ class Microscope(Device, OptomechDevice):
                 return
 
         self.setCurrentSubdevice(self.currentObjective)
+        self.geometry = self.currentObjective.hiddenGeometry
+        self.sigGeometryChanged.emit(self)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
-    def getObjective(self):
+    def getObjective(self) -> "Objective | None":
         """Return the currently active Objective."""
         with self.lock:
             if self.currentSwitchPosition not in self.selectedObjectives:
@@ -182,6 +184,9 @@ class Microscope(Device, OptomechDevice):
         iface = ScopeGUI(self, win)
         iface.objectiveChanged((self.currentObjective, None))
         return iface
+
+    def physicalTransform(self, subdev=None):
+        return self.parentDevice().deviceTransform(subdev)
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -339,7 +344,9 @@ class Microscope(Device, OptomechDevice):
         return self._positionDevice
 
 
-class Objective(OptomechDevice):
+class Objective(Device, OptomechDevice):
+
+    defaultGeometryArgs = {'color': (0, 0.7, 0.9, 0.4)}
 
     def __init__(self, config, scope, key):
         self._config = config
@@ -347,7 +354,10 @@ class Objective(OptomechDevice):
         self._key = key
         name = config['name']
 
-        OptomechDevice.__init__(self, scope.dm, {}, name)
+        Device.__init__(self, scope.dm, config, name)
+        OptomechDevice.__init__(self, scope.dm, config, name)
+        self.hiddenGeometry = self.geometry  # microscopes are in charge of setting the geometry
+        self.geometry = Geometry({}, {})
 
         if 'offset' in config:
             self.setOffset(config['offset'])
@@ -355,7 +365,7 @@ class Objective(OptomechDevice):
             self.setScale(config['scale'])
 
     def deviceTransform(self, subdev=None):
-        return pg.SRTTransform3D(OptomechDevice.deviceTransform(self))
+        return pg.SRTTransform3D(super().deviceTransform(subdev))
 
     def setOffset(self, pos):
         tr = self.deviceTransform()

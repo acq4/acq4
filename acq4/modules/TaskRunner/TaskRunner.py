@@ -1,3 +1,4 @@
+import contextlib
 from collections import OrderedDict
 from functools import reduce
 
@@ -577,12 +578,10 @@ class TaskRunner(Module):
             # print "runSingle: Starting taskThread.."
             future = self.taskThread.startTask(prot)
             # print "runSingle: taskThreadStarted"
-        except:
-            exc = sys.exc_info()
+        except Exception as exc:
             self.setStartBtnsEnable(True)
             self.loopEnabled = False
-            # print "Error starting task. "
-            raise HelpfulException("Error occurred while starting task", exc=exc)
+            raise HelpfulException("Error occurred while starting task", exc=exc) from exc
 
         return future
 
@@ -1081,16 +1080,13 @@ class TaskThread(Thread):
             endTime = time.time() + cmd['protocol']['duration']
             self.sigTaskStarted.emit(params)
             prof.mark('execute')
-        except:
+        except Exception as exc:
             with self.lock:
                 self._currentTask = None
-            try:
+            with contextlib.suppress(Exception):
                 task.stop(abort=True)
-            except:
-                pass
             printExc("\nError starting task:")
-            exc = sys.exc_info()
-            raise HelpfulException("\nError starting task:", exc)
+            raise HelpfulException("\nError starting task:", exc) from exc
 
         prof.mark('start task')
         ### Do not put code outside of these try: blocks; may cause device lockup
