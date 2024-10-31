@@ -5,7 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.OptomechDevice import OptomechDevice, Geometry
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
@@ -147,10 +147,11 @@ class Microscope(Device, OptomechDevice):
                 return
 
         self.setCurrentSubdevice(self.currentObjective)
-        self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
+        self.geometry = self.currentObjective.hiddenGeometry
         self.sigGeometryChanged.emit(self)
+        self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
 
-    def getObjective(self) -> "Objective":
+    def getObjective(self) -> "Objective | None":
         """Return the currently active Objective."""
         with self.lock:
             if self.currentSwitchPosition not in self.selectedObjectives:
@@ -186,11 +187,6 @@ class Microscope(Device, OptomechDevice):
 
     def physicalTransform(self, subdev=None):
         return self.parentDevice().deviceTransform(subdev)
-
-    def getGeometries(self):
-        if (obj := self.getObjective()) is None:
-            return []
-        return obj.getRealGeometries()
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -358,6 +354,8 @@ class Objective(Device, OptomechDevice):
 
         Device.__init__(self, scope.dm, config, name)
         OptomechDevice.__init__(self, scope.dm, config, name)
+        self.hiddenGeometry = self.geometry  # microscopes are in charge of setting the geometry
+        self.geometry = Geometry({}, {})
 
         if 'offset' in config:
             self.setOffset(config['offset'])
@@ -369,12 +367,6 @@ class Objective(Device, OptomechDevice):
 
     def defaultGeometryArgs(self):
         return {'color': (0, 0.7, 0.9, 0.4)}
-
-    def getGeometries(self):
-        return []  # Microscopes are in charge of deciding which objective to display
-
-    def getRealGeometries(self):
-        return Device.getGeometries(self)
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
@@ -404,18 +396,6 @@ class Objective(Device, OptomechDevice):
     @property
     def radius(self):
         return self._config.get('radius')
-
-    @property
-    def topRadius(self):
-        return self._config.get('topRadius')
-
-    @property
-    def bottomRadius(self):
-        return self._config.get('bottomRadius')
-
-    @property
-    def focalDistance(self):
-        return self._config.get('focalDistance')
 
     def __repr__(self):
         return (f"<Objective {self._scope.name()}.{self.name()} "

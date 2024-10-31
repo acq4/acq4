@@ -20,10 +20,9 @@ class RecordingChamber(Device, OptomechDevice):
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        OptomechDevice.__init__(self, dm, config, name)
-
         self.config = config
         self.radius = config["radius"]
+        OptomechDevice.__init__(self, dm, config, name)
 
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module."""

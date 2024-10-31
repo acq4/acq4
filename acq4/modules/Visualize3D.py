@@ -23,7 +23,6 @@ class Visualize3D(Module):
         for dev in manager.listDevices():
             dev = manager.getDevice(dev)
             self.win.add(dev)
-            dev.sigGeometryChanged.connect(self.win.handleGeometryChange)
 
 
 def truncated_cone(
@@ -157,17 +156,19 @@ class MainWindow(Qt.QMainWindow):
         self.axis = visuals.XYZAxis(parent=self.view.scene)
         self.axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
 
-        self._deviceGeometries = {}
+        self._geometries = {}
 
     def add(self, dev: Device):
-        for conic in dev.getGeometries():
-            dev.sigGlobalTransformChanged.connect(conic.handleTransformUpdate)
-            conic.handleTransformUpdate(dev, dev)
-            self._deviceGeometries.setdefault(dev, []).append(conic)
-            self.view.add(conic.mesh)
+        if hasattr(dev, "geometry"):
+            dev.sigGeometryChanged.connect(self.handleGeometryChange)
+            for geom in dev.geometry.getGeometries():
+                dev.sigGlobalTransformChanged.connect(geom.handleTransformUpdate)
+                geom.handleTransformUpdate(dev, dev)
+                self._geometries.setdefault(dev, []).append(geom)
+                self.view.add(geom.mesh)
 
     def handleGeometryChange(self, dev: Device):
-        for conic in self._deviceGeometries[dev]:
-            conic.mesh.parent = None
-        self._deviceGeometries[dev] = []
+        for geom in self._geometries[dev]:
+            geom.mesh.parent = None
+        self._geometries[dev] = []
         self.add(dev)

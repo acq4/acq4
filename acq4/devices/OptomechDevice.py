@@ -11,6 +11,23 @@ from acq4.util.Mutex import Mutex
 TransformCache = "int | None | pg.SRTTransform3D"
 
 
+class Geometry:
+    def __init__(self, config, defaults):
+        self._config = config
+        self._defaults = defaults
+        self._geometries = []
+
+    def getGeometries(self) -> list:
+        """Return a 3D model to be displayed in the 3D visualization window.
+        """
+        from acq4.modules.Visualize3D import create_geometry
+
+        if self._config:
+            args = {**self._config}
+            return create_geometry(defaults=self._defaults, **args)
+        return []
+
+
 class OptomechDevice(InterfaceMixin):
     """
     OptomechDevice is a mixin to the Device class that manages coordinate system mapping between
@@ -98,6 +115,8 @@ class OptomechDevice(InterfaceMixin):
         # Emitted when this device or any (grand)parent changes its list of available subdevices
         sigGlobalSubdeviceListChanged = Qt.Signal(object, object) # self, dev
 
+        sigGeometryChanged = Qt.Signal(object)  # self
+
     def __init__(self, dm, config, name):
         object.__init__(self)
 
@@ -113,6 +132,7 @@ class OptomechDevice(InterfaceMixin):
         self.sigGlobalSubdeviceChanged = self.__sigProxy.sigGlobalSubdeviceChanged
         self.sigSubdeviceListChanged = self.__sigProxy.sigSubdeviceListChanged
         self.sigGlobalSubdeviceListChanged = self.__sigProxy.sigGlobalSubdeviceListChanged
+        self.sigGeometryChanged = self.__sigProxy.sigGeometryChanged
 
         self.__devManager = dm
         self.__config = config
@@ -181,9 +201,15 @@ class OptomechDevice(InterfaceMixin):
             assert isinstance(self.__ports, list)
             self.__optics = config.get('optics', {'default': []})
             assert isinstance(self.__optics, dict)
+        self.geometry = Geometry((config or {}).get('geometry', {}), self.defaultGeometryArgs())
 
         # declare that this device supports the OptomechDevice API
         self.addInterface('OptomechDevice')
+
+    def defaultGeometryArgs(self):
+        """Return a dictionary of default arguments to be used when creating a 3D model for this device.
+        """
+        return {}
 
     def name(self):
         return self.__name
