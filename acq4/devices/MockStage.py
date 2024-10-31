@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import time
 
 import numpy as np
@@ -119,7 +116,7 @@ class MockStage(Stage):
         
     def _interruptMove(self):
         if self._lastMove is not None and not self._lastMove.isDone():
-            self._lastMove._interrupted = True
+            self._lastMove.mockInterrupt()
 
     def setUserSpeed(self, v):
         pass
@@ -159,24 +156,14 @@ class MockMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self.targetPos = pos
-        self._finished = False
-        self._interrupted = False
-        self._errorMsg = None
-        
+
         self.dev.stageThread.setTarget(self, pos, speed)
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
 
-    def isDone(self):
-        """Return True if the move is complete or was interrupted.
-        """
-        return self._finished or self._interrupted
+    def mockFinish(self):
+        self._taskDone()
 
-    def errorMessage(self):
-        return self._errorMsg
+    def mockInterrupt(self):
+        self._taskDone(interrupted=True, error='Move interrupted')
 
 
 class MockStageThread(Thread):
@@ -256,7 +243,7 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.currentMove._finished = True
+                    self.currentMove.mockFinish()
                     self.stop()
                 else:
                     unit = dif / dist
@@ -270,27 +257,3 @@ class MockStageThread(Thread):
     def _setPosition(self, pos):
         self.pos = np.array(pos)
         self.positionChanged.emit(self.pos)
-
-
-#class MockStageInterface(Qt.QWidget):
-    #def __init__(self, dev, win, keys=None):
-        #self.win = win
-        #self.dev = dev
-        #Qt.QWidget.__init__(self)
-        #self.layout = Qt.QGridLayout()
-        #self.setLayout(self.layout)
-        #self.btn = pg.JoystickButton()
-        #self.layout.addWidget(self.btn, 0, 0)
-        #self.label = Qt.QLabel()
-        #self.layout.addWidget(self.label)
-        #self.dev.sigPositionChanged.connect(self.update)
-        #self.btn.sigStateChanged.connect(self.btnChanged)
-        #self.label.setFixedWidth(300)
-        
-    #def btnChanged(self, btn, state):
-        #self.dev.setSpeed((state[0] * 0.0001, state[1] * 0.0001))
-        
-    #def update(self):
-        #pos = self.dev.getPosition()
-        #text = [pg.siFormat(x, suffix='m', precision=5) for x in pos]
-        #self.label.setText(", ".join(text))

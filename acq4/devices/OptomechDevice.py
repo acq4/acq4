@@ -254,8 +254,7 @@ class OptomechDevice(InterfaceMixin):
         """Map *obj* from local coordinates to global."""
         tr = self.globalTransform(subdev)
         if tr is not None:
-            mapped = self._mapTransform(obj, tr)
-            return mapped
+            return self._mapTransform(obj, tr)
 
         ## If our transformation is nonlinear, then the local mapping step must be done separately.
         subdev = self._subdevDict(subdev)

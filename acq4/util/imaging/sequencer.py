@@ -40,18 +40,18 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
         z1, frame1 = frame1
         z2, frame2 = frame2
         return z1 != z2  # for now
-        if z1 != z2:
-            return True
-        img1 = frame1.data()
-        img2 = frame2.data()
-        dmax = np.iinfo(img1.dtype).max
-        threshold = (dmax / 512)  # arbitrary
-        overflowed_diff = img1 - img2  # e.g. uint16: 4 - 1 = 3, 1 - 4 = 65532
-        if np.issubdtype(img1.dtype, np.unsignedinteger):
-            abs_adjust = (img1 < img2).astype(img1.dtype) * dmax + 1  # e.g. uint16: "-1" (65535) if img1 < img2, 1 otherwise
-            return np.mean(overflowed_diff * abs_adjust) > threshold
-        else:
-            return np.mean(np.abs(overflowed_diff)) > threshold
+        # if z1 != z2:
+        #     return True
+        # img1 = frame1.data()
+        # img2 = frame2.data()
+        # dmax = np.iinfo(img1.dtype).max
+        # threshold = (dmax / 512)  # arbitrary
+        # overflowed_diff = img1 - img2  # e.g. uint16: 4 - 1 = 3, 1 - 4 = 65532
+        # if np.issubdtype(img1.dtype, np.unsignedinteger):
+        #     abs_adjust = (img1 < img2).astype(img1.dtype) * dmax + 1  # e.g. uint16: "-1" (65535) if img1 < img2, 1 otherwise
+        #     return np.mean(overflowed_diff * abs_adjust) > threshold
+        # else:
+        #     return np.mean(np.abs(overflowed_diff)) > threshold
     depths = [depths[0]] + [
         f for i, f in enumerate(depths[1:], 1)
         if difference_is_significant(f, depths[i - 1])
@@ -61,27 +61,27 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
 
     return [f for _, f in sorted(depths, key=lambda x: x[0])]
 
-    # TODO do we want this?
-    # TODO interpolate first?
-    if frames[0][0] < frames[-1][0]:
-        ideal_z_values = np.arange(frames[0][0], frames[-1][0] + step, step)
-    else:
-        ideal_z_values = np.arange(frames[0][0], frames[-1][0] - step, -step)
-    # [(0, f1), (0, f2), (1, f3)] with ideal z's of [0, 1] should become [(0, f1), (1, f3)]
-    # [(0, f1), (2, f2), (2, f3), (2, f4)] with ideal z's of [0, 1, 2] should become [(0, f1), (1, f2), (2, f4)]
-    ideal_idx = 0
-    actual_idx = 0
-    actual_z_values = np.array([z for z, _ in frames])
-    new_frame_idxs = []
-    while ideal_idx < len(ideal_z_values) and actual_idx < len(frames):
-        next_closest = np.argmin(np.abs(actual_z_values - ideal_z_values[ideal_idx]))  # TODO this could be made faster if needed
-        next_closest = max(next_closest, actual_idx)  # don't go backwards
-        new_frame_idxs.append(next_closest)
-        ideal_idx += 1
-        actual_idx = next_closest + 1
-    if len(new_frame_idxs) < expected_size:
-        raise ValueError("Insufficient frames to have one frame per step (after walking through).")
-    return [frames[i][1] for i in new_frame_idxs]
+    # # TODO do we want this?
+    # # TODO interpolate first?
+    # if frames[0][0] < frames[-1][0]:
+    #     ideal_z_values = np.arange(frames[0][0], frames[-1][0] + step, step)
+    # else:
+    #     ideal_z_values = np.arange(frames[0][0], frames[-1][0] - step, -step)
+    # # [(0, f1), (0, f2), (1, f3)] with ideal z's of [0, 1] should become [(0, f1), (1, f3)]
+    # # [(0, f1), (2, f2), (2, f3), (2, f4)] with ideal z's of [0, 1, 2] should become [(0, f1), (1, f2), (2, f4)]
+    # ideal_idx = 0
+    # actual_idx = 0
+    # actual_z_values = np.array([z for z, _ in frames])
+    # new_frame_idxs = []
+    # while ideal_idx < len(ideal_z_values) and actual_idx < len(frames):
+    #     next_closest = np.argmin(np.abs(actual_z_values - ideal_z_values[ideal_idx]))  # TODO this could be made faster if needed
+    #     next_closest = max(next_closest, actual_idx)  # don't go backwards
+    #     new_frame_idxs.append(next_closest)
+    #     ideal_idx += 1
+    #     actual_idx = next_closest + 1
+    # if len(new_frame_idxs) < expected_size:
+    #     raise ValueError("Insufficient frames to have one frame per step (after walking through).")
+    # return [frames[i][1] for i in new_frame_idxs]
 
 
 def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float, str], future: Optional[Future] = None):
