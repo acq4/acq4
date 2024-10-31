@@ -495,7 +495,7 @@ class Scientifica(SerialDevice):
         then only that axis is zeroed."""
         if axis is None:
             self.send('ZERO')
-        elif axis.upper() not in 'XYZ':
+        elif axis.upper() not in ('X', 'Y', 'Z'):
             raise ValueError(f"Invalid axis: {axis!r}")
         else:
             self.send(f'P{axis.upper()} 0')
