@@ -18,6 +18,8 @@ class RecordingChamber(Device, OptomechDevice):
         pos: x,y,z position of recording chamber
     """
 
+    defaultGeometryArgs = {"color": (0.1, 0.1, 0.1, 0.7), "close_bottom": True}
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
@@ -27,9 +29,6 @@ class RecordingChamber(Device, OptomechDevice):
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module."""
         return RecordingChamberCameraInterface(self, mod)
-
-    def defaultGeometryArgs(self):
-        return {"color": (0.1, 0.1, 0.1, 0.7), "radius": self.radius, "close_bottom": True}
 
     def globalCenter(self):
         return np.array(self.globalPosition())

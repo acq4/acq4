@@ -346,6 +346,8 @@ class Microscope(Device, OptomechDevice):
 
 class Objective(Device, OptomechDevice):
 
+    defaultGeometryArgs = {'color': (0, 0.7, 0.9, 0.4)}
+
     def __init__(self, config, scope, key):
         self._config = config
         self._scope = scope
@@ -364,9 +366,6 @@ class Objective(Device, OptomechDevice):
 
     def deviceTransform(self, subdev=None):
         return pg.SRTTransform3D(super().deviceTransform(subdev))
-
-    def defaultGeometryArgs(self):
-        return {'color': (0, 0.7, 0.9, 0.4)}
 
     def setOffset(self, pos):
         tr = self.deviceTransform()

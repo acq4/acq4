@@ -80,6 +80,7 @@ class Pipette(Device, OptomechDevice):
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
     pathGeneratorClass = PipettePathGenerator
+    defaultGeometryArgs = {'color': (0, 1, 0.2, 1)}
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -248,9 +249,6 @@ class Pipette(Device, OptomechDevice):
         iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
-
-    def defaultGeometryArgs(self):
-        return {'color': (0, 1, 0.2, 1)}
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
