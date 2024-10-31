@@ -1,5 +1,6 @@
 from acq4.util import Qt
 import pyqtgraph as pg
+from acq4.util.future import FutureButton
 
 
 class PatchPipetteDeviceGui(Qt.QWidget):
@@ -11,11 +12,10 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
 
-        self.cleanBtn = Qt.QPushButton('Clean Pipette')
-        self.cleanBtn.setCheckable(True)
+        self.cleanBtn = FutureButton(
+            self.doClean, 'Clean Pipette', stoppable=True, processing='Cleaning...', failure='Interrupted!')
         self.positionBtnLayout = Qt.QHBoxLayout()
         self.positionBtnLayout.addWidget(self.cleanBtn)
-        self.cleanBtn.clicked.connect(self.cleanClicked)
 
         positions = ['clean', 'rinse', 'extract', 'collect']
         self.positionBtns = {}
@@ -29,19 +29,8 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         row = self.layout.rowCount()
         self.layout.addLayout(self.positionBtnLayout, row, 0)
 
-    def cleanClicked(self):
-        if self.cleanBtn.isChecked():
-            self.cleanBtn.setText("Cleaning..")
-            self.cleanFuture = self.dev.setState('clean')
-            self.cleanFuture.sigFinished.connect(self.cleaningFinished)
-        else:
-            if self.cleanFuture is not None and not self.cleanFuture.isDone():
-                self.cleanFuture.stop()
-            self.cleanBtn.setText("Clean Pipette")
-
-    def cleaningFinished(self):
-        self.cleanBtn.setText("Clean Pipette")
-        self.cleanBtn.setChecked(False)
+    def doClean(self):
+        return self.dev.setState('clean')
 
     def setPositionClicked(self):
         btn = self.sender()
