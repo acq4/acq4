@@ -486,7 +486,8 @@ class Stage(Device, OptomechDevice):
         print(vel)
 
     def stop(self):
-        """Stop moving the device immediately. Beware of infinite recursion if you call MoveFuture.stop() from here.
+        """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
+        recursions.
         """
         raise NotImplementedError()
 
