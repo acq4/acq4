@@ -13,3 +13,4 @@ config/*
 crash.log
 .vscode/
 __pycache__
+acq4/devices/MockClamp/models/
