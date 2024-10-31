@@ -59,7 +59,7 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     if len(depths) < expected_size:
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
-    return [f for _, f in sorted(depths)]
+    return [f for _, f in sorted(depths, key=lambda x: x[0])]
 
     # TODO do we want this?
     # TODO interpolate first?

@@ -17,6 +17,8 @@ from pyqtgraph.units import µm
 
 
 class AutomationDebugWindow(Qt.QMainWindow):
+    sigLogMessage = Qt.Signal(str)
+
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
         self.failedCalibrations = []
@@ -25,18 +27,18 @@ class AutomationDebugWindow(Qt.QMainWindow):
         widget.setLayout(self._layout)
         self.setCentralWidget(widget)
         self.module = module
-        self.setWindowTitle('Automation Debug')
+        self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
 
-        self._clearBtn = Qt.QPushButton('Clear')
+        self._clearBtn = Qt.QPushButton("Clear")
         self._clearBtn.clicked.connect(self.clearBoundingBoxes)
         self._layout.addWidget(self._clearBtn)
 
-        self._zStackDetectBtn = Qt.QPushButton('Neurons in z-stack?')
+        self._zStackDetectBtn = Qt.QPushButton("Neurons in z-stack?")
         self._zStackDetectBtn.clicked.connect(self.startZStackDetect)
         self._layout.addWidget(self._zStackDetectBtn)
 
-        self._flatDetectBtn = Qt.QPushButton('Neurons in single frame?')
+        self._flatDetectBtn = Qt.QPushButton("Neurons in single frame?")
         self._flatDetectBtn.clicked.connect(self.startFlatDetect)
         self._layout.addWidget(self._flatDetectBtn)
 
@@ -45,9 +47,9 @@ class AutomationDebugWindow(Qt.QMainWindow):
         auto_layout = Qt.QGridLayout()
         auto_space.setLayout(auto_layout)
 
-        auto_layout.addWidget(Qt.QLabel('Top-left'), 0, 0)
-        self._setTopLeftButton = Qt.QPushButton('>')
-        self._setTopLeftButton.setProperty('maximumWidth', 15)
+        auto_layout.addWidget(Qt.QLabel("Top-left"), 0, 0)
+        self._setTopLeftButton = Qt.QPushButton(">")
+        self._setTopLeftButton.setProperty("maximumWidth", 15)
         self._setTopLeftButton.clicked.connect(self._setTopLeft)
         auto_layout.addWidget(self._setTopLeftButton, 0, 1)
         self._xLeftSpin = SpinBox()
@@ -56,10 +58,10 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._yTopSpin = SpinBox()
         self._yTopSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         auto_layout.addWidget(self._yTopSpin, 0, 3)
-        self._setBottomRightButton = Qt.QPushButton('>')
-        self._setBottomRightButton.setProperty('maximumWidth', 15)
+        self._setBottomRightButton = Qt.QPushButton(">")
+        self._setBottomRightButton.setProperty("maximumWidth", 15)
         self._setBottomRightButton.clicked.connect(self._setBottomRight)
-        auto_layout.addWidget(Qt.QLabel('Bottom-right'), 1, 0)
+        auto_layout.addWidget(Qt.QLabel("Bottom-right"), 1, 0)
         auto_layout.addWidget(self._setBottomRightButton, 1, 1)
         self._xRightSpin = SpinBox()
         self._xRightSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
@@ -68,7 +70,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self._yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         auto_layout.addWidget(self._yBottomSpin, 1, 3)
 
-        self._autoTargetBtn = Qt.QPushButton('Find a \nrandom target')
+        self._autoTargetBtn = Qt.QPushButton("Find a \nrandom target")
         self._autoTargetBtn.clicked.connect(self.startAutoTarget)
         auto_layout.addWidget(self._autoTargetBtn, 0, 4, 1, 2)
 
@@ -86,14 +88,24 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 self._cameraSelector.addItem(name)
         pipette_layout.addWidget(self._pipetteSelector, 0, 0)
         pipette_layout.addWidget(self._cameraSelector, 0, 1)
-        self._testPipetteBtn = FeedbackButton('Test pipette calibration')
+
+        self._trackFeaturesBtn = FeedbackButton("Track target by features")
+        self._trackFeaturesBtn.clicked.connect(self.trackFeatures)
+        self._trackingFeatures = False
+        self._featureTrackingFuture = None
+        self._featureTracker = None
+        pipette_layout.addWidget(self._trackFeaturesBtn, 1, 0, 1, 2)
+
+        self._testPipetteBtn = FeedbackButton("Test pipette calibration")
         self._testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
         self._testing_pipette = False
         self._testPipetteBtn.clicked.connect(self.togglePipetteCalibration)
-        pipette_layout.addWidget(self._testPipetteBtn, 1, 0, 1, 2)
+        pipette_layout.addWidget(self._testPipetteBtn, 2, 0, 1, 2)
+
         self._pipetteLog = Qt.QTextEdit()
         self._pipetteLog.setReadOnly(True)
-        pipette_layout.addWidget(self._pipetteLog, 2, 0, 1, 2)
+        self.sigLogMessage.connect(self._pipetteLog.append)
+        pipette_layout.addWidget(self._pipetteLog, 3, 0, 1, 2)
 
         self.show()
 
@@ -110,7 +122,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
             self._pipetteFuture = self.doPipetteCalibrationTest()
             self._pipetteFuture.sigFinished.connect(self._handleCalibrationFinish)
             self._testPipetteBtn.setEnabled(True)
-            self._testPipetteBtn.setText('Interrupt pipette\ncalibration test')
+            self._testPipetteBtn.setText("Interrupt pipette\ncalibration test")
             self._testPipetteBtn.setStyleSheet("QPushButton {background-color: green}")
 
     @future_wrap
@@ -126,16 +138,87 @@ class AutomationDebugWindow(Qt.QMainWindow):
                 calibrtion_fut = calibratePipette(pipette, camera, camera.scopeDev)
                 _future.waitFor(calibrtion_fut)
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self._pipetteLog.append(f'Calibration complete: {error*1e6:.2g}µm error')
+                self.sigLogMessage.emit(f"Calibration complete: {error*1e6:.2g}µm error")
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
-                    self._pipetteLog.append(f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]')
+                    self.sigLogMessage.emit(
+                        f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
+                    )
 
             except Exception as e:
                 if self._testing_pipette:
                     raise
-                self._pipetteLog.append('Calibration interrupted by user request')
+                self.sigLogMessage.emit("Calibration interrupted by user request")
+
+    def trackFeatures(self):
+        if self._trackingFeatures:
+            self._trackingFeatures = False
+            self._trackFeaturesBtn.setText("Track target by features")
+            self._trackFeaturesBtn.setStyleSheet("")
+            self._featureTrackingFuture.stop()  # TODO force kill the thread after a timeout
+        else:
+            self._trackingFeatures = True
+            self._trackFeaturesBtn.setText("Stop tracking")
+            self._trackFeaturesBtn.setStyleSheet("QPushButton {background-color: green; color: white}")
+            self._featureTrackingFuture = self.doFeatureTracking()
+            self._featureTrackingFuture.sigFinished.connect(self._handleFeatureTrackingFinish)
+
+    @future_wrap
+    def doFeatureTracking(self, _future: Future):
+        _future.sleep(0.1)
+        from acq4.util.visual_tracker import PyrLK3DTracker, ObjectStack, ImageStack
+
+        pipette = self.pipetteDevice
+        pix = self.cameraDevice.getPixelSize()[0]  # assume square pixels
+        target = pipette.targetPosition()
+        start = target[2] - 10e-6
+        stop = target[2] + 10e-6
+        step = 1e-6
+        direction = 1
+        tracker = None
+
+        _future.waitFor(pipette.focusTarget())
+
+        while True:
+            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step), timeout=60).getResult()
+            # get the closest frame to the target depth
+            depths = [abs(f.depth - target[2]) for f in stack]
+            z = np.argmin(depths)
+            target_frame = stack[z]
+            relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
+            stack_data = np.array([frame.data().T for frame in stack])
+            start, stop = stop, start
+            if tracker is None:
+                obj_stack = ObjectStack(
+                    img_stack=stack_data,
+                    px_size=pix,
+                    z_step=step,
+                    obj_center=relative_target,
+                    tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
+                    feature_radius=12e-6,
+                )
+                tracker = self._featureTracker = PyrLK3DTracker()
+                tracker.set_tracked_object(obj_stack)
+                continue
+            if direction < 0:
+                stack_data = stack_data[::-1]
+            direction *= -1
+            result = tracker.next_frame(ImageStack(stack_data, pix, step * direction))
+            z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
+            frame = stack[round(z)]
+            target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
+            pipette.setTarget(target)
+            self.sigLogMessage.emit(f"Updated target to ({x}, {y}, {z}): {target}")
+
+    def _handleFeatureTrackingFinish(self, fut: Future):
+        try:
+            fut.wait()  # to raise errors
+        finally:
+            self._trackingFeatures = False
+            self._featureTrackingFuture = None
+            self._trackFeaturesBtn.setText("Track target by features")
+            self._trackFeaturesBtn.setStyleSheet("")
 
     def _handleCalibrationFinish(self, fut: Future):
         try:
@@ -143,10 +226,10 @@ class AutomationDebugWindow(Qt.QMainWindow):
         finally:
             self._setWorkingState(False)
             self._testing_pipette = False
-            self._testPipetteBtn.setText('Test pipette calibration')
+            self._testPipetteBtn.setText("Test pipette calibration")
 
     def _setWorkingState(self, working: bool):
-        self.module.manager.getModule('Camera').window()  # make sure camera window is open
+        self.module.manager.getModule("Camera").window()  # make sure camera window is open
         self._clearBtn.setEnabled(not working)
         self._zStackDetectBtn.setEnabled(not working)
         self._flatDetectBtn.setEnabled(not working)
@@ -197,7 +280,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         target_fut.sigFinished.connect(self._handleAutoFinish)
 
     def clearBoundingBoxes(self):
-        cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
+        cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         for widget in self._previousBoxWidgets:
             cam_win.removeItem(widget)
         self._previousBoxWidgets = []
@@ -210,11 +293,11 @@ class AutomationDebugWindow(Qt.QMainWindow):
         return self._previousBoxWidgets
 
     def _displayBoundingBoxes(self, bounding_boxes):
-        cam_win: CameraWindow = self.module.manager.getModule('Camera').window()
+        cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()
         for start, end in bounding_boxes:
             box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(*start), Qt.QPointF(*end)))
-            box.setPen(mkPen('r', width=2))
+            box.setPen(mkPen("r", width=2))
             box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
             cam_win.addItem(box)
             self._previousBoxWidgets.append(box)
@@ -253,7 +336,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
         # TODO don't know why this hangs when using waitFor, but it does
         depth = self.scopeDevice.findSurfaceDepth(
-            self.cameraDevice, searchDistance=50*µm, searchStep=15*µm, block=True
+            self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
         ).getResult()
         depth -= 50 * µm
         self.cameraDevice.setFocusDepth(depth)
@@ -290,7 +373,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
         _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
         # TODO don't know why this hangs when using waitFor, but it does
         depth = self.scopeDevice.findSurfaceDepth(
-            self.cameraDevice, searchDistance=50*µm, searchStep=15*µm, block=True
+            self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
         ).getResult()
         depth -= 50 * µm
         self.cameraDevice.setFocusDepth(depth)
@@ -308,9 +391,9 @@ class AutomationDebug(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = AutomationDebugWindow(self)
-        manager.declareInterface(name, ['automationDebugModule'], self)
+        manager.declareInterface(name, ["automationDebugModule"], self)
         this_dir = os.path.dirname(__file__)
-        self.ui.setWindowIcon(Qt.QIcon(os.path.join(this_dir, 'Manager', 'icon.png')))
+        self.ui.setWindowIcon(Qt.QIcon(os.path.join(this_dir, "Manager", "icon.png")))
 
     def quit(self, fromUi=False):
         if not fromUi:
