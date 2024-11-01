@@ -185,9 +185,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             else:
                 msg = f"Task {self} did not complete: {err}"
             if self._excInfo is not None:
-                raise RuntimeError(msg) from self._excInfo[1]
+                raise self._excInfo[1] from self._excInfo[1]
             else:
-                raise RuntimeError(msg)
+                raise self.StopRequested(msg)
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
@@ -409,12 +409,15 @@ class FutureButton(FeedbackButton):
         self.sigFinished.emit(future)
         if not future.wasInterrupted():
             self.success(self._success or "Success")
+        elif self._userRequestedStop:
+            self._userRequestedStop = False
+            self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or 'Failed!')[:40])
-            if self._userRequestedStop:
-                self._userRequestedStop = False
-            else:
+            try:
                 future.wait()  # throw errors
+            except Future.StopRequested:
+                self.reset()
 
     def _futureStateChanged(self, future, state):
         self.setText(state, temporary=True)

@@ -442,7 +442,7 @@ class ScientificaGUI(StageInterface):
             alert.setInformativeText("Please ensure that the device is not obstructed.")
             alert.setStandardButtons(Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel)
             if alert.exec_() != Qt.QMessageBox.Ok:
-                return  # TODO make this a failure but not an error
+                raise _future.StopRequested()
 
             self.dev.setLimits(None, None, None)
             pos = self.dev.globalPosition()
