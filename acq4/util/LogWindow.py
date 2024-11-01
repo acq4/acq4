@@ -11,11 +11,6 @@ from typing import Union, Optional
 import numpy as np
 
 import pyqtgraph.configfile as configfile
-from acq4.util import Qt
-from acq4.util.DataManager import DirHandle
-from acq4.util.HelpfulException import HelpfulException
-from acq4.util.codeEditor import invokeCodeEditor
-from acq4.util.json_encoder import ACQ4JSONEncoder
 from pyqtgraph import FeedbackButton
 from pyqtgraph import FileDialog
 from pyqtgraph.debug import threadName
@@ -23,6 +18,12 @@ from pyqtgraph.debug import threadName
 if __name__ == "__main__":
     libdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path = [os.path.join(libdir, "lib", "util")] + sys.path + [libdir]
+
+from acq4.util import Qt
+from acq4.util.DataManager import DirHandle
+from acq4.util.HelpfulException import HelpfulException
+from acq4.util.codeEditor import invokeCodeEditor
+from acq4.util.json_encoder import ACQ4JSONEncoder
 
 LogWidgetTemplate = Qt.loadUiType(os.path.join(os.path.dirname(__file__), "LogWidgetTemplate.ui"))[0]
 
