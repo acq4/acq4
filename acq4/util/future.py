@@ -351,7 +351,7 @@ class FutureButton(FeedbackButton):
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
-    def __init__(self, future_producer: Callable[[...], Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
+    def __init__(self, future_producer: Callable[ParamSpec, Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
         """Create a new FutureButton.
 
         Parameters
