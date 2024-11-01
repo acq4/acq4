@@ -418,20 +418,6 @@ class ScientificaGUI(StageInterface):
         self.sigBusyMoving.emit(self.autoZZeroBtn)
         return self._autoZero(axis=2)
 
-    # def _autoZero(self, axis: int | None = None):
-    #     self.autoZeroBtn.processing("Moving...")
-    #     self.autoXZeroBtn.processing("Moving...")
-    #     self.autoYZeroBtn.processing("Moving...")
-    #     self.autoZZeroBtn.processing("Moving...")
-    #     self._autoZeroFuture = self._doAutoZero(axis)
-    #     if axis is None:
-    #         finisher = self.autoZeroFinished
-    #     else:
-    #         finisher = getattr(self, f"auto{'XYZ'[axis]}ZeroFinished")
-    #     self._autoZeroFuture.sigFinished.connect(finisher)
-    #     if self._autoZeroFuture.isDone():  # in case of instant completion
-    #         finisher()
-
     @future_wrap
     def _autoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
