@@ -444,7 +444,7 @@ class ScientificaGUI(StageInterface):
             self.dev.setLimits(None, None, None)
             pos = self.dev.globalPosition()
             dest = pos[:]
-            far_away = [-1e10, -1e10, 1e10]
+            far_away = [-1, -1, 1]  # meters
             if axis is None:
                 dest = far_away
             else:
