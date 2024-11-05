@@ -422,18 +422,25 @@ class ScientificaGUI(StageInterface):
         self.sigBusyMoving.emit(self.autoZZeroBtn)
         return self._autoZero(axis=2)
 
+    def _autoZero(self, axis: int | None = None):
+        # confirm with user that movement is safe
+        response = Qt.QMessageBox.question(
+            self,
+            "Caution: check for obstructions",
+            "This will move the stage to its limit. Please ensure such a movement is safe. Ready?",
+            Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
+        )
+        if response != Qt.QMessageBox.Ok:
+            return Future.immediate(
+                error="User requested stop", excInfo=(Future.StopRequested, Future.StopRequested(), None)
+            )
+
+        return self._doAutoZero(axis)
+
     @future_wrap
-    def _autoZero(self, axis: int = None, _future: Future = None) -> None:
+    def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
-            # confirm with user that movement is safe
-            alert = Qt.QMessageBox()
-            alert.setText("This will move the stage to its limit and set that as the zero position. Ready?")
-            alert.setInformativeText("Please ensure that the device is not obstructed.")
-            alert.setStandardButtons(Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel)
-            if alert.exec_() != Qt.QMessageBox.Ok:
-                raise _future.StopRequested()
-
             self.dev.setLimits(None, None, None)
             pos = self.dev.globalPosition()
             dest = pos[:]
