@@ -31,10 +31,10 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
 
     @classmethod
-    def immediate(cls, result=None):
+    def immediate(cls, result=None, error=None, excInfo=None) -> Future:
         """Create a future that is already resolved with the optional result."""
         fut = cls()
-        fut._taskDone(returnValue=result)
+        fut._taskDone(returnValue=result, error=error, interrupted=error is not None, excInfo=excInfo)
         return fut
 
     def __init__(self):
