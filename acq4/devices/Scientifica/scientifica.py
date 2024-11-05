@@ -345,6 +345,7 @@ class ScientificaGUI(StageInterface):
         )
         self.layout.addWidget(self.autoZeroBtn, nextRow, 1)
         nextRow += 1
+        self.autoXZeroBtn = self.autoYZeroBtn = self.autoZZeroBtn = None
 
         if dev.capabilities()["getPos"][0]:
             self.xZeroBtn = Qt.QPushButton("Zero X")
@@ -386,9 +387,12 @@ class ScientificaGUI(StageInterface):
 
     def _setBusy(self, busy_btn: bool | Qt.QPushButton):
         self.autoZeroBtn.setEnabled(busy_btn == self.autoZeroBtn or not busy_btn)
-        self.autoXZeroBtn.setEnabled(busy_btn == self.autoXZeroBtn or not busy_btn)
-        self.autoYZeroBtn.setEnabled(busy_btn == self.autoYZeroBtn or not busy_btn)
-        self.autoZZeroBtn.setEnabled(busy_btn == self.autoZZeroBtn or not busy_btn)
+        if self.autoXZeroBtn:
+            self.autoXZeroBtn.setEnabled(busy_btn == self.autoXZeroBtn or not busy_btn)
+        if self.autoYZeroBtn:
+            self.autoYZeroBtn.setEnabled(busy_btn == self.autoYZeroBtn or not busy_btn)
+        if self.autoZZeroBtn:
+            self.autoZZeroBtn.setEnabled(busy_btn == self.autoZZeroBtn or not busy_btn)
 
     def zeroAll(self):
         self.dev.dev.zeroPosition()
@@ -461,38 +465,3 @@ class ScientificaGUI(StageInterface):
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
             self.sigBusyMoving.emit(False)
-
-    def autoZeroFinished(self):
-        self._autoZeroFinished()
-
-    def autoXZeroFinished(self):
-        self._autoZeroFinished(0)
-
-    def autoYZeroFinished(self):
-        self._autoZeroFinished(1)
-
-    def autoZZeroFinished(self):
-        self._autoZeroFinished(2)
-
-    def _autoZeroFinished(self, axis=None):
-        self.autoZeroBtn.setEnabled(True)
-        self.autoZeroBtn.reset()
-        self.autoXZeroBtn.setEnabled(True)
-        self.autoXZeroBtn.reset()
-        self.autoYZeroBtn.setEnabled(True)
-        self.autoYZeroBtn.reset()
-        self.autoZZeroBtn.setEnabled(True)
-        self.autoZZeroBtn.reset()
-        if axis is None:
-            btn = self.autoZeroBtn
-        else:
-            btn = getattr(self, f"auto{'XYZ'[axis]}ZeroBtn")
-        try:
-            self._autoZeroFuture.wait()
-        except Exception as e:
-            btn.failure('Error!')
-            raise e
-        else:
-            btn.success("Zero position set")
-        finally:
-            self._autoZeroFuture = None
