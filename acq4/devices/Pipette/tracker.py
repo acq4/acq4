@@ -9,7 +9,7 @@ from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
-from .pipette_detection import TemplateMatchPipetteDetector
+from .pipette_detection import TemplateMatchPipetteDetector, ResnetPipetteDetector
 
 
 class PipetteTracker(object):
@@ -21,7 +21,8 @@ class PipetteTracker(object):
 
     """
 
-    detectorClass = TemplateMatchPipetteDetector
+    # detectorClass = TemplateMatchPipetteDetector
+    detectorClass = ResnetPipetteDetector
 
     def __init__(self, pipette):
         self.dev = pipette
@@ -200,7 +201,7 @@ class PipetteTracker(object):
             pickle.dump(self.reference, fh)
 
     def measureTipPosition(
-        self, frame, searchRegion="near_tip", padding=50e-6, threshold=0.6, pos=None, tipLength=None, movePipette=False
+        self, frame, searchRegion="near_tip", padding=50e-6, threshold=0.6, pos=None, movePipette=False
     ):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
@@ -220,9 +221,6 @@ class PipetteTracker(object):
             If the confidence of the match is less than *threshold*, then raise RuntimeError.
         pos : array-like
             Expected position of tip in global coordinates
-        tipLength : float
-            Length (m) of tip to be imaged in order to provide sufficient data to the matching algorithm.
-            This is also used when deciding how far to move the pipette when movePipette==True.
         movePipette : bool
             If True, then take two frames with the pipette moved away for the second frame to allow background subtraction
 
@@ -236,12 +234,11 @@ class PipetteTracker(object):
 
         If movePipette, then take two frames with the pipette moved away for the second frame to allow background subtraction
         """
-        # load up template images
-        reference = self._getReference()
+        detector = self.detectorClass(tracker=self, pipette=self.dev)
 
-        if tipLength is None:
-            # select a tip length similar to template images
-            tipLength = reference["tipLength"]
+        tipLength = detector.suggestTipLength()
+        if padding is None:
+            padding = tipLength
 
         if movePipette:
             # move pipette and take a background frame
@@ -251,8 +248,6 @@ class PipetteTracker(object):
             bg_frame = self.takeFrame()
         else:
             bg_frame = None
-
-        detector = self.detectorClass(reference, self.dev)
 
         if searchRegion == 'near_tip':
             # generate suggested crop and pipette position
@@ -281,7 +276,7 @@ class PipetteTracker(object):
         measuredTipPos, corr = self.measureTipPosition(frame, padding, threshold, pos=pos, movePipette=movePipette)
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
-    def _getReference(self):
+    def getReference(self):
         key = self._getImager().getDeviceStateKey()
         try:
             return self.reference[key]
@@ -297,18 +292,10 @@ class PipetteTracker(object):
 
         All keyword arguments are passed to `measureTipPosition()`.
         """
-        # If no image padding is given, then use the template tip length as a first guess
-        if "padding" not in kwds:
-            ref = self._getReference()
-            kwds["padding"] = ref["tipLength"]
         if "frame" not in kwds:
             kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
         
-        try:
-            tipPos, corr = self.measureTipPosition(**kwds)
-        except RuntimeError:
-            kwds["padding"] *= 2
-            tipPos, corr = self.measureTipPosition(**kwds)
+        tipPos, corr = self.measureTipPosition(**kwds)
 
         localError = self.dev.mapFromGlobal(tipPos)
         tr = self.dev.deviceTransform()
