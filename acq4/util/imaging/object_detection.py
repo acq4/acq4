@@ -116,7 +116,8 @@ def get_pipette_detection_model():
     return _pipette_detection_model
 
 
-def do_pipette_tip_detection(data: np.ndarray, angle: float):
+analysis_window = None
+def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
     """
     Parameters
     ----------
@@ -128,10 +129,12 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
     from acq4.util.pipette_detection.torch_model_04 import make_image_tensor, pos_normalizer
     from acq4.util.pipette_detection.test_data import make_rotated_crop
 
+    global analysis_window
+
     model = get_pipette_detection_model()
 
     # rotate and crop image
-    margin = (np.array(data.shape) - 400) // 2
+    margin = np.clip((np.array(data.shape) - 400) // 2, 0, None)
     crop = (slice(margin[0], margin[0]+400), slice(margin[1], margin[1]+400))
     rot, tr = make_rotated_crop(data, -angle, crop)
     # convert to 0-255 rgb
@@ -147,6 +150,15 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
 
     # unrotate/uncrop prediction
     pos_xy = tr.imap([y, x])
+
+    if show:
+        imv = pg.ImageView()
+        imv.setImage(img.T)
+        pt = pg.TargetItem(pos=(x, y))
+        imv.target = pt
+        imv.view.addItem(pt)
+        imv.show()
+        analysis_window = imv
 
     return pos_xy, z, snr, locals()
 

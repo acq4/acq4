@@ -117,6 +117,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
         # self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
+        self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
 
         # self.ui.moveInBtn.clicked.connect(self.moveIn)
@@ -312,6 +313,11 @@ class MultiPatchWindow(Qt.QWidget):
             pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked_calibrate)
             self._calibratePips = []
             self._calibrateStagePositions = []
+
+    def autoCalibrateClicked(self):
+        pips = self.selectedPipettes()
+        for pip in pips:
+            pip.pipetteDevice.tracker.autoCalibrate()
 
     def setTargetToggled(self, b):
         cammod = getManager().getModule('Camera')
