@@ -366,7 +366,7 @@ class PlotWidget(Qt.QWidget):
         # self.closeBtn.hide()
 
     def newTestPulse(self, tp, history):
-        if self.mode in ['test pulse', 'tp analysis']:
+        if tp.data and self.mode in ['test pulse', 'tp analysis']:
             data = tp.data
             pri = data['Channel': 'primary']
             units = pri._info[-1]['ClampState']['primaryUnits'] 
