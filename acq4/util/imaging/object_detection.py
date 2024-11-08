@@ -224,7 +224,7 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, d
         # niter=2000,
         channel_axis=1,
         z_axis=0 if do_3d else None,
-        stitch_threshold=0.25 if do_3d else None,
+        stitch_threshold=0.25 if do_3d else 0,
     )
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
 
