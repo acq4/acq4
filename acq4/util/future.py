@@ -26,6 +26,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by checkStop if stop() has been invoked.
         """
 
+    class Stopped(Exception):
+        """Raised by exceptions that were politely stopped."""
+
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses.
         """
@@ -179,15 +182,18 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 self._wait(pollInterval)
         
         if self.wasInterrupted():
+            if self._excInfo is not None:
+                raise self._excInfo[1]
+
             err = self.errorMessage()
             if err is None:
                 msg = f"Task {self} did not complete (no error message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
-            if self._excInfo is not None:
-                raise self._excInfo[1] from self._excInfo[1]
+            if self._stopRequested:
+                raise self.Stopped(msg)
             else:
-                raise self.StopRequested(msg)
+                raise RuntimeError(msg)
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
@@ -416,7 +422,7 @@ class FutureButton(FeedbackButton):
             self.failure(self._failure or (future.errorMessage() or 'Failed!')[:40])
             try:
                 future.wait()  # throw errors
-            except Future.StopRequested:
+            except Future.Stopped:
                 self.reset()
 
     def _futureStateChanged(self, future, state):

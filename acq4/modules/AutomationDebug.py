@@ -137,7 +137,7 @@ class AutomationDebugWindow(Qt.QMainWindow):
                     self.sigLogMessage.emit(
                         f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
                     )
-            except Future.StopRequested:
+            except Future.Stopped:
                 self.sigLogMessage.emit('Calibration interrupted by user request')
                 break
 
@@ -195,7 +195,6 @@ class AutomationDebugWindow(Qt.QMainWindow):
         self.sigWorking.emit(False)
 
     def _setWorkingState(self, working: bool | Qt.QPushButton):
-        print(f"Setting working state to {working!r}")
         if working:
             self.module.manager.getModule("Camera").window()  # make sure camera window is open
         self._zStackDetectBtn.setEnabled(working == self._zStackDetectBtn or not working)
@@ -239,12 +238,11 @@ class AutomationDebugWindow(Qt.QMainWindow):
 
     def _handleDetectResults(self, neurons_fut: Future) -> list:
         try:
+            if neurons_fut.wasInterrupted():
+                return
             self._displayBoundingBoxes(neurons_fut.getResult())
-        except Future.StopRequested:
-            pass
         finally:
             self.sigWorking.emit(False)
-        return self._previousBoxWidgets
 
     def _displayBoundingBoxes(self, bounding_boxes):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
