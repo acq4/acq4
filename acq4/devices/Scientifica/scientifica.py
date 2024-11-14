@@ -14,6 +14,7 @@ from acq4.util.Thread import Thread
 from acq4.util.debug import logMsg
 from acq4.util.future import future_wrap, Future, FutureButton
 from pyqtgraph import debug, SpinBox, siFormat
+from pyqtgraph.units import µm
 
 
 class Scientifica(Stage):
@@ -465,9 +466,9 @@ class ScientificaGUI(StageInterface):
             logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
             _future.waitFor(self.dev.moveToGlobal(pos + diff, "fast"))
             dist = np.linalg.norm(diff)
-            if dist > 1e-2:
+            if dist > 50 * µm:
                 raise HelpfulException(
-                    f"Zeroing {self.dev.name()} moved by {siFormat(dist, suffix='m')}: check for accuracy.")
+                    f"Zeroing {self.dev.name()} indicates slippage of {siFormat(dist, suffix='m')}")
         finally:
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
