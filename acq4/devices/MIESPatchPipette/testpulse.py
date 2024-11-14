@@ -1,9 +1,8 @@
-from __future__ import print_function
-import time
+from acq4.devices.PatchPipette.testpulse import TestPulseThread
 from acq4.util import Qt
 
 
-class MIESTestPulseThread(Qt.QObject):
+class MIESTestPulseThread(TestPulseThread):
     """Run periodic test pulses over MIES bridge.
 
     Note: we do not actually start a thread here since the TP is run in the MIES process instead
@@ -13,7 +12,7 @@ class MIESTestPulseThread(Qt.QObject):
     finished = Qt.Signal()
 
     def __init__(self, dev, params):
-        Qt.QObject.__init__(self)
+        TestPulseThread.__init__(self, dev, params)
         self.dev = dev
         self._headstage = dev._headstage
         dev.mies.sigDataReady.connect(self.newTestPulse)
@@ -41,17 +40,13 @@ class MIESTestPulseThread(Qt.QObject):
             TPData = {}
         return TPData
 
-    def setParameters(self, **kwds):
-        # what to do here? probably we don't support this for now.
-        pass
-
-    def getParameter(self, param):
-        return None
-
     def start(self):
         pass
 
     def stop(self, block=False):
+        pass
+
+    def run(self):
         pass
 
 
