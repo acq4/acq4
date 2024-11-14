@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import collections
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
@@ -20,7 +22,56 @@ class Geometry:
         """Return a 3D model to be displayed in the 3D visualization window."""
         from acq4.modules.Visualize3D import create_geometry
 
-        if self._config:
+        if isinstance(self._config, str):
+            from pymp import Planner
+            import hppfcl
+
+            urdf = self._config
+            srdf = f"{urdf[:-5]}.srdf"
+            end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
+            joints = [
+                j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"
+            ]
+            planner = Planner(urdf, joints, end_effector, srdf)
+            objects = []
+            for obj in planner.scene.collision_model.geometryObjects:
+                geom = obj.geometry
+                if isinstance(geom, hppfcl.Cylinder):
+                    conf = {
+                        "type": "cylinder",
+                        "radius": geom.radius,
+                        "height": 2.0 * geom.halfLength,
+                        "close_top": True,
+                        "close_bottom": True,
+                    }
+                elif isinstance(geom, hppfcl.Cone):
+                    conf = {
+                        "type": "cone",
+                        "bottom_radius": geom.radius,
+                        "top_radius": 0,
+                        "height": 2.0 * geom.halfLength,
+                        "close_bottom": True,
+                    }
+                elif isinstance(geom, hppfcl.Box):
+                    conf = {"type": "box", "size": 2.0 * geom.halfSide}
+                else:
+                    raise ValueError(f"Unsupported geometry type: {type(geom)}")
+                print(obj.name, obj.placement)
+                xform = np.dot(
+                    np.array(planner.scene.model.jointPlacements[obj.parentJoint]),
+                    np.array(obj.placement),
+                )
+                conf["transform"] = Qt.QtGui.QMatrix4x4(xform.reshape((-1,)))
+                objects.append({obj.name: conf})
+
+            root = objects.pop(0)
+            last = root
+            while objects:
+                obj = objects.pop(0)
+                list(last.values())[0].setdefault("children", {}).update(obj)
+                last = obj
+            return create_geometry(defaults=self._defaults, **root)
+        elif self._config:
             args = {**self._config}
             return create_geometry(defaults=self._defaults, **args)
         return []

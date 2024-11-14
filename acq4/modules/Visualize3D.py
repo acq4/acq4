@@ -65,6 +65,25 @@ def truncated_cone(
     return vertices, np.array(faces)
 
 
+class BoxVisual:
+    def __init__(self, name: str, size: tuple, color=(1, 0.7, 0.1, 0.4), transform=None):
+        self._drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
+        self._deviceTransform = MatrixTransform()
+
+        self.mesh = visuals.Box(
+            width=size[0],
+            height=size[1],
+            depth=size[2],
+            color=color,
+            edge_color=(0, 0, 0, 1),
+        )
+        self.mesh.transform = ChainTransform(self._deviceTransform, self._drawingTransform)
+
+    def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
+        xform = dev.globalPhysicalTransform()
+        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
+
+
 class TruncatedConeVisual:
     def __init__(
         self,
@@ -85,56 +104,74 @@ class TruncatedConeVisual:
         self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
 
 
-def _convert_to_args(**config) -> dict:
-    # TODO delete this function and use cylinders
-    if "radius" in config:
-        config["bottom_radius"] = config.pop("radius")
-        config["top_radius"] = config["bottom_radius"]
-    return config
+class CylinderVisual(TruncatedConeVisual):
+    def __init__(self, name: str, color=(1, 0.7, 0.1, 0.4), radius=None, transform=None, **kwargs):
+        kwargs["top_radius"] = radius
+        kwargs["bottom_radius"] = radius
+        super().__init__(name, color, transform, **kwargs)
+
+
+_VISUALS = {
+    "box": BoxVisual,
+    "cone": TruncatedConeVisual,
+    "cylinder": CylinderVisual,
+}
+_CONTROL_ARGS = (
+    {"type"}
+    | set(truncated_cone.__code__.co_varnames)
+    | set(BoxVisual.__init__.__code__.co_varnames)
+    | set(CylinderVisual.__init__.__code__.co_varnames)
+    | set(TruncatedConeVisual.__init__.__code__.co_varnames)
+)
 
 
 def create_geometry(defaults=None, **config):
     """Create 3D mesh from a configuration. Format example::
 
         geometry:
-            color: (1, 0.7, 0.1, 0.4)  # default arguments at top level
-            transform:
-                pitch: 45
-            radius: 20 * mm            # radius expands to top and bottom radii
+            color: (1, 0.7, 0.1, 1)    # default arguments at top level
+            type: "cone"               # type must be "cone", "cylinder" or "box"
+            top_radius: 20 * mm
+            bottom_radius: 4 * mm
             component_1:               # arbitrary names for components
                 height: 3 * mm
                 top_radius: 40 * mm    # overrides top-level defaults
                 transform:
                     pos: 0, 0, -10 * um
+                children:              # nested components compound their transforms
+                    halo:
+                        type: "cylinder"
+                        height: 1 * mm
+                        radius: 50 * mm
+                        color: (1, 1, 1, 0.1)
+                        transform:
+                            pos: 0, 0, 3 * mm
             fuse:                      # some devices may expect specific component names
-                height: 80 * mm
-                close_bottom: True
+                type: "box"
+                size: (80 * mm, 80 * mm, 10 * mm)
                 transform:
                     pos: 0, 0, -83 * mm
 
-    If no components are specified beyond the default arguments, a single geometry is created.
-    TODO Alternately, geometry can be a filename.
+    If no components are specified beyond the toplevel config, a single geometry is created.
     """
     if defaults is None:
         defaults = {}
-    defaults = _convert_to_args(**defaults)
-    config = _convert_to_args(**config)
     for key in list(config.keys()):
-        if key in truncated_cone.__code__.co_varnames or key in TruncatedConeVisual.__init__.__code__.co_varnames:
+        if key in _CONTROL_ARGS:
             defaults[key] = config.pop(key)
     if len(config) < 1:
         defaults.setdefault("name", "geometry")
-        return [TruncatedConeVisual(**defaults)]
+        return [_VISUALS[defaults.pop("type")](**defaults)]
     objects = []
     for name, obj in config.items():
-        obj = _convert_to_args(**obj)
+        print(name, obj, defaults)
         args = {**defaults, **obj}
         kid_args = args.pop("children", {})
-        cone = TruncatedConeVisual(name=name, **args)
-        objects.append(cone)
+        visual = _VISUALS[args.pop("type")](name=name, **args)
+        objects.append(visual)
         if kid_args:
             for kid in create_geometry(defaults=defaults, **kid_args):
-                kid.mesh.parent = cone.mesh
+                kid.mesh.parent = visual.mesh
     return objects
 
 
