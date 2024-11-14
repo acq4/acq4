@@ -1,4 +1,3 @@
-from __future__ import print_function
 from acq4.util.mies import MIES
 from ..PatchClamp import PatchClamp
 
@@ -29,3 +28,6 @@ class MIESPatchClamp(PatchClamp):
 
     def getState(self):
         return {'mode': 'ic'}
+    
+    def getDAQName(self, channel):
+        return None
