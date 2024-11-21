@@ -53,7 +53,7 @@ class MockStage(Stage):
             }
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return 'x', 'y', 'z'
 
     def _move(self, pos, speed, linear, **kwds):
         """Called by base stage class when the user requests to move to an
@@ -65,6 +65,10 @@ class MockStage(Stage):
             speed = self._interpretSpeed(speed)
             self._lastMove = MockMoveFuture(self, pos, speed)
             return self._lastMove
+
+    def _interpretSpeed(self, speed):
+        speed = super()._interpretSpeed(speed)
+        return speed / np.linalg.norm(self.config.get('scale', [1]))
 
     def eventFilter(self, obj, ev):
         """Catch key press/release events used for driving the stage.
