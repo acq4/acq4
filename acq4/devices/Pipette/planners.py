@@ -26,6 +26,7 @@ class PipettePathGenerator:
     The default implementation assumes an upright scope (requiring objective avoidance) and a thick sample
     (requiring slow, axial motion).
     """
+
     def __init__(self, pip: Pipette):
         self.pip = pip
         self.manipulator: Stage = pip.parentDevice()
@@ -57,7 +58,7 @@ class PipettePathGenerator:
             if not canMoveLaterally:
                 # need to retract first
                 safePos = self.pip.positionAtDepth(slowDepth, start=globalStart)
-                path.append((safePos, 'slow', True, RETRACTION_TO_AVOID_SAMPLE_TEAR))
+                path.append((safePos, "slow", True, RETRACTION_TO_AVOID_SAMPLE_TEAR))
                 # the rest of this method continues as if safePos is the starting point
                 globalStart = safePos
 
@@ -76,7 +77,7 @@ class PipettePathGenerator:
         waypoint1 = innerPos - localDirection * abs((diff[0] / localDirection[0]))
         waypoint2 = innerPos - localDirection * abs((diff[2] / localDirection[2]))
         dist1 = np.linalg.norm(waypoint1 - innerPos)
-        dist2 = np.linalg.norm(waypoint2-innerPos)
+        dist2 = np.linalg.norm(waypoint2 - innerPos)
         waypoint = self.pip.mapToGlobal(waypoint1 if dist1 < dist2 else waypoint2)
 
         # break up the inner segment if part of it needs to be slower
@@ -105,7 +106,7 @@ class PipettePathGenerator:
         """Given global start/stop positions and a desired speed, return a path that reduces the speed for segments that
         are close to the sample.
         """
-        if speed == 'slow':
+        if speed == "slow":
             # already slow; no need for extra steps
             return [(stop, speed, linear, explanation)]
 
@@ -114,15 +115,15 @@ class PipettePathGenerator:
         stopSlow = stop[2] < slowDepth
         if startSlow and stopSlow:
             # all slow
-            return [(stop, 'slow', linear, explanation)]
+            return [(stop, "slow", linear, explanation)]
         elif not startSlow and not stopSlow:
             return [(stop, speed, linear, explanation)]
         else:
             waypoint = self.pip.positionAtDepth(slowDepth, start=start)
             if startSlow:
-                return [(waypoint, 'slow', linear, SAFE_SPEED_WAYPOINT), (stop, speed, linear, explanation)]
+                return [(waypoint, "slow", linear, SAFE_SPEED_WAYPOINT), (stop, speed, linear, explanation)]
             else:
-                return [(waypoint, speed, linear, SAFE_SPEED_WAYPOINT), (stop, 'slow', linear, explanation)]
+                return [(waypoint, speed, linear, SAFE_SPEED_WAYPOINT), (stop, "slow", linear, explanation)]
 
     def safeYZPosition(self, start, margin=2e-3):
         """Return a position to travel to, beginning from *start*, where the pipette may freely move in the local YZ
@@ -194,6 +195,7 @@ class PipetteMotionPlanner:
     For example, moving to a pipette search position involves setting the focus to a certain height, followed by
     positioning the pipette tip at that height and in the field of view.
     """
+
     def __init__(self, pip: Pipette, position: Union[np.ndarray, str], speed: float, **kwds):
         self.pip = pip
         self.position = position
@@ -206,8 +208,7 @@ class PipetteMotionPlanner:
         self.safePath = self.pip.pathGenerator.safePath
 
     def move(self):
-        """Move the pipette to the requested named position and return a Future 
-        """
+        """Move the pipette to the requested named position and return a Future"""
         if self.future is not None:
             self.stop()
 
@@ -231,8 +232,8 @@ class PipetteMotionPlanner:
 
 
 class SavedPositionMotionPlanner(PipetteMotionPlanner):
-    """Move to a saved position
-    """
+    """Move to a saved position"""
+
     def path(self):
         startPosGlobal = self.pip.globalPosition()
         endPosGlobal = self.pip.loadPosition(self.position)
@@ -240,8 +241,8 @@ class SavedPositionMotionPlanner(PipetteMotionPlanner):
 
 
 class HomeMotionPlanner(PipetteMotionPlanner):
-    """Extract pipette tip diagonally, then move to home position.
-    """
+    """Extract pipette tip diagonally, then move to home position."""
+
     def path(self):
         manipulator = self.pip.parentDevice()
         manipulatorHome = manipulator.homePosition()
@@ -257,27 +258,28 @@ class HomeMotionPlanner(PipetteMotionPlanner):
 
 
 class SearchMotionPlanner(PipetteMotionPlanner):
-    """Focus the microscope 2mm above the surface, then move the electrode 
-    tip to 500um below the focal point of the microscope. 
+    """Focus the microscope 2mm above the surface, then move the electrode
+    tip to 500um below the focal point of the microscope.
 
     This position is used when searching for new electrodes.
 
     Set *distance* to adjust the search position along the pipette's x-axis. Positive values
     move the tip farther from the microscope center to reduce the probability of collisions.
     Negative values move the pipette past the center of the microscope to improve the
-    probability of seeing the tip immediately. 
+    probability of seeing the tip immediately.
     """
+
     def _move(self):
         pip = self.pip
         speed = self.speed
-        distance = self.kwds.get('distance', 0)
+        distance = self.kwds.get("distance", 0)
 
         # Bring focus to 2mm above surface (if needed)
         scope = pip.scopeDevice()
         surfaceDepth = scope.getSurfaceDepth()
         if surfaceDepth is None:
             raise ValueError("Cannot determine search position; surface depth is not defined.")
-        searchDepth = surfaceDepth + pip._opts['searchHeight']
+        searchDepth = surfaceDepth + pip._opts["searchHeight"]
 
         cam = pip.imagingDevice()
         focusDepth = cam.getFocusDepth()
@@ -290,8 +292,8 @@ class SearchMotionPlanner(PipetteMotionPlanner):
             fut.wait(updates=True)
 
         # Here's where we want the pipette tip in global coordinates:
-        globalCenter = cam.globalCenterPosition('roi')
-        globalCenter[2] += pip._opts['searchTipHeight'] - pip._opts['searchHeight']
+        globalCenter = cam.globalCenterPosition("roi")
+        globalCenter[2] += pip._opts["searchTipHeight"] - pip._opts["searchHeight"]
 
         # adjust for distance argument:
         globalTarget = globalCenter + pip.globalDirection() * distance
@@ -318,10 +320,11 @@ class TargetMotionPlanner(PipetteMotionPlanner):
 
 class AboveTargetMotionPlanner(PipetteMotionPlanner):
     """Move the pipette tip to be centered over the target in x/y, and 100 um above
-    the sample surface in z. 
+    the sample surface in z.
 
     This position is used to recalibrate the pipette immediately before going to approach.
     """
+
     def _move(self):
         pip = self.pip
         speed = self.speed
@@ -330,7 +333,7 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         waypoint1, waypoint2 = self.aboveTargetPath()
 
         path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        path.append((waypoint2, 'slow', True, MOVE_TO_DESTINATION))
+        path.append((waypoint2, "slow", True, MOVE_TO_DESTINATION))
         pfut = pip._movePath(path)
         sfut = scope.setGlobalPosition(waypoint2)
 
@@ -342,7 +345,7 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         The path has 2 waypoints:
 
         1. 100 um away from the second waypoint, on a diagonal approach. This is meant to normalize the hysteresis
-           at the second waypoint. 
+           at the second waypoint.
         2. This position is centered on the target, a small distance above the sample surface.
         """
         pip = self.pip
@@ -366,6 +369,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
     NOTE: this method assumes that (0, 0) in global coordinates represents the center of the recording
     chamber.
     """
+
     def _move(self):
         pip = self.pip
         speed = self.speed
@@ -376,7 +380,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
             raise ValueError("Surface depth has not been set.")
 
         # we want to land 1 mm above sample surface
-        idleDepth = surface + pip._opts['idleHeight']
+        idleDepth = surface + pip._opts["idleHeight"]
 
         # If the tip is below idle depth, bring it up along the axis of the electrode.
         pos = pip.globalPosition()
@@ -385,19 +389,19 @@ class IdleMotionPlanner(PipetteMotionPlanner):
 
         # From here, move directly to idle position
         angle = pip.yawRadians()
-        ds = pip._opts['idleDistance']  # move to 7 mm from center
+        ds = pip._opts["idleDistance"]  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
-        
+
         return pip._moveToGlobal(globalIdlePos, speed)
 
 
 def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
     return {
-        'home': HomeMotionPlanner,
-        'search': SearchMotionPlanner,
-        'aboveTarget': AboveTargetMotionPlanner,
-        'approach': ApproachMotionPlanner,
-        'target': TargetMotionPlanner,
-        'idle': IdleMotionPlanner,
-        'saved': SavedPositionMotionPlanner,
+        "home": HomeMotionPlanner,
+        "search": SearchMotionPlanner,
+        "aboveTarget": AboveTargetMotionPlanner,
+        "approach": ApproachMotionPlanner,
+        "target": TargetMotionPlanner,
+        "idle": IdleMotionPlanner,
+        "saved": SavedPositionMotionPlanner,
     }
