@@ -20,9 +20,10 @@ class Visualize3D(Module):
         self.truncated_cone = None
         self.win = MainWindow()
         self.win.show()
-        for dev in manager.listDevices():
+        for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
             self.win.add(dev)
+            # todo handle devices added or removed
 
 
 def truncated_cone(
@@ -65,10 +66,22 @@ def truncated_cone(
     return vertices, np.array(faces)
 
 
-class BoxVisual:
-    def __init__(self, name: str, size: tuple, color=(1, 0.7, 0.1, 0.4), transform=None):
+class Visual(Qt.QObject):
+    def __init__(self, transform=None):
+        super().__init__()
         self._drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
         self._deviceTransform = MatrixTransform()
+
+    def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
+        self.setDeviceTransform(dev.globalPhysicalTransform())
+
+    def setDeviceTransform(self, xform):
+        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
+
+
+class BoxVisual(Visual):
+    def __init__(self, name: str, size: tuple, color=(1, 0.7, 0.1, 0.4), transform=None):
+        super().__init__(transform)
 
         self.mesh = visuals.Box(
             width=size[0],
@@ -79,12 +92,8 @@ class BoxVisual:
         )
         self.mesh.transform = ChainTransform(self._deviceTransform, self._drawingTransform)
 
-    def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
-        xform = dev.globalPhysicalTransform()
-        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
 
-
-class TruncatedConeVisual:
+class TruncatedConeVisual(Visual):
     def __init__(
         self,
         name: str,
@@ -92,16 +101,11 @@ class TruncatedConeVisual:
         transform=None,
         **kwargs,
     ):
-        vertices, faces = truncated_cone(**kwargs)
-        self._drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
-        self._deviceTransform = MatrixTransform()
+        super().__init__(transform)
 
+        vertices, faces = truncated_cone(**kwargs)
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
         self.mesh.transform = ChainTransform(self._deviceTransform, self._drawingTransform)
-
-    def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
-        xform = dev.globalPhysicalTransform()
-        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
 
 
 class CylinderVisual(TruncatedConeVisual):
@@ -153,6 +157,8 @@ def create_geometry(defaults=None, **config):
                     pos: 0, 0, -83 * mm
 
     If no components are specified beyond the toplevel config, a single geometry is created.
+
+    Returns a flattened list of visuals.
     """
     if defaults is None:
         defaults = {}
@@ -198,7 +204,7 @@ class MainWindow(Qt.QMainWindow):
     def add(self, dev: Device):
         if hasattr(dev, "geometry"):
             dev.sigGeometryChanged.connect(self.handleGeometryChange)
-            for geom in dev.geometry.getGeometries():
+            for geom in dev.geometry.get_geometries():
                 dev.sigGlobalTransformChanged.connect(geom.handleTransformUpdate)
                 geom.handleTransformUpdate(dev, dev)
                 self._geometries.setdefault(dev, []).append(geom)

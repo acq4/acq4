@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 
 from acq4.util.future import MultiFuture
+from ... import getManager
 
 if TYPE_CHECKING:
     from .pipette import Pipette
@@ -150,6 +151,40 @@ class PipettePathGenerator:
         safePos = localStart + localDir * (dx / localDir[0])
 
         return self.pip.mapToGlobal(safePos)
+
+
+class GeometryAwarePathGenerator(PipettePathGenerator):
+    def safePath(self, globalStart, globalStop, speed, explanation=None):
+        man = getManager()
+        voxel_space = self.createVoxelSpace()
+        for dev in man.listInterfaces("OptomechDevice"):
+            # TODO what if one of these devices is actively moving?
+            # TODO the sample surface needs to be included
+            if dev == self.pip:
+                continue
+            obstacle = dev.geometry
+            xform = dev.globalPhysicalTransform()
+            obstacle.voxelize_into(voxel_space, xform)
+        self.pip.geometry.convolve_across(voxel_space)
+        return self.aStar(voxel_space, globalStart, globalStop, speed, explanation)
+
+    def createVoxelSpace(self) -> tuple[np.ndarray, np.ndarray]:
+        """Create a 3D voxel space that represents the environment through which the pipette can move"""
+        precision = 50e-6
+        manipulator: Stage = self.pip.parentDevice()
+        limits = np.array(manipulator.getLimits())  # (low,high) * axes, in hardware coordinates
+        low_pt, high_pt = [manipulator.mapToGlobal(l) for l in limits.T]
+        space = np.zeros(
+            (
+                int((high_pt[0] - low_pt[0]) / precision),
+                int((high_pt[1] - low_pt[1]) / precision),
+                int((high_pt[2] - low_pt[2]) / precision),
+            ),
+            dtype=bool,
+        )
+        # the range is correct now, but we need a transform to map from pipette coordinates to the manipulator's space
+        xform = manipulator.globalPhysicalTransform()
+        return space, xform
 
 
 class PipetteMotionPlanner:

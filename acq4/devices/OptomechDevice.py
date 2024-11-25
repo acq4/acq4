@@ -4,6 +4,7 @@ import collections
 import xml.etree.ElementTree as ET
 
 import numpy as np
+import trimesh
 
 import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
@@ -18,7 +19,34 @@ class Geometry:
         self._config = config
         self._defaults = defaults
 
-    def getGeometries(self) -> list:
+    def voxelized(self, resolution: float):
+        # first determine the bounding box of the geometry
+        limits = np.zeros((3, 2), dtype=float)
+        for geom in self.get_geometries():
+            for i in range(3):
+                bounds = geom.mesh.bounds(i)
+                limits[i][0] = min(limits[i][0], bounds[0])
+                limits[i][1] = max(limits[i][1], bounds[1])
+        space = np.zeros(np.ceil((limits[:, 1] - limits[:, 0]) / resolution).astype(int) + 1, dtype=bool)
+        for geom in self.get_geometries():
+            # fake device transform to fit in this space
+            xform = pg.SRTTransform3D({'scale': np.ones(3) / resolution})
+            geom.setDeviceTransform(xform)
+            meshdata = geom.mesh._mesh.mesh_data
+            obstacle = trimesh.Trimesh(meshdata.get_vertices(), meshdata.get_faces()).voxelized(resolution)
+            points = np.array([xform.map(pt) for pt in obstacle.points])
+            space[tuple(points.astype(int).T)] = True
+        return space
+
+    def voxelize_into(self, space: np.ndarray, resolution: float, xform) -> np.ndarray:
+        """Return a voxelized version of the geometry with the specified resolution."""
+        for obj in self.get_geometries():
+            obj.handleTransformUpdate(xform)
+
+    def convolve_across(self, space: np.ndarray):
+        """For every True point in the space, insert this geometry's shadow."""
+
+    def get_geometries(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
         from acq4.modules.Visualize3D import create_geometry
 
@@ -257,6 +285,7 @@ class OptomechDevice(InterfaceMixin):
 
         # declare that this device supports the OptomechDevice API
         self.addInterface("OptomechDevice")
+        dm.declareInterface(name, ["OptomechDevice"], self)
 
     def name(self):
         return self.__name
