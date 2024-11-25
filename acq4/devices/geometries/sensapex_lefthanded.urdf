@@ -55,6 +55,24 @@
     <limit lower="-0.01" upper="0.01" effort="1000" velocity="0.5"/>
   </joint>
 
+  <link name="xz_rotation_link">
+    <visual>
+      <geometry>
+        <box size="0.005 0.005 0.005"/>
+      </geometry>
+      <material name="gray">
+        <color rgba="0.5 0.5 0.5 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="xz_rotation" type="revolute">
+    <parent link="z_axis_link"/>
+    <child link="xz_rotation_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.57" upper="1.57" effort="1000" velocity="0.5"/>
+  </joint>
+
   <link name="x_axis_link">
     <visual>
       <geometry>
@@ -69,7 +87,7 @@
   </link>
 
   <joint name="x_axis_joint" type="prismatic">
-    <parent link="z_axis_link"/>
+    <parent link="xz_rotation_link"/>
     <child link="x_axis_link"/>
     <origin xyz="-0.005 0 0" rpy="-0.3927 0 0"/>  <!-- pi/8 -->
     <axis xyz="0 0.5 0.866"/>  <!-- TODO this should be ~67.5° -->
