@@ -16,7 +16,7 @@ from acq4.util.HelpfulException import HelpfulException
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
-from .planners import defaultMotionPlanners, PipettePathGenerator
+from .planners import defaultMotionPlanners, GeometryAwarePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
 
@@ -79,7 +79,7 @@ class Pipette(Device, OptomechDevice):
 
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
-    pathGeneratorClass = PipettePathGenerator
+    pathGeneratorClass = GeometryAwarePathGenerator
     defaultGeometryArgs = {'color': (0, 1, 0.2, 1)}
 
     def __init__(self, deviceManager, config, name):
