@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 import trimesh
+from coorx import SRT3DTransform
 
 import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
@@ -14,12 +15,21 @@ from acq4.util.Mutex import Mutex
 TransformCache = "int | None | pg.SRTTransform3D"
 
 
+class Volume:
+    def __init__(self, space: np.ndarray, transform: SRT3DTransform):
+        self._space = space
+        self._transform = transform
+
+    def mapFromGlobalToLocal(self, obj):
+        return self._transform.map(obj)
+
+
 class Geometry:
     def __init__(self, config, defaults):
         self._config = config
         self._defaults = defaults
 
-    def voxelized(self, resolution: float):
+    def voxel_template(self, resolution: float, convolve_with: np.ndarray = None) -> np.ndarray:
         # first determine the bounding box of the geometry
         limits = np.zeros((3, 2), dtype=float)
         for geom in self.get_geometries():
@@ -30,13 +40,26 @@ class Geometry:
         space = np.zeros(np.ceil((limits[:, 1] - limits[:, 0]) / resolution).astype(int) + 1, dtype=bool)
         for geom in self.get_geometries():
             # fake device transform to fit in this space
-            xform = pg.SRTTransform3D({'scale': np.ones(3) / resolution})
-            geom.setDeviceTransform(xform)
-            meshdata = geom.mesh._mesh.mesh_data
+            xform = SRT3DTransform(scale=np.ones(3) / resolution)
+            geom.setDeviceTransform(xform.params)
+            meshdata = geom.mesh.mesh.mesh_data  # todo ugh
+            # xform = pg.SRTTransform3D({'scale': np.ones(3) / resolution})
+            # geom.setDeviceTransform(xform)
+            # meshdata = geom.mesh._mesh.mesh_data
             obstacle = trimesh.Trimesh(meshdata.get_vertices(), meshdata.get_faces()).voxelized(resolution)
-            points = np.array([xform.map(pt) for pt in obstacle.points])
-            space[tuple(points.astype(int).T)] = True
+            points = np.array([xform.map(pt) for pt in obstacle.points - limits[:, 0]])
+            space[tuple(points.round().astype(int).T)] = True
+
+        if convolve_with is not None:
+            # todo pad the space
+            # todo convolve the space with the shadow
+            pass
         return space
+
+    def global_path_intersects(self, path, resolution: float, traveling_object: np.ndarray = None) -> bool:
+        """Return True if the path intersects this geometry, optionally convolving our geometry with the traveling
+        object's shadow."""
+        voxels = self.voxel_template(resolution, traveling_object)
 
     def voxelize_into(self, space: np.ndarray, resolution: float, xform) -> np.ndarray:
         """Return a voxelized version of the geometry with the specified resolution."""
