@@ -51,13 +51,13 @@ def test_translated_voxels():
 
 def test_path_intersects(geometry):
     path = np.array([[0.0, -0.1, 0.0], [1.5, 0.5, 0.0]])
-    intersects = geometry.global_path_intersects(path)
+    intersects = geometry.global_path_intersects(path, resolution=0.1)
     assert intersects
 
 
 def test_path_does_not_intersect(geometry):
     path = np.array([[0.0, -0.1, 0.0], [0.5, -0.5, 0.0]])
-    intersects = geometry.global_path_intersects(path)
+    intersects = geometry.global_path_intersects(path, resolution=0.1)
     assert not intersects
 
 

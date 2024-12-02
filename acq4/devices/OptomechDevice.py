@@ -29,7 +29,7 @@ class Geometry:
         self._config = config
         self._defaults = defaults
 
-    def voxel_template(self, resolution: float, convolve_with: np.ndarray = None) -> np.ndarray:
+    def voxel_template(self, resolution: float) -> np.ndarray:
         # first determine the bounding box of the geometry
         limits = np.zeros((3, 2), dtype=float)
         for geom in self.get_geometries():
@@ -49,24 +49,36 @@ class Geometry:
             obstacle = trimesh.Trimesh(meshdata.get_vertices(), meshdata.get_faces()).voxelized(resolution)
             points = np.array([xform.map(pt) for pt in obstacle.points - limits[:, 0]])
             space[tuple(points.round().astype(int).T)] = True
-
-        if convolve_with is not None:
-            # todo pad the space
-            # todo convolve the space with the shadow
-            pass
         return space
 
-    def global_path_intersects(self, path, resolution: float, traveling_object: np.ndarray = None) -> bool:
+    def global_path_intersects(self, path, resolution: float, traveling_object: Geometry = None) -> bool:
         """Return True if the path intersects this geometry, optionally convolving our geometry with the traveling
         object's shadow."""
-        voxels = self.voxel_template(resolution, traveling_object)
+        voxels = self.voxel_template(resolution)
+        xform = self.base_transform(resolution)
+        if traveling_object is not None:
+            voxels = traveling_object.convolve_across(voxels, resolution)
+            xform = traveling_object.base_transform(resolution) * xform
+        # transform the path into local coordinates
+        path = np.array([xform.map(pt) for pt in path])
+        # check for intersections
+        path_space = np.zeros_like(voxels)
+        for i in range(len(path) - 1):
+            start = point = path[i]
+            end = path[i + 1]
+            direction = (end - start) / np.linalg.norm(end - start)
+            while np.linalg.norm(point - start) < np.linalg.norm(end - start):
+                if np.all(np.round(point) >= 0) and np.all(np.round(point) < path_space.shape):
+                    path_space[tuple(np.round(point).astype(int))] = True
+                point = point + direction * resolution
+        return np.any(path_space & voxels)
 
     def voxelize_into(self, space: np.ndarray, resolution: float, xform) -> np.ndarray:
         """Return a voxelized version of the geometry with the specified resolution."""
         for obj in self.get_geometries():
             obj.handleTransformUpdate(xform)
 
-    def convolve_across(self, space: np.ndarray):
+    def convolve_across(self, space: np.ndarray, resolution: float) -> np.ndarray:
         """For every True point in the space, insert this geometry's shadow."""
 
     def get_geometries(self) -> list:
@@ -125,6 +137,9 @@ class Geometry:
             args = {**self._config}
             return create_geometry(defaults=self._defaults, **args)
         return []
+
+    def base_transform(self, resolution: float) -> SRT3DTransform:
+        return SRT3DTransform(scale=np.ones(3) / resolution)
 
 
 class OptomechDevice(InterfaceMixin):
