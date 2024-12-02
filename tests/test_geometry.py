@@ -76,7 +76,7 @@ def test_get_geometries(geometry):
 
 
 def visualize():
-    app = pg.mkQApp()
+    pg.mkQApp()
 
     canvas = scene.SceneCanvas(keys="interactive", show=True)
     canvas.native.show()

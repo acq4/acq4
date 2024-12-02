@@ -107,7 +107,6 @@ class Geometry:
                     conf = {"type": "box", "size": 2.0 * geom.halfSide}
                 else:
                     raise ValueError(f"Unsupported geometry type: {type(geom)}")
-                print(obj.name, obj.placement)
                 xform = np.dot(
                     np.array(planner.scene.model.jointPlacements[obj.parentJoint]),
                     np.array(obj.placement),
@@ -935,19 +934,19 @@ class DeviceTreeItemGroup(pg.ItemGroup):
     def subdevListChanged(self, sender, device):
         self.rebuildGroups()
 
-    #def removeGroups(self, device, subdev, parentGroup=None):
-        #rem = []
-        #for group in self.groups[device][subdev]:
-            #if parentGroup is None or group.parentItem() is parentGroup:
-                #rem.append(group)
-                #for child in device.childDevices():
-                    #if child in self.groups:
-                        #self.removeGroups(child, subdev=None, parentGroup=group)
-        #for group in rem:
-            #self.groups[device][subdev].remove(group)
-            #scene = group.scene()
-            #if scene is not None:
-                #scene.removeItem(group)
+    # def removeGroups(self, device, subdev, parentGroup=None):
+    #     rem = []
+    #     for group in self.groups[device][subdev]:
+    #         if parentGroup is None or group.parentItem() is parentGroup:
+    #             rem.append(group)
+    #             for child in device.childDevices():
+    #                 if child in self.groups:
+    #                     self.removeGroups(child, subdev=None, parentGroup=group)
+    #     for group in rem:
+    #         self.groups[device][subdev].remove(group)
+    #         scene = group.scene()
+    #         if scene is not None:
+    #             scene.removeItem(group)
 
     def rebuildGroups(self):
         """Create the tree of graphics items needed to display camera boundaries"""
