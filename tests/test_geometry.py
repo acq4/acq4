@@ -5,7 +5,6 @@ from vispy.scene import visuals
 
 from acq4.devices.OptomechDevice import Geometry
 import pyqtgraph as pg
-import pyqtgraph.opengl as gl
 
 
 @pytest.fixture
@@ -50,13 +49,20 @@ def test_translated_voxels():
 
 
 def test_path_intersects(geometry):
-    path = np.array([[0.0, -0.1, 0.0], [1.5, 0.5, 0.0]])
+    path = np.array([[0, -1, 0], [1, 15, 0]])
     intersects = geometry.global_path_intersects(path, resolution=0.1)
     assert intersects
 
 
+def test_path_barely_intersects(geometry):
+    path = np.array([[0.0401, -0.05, 0], [-0.04, 0.05, 0]])
+    intersects = geometry.global_path_intersects(path, resolution=0.1)
+    assert intersects
+
+
+
 def test_path_does_not_intersect(geometry):
-    path = np.array([[0.0, -0.1, 0.0], [0.5, -0.5, 0.0]])
+    path = np.array([[0, -1, 0], [5, -5, 0]])
     intersects = geometry.global_path_intersects(path, resolution=0.1)
     assert not intersects
 
@@ -97,6 +103,9 @@ def visualize():
     template = geometry.voxel_template(0.1)
     vol = scene.visuals.Volume(template.astype('float32'), parent=view.scene)
     vol.transform = scene.transforms.STTransform(scale=(0.1, 0.1, 0.1), translate=(0.5, 0, 0))
+
+    path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
+    scene.visuals.Line(pos=path, parent=view.scene, color='red')
 
     pg.exec()
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import xml.etree.ElementTree as ET
+from typing import List, Tuple
 
 import numpy as np
 import trimesh
@@ -13,6 +14,63 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 
 TransformCache = "int | None | pg.SRTTransform3D"
+
+
+def line_intersects_voxel(start, end, vox):
+    direction = (end - start) / np.linalg.norm(end - start)
+    for ax in (0, 1, 2):
+        if direction[ax] == 0:
+            continue
+        ax2 = (ax + 1) % 3
+        ax3 = (ax + 2) % 3
+        x_steps = np.arange(np.ceil(min(start[ax], end[ax])), np.floor(max(start[ax], end[ax])) + 1).astype(int)
+        for x in x_steps:
+            t = (x - start[ax]) / direction[ax]
+            y = int(np.floor(start[ax2] + t * direction[ax2]))
+            z = int(np.floor(start[ax3] + t * direction[ax3]))
+            index = [None, None, None]
+            index[ax] = x
+            index[ax2] = y
+            index[ax3] = z
+            if tuple(vox) == tuple(index):
+                return True
+            index[ax] -= 1
+            if tuple(vox) == tuple(index):
+                return True
+    return False
+
+
+def find_intersected_voxels(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> List[Tuple[int, int, int]]:
+    """
+    Find all voxels intersected by a line segment.
+
+    Parameters:
+    - line_start: Start point of the line segment
+    - line_end: End point of the line segment
+    - voxel_size: Size of each voxel
+
+    Returns:
+    - List of voxel coordinates intersected by the line
+    """
+    # Compute bounding box of the line
+    min_point = np.minimum(line_start, line_end)
+    max_point = np.maximum(line_start, line_end)
+
+    # Determine voxel range
+    start_voxel = np.floor(min_point).astype(int)
+    start_voxel = np.maximum(start_voxel, 0)
+    end_voxel = np.floor(max_point).astype(int)
+    end_voxel = np.minimum(end_voxel, voxel_space_max)
+
+    return [
+        (x, y, z)
+        for x in range(start_voxel[0], end_voxel[0] + 1)
+        for y in range(start_voxel[1], end_voxel[1] + 1)
+        for z in range(start_voxel[2], end_voxel[2] + 1)
+        if line_intersects_voxel(line_start, line_end, np.array([x, y, z]))
+    ]
 
 
 class Volume:
@@ -59,19 +117,15 @@ class Geometry:
         if traveling_object is not None:
             voxels = traveling_object.convolve_across(voxels, resolution)
             xform = traveling_object.base_transform(resolution) * xform
-        # transform the path into local coordinates
         path = np.array([xform.map(pt) for pt in path])
-        # check for intersections
-        path_space = np.zeros_like(voxels)
         for i in range(len(path) - 1):
-            start = point = path[i]
+            start = path[i]
             end = path[i + 1]
-            direction = (end - start) / np.linalg.norm(end - start)
-            while np.linalg.norm(point - start) < np.linalg.norm(end - start):
-                if np.all(np.round(point) >= 0) and np.all(np.round(point) < path_space.shape):
-                    path_space[tuple(np.round(point).astype(int))] = True
-                point = point + direction * resolution
-        return np.any(path_space & voxels)
+            for x, y, z in find_intersected_voxels(start, end, np.array(voxels.shape) - 1):  # todo shape).T?
+                print(x, y, z)
+                if voxels[x, y, z]:  # todo z, y, x?
+                    return True
+        return False
 
     def voxelize_into(self, space: np.ndarray, resolution: float, xform) -> np.ndarray:
         """Return a voxelized version of the geometry with the specified resolution."""
