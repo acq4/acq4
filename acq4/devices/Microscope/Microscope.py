@@ -5,7 +5,8 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice, Geometry
+from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.util.geometry import Geometry
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt

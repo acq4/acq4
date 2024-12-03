@@ -3,7 +3,7 @@ import numpy as np
 from vispy import scene
 from vispy.scene import visuals
 
-from acq4.devices.OptomechDevice import Geometry
+from acq4.util.geometry import Geometry
 import pyqtgraph as pg
 
 
@@ -60,18 +60,36 @@ def test_path_barely_intersects(geometry):
     assert intersects
 
 
-
 def test_path_does_not_intersect(geometry):
     path = np.array([[0, -1, 0], [5, -5, 0]])
     intersects = geometry.global_path_intersects(path, resolution=0.1)
     assert not intersects
 
 
+def test_ships_passing_in_the_night(geometry):
+    path = np.array([[0, 3, 0], [5, 3, 0]])
+    intersects = geometry.global_path_intersects(path, resolution=0.1, traveling_object=geometry)
+    assert not intersects
+
+
+def test_ships_colliding_in_the_night(geometry):
+    path = np.array([[1, 0, -1], [1, 0, 5]])
+    intersects = geometry.global_path_intersects(path, resolution=0.1, traveling_object=geometry)
+    assert intersects
+
+
+def test_ships_clipping_in_the_night(geometry):
+    path = np.array([[0, -1.1, 0], [3, 0.1, 0]])
+    intersects = geometry.global_path_intersects(path, resolution=0.1, traveling_object=geometry)
+    assert intersects
+
+
 def test_convolve_across(geometry):
-    space = np.zeros((10, 10, 10), dtype=bool)
-    geometry.convolve_across(space)
-    # Add assertions to verify the expected behavior
-    assert False, "todo"
+    space = geometry.voxel_template(0.1)
+    space = geometry.convolve_across(space, resolution=0.1)
+    assert isinstance(space, np.ndarray)
+    assert space.shape == (22, 22, 22)
+    assert False, "todo: what else can we assert about the result?"
 
 
 def test_get_geometries(geometry):
@@ -101,6 +119,7 @@ def visualize():
     view.add(obj.mesh)
 
     template = geometry.voxel_template(0.1)
+    template = geometry.convolve_across(template, resolution=0.1)
     vol = scene.visuals.Volume(template.astype('float32'), parent=view.scene)
     vol.transform = scene.transforms.STTransform(scale=(0.1, 0.1, 0.1), translate=(0.5, 0, 0))
 
