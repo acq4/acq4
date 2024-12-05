@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from functools import reduce
+from typing import List, Tuple, Optional
 from xml.etree import ElementTree as ET
 
 import numpy as np
+import scipy
 import trimesh
-from coorx import SRT3DTransform
+from coorx import SRT3DTransform, BaseTransform, NullTransform
+from trimesh.voxel import VoxelGrid
 
 from acq4.util import Qt
 
 
 def line_intersects_voxel(start, end, vox):
+    # TODO as an optimization later, we can check for intersections with arbitrary bounding boxes, not just voxels
     direction = (end - start) / np.linalg.norm(end - start)
     for ax in (0, 1, 2):
         if direction[ax] == 0:
@@ -67,41 +71,165 @@ def find_intersected_voxels(
     ]
 
 
-class Volume:
-    def __init__(self, space: np.ndarray, transform: SRT3DTransform):
-        self._space = space
-        self._transform = transform
+class GeometryMotionPlanner:
+    """
+    Parameters
+    ----------
+    geometries : List[Geometry]
+        List of Geometry instances representing all collision objects in the world.
+        The transform of each instance must map to the same (global) coordinate system.
+    """
+    def __init__(self, geometries: List[Geometry]):
+        self.geometries = geometries
 
-    def map_from_parent_to_local(self, obj):
-        return self._transform.map(obj)
+    def find_path(self, traveling_object: Geometry, start, stop):
+        """
+        Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid collisions
+
+        Returns
+        -------
+        path : list
+            List of global positions from start to stop
+
+        Method:
+        1. Create voxelized representations of traveling_object in the coordinate systems of all other geometries
+             traveling_object.voxelize (in coordinate system of traveling_object)
+             take mirror image of volume; this becomes the convolution kernel
+             the center of the kernel needs to be mirrored as well
+        2. Create convolutions between all other geometries and traveling_object
+             geometry.voxelize (in local coordinate system)
+             volume.convolve(geometry_voxels, traveling_kernel)
+        3. Do a path-finding algorithm that, at each step, checks for collisions among all convolved volumes
+             A*
+             volume.check_edge_collision
+        """
+
+
+class Volume(object):
+    """
+    A volumetric representation of Geometry
+
+    Parameters
+    ----------
+    volume : ndarray
+        3D boolean array containing voxelized geometry
+    transform : coorx.BaseTransform
+        Transform that maps from the coordinate system of the geometry to the voxel
+        indices in *volume*
+    """
+    def __init__(self, volume: np.ndarray, transform: BaseTransform):
+        self.volume = volume
+        self.transform = transform
+
+    def convolve(self, kernel_array, center) -> Volume:
+        """
+        Return a new Volume that contains the convolution of self with *kernel_array*
+
+        Parameters
+        ----------
+        kernel_array : ndarray
+            Voxel array to convolve with, already transformed to match the rotation of self
+        center : array-like
+            (i,j,k) index of the "center" voxel in kernel_array. This is added to the resulting Volume's transform.
+        """
+        dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
+        xform = self.transform * SRT3DTransform(offset=center)
+        return Volume(dest, xform)
 
 
 class Geometry:
-    def __init__(self, config, defaults):
+    def __init__(self, config, name):
+        self.color = None
+        self.name = name
         self._config = config
-        self._defaults = defaults
+        self._children: List[Geometry] = []
+        self._mesh: Optional[trimesh.Trimesh] = None
+        # maps from local coordinate system of geometry (the coordinates in which mesh vertices are specified) to parent
+        self._parent_transform: BaseTransform = NullTransform()
+        self.parse_config()
 
-    def voxel_template(self, resolution: float) -> np.ndarray:
-        # first determine the bounding box of the geometry
-        limits = np.zeros((3, 2), dtype=float)
-        for geom in self.get_geometries():
-            for i in range(3):
-                bounds = geom.mesh.bounds(i)
-                limits[i][0] = min(limits[i][0], bounds[0])
-                limits[i][1] = max(limits[i][1], bounds[1])
-        space = np.zeros(np.ceil((limits[:, 1] - limits[:, 0]) / resolution).astype(int) + 1, dtype=bool)
-        for geom in self.get_geometries():
-            # fake device transform to fit in this space
-            xform = SRT3DTransform(scale=np.ones(3) / resolution)
-            geom.setDeviceTransform(xform.params)
-            meshdata = geom.mesh.mesh.mesh_data  # todo ugh
-            # xform = pg.SRTTransform3D({'scale': np.ones(3) / resolution})
-            # geom.setDeviceTransform(xform)
-            # meshdata = geom.mesh._mesh.mesh_data
-            obstacle = trimesh.Trimesh(meshdata.get_vertices(), meshdata.get_faces()).voxelized(resolution)
-            points = np.array([xform.map(pt) for pt in obstacle.points - limits[:, 0]])
-            space[tuple(points.round().astype(int).T)] = True
-        return space
+    def parse_config(self):
+        """Create 3D mesh from a configuration. Format example::
+
+            geometry:
+                color: (1, 0.7, 0.1, 1)    # color will be inherited by children
+                type: "cone"               # type must be "cone", "cylinder" or "box"
+                top_radius: 20 * mm
+                bottom_radius: 4 * mm
+                children:
+                    component_1:               # names for children are in their key
+                        type: "cone"
+                        height: 3 * mm
+                        top_radius: 40 * mm    # overrides top-level defaults
+                        transform:
+                            pos: 0, 0, -10 * um
+                        children:              # nested components compound their transforms
+                            halo:
+                                type: "cylinder"
+                                height: 1 * mm
+                                radius: 50 * mm
+                                color: (1, 1, 1, 0.1)
+                                transform:
+                                    pos: 0, 0, 3 * mm
+                    fuse:                      # some devices may expect specific component names
+                        type: "box"
+                        size: (80 * mm, 80 * mm, 10 * mm)
+                        transform:
+                            pos: 0, 0, -83 * mm
+        """
+        config = self._config.copy()
+
+        self.color = config.pop("color", None)
+
+        xform = config.pop("transform", {}).copy()
+        if "pos" in xform:
+            xform["offset"] = xform.pop("pos")
+        self._parent_transform = SRT3DTransform(**xform)
+
+        self._children = []
+        for name, child_config in config.pop("children", {}).items():
+            child = Geometry(child_config, name)
+            if child.color is None:
+                child.color = self.color
+            self._children.append(child)
+
+        geom_type = config.pop('type', None)
+        if geom_type == "box":
+            self._mesh = self.make_box(config)
+        elif geom_type == "cone":
+            self._mesh = self.make_cone(config)
+        elif geom_type == "cylinder":
+            self._mesh = self.make_cylinder(config)
+        else:
+            raise ValueError(f"Unsupported geometry type: {geom_type}")
+
+        if len(config) > 0:
+            raise ValueError(f"Invalid geometry config: {config}")
+
+    @property
+    def mesh(self) -> trimesh.Trimesh:
+        """
+        Returns
+        -------
+        mesh : Mesh
+            Concatenated Mesh containing all geometry from this object and its children,
+            expressed in the local coordinate system of this object
+        """
+        return reduce(lambda m, o: m + o, [child.mesh for child in self._children], self._mesh)
+
+    def voxelize_with_transform(self, transform):
+        # get mesh vertices
+        # map vertices through transform
+        # get bounding rect
+        # create voxel array
+        # create transform (from bounding box offset and voxel size)
+        pass
+
+    def voxel_template(self, resolution: float) -> Volume:
+        bounds = self.mesh.bounds
+        drawing_xform = SRT3DTransform(scale=np.ones((3,))/resolution, offset=-bounds[0]/resolution)  # TODO i don't trust this
+        obstacle: VoxelGrid = self.mesh.voxelized(resolution)
+        return Volume(obstacle.encoding.dense, self._parent_transform * drawing_xform)
 
     def global_path_intersects(self, path, resolution: float, traveling_object: Geometry = None) -> bool:
         """Return True if the path intersects this geometry, optionally convolving our geometry with the traveling
@@ -115,29 +243,25 @@ class Geometry:
         for i in range(len(path) - 1):
             start = path[i]
             end = path[i + 1]
-            for x, y, z in find_intersected_voxels(start, end, np.array(voxels.shape) - 1):  # todo shape).T?
-                if voxels[x, y, z]:  # todo z, y, x?
+            for x, y, z in find_intersected_voxels(start, end, np.array(voxels.space.shape) - 1):  # todo shape).T?
+                if voxels.space[x, y, z]:  # todo z, y, x?
                     return True
         return False
 
-    def voxelize_into(self, space: np.ndarray, resolution: float, xform) -> np.ndarray:
-        """Return a voxelized version of the geometry with the specified resolution."""
-        for obj in self.get_geometries():
-            obj.handleTransformUpdate(xform)
-
-    def convolve_across(self, space: np.ndarray, resolution: float) -> np.ndarray:
+    def convolve_across(self, space: Volume, resolution: float) -> np.ndarray:
         """For every True point in the space, insert this geometry's shadow."""
-        voxels = self.voxel_template(resolution)
-        dest = np.zeros_like(space)
-        dest = np.pad(dest, [(0, d) for d in voxels.shape], constant_values=False)
-        for x in range(space.shape[0]):
-            for y in range(space.shape[1]):
-                for z in range(space.shape[2]):
-                    if space[x, y, z]:
-                        dest[x : x + voxels.shape[0], y : y + voxels.shape[1], z : z + voxels.shape[2]] |= voxels
-        return dest
+        kernel = self.voxel_template(resolution)
+        return scipy.signal.convolve(space, kernel, mode="full")
+        # dest = np.zeros_like(space)
+        # dest = np.pad(dest, [(0, d) for d in kernel.space.shape], constant_values=False)
+        # for x in range(space.space.shape[0]):
+        #     for y in range(space.space.shape[1]):
+        #         for z in range(space.space.shape[2]):
+        #             if space.space[x, y, z]:
+        #                 dest[x : x + kernel.space.shape[0], y : y + kernel.space.shape[1], z : z + kernel.space.shape[2]] |= kernel.space
+        # return dest
 
-    def get_geometries(self) -> list:
+    def visuals(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
         from acq4.modules.Visualize3D import create_geometry
 
@@ -191,8 +315,63 @@ class Geometry:
             return create_geometry(defaults=self._defaults, **root)
         elif self._config:
             args = {**self._config}
-            return create_geometry(defaults=self._defaults, **args)
+            return create_geometry(defaults={}, **args)
         return []
 
-    def base_transform(self, resolution: float) -> SRT3DTransform:
-        return SRT3DTransform(scale=np.ones(3) / resolution)
+    def make_box(self, args) -> trimesh.Trimesh:
+        return trimesh.creation.box(args.pop("size"))
+
+    def make_cone(self, args) -> trimesh.Trimesh:
+        points, faces = truncated_cone(
+            bottom_radius=args.pop("bottom_radius"),
+            top_radius=args.pop("top_radius"),
+            height=args.pop("height"),
+            close_top=args.pop("close_top", False),
+            close_bottom=args.pop("close_bottom", False),
+            segments=args.pop("segments", 32),
+        )
+        return trimesh.Trimesh(points, faces)
+
+    def make_cylinder(self, args):
+        args["bottom_radius"] = args["top_radius"] = args.pop("radius")
+        return self.make_cone(args)
+
+
+def truncated_cone(
+    bottom_radius: float,
+    top_radius: float,
+    height: float,
+    close_top: bool = False,
+    close_bottom: bool = False,
+    segments: int = 32,
+) -> (np.ndarray, np.ndarray):
+    theta = np.linspace(0, 2 * np.pi, segments, endpoint=False)
+    bottom_circle = np.column_stack((bottom_radius * np.cos(theta), bottom_radius * np.sin(theta), np.zeros(segments)))
+    top_circle = np.column_stack((top_radius * np.cos(theta), top_radius * np.sin(theta), np.full(segments, height)))
+
+    vertices = np.vstack((bottom_circle, top_circle))
+
+    faces = []
+    for i in range(segments):
+        next_i = (i + 1) % segments
+        faces.extend(
+            (
+                [i, next_i, segments + next_i],
+                [i, segments + next_i, segments + i],
+            )
+        )
+
+    if close_bottom:
+        bottom_center = len(vertices)
+        vertices = np.vstack((vertices, [[0, 0, 0], [0, 0, height]]))
+        for i in range(segments):
+            next_i = (i + 1) % segments
+            faces.append([i, next_i, bottom_center])
+    if close_top:
+        top_center = len(vertices)
+        vertices = np.vstack((vertices, [[0, 0, height]]))
+        for i in range(segments):
+            next_i = (i + 1) % segments
+            faces.append([segments + i, segments + next_i, top_center])
+
+    return vertices, np.array(faces)

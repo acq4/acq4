@@ -3,100 +3,62 @@ import numpy as np
 from vispy import scene
 from vispy.scene import visuals
 
-from acq4.util.geometry import Geometry
+from acq4.util.geometry import Geometry, Volume
 import pyqtgraph as pg
 
 
 @pytest.fixture
 def geometry():
-    config = {"type": "box", "size": [1.0, 1.0, 1.0]}
-    defaults = {}
-    return Geometry(config, defaults)
+    return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test")
+
+
+def test_volume_convolve(geometry):
+    """
+    If kernel_array is all zeroes except for one voxel, and *center* gives us the index of that voxel, then
+    the resulting convolved Volume will be equivalent to self (except for having some extra padding)
+    """
+    kernel_array = np.ones((1, 1, 1), dtype=bool)
+    orig = geometry.voxel_template(0.1)
+    center = (-10, 0, 0)  # off the grid centers are allowed
+    convolved = orig.convolve(kernel_array, center=center)
+    assert np.all(convolved.volume == orig.volume)
+    assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)) + center)
 
 
 def test_small_voxelization(geometry):
     resolution = 0.25
     template = geometry.voxel_template(resolution)
-    assert isinstance(template, np.ndarray)
-    assert template.shape == (5, 5, 5)
+    assert isinstance(template, Volume)
+    assert template.volume.shape == (5, 5, 5)
     expected = np.ones((5, 5, 5), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
-    assert np.all(template == expected)
+    assert np.all(template.volume == expected)
+    assert np.all(template.transform.map((0, 0, 0)) == np.array([2, 2, 2]))
+    corner = np.array([0.5, 0.5, 0.5])
+    assert np.all(template.transform.map(corner) == np.array([4, 4, 4]))
 
 
 def test_voxelized(geometry):
     resolution = 0.1
     template = geometry.voxel_template(resolution)
-    assert isinstance(template, np.ndarray)
-    assert template.shape == (11, 11, 11)
+    assert isinstance(template, Volume)
+    assert template.volume.shape == (11, 11, 11)
     expected = np.ones((11, 11, 11), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
-    # surface_area = np.sum(template) * resolution ** 2
-    # assert np.isclose(surface_area, 6.0, atol=resolution)
-    assert np.all(template == expected)
+    assert np.all(template.volume == expected)
+    origin = template.transform.map(np.array([0, 0, 0]))
+    assert np.all(origin[:3] == np.array([5, 5, 5]))
 
 
 def test_translated_voxels():
     config = {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": [1.0, 0.0, 0.0]}}
-    geometry = Geometry(config, {})
+    geometry = Geometry(config, "test")
     resolution = 0.1
     template = geometry.voxel_template(resolution)
-    assert isinstance(template, np.ndarray)
-    assert template.shape == (21, 11, 11)
-    surface_area = np.sum(template) * resolution**2
-    assert np.isclose(surface_area, 6.0, atol=resolution)
-    assert not np.any(np.argmax(template, axis=0) < 10)
-
-
-def test_path_intersects(geometry):
-    path = np.array([[0, -1, 0], [1, 15, 0]])
-    intersects = geometry.global_path_intersects(path, resolution=0.1)
-    assert intersects
-
-
-def test_path_barely_intersects(geometry):
-    path = np.array([[0.0401, -0.05, 0], [-0.04, 0.05, 0]])
-    intersects = geometry.global_path_intersects(path, resolution=0.1)
-    assert intersects
-
-
-def test_path_does_not_intersect(geometry):
-    path = np.array([[0, -1, 0], [5, -5, 0]])
-    intersects = geometry.global_path_intersects(path, resolution=0.1)
-    assert not intersects
-
-
-def test_ships_passing_in_the_night(geometry):
-    path = np.array([[0, 3, 0], [5, 3, 0]])
-    intersects = geometry.global_path_intersects(path, resolution=0.1, traveling_object=geometry)
-    assert not intersects
-
-
-def test_ships_colliding_in_the_night(geometry):
-    path = np.array([[1, 0, -1], [1, 0, 5]])
-    intersects = geometry.global_path_intersects(path, resolution=0.1, traveling_object=geometry)
-    assert intersects
-
-
-def test_ships_clipping_in_the_night(geometry):
-    path = np.array([[0, -1.1, 0], [3, 0.1, 0]])
-    intersects = geometry.global_path_intersects(path, resolution=0.1, traveling_object=geometry)
-    assert intersects
-
-
-def test_convolve_across(geometry):
-    space = geometry.voxel_template(0.1)
-    space = geometry.convolve_across(space, resolution=0.1)
-    assert isinstance(space, np.ndarray)
-    assert space.shape == (22, 22, 22)
-    assert False, "todo: what else can we assert about the result?"
-
-
-def test_get_geometries(geometry):
-    geometries = geometry.get_geometries()
-    assert isinstance(geometries, list)
-    # Add more assertions to verify the expected behavior
-    assert False, "todo"
+    assert isinstance(template, Volume)
+    assert template.volume.shape == (11, 11, 11)
+    origin = template.transform.map(np.array([0, 0, 0]))
+    assert np.all(origin[:3] == np.array([15, 5, 5]))
 
 
 def visualize():
@@ -115,13 +77,14 @@ def visualize():
     axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
 
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, {})
-    obj = geometry.get_geometries()[0]
+    obj = geometry.visuals()[0]
     view.add(obj.mesh)
 
-    template = geometry.voxel_template(0.1)
-    template = geometry.convolve_across(template, resolution=0.1)
-    vol = scene.visuals.Volume(template.astype('float32'), parent=view.scene)
-    vol.transform = scene.transforms.STTransform(scale=(0.1, 0.1, 0.1), translate=(0.5, 0, 0))
+    resolution = 0.1
+    template = geometry.voxel_template(resolution)
+    template = template.convolve(template.volume, center=(0, 0, 0))
+    vol = scene.visuals.Volume(template.volume.astype('float32'), parent=view.scene)
+    vol.transform = scene.transforms.STTransform(scale=np.ones(3) / resolution, translate=(0.5 / resolution, 0, 0))
 
     path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
     scene.visuals.Line(pos=path, parent=view.scene, color='red')

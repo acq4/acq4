@@ -102,9 +102,6 @@ class OptomechDevice(InterfaceMixin):
 
         sigGeometryChanged = Qt.Signal(object)  # self
 
-    # a dictionary of default arguments to be used when creating a 3D model for the device.
-    defaultGeometryArgs = {}
-
     def __init__(self, dm, config, name):
         object.__init__(self)
 
@@ -189,11 +186,13 @@ class OptomechDevice(InterfaceMixin):
             assert isinstance(self.__ports, list)
             self.__optics = config.get("optics", {"default": []})
             assert isinstance(self.__optics, dict)
-        self.geometry = Geometry((config or {}).get("geometry", {}), self.defaultGeometryArgs)
 
         # declare that this device supports the OptomechDevice API
         self.addInterface("OptomechDevice")
         dm.declareInterface(name, ["OptomechDevice"], self)
+
+    def getGeometries(self):
+        return [Geometry((self._config or {}).get("geometry", {}))]
 
     def name(self):
         return self.__name

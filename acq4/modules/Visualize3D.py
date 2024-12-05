@@ -1,4 +1,3 @@
-import numpy as np
 from vispy import scene
 from vispy.scene import visuals
 from vispy.visuals.transforms import MatrixTransform, ChainTransform
@@ -7,6 +6,7 @@ from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.geometry import truncated_cone
 from pyqtgraph import SRTTransform3D
 
 
@@ -26,50 +26,10 @@ class Visualize3D(Module):
             # todo handle devices added or removed
 
 
-def truncated_cone(
-    bottom_radius: float,
-    top_radius: float,
-    height: float,
-    close_top: bool = False,
-    close_bottom: bool = False,
-    segments: int = 32,
-) -> (np.ndarray, np.ndarray):
-    theta = np.linspace(0, 2 * np.pi, segments, endpoint=False)
-    bottom_circle = np.column_stack((bottom_radius * np.cos(theta), bottom_radius * np.sin(theta), np.zeros(segments)))
-    top_circle = np.column_stack((top_radius * np.cos(theta), top_radius * np.sin(theta), np.full(segments, height)))
-
-    vertices = np.vstack((bottom_circle, top_circle))
-
-    faces = []
-    for i in range(segments):
-        next_i = (i + 1) % segments
-        faces.extend(
-            (
-                [i, next_i, segments + next_i],
-                [i, segments + next_i, segments + i],
-            )
-        )
-
-    if close_bottom:
-        bottom_center = len(vertices)
-        vertices = np.vstack((vertices, [[0, 0, 0], [0, 0, height]]))
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            faces.append([i, next_i, bottom_center])
-    if close_top:
-        top_center = len(vertices)
-        vertices = np.vstack((vertices, [[0, 0, height]]))
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            faces.append([segments + i, segments + next_i, top_center])
-
-    return vertices, np.array(faces)
-
-
 class Visual(Qt.QObject):
     def __init__(self, transform=None):
         super().__init__()
-        self._drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
+        self.drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
         self._deviceTransform = MatrixTransform()
 
     def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
@@ -90,7 +50,7 @@ class BoxVisual(Visual):
             color=color,
             edge_color=(0, 0, 0, 1),
         )
-        self.mesh.transform = ChainTransform(self._deviceTransform, self._drawingTransform)
+        self.mesh.transform = ChainTransform(self._deviceTransform, self.drawingTransform)
 
 
 class TruncatedConeVisual(Visual):
@@ -105,7 +65,7 @@ class TruncatedConeVisual(Visual):
 
         vertices, faces = truncated_cone(**kwargs)
         self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
-        self.mesh.transform = ChainTransform(self._deviceTransform, self._drawingTransform)
+        self.mesh.transform = ChainTransform(self._deviceTransform, self.drawingTransform)
 
 
 class CylinderVisual(TruncatedConeVisual):
@@ -170,7 +130,6 @@ def create_geometry(defaults=None, **config):
         return [_VISUALS[defaults.pop("type")](**defaults)]
     objects = []
     for name, obj in config.items():
-        print(name, obj, defaults)
         args = {**defaults, **obj}
         kid_args = args.pop("children", {})
         visual = _VISUALS[args.pop("type")](name=name, **args)
@@ -201,14 +160,15 @@ class MainWindow(Qt.QMainWindow):
 
         self._geometries = {}
 
-    def add(self, dev: Device):
-        if hasattr(dev, "geometry"):
-            dev.sigGeometryChanged.connect(self.handleGeometryChange)
-            for geom in dev.geometry.get_geometries():
-                dev.sigGlobalTransformChanged.connect(geom.handleTransformUpdate)
-                geom.handleTransformUpdate(dev, dev)
-                self._geometries.setdefault(dev, []).append(geom)
-                self.view.add(geom.mesh)
+    def add(self, dev: OptomechDevice):
+        dev.sigGeometryChanged.connect(self.handleGeometryChange)
+        for geom in dev.getGeometries():
+            for shape in geom.visuals():
+                # TODO this probably needs to be handled by the device
+                dev.sigGlobalTransformChanged.connect(shape.handleTransformUpdate)
+                shape.handleTransformUpdate(dev, dev)
+                self._geometries.setdefault(dev, []).append(shape)
+                self.view.add(shape.mesh)
 
     def handleGeometryChange(self, dev: Device):
         for geom in self._geometries[dev]:

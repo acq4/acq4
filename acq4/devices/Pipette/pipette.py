@@ -80,7 +80,6 @@ class Pipette(Device, OptomechDevice):
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
     pathGeneratorClass = GeometryAwarePathGenerator
-    defaultGeometryArgs = {'color': (0, 1, 0.2, 1)}
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -137,6 +136,13 @@ class Pipette(Device, OptomechDevice):
             self.setTarget(target)
 
         deviceManager.sigAbortAll.connect(self.stop)
+
+    def getGeometries(self):
+        if isinstance(self.config.get("geometry"), dict):
+            defaults = {'color': (0, 1, 0.2, 1)}
+            defaults.update(self.config["geometry"])
+            self.config["geometry"] = defaults
+        return super().getGeometries()
 
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
