@@ -3,7 +3,7 @@ import numpy as np
 from vispy import scene
 from vispy.scene import visuals
 
-from acq4.util.geometry import Geometry, Volume
+from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
 import pyqtgraph as pg
 
 
@@ -12,17 +12,33 @@ def geometry():
     return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test")
 
 
-def test_volume_convolve(geometry):
-    """
-    If kernel_array is all zeroes except for one voxel, and *center* gives us the index of that voxel, then
-    the resulting convolved Volume will be equivalent to self (except for having some extra padding)
-    """
+def test_identity_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
     orig = geometry.voxel_template(0.1)
-    center = (-10, 0, 0)  # off the grid centers are allowed
+    center = (0, 0, 0)
+    convolved = orig.convolve(kernel_array, center=center)
+    assert np.all(convolved.volume == orig.volume)
+    assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
+
+
+def test_translated_convolve(geometry):
+    kernel_array = np.ones((1, 1, 1), dtype=bool)
+    orig = geometry.voxel_template(0.1)
+    center = (-10, 0, 100)  # off the grid centers are allowed
     convolved = orig.convolve(kernel_array, center=center)
     assert np.all(convolved.volume == orig.volume)
     assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)) + center)
+
+
+def test_offcenter_convolve(geometry):
+    kernel_array = np.zeros((3, 3, 3), dtype=bool)
+    kernel_array[1, 1, 1] = True
+    orig = geometry.voxel_template(0.1)
+    center = (1, 1, 1)
+    convolved = orig.convolve(kernel_array, center=center)
+    assert np.all(convolved.volume == orig.volume)
+    assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
+
 
 
 def test_small_voxelization(geometry):
@@ -84,7 +100,7 @@ def visualize():
     template = geometry.voxel_template(resolution)
     template = template.convolve(template.volume, center=(0, 0, 0))
     vol = scene.visuals.Volume(template.volume.astype('float32'), parent=view.scene)
-    vol.transform = scene.transforms.STTransform(scale=np.ones(3) / resolution, translate=(0.5 / resolution, 0, 0))
+    vol.transform = scene.transforms.STTransform(scale=np.ones(3) * resolution, translate=(2.5, -0.5, -0.5))
 
     path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
     scene.visuals.Line(pos=path, parent=view.scene, color='red')

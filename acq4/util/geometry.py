@@ -72,19 +72,20 @@ def find_intersected_voxels(
 
 
 class GeometryMotionPlanner:
-    """
-    Parameters
-    ----------
-    geometries : List[Geometry]
-        List of Geometry instances representing all collision objects in the world.
-        The transform of each instance must map to the same (global) coordinate system.
-    """
     def __init__(self, geometries: List[Geometry]):
+        """
+        Parameters
+        ----------
+        geometries : List[Geometry]
+            List of Geometry instances representing all collision objects in the world.
+            The transform of each instance must map to the same (global) coordinate system.
+        """
         self.geometries = geometries
 
     def find_path(self, traveling_object: Geometry, start, stop):
         """
-        Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid collisions
+        Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
+        collisions.
 
         Returns
         -------
@@ -103,6 +104,7 @@ class GeometryMotionPlanner:
              A*
              volume.check_edge_collision
         """
+        return [(stop - start) / 2, stop]
 
 
 class Volume(object):
@@ -117,6 +119,7 @@ class Volume(object):
         Transform that maps from the coordinate system of the geometry to the voxel
         indices in *volume*
     """
+
     def __init__(self, volume: np.ndarray, transform: BaseTransform):
         self.volume = volume
         self.transform = transform
@@ -132,9 +135,32 @@ class Volume(object):
         center : array-like
             (i,j,k) index of the "center" voxel in kernel_array. This is added to the resulting Volume's transform.
         """
-        dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
-        xform = self.transform * SRT3DTransform(offset=center)
-        return Volume(dest, xform)
+        # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
+        dest = np.zeros_like(self.volume)
+        dest = np.pad(dest, [(0, d - 1) for d in kernel_array.shape], constant_values=False)
+        for x in range(self.volume.shape[0]):
+            for y in range(self.volume.shape[1]):
+                for z in range(self.volume.shape[2]):
+                    if self.volume[x, y, z]:
+                        dest[
+                            x : x + kernel_array.shape[0],
+                            y : y + kernel_array.shape[1],
+                            z : z + kernel_array.shape[2],
+                        ] |= kernel_array
+        first_nonzero_x = np.argmax(np.any(dest, axis=(1, 2)))
+        last_nonzero_x = dest.shape[0] - np.argmax(np.any(dest[::-1], axis=(1, 2)))
+        first_nonzero_y = np.argmax(np.any(dest, axis=(0, 2)))
+        last_nonzero_y = dest.shape[1] - np.argmax(np.any(dest[:, ::-1], axis=(0, 2)))
+        first_nonzero_z = np.argmax(np.any(dest, axis=(0, 1)))
+        last_nonzero_z = dest.shape[2] - np.argmax(np.any(dest[:, :, ::-1], axis=(0, 1)))
+        dest = dest[
+            first_nonzero_x:last_nonzero_x,
+            first_nonzero_y:last_nonzero_y,
+            first_nonzero_z:last_nonzero_z,
+        ]
+        center = np.array(center) - np.array([first_nonzero_x, first_nonzero_y, first_nonzero_z])
+        draw_xform = SRT3DTransform(offset=center)
+        return Volume(dest, self.transform * draw_xform)
 
 
 class Geometry:
@@ -151,31 +177,31 @@ class Geometry:
     def parse_config(self):
         """Create 3D mesh from a configuration. Format example::
 
-            geometry:
-                color: (1, 0.7, 0.1, 1)    # color will be inherited by children
-                type: "cone"               # type must be "cone", "cylinder" or "box"
-                top_radius: 20 * mm
-                bottom_radius: 4 * mm
-                children:
-                    component_1:               # names for children are in their key
-                        type: "cone"
-                        height: 3 * mm
-                        top_radius: 40 * mm    # overrides top-level defaults
-                        transform:
-                            pos: 0, 0, -10 * um
-                        children:              # nested components compound their transforms
-                            halo:
-                                type: "cylinder"
-                                height: 1 * mm
-                                radius: 50 * mm
-                                color: (1, 1, 1, 0.1)
-                                transform:
-                                    pos: 0, 0, 3 * mm
-                    fuse:                      # some devices may expect specific component names
-                        type: "box"
-                        size: (80 * mm, 80 * mm, 10 * mm)
-                        transform:
-                            pos: 0, 0, -83 * mm
+        geometry:
+            color: (1, 0.7, 0.1, 1)    # color will be inherited by children
+            type: "cone"               # type must be "cone", "cylinder" or "box"
+            top_radius: 20 * mm
+            bottom_radius: 4 * mm
+            children:
+                component_1:               # names for children are in their key
+                    type: "cone"
+                    height: 3 * mm
+                    top_radius: 40 * mm    # overrides top-level defaults
+                    transform:
+                        pos: 0, 0, -10 * um
+                    children:              # nested components compound their transforms
+                        halo:
+                            type: "cylinder"
+                            height: 1 * mm
+                            radius: 50 * mm
+                            color: (1, 1, 1, 0.1)
+                            transform:
+                                pos: 0, 0, 3 * mm
+                fuse:                      # some devices may expect specific component names
+                    type: "box"
+                    size: (80 * mm, 80 * mm, 10 * mm)
+                    transform:
+                        pos: 0, 0, -83 * mm
         """
         config = self._config.copy()
 
@@ -193,7 +219,7 @@ class Geometry:
                 child.color = self.color
             self._children.append(child)
 
-        geom_type = config.pop('type', None)
+        geom_type = config.pop("type", None)
         if geom_type == "box":
             self._mesh = self.make_box(config)
         elif geom_type == "cone":
@@ -227,7 +253,9 @@ class Geometry:
 
     def voxel_template(self, resolution: float) -> Volume:
         bounds = self.mesh.bounds
-        drawing_xform = SRT3DTransform(scale=np.ones((3,))/resolution, offset=-bounds[0]/resolution)  # TODO i don't trust this
+        drawing_xform = SRT3DTransform(
+            scale=np.ones((3,)) / resolution, offset=-bounds[0] / resolution
+        )  # TODO i don't trust this
         obstacle: VoxelGrid = self.mesh.voxelized(resolution)
         return Volume(obstacle.encoding.dense, self._parent_transform * drawing_xform)
 
@@ -335,6 +363,10 @@ class Geometry:
     def make_cylinder(self, args):
         args["bottom_radius"] = args["top_radius"] = args.pop("radius")
         return self.make_cone(args)
+
+    def contains(self, point) -> bool:
+        bounds = self.mesh.bounds
+        return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
 
 
 def truncated_cone(
