@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import reduce
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Callable
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -9,6 +9,7 @@ import scipy
 import trimesh
 from coorx import SRT3DTransform, BaseTransform, NullTransform
 from trimesh.voxel import VoxelGrid
+from pyqtgraph.units import µm
 
 from acq4.util import Qt
 
@@ -71,8 +72,128 @@ def find_intersected_voxels(
     ]
 
 
+def reconstruct_path(came_from, current):
+    path = [current]
+    while current in came_from:
+        current = came_from[current]
+        path.append(current)
+    return path[::-1]
+
+
+def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_direction: np.ndarray, concentration=1.0):
+    """
+    Generate random points within a sphere with directional bias.
+
+    Parameters:
+    - n_points: Number of points to generate
+    - sphere_radius: Radius of the containing sphere
+    - bias_direction: Unit vector indicating preferred direction
+    - concentration: Controls spread (higher = more concentrated around bias direction)
+
+    Returns:
+    - Array of points (n_points x 3)
+    """
+    # Normalize bias direction
+    bias_direction = bias_direction / np.linalg.norm(bias_direction)
+
+    # Generate points using von Mises-Fisher distribution
+    # This provides a directionally biased distribution on a sphere
+    def sample_vmf(mu, kappa, size):
+        dim = len(mu)
+
+        # Generate base distribution
+        base = np.random.normal(0, 1, (size, dim))
+        base /= np.linalg.norm(base, axis=1)[:, np.newaxis]
+
+        dot_products = base @ mu
+
+        # Apply concentration with element-wise multiplication
+        result = base + kappa * (dot_products[:, np.newaxis] * mu - base)
+        result /= np.linalg.norm(result, axis=1)[:, np.newaxis]
+
+        return result
+
+    # Sample directions with bias
+    directions = sample_vmf(bias_direction, concentration, n_points)
+
+    # Random radial distance (uniform within sphere)
+    radii = sphere_radius * np.cbrt(np.random.random(n_points))
+
+    # Combine directions and radii
+    return directions * radii[:, np.newaxis]
+
+
+def a_star_ish(
+    start: np.ndarray,
+    finish: np.ndarray,
+    edge_cost: Callable,
+    heuristic=None,
+    neighbors=None,
+    max_cost=2000,
+    callback=None,
+):
+    """Run the A* algorithm to find the shortest path between *start* and *finish*."""
+    if heuristic is None:
+
+        def heuristic(x, y):
+            return np.linalg.norm(y - x)
+
+    if neighbors is None:
+        radius = np.linalg.norm(finish - start) / 10
+        count = 10
+
+        def neighbors(pt):
+            points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.2)
+            points += pt
+            return np.vstack((points, finish))
+
+    open_set = {tuple(start): start}
+    came_from = {}
+    g_score = {tuple(start): 0}
+    f_score = {tuple(start): heuristic(start, finish)}
+    cost = 0
+
+    while open_set:
+        curr_key = min(open_set, key=lambda x: f_score[x])
+        current = open_set.pop(curr_key)
+        if np.all(current == finish):
+            return reconstruct_path(came_from, curr_key)
+
+        for neighbor in neighbors(current):
+            cost += 1
+            if cost > max_cost:
+                return None
+            neigh_key = tuple(neighbor)
+            tentative_g_score = g_score[curr_key] + edge_cost(current, neighbor)
+            if neigh_key not in g_score or tentative_g_score < g_score[neigh_key]:
+                came_from[neigh_key] = curr_key
+                g_score[neigh_key] = tentative_g_score
+                f_score[neigh_key] = tentative_g_score + 2 * heuristic(neighbor, finish)
+                if f_score[neigh_key] < np.inf and neigh_key not in open_set:
+                    open_set[neigh_key] = neighbor
+            if callback is not None:
+                callback(reconstruct_path(came_from, neigh_key)[::-1])
+
+    return None
+
+
+def simplify_path(path, edge_cost: Callable):
+    """Simplify the given path by iteratively removing unnecessary waypoints."""
+    path = list(path)
+    made_change = True
+    while made_change:
+        made_change = False
+        ptr = 0
+        while ptr < len(path) - 2:
+            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
+                path.pop(ptr + 1)
+                made_change = True
+            ptr += 1
+    return path
+
+
 class GeometryMotionPlanner:
-    def __init__(self, geometries: List[Geometry]):
+    def __init__(self, geometries: List[Geometry], resolution: float = 50 * µm):
         """
         Parameters
         ----------
@@ -81,8 +202,9 @@ class GeometryMotionPlanner:
             The transform of each instance must map to the same (global) coordinate system.
         """
         self.geometries = geometries
+        self.resolution = resolution
 
-    def find_path(self, traveling_object: Geometry, start, stop):
+    def find_path(self, traveling_object: Geometry, start, stop, callback=None):
         """
         Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
         collisions.
@@ -104,7 +226,25 @@ class GeometryMotionPlanner:
              A*
              volume.check_edge_collision
         """
-        return [(stop - start) / 2, stop]
+        vol = traveling_object.voxel_template(self.resolution)
+        kernel = vol.volume[::-1, ::-1, ::-1]
+        center = vol.transform.map(np.array([0, 0, 0])) * -1
+        obstacles = [
+            geom.voxel_template(self.resolution).convolve(kernel, center)
+            for geom in self.geometries
+            if geom is not traveling_object
+        ]
+
+        def edge_cost(a, b):
+            for obj in obstacles:
+                if obj.intersects_line(a, b):
+                    return np.inf
+            return np.linalg.norm(b - a)
+
+        path = a_star_ish(start, stop, edge_cost, callback=callback)
+        if path is None:
+            return None
+        return simplify_path(path, edge_cost)[1:]
 
 
 class Volume(object):
@@ -161,6 +301,10 @@ class Volume(object):
         center = np.array(center) - np.array([first_nonzero_x, first_nonzero_y, first_nonzero_z])
         draw_xform = SRT3DTransform(offset=center)
         return Volume(dest, self.transform * draw_xform)
+
+    def intersects_line(self, a, b):
+        indexes = find_intersected_voxels(self.transform.map(a), self.transform.map(b), np.array(self.volume.shape) - 1)
+        return next((True for x, y, z in indexes if self.volume[x, y, z]), False)
 
 
 class Geometry:
@@ -364,7 +508,14 @@ class Geometry:
         args["bottom_radius"] = args["top_radius"] = args.pop("radius")
         return self.make_cone(args)
 
-    def contains(self, point) -> bool:
+    def contains(self, point, padding=None) -> bool:
+        if padding is not None:
+            for ax in range(3):
+                for sign in (-1, 1):
+                    adjustment = np.zeros(3)
+                    adjustment[ax] = sign * padding
+                    if self.contains(point + adjustment):
+                        return True
         bounds = self.mesh.bounds
         return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
 
