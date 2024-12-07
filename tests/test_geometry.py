@@ -42,7 +42,6 @@ def test_offcenter_convolve(geometry):
     assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
 
 
-
 def test_small_voxelization(geometry):
     resolution = 0.25
     template = geometry.voxel_template(resolution)
@@ -94,7 +93,9 @@ def test_find_path(geometry):
     assert np.all(path[-1] == dest)
     # walk along the path at resolution steps and assert that we haven't touched the box
     for waypoint in path:
-        assert not geometry.contains(waypoint, padding=resolution), f"waypoint {waypoint} is within {resolution} of {geometry.mesh.bounds}"
+        assert not geometry.contains(
+            waypoint, padding=resolution
+        ), f"waypoint {waypoint} is within {resolution} of {geometry.mesh.bounds}"
         # TODO this inifinite loops
         # step = start
         # step_size = (resolution * (waypoint - start) / np.linalg.norm(waypoint - start))
@@ -114,6 +115,7 @@ def test_no_path(geometry):
     start = np.array([resolution, resolution, resolution]) * 2  # inside the box
     path = planner.find_path(point, start, dest)
     assert path is None
+
 
 draw_n = 0
 
@@ -148,11 +150,11 @@ def visualize():
 
     start = np.array([0.1, 0.1, -2])
     dest = np.array([0.2, 0.2, 3])
-    start_target = scene.visuals.Sphere(radius=0.1, color='blue', parent=view.scene)
+    start_target = scene.visuals.Sphere(radius=0.1, color="blue", parent=view.scene)
     start_target.transform = scene.transforms.STTransform(translate=start)
-    dest_target = scene.visuals.Sphere(radius=0.1, color='green', parent=view.scene)
+    dest_target = scene.visuals.Sphere(radius=0.1, color="green", parent=view.scene)
     dest_target.transform = scene.transforms.STTransform(translate=dest)
-    path_line = scene.visuals.Line(pos=np.array([start, dest]), color='red', parent=view.scene)
+    path_line = scene.visuals.Line(pos=np.array([start, dest]), color="red", parent=view.scene)
 
     def update_path(p, skip=1):
         global draw_n
