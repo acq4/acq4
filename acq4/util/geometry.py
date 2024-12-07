@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from functools import reduce
 from typing import List, Tuple, Optional, Callable
 from xml.etree import ElementTree as ET
@@ -313,7 +314,7 @@ class Geometry:
         self.name = name
         self._config = config
         self._children: List[Geometry] = []
-        self._mesh: Optional[trimesh.Trimesh] = None
+        self._mesh: trimesh.Trimesh = trimesh.Trimesh()
         # maps from local coordinate system of geometry (the coordinates in which mesh vertices are specified) to parent
         self._parent_transform: BaseTransform = NullTransform()
         self.parse_config()
@@ -370,6 +371,8 @@ class Geometry:
             self._mesh = self.make_cone(config)
         elif geom_type == "cylinder":
             self._mesh = self.make_cylinder(config)
+        elif geom_type is None:
+            pass
         else:
             raise ValueError(f"Unsupported geometry type: {geom_type}")
 
@@ -486,8 +489,12 @@ class Geometry:
                 last = obj
             return create_geometry(defaults=self._defaults, **root)
         elif self._config:
-            args = {**self._config}
-            return create_geometry(defaults={}, **args)
+            args = deepcopy(self._config)
+            args.pop("children", {})
+            objects = []
+            if "type" in args:
+                objects += create_geometry(defaults={}, **args)
+            return reduce(lambda tot, kid: tot + kid.visuals(), self._children, objects)
         return []
 
     def make_box(self, args) -> trimesh.Trimesh:

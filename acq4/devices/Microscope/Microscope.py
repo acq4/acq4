@@ -148,9 +148,13 @@ class Microscope(Device, OptomechDevice):
                 return
 
         self.setCurrentSubdevice(self.currentObjective)
-        self.geometry = self.currentObjective.hiddenGeometry
         self.sigGeometryChanged.emit(self)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
+
+    def getGeometries(self):
+        if self.currentObjective is None:
+            return []
+        return self.currentObjective.getHiddenGeometries()
 
     def getObjective(self) -> "Objective | None":
         """Return the currently active Objective."""
@@ -355,8 +359,6 @@ class Objective(Device, OptomechDevice):
 
         Device.__init__(self, scope.dm, config, name)
         OptomechDevice.__init__(self, scope.dm, config, name)
-        self.hiddenGeometry = self.geometry  # microscopes are in charge of setting the geometry
-        self.geometry = Geometry({}, {})
 
         if 'offset' in config:
             self.setOffset(config['offset'])
@@ -364,10 +366,13 @@ class Objective(Device, OptomechDevice):
             self.setScale(config['scale'])
 
     def getGeometries(self):
-        if isinstance(self.config.get("geometry"), dict):
+        return []  # microscopes are in charge of setting the geometry
+
+    def getHiddenGeometries(self):
+        if isinstance(self._config.get("geometry"), dict):
             defaults = {'color': (0, 0.7, 0.9, 0.4)}
-            defaults.update(self.config["geometry"])
-            self.config["geometry"] = defaults
+            defaults.update(self._config["geometry"])
+            self._config["geometry"] = defaults
         return super().getGeometries()
 
     def deviceTransform(self, subdev=None):

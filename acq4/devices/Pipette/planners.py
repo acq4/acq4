@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
+from coorx import SRT3DTransform
 from vispy.visuals.transforms import ChainTransform
 
 from acq4.util.future import MultiFuture
@@ -167,7 +168,11 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 continue
             for geom in dev.getGeometries():
                 # TODO convert from pg to coorx transform
-                geom.set_transform(ChainTransform(dev.globalPhysicalTransform(), geom.transform))
+                physical_xform = dev.globalPhysicalTransform().saveState()
+                if "pos" in physical_xform:
+                    physical_xform["offset"] = physical_xform.pop("pos")
+                physical_xform = SRT3DTransform(**physical_xform)
+                geom.set_transform(ChainTransform(physical_xform, geom.transform))
                 geometries.append(geom)
         planner = GeometryMotionPlanner(geometries)
         path = planner.find_path(self.pip.getGeometries()[0], globalStart, globalStop)
