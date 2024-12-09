@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from functools import reduce
-from typing import List, Tuple, Optional, Callable
+from typing import List, Tuple, Callable
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -10,9 +10,52 @@ import scipy
 import trimesh
 from coorx import SRT3DTransform, BaseTransform, NullTransform
 from trimesh.voxel import VoxelGrid
-from pyqtgraph.units import µm
+from vispy.scene import visuals
+from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
 from acq4.util import Qt
+from pyqtgraph import SRTTransform3D
+from pyqtgraph.units import µm
+
+
+def truncated_cone(
+    bottom_radius: float,
+    top_radius: float,
+    height: float,
+    close_top: bool = False,
+    close_bottom: bool = False,
+    segments: int = 32,
+) -> (np.ndarray, np.ndarray):
+    theta = np.linspace(0, 2 * np.pi, segments, endpoint=False)
+    bottom_circle = np.column_stack((bottom_radius * np.cos(theta), bottom_radius * np.sin(theta), np.zeros(segments)))
+    top_circle = np.column_stack((top_radius * np.cos(theta), top_radius * np.sin(theta), np.full(segments, height)))
+
+    vertices = np.vstack((bottom_circle, top_circle))
+
+    faces = []
+    for i in range(segments):
+        next_i = (i + 1) % segments
+        faces.extend(
+            (
+                [i, next_i, segments + next_i],
+                [i, segments + next_i, segments + i],
+            )
+        )
+
+    if close_bottom:
+        bottom_center = len(vertices)
+        vertices = np.vstack((vertices, [[0, 0, 0], [0, 0, height]]))
+        for i in range(segments):
+            next_i = (i + 1) % segments
+            faces.append([i, next_i, bottom_center])
+    if close_top:
+        top_center = len(vertices)
+        vertices = np.vstack((vertices, [[0, 0, height]]))
+        for i in range(segments):
+            next_i = (i + 1) % segments
+            faces.append([segments + i, segments + next_i, top_center])
+
+    return vertices, np.array(faces)
 
 
 def line_intersects_voxel(start, end, vox):
@@ -359,9 +402,9 @@ class Geometry:
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
+            if "color" not in child_config:
+                child_config["color"] = self.color
             child = Geometry(child_config, name)
-            if child.color is None:
-                child.color = self.color
             self._children.append(child)
 
         geom_type = config.pop("type", None)
@@ -371,9 +414,7 @@ class Geometry:
             self._mesh = self.make_cone(config)
         elif geom_type == "cylinder":
             self._mesh = self.make_cylinder(config)
-        elif geom_type is None:
-            pass
-        else:
+        elif geom_type is not None:
             raise ValueError(f"Unsupported geometry type: {geom_type}")
 
         if len(config) > 0:
@@ -438,7 +479,6 @@ class Geometry:
 
     def visuals(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
-        from acq4.modules.Visualize3D import create_geometry
 
         if isinstance(self._config, str):
             from pymp import Planner
@@ -487,14 +527,23 @@ class Geometry:
                 obj = objects.pop(0)
                 list(last.values())[0].setdefault("children", {}).update(obj)
                 last = obj
-            return create_geometry(defaults=self._defaults, **root)
+            # TODO wrong structure now
+            return []
         elif self._config:
             args = deepcopy(self._config)
             args.pop("children", {})
+            args.setdefault("name", "geometry")
             objects = []
+            parent = None
             if "type" in args:
-                objects += create_geometry(defaults={}, **args)
-            return reduce(lambda tot, kid: tot + kid.visuals(), self._children, objects)
+                parent = _VISUALS[args.pop("type")](**args)
+                objects.append(parent)
+            for kid in self._children:
+                for kid_viz in kid.visuals():
+                    if parent is not None:
+                        kid_viz.mesh.parent = parent.mesh
+                    objects.append(kid_viz)
+            return objects
         return []
 
     def make_box(self, args) -> trimesh.Trimesh:
@@ -527,41 +576,64 @@ class Geometry:
         return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
 
 
-def truncated_cone(
-    bottom_radius: float,
-    top_radius: float,
-    height: float,
-    close_top: bool = False,
-    close_bottom: bool = False,
-    segments: int = 32,
-) -> (np.ndarray, np.ndarray):
-    theta = np.linspace(0, 2 * np.pi, segments, endpoint=False)
-    bottom_circle = np.column_stack((bottom_radius * np.cos(theta), bottom_radius * np.sin(theta), np.zeros(segments)))
-    top_circle = np.column_stack((top_radius * np.cos(theta), top_radius * np.sin(theta), np.full(segments, height)))
+class Visual(Qt.QObject):
+    def __init__(self, transform=None):
+        super().__init__()
+        self.drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
+        self._deviceTransform = MatrixTransform()
 
-    vertices = np.vstack((bottom_circle, top_circle))
+    def handleTransformUpdate(self, dev, _):
+        self.setDeviceTransform(dev.globalPhysicalTransform())
 
-    faces = []
-    for i in range(segments):
-        next_i = (i + 1) % segments
-        faces.extend(
-            (
-                [i, next_i, segments + next_i],
-                [i, segments + next_i, segments + i],
-            )
+    def setDeviceTransform(self, xform):
+        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
+
+
+class BoxVisual(Visual):
+    def __init__(self, name: str, size: tuple, color=(1, 0.7, 0.1, 0.4), transform=None):
+        super().__init__(transform)
+
+        self.mesh = visuals.Box(
+            width=size[0],
+            height=size[1],
+            depth=size[2],
+            color=color,
+            edge_color=(0, 0, 0, 1),
         )
+        self.mesh.transform = ChainTransform(self._deviceTransform, self.drawingTransform)
 
-    if close_bottom:
-        bottom_center = len(vertices)
-        vertices = np.vstack((vertices, [[0, 0, 0], [0, 0, height]]))
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            faces.append([i, next_i, bottom_center])
-    if close_top:
-        top_center = len(vertices)
-        vertices = np.vstack((vertices, [[0, 0, height]]))
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            faces.append([segments + i, segments + next_i, top_center])
 
-    return vertices, np.array(faces)
+class TruncatedConeVisual(Visual):
+    def __init__(
+        self,
+        name: str,
+        color=(1, 0.7, 0.1, 0.4),
+        transform=None,
+        **kwargs,
+    ):
+        super().__init__(transform)
+
+        vertices, faces = truncated_cone(**kwargs)
+        self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
+        self.mesh.transform = ChainTransform(self._deviceTransform, self.drawingTransform)
+
+
+class CylinderVisual(TruncatedConeVisual):
+    def __init__(self, name: str, color=(1, 0.7, 0.1, 0.4), radius=None, transform=None, **kwargs):
+        kwargs["top_radius"] = radius
+        kwargs["bottom_radius"] = radius
+        super().__init__(name, color, transform, **kwargs)
+
+
+_VISUALS = {
+    "box": BoxVisual,
+    "cone": TruncatedConeVisual,
+    "cylinder": CylinderVisual,
+}
+_CONTROL_ARGS = (
+    {"type"}
+    | set(truncated_cone.__code__.co_varnames)
+    | set(BoxVisual.__init__.__code__.co_varnames)
+    | set(CylinderVisual.__init__.__code__.co_varnames)
+    | set(TruncatedConeVisual.__init__.__code__.co_varnames)
+)
