@@ -192,7 +192,9 @@ class OptomechDevice(InterfaceMixin):
         dm.declareInterface(name, ["OptomechDevice"], self)
 
     def getGeometries(self):
-        return [Geometry((self._config or {}).get("geometry", {}), self.name)]
+        if "geometry" in self._config:
+            return [Geometry(self._config["geometry"], self.name)]
+        return []
 
     def name(self):
         return self.__name

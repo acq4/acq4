@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
-import numpy as np
 from coorx import SRT3DTransform
 from vispy.visuals.transforms import ChainTransform
 
+import pyqtgraph as pg
 from acq4.util.future import MultiFuture
 from ... import getManager
+from ...util.HelpfulException import HelpfulException
 from ...util.geometry import GeometryMotionPlanner
 
 if TYPE_CHECKING:
@@ -162,20 +163,21 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         man = getManager()
         geometries = []
         for dev in man.listInterfaces("OptomechDevice"):
+            dev = man.getDevice(dev)
             # TODO what if one of these devices is actively moving?
             # TODO the sample surface needs to be included
             if dev == self.pip:
                 continue
             for geom in dev.getGeometries():
-                # TODO convert from pg to coorx transform
-                physical_xform = dev.globalPhysicalTransform().saveState()
-                if "pos" in physical_xform:
-                    physical_xform["offset"] = physical_xform.pop("pos")
-                physical_xform = SRT3DTransform(**physical_xform)
-                geom.set_transform(ChainTransform(physical_xform, geom.transform))
+                physical_mat = pg.SRTTransform3D(dev.globalPhysicalTransform()).matrix().T
+                physical_xform = SRT3DTransform()
+                physical_xform.matrix = physical_mat
+                geom.transform(physical_xform)
                 geometries.append(geom)
         planner = GeometryMotionPlanner(geometries)
         path = planner.find_path(self.pip.getGeometries()[0], globalStart, globalStop)
+        if path is None:
+            raise HelpfulException("No safe path found")
         return [(waypoint, speed, False, APPROACH_WAYPOINT) for waypoint in path]
 
 

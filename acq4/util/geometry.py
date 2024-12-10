@@ -237,7 +237,7 @@ def simplify_path(path, edge_cost: Callable):
 
 
 class GeometryMotionPlanner:
-    def __init__(self, geometries: List[Geometry], resolution: float = 50 * µm):
+    def __init__(self, geometries: List[Geometry], resolution: float = 500 * µm):
         """
         Parameters
         ----------
@@ -431,6 +431,9 @@ class Geometry:
         """
         return reduce(lambda m, o: m + o, [child.mesh for child in self._children], self._mesh)
 
+    def transform(self, xform: BaseTransform):
+        self._parent_transform = xform * self._parent_transform
+
     def voxelize_with_transform(self, transform):
         # get mesh vertices
         # map vertices through transform
@@ -481,54 +484,7 @@ class Geometry:
         """Return a 3D model to be displayed in the 3D visualization window."""
 
         if isinstance(self._config, str):
-            from pymp import Planner
-            import hppfcl
-
-            urdf = self._config
-            srdf = f"{urdf[:-5]}.srdf"
-            end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
-            joints = [
-                j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"
-            ]
-            planner = Planner(urdf, joints, end_effector, srdf)
-            objects = []
-            for obj in planner.scene.collision_model.geometryObjects:
-                geom = obj.geometry
-                if isinstance(geom, hppfcl.Cylinder):
-                    conf = {
-                        "type": "cylinder",
-                        "radius": geom.radius,
-                        "height": 2.0 * geom.halfLength,
-                        "close_top": True,
-                        "close_bottom": True,
-                    }
-                elif isinstance(geom, hppfcl.Cone):
-                    conf = {
-                        "type": "cone",
-                        "bottom_radius": geom.radius,
-                        "top_radius": 0,
-                        "height": 2.0 * geom.halfLength,
-                        "close_bottom": True,
-                    }
-                elif isinstance(geom, hppfcl.Box):
-                    conf = {"type": "box", "size": 2.0 * geom.halfSide}
-                else:
-                    raise ValueError(f"Unsupported geometry type: {type(geom)}")
-                xform = np.dot(
-                    np.array(planner.scene.model.jointPlacements[obj.parentJoint]),
-                    np.array(obj.placement),
-                )
-                conf["transform"] = Qt.QtGui.QMatrix4x4(xform.reshape((-1,)))
-                objects.append({obj.name: conf})
-
-            root = objects.pop(0)
-            last = root
-            while objects:
-                obj = objects.pop(0)
-                list(last.values())[0].setdefault("children", {}).update(obj)
-                last = obj
-            # TODO wrong structure now
-            return []
+            return self._urdf_visuals()
         elif self._config:
             args = deepcopy(self._config)
             args.pop("children", {})
@@ -544,6 +500,56 @@ class Geometry:
                         kid_viz.mesh.parent = parent.mesh
                     objects.append(kid_viz)
             return objects
+        return []
+
+    def _urdf_visuals(self):
+        from pymp import Planner
+        import hppfcl
+
+        urdf = self._config
+        srdf = f"{urdf[:-5]}.srdf"
+        end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
+        joints = [
+            j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"
+        ]
+        planner = Planner(urdf, joints, end_effector, srdf)
+        objects = []
+        for obj in planner.scene.collision_model.geometryObjects:
+            geom = obj.geometry
+            if isinstance(geom, hppfcl.Cylinder):
+                conf = {
+                    "type": "cylinder",
+                    "radius": geom.radius,
+                    "height": 2.0 * geom.halfLength,
+                    "close_top": True,
+                    "close_bottom": True,
+                }
+            elif isinstance(geom, hppfcl.Cone):
+                conf = {
+                    "type": "cone",
+                    "bottom_radius": geom.radius,
+                    "top_radius": 0,
+                    "height": 2.0 * geom.halfLength,
+                    "close_bottom": True,
+                }
+            elif isinstance(geom, hppfcl.Box):
+                conf = {"type": "box", "size": 2.0 * geom.halfSide}
+            else:
+                raise ValueError(f"Unsupported geometry type: {type(geom)}")
+            xform = np.dot(
+                np.array(planner.scene.model.jointPlacements[obj.parentJoint]),
+                np.array(obj.placement),
+            )
+            conf["transform"] = Qt.QtGui.QMatrix4x4(xform.reshape((-1,)))
+            objects.append({obj.name: conf})
+
+        root = objects.pop(0)
+        last = root
+        while objects:
+            obj = objects.pop(0)
+            list(last.values())[0].setdefault("children", {}).update(obj)
+            last = obj
+        # TODO wrong structure now
         return []
 
     def make_box(self, args) -> trimesh.Trimesh:
