@@ -10,6 +10,7 @@ import scipy
 import trimesh
 from coorx import SRT3DTransform, BaseTransform, NullTransform
 from trimesh.voxel import VoxelGrid
+from vispy import scene
 from vispy.scene import visuals
 from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
@@ -247,6 +248,7 @@ class GeometryMotionPlanner:
         """
         self.geometries = geometries
         self.resolution = resolution
+        self._viz = None
 
     def find_path(self, traveling_object: Geometry, start, stop, callback=None):
         """
@@ -290,6 +292,41 @@ class GeometryMotionPlanner:
             return None
         return simplify_path(path, edge_cost)[1:]
 
+    def visualize(self, traveling_object, start, stop):
+        if self._viz is not None:
+            self._viz.close()
+
+        self._viz = scene.SceneCanvas(keys="interactive", show=True)
+        self._viz.native.show()
+
+        view = self._viz.central_widget.add_view()
+        view.camera = "turntable"
+
+        grid = visuals.GridLines()
+        view.add(grid)
+
+        axis = visuals.XYZAxis(parent=view.scene)
+        axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
+
+        start_target = scene.visuals.Sphere(radius=100*µm, color="blue", parent=view.scene)
+        start_target.transform = scene.transforms.STTransform(translate=start)
+        dest_target = scene.visuals.Sphere(radius=100*µm, color="green", parent=view.scene)
+        dest_target.transform = scene.transforms.STTransform(translate=stop)
+
+        vol = traveling_object.voxel_template(self.resolution)
+        kernel = vol.volume[::-1, ::-1, ::-1]
+        center = vol.transform.map(np.array([0, 0, 0])) * -1
+        for geom in self.geometries:
+            obstacle = geom.voxel_template(self.resolution).convolve(kernel, center)
+            viz = scene.visuals.Volume(obstacle.volume.astype('float32'), parent=view.scene)
+            # Go from a coorx.CompoundTransform to a vispy transform via pyqtgraph
+            xform = SRTTransform3D()
+            for x in obstacle.transform.transforms:
+                args = x.params
+                args["pos"] = args.pop("offset")
+                xform = SRTTransform3D(xform * SRTTransform3D(args))
+            viz.transform = scene.transforms.MatrixTransform(xform.matrix().T)
+
 
 class Volume(object):
     """
@@ -300,13 +337,18 @@ class Volume(object):
     volume : ndarray
         3D boolean array containing voxelized geometry
     transform : coorx.BaseTransform
-        Transform that maps from the coordinate system of the geometry to the voxel
-        indices in *volume*
+        Transform that maps from the local coordinate system of this volume (i.e. voxel coordinates) to the parent
+        geometry's coordinate system.
     """
 
     def __init__(self, volume: np.ndarray, transform: BaseTransform):
         self.volume = volume
         self.transform = transform
+
+    @property
+    def inverse_transform(self):
+        """The transform that maps from the parent geometry's coordinate system to the local coordinate system."""
+        return self.transform.inverse
 
     def convolve(self, kernel_array, center) -> Volume:
         """
@@ -445,10 +487,10 @@ class Geometry:
     def voxel_template(self, resolution: float) -> Volume:
         bounds = self.mesh.bounds
         drawing_xform = SRT3DTransform(
-            scale=np.ones((3,)) / resolution, offset=-bounds[0] / resolution
+            scale=np.ones((3,)) * resolution, offset=-bounds[0] * resolution
         )  # TODO i don't trust this
         obstacle: VoxelGrid = self.mesh.voxelized(resolution)
-        return Volume(obstacle.encoding.dense, self._parent_transform * drawing_xform)
+        return Volume(obstacle.encoding.dense.T, self._parent_transform * drawing_xform)
 
     def global_path_intersects(self, path, resolution: float, traveling_object: Geometry = None) -> bool:
         """Return True if the path intersects this geometry, optionally convolving our geometry with the traveling

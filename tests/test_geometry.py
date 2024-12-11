@@ -42,6 +42,14 @@ def test_offcenter_convolve(geometry):
     assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
 
 
+def test_convolve_growth(geometry):
+    dot = Geometry({"type": "box", "size": [0.1, 0.1, 0.1]}, "dot").voxel_template(0.1)
+    kernel_array = geometry.voxel_template(0.1).volume
+    center = (0, 0, 0)
+    convolved = dot.convolve(kernel_array, center=center)
+    assert np.all(convolved.volume == kernel_array)
+
+
 def test_small_voxelization(geometry):
     resolution = 0.25
     template = geometry.voxel_template(resolution)
@@ -50,9 +58,9 @@ def test_small_voxelization(geometry):
     expected = np.ones((5, 5, 5), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
     assert np.all(template.volume == expected)
-    assert np.all(template.transform.map((0, 0, 0)) == np.array([2, 2, 2]))
+    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([2, 2, 2]))
     corner = np.array([0.5, 0.5, 0.5])
-    assert np.all(template.transform.map(corner) == np.array([4, 4, 4]))
+    assert np.all(template.inverse_transform.map(corner) == np.array([4, 4, 4]))
 
 
 def test_voxelized(geometry):
@@ -63,7 +71,7 @@ def test_voxelized(geometry):
     expected = np.ones((11, 11, 11), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
     assert np.all(template.volume == expected)
-    origin = template.transform.map(np.array([0, 0, 0]))
+    origin = template.inverse_transform.map(np.array([0, 0, 0]))
     assert np.all(origin[:3] == np.array([5, 5, 5]))
 
 
@@ -74,7 +82,7 @@ def test_translated_voxels():
     template = geometry.voxel_template(resolution)
     assert isinstance(template, Volume)
     assert template.volume.shape == (11, 11, 11)
-    origin = template.transform.map(np.array([0, 0, 0]))
+    origin = template.inverse_transform.map(np.array([0, 0, 0]))
     assert np.all(origin[:3] == np.array([15, 5, 5]))
 
 
@@ -140,6 +148,7 @@ def visualize():
     view.add(obj.mesh)
 
     resolution = 0.1
+
     # template = geometry.voxel_template(resolution)
     # template = template.convolve(template.volume, center=(0, 0, 0))
     # vol = scene.visuals.Volume(template.volume.astype('float32'), parent=view.scene)

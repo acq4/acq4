@@ -10,6 +10,7 @@ from acq4.util.future import MultiFuture
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.geometry import GeometryMotionPlanner
+from ...util.threadrun import runInGuiThread
 
 if TYPE_CHECKING:
     from .pipette import Pipette
@@ -17,9 +18,56 @@ if TYPE_CHECKING:
 
 RETRACTION_TO_AVOID_SAMPLE_TEAR = "retracting away from sample"
 MOVE_TO_DESTINATION = "final move to destination"
+OBSTACLE_AVOIDANCE = "intermediate waypoint to avoid obstacles"
 APPROACH_WAYPOINT = "approach waypoint"
 SAFE_SPEED_WAYPOINT = "safe speed waypoint"
 APPROACH_TO_CORRECT_FOR_HYSTERESIS = "hysteresis correction waypoint"
+
+import numpy as np
+
+
+def qmatrix4x4_to_vispy_srt(qt_matrix):
+    """Convert QMatrix4x4 to a SRT3DTransform."""
+    np_matrix = np.array(qt_matrix.data()).reshape((4, 4))  # .T?
+    translation = np_matrix[:3, 3]
+
+    rotation_scale_matrix = np_matrix[:3, :3]
+
+    scale_x = np.linalg.norm(rotation_scale_matrix[:, 0])
+    scale_y = np.linalg.norm(rotation_scale_matrix[:, 1])
+    scale_z = np.linalg.norm(rotation_scale_matrix[:, 2])
+    scale = np.array([scale_x, scale_y, scale_z])
+
+    rotation_matrix = rotation_scale_matrix / scale
+
+    def get_angle_axis():
+        axes = [
+            (1, 0, 0),  # x-axis
+            (0, 1, 0),  # y-axis
+            (0, 0, 1),  # z-axis
+        ]
+
+        for axis_idx, axis in enumerate(axes):
+            if axis == (1, 0, 0):
+                cos_val = rotation_matrix[1, 1]
+                sin_val = -rotation_matrix[1, 2]
+            elif axis == (0, 1, 0):
+                cos_val = rotation_matrix[0, 0]
+                sin_val = rotation_matrix[2, 0]
+            else:
+                cos_val = rotation_matrix[0, 0]
+                sin_val = rotation_matrix[0, 1]
+
+            angle = np.degrees(np.arctan2(sin_val, cos_val))
+
+            # Check if the angle is meaningful (not close to zero)
+            if not np.isclose(angle, 0, atol=1e-5):
+                return angle, axis
+
+        return 0, (0, 0, 1)  # default to no rotation
+
+    angle, axis = get_angle_axis()
+    return SRT3DTransform(offset=translation, scale=scale, angle=angle, axis=axis)
 
 
 class PipettePathGenerator:
@@ -175,10 +223,13 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 geom.transform(physical_xform)
                 geometries.append(geom)
         planner = GeometryMotionPlanner(geometries)
+        runInGuiThread(planner.visualize, self.pip.getGeometries()[0], globalStart, globalStop)
         path = planner.find_path(self.pip.getGeometries()[0], globalStart, globalStop)
         if path is None:
             raise HelpfulException("No safe path found")
-        return [(waypoint, speed, False, APPROACH_WAYPOINT) for waypoint in path]
+        path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
+        path[-1][3] = explanation
+        return path
 
 
 class PipetteMotionPlanner:
