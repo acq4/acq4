@@ -9,7 +9,7 @@ from pyqtgraph.parametertree import Parameter, ParameterTree
 
 class CameraDeviceGui(Qt.QWidget):
     def __init__(self, dev, win):
-        Qt.QWidget.__init__(self, win)
+        Qt.QWidget.__init__(self)
         self.dev = dev
         self.win = win
         self.layout = Qt.QGridLayout()
