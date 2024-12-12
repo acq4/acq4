@@ -2,6 +2,7 @@ import time
 
 import pytest
 import numpy as np
+from coorx import NullTransform
 from vispy import scene
 from vispy.scene import visuals
 
@@ -14,6 +15,12 @@ def geometry():
     return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test")
 
 
+def test_mesh(geometry):
+    mesh = geometry.mesh
+    assert mesh is not None
+    assert np.allclose(mesh.bounds, [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
+
+
 def test_identity_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
     orig = geometry.voxel_template(0.1)
@@ -23,13 +30,26 @@ def test_identity_convolve(geometry):
     assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
 
 
+def test_cross_geometry_transform():
+    geom_a = Geometry(
+        {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (-10, 2, 100), "angle": 45, "axis": (0, 0, 1)}},
+        "a",
+    )
+    geom_b = Geometry({"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (50, 50, 50)}}, "b")
+    geom_c = geom_a.transformed_to(
+        geom_b, self_to_global=NullTransform(), global_to_other=NullTransform(), name="transformed"
+    )
+    assert np.all(geom_c.transform.map((0, 0, 0)) == np.array([50, 50, 50]))
+    assert np.allclose(geom_c.voxel_template(0.1).volume, geom_a.voxel_template(0.1).volume)
+
+
 def test_translated_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
     orig = geometry.voxel_template(0.1)
     center = (-10, 0, 100)  # off the grid centers are allowed
     convolved = orig.convolve(kernel_array, center=center)
     assert np.all(convolved.volume == orig.volume)
-    assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)) + center)
+    assert np.all(convolved.inverse_transform.map((0, 0, 0)) == orig.inverse_transform.map((0, 0, 0)) - center)
 
 
 def test_offcenter_convolve(geometry):
@@ -39,7 +59,7 @@ def test_offcenter_convolve(geometry):
     center = (1, 1, 1)
     convolved = orig.convolve(kernel_array, center=center)
     assert np.all(convolved.volume == orig.volume)
-    assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
+    assert np.all(convolved.inverse_transform.map((0, 0, 0)) == orig.inverse_transform.map((0, 0, 0)))
 
 
 def test_convolve_growth(geometry):
@@ -50,17 +70,18 @@ def test_convolve_growth(geometry):
     assert np.all(convolved.volume == kernel_array)
 
 
-def test_small_voxelization(geometry):
-    resolution = 0.25
+def test_coarse_voxelization(geometry):
+    resolution = 0.25  # units per vx
     template = geometry.voxel_template(resolution)
     assert isinstance(template, Volume)
-    assert template.volume.shape == (5, 5, 5)
+    assert template.volume.shape == (5, 5, 5)  # not 4; the edge is in the next voxel over
     expected = np.ones((5, 5, 5), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
     assert np.all(template.volume == expected)
-    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([2, 2, 2]))
+    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([2, 2, 2]))  # but we're getting [0.5, 0.5, 0.5]
     corner = np.array([0.5, 0.5, 0.5])
     assert np.all(template.inverse_transform.map(corner) == np.array([4, 4, 4]))
+    assert np.all(template.transform.map(np.array([0, 3, 0]) == np.array([-0.5, 0.25, -0.5])))
 
 
 def test_voxelized(geometry):
@@ -75,15 +96,17 @@ def test_voxelized(geometry):
     assert np.all(origin[:3] == np.array([5, 5, 5]))
 
 
-def test_translated_voxels():
-    config = {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": [1.0, 0.0, 0.0]}}
-    geometry = Geometry(config, "test")
+def test_translated_voxels_have_no_knowledge_of_such():
     resolution = 0.1
+    offset = np.array([1.0, -0.1, 10.0])
+    config = {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": offset}}
+    geometry = Geometry(config, "test")
     template = geometry.voxel_template(resolution)
     assert isinstance(template, Volume)
     assert template.volume.shape == (11, 11, 11)
+    # inverse goes from geometry to voxel
     origin = template.inverse_transform.map(np.array([0, 0, 0]))
-    assert np.all(origin[:3] == np.array([15, 5, 5]))
+    assert np.all(origin[:3] == np.array([5, 5, 5]))
 
 
 def test_find_path(geometry):

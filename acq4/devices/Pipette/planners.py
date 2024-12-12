@@ -209,7 +209,7 @@ class PipettePathGenerator:
 class GeometryAwarePathGenerator(PipettePathGenerator):
     def safePath(self, globalStart, globalStop, speed, explanation=None):
         man = getManager()
-        geometries = []
+        geometries = {}
         for dev in man.listInterfaces("OptomechDevice"):
             dev = man.getDevice(dev)
             # TODO what if one of these devices is actively moving?
@@ -220,8 +220,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 physical_mat = pg.SRTTransform3D(dev.globalPhysicalTransform()).matrix().T
                 physical_xform = SRT3DTransform()
                 physical_xform.matrix = physical_mat
-                geom.transform(physical_xform)
-                geometries.append(geom)
+                geometries[geom] = physical_xform
         planner = GeometryMotionPlanner(geometries)
         runInGuiThread(planner.visualize, self.pip.getGeometries()[0], globalStart, globalStop)
         path = planner.find_path(self.pip.getGeometries()[0], globalStart, globalStop)

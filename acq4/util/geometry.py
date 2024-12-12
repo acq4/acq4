@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 from functools import reduce
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Optional, Dict
 from xml.etree import ElementTree as ET
 
 import numpy as np
-import scipy
 import trimesh
 from coorx import SRT3DTransform, BaseTransform, NullTransform
 from trimesh.voxel import VoxelGrid
@@ -136,7 +135,7 @@ def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_dire
     - concentration: Controls spread (higher = more concentrated around bias direction)
 
     Returns:
-    - Array of points (n_points x 3)
+    - Array of points (n_points, 3)
     """
     # Normalize bias direction
     bias_direction = bias_direction / np.linalg.norm(bias_direction)
@@ -154,9 +153,7 @@ def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_dire
 
         # Apply concentration with element-wise multiplication
         result = base + kappa * (dot_products[:, np.newaxis] * mu - base)
-        result /= np.linalg.norm(result, axis=1)[:, np.newaxis]
-
-        return result
+        return result / np.linalg.norm(result, axis=1)[:, np.newaxis]
 
     # Sample directions with bias
     directions = sample_vmf(bias_direction, concentration, n_points)
@@ -238,13 +235,15 @@ def simplify_path(path, edge_cost: Callable):
 
 
 class GeometryMotionPlanner:
-    def __init__(self, geometries: List[Geometry], resolution: float = 500 * µm):
+    def __init__(self, geometries: Dict[Geometry, BaseTransform], resolution: float = 500 * µm):
         """
         Parameters
         ----------
-        geometries : List[Geometry]
-            List of Geometry instances representing all collision objects in the world.
-            The transform of each instance must map to the same (global) coordinate system.
+        geometries : Dict[Geometry, BaseTrasnform]
+            Dictionary of Geometry instances representing all collision objects in the world and the transform that
+            respectively takes them to the global coordinate system.
+        resolution : float
+            Resolution of the voxel grid used for path planning.
         """
         self.geometries = geometries
         self.resolution = resolution
@@ -308,24 +307,18 @@ class GeometryMotionPlanner:
         axis = visuals.XYZAxis(parent=view.scene)
         axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
 
-        start_target = scene.visuals.Sphere(radius=100*µm, color="blue", parent=view.scene)
+        start_target = scene.visuals.Sphere(radius=100 * µm, color="blue", parent=view.scene)
         start_target.transform = scene.transforms.STTransform(translate=start)
-        dest_target = scene.visuals.Sphere(radius=100*µm, color="green", parent=view.scene)
+        dest_target = scene.visuals.Sphere(radius=100 * µm, color="green", parent=view.scene)
         dest_target.transform = scene.transforms.STTransform(translate=stop)
 
         vol = traveling_object.voxel_template(self.resolution)
         kernel = vol.volume[::-1, ::-1, ::-1]
         center = vol.transform.map(np.array([0, 0, 0])) * -1
-        for geom in self.geometries:
+        for geom, to_global in self.geometries.items():
             obstacle = geom.voxel_template(self.resolution).convolve(kernel, center)
-            viz = scene.visuals.Volume(obstacle.volume.astype('float32'), parent=view.scene)
-            # Go from a coorx.CompoundTransform to a vispy transform via pyqtgraph
-            xform = SRTTransform3D()
-            for x in obstacle.transform.transforms:
-                args = x.params
-                args["pos"] = args.pop("offset")
-                xform = SRTTransform3D(xform * SRTTransform3D(args))
-            viz.transform = scene.transforms.MatrixTransform(xform.matrix().T)
+            viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=view.scene)
+            viz.transform = obstacle.transform.to_vispy()
 
 
 class Volume(object):
@@ -343,7 +336,7 @@ class Volume(object):
 
     def __init__(self, volume: np.ndarray, transform: BaseTransform):
         self.volume = volume
-        self.transform = transform
+        self.transform: BaseTransform = transform
 
     @property
     def inverse_transform(self):
@@ -394,15 +387,28 @@ class Volume(object):
 
 
 class Geometry:
-    def __init__(self, config, name):
-        self.color = None
+    def __init__(
+        self,
+        config: Dict = None,
+        name: str = "geometry",
+        mesh: trimesh.Trimesh = None,
+        transform: BaseTransform = None,
+        color=None,
+    ):
+        """Create a geometry either from a configuration (see parse_config) or from an existing mesh and transform."""
+        self.color = color
         self.name = name
         self._config = config
         self._children: List[Geometry] = []
-        self._mesh: trimesh.Trimesh = trimesh.Trimesh()
+        if mesh is None:
+            self._mesh: trimesh.Trimesh = trimesh.Trimesh()
+            self._total_mesh: Optional[trimesh.Trimesh] = None
+        else:
+            self._mesh = self._total_mesh = mesh
         # maps from local coordinate system of geometry (the coordinates in which mesh vertices are specified) to parent
-        self._parent_transform: BaseTransform = NullTransform()
-        self.parse_config()
+        self._transform: BaseTransform = transform or NullTransform()
+        if config is not None:
+            self.parse_config()
 
     def parse_config(self):
         """Create 3D mesh from a configuration. Format example::
@@ -440,7 +446,7 @@ class Geometry:
         xform = config.pop("transform", {}).copy()
         if "pos" in xform:
             xform["offset"] = xform.pop("pos")
-        self._parent_transform = SRT3DTransform(**xform)
+        self._transform = SRT3DTransform(**xform)
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
@@ -471,63 +477,30 @@ class Geometry:
             Concatenated Mesh containing all geometry from this object and its children,
             expressed in the local coordinate system of this object
         """
-        return reduce(lambda m, o: m + o, [child.mesh for child in self._children], self._mesh)
+        if self._total_mesh is None:
+            self._total_mesh = reduce(lambda m, o: m + o, [child.mesh for child in self._children], self._mesh)
+        return self._total_mesh
 
-    def transform(self, xform: BaseTransform):
-        self._parent_transform = xform * self._parent_transform
-
-    def voxelize_with_transform(self, transform):
-        # get mesh vertices
-        # map vertices through transform
-        # get bounding rect
-        # create voxel array
-        # create transform (from bounding box offset and voxel size)
-        pass
+    @property
+    def transform(self):
+        """Transform that maps from the local coordinate system of this geometry to the parent geometry's coordinate"""
+        return self._transform
 
     def voxel_template(self, resolution: float) -> Volume:
         bounds = self.mesh.bounds
+        # this xform will map from voxels to geometry
         drawing_xform = SRT3DTransform(
-            scale=np.ones((3,)) * resolution, offset=-bounds[0] * resolution
+            scale=np.ones((3,)) * resolution, offset=np.array(bounds[0])
         )  # TODO i don't trust this
-        obstacle: VoxelGrid = self.mesh.voxelized(resolution)
-        return Volume(obstacle.encoding.dense.T, self._parent_transform * drawing_xform)
-
-    def global_path_intersects(self, path, resolution: float, traveling_object: Geometry = None) -> bool:
-        """Return True if the path intersects this geometry, optionally convolving our geometry with the traveling
-        object's shadow."""
-        voxels = self.voxel_template(resolution)
-        xform = self.base_transform(resolution)
-        if traveling_object is not None:
-            voxels = traveling_object.convolve_across(voxels, resolution)
-            xform = traveling_object.base_transform(resolution) * xform
-        path = np.array([xform.map(pt) for pt in path])
-        for i in range(len(path) - 1):
-            start = path[i]
-            end = path[i + 1]
-            for x, y, z in find_intersected_voxels(start, end, np.array(voxels.space.shape) - 1):  # todo shape).T?
-                if voxels.space[x, y, z]:  # todo z, y, x?
-                    return True
-        return False
-
-    def convolve_across(self, space: Volume, resolution: float) -> np.ndarray:
-        """For every True point in the space, insert this geometry's shadow."""
-        kernel = self.voxel_template(resolution)
-        return scipy.signal.convolve(space, kernel, mode="full")
-        # dest = np.zeros_like(space)
-        # dest = np.pad(dest, [(0, d) for d in kernel.space.shape], constant_values=False)
-        # for x in range(space.space.shape[0]):
-        #     for y in range(space.space.shape[1]):
-        #         for z in range(space.space.shape[2]):
-        #             if space.space[x, y, z]:
-        #                 dest[x : x + kernel.space.shape[0], y : y + kernel.space.shape[1], z : z + kernel.space.shape[2]] |= kernel.space
-        # return dest
+        obstacle: VoxelGrid = self.mesh.voxelized(resolution)  # TODO this is slow
+        return Volume(obstacle.encoding.dense.T, drawing_xform)
 
     def visuals(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
 
         if isinstance(self._config, str):
             return self._urdf_visuals()
-        elif self._config:
+        elif self._config is not None:
             args = deepcopy(self._config)
             args.pop("children", {})
             args.setdefault("name", "geometry")
@@ -542,6 +515,12 @@ class Geometry:
                         kid_viz.mesh.parent = parent.mesh
                     objects.append(kid_viz)
             return objects
+        elif self.mesh is not None:
+            vertices = self.mesh.vertices
+            faces = self.mesh.faces
+            mesh = visuals.Mesh(vertices=vertices, faces=faces, color=self.color, shading="smooth")
+            mesh.transform = self.transform.to_vispy()
+            return [mesh]
         return []
 
     def _urdf_visuals(self):
@@ -551,9 +530,7 @@ class Geometry:
         urdf = self._config
         srdf = f"{urdf[:-5]}.srdf"
         end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
-        joints = [
-            j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"
-        ]
+        joints = [j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"]
         planner = Planner(urdf, joints, end_effector, srdf)
         objects = []
         for obj in planner.scene.collision_model.geometryObjects:
@@ -622,6 +599,12 @@ class Geometry:
                         return True
         bounds = self.mesh.bounds
         return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
+
+    def transformed_to(self, other, self_to_global, global_to_other, name):
+        from_self_to_other = self.transform * self_to_global * global_to_other * other.transform.inverse
+        mesh = self.mesh.copy()
+        mesh.apply_transform(from_self_to_other.full_matrix.T)
+        return Geometry(mesh=mesh, transform=other.transform, name=name, color=self.color)
 
 
 class Visual(Qt.QObject):
