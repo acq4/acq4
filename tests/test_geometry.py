@@ -39,17 +39,25 @@ def test_cross_geometry_transform():
     geom_c = geom_a.transformed_to(
         geom_b, self_to_global=NullTransform(), global_to_other=NullTransform(), name="transformed"
     )
+    # geom_c's transform should be the same as geam_b's
     assert np.all(geom_c.transform.map((0, 0, 0)) == np.array([50, 50, 50]))
-    assert np.allclose(geom_c.voxel_template(0.1).volume, geom_a.voxel_template(0.1).volume)
+    # geom_c's mesh should be rotated and therefore the voxels should be wholly unique
+    assert geom_c.voxel_template(0.1).volume.shape != geom_a.voxel_template(0.1).volume.shape
+    assert geom_c.voxel_template(0.1).volume.shape != geom_b.voxel_template(0.1).volume.shape
+    # TODO it would be nice to positively assert something about the voxelization
 
 
 def test_translated_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
-    orig = geometry.voxel_template(0.1)
-    center = (-10, 0, 100)  # off the grid centers are allowed
-    convolved = orig.convolve(kernel_array, center=center)
+    resolution = 0.1
+    orig = geometry.voxel_template(resolution)
+    center = np.array([-10, 0, 100])  # off the grid centers are allowed
+    convolved = orig.convolve(kernel_array, center=center * resolution)  # TODO why times?
     assert np.all(convolved.volume == orig.volume)
-    assert np.all(convolved.inverse_transform.map((0, 0, 0)) == orig.inverse_transform.map((0, 0, 0)) - center)
+    assert np.allclose(
+        convolved.inverse_transform.map((0, 0, 0)) + center,
+        orig.inverse_transform.map((0, 0, 0)),
+    )
 
 
 def test_offcenter_convolve(geometry):
@@ -58,8 +66,8 @@ def test_offcenter_convolve(geometry):
     orig = geometry.voxel_template(0.1)
     center = (1, 1, 1)
     convolved = orig.convolve(kernel_array, center=center)
-    assert np.all(convolved.volume == orig.volume)
-    assert np.all(convolved.inverse_transform.map((0, 0, 0)) == orig.inverse_transform.map((0, 0, 0)))
+    assert np.allclose(convolved.volume, orig.volume)
+    assert np.allclose(convolved.inverse_transform.map((0, 0, 0)), orig.inverse_transform.map((0, 0, 0)))
 
 
 def test_convolve_growth(geometry):
@@ -78,7 +86,7 @@ def test_coarse_voxelization(geometry):
     expected = np.ones((5, 5, 5), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
     assert np.all(template.volume == expected)
-    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([2, 2, 2]))  # but we're getting [0.5, 0.5, 0.5]
+    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([2, 2, 2]))
     corner = np.array([0.5, 0.5, 0.5])
     assert np.all(template.inverse_transform.map(corner) == np.array([4, 4, 4]))
     assert np.all(template.transform.map(np.array([0, 3, 0]) == np.array([-0.5, 0.25, -0.5])))

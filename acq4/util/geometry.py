@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import numpy as np
 import trimesh
-from coorx import SRT3DTransform, BaseTransform, NullTransform
+from coorx import SRT3DTransform, BaseTransform, NullTransform, TTransform
 from trimesh.voxel import VoxelGrid
 from vispy import scene
 from vispy.scene import visuals
@@ -352,10 +352,10 @@ class Volume(object):
         kernel_array : ndarray
             Voxel array to convolve with, already transformed to match the rotation of self
         center : array-like
-            (i,j,k) index of the "center" voxel in kernel_array. This is added to the resulting Volume's transform.
+            Position of the "center" point relative to the kernel. This is added to the resulting Volume's transform.
         """
         # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
-        dest = np.zeros_like(self.volume)
+        dest = np.zeros_like(self.volume, dtype=bool)
         dest = np.pad(dest, [(0, d - 1) for d in kernel_array.shape], constant_values=False)
         for x in range(self.volume.shape[0]):
             for y in range(self.volume.shape[1]):
@@ -378,7 +378,7 @@ class Volume(object):
             first_nonzero_z:last_nonzero_z,
         ]
         center = np.array(center) - np.array([first_nonzero_x, first_nonzero_y, first_nonzero_z])
-        draw_xform = SRT3DTransform(offset=center)
+        draw_xform = TTransform(offset=center)
         return Volume(dest, self.transform * draw_xform)
 
     def intersects_line(self, a, b):
