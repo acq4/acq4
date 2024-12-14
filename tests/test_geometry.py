@@ -36,9 +36,8 @@ def test_cross_geometry_transform():
         "a",
     )
     geom_b = Geometry({"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (50, 50, 50)}}, "b")
-    geom_c = geom_a.transformed_to(
-        geom_b, self_to_global=NullTransform(), global_to_other=NullTransform(), name="transformed"
-    )
+    from_a_to_b = geom_a.transform * geom_b.transform.inverse
+    geom_c = geom_a.transformed_to(geom_b.transform, from_a_to_b, name="transformed")
     # geom_c's transform should be the same as geam_b's
     assert np.all(geom_c.transform.map((0, 0, 0)) == np.array([50, 50, 50]))
     # geom_c's mesh should be rotated and therefore the voxels should be wholly unique
@@ -119,11 +118,11 @@ def test_translated_voxels_have_no_knowledge_of_such():
 
 def test_find_path(geometry):
     resolution = 0.1
-    planner = GeometryMotionPlanner([geometry], resolution)
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
     point = Geometry({"type": "box", "size": [resolution, resolution, resolution]}, "point")
     dest = np.array([0.5, 0.5, 3])
     start = np.array([0.5, 0.5, -2])
-    path = planner.find_path(point, start, dest)
+    path = planner.find_path(point, NullTransform(3), start, dest)
 
     assert path is not None
     assert len(path) >= 2
@@ -148,11 +147,11 @@ def test_find_path(geometry):
 
 def test_no_path(geometry):
     resolution = 0.1
-    planner = GeometryMotionPlanner([geometry], resolution)
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
     point = Geometry({"type": "box", "size": [resolution, resolution, resolution]}, "point")
     dest = np.array([0.5, 0.5, 3])
     start = np.array([resolution, resolution, resolution]) * 2  # inside the box
-    path = planner.find_path(point, start, dest)
+    path = planner.find_path(point, NullTransform(3), start, dest)
     assert path is None
 
 
@@ -175,16 +174,32 @@ def visualize():
     axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
 
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, {})
-    obj = geometry.visuals()[0]
-    view.add(obj.mesh)
+    # obj = geometry.visuals()[0]
+    # view.add(obj.mesh)
 
     resolution = 0.1
 
+    traveler = Geometry(
+        {
+            "type": "cylinder",
+            "radius": resolution,
+            "height": 10 * resolution,
+            "transform": {"angle": 45, "axis": (0, 1, 0)},
+        },
+        "traveler",
+    )
+
+    from_self_to_other = traveler.transform * geometry.transform.inverse
+    xformed = traveler.transformed_to(geometry.transform, from_self_to_other, f"{traveler.name}_in_{geometry.name}")
+    kernel = xformed.voxel_template(resolution).volume[::-1, ::-1, ::-1]
+    center = xformed.transform.map(np.array([0, 0, 0])) * -1
+    obstacle = geometry.voxel_template(resolution).convolve(kernel, center)
+    vol = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=view.scene)
+    vol.transform = scene.transforms.STTransform(scale=np.ones(3) * resolution, translate=(-0.5, -0.5, -0.5))
+
     # template = geometry.voxel_template(resolution)
     # template = template.convolve(template.volume, center=(0, 0, 0))
-    # vol = scene.visuals.Volume(template.volume.astype('float32'), parent=view.scene)
-    # vol.transform = scene.transforms.STTransform(scale=np.ones(3) * resolution, translate=(2.5, -0.5, -0.5))
-    #
+
     # path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
     # scene.visuals.Line(pos=path, parent=view.scene, color='red')
 
@@ -208,9 +223,8 @@ def visualize():
         path_line.set_data(p)
         app.processEvents()
 
-    planner = GeometryMotionPlanner([geometry], resolution)
-    point = Geometry({"type": "box", "size": [resolution, resolution, resolution]}, "point")
-    path = planner.find_path(point, start, dest, callback=update_path)
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
+    path = planner.find_path(traveler, NullTransform(3), start, dest, callback=update_path)
     update_path(path, skip=1)
 
     pg.exec()

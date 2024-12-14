@@ -249,7 +249,7 @@ class GeometryMotionPlanner:
         self.resolution = resolution
         self._viz = None
 
-    def find_path(self, traveling_object: Geometry, start, stop, callback=None):
+    def find_path(self, traveling_object: Geometry, from_traveler_to_global: BaseTransform, start, stop, callback=None):
         """
         Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
         collisions.
@@ -257,7 +257,7 @@ class GeometryMotionPlanner:
         Returns
         -------
         path : list
-            List of global positions from start to stop
+            List of global positions to get from start to stop
 
         Method:
         1. Create voxelized representations of traveling_object in the coordinate systems of all other geometries
@@ -271,14 +271,22 @@ class GeometryMotionPlanner:
              A*
              volume.check_edge_collision
         """
-        vol = traveling_object.voxel_template(self.resolution)
-        kernel = vol.volume[::-1, ::-1, ::-1]
-        center = vol.transform.map(np.array([0, 0, 0])) * -1
-        obstacles = [
-            geom.voxel_template(self.resolution).convolve(kernel, center)
-            for geom in self.geometries
-            if geom is not traveling_object
-        ]
+        # vol = traveling_object.voxel_template(self.resolution)
+        # kernel = vol.volume[::-1, ::-1, ::-1]
+        # center = vol.transform.map(np.array([0, 0, 0])) * -1
+        obstacles = []
+        for geom in self.geometries:
+            if geom is not traveling_object:
+                from_obj_to_geom = self.geometries[geom]
+                from_self_to_other = (
+                    traveling_object.transform * from_traveler_to_global * from_obj_to_geom * geom.transform.inverse
+                )
+                xformed = traveling_object.transformed_to(
+                    geom.transform, from_self_to_other, f"{traveling_object.name}_in_{geom.name}"
+                )
+                kernel = xformed.voxel_template(self.resolution).volume[::-1, ::-1, ::-1]
+                center = xformed.transform.map(np.array([0, 0, 0])) * -1
+                obstacles.append(geom.voxel_template(self.resolution).convolve(kernel, center))
 
         def edge_cost(a, b):
             for obj in obstacles:
@@ -600,11 +608,14 @@ class Geometry:
         bounds = self.mesh.bounds
         return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
 
-    def transformed_to(self, other, self_to_global, global_to_other, name):
-        from_self_to_other = self.transform * self_to_global * global_to_other * other.transform.inverse
+    def transformed_to(self, other_transform, from_self_to_other, name):
+        """
+        Return a new Geometry that is a transformed version of this one. The mesh will be transformed by the
+        from_self_to_other transform, while the new geometry itself will have the other_transform.
+        """
         mesh = self.mesh.copy()
         mesh.apply_transform(from_self_to_other.full_matrix.T)
-        return Geometry(mesh=mesh, transform=other.transform, name=name, color=self.color)
+        return Geometry(mesh=mesh, transform=other_transform, name=name, color=self.color)
 
 
 class Visual(Qt.QObject):
