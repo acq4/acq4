@@ -225,7 +225,8 @@ def visualize():
 
     planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
     path = planner.find_path(traveler, NullTransform(3), start, dest, callback=update_path)
-    update_path(path, skip=1)
+    print(path)
+    update_path([start] + path, skip=1)
 
     pg.exec()
 

@@ -290,7 +290,7 @@ class GeometryMotionPlanner:
 
         def edge_cost(a, b):
             for obj in obstacles:
-                if obj.intersects_line(a, b):
+                if obj.intersects_line(from_traveler_to_global.inverse.map(a), from_traveler_to_global.inverse.map(b)):
                     return np.inf
             return np.linalg.norm(b - a)
 
