@@ -390,7 +390,7 @@ class Volume(object):
         return Volume(dest, self.transform * draw_xform)
 
     def intersects_line(self, a, b):
-        indexes = find_intersected_voxels(self.transform.map(a), self.transform.map(b), np.array(self.volume.shape) - 1)
+        indexes = find_intersected_voxels(self.transform.inverse.map(a), self.transform.inverse.map(b), np.array(self.volume.shape) - 1)
         return next((True for x, y, z in indexes if self.volume[x, y, z]), False)
 
 
