@@ -1010,7 +1010,7 @@ class TaskThread(Thread):
             self.task = None  ## free up this memory
             self.paramSpace = None
             printExc("Error in task thread, exiting.")
-            self._currentFuture._taskDone(interrupted=True, error=str(exc))
+            self._currentFuture._taskDone(interrupted=True, excInfo=sys.exc_info())
             self._currentFuture = None
             self.sigExitFromError.emit()
         else:

@@ -40,8 +40,7 @@ class ThreadCallFuture(Future):
             self._taskDone()
         except Exception as exc:
             self.exc = exc
-            err = "".join(traceback.format_exception(*sys.exc_info()))
-            self._taskDone(interrupted=True, error=err)
+            self._taskDone(interrupted=True, excInfo=sys.exc_info())
 
     def __call__(self):
         self.wait()

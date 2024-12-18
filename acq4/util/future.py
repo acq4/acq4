@@ -26,15 +26,18 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by checkStop if stop() has been invoked.
         """
 
+    class Stopped(Exception):
+        """Raised by exceptions that were politely stopped."""
+
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses.
         """
 
     @classmethod
-    def immediate(cls, result=None):
+    def immediate(cls, result=None, error=None, excInfo=None) -> Future:
         """Create a future that is already resolved with the optional result."""
         fut = cls()
-        fut._taskDone(returnValue=result)
+        fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
     def __init__(self):
@@ -66,8 +69,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         try:
             kwds['_future'] = self
             self._taskDone(returnValue=func(*args, **kwds))
-        except Exception as exc:
-            self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
+        except Exception:
+            self._taskDone(interrupted=True, excInfo=sys.exc_info())
 
     def propagateStopsInto(self, future: Future):
         """Add a future to the list of futures that will be stopped if this future is stopped.
@@ -184,10 +187,15 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 msg = f"Task {self} did not complete (no error message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
-            if self._excInfo is not None:
+
+            if self._stopRequested:
+                raise self.Stopped(msg)
+            elif self._excInfo is not None:
+                if hasattr(self._excInfo[1], 'add_note'):
+                    self._excInfo[1].add_note(msg)
+                    raise self._excInfo[1]
                 raise RuntimeError(msg) from self._excInfo[1]
-            else:
-                raise RuntimeError(msg)
+            raise RuntimeError(msg)
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
@@ -351,7 +359,7 @@ class FutureButton(FeedbackButton):
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
-    def __init__(self, future_producer: Callable[[...], Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
+    def __init__(self, future_producer: Callable[ParamSpec, Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
         """Create a new FutureButton.
 
         Parameters
@@ -409,12 +417,15 @@ class FutureButton(FeedbackButton):
         self.sigFinished.emit(future)
         if not future.wasInterrupted():
             self.success(self._success or "Success")
+        elif self._userRequestedStop:
+            self._userRequestedStop = False
+            self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or 'Failed!')[:40])
-            if self._userRequestedStop:
-                self._userRequestedStop = False
-            else:
+            try:
                 future.wait()  # throw errors
+            except Future.Stopped:
+                self.reset()
 
     def _futureStateChanged(self, future, state):
         self.setText(state, temporary=True)
