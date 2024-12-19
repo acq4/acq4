@@ -51,7 +51,7 @@ def test_translated_convolve(geometry):
     resolution = 0.1
     orig = geometry.voxel_template(resolution)
     center = np.array([-10, 0, 100])  # off the grid centers are allowed
-    convolved = orig.convolve(kernel_array, center=center * resolution)  # TODO why times?
+    convolved = orig.convolve(kernel_array, center=center)
     assert np.all(convolved.volume == orig.volume)
     assert np.allclose(
         convolved.inverse_transform.map((0, 0, 0)) + center,
@@ -65,8 +65,9 @@ def test_offcenter_convolve(geometry):
     orig = geometry.voxel_template(0.1)
     center = (1, 1, 1)
     convolved = orig.convolve(kernel_array, center=center)
-    assert np.allclose(convolved.volume, orig.volume)
-    assert np.allclose(convolved.inverse_transform.map((0, 0, 0)), orig.inverse_transform.map((0, 0, 0)))
+    # we usually won't have kernels with empty edges, so these 1:-1 and +1 steps are only needed for this test
+    assert np.allclose(convolved.volume[1:-1, 1:-1, 1:-1], orig.volume)
+    assert np.allclose(convolved.inverse_transform.map((0, 0, 0)) + 1, orig.inverse_transform.map((0, 0, 0)))
 
 
 def test_convolve_growth(geometry):
