@@ -48,13 +48,13 @@ def test_cross_geometry_transform():
 
 def test_translated_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
-    resolution = 0.1
-    orig = geometry.voxel_template(resolution)
+    voxel_size = 0.1
+    orig = geometry.voxel_template(voxel_size)
     center = np.array([-10, 0, 100])  # off the grid centers are allowed
     convolved = orig.convolve(kernel_array, center=center)
     assert np.all(convolved.volume == orig.volume)
     assert np.allclose(
-        convolved.inverse_transform.map((0, 0, 0)) + center,
+        convolved.inverse_transform.map((0, 0, 0)) - center,
         orig.inverse_transform.map((0, 0, 0)),
     )
 
@@ -65,9 +65,9 @@ def test_offcenter_convolve(geometry):
     orig = geometry.voxel_template(0.1)
     center = (1, 1, 1)
     convolved = orig.convolve(kernel_array, center=center)
-    # we usually won't have kernels with empty edges, so these 1:-1 and +1 steps are only needed for this test
+    # we usually won't have kernels with empty edges, so these 1:-1 step is only needed for this test
     assert np.allclose(convolved.volume[1:-1, 1:-1, 1:-1], orig.volume)
-    assert np.allclose(convolved.inverse_transform.map((0, 0, 0)) + 1, orig.inverse_transform.map((0, 0, 0)))
+    assert np.allclose(convolved.inverse_transform.map((0, 0, 0)) - center, orig.inverse_transform.map((0, 0, 0)))
 
 
 def test_convolve_growth(geometry):
@@ -79,8 +79,8 @@ def test_convolve_growth(geometry):
 
 
 def test_coarse_voxelization(geometry):
-    resolution = 0.25  # units per vx
-    template = geometry.voxel_template(resolution)
+    voxel_size = 0.25  # units per vx
+    template = geometry.voxel_template(voxel_size)
     assert isinstance(template, Volume)
     assert template.volume.shape == (5, 5, 5)  # not 4; the edge is in the next voxel over
     expected = np.ones((5, 5, 5), dtype=bool)
@@ -93,8 +93,8 @@ def test_coarse_voxelization(geometry):
 
 
 def test_voxelized(geometry):
-    resolution = 0.1
-    template = geometry.voxel_template(resolution)
+    voxel_size = 0.1
+    template = geometry.voxel_template(voxel_size)
     assert isinstance(template, Volume)
     assert template.volume.shape == (11, 11, 11)
     expected = np.ones((11, 11, 11), dtype=bool)
@@ -105,11 +105,11 @@ def test_voxelized(geometry):
 
 
 def test_translated_voxels_have_no_knowledge_of_such():
-    resolution = 0.1
+    voxel_size = 0.1
     offset = np.array([1.0, -0.1, 10.0])
     config = {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": offset}}
     geometry = Geometry(config, "test")
-    template = geometry.voxel_template(resolution)
+    template = geometry.voxel_template(voxel_size)
     assert isinstance(template, Volume)
     assert template.volume.shape == (11, 11, 11)
     # inverse goes from geometry to voxel
@@ -118,9 +118,9 @@ def test_translated_voxels_have_no_knowledge_of_such():
 
 
 def test_find_path(geometry):
-    resolution = 0.1
-    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
-    point = Geometry({"type": "box", "size": [resolution, resolution, resolution]}, "point")
+    voxel_size = 0.1
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, voxel_size)
+    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point")
     dest = np.array([0.5, 0.5, 3])
     start = np.array([0.5, 0.5, -2])
     path = planner.find_path(point, NullTransform(3), start, dest)
@@ -130,28 +130,49 @@ def test_find_path(geometry):
     assert not np.all(path[0] == start)
     assert not np.all(path[0] == dest)
     assert np.all(path[-1] == dest)
-    # walk along the path at resolution steps and assert that we haven't touched the box
+    # walk along the path at voxel_size steps and assert that we haven't touched the box
     for waypoint in path:
         assert not geometry.contains(
-            waypoint, padding=resolution
-        ), f"waypoint {waypoint} is within {resolution} of {geometry.mesh.bounds}"
+            waypoint, padding=voxel_size
+        ), f"waypoint {waypoint} is within {voxel_size} of {geometry.mesh.bounds}"
         # TODO this inifinite loops
         # step = start
-        # step_size = (resolution * (waypoint - start) / np.linalg.norm(waypoint - start))
-        # assert np.isclose(np.linalg.norm(step_size), resolution)
+        # step_size = (voxel_size * (waypoint - start) / np.linalg.norm(waypoint - start))
+        # assert np.isclose(np.linalg.norm(step_size), voxel_size)
         # assert not np.all(step + step_size == start)
         # while np.linalg.norm(start - step) < np.linalg.norm(start - waypoint):
         #     step += step_size
-        #     assert not geometry.contains(step, padding=resolution), f"step {step} is within {resolution} of {geometry.mesh.bounds}"
+        #     assert not geometry.contains(step, padding=voxel_size), f"step {step} is within {voxel_size} of {geometry.mesh.bounds}"
         # start = waypoint
 
 
+def test_path_with_funner_traveler(geometry):
+    voxel_size = 0.1
+    traveler = Geometry(
+        {
+            "type": "cylinder",
+            "radius": voxel_size,
+            "height": 10 * voxel_size,
+            "transform": {"angle": 45, "axis": (0, 1, 0)},
+        },
+        "traveler",
+    )
+    start = np.array([0.1, 0.1, -2])
+    dest = np.array([0.2, 0.2, 3])
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, voxel_size)
+    path = planner.find_path(traveler, NullTransform(3), start, dest)
+    assert path is not None
+    assert len(path) >= 2
+    assert not np.all(path[0] == start)
+    assert not np.all(path[0] == dest)
+
+
 def test_no_path(geometry):
-    resolution = 0.1
-    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
-    point = Geometry({"type": "box", "size": [resolution, resolution, resolution]}, "point")
+    voxel_size = 0.1
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, voxel_size)
+    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point")
     dest = np.array([0.5, 0.5, 3])
-    start = np.array([resolution, resolution, resolution]) * 2  # inside the box
+    start = np.array([voxel_size, voxel_size, voxel_size]) * 2  # inside the box
     path = planner.find_path(point, NullTransform(3), start, dest)
     assert path is None
 
@@ -178,27 +199,29 @@ def visualize():
     # obj = geometry.visuals()[0]
     # view.add(obj.mesh)
 
-    resolution = 0.1
+    voxel_size = 0.1
 
     traveler = Geometry(
         {
             "type": "cylinder",
-            "radius": resolution,
-            "height": 10 * resolution,
+            "radius": voxel_size,
+            "height": 10 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
         "traveler",
     )
 
-    from_self_to_other = traveler.transform * geometry.transform.inverse
-    xformed = traveler.transformed_to(geometry.transform, from_self_to_other, f"{traveler.name}_in_{geometry.name}")
-    kernel = xformed.voxel_template(resolution).volume[::-1, ::-1, ::-1]
+    from_traveler_to_geom = geometry.transform.inverse * traveler.transform
+    xformed = traveler.transformed_to(geometry.transform, from_traveler_to_geom, f"{traveler.name}_in_{geometry.name}")
+    kernel = xformed.voxel_template(voxel_size).volume[::-1, ::-1, ::-1]
     center = xformed.transform.map(np.array([0, 0, 0])) * -1
-    obstacle = geometry.voxel_template(resolution).convolve(kernel, center)
+    obstacle = geometry.voxel_template(voxel_size).convolve(kernel, center)
     vol = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=view.scene)
-    vol.transform = scene.transforms.STTransform(scale=np.ones(3) * resolution, translate=(-0.5, -0.5, -0.5))
+    vol.cmap = "grays"
+    vol.opacity = 0.2
+    vol.transform = obstacle.transform.to_vispy()
 
-    # template = geometry.voxel_template(resolution)
+    # template = geometry.voxel_template(voxel_size)
     # template = template.convolve(template.volume, center=(0, 0, 0))
 
     # path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
@@ -224,8 +247,8 @@ def visualize():
         path_line.set_data(p)
         app.processEvents()
 
-    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, resolution)
-    path = planner.find_path(traveler, NullTransform(3), start, dest, callback=update_path)
+    planner = GeometryMotionPlanner({geometry: NullTransform(3)}, voxel_size)
+    path = planner.find_path(traveler, NullTransform(3), start, dest, callback=update_path, visualize=True)
     print(path)
     update_path([start] + path, skip=1)
 

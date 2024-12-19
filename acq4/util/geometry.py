@@ -301,7 +301,8 @@ class GeometryMotionPlanner:
                 xformed = traveling_object.transformed_to(
                     geom.transform, from_traveler_to_geom, f"{traveling_object.name}_in_{geom.name}"
                 )
-                shadow = xformed.voxel_template(self.voxel_size).volume[::-1, ::-1, ::-1]
+                xformed = xformed.voxel_template(self.voxel_size)
+                shadow = xformed.volume[::-1, ::-1, ::-1]
                 center = np.array(shadow.shape) - xformed.transform.inverse.map(np.array([0, 0, 0]))
                 obst = geom.voxel_template(self.voxel_size).convolve(shadow, center)
                 obst.transform = from_obj_to_global * obst.transform
@@ -348,11 +349,11 @@ class GeometryMotionPlanner:
         )
         viz.transform = (transform * geometry.transform).to_vispy()
 
-        # voxel = geometry.voxel_template(self.voxel_size)
-        # vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=viz)
-        # vol.cmap = "cool"
-        # vol.opacity = 0.2
-        # vol.transform = (transform * voxel.transform).to_vispy()
+        voxel = geometry.voxel_template(self.voxel_size)
+        vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=viz)
+        vol.cmap = "grays"
+        vol.opacity = 0.2
+        vol.transform = (transform * voxel.transform).to_vispy()
 
     def add_obstacle(self, obstacle: Volume):
         viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=self._viz_view.scene)
@@ -408,7 +409,7 @@ class Volume(object):
                             z : z + kernel_array.shape[2],
                         ] |= kernel_array
         center = np.array(center)
-        draw_xform = TTransform(offset=center)
+        draw_xform = TTransform(offset=-center)
         volume = Volume(dest, self.transform * draw_xform)  # xform(coord_in_volume)
         volume.locals = locals()
         return volume
@@ -526,7 +527,7 @@ class Geometry:
 
     def voxel_template(self, voxel_size: float) -> Volume:
         bounds = self.mesh.bounds
-        # this xform will map from voxels to geometry? mesh space? are those the same?
+        # TODO this xform will map from voxels to geometry? mesh space? are those the same?
         drawing_xform = SRT3DTransform(
             scale=np.ones((3,)) * voxel_size, offset=np.array(bounds[0])
         )  # TODO i don't understand this
