@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
-from coorx import SRT3DTransform
-from vispy.visuals.transforms import ChainTransform
+from coorx import SRT3DTransform, AffineTransform
 
 import pyqtgraph as pg
 from acq4.util.future import MultiFuture
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.geometry import GeometryMotionPlanner
-from ...util.threadrun import runInGuiThread
 
 if TYPE_CHECKING:
     from .pipette import Pipette
@@ -218,16 +216,20 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 continue
             for geom in dev.getGeometries():
                 physical_mat = pg.SRTTransform3D(dev.globalPhysicalTransform()).matrix().T
-                physical_xform = SRT3DTransform()
-                physical_xform.matrix = physical_mat
+                physical_xform = AffineTransform(matrix=physical_mat[0:3, 0:3], offset=physical_mat[0:3, 3])
                 geometries[geom] = physical_xform
-        planner = GeometryMotionPlanner(geometries)
-        runInGuiThread(planner.visualize, self.pip.getGeometries()[0], globalStart, globalStop)
-        path = planner.find_path(self.pip.getGeometries()[0], globalStart, globalStop)
+        planner = self._last_planner = GeometryMotionPlanner(geometries)
+        from_pip_to_global = pg.SRTTransform3D(self.pip.globalPhysicalTransform())
+        from_pip_to_global = AffineTransform(
+            matrix=from_pip_to_global.matrix()[0:3, 0:3].T, offset=from_pip_to_global.getTranslation()
+        )
+        path = planner.find_path(
+            self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, visualize=True
+        )
         if path is None:
             raise HelpfulException("No safe path found")
         path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
-        path[-1][3] = explanation
+        path[-1] = (path[-1][0], speed, False, explanation)
         return path
 
 
