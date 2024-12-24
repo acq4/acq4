@@ -215,13 +215,25 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             if dev == self.pip:
                 continue
             for geom in dev.getGeometries():
-                physical_mat = pg.SRTTransform3D(dev.globalPhysicalTransform()).matrix().T
-                physical_xform = AffineTransform(matrix=physical_mat[0:3, 0:3], offset=physical_mat[0:3, 3])
+                pg_xform = pg.SRTTransform3D(dev.globalPhysicalTransform())
+                physical_xform = SRT3DTransform(
+                    offset=pg_xform.getTranslation(),
+                    scale=pg_xform.getScale(),
+                    angle=pg_xform.getRotation()[0],
+                    axis=pg_xform.getRotation()[1],
+                    from_cs=dev.name(),
+                    to_cs="global",
+                )
                 geometries[geom] = physical_xform
         planner = self._last_planner = GeometryMotionPlanner(geometries)
-        from_pip_to_global = pg.SRTTransform3D(self.pip.globalPhysicalTransform())
-        from_pip_to_global = AffineTransform(
-            matrix=from_pip_to_global.matrix()[0:3, 0:3].T, offset=from_pip_to_global.getTranslation()
+        pg_xform = pg.SRTTransform3D(dev.globalPhysicalTransform())
+        from_pip_to_global = SRT3DTransform(
+            offset=pg_xform.getTranslation(),
+            scale=pg_xform.getScale(),
+            angle=pg_xform.getRotation()[0],
+            axis=pg_xform.getRotation()[1],
+            from_cs=self.pip.name(),
+            to_cs="global",
         )
         path = planner.find_path(
             self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, visualize=True

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from functools import reduce
-from typing import List, Tuple, Callable, Optional, Dict
+from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
 
 import numpy as np
 import trimesh
-from coorx import SRT3DTransform, BaseTransform, NullTransform, TTransform
+from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point
 from trimesh.voxel import VoxelGrid
 from vispy import scene
 from vispy.scene import visuals
@@ -86,14 +85,14 @@ def line_intersects_voxel(start, end, vox):
 
 def find_intersected_voxels(
     line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
-) -> List[Tuple[int, int, int]]:
+) -> Generator[tuple[int, int, int], Any, None]:
     """
     Find all voxels intersected by a line segment.
 
     Parameters:
     - line_start: Start point of the line segment
     - line_end: End point of the line segment
-    - voxel_size: Size of each voxel
+    - voxel_space_max: Maximum voxel coordinates in the space (assumes minimum is 0)
 
     Returns:
     - List of voxel coordinates intersected by the line
@@ -108,13 +107,13 @@ def find_intersected_voxels(
     end_voxel = np.floor(max_point).astype(int)
     end_voxel = np.minimum(end_voxel, voxel_space_max)
 
-    return [
+    return (
         (x, y, z)
         for x in range(start_voxel[0], end_voxel[0] + 1)
         for y in range(start_voxel[1], end_voxel[1] + 1)
         for z in range(start_voxel[2], end_voxel[2] + 1)
         if line_intersects_voxel(line_start, line_end, np.array([x, y, z]))
-    ]
+    )
 
 
 def reconstruct_path(came_from, current):
@@ -172,7 +171,7 @@ def a_star_ish(
     edge_cost: Callable,
     heuristic=None,
     neighbors=None,
-    max_cost=2000,
+    max_cost=4000,
     callback=None,
 ):
     """Run the A* algorithm to find the shortest path between *start* and *finish*."""
@@ -236,7 +235,7 @@ def simplify_path(path, edge_cost: Callable):
 
 
 class GeometryMotionPlanner:
-    def __init__(self, geometries: Dict[Geometry, BaseTransform], voxel_size: float = 2000 * µm):
+    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 2000 * µm):
         """
         Parameters
         ----------
@@ -249,14 +248,13 @@ class GeometryMotionPlanner:
         self.geometries = geometries
         self.voxel_size = voxel_size
         self._viz = None
-        self._volumes = []
         self._viz_view = None
         self._locals = None
 
     def find_path(
         self,
         traveling_object: Geometry,
-        from_traveler_to_global: BaseTransform,
+        from_traveler_to_global: Transform,
         start,
         stop,
         callback=None,
@@ -265,11 +263,6 @@ class GeometryMotionPlanner:
         """
         Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
         collisions.
-
-        Returns
-        -------
-        path : list
-            List of global positions to get from start to stop
 
         Method:
         1. Create voxelized representations of traveling_object in the coordinate systems of all other geometries
@@ -282,33 +275,54 @@ class GeometryMotionPlanner:
         3. Do a path-finding algorithm that, at each step, checks for collisions among all convolved volumes
              A* (ish)
              volume.check_edge_collision
+
+        Parameters
+        ----------
+        traveling_object : Geometry
+            Geometry representing the object to be moved from *start* to *stop*
+        from_traveler_to_global : Transform
+            Transform that maps from the traveling_object's local coordinate system to global
+        start
+            Global coordinates of the traveling object's origin when at initial location
+        stop
+            Global coordinates of the final location we want the traveling object's origin to be.
+        callback : callable
+            D
+
+        Returns
+        -------
+        path : list
+            List of global positions to get from start to stop
         """
         if visualize:
-            runInGuiThread(self.initialize_visualization, start, stop)
+            runInGuiThread(self.initialize_visualization, traveling_object, from_traveler_to_global, start, stop)
 
         obstacles = []
-        for geom, from_obj_to_global in self.geometries.items():
-            if geom is not traveling_object:
-                if visualize:
-                    runInGuiThread(self.add_geometry_mesh, geom, from_obj_to_global)
-                from_traveler_to_geom = (
-                    geom.transform.inverse
-                    * from_obj_to_global.inverse
-                    * from_traveler_to_global
-                    * traveling_object.transform
-                )
+        for geom, from_geom_to_global in self.geometries.items():
+            if visualize:
+                runInGuiThread(self.add_geometry_mesh, geom, from_geom_to_global)
+            if geom is traveling_object:
+                continue
+            from_traveler_to_geom = (
+                geom.transform.inverse
+                * from_geom_to_global.inverse
+                * from_traveler_to_global
+                * traveling_object.transform
+            )
 
-                xformed = traveling_object.transformed_to(
-                    geom.transform, from_traveler_to_geom, f"{traveling_object.name}_in_{geom.name}"
-                )
-                xformed = xformed.voxel_template(self.voxel_size)
-                shadow = xformed.volume[::-1, ::-1, ::-1]
-                center = np.array(shadow.shape) - xformed.transform.inverse.map(np.array([0, 0, 0]))
-                obst = geom.voxel_template(self.voxel_size).convolve(shadow, center)
-                obst.transform = from_obj_to_global * obst.transform
-                obstacles.append(obst)
-                if visualize:
-                    runInGuiThread(self.add_obstacle, obstacles[-1])
+            xformed = traveling_object.transformed_to(
+                geom.transform, from_traveler_to_geom, f"{traveling_object.name}_in_{geom.name}"
+            )
+            xformed_voxels = xformed.voxel_template(self.voxel_size)
+            shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
+            parent_origin = Point(np.array([0, 0, 0]), geom.parent_name)
+            center = np.array(shadow.shape) - xformed_voxels.transform.inverse.map(parent_origin)
+            obst = geom.voxel_template(self.voxel_size).convolve(shadow, center, f"{xformed.name} shadow")
+            # TODO how is this obst already in the global coords?
+            obst.transform = from_geom_to_global * obst.transform
+            obstacles.append(obst)
+            if visualize:
+                runInGuiThread(self.add_obstacle, obstacles[-1])
 
         def edge_cost(a, b):
             for obj in obstacles:
@@ -323,7 +337,7 @@ class GeometryMotionPlanner:
         self._locals = locals()
         return simplify_path(path, edge_cost)[1:]
 
-    def initialize_visualization(self, start, stop):
+    def initialize_visualization(self, traveling_object, from_traveler_to_global, start, stop):
         if self._viz is not None:
             self._viz.close()
         self._viz = scene.SceneCanvas(keys="interactive", show=True)
@@ -333,13 +347,14 @@ class GeometryMotionPlanner:
         grid = visuals.GridLines()
         view.add(grid)
         axis = visuals.XYZAxis(parent=view.scene)
-        axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
-        start_target = scene.visuals.Sphere(radius=100 * µm, color="blue", parent=view.scene)
+        axis.set_transform("st", scale=(self.voxel_size * 10, self.voxel_size * 10, self.voxel_size * 10))
+        self.add_geometry_mesh(traveling_object, from_traveler_to_global)
+        start_target = scene.visuals.Sphere(radius=self.voxel_size, color="blue", parent=view.scene)
         start_target.transform = scene.transforms.STTransform(translate=start)
-        dest_target = scene.visuals.Sphere(radius=100 * µm, color="green", parent=view.scene)
+        dest_target = scene.visuals.Sphere(radius=self.voxel_size, color="green", parent=view.scene)
         dest_target.transform = scene.transforms.STTransform(translate=stop)
 
-    def add_geometry_mesh(self, geometry: Geometry, transform: BaseTransform):
+    def add_geometry_mesh(self, geometry: Geometry, to_global: Transform):
         viz = scene.visuals.Mesh(
             vertices=geometry.mesh.vertices,
             faces=geometry.mesh.faces,
@@ -347,13 +362,17 @@ class GeometryMotionPlanner:
             shading="smooth",
             parent=self._viz_view.scene,
         )
-        viz.transform = (transform * geometry.transform).to_vispy()
+        viz.transform = (to_global * geometry.transform).to_vispy()
+        # viz.transform = geometry.transform.to_vispy()
 
         voxel = geometry.voxel_template(self.voxel_size)
         vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=viz)
         vol.cmap = "grays"
         vol.opacity = 0.2
-        vol.transform = (transform * voxel.transform).to_vispy()
+        # vol.transform = voxel.transform.to_vispy()
+        vol.transform = (
+            to_global * voxel.transform
+        ).to_vispy()  # TODO removing `to_global * ` makes this behave better?
 
     def add_obstacle(self, obstacle: Volume):
         viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=self._viz_view.scene)
@@ -370,21 +389,21 @@ class Volume(object):
     ----------
     volume : ndarray
         3D boolean array containing voxelized geometry
-    transform : coorx.BaseTransform
+    transform : coorx.Transform
         Transform that maps from the local coordinate system of this volume (i.e. voxel coordinates) to the parent
         geometry's coordinate system.
     """
 
-    def __init__(self, volume: np.ndarray, transform: BaseTransform):
+    def __init__(self, volume: np.ndarray, transform: Transform):
         self.volume = volume
-        self.transform: BaseTransform = transform
+        self.transform: Transform = transform
 
     @property
     def inverse_transform(self):
         """The transform that maps from the parent geometry's coordinate system to the local coordinate system."""
         return self.transform.inverse
 
-    def convolve(self, kernel_array, center) -> Volume:
+    def convolve(self, kernel_array, center, name) -> Volume:
         """
         Return a new Volume that contains the convolution of self with *kernel_array*
 
@@ -394,6 +413,8 @@ class Volume(object):
             Voxel array to convolve with, already transformed to match the rotation of self
         center : array-like
             Position of the "center" point relative to the kernel. This is added to the resulting Volume's transform.
+        name : str
+            Name of the kernel
         """
         # scipy does weird stuff
         # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
@@ -409,30 +430,38 @@ class Volume(object):
                             z : z + kernel_array.shape[2],
                         ] |= kernel_array
         center = np.array(center)
-        draw_xform = TTransform(offset=-center)
-        volume = Volume(dest, self.transform * draw_xform)  # xform(coord_in_volume)
+        draw_xform = TTransform(
+            offset=-center, to_cs=self.transform.systems[0], from_cs=f"convolved_{name}_in_{self.transform.systems[1]}"
+        )
+        volume = Volume(dest, self.transform * draw_xform)
         volume.locals = locals()
         return volume
 
     def intersects_line(self, a, b):
-        indexes = find_intersected_voxels(
+        """Return True if the line segment between *a* and *b* intersects with this volume. Points should be in the
+        parent coordinate system of the volume."""
+        line_voxels = find_intersected_voxels(
             self.transform.inverse.map(a), self.transform.inverse.map(b), np.array(self.volume.shape) - 1
         )
-        return next((True for x, y, z in indexes if self.volume[x, y, z]), False)
+        return next((True for x, y, z in line_voxels if self.volume[x, y, z]), False)
 
 
 class Geometry:
     def __init__(
         self,
         config: Dict = None,
-        name: str = "geometry",
+        name: str = None,
+        parent_name: str = None,
         mesh: trimesh.Trimesh = None,
-        transform: BaseTransform = None,
+        transform: Transform = None,
         color=None,
     ):
         """Create a geometry either from a configuration (see parse_config) or from a mesh and transform."""
         self.color = color
         self.name = name
+        self.parent_name = parent_name
+        if parent_name is None and transform is not None:
+            self.parent_name = transform.systems[1]
         self._config = config
         self._children: List[Geometry] = []
         if mesh is None:
@@ -441,7 +470,7 @@ class Geometry:
         else:
             self._mesh = self._total_mesh = mesh
         # maps from local coordinate system of geometry (the coordinates in which mesh vertices are specified) to parent
-        self._transform: BaseTransform = transform or NullTransform()
+        self._transform: Transform = transform or NullTransform(3, **self._default_transform_args())
         if config is not None:
             self.parse_config()
 
@@ -481,13 +510,13 @@ class Geometry:
         xform = config.pop("transform", {}).copy()
         if "pos" in xform:
             xform["offset"] = xform.pop("pos")
-        self._transform = SRT3DTransform(**xform)
+        self._transform = SRT3DTransform(**self._default_transform_args(), **xform)
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
             if "color" not in child_config:
                 child_config["color"] = self.color
-            child = Geometry(child_config, name)
+            child = Geometry(child_config, name, self.name)
             self._children.append(child)
 
         geom_type = config.pop("type", None)
@@ -529,7 +558,7 @@ class Geometry:
         bounds = self.mesh.bounds
         # TODO this xform will map from voxels to geometry? mesh space? are those the same?
         drawing_xform = SRT3DTransform(
-            scale=np.ones((3,)) * voxel_size, offset=np.array(bounds[0])
+            scale=np.ones((3,)) * voxel_size, offset=np.array(bounds[0]), **self._default_transform_args()
         )  # TODO i don't understand this
         obstacle: VoxelGrid = self.mesh.voxelized(voxel_size)
         return Volume(obstacle.encoding.dense.T, drawing_xform)
@@ -645,8 +674,11 @@ class Geometry:
         from_self_to_other transform, while the new geometry itself will have the other_transform.
         """
         mesh = self.mesh.copy()
-        mesh.apply_transform(from_self_to_other.full_matrix.T)
+        mesh.apply_transform(from_self_to_other.full_matrix)
         return Geometry(mesh=mesh, transform=other_transform, name=name, color=self.color)
+
+    def _default_transform_args(self):
+        return dict(from_cs=self.name, to_cs=self.parent_name)
 
 
 class Visual(Qt.QObject):
