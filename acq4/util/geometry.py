@@ -362,23 +362,23 @@ class GeometryMotionPlanner:
             shading="smooth",
             parent=self._viz_view.scene,
         )
-        viz.transform = (to_global * geometry.transform).to_vispy()
-        # viz.transform = geometry.transform.to_vispy()
+        viz.transform = (to_global * geometry.transform).as_vispy()
+        # viz.transform = geometry.transform.as_vispy()
 
         voxel = geometry.voxel_template(self.voxel_size)
         vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=viz)
         vol.cmap = "grays"
         vol.opacity = 0.2
-        # vol.transform = voxel.transform.to_vispy()
+        # vol.transform = voxel.transform.as_vispy()
         vol.transform = (
             to_global * voxel.transform
-        ).to_vispy()  # TODO removing `to_global * ` makes this behave better?
+        ).as_vispy()  # TODO removing `to_global * ` makes this behave better?
 
     def add_obstacle(self, obstacle: Volume):
         viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=self._viz_view.scene)
         viz.cmap = "cool"
         viz.opacity = 0.2
-        viz.transform = obstacle.transform.to_vispy()
+        viz.transform = obstacle.transform.as_vispy()
 
 
 class Volume(object):
@@ -587,7 +587,7 @@ class Geometry:
             vertices = self.mesh.vertices
             faces = self.mesh.faces
             mesh = visuals.Mesh(vertices=vertices, faces=faces, color=self.color, shading="smooth")
-            mesh.transform = self.transform.to_vispy()
+            mesh.transform = self.transform.as_vispy()
             return [mesh]
         return []
 

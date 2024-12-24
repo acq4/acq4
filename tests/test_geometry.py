@@ -272,7 +272,7 @@ def visualize():
     vol = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=view.scene)
     vol.cmap = "grays"
     vol.opacity = 0.2
-    vol.transform = (from_geom_to_global * obstacle.transform).to_vispy()
+    vol.transform = (from_geom_to_global * obstacle.transform).as_vispy()
 
     for v in geometry.visuals():
         v.setDeviceTransform(from_geom_to_global.as_pyqtgraph())
