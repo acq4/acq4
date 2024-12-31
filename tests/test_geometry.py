@@ -263,20 +263,22 @@ def visualize():
         {
             "type": "cylinder",
             "radius": voxel_size,
-            "height": 10 * voxel_size,
+            "height": 40 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
         "traveler",
-        "global",
+        "traveler_parent",
     )
     # traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point")
 
-    # assumes from traveler to global is null
-    from_traveler_to_geom = geometry.transform.inverse * from_geom_to_global.inverse * traveler.transform
+    from_traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
+    from_traveler_to_geom = (
+        geometry.transform.inverse * from_geom_to_global.inverse * from_traveler_to_global * traveler.transform
+    )
     xformed = traveler.transformed_to(geometry.transform, from_traveler_to_geom, f"{traveler.name}_in_{geometry.name}")
     kernel = xformed.voxel_template(voxel_size).volume[::-1, ::-1, ::-1]
     center = xformed.transform.map(np.array([0, 0, 0])) * -1
-    obstacle = geometry.voxel_template(voxel_size).convolve(kernel, center)
+    obstacle = geometry.voxel_template(voxel_size).convolve(kernel, center, "shadow")
     vol = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=view.scene)
     vol.cmap = "grays"
     vol.opacity = 0.2
@@ -292,8 +294,8 @@ def visualize():
     # path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
     # scene.visuals.Line(pos=path, parent=view.scene, color='red')
 
-    start = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7])), "global")
-    dest = from_geom_to_global.map(Point(np.array([0.2, 0.2, 5])), "global")
+    start = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
+    dest = from_geom_to_global.map(Point(np.array([0.2, 0.2, 5]), "geom_parent"))
     start_target = scene.visuals.Sphere(radius=0.1, color="blue", parent=view.scene)
     start_target.transform = scene.transforms.STTransform(translate=start)
     dest_target = scene.visuals.Sphere(radius=0.1, color="green", parent=view.scene)
@@ -313,7 +315,7 @@ def visualize():
         app.processEvents()
 
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
-    path = planner.find_path(traveler, NullTransform(3), start, dest, callback=update_path, visualize=True)
+    path = planner.find_path(traveler, from_traveler_to_global, start, dest, callback=update_path, visualize=True)
     print(path)
     if path is not None:
         update_path([start] + path, skip=1)

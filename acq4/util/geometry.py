@@ -315,8 +315,7 @@ class GeometryMotionPlanner:
             )
             xformed_voxels = xformed.voxel_template(self.voxel_size)
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
-            parent_origin = Point(np.array([0, 0, 0]), geom.parent_name)
-            center = np.array(shadow.shape) - xformed_voxels.transform.inverse.map(parent_origin)
+            center = np.array(shadow.shape) - xformed_voxels.parent_origin
             obst = geom.voxel_template(self.voxel_size).convolve(shadow, center, f"{xformed.name} shadow")
             # TODO how is this obst already in the global coords?
             obst.transform = from_geom_to_global * obst.transform
@@ -402,6 +401,11 @@ class Volume(object):
     def inverse_transform(self):
         """The transform that maps from the parent geometry's coordinate system to the local coordinate system."""
         return self.transform.inverse
+
+    @property
+    def parent_origin(self):
+        origin = Point(np.array([0, 0, 0]), self.transform.systems[1])
+        return self.transform.inverse.map(origin)
 
     def convolve(self, kernel_array, center, name) -> Volume:
         """
