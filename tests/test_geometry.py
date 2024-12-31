@@ -238,23 +238,9 @@ draw_n = 0
 
 
 def visualize():
-    app = pg.mkQApp()
-
-    canvas = scene.SceneCanvas(keys="interactive", show=True)
-    canvas.native.show()
-
-    view = canvas.central_widget.add_view()
-    view.camera = "turntable"
-
-    grid = visuals.GridLines()
-    view.add(grid)
-
-    axis = visuals.XYZAxis(parent=view.scene)
-    axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
+    pg.mkQApp()
 
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "geometry", "geom_parent")
-    # obj = geometry.visuals()[0]
-    # view.add(obj.mesh)
     from_geom_to_global = TTransform(offset=(1, 2, 3), from_cs="geom_parent", to_cs="global")
 
     voxel_size = 0.1
@@ -272,53 +258,13 @@ def visualize():
     # traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point")
 
     from_traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
-    from_traveler_to_geom = (
-        geometry.transform.inverse * from_geom_to_global.inverse * from_traveler_to_global * traveler.transform
-    )
-    xformed = traveler.transformed_to(geometry.transform, from_traveler_to_geom, f"{traveler.name}_in_{geometry.name}")
-    kernel = xformed.voxel_template(voxel_size).volume[::-1, ::-1, ::-1]
-    center = xformed.transform.map(np.array([0, 0, 0])) * -1
-    obstacle = geometry.voxel_template(voxel_size).convolve(kernel, center, "shadow")
-    vol = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=view.scene)
-    vol.cmap = "grays"
-    vol.opacity = 0.2
-    vol.transform = (from_geom_to_global * obstacle.transform).as_vispy()
 
-    for v in geometry.visuals():
-        v.setDeviceTransform(from_geom_to_global.as_pyqtgraph())
-        view.add(v.mesh)
-
-    # template = geometry.voxel_template(voxel_size)
-    # template = template.convolve(template.volume, center=(0, 0, 0))
-
-    # path = np.array([[0.041, -0.05, 0], [-0.04, 0.05, 0]])
-    # scene.visuals.Line(pos=path, parent=view.scene, color='red')
-
-    start = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
-    dest = from_geom_to_global.map(Point(np.array([0.2, 0.2, 5]), "geom_parent"))
-    start_target = scene.visuals.Sphere(radius=0.1, color="blue", parent=view.scene)
-    start_target.transform = scene.transforms.STTransform(translate=start)
-    dest_target = scene.visuals.Sphere(radius=0.1, color="green", parent=view.scene)
-    dest_target.transform = scene.transforms.STTransform(translate=dest)
-    path_line = scene.visuals.Line(pos=np.array([start, dest]), color="red", parent=view.scene)
-
-    def update_path(p, skip=4):
-        global draw_n
-        draw_n += 1
-        if draw_n % skip != 0:
-            return
-        # sleep to allow the user to watch
-        then = time.time()
-        while time.time() - then < 0.1:
-            app.processEvents()
-        path_line.set_data(p)
-        app.processEvents()
+    dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
+    start = from_geom_to_global.map(Point(np.array([0.2, 0.2, 5]), "geom_parent"))
 
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
-    path = planner.find_path(traveler, from_traveler_to_global, start, dest, callback=update_path, visualize=True)
+    path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualize=True)
     print(path)
-    if path is not None:
-        update_path([start] + path, skip=1)
 
     pg.exec()
 

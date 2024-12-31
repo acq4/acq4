@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from copy import deepcopy
 from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
@@ -245,6 +246,7 @@ class GeometryMotionPlanner:
         voxel_size : float
             Resolution of the voxel grid used for path planning.
         """
+        self._draw_n = 0
         self.geometries = geometries
         self.voxel_size = voxel_size
         self._viz = None
@@ -295,6 +297,20 @@ class GeometryMotionPlanner:
             List of global positions to get from start to stop
         """
         if visualize:
+            if callback is None:
+                app = Qt.QtWidgets.QApplication.instance()
+
+                def callback(p, skip=4):
+                    self._draw_n += 1
+                    if self._draw_n % skip != 0:
+                        return
+                    # sleep to allow the user to watch
+                    then = time.time()
+                    while time.time() - then < 0.1:
+                        app.processEvents()
+                    self._path_line.set_data(p)
+                    app.processEvents()
+
             runInGuiThread(self.initialize_visualization, traveling_object, from_traveler_to_global, start, stop)
 
         obstacles = []
@@ -334,7 +350,10 @@ class GeometryMotionPlanner:
             return None
         # TODO if path is empty? are we already at our dest?
         self._locals = locals()
-        return simplify_path(path, edge_cost)[1:]
+        path = simplify_path(path, edge_cost)
+        if callback:
+            callback(path, skip=1)
+        return path[1:]
 
     def initialize_visualization(self, traveling_object, from_traveler_to_global, start, stop):
         if self._viz is not None:
@@ -352,26 +371,25 @@ class GeometryMotionPlanner:
         start_target.transform = scene.transforms.STTransform(translate=start)
         dest_target = scene.visuals.Sphere(radius=self.voxel_size, color="green", parent=view.scene)
         dest_target.transform = scene.transforms.STTransform(translate=stop)
+        self._path_line = scene.visuals.Line(pos=np.array([start, stop]), color="red", parent=view.scene)
 
     def add_geometry_mesh(self, geometry: Geometry, to_global: Transform):
         viz = scene.visuals.Mesh(
             vertices=geometry.mesh.vertices,
             faces=geometry.mesh.faces,
-            color=geometry.color,
+            color=geometry.color or "gray",
             shading="smooth",
             parent=self._viz_view.scene,
         )
         viz.transform = (to_global * geometry.transform).as_vispy()
-        # viz.transform = geometry.transform.as_vispy()
 
         voxel = geometry.voxel_template(self.voxel_size)
         vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=viz)
         vol.cmap = "grays"
         vol.opacity = 0.2
-        # vol.transform = voxel.transform.as_vispy()
         vol.transform = (
             to_global * voxel.transform
-        ).as_vispy()  # TODO removing `to_global * ` makes this behave better?
+        ).as_vispy()
 
     def add_obstacle(self, obstacle: Volume):
         viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=self._viz_view.scene)
