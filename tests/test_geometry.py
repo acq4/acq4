@@ -245,18 +245,17 @@ def visualize():
         {
             "type": "cylinder",
             "radius": voxel_size,
-            "height": 55 * voxel_size,
+            "height": 40 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
         "traveler",
         "traveler_parent",
     )
-    # traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point")
-
-    from_traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
+    # traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
 
     dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
     start = from_geom_to_global.map(Point(np.array([0.2, 0.2, 5]), "geom_parent"))
+    from_traveler_to_global = TTransform(offset=start, from_cs="traveler_parent", to_cs="global")
 
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
     path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualize=True)

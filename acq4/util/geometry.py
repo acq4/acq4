@@ -327,12 +327,15 @@ class GeometryMotionPlanner:
             )
 
             xformed = traveling_object.transformed_to(
-                geom.transform, from_traveler_to_geom, f"{traveling_object.name}_in_{geom.name}"
+                geom.transform, from_traveler_to_geom, f"[{traveling_object.name} in {geom.name}]"
             )
             xformed_voxels = xformed.voxel_template(self.voxel_size)
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
-            center = np.array(shadow.shape) - xformed_voxels.parent_origin
-            obst = geom.voxel_template(self.voxel_size).convolve(shadow, center, f"{xformed.name} shadow")
+            center = np.array((0, 0, 0))  # this leads to it behaving like geom.transform
+            center = np.array(shadow.shape) - xformed_voxels.parent_origin  # this puts it in a weird place
+            center = xformed_voxels.parent_origin  # this lines it up with the traveler, but maybe only due to symmetry
+            template = geom.voxel_template(self.voxel_size)
+            obst = template.convolve(shadow, center, f"{xformed.name}'s shadow")
             obst.transform = from_geom_to_global * geom.transform * obst.transform
             obstacles.append(obst)
             if visualize:
@@ -448,9 +451,10 @@ class Volume(object):
                             y : y + kernel_array.shape[1],
                             z : z + kernel_array.shape[2],
                         ] |= kernel_array
-        center = np.array(center)
         draw_xform = TTransform(
-            offset=-center, to_cs=self.transform.systems[0], from_cs=f"convolved_{name}_in_{self.transform.systems[1]}"
+            offset=-center,
+            to_cs=self.transform.systems[0],
+            from_cs=f"[convolved {name} in {self.transform.systems[1]}]",
         )
         volume = Volume(dest, self.transform * draw_xform)
         volume.locals = locals()
@@ -468,7 +472,7 @@ class Volume(object):
 class Geometry:
     def __init__(
         self,
-        config: Dict = None,
+        config: Dict | str = None,
         name: str = None,
         parent_name: str = None,
         mesh: trimesh.Trimesh = None,
@@ -489,9 +493,10 @@ class Geometry:
         else:
             self._mesh = self._total_mesh = mesh
         # maps from local coordinate system of geometry (the coordinates in which mesh vertices are specified) to parent
-        self._transform: Transform = transform or NullTransform(3, **self._default_transform_args())
         if config is not None:
             self.parse_config()
+        if getattr(self, "_transform", None) is None:
+            self._transform: Transform = transform or NullTransform(3, **self._default_transform_args())
 
     def parse_config(self):
         """Create 3D mesh from a configuration. Format example::
@@ -616,7 +621,7 @@ class Geometry:
         from pymp import Planner
         import hppfcl
 
-        urdf = self._config
+        urdf: str = self._config
         srdf = f"{urdf[:-5]}.srdf"
         end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
         joints = [j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"]
