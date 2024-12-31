@@ -333,8 +333,7 @@ class GeometryMotionPlanner:
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
             center = np.array(shadow.shape) - xformed_voxels.parent_origin
             obst = geom.voxel_template(self.voxel_size).convolve(shadow, center, f"{xformed.name} shadow")
-            # TODO how is this obst already in the global coords?
-            obst.transform = from_geom_to_global * obst.transform
+            obst.transform = from_geom_to_global * geom.transform * obst.transform
             obstacles.append(obst)
             if visualize:
                 runInGuiThread(self.add_obstacle, obstacles[-1])
@@ -384,12 +383,10 @@ class GeometryMotionPlanner:
         viz.transform = (to_global * geometry.transform).as_vispy()
 
         voxel = geometry.voxel_template(self.voxel_size)
-        vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=viz)
+        vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=self._viz_view.scene)
         vol.cmap = "grays"
         vol.opacity = 0.2
-        vol.transform = (
-            to_global * voxel.transform
-        ).as_vispy()
+        vol.transform = (to_global * geometry.transform * voxel.transform).as_vispy()
 
     def add_obstacle(self, obstacle: Volume):
         viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=self._viz_view.scene)
@@ -578,9 +575,11 @@ class Geometry:
 
     def voxel_template(self, voxel_size: float) -> Volume:
         bounds = self.mesh.bounds
-        # TODO this xform will map from voxels to geometry? mesh space? are those the same?
         drawing_xform = SRT3DTransform(
-            scale=np.ones((3,)) * voxel_size, offset=np.array(bounds[0]), **self._default_transform_args()
+            scale=np.ones((3,)) * voxel_size,
+            offset=np.array(bounds[0]),
+            from_cs=f"Voxels of {self.name}",
+            to_cs=self.name,
         )  # TODO i don't understand this
         obstacle: VoxelGrid = self.mesh.voxelized(voxel_size)
         return Volume(obstacle.encoding.dense.T, drawing_xform)

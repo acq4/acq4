@@ -1,13 +1,9 @@
-import time
-
-import pytest
 import numpy as np
+import pytest
 from coorx import NullTransform, TTransform, Point
-from vispy import scene
-from vispy.scene import visuals
 
-from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
 import pyqtgraph as pg
+from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
 
 
 @pytest.fixture
@@ -249,7 +245,7 @@ def visualize():
         {
             "type": "cylinder",
             "radius": voxel_size,
-            "height": 40 * voxel_size,
+            "height": 55 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
         "traveler",
