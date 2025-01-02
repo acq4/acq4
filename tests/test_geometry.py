@@ -20,7 +20,7 @@ def test_mesh(geometry):
 def test_identity_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
     orig = geometry.voxel_template(0.1)
-    center = (0, 0, 0)
+    center = np.array((0, 0, 0))
     convolved = orig.convolve(kernel_array, center=center, name=geometry.name)
     assert np.all(convolved.volume == orig.volume)
     assert np.all(convolved.transform.map((0, 0, 0)) == orig.transform.map((0, 0, 0)))
@@ -62,7 +62,7 @@ def test_offcenter_convolve(geometry):
     kernel_array = np.zeros((3, 3, 3), dtype=bool)
     kernel_array[1, 1, 1] = True
     orig = geometry.voxel_template(0.1)
-    center = (1, 1, 1)
+    center = np.array((1, 1, 1))
     convolved = orig.convolve(kernel_array, center=center, name="fake")
     # we usually won't have kernels with empty edges, so this 1:-1 step is only needed for this test
     assert np.allclose(convolved.volume[1:-1, 1:-1, 1:-1], orig.volume)
@@ -72,7 +72,7 @@ def test_offcenter_convolve(geometry):
 def test_convolve_growth(geometry):
     dot = Geometry({"type": "box", "size": [0.1, 0.1, 0.1]}, "dot", "dot_parent").voxel_template(0.1)
     kernel_array = geometry.voxel_template(0.1).volume
-    center = (0, 0, 0)
+    center = np.array((0, 0, 0))
     convolved = dot.convolve(kernel_array, center=center, name=geometry.name)
     assert np.all(convolved.volume == kernel_array)
 
@@ -254,7 +254,7 @@ def visualize():
     # traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
 
     dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
-    start = from_geom_to_global.map(Point(np.array([0.2, 0.2, 5]), "geom_parent"))
+    start = from_geom_to_global.map(Point(np.array([4, -2, 5]), "geom_parent"))
     from_traveler_to_global = TTransform(offset=start, from_cs="traveler_parent", to_cs="global")
 
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)

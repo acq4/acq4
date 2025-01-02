@@ -331,9 +331,7 @@ class GeometryMotionPlanner:
             )
             xformed_voxels = xformed.voxel_template(self.voxel_size)
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
-            center = np.array((0, 0, 0))  # this leads to it behaving like geom.transform
-            center = np.array(shadow.shape) - xformed_voxels.parent_origin  # this puts it in a weird place
-            center = xformed_voxels.parent_origin  # this lines it up with the traveler, but maybe only due to symmetry
+            center = np.array(shadow.shape) - xformed_voxels.parent_origin
             template = geom.voxel_template(self.voxel_size)
             obst = template.convolve(shadow, center, f"{xformed.name}'s shadow")
             obst.transform = from_geom_to_global * geom.transform * obst.transform
@@ -700,7 +698,10 @@ class Geometry:
         from_self_to_other transform, while the new geometry itself will have the other_transform.
         """
         mesh = self.mesh.copy()
-        mesh.apply_transform(from_self_to_other.full_matrix)
+        matrix = np.eye(4)
+        matrix[:3, :3] = from_self_to_other.full_matrix[:3, :3]
+        mesh.apply_transform(matrix)
+        # TODO these points aren't actually in other_tronsform's coordinate system without the translation I just removed
         return Geometry(mesh=mesh, transform=other_transform, name=name, color=self.color)
 
     def _default_transform_args(self):
