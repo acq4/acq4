@@ -423,17 +423,17 @@ class Volume(object):
         origin = Point(np.array([0, 0, 0]), self.transform.systems[1])
         return self.transform.inverse.map(origin)
 
-    def convolve(self, kernel_array, center, name) -> Volume:
+    def convolve(self, kernel_array: np.ndarray, center: np.ndarray, name: str) -> Volume:
         """
         Return a new Volume that contains the convolution of self with *kernel_array*
 
         Parameters
         ----------
-        kernel_array : ndarray
+        kernel_array
             Voxel array to convolve with, already transformed to match the rotation of self
-        center : array-like
+        center
             Position of the "center" point relative to the kernel. This is added to the resulting Volume's transform.
-        name : str
+        name
             Name of the kernel
         """
         # scipy does weird stuff
