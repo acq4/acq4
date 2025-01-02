@@ -147,13 +147,11 @@ class Microscope(Device, OptomechDevice):
                 return
 
         self.setCurrentSubdevice(self.currentObjective)
-        self.sigGeometryChanged.emit(self)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
-
-    def getGeometries(self):
-        if self.currentObjective is None:
-            return []
-        return self.currentObjective.getHiddenGeometries()
+        if lastObj is not None:
+            lastObj.sigGeometryChanged.emit(lastObj)
+        if self.currentObjective is not None:
+            self.currentObjective.sigGeometryChanged.emit(self.currentObjective)
 
     def getObjective(self) -> "Objective | None":
         """Return the currently active Objective."""
@@ -352,7 +350,7 @@ class Objective(Device, OptomechDevice):
 
     def __init__(self, config, scope, key):
         self._config = config
-        self._scope = scope
+        self._scope: Microscope = scope
         self._key = key
         name = config['name']
 
@@ -365,17 +363,15 @@ class Objective(Device, OptomechDevice):
             self.setScale(config['scale'])
 
     def getGeometries(self):
-        return []  # microscopes are in charge of setting the geometry
-
-    def getHiddenGeometries(self):
-        if isinstance(self._config.get("geometry"), dict):
-            defaults = {'color': (0, 0.7, 0.9, 0.4)}
-            defaults.update(self._config["geometry"])
-            self._config["geometry"] = defaults
-        return super().getGeometries()
+        if self._scope.currentObjective == self:
+            return super().getGeometries()
+        return []
 
     def deviceTransform(self, subdev=None):
         return pg.SRTTransform3D(super().deviceTransform(subdev))
+
+    def physicalTransform(self, subdev=None):
+        return self._scope.physicalTransform(subdev)
 
     def setOffset(self, pos):
         tr = self.deviceTransform()

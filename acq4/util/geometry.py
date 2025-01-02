@@ -349,6 +349,7 @@ class GeometryMotionPlanner:
         if path is None:
             return None
         # TODO if path is empty? are we already at our dest?
+        # TODO remove this memory leaking debug
         self._locals = locals()
         path = simplify_path(path, edge_cost)
         if callback:

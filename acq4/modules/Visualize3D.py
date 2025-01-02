@@ -55,7 +55,7 @@ class MainWindow(Qt.QMainWindow):
                     self.view.add(shape.mesh)
 
     def handleGeometryChange(self, dev: Device):
-        for geom in self._geometries[dev]:
+        for geom in self._geometries.get(dev, []):
             geom.mesh.parent = None
         self._geometries[dev] = []
         self.add(dev)

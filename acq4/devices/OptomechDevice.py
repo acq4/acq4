@@ -193,7 +193,9 @@ class OptomechDevice(InterfaceMixin):
 
     def getGeometries(self):
         if "geometry" in self._config:
-            return [Geometry(self._config["geometry"], self.name, f"{self.name}'s primary geometry")]
+            return [Geometry(
+                config=self._config["geometry"], name=f"{self.name()}'s primary geometry", parent_name=self.name()
+            )]
         return []
 
     def name(self):
