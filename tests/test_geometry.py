@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from coorx import NullTransform, TTransform, Point
+from coorx import NullTransform, TTransform, Point, SRT3DTransform
 
 import pyqtgraph as pg
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
@@ -32,13 +32,20 @@ def test_cross_geometry_transform():
         "a",
         "a_parent",
     )
-    geom_b = Geometry({"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (50, 50, 50)}}, "b", "b_parent")
-    from_a_to_global = NullTransform(3, from_cs=geom_a.parent_name, to_cs="global")
-    from_b_to_global = NullTransform(3, from_cs=geom_b.parent_name, to_cs="global")
+    geom_b = Geometry(
+        {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (55, 45, 50), "angle": -22.5, "axis": (0, 0, 1)}},
+        "b",
+        "b_parent",
+    )
+    from_a_to_global = SRT3DTransform(
+        offset=(3, 2, 1), angle=22.5, axis=(1, 0, 1), from_cs=geom_a.parent_name, to_cs="global"
+    )
+    from_b_to_global = SRT3DTransform(
+        offset=(6, 4, 2), angle=-45, axis=(1, 0, 1), from_cs=geom_b.parent_name, to_cs="global"
+    )
     from_a_to_b = geom_b.transform.inverse * from_b_to_global.inverse * from_a_to_global * geom_a.transform
-    geom_c = geom_a.transformed_to(geom_b.transform, from_a_to_b, name="transformed")
-    # geom_c's transform should be the same as geom_b's
-    assert np.all(geom_c.transform.map((0, 0, 0)) == np.array([50, 50, 50]))
+
+    geom_c = geom_a.transformed_to(from_a_to_b, name="transformed")
     # geom_c's mesh should be rotated and therefore the voxels should be wholly unique
     assert geom_c.voxel_template(0.1).volume.shape != geom_a.voxel_template(0.1).volume.shape
     assert geom_c.voxel_template(0.1).volume.shape != geom_b.voxel_template(0.1).volume.shape
@@ -230,14 +237,11 @@ def test_no_path_because_of_offset_shadow(geometry):
     assert path is None
 
 
-draw_n = 0
-
-
-def visualize():
-    pg.mkQApp()
-
+def test_no_path_with_rotated_obstacles():
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "geometry", "geom_parent")
-    from_geom_to_global = TTransform(offset=(1, 2, 3), from_cs="geom_parent", to_cs="global")
+    from_geom_to_global = SRT3DTransform(
+        offset=(1, 2, 3), angle=45, axis=(0, 0, 1), from_cs="geom_parent", to_cs="global"
+    )
 
     voxel_size = 0.1
 
@@ -247,6 +251,39 @@ def visualize():
             "radius": voxel_size,
             "height": 40 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
+        },
+        "traveler",
+        "traveler_parent",
+    )
+
+    dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
+    start = from_geom_to_global.map(Point(np.array([4, -2, 5]), "geom_parent"))
+    from_traveler_to_global = TTransform(offset=start, from_cs="traveler_parent", to_cs="global")
+
+    planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
+    path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualize=True)
+    assert path is None
+
+
+draw_n = 0
+
+
+def visualize():
+    pg.mkQApp()
+
+    geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "geometry", "geom_parent")
+    from_geom_to_global = SRT3DTransform(
+        offset=(1, 2, 3), angle=35, axis=(1, 0, 0), from_cs="geom_parent", to_cs="global"
+    )
+
+    voxel_size = 0.1
+
+    traveler = Geometry(
+        {
+            "type": "cylinder",
+            "radius": voxel_size,
+            "height": 40 * voxel_size,
+            "transform": {"angle": 45, "axis": (1, 0, 0)},
         },
         "traveler",
         "traveler_parent",

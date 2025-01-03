@@ -327,7 +327,7 @@ class GeometryMotionPlanner:
             )
 
             xformed = traveling_object.transformed_to(
-                geom.transform, from_traveler_to_geom, f"[{traveling_object.name} in {geom.name}]"
+                from_traveler_to_geom, f"[{traveling_object.name} in {geom.name}]"
             )
             xformed_voxels = xformed.voxel_template(self.voxel_size)
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
@@ -482,8 +482,11 @@ class Geometry:
         self.color = color
         self.name = name
         self.parent_name = parent_name
-        if parent_name is None and transform is not None:
-            self.parent_name = transform.systems[1]
+        if parent_name is None:
+            if transform is None:
+                raise ValueError("Parent name must be provided if no transform is given")
+            else:
+                self.parent_name = transform.systems[1]
         self._config = config
         self._children: List[Geometry] = []
         if mesh is None:
@@ -574,7 +577,7 @@ class Geometry:
 
     @property
     def transform(self):
-        """Transform that maps from the local coordinate system of this geometry to the parent geometry's coordinate"""
+        """Transform that maps from the local coordinate system of this geometry to its parent's"""
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
@@ -584,7 +587,7 @@ class Geometry:
             offset=np.array(bounds[0]),
             from_cs=f"Voxels of {self.name}",
             to_cs=self.name,
-        )  # TODO i don't understand this
+        )
         obstacle: VoxelGrid = self.mesh.voxelized(voxel_size)
         return Volume(obstacle.encoding.dense.T, drawing_xform)
 
@@ -693,17 +696,21 @@ class Geometry:
         bounds = self.mesh.bounds
         return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
 
-    def transformed_to(self, other_transform, from_self_to_other, name):
+    def transformed_to(self, from_self_to_other, name):
         """
-        Return a new Geometry that is a transformed version of this one. The mesh will be transformed by the
-        from_self_to_other transform, while the new geometry itself will have the other_transform.
+        Return a copy of this Geometry that is rotated and scaled to match the orientation of another coordinate system,
+        but is centered at its own origin.
         """
         mesh = self.mesh.copy()
         matrix = np.eye(4)
         matrix[:3, :3] = from_self_to_other.full_matrix[:3, :3]
         mesh.apply_transform(matrix)
-        # TODO these points aren't actually in other_tronsform's coordinate system without the translation I just removed
-        return Geometry(mesh=mesh, transform=other_transform, name=name, color=self.color)
+        return Geometry(
+            mesh=mesh,
+            name=name,
+            parent_name=self.parent_name,
+            color=self.color,
+        )
 
     def _default_transform_args(self):
         return dict(from_cs=self.name, to_cs=self.parent_name)
