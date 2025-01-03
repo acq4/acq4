@@ -205,6 +205,10 @@ class PipettePathGenerator:
 
 
 class GeometryAwarePathGenerator(PipettePathGenerator):
+    def __init__(self, pip: Pipette):
+        super().__init__(pip)
+        self._last_planner = None
+
     def safePath(self, globalStart, globalStop, speed, explanation=None):
         man = getManager()
         geometries = {}
@@ -226,7 +230,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 )
                 geometries[geom] = physical_xform
         planner = self._last_planner = GeometryMotionPlanner(geometries)
-        pg_xform = pg.SRTTransform3D(dev.globalPhysicalTransform())
+        pg_xform = pg.SRTTransform3D(self.pip.globalPhysicalTransform())
         from_pip_to_global = SRT3DTransform(
             offset=pg_xform.getTranslation(),
             scale=pg_xform.getScale(),
