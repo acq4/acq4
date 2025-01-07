@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from coorx import NullTransform, TTransform, Point
+from coorx import NullTransform, TTransform, Point, SRT3DTransform
 
 import pyqtgraph as pg
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
@@ -8,7 +8,7 @@ from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
 
 @pytest.fixture
 def geometry():
-    return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test", "test_parent")
+    return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
 
 
 def test_mesh(geometry):
@@ -29,10 +29,10 @@ def test_identity_convolve(geometry):
 def test_cross_geometry_transform():
     geom_a = Geometry(
         {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (-10, 2, 100), "angle": 45, "axis": (0, 0, 1)}},
+        "a_mesh",
         "a",
-        "a_parent",
     )
-    geom_b = Geometry({"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (50, 50, 50)}}, "b", "b_parent")
+    geom_b = Geometry({"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": (50, 50, 50)}}, "b_mesh", "b")
     from_a_to_global = NullTransform(3, from_cs=geom_a.parent_name, to_cs="global")
     from_b_to_global = NullTransform(3, from_cs=geom_b.parent_name, to_cs="global")
     from_a_to_b = geom_b.transform.inverse * from_b_to_global.inverse * from_a_to_global * geom_a.transform
@@ -43,6 +43,7 @@ def test_cross_geometry_transform():
     assert geom_c.voxel_template(0.1).volume.shape != geom_a.voxel_template(0.1).volume.shape
     assert geom_c.voxel_template(0.1).volume.shape != geom_b.voxel_template(0.1).volume.shape
     # TODO it would be nice to positively assert something about the voxelization
+    # TODO would they have about the same volume?
 
 
 def test_translated_convolve(geometry):
@@ -70,7 +71,7 @@ def test_offcenter_convolve(geometry):
 
 
 def test_convolve_growth(geometry):
-    dot = Geometry({"type": "box", "size": [0.1, 0.1, 0.1]}, "dot", "dot_parent").voxel_template(0.1)
+    dot = Geometry({"type": "box", "size": [0.1, 0.1, 0.1]}, "dot_mesh", "dot").voxel_template(0.1)
     kernel_array = geometry.voxel_template(0.1).volume
     center = np.array((0, 0, 0))
     convolved = dot.convolve(kernel_array, center=center, name=geometry.name)
@@ -107,7 +108,7 @@ def test_translated_voxels_have_no_knowledge_of_such():
     voxel_size = 0.1
     offset = np.array([1.0, -0.1, 10.0])
     config = {"type": "box", "size": [1.0, 1.0, 1.0], "transform": {"pos": offset}}
-    geometry = Geometry(config, "test", "test_parent")
+    geometry = Geometry(config, "test_mesh", "test")
     template = geometry.voxel_template(voxel_size)
     assert isinstance(template, Volume)
     assert template.volume.shape == (11, 11, 11)
@@ -116,15 +117,17 @@ def test_translated_voxels_have_no_knowledge_of_such():
     assert np.all(origin[:3] == np.array([5, 5, 5]))
 
 
-def test_find_path(geometry):
+def test_find_path(geometry, viz=False):
     voxel_size = 0.1
     planner = GeometryMotionPlanner(
         {geometry: NullTransform(3, from_cs=geometry.parent_name, to_cs="global")}, voxel_size
     )
-    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
-    dest = Point(np.array([0.5, 0.5, 3]), "global")
-    start = Point(np.array([0.5, 0.5, -2]), "global")
-    path = planner.find_path(point, NullTransform(3, from_cs=point.parent_name, to_cs="global"), start, dest)
+    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point_mesh", "point")
+    dest = Point(np.array([0, 0, 3]), "global")
+    start = Point(np.array([0, 0, -2]), "global")
+    path = planner.find_path(point, NullTransform(3, from_cs=point.parent_name, to_cs="global"), start, dest, visualize=viz)
+    if viz:
+        pg.exec()
 
     assert path is not None
     assert len(path) >= 2
@@ -156,28 +159,32 @@ def test_path_with_funner_traveler(geometry):
             "height": 10 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
+        "traveler_mesh",
         "traveler",
-        "traveler_parent",
     )
     start = Point(np.array([0.1, 0.1, -2]), "global")
     dest = Point(np.array([0.2, 0.2, 3]), "global")
-    planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test_parent", to_cs="global")}, voxel_size)
-    path = planner.find_path(traveler, NullTransform(3, from_cs="traveler_parent", to_cs="global"), start, dest)
+    planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
+    path = planner.find_path(traveler, NullTransform(3, from_cs="traveler", to_cs="global"), start, dest)
     assert path is not None
     assert len(path) >= 2
     assert not np.all(path[0] == start)
     assert not np.all(path[0] == dest)
 
 
-def test_no_path(geometry):
+def test_no_path(viz=False):
+    geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
     voxel_size = 0.1
     planner = GeometryMotionPlanner(
         {geometry: NullTransform(3, from_cs=geometry.parent_name, to_cs="global")}, voxel_size
     )
-    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
-    dest = Point(np.array([0.5, 0.5, 3]), "global")
-    start = Point(np.array([voxel_size, voxel_size, voxel_size]) * 2, "global")  # inside the box
-    path = planner.find_path(point, NullTransform(3, from_cs=point.parent_name, to_cs="global"), start, dest)
+    traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, 6 * voxel_size], "transform": {"pos": (0, 0, -0.3)}}, "traveler_mesh", "traveler")
+    from_traveler_to_global = TTransform(offset=(0, 2, 3), from_cs="traveler", to_cs="global")
+    start = from_traveler_to_global.map(Point(np.array([0, 0, 0]), "traveler"))
+    dest = Point(np.array([voxel_size, voxel_size, voxel_size]) * 2, "global")  # inside the box
+    path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualize=viz)
+    if viz:
+        pg.exec()
     assert path is None
 
 
@@ -190,10 +197,10 @@ def test_no_path_because_of_shadow(geometry):
             "height": 10 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
+        "traveler_mesh",
         "traveler",
-        "traveler_parent",
     )
-    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
+    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point_mesh", "point")
     start = Point(np.array([0.7, 0, -0.7]), "global")
     dest = Point(np.array([0.2, 0.2, 5]), "global")
     planner = GeometryMotionPlanner(
@@ -207,7 +214,7 @@ def test_no_path_because_of_shadow(geometry):
     assert path is None
 
 
-def test_no_path_because_of_offset_shadow(geometry):
+def test_no_path_because_of_offset_shadow(geometry, viz=False):
     voxel_size = 0.1
     traveler = Geometry(
         {
@@ -216,17 +223,28 @@ def test_no_path_because_of_offset_shadow(geometry):
             "height": 50 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
+        "traveler_mesh",
         "traveler",
-        "traveler_parent",
     )
-    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
-    to_the_side = TTransform(offset=(1, 2, 3), from_cs="test_parent", to_cs="global")
-    dest = to_the_side.map(Point(np.array([0.7, 0, -0.7]), "test_parent"))
-    start = to_the_side.map(Point(np.array([0.2, 0.2, 5]), "test_parent"))
-    planner = GeometryMotionPlanner({geometry: to_the_side}, voxel_size)
-    path = planner.find_path(point, NullTransform(3, from_cs="point_parent", to_cs="global"), start, dest)
+    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point_mesh", "point")
+    to_the_side = TTransform(offset=(1, 2, 3), from_cs="test", to_cs="global")
+    from_geom_to_global = SRT3DTransform(
+        offset=(1, 2, 3),
+        angle=45,
+        axis=(1, 0, 0),
+        from_cs="test",
+        to_cs="global",
+    )
+    dest = to_the_side.map(Point(np.array([0.7, 0, -0.7]), "test"))
+    start = to_the_side.map(Point(np.array([0.2, 0.2, 5]), "test"))
+    planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
+    path = planner.find_path(point, NullTransform(3, from_cs="point", to_cs="global"), start, dest, visualize=viz)
+    if viz:
+        pg.exec()
     assert path is not None
-    path = planner.find_path(traveler, NullTransform(3, from_cs="traveler_parent", to_cs="global"), start, dest)
+    path = planner.find_path(traveler, NullTransform(3, from_cs="traveler", to_cs="global"), start, dest, visualize=viz)
+    if viz:
+        pg.exec()
     assert path is None
 
 
@@ -234,10 +252,14 @@ draw_n = 0
 
 
 def visualize():
-    pg.mkQApp()
-
-    geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "geometry", "geom_parent")
-    from_geom_to_global = TTransform(offset=(1, 2, 3), from_cs="geom_parent", to_cs="global")
+    geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "geometry_mesh", "geom")
+    from_geom_to_global = SRT3DTransform(
+        offset=(1, 2, 3),
+        angle=45,
+        axis=(1, 0, 0),
+        from_cs="geom",
+        to_cs="global",
+    )
 
     voxel_size = 0.1
 
@@ -248,14 +270,13 @@ def visualize():
             "height": 40 * voxel_size,
             "transform": {"angle": 45, "axis": (0, 1, 0)},
         },
+        "traveler_mesh",
         "traveler",
-        "traveler_parent",
     )
-    # traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point", "point_parent")
 
-    dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom_parent"))
-    start = from_geom_to_global.map(Point(np.array([4, -2, 5]), "geom_parent"))
-    from_traveler_to_global = TTransform(offset=start, from_cs="traveler_parent", to_cs="global")
+    dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom"))
+    start = from_geom_to_global.map(Point(np.array([4, -2, 5]), "geom"))
+    from_traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
 
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
     path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualize=True)
@@ -265,4 +286,9 @@ def visualize():
 
 
 if __name__ == "__main__":
-    visualize()
+    pg.mkQApp()
+    # visualize()
+    geom = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
+    test_find_path(geom, True)
+    # test_no_path(True)
+    # test_no_path_because_of_offset_shadow(geom, True)

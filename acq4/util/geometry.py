@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import numpy as np
 import trimesh
-from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point
+from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
 from trimesh.voxel import VoxelGrid
 from vispy import scene
 from vispy.scene import visuals
@@ -314,28 +314,35 @@ class GeometryMotionPlanner:
             runInGuiThread(self.initialize_visualization, traveling_object, from_traveler_to_global, start, stop)
 
         obstacles = []
-        for geom, from_geom_to_global in self.geometries.items():
+        for obst, from_obst_to_global in self.geometries.items():
             if visualize:
-                runInGuiThread(self.add_geometry_mesh, geom, from_geom_to_global)
-            if geom is traveling_object:
+                runInGuiThread(self.add_geometry_mesh, obst, from_obst_to_global)
+            if obst is traveling_object:
                 continue
-            from_traveler_to_geom = (
-                geom.transform.inverse
-                * from_geom_to_global.inverse
+            from_traveler_mesh_to_obst_mesh = (
+                obst.transform.inverse
+                * from_obst_to_global.inverse
                 * from_traveler_to_global
                 * traveling_object.transform
             )
 
-            xformed = traveling_object.transformed_to(
-                geom.transform, from_traveler_to_geom, f"[{traveling_object.name} in {geom.name}]"
-            )
+            xformed = traveling_object.transformed_to(obst.transform, from_traveler_mesh_to_obst_mesh)
             xformed_voxels = xformed.voxel_template(self.voxel_size)
+            # TODO this is adding a scale=-1, but none of the transforms reflect this
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
-            center = np.array(shadow.shape) - xformed_voxels.parent_origin
-            template = geom.voxel_template(self.voxel_size)
-            obst = template.convolve(shadow, center, f"{xformed.name}'s shadow")
-            obst.transform = from_geom_to_global * geom.transform * obst.transform
-            obstacles.append(obst)
+
+            traveler_origin = Point((0, 0, 0), traveling_object.parent_name)
+            traveler_origin_in_global = from_traveler_to_global.map(traveler_origin)
+            traveler_origin_in_obst = from_obst_to_global.inverse.map(traveler_origin_in_global)
+            traveler_origin_in_obst_mesh = obst.transform.inverse.map(traveler_origin_in_obst)
+            traveler_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(traveler_origin_in_obst_mesh)
+
+            center = np.array(shadow.T.shape) - traveler_origin_in_xformed_voxels
+            obst_voxels = obst.voxel_template(self.voxel_size)
+            convolved_obst = obst_voxels.convolve(shadow, center, f"{xformed.name}'s shadow")
+            # put the obstacle in the global coordinate system?
+            convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
+            obstacles.append(convolved_obst)
             if visualize:
                 runInGuiThread(self.add_obstacle, obstacles[-1])
 
@@ -421,6 +428,7 @@ class Volume(object):
 
     @property
     def parent_origin(self):
+        """The origin of the mesh CS in the voxel's CS"""
         origin = Point(np.array([0, 0, 0]), self.transform.systems[1])
         return self.transform.inverse.map(origin)
 
@@ -439,8 +447,8 @@ class Volume(object):
         """
         # scipy does weird stuff
         # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
-        dest = np.zeros_like(self.volume, dtype=bool)
-        dest = np.pad(dest, [(0, d - 1) for d in kernel_array.shape], constant_values=False)
+        shape = np.array(self.volume.shape) + np.array(kernel_array.shape) - 1
+        dest = np.zeros(shape, dtype=bool)
         for x in range(self.volume.shape[0]):
             for y in range(self.volume.shape[1]):
                 for z in range(self.volume.shape[2]):
@@ -461,7 +469,7 @@ class Volume(object):
 
     def intersects_line(self, a, b):
         """Return True if the line segment between *a* and *b* intersects with this volume. Points should be in the
-        parent coordinate system of the volume."""
+        parent coordinate system of the volume"""
         line_voxels = find_intersected_voxels(
             self.transform.inverse.map(a), self.transform.inverse.map(b), np.array(self.volume.shape) - 1
         )
@@ -578,15 +586,21 @@ class Geometry:
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
-        bounds = self.mesh.bounds
-        drawing_xform = SRT3DTransform(
-            scale=np.ones((3,)) * voxel_size,
-            offset=np.array(bounds[0]),
-            from_cs=f"Voxels of {self.name}",
-            to_cs=self.name,
-        )  # TODO i don't understand this
-        obstacle: VoxelGrid = self.mesh.voxelized(voxel_size)
-        return Volume(obstacle.encoding.dense.T, drawing_xform)
+        voxels: VoxelGrid = self.mesh.voxelized(voxel_size)
+        matrix = voxels.transform
+        from_voxels_to_mesh = AffineTransform(
+            matrix=matrix[:3, :3],
+            offset=matrix[:3, 3],
+            from_cs=f"Voxels corners of {self.transform.systems[0]}",
+            to_cs=self.transform.systems[0],
+        ) * TTransform(  # from voxel corner to center
+            offset=(-0.5, -0.5, -0.5),
+            to_cs=f"Voxels of {self.transform.systems[0]}",
+            from_cs=f"Voxels corners of {self.transform.systems[0]}",
+        )
+
+        # TODO this voxel grid might add a 1-voxel offset that the xform doesn't account for
+        return Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
 
     def visuals(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
@@ -693,17 +707,15 @@ class Geometry:
         bounds = self.mesh.bounds
         return np.all(bounds[0] <= point) and np.all(point <= bounds[1])
 
-    def transformed_to(self, other_transform, from_self_to_other, name):
+    def transformed_to(self, other_transform, from_self_to_other):
         """
         Return a new Geometry that is a transformed version of this one. The mesh will be transformed by the
         from_self_to_other transform, while the new geometry itself will have the other_transform.
         """
-        mesh = self.mesh.copy()
-        matrix = np.eye(4)
-        matrix[:3, :3] = from_self_to_other.full_matrix[:3, :3]
-        mesh.apply_transform(matrix)
-        # TODO these points aren't actually in other_tronsform's coordinate system without the translation I just removed
-        return Geometry(mesh=mesh, transform=other_transform, name=name, color=self.color)
+        # TODO do I have to remove the translation like I did before?
+        vertices = from_self_to_other.map(self.mesh.vertices)
+        mesh = trimesh.Trimesh(vertices=vertices, faces=self.mesh.faces)
+        return Geometry(mesh=mesh, transform=other_transform, color=self.color)
 
     def _default_transform_args(self):
         return dict(from_cs=self.name, to_cs=self.parent_name)
