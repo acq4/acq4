@@ -591,12 +591,12 @@ class Geometry:
         from_voxels_to_mesh = AffineTransform(
             matrix=matrix[:3, :3],
             offset=matrix[:3, 3],
-            from_cs=f"Voxels corners of {self.transform.systems[0]}",
+            from_cs=f"Voxel centers of {self.transform.systems[0]}",
             to_cs=self.transform.systems[0],
-        ) * TTransform(  # from voxel corner to center
+        ) * TTransform(
             offset=(-0.5, -0.5, -0.5),
-            to_cs=f"Voxels of {self.transform.systems[0]}",
-            from_cs=f"Voxels corners of {self.transform.systems[0]}",
+            to_cs=f"Voxel centers of {self.transform.systems[0]}",
+            from_cs=f"Voxels of {self.transform.systems[0]}",
         )
 
         # TODO this voxel grid might add a 1-voxel offset that the xform doesn't account for

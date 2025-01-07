@@ -36,7 +36,7 @@ def test_cross_geometry_transform():
     from_a_to_global = NullTransform(3, from_cs=geom_a.parent_name, to_cs="global")
     from_b_to_global = NullTransform(3, from_cs=geom_b.parent_name, to_cs="global")
     from_a_to_b = geom_b.transform.inverse * from_b_to_global.inverse * from_a_to_global * geom_a.transform
-    geom_c = geom_a.transformed_to(geom_b.transform, from_a_to_b, name="transformed")
+    geom_c = geom_a.transformed_to(geom_b.transform, from_a_to_b)
     # geom_c's transform should be the same as geom_b's
     assert np.all(geom_c.transform.map((0, 0, 0)) == np.array([50, 50, 50]))
     # geom_c's mesh should be rotated and therefore the voxels should be wholly unique
@@ -86,9 +86,9 @@ def test_coarse_voxelization(geometry):
     expected = np.ones((5, 5, 5), dtype=bool)
     expected[1:-1, 1:-1, 1:-1] = False
     assert np.all(template.volume == expected)
-    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([2, 2, 2]))
+    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([5 / 2, 5 / 2, 5 / 2]))
     corner = np.array([0.5, 0.5, 0.5])
-    assert np.all(template.inverse_transform.map(corner) == np.array([4, 4, 4]))
+    assert np.all(template.inverse_transform.map(corner) == np.array([4.5, 4.5, 4.5]))
     assert np.all(template.transform.map(np.array([0, 3, 0]) == np.array([-0.5, 0.25, -0.5])))
 
 
@@ -101,7 +101,7 @@ def test_voxelized(geometry):
     expected[1:-1, 1:-1, 1:-1] = False
     assert np.all(template.volume == expected)
     origin = template.inverse_transform.map(np.array([0, 0, 0]))
-    assert np.all(origin[:3] == np.array([5, 5, 5]))
+    assert np.all(origin[:3] == np.array([11 / 2, 11 / 2, 11 / 2]))
 
 
 def test_translated_voxels_have_no_knowledge_of_such():
@@ -114,7 +114,7 @@ def test_translated_voxels_have_no_knowledge_of_such():
     assert template.volume.shape == (11, 11, 11)
     # inverse goes from geometry to voxel
     origin = template.inverse_transform.map(np.array([0, 0, 0]))
-    assert np.all(origin[:3] == np.array([5, 5, 5]))
+    assert np.all(origin[:3] == np.array([11 / 2, 11 / 2, 11 / 2]))
 
 
 def test_find_path(geometry, viz=False):
