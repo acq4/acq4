@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
 
+import numba
 import numpy as np
 import trimesh
 from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
@@ -353,12 +354,8 @@ class GeometryMotionPlanner:
             convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
             obstacles.append(convolved_obst)
         if visualize:
-            # for obst, to_global in self.geometries.items():
-            #     runInGuiThread(self.add_voxels, obst.voxel_template(self.voxel_size), to_global * obst.transform)
             for obst in obstacles:
                 runInGuiThread(self.add_obstacle, obst)
-
-        if visualize:
             runInGuiThread(
                 self.add_voxels,
                 traveling_object.voxel_template(self.voxel_size),
@@ -430,6 +427,29 @@ class GeometryMotionPlanner:
         self.add_voxels(obstacle, NullTransform(3, from_cs="global", to_cs="global"))
 
 
+@numba.jit(nopython=True)
+def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+    """"""
+    # scipy does weird stuff
+    # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
+    v_shape = volume.shape
+    k_shape = kernel.shape
+    shape = (v_shape[0] + k_shape[0] - 1, v_shape[1] + k_shape[1] - 1, v_shape[2] + k_shape[2] - 1)
+
+    dest = np.zeros(shape, dtype=np.bool_)
+
+    for x in range(v_shape[0]):
+        for y in range(v_shape[1]):
+            for z in range(v_shape[2]):
+                if volume[x, y, z]:
+                    for kx in range(k_shape[0]):
+                        for ky in range(k_shape[1]):
+                            for kz in range(k_shape[2]):
+                                if kernel[kx, ky, kz]:
+                                    dest[x + kx, y + ky, z + kz] = True
+    return dest
+
+
 class Volume(object):
     """
     A volumetric representation of Geometry
@@ -471,19 +491,7 @@ class Volume(object):
         name
             Name of the kernel
         """
-        # scipy does weird stuff
-        # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
-        shape = np.array(self.volume.shape) + np.array(kernel_array.shape) - 1
-        dest = np.zeros(shape, dtype=bool)
-        for x in range(self.volume.shape[0]):
-            for y in range(self.volume.shape[1]):
-                for z in range(self.volume.shape[2]):
-                    if self.volume[x, y, z]:
-                        dest[
-                            x : x + kernel_array.shape[0],
-                            y : y + kernel_array.shape[1],
-                            z : z + kernel_array.shape[2],
-                        ] |= kernel_array
+        dest = convolve_kernel_onto_volume(self.volume, kernel_array)
         draw_xform = TTransform(
             offset=-center,
             to_cs=self.transform.systems[0],
