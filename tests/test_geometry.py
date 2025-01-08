@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
 from coorx import NullTransform, TTransform, Point, SRT3DTransform
+from vispy import scene
 
 import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
 
 
@@ -78,6 +80,36 @@ def test_convolve_growth(geometry):
     assert np.all(convolved.volume == kernel_array)
 
 
+def test_single_voxel_voxelization(geometry, visualize=False):
+    voxel_size = 1.0
+    template = geometry.voxel_template(voxel_size)
+    if visualize:
+        w = gl.GLViewWidget()
+        w.show()
+        w.setCameraPosition(distance=20)
+        g = gl.GLGridItem()
+        g.scale(1, 1, 1)
+        w.addItem(g)
+
+        mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
+        m = gl.GLMeshItem(meshdata=mesh, smooth=False, color=(1, 0, 0, 0.5))
+        m.setTransform(geometry.transform.as_pyqtgraph())
+        w.addItem(m)
+
+        vol = np.zeros(template.volume.T.shape + (4,), dtype=np.ubyte)
+        vol[..., :3] = (30, 30, 100)
+        vol[..., 3] = template.volume.T * 20
+        v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False)
+        v.setTransform((geometry.transform * template.transform).as_pyqtgraph())
+        w.addItem(v)
+
+        pg.exec()
+    assert isinstance(template, Volume)
+    assert template.volume.shape == (1, 1, 1)
+    assert np.all(template.volume)
+    assert np.all(template.inverse_transform.map((0, 0, 0)) == np.array([0.5, 0.5, 0.5]))
+
+
 def test_coarse_voxelization(geometry):
     voxel_size = 0.25  # units per vx
     template = geometry.voxel_template(voxel_size)
@@ -125,7 +157,9 @@ def test_find_path(geometry, viz=False):
     point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point_mesh", "point")
     dest = Point(np.array([0, 0, 3]), "global")
     start = Point(np.array([0, 0, -2]), "global")
-    path = planner.find_path(point, NullTransform(3, from_cs=point.parent_name, to_cs="global"), start, dest, visualize=viz)
+    path = planner.find_path(
+        point, NullTransform(3, from_cs=point.parent_name, to_cs="global"), start, dest, visualize=viz
+    )
     if viz:
         pg.exec()
 
@@ -150,7 +184,7 @@ def test_find_path(geometry, viz=False):
         # start = waypoint
 
 
-def test_path_with_funner_traveler(geometry):
+def test_path_with_funner_traveler(geometry, viz=False):
     voxel_size = 0.1
     traveler = Geometry(
         {
@@ -162,10 +196,14 @@ def test_path_with_funner_traveler(geometry):
         "traveler_mesh",
         "traveler",
     )
-    start = Point(np.array([0.1, 0.1, -2]), "global")
+    start = Point(np.array([-0.4, -0.4, -1.2]), "global")
     dest = Point(np.array([0.2, 0.2, 3]), "global")
     planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
-    path = planner.find_path(traveler, NullTransform(3, from_cs="traveler", to_cs="global"), start, dest)
+    path = planner.find_path(
+        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, visualize=viz
+    )
+    if viz:
+        pg.exec()
     assert path is not None
     assert len(path) >= 2
     assert not np.all(path[0] == start)
@@ -178,7 +216,11 @@ def test_no_path(viz=False):
     planner = GeometryMotionPlanner(
         {geometry: NullTransform(3, from_cs=geometry.parent_name, to_cs="global")}, voxel_size
     )
-    traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, 6 * voxel_size], "transform": {"pos": (0, 0, -0.3)}}, "traveler_mesh", "traveler")
+    traveler = Geometry(
+        {"type": "box", "size": [voxel_size, voxel_size, 6 * voxel_size], "transform": {"pos": (0, 0, -0.3)}},
+        "traveler_mesh",
+        "traveler",
+    )
     from_traveler_to_global = TTransform(offset=(0, 2, 3), from_cs="traveler", to_cs="global")
     start = from_traveler_to_global.map(Point(np.array([0, 0, 0]), "traveler"))
     dest = Point(np.array([voxel_size, voxel_size, voxel_size]) * 2, "global")  # inside the box
@@ -288,7 +330,24 @@ def visualize():
 if __name__ == "__main__":
     pg.mkQApp()
     # visualize()
-    geom = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
-    test_find_path(geom, True)
+    geom = Geometry(
+        {
+            "type": "box",
+            "size": [1.0, 1.0, 1.0],
+            # "transform": {"angle": 45, "axis": (1, 1, 0)},
+            "children": {
+                "more rotated": {
+                    "type": "box",
+                    "size": [0.5, 0.5, 0.5],
+                    "transform": {"pos": (1.5, 0, 0), "angle": 45, "axis": (0, 0, 1)},
+                }
+            },
+        },
+        "test_mesh",
+        "test",
+    )
+    test_path_with_funner_traveler(geom, True)
+    # test_single_voxel_voxelization(geom, True)
+    # test_find_path(geom, True)
     # test_no_path(True)
     # test_no_path_because_of_offset_shadow(geom, True)
