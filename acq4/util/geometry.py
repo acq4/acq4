@@ -195,6 +195,7 @@ def a_star_ish(
     came_from = {}
     g_score = {tuple(start): 0}
     f_score = {tuple(start): heuristic(start, finish)}
+    obstacles = {}
     cost = 0
 
     while open_set:
@@ -208,7 +209,11 @@ def a_star_ish(
             if cost > max_cost:
                 return None
             neigh_key = tuple(neighbor)
-            tentative_g_score = g_score[curr_key] + edge_cost(current, neighbor)
+            this_cost, obstacle = edge_cost(current, neighbor)
+            if this_cost == np.inf:
+                obstacles.setdefault(obstacle, 0)
+                obstacles[obstacle] += 1
+            tentative_g_score = g_score[curr_key] + this_cost
             if neigh_key not in g_score or tentative_g_score < g_score[neigh_key]:
                 came_from[neigh_key] = curr_key
                 g_score[neigh_key] = tentative_g_score
@@ -218,6 +223,7 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
+    print("worst obstacle:", max(obstacles.items(), key=lambda x: x[1])[0].transform.systems[0])
     return None
 
 
@@ -229,7 +235,7 @@ def simplify_path(path, edge_cost: Callable):
         made_change = False
         ptr = 0
         while ptr < len(path) - 2:
-            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
+            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2]))[0] < np.inf:
                 path.pop(ptr + 1)
                 made_change = True
             ptr += 1
@@ -237,7 +243,7 @@ def simplify_path(path, edge_cost: Callable):
 
 
 class GeometryMotionPlanner:
-    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 2000 * µm):
+    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 500 * µm):
         """
         Parameters
         ----------
@@ -362,8 +368,8 @@ class GeometryMotionPlanner:
         def edge_cost(a, b):
             for obj in obstacles:
                 if obj.intersects_line(a, b):
-                    return np.inf
-            return np.linalg.norm(b - a)
+                    return np.inf, obj
+            return np.linalg.norm(b - a), None
 
         path = a_star_ish(start, stop, edge_cost, callback=callback)
         if path is None:
@@ -389,12 +395,17 @@ class GeometryMotionPlanner:
         self.add_geometry_mesh(traveling_object, from_traveler_to_global)
         # TODO draw the voxels after all the other meshes have been drawn
 
-        start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 255, 255), size=self.voxel_size, pxMode=False)
+        start_target = gl.GLScatterPlotItem(
+            pos=np.array([start]), color=(0, 0, 255, 255), size=self.voxel_size, pxMode=False
+        )
         self._viz.addItem(start_target)
-        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 255, 0, 255), size=self.voxel_size, pxMode=False)
+        dest_target = gl.GLScatterPlotItem(
+            pos=np.array([stop]), color=(0, 255, 0, 255), size=self.voxel_size, pxMode=False
+        )
         self._viz.addItem(dest_target)
 
-        self._path_line = gl.GLLinePlotItem(pos=np.array([start, start]), color=(1, 0, 0, 1), width=1)
+        self._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(255, 0, 0, 255), width=1)
+        self._viz.addItem(self._path_line)
 
     def add_geometry_mesh(self, geometry: Geometry, to_global: Transform):
         mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
@@ -486,7 +497,9 @@ class Volume(object):
         """Return True if the line segment between *a* and *b* intersects with this volume. Points should be in the
         parent coordinate system of the volume"""
         line_voxels = find_intersected_voxels(
-            self.transform.inverse.map(a), self.transform.inverse.map(b), np.array(self.volume.shape) - 1
+            self.transform.inverse.map(a)[::-1],
+            self.transform.inverse.map(b)[::-1],
+            np.array(self.volume.shape) - 1,
         )
         return next((True for x, y, z in line_voxels if self.volume[x, y, z]), False)
 
