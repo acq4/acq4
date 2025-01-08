@@ -16,6 +16,7 @@ from vispy.visuals.transforms import MatrixTransform, ChainTransform
 from acq4.util import Qt
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SRTTransform3D
+import pyqtgraph.opengl as gl
 from pyqtgraph.units import µm
 
 
@@ -289,7 +290,9 @@ class GeometryMotionPlanner:
         stop
             Global coordinates of the final location we want the traveling object's origin to be.
         callback : callable
-            D
+            A function to be called at each step of the path planning process to aid in visualization and debugging.
+        visualize : bool
+            If True, visualize the path planning process.
 
         Returns
         -------
@@ -306,9 +309,9 @@ class GeometryMotionPlanner:
                         return
                     # sleep to allow the user to watch
                     then = time.time()
-                    while time.time() - then < 0.1:
+                    while time.time() - then < 0.01:
                         app.processEvents()
-                    self._path_line.set_data(p)
+                    self._path_line.setData(pos=np.array(p))
                     app.processEvents()
 
             runInGuiThread(self.initialize_visualization, traveling_object, from_traveler_to_global, start, stop)
@@ -343,8 +346,18 @@ class GeometryMotionPlanner:
             # put the obstacle in the global coordinate system?
             convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
             obstacles.append(convolved_obst)
-            if visualize:
-                runInGuiThread(self.add_obstacle, obstacles[-1])
+        if visualize:
+            # for obst, to_global in self.geometries.items():
+            #     runInGuiThread(self.add_voxels, obst.voxel_template(self.voxel_size), to_global * obst.transform)
+            for obst in obstacles:
+                runInGuiThread(self.add_obstacle, obst)
+
+        if visualize:
+            runInGuiThread(
+                self.add_voxels,
+                traveling_object.voxel_template(self.voxel_size),
+                from_traveler_to_global * traveling_object.transform,
+            )
 
         def edge_cost(a, b):
             for obj in obstacles:
@@ -366,42 +379,44 @@ class GeometryMotionPlanner:
     def initialize_visualization(self, traveling_object, from_traveler_to_global, start, stop):
         if self._viz is not None:
             self._viz.close()
-        self._viz = scene.SceneCanvas(keys="interactive", show=True)
-        self._viz.native.show()
-        view = self._viz_view = self._viz.central_widget.add_view()
-        view.camera = "turntable"
-        grid = visuals.GridLines()
-        view.add(grid)
-        axis = visuals.XYZAxis(parent=view.scene)
-        axis.set_transform("st", scale=(self.voxel_size * 10, self.voxel_size * 10, self.voxel_size * 10))
+        self._viz = gl.GLViewWidget()
+        self._viz.show()
+        self._viz.setCameraPosition(distance=20)
+        g = gl.GLGridItem()
+        g.scale(1, 1, 1)
+        self._viz.addItem(g)
+
         self.add_geometry_mesh(traveling_object, from_traveler_to_global)
-        start_target = scene.visuals.Sphere(radius=self.voxel_size, color="blue", parent=view.scene)
-        start_target.transform = scene.transforms.STTransform(translate=start)
-        dest_target = scene.visuals.Sphere(radius=self.voxel_size, color="green", parent=view.scene)
-        dest_target.transform = scene.transforms.STTransform(translate=stop)
-        self._path_line = scene.visuals.Line(pos=np.array([start, stop]), color="red", parent=view.scene)
+        # TODO draw the voxels after all the other meshes have been drawn
+
+        start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 255, 255), size=self.voxel_size, pxMode=False)
+        self._viz.addItem(start_target)
+        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 255, 0, 255), size=self.voxel_size, pxMode=False)
+        self._viz.addItem(dest_target)
+
+        self._path_line = gl.GLLinePlotItem(pos=np.array([start, start]), color=(1, 0, 0, 1), width=1)
 
     def add_geometry_mesh(self, geometry: Geometry, to_global: Transform):
-        viz = scene.visuals.Mesh(
-            vertices=geometry.mesh.vertices,
-            faces=geometry.mesh.faces,
-            color=geometry.color or "gray",
-            shading="smooth",
-            parent=self._viz_view.scene,
-        )
-        viz.transform = (to_global * geometry.transform).as_vispy()
+        mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
+        if geometry.color is None:
+            color = (255, 0, 0, 255)
+        else:
+            color = np.array(geometry.color) * 255
+        m = gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
+        m.setTransform((to_global * geometry.transform).as_pyqtgraph())
+        self._viz.addItem(m)
 
-        voxel = geometry.voxel_template(self.voxel_size)
-        vol = scene.visuals.Volume(voxel.volume.astype("float32"), parent=self._viz_view.scene)
-        vol.cmap = "grays"
-        vol.opacity = 0.2
-        vol.transform = (to_global * geometry.transform * voxel.transform).as_vispy()
+    def add_voxels(self, voxels: Volume, to_global: Transform):
+        vol = np.zeros(voxels.volume.T.shape + (4,), dtype=np.ubyte)
+        vol[..., :3] = (10, 10, 30)
+        vol[..., 3] = voxels.volume.T * 20
+        v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
+        v.setTransform((to_global * voxels.transform).as_pyqtgraph())
+        self._viz.addItem(v)
 
     def add_obstacle(self, obstacle: Volume):
-        viz = scene.visuals.Volume(obstacle.volume.astype("float32"), parent=self._viz_view.scene)
-        viz.cmap = "cool"
-        viz.opacity = 0.2
-        viz.transform = obstacle.transform.as_vispy()
+        # already in global coordinates
+        self.add_voxels(obstacle, NullTransform(3, from_cs="global", to_cs="global"))
 
 
 class Volume(object):
