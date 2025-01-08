@@ -184,6 +184,30 @@ def test_find_path(geometry, viz=False):
         # start = waypoint
 
 
+def test_z_and_x_are_not_swapped(viz=False):
+    geometry = Geometry({"type": "box", "size": [10.0, 1.0, 1.0]}, "test_mesh", "test")
+    voxel_size = 0.1
+    from_geom_to_global = NullTransform(3, from_cs=geometry.parent_name, to_cs="global")
+    start = Point(np.array([0, 0, 3]), "global")
+    dest = Point(np.array([0, -4, 0]), "global")
+    planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
+    traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "traveler_mesh", "traveler")
+
+    path = planner.find_path(
+        traveler, NullTransform(3, from_cs=traveler.parent_name, to_cs="global"), start, dest, visualize=viz
+    )
+    if viz:
+        pg.exec()
+    assert path is not None
+
+    path = planner.find_path(
+        traveler, NullTransform(3, from_cs=traveler.parent_name, to_cs="global"), start[::-1], dest, visualize=viz
+    )
+    if viz:
+        pg.exec()
+    assert path is None
+
+
 def test_path_with_funner_traveler(geometry, viz=False):
     voxel_size = 0.1
     traveler = Geometry(
