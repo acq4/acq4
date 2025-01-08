@@ -348,7 +348,7 @@ class GeometryMotionPlanner:
 
             center = np.array(shadow.T.shape) - traveler_origin_in_xformed_voxels
             obst_voxels = obst.voxel_template(self.voxel_size)
-            convolved_obst = obst_voxels.convolve(shadow, center, f"{xformed.name}'s shadow")
+            convolved_obst = obst_voxels.convolve(shadow, center, f"[shadow of {traveling_object.name}]")
             # put the obstacle in the global coordinate system?
             convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
             obstacles.append(convolved_obst)
