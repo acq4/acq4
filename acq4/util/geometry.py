@@ -10,14 +10,13 @@ import numpy as np
 import trimesh
 from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
 from trimesh.voxel import VoxelGrid
-from vispy import scene
 from vispy.scene import visuals
 from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
+import pyqtgraph.opengl as gl
 from acq4.util import Qt
 from acq4.util.threadrun import runInGuiThread
-from pyqtgraph import SRTTransform3D
-import pyqtgraph.opengl as gl
+from pyqtgraph import SRTTransform3D, debug
 from pyqtgraph.units import µm
 
 
@@ -61,28 +60,51 @@ def truncated_cone(
     return vertices, np.array(faces)
 
 
-def line_intersects_voxel(start, end, vox):
-    # TODO as an optimization later, we can check for intersections with arbitrary bounding boxes, not just voxels
-    direction = (end - start) / np.linalg.norm(end - start)
-    for ax in (0, 1, 2):
-        if direction[ax] == 0:
+# TODO as an optimization later, we can check for intersections with arbitrary bounding boxes, not just voxels
+@numba.jit(nopython=True)
+def line_intersects_voxel(start: np.ndarray, end: np.ndarray, vox: np.ndarray):
+    """
+    Check if a line segment intersects with a voxel (using Numba optimization)
+    """
+    diff = end - start
+    norm = np.sqrt(diff[0] ** 2 + diff[1] ** 2 + diff[2] ** 2)  # Faster than np.linalg.norm
+    direction = diff / norm
+
+    # Check each axis
+    for ax in range(3):
+        if abs(direction[ax]) < 1e-10:  # Avoid division by zero
             continue
+
         ax2 = (ax + 1) % 3
         ax3 = (ax + 2) % 3
-        x_steps = np.arange(np.ceil(min(start[ax], end[ax])), np.floor(max(start[ax], end[ax])) + 1).astype(int)
-        for x in x_steps:
+
+        # Calculate min and max for x_steps
+        min_val = min(start[ax], end[ax])
+        max_val = max(start[ax], end[ax])
+
+        # Create steps array manually since np.arange isn't supported in nopython mode
+        start_step = int(np.ceil(min_val))
+        end_step = int(np.floor(max_val)) + 1
+
+        for x in range(start_step, end_step):
             t = (x - start[ax]) / direction[ax]
             y = int(np.floor(start[ax2] + t * direction[ax2]))
             z = int(np.floor(start[ax3] + t * direction[ax3]))
-            index = [None, None, None]
+
+            # Create index array
+            index = np.zeros(3, dtype=np.int64)
             index[ax] = x
             index[ax2] = y
             index[ax3] = z
-            if tuple(vox) == tuple(index):
+
+            # Check both current and previous voxel
+            if index[0] == vox[0] and index[1] == vox[1] and index[2] == vox[2]:
                 return True
+
             index[ax] -= 1
-            if tuple(vox) == tuple(index):
+            if index[0] == vox[0] and index[1] == vox[1] and index[2] == vox[2]:
                 return True
+
     return False
 
 
@@ -98,7 +120,7 @@ def find_intersected_voxels(
     - voxel_space_max: Maximum voxel coordinates in the space (assumes minimum is 0)
 
     Returns:
-    - List of voxel coordinates intersected by the line
+    - Generator of voxel coordinates intersected by the line
     """
     # Compute bounding box of the line
     min_point = np.minimum(line_start, line_end)
@@ -178,6 +200,7 @@ def a_star_ish(
     callback=None,
 ):
     """Run the A* algorithm to find the shortest path between *start* and *finish*."""
+    profile = debug.Profiler()
     if heuristic is None:
 
         def heuristic(x, y):
@@ -189,6 +212,7 @@ def a_star_ish(
 
         def neighbors(pt):
             points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.2)
+            profile.mark("generated neighbors")
             points += pt
             return np.vstack((points, finish))
 
@@ -211,6 +235,7 @@ def a_star_ish(
                 return None
             neigh_key = tuple(neighbor)
             this_cost, obstacle = edge_cost(current, neighbor)
+            profile.mark(f"checked edge cost {current} -> {neighbor}")
             if this_cost == np.inf:
                 obstacles.setdefault(obstacle, 0)
                 obstacles[obstacle] += 1
@@ -225,6 +250,7 @@ def a_star_ish(
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
     print("worst obstacle:", max(obstacles.items(), key=lambda x: x[1])[0].transform.systems[0])
+    profile.finish()
     return None
 
 
@@ -322,7 +348,7 @@ class GeometryMotionPlanner:
                     app.processEvents()
 
             runInGuiThread(self.initialize_visualization, traveling_object, from_traveler_to_global, start, stop)
-
+        profile = debug.Profiler()
         obstacles = []
         for obst, from_obst_to_global in self.geometries.items():
             if visualize:
@@ -337,6 +363,7 @@ class GeometryMotionPlanner:
             )
 
             xformed = traveling_object.transformed_to(obst.transform, from_traveler_mesh_to_obst_mesh)
+            profile.mark(f"transformed traveler into {obst.name}")
             xformed_voxels = xformed.voxel_template(self.voxel_size)
             # TODO this is adding a scale=-1, but none of the transforms reflect this
             shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
@@ -348,8 +375,11 @@ class GeometryMotionPlanner:
             traveler_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(traveler_origin_in_obst_mesh)
 
             center = np.array(shadow.T.shape) - traveler_origin_in_xformed_voxels
+            profile.mark(f"voxelized convolution kernel for {obst.name}")
             obst_voxels = obst.voxel_template(self.voxel_size)
+            profile.mark(f"voxelized {obst.name}")
             convolved_obst = obst_voxels.convolve(shadow, center, f"[shadow of {traveling_object.name}]")
+            profile.mark(f"convolved for {obst.name}")
             # put the obstacle in the global coordinate system?
             convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
             obstacles.append(convolved_obst)
@@ -369,14 +399,18 @@ class GeometryMotionPlanner:
             return np.linalg.norm(b - a), None
 
         path = a_star_ish(start, stop, edge_cost, callback=callback)
+        profile.mark("A*")
         if path is None:
+            profile.finish()
             return None
         # TODO if path is empty? are we already at our dest?
         # TODO remove this memory leaking debug
         self._locals = locals()
         path = simplify_path(path, edge_cost)
+        profile.mark("simplified path")
         if callback:
             callback(path, skip=1)
+        profile.finish()
         return path[1:]
 
     def initialize_visualization(self, traveling_object, from_traveler_to_global, start, stop):
@@ -622,7 +656,9 @@ class Geometry:
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
+        profile = debug.Profiler()
         voxels: VoxelGrid = self.mesh.voxelized(voxel_size)
+        profile.mark("mesh voxelized")
         matrix = voxels.transform
         from_voxels_to_mesh = AffineTransform(
             matrix=matrix[:3, :3],
@@ -636,7 +672,9 @@ class Geometry:
         )
 
         # TODO this voxel grid might add a 1-voxel offset that the xform doesn't account for
-        return Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
+        ret = Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
+        profile.finish()
+        return ret
 
     def visuals(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
