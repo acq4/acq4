@@ -285,7 +285,6 @@ class GeometryMotionPlanner:
         self.voxel_size = voxel_size
         self._viz = None
         self._viz_view = None
-        self._locals = None
 
     def find_path(
         self,
@@ -405,8 +404,6 @@ class GeometryMotionPlanner:
             profile.finish()
             return None
         # TODO if path is empty? are we already at our dest?
-        # TODO remove this memory leaking debug
-        self._locals = locals()
         path = simplify_path(path, edge_cost)
         profile.mark("simplified path")
         if callback:
@@ -425,7 +422,6 @@ class GeometryMotionPlanner:
         self._viz.addItem(g)
 
         self.add_geometry_mesh(traveling_object, from_traveler_to_global)
-        # TODO draw the voxels after all the other meshes have been drawn
 
         start_target = gl.GLScatterPlotItem(
             pos=np.array([start]), color=(0, 0, 255, 255), size=self.voxel_size, pxMode=False
@@ -532,9 +528,7 @@ class Volume(object):
             to_cs=self.transform.systems[0],
             from_cs=f"[convolved {name} in {self.transform.systems[1]}]",
         )
-        volume = Volume(dest, self.transform * draw_xform)
-        volume.locals = locals()
-        return volume
+        return Volume(dest, self.transform * draw_xform)
 
     def intersects_line(self, a, b):
         """Return True if the line segment between *a* and *b* intersects with this volume. Points should be in the
@@ -783,7 +777,6 @@ class Geometry:
         Return a new Geometry that is a transformed version of this one. The mesh will be transformed by the
         from_self_to_other transform, while the new geometry itself will have the other_transform.
         """
-        # TODO do I have to remove the translation like I did before?
         vertices = from_self_to_other.map(self.mesh.vertices)
         mesh = trimesh.Trimesh(vertices=vertices, faces=self.mesh.faces)
         return Geometry(mesh=mesh, transform=other_transform, color=self.color)
