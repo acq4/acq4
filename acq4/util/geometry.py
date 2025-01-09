@@ -391,6 +391,7 @@ class GeometryMotionPlanner:
                 traveling_object.voxel_template(self.voxel_size),
                 from_traveler_to_global * traveling_object.transform,
             )
+        profile.mark("voxelized all obstacles")
 
         def edge_cost(a, b):
             for obj in obstacles:
@@ -656,9 +657,7 @@ class Geometry:
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
-        profile = debug.Profiler()
         voxels: VoxelGrid = self.mesh.voxelized(voxel_size)
-        profile.mark("mesh voxelized")
         matrix = voxels.transform
         from_voxels_to_mesh = AffineTransform(
             matrix=matrix[:3, :3],
@@ -672,9 +671,7 @@ class Geometry:
         )
 
         # TODO this voxel grid might add a 1-voxel offset that the xform doesn't account for
-        ret = Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
-        profile.finish()
-        return ret
+        return Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
 
     def visuals(self) -> list:
         """Return a 3D model to be displayed in the 3D visualization window."""
