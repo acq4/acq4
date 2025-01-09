@@ -16,18 +16,10 @@ time = None
 
 def winTime():
     """Return the current time in seconds with high precision (windows version, use ptime.time() to stay platform independent)."""
-    warnings.warn(
-        "'pg.time' will be removed from the library in the first release following January, 2022.",
-        DeprecationWarning, stacklevel=2
-    )
     return clock() + START_TIME
 
 def unixTime():
     """Return the current time in seconds with high precision (unix version, use ptime.time() to stay platform independent)."""
-    warnings.warn(
-        "'pg.time' will be removed from the library in the first release following January, 2022.",
-        DeprecationWarning, stacklevel=2
-    )
     return system_time()
 
 
