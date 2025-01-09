@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from copy import deepcopy
+from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
 
@@ -15,6 +16,7 @@ from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
 import pyqtgraph.opengl as gl
 from acq4.util import Qt
+from acq4.util.future import future_wrap, Future
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SRTTransform3D, debug
 from pyqtgraph.units import µm
@@ -458,8 +460,13 @@ class GeometryMotionPlanner:
         self.add_voxels(obstacle, NullTransform(3, from_cs="global", to_cs="global"))
 
 
+@future_wrap
+def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray, _future: Future) -> np.ndarray:
+    return _do_convolve(volume, kernel)
+
+
 @numba.jit(nopython=True)
-def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+def _do_convolve(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """"""
     # scipy does weird stuff
     # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
@@ -494,10 +501,12 @@ class Volume(object):
         geometry's coordinate system.
     """
     _convolution_cache = {}
+    _cache_lock = RLock()
 
     @classmethod
     def clear_cache(cls):
-        cls._convolution_cache = {}
+        with cls._cache_lock:
+            cls._convolution_cache = {}
 
     def __init__(self, volume: np.ndarray, transform: Transform):
         self.volume = volume
@@ -527,9 +536,10 @@ class Volume(object):
         name
             Name of the kernel
         """
-        if name not in self._convolution_cache:
-            self._convolution_cache[name] = convolve_kernel_onto_volume(self.volume, kernel_array)
-        dest = self._convolution_cache[name]
+        with self._cache_lock:
+            if name not in self._convolution_cache:
+                self._convolution_cache[name] = convolve_kernel_onto_volume(self.volume, kernel_array)
+        dest = self._convolution_cache[name].getResult()
         draw_xform = TTransform(
             offset=-center,
             to_cs=self.transform.systems[0],
@@ -548,12 +558,19 @@ class Volume(object):
         return next((True for x, y, z in line_voxels if self.volume[x, y, z]), False)
 
 
+@future_wrap
+def _voxelize(mesh: trimesh.Trimesh, voxel_size: float, _future: Future):
+    return mesh.voxelized(voxel_size)
+
+
 class Geometry:
     _voxel_cache = {}
+    _cache_lock = RLock()
 
     @classmethod
     def clear_cache(cls):
-        cls._voxel_cache = {}
+        with cls._cache_lock:
+            cls._voxel_cache = {}
 
     def __init__(
         self,
@@ -666,9 +683,10 @@ class Geometry:
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
-        if self.name not in self._voxel_cache:
-            self._voxel_cache[self.name] = self.mesh.voxelized(voxel_size)
-        voxels: VoxelGrid = self._voxel_cache[self.name]
+        with self._cache_lock:
+            if self.name not in self._voxel_cache:
+                self._voxel_cache[self.name] = _voxelize(self.mesh, voxel_size)
+        voxels: VoxelGrid = self._voxel_cache[self.name].getResult()
         matrix = voxels.transform
         from_voxels_to_mesh = AffineTransform(
             matrix=matrix[:3, :3],
