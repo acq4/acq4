@@ -14,7 +14,7 @@ from acq4.util.debug import printExc
 from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.typing import Number
+from acq4.util.acq4_typing import Number
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
