@@ -377,7 +377,7 @@ class GeometryMotionPlanner:
             profile.mark(f"voxelized convolution kernel for {obst.name}")
             obst_voxels = obst.voxel_template(self.voxel_size)
             profile.mark(f"voxelized {obst.name}")
-            convolved_obst = obst_voxels.convolve(shadow, center, f"[shadow of {traveling_object.name}]")
+            convolved_obst = obst_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
             profile.mark(f"convolved for {obst.name}")
             # put the obstacle in the global coordinate system?
             convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
@@ -493,6 +493,11 @@ class Volume(object):
         Transform that maps from the local coordinate system of this volume (i.e. voxel coordinates) to the parent
         geometry's coordinate system.
     """
+    _convolution_cache = {}
+
+    @classmethod
+    def clear_cache(cls):
+        cls._convolution_cache = {}
 
     def __init__(self, volume: np.ndarray, transform: Transform):
         self.volume = volume
@@ -522,7 +527,9 @@ class Volume(object):
         name
             Name of the kernel
         """
-        dest = convolve_kernel_onto_volume(self.volume, kernel_array)
+        if name not in self._convolution_cache:
+            self._convolution_cache[name] = convolve_kernel_onto_volume(self.volume, kernel_array)
+        dest = self._convolution_cache[name]
         draw_xform = TTransform(
             offset=-center,
             to_cs=self.transform.systems[0],
@@ -542,6 +549,12 @@ class Volume(object):
 
 
 class Geometry:
+    _voxel_cache = {}
+
+    @classmethod
+    def clear_cache(cls):
+        cls._voxel_cache = {}
+
     def __init__(
         self,
         config: Dict | str = None,
@@ -556,7 +569,9 @@ class Geometry:
         self.name = name
         self.parent_name = parent_name
         if parent_name is None and transform is not None:
-            self.parent_name = transform.systems[1]
+            self.parent_name = str(transform.systems[1])
+        if name is None and transform is not None:
+            self.name = str(transform.systems[0])
         self._config = config
         self._children: List[Geometry] = []
         if mesh is None:
@@ -651,7 +666,9 @@ class Geometry:
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
-        voxels: VoxelGrid = self.mesh.voxelized(voxel_size)
+        if self.name not in self._voxel_cache:
+            self._voxel_cache[self.name] = self.mesh.voxelized(voxel_size)
+        voxels: VoxelGrid = self._voxel_cache[self.name]
         matrix = voxels.transform
         from_voxels_to_mesh = AffineTransform(
             matrix=matrix[:3, :3],
@@ -779,7 +796,12 @@ class Geometry:
         """
         vertices = from_self_to_other.map(self.mesh.vertices)
         mesh = trimesh.Trimesh(vertices=vertices, faces=self.mesh.faces)
-        return Geometry(mesh=mesh, transform=other_transform, color=self.color)
+        return Geometry(
+            mesh=mesh,
+            transform=other_transform,
+            color=self.color,
+            name=f"[{self.name} in {other_transform.systems[0]}]",
+        )
 
     def _default_transform_args(self):
         return dict(from_cs=self.name, to_cs=self.parent_name)

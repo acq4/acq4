@@ -13,6 +13,12 @@ def geometry():
     return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
 
 
+@pytest.fixture(autouse=True)
+def setup():
+    Geometry.clear_cache()
+    Volume.clear_cache()
+
+
 def test_mesh(geometry):
     mesh = geometry.mesh
     assert mesh is not None
