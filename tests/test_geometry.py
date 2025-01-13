@@ -15,8 +15,7 @@ def geometry():
 
 @pytest.fixture(autouse=True)
 def setup():
-    Geometry.clear_cache()
-    Volume.clear_cache()
+    GeometryMotionPlanner.clear_cache()
 
 
 def test_mesh(geometry):

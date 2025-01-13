@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import time
 from copy import deepcopy
-from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
 
@@ -16,7 +15,6 @@ from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
 import pyqtgraph.opengl as gl
 from acq4.util import Qt
-from acq4.util.future import future_wrap, Future
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SRTTransform3D, debug
 from pyqtgraph.units import µm
@@ -202,7 +200,6 @@ def a_star_ish(
     callback=None,
 ):
     """Run the A* algorithm to find the shortest path between *start* and *finish*."""
-    profile = debug.Profiler()
     if heuristic is None:
 
         def heuristic(x, y):
@@ -213,8 +210,8 @@ def a_star_ish(
         count = 10
 
         def neighbors(pt):
+            # TODO this could be used to restrict points to above the tissue and inside the traveler's range of motion, too
             points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.2)
-            profile.mark("generated neighbors")
             points += pt
             return np.vstack((points, finish))
 
@@ -237,7 +234,6 @@ def a_star_ish(
                 return None
             neigh_key = tuple(neighbor)
             this_cost, obstacle = edge_cost(current, neighbor)
-            profile.mark(f"checked edge cost {current} -> {neighbor}")
             if this_cost == np.inf:
                 obstacles.setdefault(obstacle, 0)
                 obstacles[obstacle] += 1
@@ -252,7 +248,6 @@ def a_star_ish(
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
     print("worst obstacle:", max(obstacles.items(), key=lambda x: x[1])[0].transform.systems[0])
-    profile.finish()
     return None
 
 
@@ -272,7 +267,17 @@ def simplify_path(path, edge_cost: Callable):
 
 
 class GeometryMotionPlanner:
-    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 500 * µm):
+    # TODO thread safety on this cache
+    _cache = {}
+    _viz = None
+    _path_line = None
+    _displayed_objects = []
+
+    @classmethod
+    def clear_cache(cls):
+        cls._cache = {}
+
+    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 2000 * µm):
         """
         Parameters
         ----------
@@ -285,13 +290,11 @@ class GeometryMotionPlanner:
         self._draw_n = 0
         self.geometries = geometries
         self.voxel_size = voxel_size
-        self._viz = None
-        self._viz_view = None
 
     def find_path(
         self,
-        traveling_object: Geometry,
-        from_traveler_to_global: Transform,
+        traveler: Geometry,
+        to_global_from_traveler: Transform,
         start,
         stop,
         callback=None,
@@ -315,9 +318,9 @@ class GeometryMotionPlanner:
 
         Parameters
         ----------
-        traveling_object : Geometry
+        traveler : Geometry
             Geometry representing the object to be moved from *start* to *stop*
-        from_traveler_to_global : Transform
+        to_global_from_traveler : Transform
             Transform that maps from the traveling_object's local coordinate system to global
         start
             Global coordinates of the traveling object's origin when at initial location
@@ -348,55 +351,36 @@ class GeometryMotionPlanner:
                     self._path_line.setData(pos=np.array(p))
                     app.processEvents()
 
-            runInGuiThread(self.initialize_visualization, traveling_object, from_traveler_to_global, start, stop)
+            runInGuiThread(self.initialize_visualization, traveler, to_global_from_traveler, start, stop)
         profile = debug.Profiler()
         obstacles = []
-        for obst, from_obst_to_global in self.geometries.items():
+        for obst, to_global_from_obst in self.geometries.items():
             if visualize:
-                runInGuiThread(self.add_geometry_mesh, obst, from_obst_to_global)
-            if obst is traveling_object:
+                runInGuiThread(self.add_geometry_mesh, obst, to_global_from_obst)
+            if obst is traveler:
                 continue
-            from_traveler_mesh_to_obst_mesh = (
-                obst.transform.inverse
-                * from_obst_to_global.inverse
-                * from_traveler_to_global
-                * traveling_object.transform
-            )
-
-            xformed = traveling_object.transformed_to(obst.transform, from_traveler_mesh_to_obst_mesh)
-            profile.mark(f"transformed traveler into {obst.name}")
-            xformed_voxels = xformed.voxel_template(self.voxel_size)
-            # TODO this is adding a scale=-1, but none of the transforms reflect this
-            shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
-
-            traveler_origin = Point((0, 0, 0), traveling_object.parent_name)
-            traveler_origin_in_global = from_traveler_to_global.map(traveler_origin)
-            traveler_origin_in_obst = from_obst_to_global.inverse.map(traveler_origin_in_global)
-            traveler_origin_in_obst_mesh = obst.transform.inverse.map(traveler_origin_in_obst)
-            traveler_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(traveler_origin_in_obst_mesh)
-
-            center = np.array(shadow.T.shape) - traveler_origin_in_xformed_voxels
-            profile.mark(f"voxelized convolution kernel for {obst.name}")
-            obst_voxels = obst.voxel_template(self.voxel_size)
-            profile.mark(f"voxelized {obst.name}")
-            convolved_obst = obst_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
-            profile.mark(f"convolved for {obst.name}")
-            # put the obstacle in the global coordinate system?
-            convolved_obst.transform = from_obst_to_global * obst.transform * convolved_obst.transform
-            obstacles.append(convolved_obst)
+            cache_key = (obst.name, traveler.name)
+            if cache_key not in self._cache:
+                convolved_obst = obst.make_convolved_voxels(
+                    traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
+                )
+                convolved_obst.transform = obst.transform * convolved_obst.transform
+                self._cache[cache_key] = convolved_obst
+                profile.mark(f"cache miss: generated convolved obstacle {obst.name}")
+            obstacles.append((self._cache[cache_key], to_global_from_obst))
         if visualize:
-            for obst in obstacles:
-                runInGuiThread(self.add_obstacle, obst)
+            for obst, to_global_from_obst in obstacles:
+                runInGuiThread(self.add_obstacle, obst, to_global_from_obst)
             runInGuiThread(
                 self.add_voxels,
-                traveling_object.voxel_template(self.voxel_size),
-                from_traveler_to_global * traveling_object.transform,
+                traveler.voxel_template(self.voxel_size),
+                to_global_from_traveler * traveler.transform,
             )
         profile.mark("voxelized all obstacles")
 
         def edge_cost(a, b):
-            for obj in obstacles:
-                if obj.intersects_line(a, b):
+            for obj, to_global_from_obst in obstacles:
+                if obj.intersects_line(to_global_from_obst.inverse.map(a), to_global_from_obst.inverse.map(b)):
                     return np.inf, obj
             return np.linalg.norm(b - a), None
 
@@ -413,29 +397,37 @@ class GeometryMotionPlanner:
         profile.finish()
         return path[1:]
 
-    def initialize_visualization(self, traveling_object, from_traveler_to_global, start, stop):
-        if self._viz is not None:
+    def initialize_visualization(self, traveling_object, to_global_from_traveler, start, stop):
+        if self._viz is None:
+            self._viz = gl.GLViewWidget()
+        else:
+            for disp in self._displayed_objects:
+                self._viz.removeItem(disp)
             self._viz.close()
-        self._viz = gl.GLViewWidget()
+            self._displayed_objects = []
         self._viz.show()
         self._viz.setCameraPosition(distance=20)
         g = gl.GLGridItem()
         g.scale(1, 1, 1)
         self._viz.addItem(g)
 
-        self.add_geometry_mesh(traveling_object, from_traveler_to_global)
+        self.add_geometry_mesh(traveling_object, to_global_from_traveler)
 
         start_target = gl.GLScatterPlotItem(
             pos=np.array([start]), color=(0, 0, 255, 255), size=self.voxel_size, pxMode=False
         )
+        self._displayed_objects.append(start_target)
         self._viz.addItem(start_target)
         dest_target = gl.GLScatterPlotItem(
             pos=np.array([stop]), color=(0, 255, 0, 255), size=self.voxel_size, pxMode=False
         )
+        self._displayed_objects.append(dest_target)
         self._viz.addItem(dest_target)
 
-        self._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(255, 0, 0, 255), width=1)
-        self._viz.addItem(self._path_line)
+        if self._path_line is None:
+            self._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(255, 0, 0, 255), width=1)
+            self._viz.addItem(self._path_line)
+        self._path_line.setData(pos=np.array([start, stop]))
 
     def add_geometry_mesh(self, geometry: Geometry, to_global: Transform):
         mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
@@ -445,6 +437,7 @@ class GeometryMotionPlanner:
             color = np.array(geometry.color) * 255
         m = gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
         m.setTransform((to_global * geometry.transform).as_pyqtgraph())
+        self._displayed_objects.append(m)
         self._viz.addItem(m)
 
     def add_voxels(self, voxels: Volume, to_global: Transform):
@@ -453,21 +446,16 @@ class GeometryMotionPlanner:
         vol[..., 3] = voxels.volume.T * 20
         v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
         v.setTransform((to_global * voxels.transform).as_pyqtgraph())
+        self._displayed_objects.append(v)
         self._viz.addItem(v)
 
-    def add_obstacle(self, obstacle: Volume):
+    def add_obstacle(self, obstacle: Volume, from_obst_to_global):
         # already in global coordinates
-        self.add_voxels(obstacle, NullTransform(3, from_cs="global", to_cs="global"))
-
-
-@future_wrap
-def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray, _future: Future) -> np.ndarray:
-    return _do_convolve(volume, kernel)
+        self.add_voxels(obstacle, from_obst_to_global)
 
 
 @numba.jit(nopython=True)
-def _do_convolve(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
-    """"""
+def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     # scipy does weird stuff
     # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
     v_shape = volume.shape
@@ -500,13 +488,6 @@ class Volume(object):
         Transform that maps from the local coordinate system of this volume (i.e. voxel coordinates) to the parent
         geometry's coordinate system.
     """
-    _convolution_cache = {}
-    _cache_lock = RLock()
-
-    @classmethod
-    def clear_cache(cls):
-        with cls._cache_lock:
-            cls._convolution_cache = {}
 
     def __init__(self, volume: np.ndarray, transform: Transform):
         self.volume = volume
@@ -536,10 +517,7 @@ class Volume(object):
         name
             Name of the kernel
         """
-        with self._cache_lock:
-            if name not in self._convolution_cache:
-                self._convolution_cache[name] = convolve_kernel_onto_volume(self.volume, kernel_array)
-        dest = self._convolution_cache[name].getResult()
+        dest = convolve_kernel_onto_volume(self.volume, kernel_array)
         draw_xform = TTransform(
             offset=-center,
             to_cs=self.transform.systems[0],
@@ -558,20 +536,7 @@ class Volume(object):
         return next((True for x, y, z in line_voxels if self.volume[x, y, z]), False)
 
 
-@future_wrap
-def _voxelize(mesh: trimesh.Trimesh, voxel_size: float, _future: Future):
-    return mesh.voxelized(voxel_size)
-
-
 class Geometry:
-    _voxel_cache = {}
-    _cache_lock = RLock()
-
-    @classmethod
-    def clear_cache(cls):
-        with cls._cache_lock:
-            cls._voxel_cache = {}
-
     def __init__(
         self,
         config: Dict | str = None,
@@ -683,10 +648,7 @@ class Geometry:
         return self._transform
 
     def voxel_template(self, voxel_size: float) -> Volume:
-        with self._cache_lock:
-            if self.name not in self._voxel_cache:
-                self._voxel_cache[self.name] = _voxelize(self.mesh, voxel_size)
-        voxels: VoxelGrid = self._voxel_cache[self.name].getResult()
+        voxels: VoxelGrid = self.mesh.voxelized(voxel_size)
         matrix = voxels.transform
         from_voxels_to_mesh = AffineTransform(
             matrix=matrix[:3, :3],
@@ -823,6 +785,22 @@ class Geometry:
 
     def _default_transform_args(self):
         return dict(from_cs=self.name, to_cs=self.parent_name)
+
+    def make_convolved_voxels(self, other, to_self_from_other, voxel_size):
+        to_self_mesh_from_other_mesh = (
+                self.transform.inverse * to_self_from_other * other.transform
+        )
+        xformed = other.transformed_to(self.transform, to_self_mesh_from_other_mesh)
+        xformed_voxels = xformed.voxel_template(voxel_size)
+        # TODO this is adding a scale=-1, but none of the transforms reflect this
+        shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
+        other_origin = Point((0, 0, 0), other.parent_name)
+        other_origin_in_self = to_self_from_other.map(other_origin)
+        other_origin_in_self_mesh = self.transform.inverse.map(other_origin_in_self)
+        other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self_mesh)
+        center = np.array(shadow.T.shape) - other_origin_in_xformed_voxels
+        self_voxels = self.voxel_template(voxel_size)
+        return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
 
 
 class Visual(Qt.QObject):
