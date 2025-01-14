@@ -336,6 +336,8 @@ class GeometryMotionPlanner:
         path : list
             List of global positions to get from start to stop
         """
+        start = np.array(start)
+        stop = np.array(stop)
         if visualize:
             if callback is None:
                 app = Qt.QtWidgets.QApplication.instance()

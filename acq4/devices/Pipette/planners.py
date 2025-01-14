@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
-from coorx import SRT3DTransform, AffineTransform
+from coorx import SRT3DTransform
 
 import pyqtgraph as pg
-from acq4.util.future import MultiFuture
+from acq4.util.future import MultiFuture, future_wrap
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.geometry import GeometryMotionPlanner
@@ -207,9 +207,9 @@ class PipettePathGenerator:
 class GeometryAwarePathGenerator(PipettePathGenerator):
     def __init__(self, pip: Pipette):
         super().__init__(pip)
-        self._last_planner = None
+        self._cachePrimer = self._primeCaches()
 
-    def safePath(self, globalStart, globalStop, speed, explanation=None):
+    def _getPlanningContext(self):
         man = getManager()
         geometries = {}
         for dev in man.listInterfaces("OptomechDevice"):
@@ -229,7 +229,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                     to_cs="global",
                 )
                 geometries[geom] = physical_xform
-        planner = self._last_planner = GeometryMotionPlanner(geometries)
+        planner = GeometryMotionPlanner(geometries)
         pg_xform = pg.SRTTransform3D(self.pip.globalPhysicalTransform())
         from_pip_to_global = SRT3DTransform(
             offset=pg_xform.getTranslation(),
@@ -239,11 +239,22 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             from_cs=self.pip.name(),
             to_cs="global",
         )
-        path = planner.find_path(
-            self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, visualize=True
-        )
+        return planner, from_pip_to_global
+
+    @future_wrap
+    def _primeCaches(self, _future):
+        planner, from_pip_to_global = self._getPlanningContext()
+        planner.find_path(self.pip.getGeometries()[0], from_pip_to_global, (0, 0, 0), (1e-6, 1e-6, 1e-6))
+
+    def safePath(self, globalStart, globalStop, speed, explanation=None):
+        self._cachePrimer.wait()
+        planner, from_pip_to_global = self._getPlanningContext()
+        path = planner.find_path(self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop)
         if path is None:
-            raise HelpfulException("No safe path found")
+            planner.find_path(self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, visualize=True)
+            raise HelpfulException("No safe path found; see visualization for details.")
+        if len(path) == 0:
+            return [(globalStop, speed, False, explanation)]
         path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
         path[-1] = (path[-1][0], speed, False, explanation)
         return path

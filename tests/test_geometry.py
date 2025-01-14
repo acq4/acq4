@@ -154,6 +154,24 @@ def test_translated_voxels_have_no_knowledge_of_such():
     assert np.all(origin[:3] == np.array([11 / 2, 11 / 2, 11 / 2]))
 
 
+def test_cached_voxels_behave_well(geometry):
+    voxel_size = 0.1
+    template = geometry.voxel_template(voxel_size)
+
+    template2 = geometry.voxel_template(voxel_size)
+    assert np.all(template.volume == template2.volume)
+
+
+def test_cached_convolutions_behave_well(geometry):
+    kernel_array = np.ones((1, 1, 1), dtype=bool)
+    voxel_size = 0.1
+    orig = geometry.voxel_template(voxel_size)
+    center = np.array([-10, 0, 100])
+    convolved = orig.convolve(kernel_array, center=center, name="fake")
+    convolved2 = orig.convolve(kernel_array, center=center, name="fake")
+    assert np.all(convolved.volume == convolved2.volume)
+
+
 def test_find_path(geometry, viz=False):
     voxel_size = 0.1
     planner = GeometryMotionPlanner(
