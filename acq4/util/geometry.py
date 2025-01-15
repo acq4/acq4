@@ -297,6 +297,7 @@ class GeometryMotionPlanner:
         to_global_from_traveler: Transform,
         start,
         stop,
+        bounds=None,
         callback=None,
         visualize=False,
     ):
@@ -328,6 +329,8 @@ class GeometryMotionPlanner:
             Global coordinates of the final location we want the traveling object's origin to be.
         callback : callable
             A function to be called at each step of the path planning process to aid in visualization and debugging.
+        bounds : Planes
+            Planes that define the bounds of the space in which the path is to be found.
         visualize : bool
             If True, visualize the path planning process.
 
@@ -338,6 +341,7 @@ class GeometryMotionPlanner:
         """
         start = np.array(start)
         stop = np.array(stop)
+        bounds = [] if bounds is None else bounds
         if visualize:
             if callback is None:
                 app = Qt.QtWidgets.QApplication.instance()
@@ -383,6 +387,9 @@ class GeometryMotionPlanner:
         profile.mark("voxelized all obstacles")
 
         def edge_cost(a, b):
+            for bound in bounds:
+                if bound.line_intersects(a, b):
+                    return np.inf, bound
             for obj, to_global_from_obst in obstacles:
                 if obj.intersects_line(to_global_from_obst.inverse.map(a), to_global_from_obst.inverse.map(b)):
                     return np.inf, obj
@@ -800,6 +807,20 @@ class Geometry:
         center = np.array(shadow.T.shape) - other_origin_in_xformed_voxels
         self_voxels = self.voxel_template(voxel_size)
         return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
+
+
+class Plane:
+    def __init__(self, normal, point):
+        self.normal = normal
+        self.point = point
+
+    def line_intersects(self, start: np.ndarray, end: np.ndarray) -> bool:
+        diff = end - start
+        denom = np.dot(self.normal, diff)
+        if denom == 0:
+            return False
+        t = np.dot(self.normal, self.point - start) / denom
+        return 0 <= t <= 1
 
 
 class Visual(Qt.QObject):

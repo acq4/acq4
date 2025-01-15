@@ -5,7 +5,7 @@ from vispy import scene
 
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner
+from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane
 
 
 @pytest.fixture
@@ -255,6 +255,30 @@ def test_path_with_funner_traveler(geometry, viz=False):
     assert len(path) >= 2
     assert not np.all(path[0] == start)
     assert not np.all(path[0] == dest)
+
+
+def test_bounds_prevent_path(geometry, viz=False):
+    voxel_size = 0.1
+    traveler = Geometry(
+        {
+            "type": "cylinder",
+            "radius": voxel_size,
+            "height": 10 * voxel_size,
+            "transform": {"angle": 45, "axis": (0, 1, 0)},
+        },
+        "traveler_mesh",
+        "traveler",
+    )
+    start = Point(np.array([-0.4, -0.4, -1.2]), "global")
+    dest = Point(np.array([0.2, 0.2, 3]), "global")
+    bound = Plane(np.array([0, 0, 1]), np.array([0, 0, 0]))
+    planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
+    path = planner.find_path(
+        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, [bound], visualize=viz
+    )
+    if viz:
+        pg.exec()
+    assert path is None
 
 
 def test_no_path(viz=False):
