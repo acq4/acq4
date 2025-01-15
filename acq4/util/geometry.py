@@ -349,11 +349,13 @@ class GeometryMotionPlanner:
                     # sleep to allow the user to watch
                     then = time.time()
                     while time.time() - then < 0.01:
-                        app.processEvents()
+                        app.processEvents()  # TODO fix this
                     self._path_line.setData(pos=np.array(p))
                     app.processEvents()
 
-            runInGuiThread(self.initialize_visualization, traveler, to_global_from_traveler, start, stop)
+            runInGuiThread(
+                self.initialize_visualization, traveler, to_global_from_traveler, start, stop, self.voxel_size
+            )
         profile = debug.Profiler()
         obstacles = []
         for obst, to_global_from_obst in self.geometries.items():
@@ -372,7 +374,7 @@ class GeometryMotionPlanner:
             obstacles.append((self._cache[cache_key], to_global_from_obst))
         if visualize:
             for obst, to_global_from_obst in obstacles:
-                runInGuiThread(self.add_obstacle, obst, to_global_from_obst)
+                runInGuiThread(self.add_voxels, obst, to_global_from_obst)
             runInGuiThread(
                 self.add_voxels,
                 traveler.voxel_template(self.voxel_size),
@@ -399,39 +401,39 @@ class GeometryMotionPlanner:
         profile.finish()
         return path[1:]
 
-    def initialize_visualization(self, traveling_object, to_global_from_traveler, start, stop):
-        if self._viz is None:
-            self._viz = gl.GLViewWidget()
+    @classmethod
+    def initialize_visualization(cls, traveling_object, to_global_from_traveler, start, stop, voxel_size):
+        if cls._viz is None:
+            cls._viz = gl.GLViewWidget()
+            cls._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(255, 0, 0, 255), width=1)
+            cls._viz.addItem(cls._path_line)
         else:
-            for disp in self._displayed_objects:
-                self._viz.removeItem(disp)
-            self._viz.close()
-            self._displayed_objects = []
-        self._viz.show()
-        self._viz.setCameraPosition(distance=20)
+            for disp in cls._displayed_objects:
+                cls._viz.removeItem(disp)
+            cls._displayed_objects = []
+            # cls._viz.clear()
+            cls._viz.close()
+        cls._viz.show()
+        cls._viz.setCameraPosition(distance=20)
         g = gl.GLGridItem()
         g.scale(1, 1, 1)
-        self._viz.addItem(g)
+        cls._viz.addItem(g)
 
-        self.add_geometry_mesh(traveling_object, to_global_from_traveler)
+        cls.add_geometry_mesh(traveling_object, to_global_from_traveler)
 
         start_target = gl.GLScatterPlotItem(
-            pos=np.array([start]), color=(0, 0, 255, 255), size=self.voxel_size, pxMode=False
+            pos=np.array([start]), color=(0, 0, 255, 255), size=voxel_size, pxMode=False
         )
-        self._displayed_objects.append(start_target)
-        self._viz.addItem(start_target)
-        dest_target = gl.GLScatterPlotItem(
-            pos=np.array([stop]), color=(0, 255, 0, 255), size=self.voxel_size, pxMode=False
-        )
-        self._displayed_objects.append(dest_target)
-        self._viz.addItem(dest_target)
+        cls._displayed_objects.append(start_target)
+        cls._viz.addItem(start_target)
+        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 255, 0, 255), size=voxel_size, pxMode=False)
+        cls._displayed_objects.append(dest_target)
+        cls._viz.addItem(dest_target)
 
-        if self._path_line is None:
-            self._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(255, 0, 0, 255), width=1)
-            self._viz.addItem(self._path_line)
-        self._path_line.setData(pos=np.array([start, stop]))
+        cls._path_line.setData(pos=np.array([start, stop]))
 
-    def add_geometry_mesh(self, geometry: Geometry, to_global: Transform):
+    @classmethod
+    def add_geometry_mesh(cls, geometry: Geometry, to_global: Transform):
         mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
         if geometry.color is None:
             color = (255, 0, 0, 255)
@@ -439,21 +441,18 @@ class GeometryMotionPlanner:
             color = np.array(geometry.color) * 255
         m = gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
         m.setTransform((to_global * geometry.transform).as_pyqtgraph())
-        self._displayed_objects.append(m)
-        self._viz.addItem(m)
+        cls._displayed_objects.append(m)
+        cls._viz.addItem(m)
 
-    def add_voxels(self, voxels: Volume, to_global: Transform):
+    @classmethod
+    def add_voxels(cls, voxels: Volume, to_global: Transform):
         vol = np.zeros(voxels.volume.T.shape + (4,), dtype=np.ubyte)
         vol[..., :3] = (10, 10, 30)
         vol[..., 3] = voxels.volume.T * 20
         v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
         v.setTransform((to_global * voxels.transform).as_pyqtgraph())
-        self._displayed_objects.append(v)
-        self._viz.addItem(v)
-
-    def add_obstacle(self, obstacle: Volume, from_obst_to_global):
-        # already in global coordinates
-        self.add_voxels(obstacle, from_obst_to_global)
+        cls._displayed_objects.append(v)
+        cls._viz.addItem(v)
 
 
 @numba.jit(nopython=True)
@@ -789,9 +788,7 @@ class Geometry:
         return dict(from_cs=self.name, to_cs=self.parent_name)
 
     def make_convolved_voxels(self, other, to_self_from_other, voxel_size):
-        to_self_mesh_from_other_mesh = (
-                self.transform.inverse * to_self_from_other * other.transform
-        )
+        to_self_mesh_from_other_mesh = self.transform.inverse * to_self_from_other * other.transform
         xformed = other.transformed_to(self.transform, to_self_mesh_from_other_mesh)
         xformed_voxels = xformed.voxel_template(voxel_size)
         # TODO this is adding a scale=-1, but none of the transforms reflect this
