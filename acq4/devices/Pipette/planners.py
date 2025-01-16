@@ -249,9 +249,18 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
     def safePath(self, globalStart, globalStop, speed, explanation=None):
         self._cachePrimer.wait()
         planner, from_pip_to_global = self._getPlanningContext()
-        path = planner.find_path(self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop)
+        path = planner.find_path(
+            self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, self.pip.getBoundaries()
+        )
         if path is None:
-            planner.find_path(self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, visualize=True)
+            planner.find_path(
+                self.pip.getGeometries()[0],
+                from_pip_to_global,
+                globalStart,
+                globalStop,
+                self.pip.getBoundaries(),
+                visualize=True,
+            )
             raise HelpfulException("No safe path found; see visualization for details.")
         if len(path) == 0:
             return [(globalStop, speed, False, explanation)]

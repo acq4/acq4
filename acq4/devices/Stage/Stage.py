@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import itertools
 import threading
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 
@@ -15,6 +16,7 @@ from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from ... import getManager
 from ...util.future import Future, FutureButton
+from ...util.geometry import Plane
 
 
 class Stage(Device, OptomechDevice):
@@ -537,6 +539,23 @@ class Stage(Device, OptomechDevice):
         """Return a list the (min, max) position limits for each axis.
         """
         return self._limits[:]
+
+    def getBoundaries(self) -> List[Plane]:
+        """Return the boundaries of the stage in global coordinates."""
+        if len(self.axes()) != 3:
+            raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
+        if None in [m for ax in self.getLimits() for m in ax]:
+            return []
+        limits: List[tuple[float | None, float | None]] = self.getLimits()  # min, max
+        xform = self.axisTransform()
+        planes = []
+        for axis, i in itertools.product(range(len(limits)), range(2)):
+            normal = np.zeros(3)
+            normal[axis] = 1 if i == 0 else -1
+            normal = xform.map(normal)
+            point = xform.map(np.array([ax[i] for ax in limits]))  # any point on the plane
+            planes.append(Plane(normal, point))
+        return planes
 
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")

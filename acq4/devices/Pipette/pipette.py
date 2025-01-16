@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 
 import json
@@ -19,6 +21,7 @@ from pyqtgraph import Point
 from .planners import defaultMotionPlanners, GeometryAwarePathGenerator
 from .tracker import PipetteTracker
 from ..RecordingChamber import RecordingChamber
+from ...util.geometry import Plane
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -143,6 +146,10 @@ class Pipette(Device, OptomechDevice):
             defaults.update(self.config["geometry"])
             self.config["geometry"] = defaults
         return super().getGeometries()
+
+    def getBoundaries(self) -> List[Plane]:
+        return [Plane(self._solveMyGlobalPosition(p.normal), self._solveMyGlobalPosition(p.point))
+                for p in self.parentDevice().getBoundaries()]
 
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
@@ -527,6 +534,12 @@ class Pipette(Device, OptomechDevice):
         stage = self.parentDevice()
         spos = np.asarray(stage.globalPosition())
         return spos + dif
+
+    def _solveMyGlobalPosition(self, pos):
+        """Return the global position of the pipette tip when the stage is at the given global position.
+        """
+        dif = np.asarray(pos) - np.asarray(self.parentDevice().globalPosition())
+        return np.asarray(self.globalPosition()) + dif
 
     def _moveToLocal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in local coordinates.
