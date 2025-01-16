@@ -238,7 +238,7 @@ def a_star_ish(
                 obstacles.setdefault(obstacle, 0)
                 obstacles[obstacle] += 1
             tentative_g_score = g_score[curr_key] + this_cost
-            if neigh_key not in g_score or tentative_g_score < g_score[neigh_key]:
+            if neigh_key not in g_score or tentative_g_score < g_score[neigh_key] or np.all(neighbor == finish):
                 came_from[neigh_key] = curr_key
                 g_score[neigh_key] = tentative_g_score
                 f_score[neigh_key] = tentative_g_score + 2 * heuristic(neighbor, finish)
@@ -412,7 +412,7 @@ class GeometryMotionPlanner:
     def initialize_visualization(cls, traveling_object, to_global_from_traveler, start, stop, voxel_size):
         if cls._viz is None:
             cls._viz = gl.GLViewWidget()
-            cls._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(255, 0, 0, 255), width=1)
+            cls._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
             cls._viz.addItem(cls._path_line)
         else:
             for disp in cls._displayed_objects:
@@ -429,11 +429,11 @@ class GeometryMotionPlanner:
         cls.add_geometry_mesh(traveling_object, to_global_from_traveler)
 
         start_target = gl.GLScatterPlotItem(
-            pos=np.array([start]), color=(0, 0, 255, 255), size=voxel_size, pxMode=False
+            pos=np.array([start]), color=(0, 0, 1, 1), size=voxel_size, pxMode=False
         )
         cls._displayed_objects.append(start_target)
         cls._viz.addItem(start_target)
-        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 255, 0, 255), size=voxel_size, pxMode=False)
+        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size, pxMode=False)
         cls._displayed_objects.append(dest_target)
         cls._viz.addItem(dest_target)
 
@@ -443,9 +443,9 @@ class GeometryMotionPlanner:
     def add_geometry_mesh(cls, geometry: Geometry, to_global: Transform):
         mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
         if geometry.color is None:
-            color = (255, 0, 0, 255)
+            color = (1, 0, 0, 1)
         else:
-            color = np.array(geometry.color) * 255
+            color = np.array(geometry.color)
         m = gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
         m.setTransform((to_global * geometry.transform).as_pyqtgraph())
         cls._displayed_objects.append(m)
@@ -455,7 +455,7 @@ class GeometryMotionPlanner:
     def add_voxels(cls, voxels: Volume, to_global: Transform):
         vol = np.zeros(voxels.volume.T.shape + (4,), dtype=np.ubyte)
         vol[..., :3] = (10, 10, 30)
-        vol[..., 3] = voxels.volume.T * 20
+        vol[..., 3] = voxels.volume.T * 5
         v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
         v.setTransform((to_global * voxels.transform).as_pyqtgraph())
         cls._displayed_objects.append(v)
