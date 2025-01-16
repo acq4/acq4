@@ -547,7 +547,7 @@ class Stage(Device, OptomechDevice):
         if None in [m for ax in self.getLimits() for m in ax]:
             return []
         limits: List[tuple[float | None, float | None]] = self.getLimits()  # min, max
-        xform = self.axisTransform()
+        xform = self._baseTrasnform() * self.axisTransform()
         planes = []
         for axis, i in itertools.product(range(len(limits)), range(2)):
             normal = np.zeros(3)

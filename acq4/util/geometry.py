@@ -210,7 +210,6 @@ def a_star_ish(
         count = 10
 
         def neighbors(pt):
-            # TODO this could be used to restrict points to above the tissue and inside the traveler's range of motion, too
             points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.2)
             points += pt
             return np.vstack((points, finish))
@@ -247,7 +246,11 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
-    print("worst obstacle:", max(obstacles.items(), key=lambda x: x[1])[0].transform.systems[0])
+    worst = max(obstacles.items(), key=lambda x: x[1])
+    if isinstance(worst[0], Volume):
+        print("worst obstacle:", worst[0].transform.systems[0])
+    else:
+        print(f"worst obstacle: {worst}")
     return None
 
 
@@ -390,8 +393,8 @@ class GeometryMotionPlanner:
             for bound in bounds:
                 if bound.line_intersects(a, b):
                     return np.inf, bound
-            for obj, to_global_from_obst in obstacles:
-                if obj.intersects_line(to_global_from_obst.inverse.map(a), to_global_from_obst.inverse.map(b)):
+            for obj, to_global in obstacles:
+                if obj.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
                     return np.inf, obj
             return np.linalg.norm(b - a), None
 
@@ -428,9 +431,7 @@ class GeometryMotionPlanner:
 
         cls.add_geometry_mesh(traveling_object, to_global_from_traveler)
 
-        start_target = gl.GLScatterPlotItem(
-            pos=np.array([start]), color=(0, 0, 1, 1), size=voxel_size, pxMode=False
-        )
+        start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 1, 1), size=voxel_size, pxMode=False)
         cls._displayed_objects.append(start_target)
         cls._viz.addItem(start_target)
         dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size, pxMode=False)
@@ -821,6 +822,19 @@ class Plane:
             return False
         t = np.dot(self.normal, self.point - start) / denom
         return 0 <= t <= 1
+
+    @property
+    def coefficients(self):
+        a, b, c = self.normal
+        d = -np.dot(self.normal, self.point)
+        return a, b, c, d
+
+    def __str__(self):
+        a, b, c, d = self.coefficients
+        return f"Plane({a}x + {b}y + {c}z + {d} = 0)"
+
+    def __repr__(self):
+        return str(self)
 
 
 class Visual(Qt.QObject):
