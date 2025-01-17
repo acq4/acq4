@@ -11,6 +11,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
+from coorx import AffineTransform
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
@@ -547,12 +548,14 @@ class Stage(Device, OptomechDevice):
         if None in [m for ax in self.getLimits() for m in ax]:
             return []
         limits = self.getLimits()  # min, max
-        xform = pg.SRTTransform3D(self._baseTransform * self.axisTransform())
+        xform = self._baseTransform * self.axisTransform()
+        xform = np.array(xform.copyDataTo()).reshape(4, 4)
+        xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
         planes = []
         for axis, i in itertools.product(range(len(limits)), range(2)):
             normal = np.zeros(3)
             normal[axis] = 1 if i == 0 else -1
-            normal = xform.map(normal)
+            normal = xform.map(normal) - xform.map(np.zeros(3))
             point = xform.map(np.array([ax[i] for ax in limits]))  # any point on the plane
             planes.append(Plane(normal, point))
         return planes

@@ -7,14 +7,26 @@ from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, L
 from coorx import NullTransform, TTransform, Point, SRT3DTransform
 
 
+@pytest.fixture(autouse=True)
+def setup():
+    GeometryMotionPlanner.clear_cache()
+
+
 @pytest.fixture
 def geometry():
     return Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
 
 
-@pytest.fixture(autouse=True)
-def setup():
-    GeometryMotionPlanner.clear_cache()
+@pytest.fixture
+def cube():
+    return [
+        Plane(np.array([1, 0, 0]), np.array([0, 0, 0])),
+        Plane(np.array([0, 1, 0]), np.array([0, 0, 0])),
+        Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
+        Plane(np.array([1, 0, 0]), np.array([1, 1, 1])),
+        Plane(np.array([0, 1, 0]), np.array([1, 1, 1])),
+        Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
+    ]
 
 
 def test_mesh(geometry):
@@ -256,7 +268,7 @@ def test_path_with_funner_traveler(geometry, viz=False):
     assert not np.all(path[0] == dest)
 
 
-def test_bounds_prevent_path(geometry, viz=False):
+def test_bounds_prevent_path(geometry, cube, viz=False):
     voxel_size = 0.1
     traveler = Geometry(
         {
@@ -270,10 +282,9 @@ def test_bounds_prevent_path(geometry, viz=False):
     )
     start = Point(np.array([-0.4, -0.4, -1.2]), "global")
     dest = Point(np.array([0.2, 0.2, 3]), "global")
-    bound = Plane(np.array([0, 0, 1]), np.array([0, 0, 0]))
     planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
     path = planner.find_path(
-        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, [bound], visualize=viz
+        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, cube, visualize=viz
     )
     if viz:
         pg.exec()
@@ -391,15 +402,7 @@ def test_line_intersections():
     assert b.intersecting_point(a) is None
 
 
-def test_wireframe():
-    cube = [
-        Plane(np.array([1, 0, 0]), np.array([0, 0, 0])),
-        Plane(np.array([0, 1, 0]), np.array([0, 0, 0])),
-        Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
-        Plane(np.array([1, 0, 0]), np.array([1, 1, 1])),
-        Plane(np.array([0, 1, 0]), np.array([1, 1, 1])),
-        Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
-    ]
+def test_wireframe(cube):
     wireframe = Plane.wireframe(*cube)
     assert len(wireframe) == 12
     wireframe = np.array(wireframe)
