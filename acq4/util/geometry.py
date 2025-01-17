@@ -439,8 +439,8 @@ class GeometryMotionPlanner:
         dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size, pxMode=False)
         cls._displayed_objects.append(dest_target)
         cls._viz.addItem(dest_target)
-        for a, b in Plane.wireframe(bounds):
-            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=5)
+        for a, b in Plane.wireframe(*bounds):
+            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
             cls._viz.addItem(edge)
             cls._displayed_objects.append(edge)
 
