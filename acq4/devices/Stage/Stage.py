@@ -535,7 +535,7 @@ class Stage(Device, OptomechDevice):
         if len(changed) > 0:
             self.sigLimitsChanged.emit(changed)
 
-    def getLimits(self):
+    def getLimits(self) -> List[tuple[float | None, float | None]]:
         """Return a list the (min, max) position limits for each axis.
         """
         return self._limits[:]
@@ -546,7 +546,7 @@ class Stage(Device, OptomechDevice):
             raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
         if None in [m for ax in self.getLimits() for m in ax]:
             return []
-        limits: List[tuple[float | None, float | None]] = self.getLimits()  # min, max
+        limits = self.getLimits()  # min, max
         xform = self._baseTrasnform() * self.axisTransform()
         planes = []
         for axis, i in itertools.product(range(len(limits)), range(2)):
