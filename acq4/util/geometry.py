@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import time
 from copy import deepcopy
 from typing import List, Callable, Optional, Dict, Any, Generator
@@ -8,14 +9,15 @@ from xml.etree import ElementTree as ET
 import numba
 import numpy as np
 import trimesh
-from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
 from trimesh.voxel import VoxelGrid
 from vispy.scene import visuals
 from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
 import pyqtgraph.opengl as gl
 from acq4.util import Qt
+from acq4.util.approx import ApproxDict, ApproxSet
 from acq4.util.threadrun import runInGuiThread
+from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
 from pyqtgraph import SRTTransform3D, debug
 from pyqtgraph.units import µm
 
@@ -810,9 +812,239 @@ class Geometry:
         return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
 
 
+class Line:
+    def __init__(self, direction, point):
+        self.direction = direction / np.linalg.norm(direction)
+        if np.isnan(self.direction).any():
+            raise ValueError(f"Direction vector {direction} is invalid")
+        self.point = point
+
+    def __eq__(self, other: "Line") -> bool:
+        epsilon = 1e-12
+        cross_product = np.cross(self.direction, other.direction)
+        return (
+            np.linalg.norm(cross_product) < epsilon
+            and np.linalg.norm(np.cross(self.direction, other.point - self.point)) < epsilon
+        )
+
+    def intersecting_point(self, other: "Line", epsilon: float = 1e-12) -> np.ndarray | None:
+        """
+        Find the intersection point of two 3D lines, accounting for floating point precision.
+
+        Returns:
+            The closest point between the two lines, if that's within epsilon of the lines
+            intersecting. None, otherwise.
+        """
+        # return self._intersecting_point_chatgpt(other, epsilon)
+        # return self._intersecting_point_gru_1(other, epsilon)
+        # return self._intersecting_point_gru_2(other, epsilon)
+        return self._intersecting_point_claude_1(other, epsilon)
+        # return self._intersecting_point_claude_2(other, epsilon)
+
+    def _intersecting_point_chatgpt(self, other, epsilon):
+        # Cross product of the directions
+        cross_dir = np.cross(self.direction, other.direction)
+        cross_dir_norm = np.linalg.norm(cross_dir)
+
+        # Check if lines are parallel (cross product is near zero)
+        if cross_dir_norm < epsilon:
+            # Check if the lines are coincident
+            diff = other.point - self.point
+            if np.linalg.norm(np.cross(diff, self.direction)) < epsilon:
+                return self.point  # Lines are coincident, return any point on the line
+            else:
+                return None  # Lines are parallel but not coincident
+
+        # Solve for the closest points on each line
+        A = np.array([self.direction, -other.direction, cross_dir]).T
+        b = other.point - self.point
+        t = np.linalg.lstsq(A, b, rcond=None)[0]
+
+        # Calculate the points on each line
+        closest_point1 = self.point + t[0] * self.direction
+        closest_point2 = other.point + t[1] * other.direction
+
+        # Check if the closest points are the same (within tolerance)
+        if np.linalg.norm(closest_point1 - closest_point2) < epsilon:
+            return (closest_point1 + closest_point2) / 2  # Average point for stability
+        else:
+            return None  # Lines do not intersect
+
+    def _intersecting_point_gru_1(self, other, epsilon):
+        # Check if lines are parallel
+        cross_product = np.cross(self.direction, other.direction)
+        if np.linalg.norm(cross_product) < epsilon:
+            return None
+
+        # Vector between the two arbitrary points
+        w0 = self.point - other.point
+
+        # Matrix for the linear system
+        A = np.array(
+            [
+                [np.dot(self.direction, self.direction), -np.dot(self.direction, other.direction)],
+                [np.dot(self.direction, other.direction), -np.dot(other.direction, other.direction)],
+            ]
+        )
+
+        # Right-hand side
+        b = np.array([-np.dot(self.direction, w0), np.dot(other.direction, w0)])
+
+        try:
+            # Solve the linear system
+            t, s = np.linalg.solve(A, b)
+
+            # Calculate the closest points on the two lines
+            closest_point_self = self.point + t * self.direction
+            closest_point_other = other.point + s * other.direction
+
+            # Check if the distance between the closest points is within epsilon
+            if np.linalg.norm(closest_point_self - closest_point_other) < epsilon:
+                return (closest_point_self + closest_point_other) / 2
+        except np.linalg.LinAlgError:
+            return None
+
+        return None
+
+    def _intersecting_point_claude_1(self, other, epsilon):
+        # Check if lines are parallel
+        cross_product = np.cross(self.direction, other.direction)
+        if np.linalg.norm(cross_product) < epsilon:
+            if np.linalg.norm(np.cross(self.direction, other.point - self.point)) < epsilon:
+                return self.point
+            return None
+
+        w0 = self.point - other.point
+
+        # Coefficients for the system of equations
+        a = np.dot(self.direction, self.direction)
+        b = np.dot(self.direction, other.direction)
+        c = np.dot(other.direction, other.direction)
+        d = np.dot(self.direction, w0)
+        e = np.dot(other.direction, w0)
+
+        # Parameters for points of closest approach
+        denominator = a * c - b * b
+        if abs(denominator) < epsilon:
+            return None
+
+        sc = (b * e - c * d) / denominator
+        tc = (a * e - b * d) / denominator
+
+        # Find closest points on each line
+        closest_point1 = self.point + sc * self.direction
+        closest_point2 = other.point + tc * other.direction
+
+        # Calculate distance between lines
+        distance = np.linalg.norm(closest_point1 - closest_point2)
+
+        # If distance is within epsilon, lines intersect
+        if distance < epsilon:
+            return closest_point1
+        return None
+
+    def _intersecting_point_claude_2(self, other, epsilon):
+        # Check if lines are parallel
+        cross_product = np.cross(self.direction, other.direction)
+        if np.linalg.norm(cross_product) < epsilon:
+            return None
+
+        A = np.array([self.direction, -other.direction]).T
+        b = other.point - self.point
+
+        # because we only have 2 lines, solve has to be tried on each axial-projection
+        for ax in range(3):
+            try:
+                # Solve for parameters t and s
+                A_wo_axis = np.delete(A, ax, axis=0)
+                b_wo_axis = np.delete(b, ax)
+                v1, v2 = np.linalg.solve(A_wo_axis, b_wo_axis)
+            except np.linalg.LinAlgError:
+                if ax == 2:
+                    return None
+                continue
+
+            v = np.array([v1, v2, 0])
+            v[[ax, 2]] = v[[2, ax]]
+            intersection1 = self.point + v * self.direction
+            intersection2 = other.point + v * other.direction
+            break
+
+        # Check distance between supposed intersection points
+        distance = np.linalg.norm(intersection1 - intersection2)
+
+        if distance < epsilon:
+            return intersection1
+        return None
+
+    def _intersecting_point_gru_2(self, other, epsilon):
+        cross_product = np.cross(self.direction, other.direction)
+        cross_norm = np.linalg.norm(cross_product)
+        if cross_norm < epsilon:
+            # Check if the lines are coincident
+            if np.linalg.norm(np.cross(self.direction, other.point - self.point)) < epsilon:
+                return self.point  # Arbitrarily return one point on the coincident lines
+            return None  # Lines are parallel but not coincident
+
+        # Calculate the closest points on each line
+        w0 = self.point - other.point
+        a = np.dot(self.direction, self.direction)
+        b = np.dot(self.direction, other.direction)
+        c = np.dot(other.direction, other.direction)
+        d = np.dot(self.direction, w0)
+        e = np.dot(other.direction, w0)
+
+        denom = a * c - b * b
+        if abs(denom) < epsilon:
+            return None  # Lines are nearly parallel
+
+        # Calculate the parameters for the closest points
+        s = (b * e - c * d) / denom
+        t = (a * e - b * d) / denom
+
+        # Closest points on the lines
+        closest_point_self = self.point + s * self.direction
+        closest_point_other = other.point + t * other.direction
+
+        # Check if the closest points are within epsilon distance
+        if np.linalg.norm(closest_point_self - closest_point_other) < epsilon:
+            return (closest_point_self + closest_point_other) / 2  # Return the midpoint for numerical stability
+        return None
+
+    def __str__(self):
+        return f"Line({self.point} -> {self.point + self.direction})"
+
+    def __repr__(self):
+        return str(self)
+
+
 class Plane:
+    @classmethod
+    def wireframe(cls, *planes: "Plane") -> List[tuple[np.ndarray, np.ndarray]]:
+        """Given a set of intersecting planes, assumed to form a closed volume, make a
+        wireframe of that volume. Returns a list of segment endpoints."""
+        lines = []
+        segments = ApproxDict()
+        for i, plane in enumerate(planes):
+            for other in planes[i + 1 :]:
+                line = plane.intersecting_line(other)
+                if line is not None:
+                    lines.append(line)
+
+        for a, b, c in itertools.product(lines, lines, lines):
+            if a == b or b == c or a == c:
+                continue
+            if (start := a.intersecting_point(b)) is not None and (end := a.intersecting_point(c)) is not None:
+                if np.allclose(start, end):
+                    continue
+                start = tuple(start)
+                end = tuple(end)
+                if start not in segments.get(end, ApproxSet()):
+                    segments.setdefault(start, ApproxSet()).add(end)
+        return [(np.array(start), np.array(end)) for start, ends in segments.items() for end in ends]
+
     def __init__(self, normal, point):
-        self.normal = normal
+        self.normal = normal / np.linalg.norm(normal)
         self.point = point
 
     def line_intersects(self, start: np.ndarray, end: np.ndarray) -> bool:
@@ -822,6 +1054,28 @@ class Plane:
             return False
         t = np.dot(self.normal, self.point - start) / denom
         return 0 <= t <= 1
+
+    def intersecting_line(self, other: "Plane") -> Line | None:
+        direction = np.cross(self.normal, other.normal)
+        if np.allclose(direction, 0):
+            return None
+
+        # Normalize the direction vector
+        direction = direction / np.linalg.norm(direction)
+
+        # Calculate a point on the intersection line
+        n1n2 = np.dot(self.normal, other.normal)
+        n1n1 = np.dot(self.normal, self.normal)
+        n2n2 = np.dot(other.normal, other.normal)
+        c1 = np.dot(self.normal, self.point)
+        c2 = np.dot(other.normal, other.point)
+
+        det = n1n1 * n2n2 - n1n2 * n1n2
+        c1n2 = c1 * n2n2 - c2 * n1n2
+        c2n1 = c2 * n1n1 - c1 * n1n2
+
+        point = (c1n2 * self.normal + c2n1 * other.normal) / det
+        return Line(direction, point)
 
     @property
     def coefficients(self):

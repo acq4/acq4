@@ -1,11 +1,10 @@
 import numpy as np
 import pytest
-from coorx import NullTransform, TTransform, Point, SRT3DTransform
-from vispy import scene
 
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane
+from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line
+from coorx import NullTransform, TTransform, Point, SRT3DTransform
 
 
 @pytest.fixture
@@ -359,6 +358,77 @@ def test_no_path_because_of_offset_shadow(geometry, viz=False):
     if viz:
         pg.exec()
     assert path is None
+
+
+def assert_all_intersect_at(pt, *lines):
+    for a in lines:
+        for b in lines:
+            if a == b:
+                # point can be arbitrary
+                assert a.intersecting_point(b) is not None
+                assert b.intersecting_point(a) is not None
+            else:
+                assert np.allclose(x := a.intersecting_point(b), pt), f"{a} and {b} intersect at {x}, not {pt}"
+                assert np.allclose(x := b.intersecting_point(a), pt), f"{b} and {a} intersect at {x}, not {pt}"
+
+
+def test_line_intersections():
+    a = Line(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))
+
+    assert_all_intersect_at(
+        np.array([0.0, 0.0, 0.0]),
+        a,
+        Line(np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 0.0])),
+        Line(np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 0.0])),
+        Line(np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 10.0])),
+        Line(np.array([0.0, 0.0, -1.0]), np.array([0.0, 0.0, 10.0])),
+        Line(np.array([0.0, -1.0, 1.0]), np.array([0.0, 1.0, -1.0])),
+        Line(np.array([1.0, 1.0, 1.0]), np.array([3.14159, 3.14159, 3.14159])),
+    )
+
+    b = Line(np.array([0.0, 1.0, 0.0]), np.array([1.0, 1.0, 1.0]))
+    assert a.intersecting_point(b) is None
+    assert b.intersecting_point(a) is None
+
+
+def test_wireframe():
+    cube = [
+        Plane(np.array([1, 0, 0]), np.array([0, 0, 0])),
+        Plane(np.array([0, 1, 0]), np.array([0, 0, 0])),
+        Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
+        Plane(np.array([1, 0, 0]), np.array([1, 1, 1])),
+        Plane(np.array([0, 1, 0]), np.array([1, 1, 1])),
+        Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
+    ]
+    wireframe = Plane.wireframe(*cube)
+    assert len(wireframe) == 12
+    wireframe = np.array(wireframe)
+    assert wireframe.shape == (12, 2, 3)
+
+    assert np.any(np.all(wireframe == np.array([[0, 0, 0], [1, 0, 0]]), axis=1))
+    assert np.any(np.all(wireframe == np.array([[0, 0, 0], [0, 1, 0]]), axis=1))
+    assert np.any(np.all(wireframe == np.array([[0, 0, 0], [0, 0, 1]]), axis=1))
+    assert np.any(np.all(wireframe == np.array([[1, 1, 1], [0, 1, 1]]), axis=1))
+    assert np.any(np.all(wireframe == np.array([[1, 1, 1], [1, 0, 1]]), axis=1))
+    assert np.any(np.all(wireframe == np.array([[1, 1, 1], [1, 1, 0]]), axis=1))
+
+
+def test_wireframe_rhomboid():
+    rhomboid = [
+        Plane(np.array([1, 0, 1]), np.array([0, 0, 0])),
+        Plane(np.array([0, 1, 1]), np.array([0, 0, 0])),
+        Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
+        Plane(np.array([1, 0, 1]), np.array([1, 1, 1])),
+        Plane(np.array([0, 1, 1]), np.array([1, 1, 1])),
+        Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
+    ]
+    wireframe = Plane.wireframe(*rhomboid)
+    assert len(wireframe) == 12
+    wireframe = np.array(wireframe)
+    assert wireframe.shape == (12, 2, 3)
+
+    assert np.any(np.all(wireframe == np.array([[-1, 0, 0], [1, 0, 0]]), axis=1))
+    assert np.any(np.all(wireframe == np.array([[1, 1, 1], [0, 1, 0]]), axis=1))
 
 
 draw_n = 0
