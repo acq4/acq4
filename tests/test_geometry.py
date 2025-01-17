@@ -413,6 +413,37 @@ def test_wireframe():
     assert np.any(np.all(wireframe == np.array([[1, 1, 1], [1, 1, 0]]), axis=1))
 
 
+def test_wireframe_acq4():
+    bounds = [
+        Plane(
+            np.array([9.99999971e-01, -2.41127827e-04, -4.41750099e-07]),
+            np.array([0.00012748, -0.00034118, -0.00010044]),
+        ),
+        Plane(
+            np.array([-9.99999971e-01, -2.41237557e-04, -4.41951126e-07]),
+            np.array([0.14022748, 0.13975882, 0.13999956]),
+        ),
+        Plane(
+            np.array([2.27538386e-04, 9.99999974e-01, -4.41957183e-07]),
+            np.array([0.00012748, -0.00034118, -0.00010044]),
+        ),
+        Plane(
+            np.array([2.27428656e-04, -9.99999974e-01, -4.41744050e-07]), np.array([0.14022748, 0.13975882, 0.13999956])
+        ),
+        Plane(
+            np.array([2.27483601e-04, -2.41182780e-04, 9.99999945e-01]),
+            np.array([0.00012748, -0.00034118, -0.00010044]),
+        ),
+        Plane(
+            np.array([2.27483400e-04, -2.41182566e-04, -9.99999945e-01]), np.array([0.14022748, 0.13975882, 0.13999956])
+        ),
+    ]
+    wireframe = Plane.wireframe(*bounds)
+    assert len(wireframe) == 12
+    wireframe = np.array(wireframe)
+    assert wireframe.shape == (12, 2, 3)
+
+
 def test_wireframe_rhomboid():
     rhomboid = [
         Plane(np.array([1, 0, 1]), np.array([0, 0, 0])),

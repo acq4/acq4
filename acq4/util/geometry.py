@@ -363,7 +363,7 @@ class GeometryMotionPlanner:
                     app.processEvents()
 
             runInGuiThread(
-                self.initialize_visualization, traveler, to_global_from_traveler, start, stop, self.voxel_size
+                self.initialize_visualization, traveler, to_global_from_traveler, start, stop, self.voxel_size, bounds
             )
         profile = debug.Profiler()
         obstacles = []
@@ -414,7 +414,7 @@ class GeometryMotionPlanner:
         return path[1:]
 
     @classmethod
-    def initialize_visualization(cls, traveling_object, to_global_from_traveler, start, stop, voxel_size):
+    def initialize_visualization(cls, traveling_object, to_global_from_traveler, start, stop, voxel_size, bounds):
         if cls._viz is None:
             cls._viz = gl.GLViewWidget()
             cls._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
@@ -439,6 +439,10 @@ class GeometryMotionPlanner:
         dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size, pxMode=False)
         cls._displayed_objects.append(dest_target)
         cls._viz.addItem(dest_target)
+        for a, b in Plane.wireframe(bounds):
+            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=5)
+            cls._viz.addItem(edge)
+            cls._displayed_objects.append(edge)
 
         cls._path_line.setData(pos=np.array([start, stop]))
 
