@@ -1,5 +1,6 @@
-from vispy import scene
-from vispy.scene import visuals
+import numpy as np
+
+from pyqtgraph import opengl as gl
 
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -28,7 +29,6 @@ class Visualize3D(Module):
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
             self._win.add(dev)
-            # todo handle devices added or removed
 
 
 class MainWindow(Qt.QMainWindow):
@@ -37,39 +37,39 @@ class MainWindow(Qt.QMainWindow):
         self.setWindowTitle("3D Visualization with VisPy")
         self.setGeometry(100, 100, 800, 600)
 
-        self.canvas = scene.SceneCanvas(keys="interactive", show=True)
-        self.setCentralWidget(self.canvas.native)
-
-        self.view = self.canvas.central_widget.add_view()
-        self.view.camera = "turntable"
-
-        grid = visuals.GridLines()
-        self.view.add(grid)
-
-        self.axis = visuals.XYZAxis(parent=self.view.scene)
-        self.axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
+        self.view = gl.GLViewWidget()
+        self.setCentralWidget(self.view)
+        self.view.setCameraPosition(distance=2)
+        grid = gl.GLGridItem()
+        grid.scale(1, 1, 1)
+        self.view.addItem(grid)
 
         self._geometries = {}
 
     def clear(self):
-        for dev, geoms in self._geometries.items():
-            for geom in geoms:
-                geom.mesh.parent = None
+        for dev in self._geometries:
+            self._geometries[dev]["mesh"].parent = None
         self._geometries = {}
 
     def add(self, dev: OptomechDevice):
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
-        for geom in dev.getGeometries():
-            for shape in geom.visuals():
-                # TODO this probably needs to be handled by the device
-                self._geometries.setdefault(dev, []).append(shape)
-                if shape.mesh.parent is None:
-                    dev.sigGlobalTransformChanged.connect(shape.handleTransformUpdate)
-                    shape.handleTransformUpdate(dev, dev)
-                    self.view.add(shape.mesh)
+        if (geom := dev.getGeometry()) is not None:
+            self._geometries.setdefault(dev, {})["geom"] = geom
+            mesh = geom.glMesh()
+            self.view.addItem(mesh)
+            self._geometries[dev]["mesh"] = mesh
+
+            dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
+            self.handleTransformUpdate(dev, dev)
+
+    def handleTransformUpdate(self, _, dev: Device):
+        if dev in self._geometries:
+            geom = self._geometries[dev]["geom"]
+            xform = dev.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
+            self._geometries[dev]["mesh"].setTransform(xform)
 
     def handleGeometryChange(self, dev: Device):
-        for geom in self._geometries.get(dev, []):
-            geom.mesh.parent = None
-        self._geometries[dev] = []
+        if dev in self._geometries:
+            self._geometries[dev]["mesh"].parent = None
+        del self._geometries[dev]
         self.add(dev)

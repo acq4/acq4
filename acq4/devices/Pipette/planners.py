@@ -218,7 +218,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             # TODO the sample surface needs to be included
             if dev == self.pip:
                 continue
-            for geom in dev.getGeometries():
+            geom = dev.getGeometry()
+            if geom is not None:
                 pg_xform = pg.SRTTransform3D(dev.globalPhysicalTransform())
                 physical_xform = SRT3DTransform(
                     offset=pg_xform.getTranslation(),
@@ -244,17 +245,17 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
     @future_wrap
     def _primeCaches(self, _future):
         planner, from_pip_to_global = self._getPlanningContext()
-        planner.find_path(self.pip.getGeometries()[0], from_pip_to_global, (0, 0, 0), (1e-6, 1e-6, 1e-6))
+        planner.find_path(self.pip.getGeometry()[0], from_pip_to_global, (0, 0, 0), (1e-6, 1e-6, 1e-6))
 
     def safePath(self, globalStart, globalStop, speed, explanation=None):
         self._cachePrimer.wait()
         planner, from_pip_to_global = self._getPlanningContext()
         path = planner.find_path(
-            self.pip.getGeometries()[0], from_pip_to_global, globalStart, globalStop, self.pip.getBoundaries()
+            self.pip.getGeometry()[0], from_pip_to_global, globalStart, globalStop, self.pip.getBoundaries()
         )
         if path is None:
             planner.find_path(
-                self.pip.getGeometries()[0],
+                self.pip.getGeometry()[0],
                 from_pip_to_global,
                 globalStart,
                 globalStop,

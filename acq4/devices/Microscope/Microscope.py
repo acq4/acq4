@@ -362,10 +362,10 @@ class Objective(Device, OptomechDevice):
         if 'scale' in config:
             self.setScale(config['scale'])
 
-    def getGeometries(self):
+    def getGeometry(self):
         if self._scope.currentObjective == self:
-            return super().getGeometries()
-        return []
+            return super().getGeometry()
+        return None
 
     def deviceTransform(self, subdev=None):
         return pg.SRTTransform3D(super().deviceTransform(subdev))

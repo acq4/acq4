@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import itertools
 import time
-from copy import deepcopy
 from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
 
@@ -10,8 +9,6 @@ import numba
 import numpy as np
 import trimesh
 from trimesh.voxel import VoxelGrid
-from vispy.scene import visuals
-from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
@@ -19,7 +16,7 @@ from acq4.util import Qt
 from acq4.util.approx import ApproxDict, ApproxSet
 from acq4.util.threadrun import runInGuiThread
 from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
-from pyqtgraph import SRTTransform3D, debug
+from pyqtgraph import debug
 from pyqtgraph.units import µm
 
 
@@ -658,6 +655,14 @@ class Geometry:
                 kid.apply_transform(child.transform.full_matrix)
                 self._total_mesh += kid
         return self._total_mesh
+
+    def glMesh(self) -> gl.GLMeshItem:
+        mesh = gl.MeshData(vertexes=self.mesh.vertices, faces=self.mesh.faces)
+        if self.color is None:
+            color = (1, 1, 1, 1)
+        else:
+            color = np.array(self.color)
+        return gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
 
     @property
     def transform(self):
