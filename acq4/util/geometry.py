@@ -13,6 +13,7 @@ from trimesh.voxel import VoxelGrid
 from vispy.scene import visuals
 from vispy.visuals.transforms import MatrixTransform, ChainTransform
 
+import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from acq4.util import Qt
 from acq4.util.approx import ApproxDict, ApproxSet
@@ -460,13 +461,14 @@ class GeometryMotionPlanner:
 
     @classmethod
     def add_voxels(cls, voxels: Volume, to_global: Transform):
-        vol = np.zeros(voxels.volume.T.shape + (4,), dtype=np.ubyte)
-        vol[..., :3] = (10, 10, 30)
-        vol[..., 3] = voxels.volume.T * 5
-        v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
-        v.setTransform((to_global * voxels.transform).as_pyqtgraph())
-        cls._displayed_objects.append(v)
-        cls._viz.addItem(v)
+        verts, faces = pg.isosurface(np.ascontiguousarray(voxels.volume.T.astype(int)), 1)
+        mesh = gl.MeshData(vertexes=verts, faces=faces)
+        m = gl.GLMeshItem(
+            meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
+        )
+        m.setTransform((to_global * voxels.transform).as_pyqtgraph())
+        cls._displayed_objects.append(m)
+        cls._viz.addItem(m)
 
 
 @numba.jit(nopython=True)
