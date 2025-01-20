@@ -11,15 +11,23 @@ class Visualize3D(Module):
     moduleDisplayName = "3D Visualization"
     moduleCategory = "Utilities"
 
+    _win = None
+
+    @classmethod
+    def openWindow(cls):
+        if cls._win is None:
+            cls._win = MainWindow()
+        cls._win.clear()
+        cls._win.show()
+
     def __init__(self, manager, name: str, config: dict):
         super().__init__(manager, name, config)
         self.gridlines = None
         self.truncated_cone = None
-        self.win = MainWindow()
-        self.win.show()
+        self.openWindow()
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
-            self.win.add(dev)
+            self._win.add(dev)
             # todo handle devices added or removed
 
 
@@ -41,6 +49,12 @@ class MainWindow(Qt.QMainWindow):
         self.axis = visuals.XYZAxis(parent=self.view.scene)
         self.axis.set_transform("st", scale=(10e-3, 10e-3, 10e-3))
 
+        self._geometries = {}
+
+    def clear(self):
+        for dev, geoms in self._geometries.items():
+            for geom in geoms:
+                geom.mesh.parent = None
         self._geometries = {}
 
     def add(self, dev: OptomechDevice):
