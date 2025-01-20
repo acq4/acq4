@@ -686,34 +686,6 @@ class Geometry:
         # TODO this voxel grid might add a 1-voxel offset that the xform doesn't account for
         return Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
 
-    def visuals(self) -> list:
-        """Return a 3D model to be displayed in the 3D visualization window."""
-
-        if isinstance(self._config, str):
-            return self._urdf_visuals()
-        elif self._config is not None:
-            args = deepcopy(self._config)
-            args.pop("children", {})
-            args.setdefault("name", "geometry")
-            objects = []
-            parent = None
-            if "type" in args:
-                parent = _VISUALS[args.pop("type")](**args)
-                objects.append(parent)
-            for kid in self._children:
-                for kid_viz in kid.visuals():
-                    if parent is not None:
-                        kid_viz.mesh.parent = parent.mesh
-                    objects.append(kid_viz)
-            return objects
-        elif self.mesh is not None:
-            vertices = self.mesh.vertices
-            faces = self.mesh.faces
-            mesh = visuals.Mesh(vertices=vertices, faces=faces, color=self.color, shading="smooth")
-            mesh.transform = self.transform.as_vispy()
-            return [mesh]
-        return []
-
     def _urdf_visuals(self):
         from pymp import Planner
         import hppfcl
@@ -960,66 +932,3 @@ class Plane:
 
     def __repr__(self):
         return str(self)
-
-
-class Visual(Qt.QObject):
-    def __init__(self, transform=None):
-        super().__init__()
-        self.drawingTransform = MatrixTransform(SRTTransform3D(transform).matrix().T)
-        self._deviceTransform = MatrixTransform()  # will be the global transform of the device
-
-    def handleTransformUpdate(self, dev, _):
-        self.setDeviceTransform(dev.globalPhysicalTransform())
-
-    def setDeviceTransform(self, xform):
-        self._deviceTransform.matrix = SRTTransform3D(xform).matrix().T
-
-
-class BoxVisual(Visual):
-    def __init__(self, name: str, size: tuple, color=(1, 0.7, 0.1, 0.4), transform=None):
-        super().__init__(transform)
-
-        self.mesh = visuals.Box(
-            width=size[0],
-            height=size[1],
-            depth=size[2],
-            color=color,
-            edge_color=(0, 0, 0, 1),
-        )
-        self.mesh.transform = ChainTransform(self._deviceTransform, self.drawingTransform)
-
-
-class TruncatedConeVisual(Visual):
-    def __init__(
-        self,
-        name: str,
-        color=(1, 0.7, 0.1, 0.4),
-        transform=None,
-        **kwargs,
-    ):
-        super().__init__(transform)
-
-        vertices, faces = truncated_cone(**kwargs)
-        self.mesh = visuals.Mesh(vertices=vertices, faces=faces, color=color, shading="smooth")
-        self.mesh.transform = ChainTransform(self._deviceTransform, self.drawingTransform)
-
-
-class CylinderVisual(TruncatedConeVisual):
-    def __init__(self, name: str, color=(1, 0.7, 0.1, 0.4), radius=None, transform=None, **kwargs):
-        kwargs["top_radius"] = radius
-        kwargs["bottom_radius"] = radius
-        super().__init__(name, color, transform, **kwargs)
-
-
-_VISUALS = {
-    "box": BoxVisual,
-    "cone": TruncatedConeVisual,
-    "cylinder": CylinderVisual,
-}
-_CONTROL_ARGS = (
-    {"type"}
-    | set(truncated_cone.__code__.co_varnames)
-    | set(BoxVisual.__init__.__code__.co_varnames)
-    | set(CylinderVisual.__init__.__code__.co_varnames)
-    | set(TruncatedConeVisual.__init__.__code__.co_varnames)
-)
