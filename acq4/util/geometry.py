@@ -198,8 +198,9 @@ def a_star_ish(
     neighbors=None,
     max_cost=4000,
     callback=None,
-):
-    """Run the A* algorithm to find the shortest path between *start* and *finish*."""
+) -> tuple[List[np.ndarray] | None, str | None]:
+    """Run the A* algorithm to find the shortest path between *start* and *finish*. Return the path or None and the
+    barrier that prevented the path or None."""
     if heuristic is None:
 
         def heuristic(x, y):
@@ -221,16 +222,22 @@ def a_star_ish(
     obstacles = {}
     cost = 0
 
+    def worst() -> str:
+        offender = max(obstacles.items(), key=lambda x: x[1])
+        if isinstance(offender[0], Volume):
+            return str(offender[0].transform.systems[0])
+        return str(offender[0])
+
     while open_set:
         curr_key = min(open_set, key=lambda x: f_score[x])
         current = open_set.pop(curr_key)
         if np.all(current == finish):
-            return reconstruct_path(came_from, curr_key)
+            return reconstruct_path(came_from, curr_key), None
 
         for neighbor in neighbors(current):
             cost += 1
             if cost > max_cost:
-                return None
+                return None, worst()
             neigh_key = tuple(neighbor)
             this_cost, obstacle = edge_cost(current, neighbor)
             if this_cost == np.inf:
@@ -246,12 +253,7 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
-    worst = max(obstacles.items(), key=lambda x: x[1])
-    if isinstance(worst[0], Volume):
-        print("worst obstacle:", worst[0].transform.systems[0])
-    else:
-        print(f"worst obstacle: {worst}")
-    return None
+    return None, worst()
 
 
 def simplify_path(path, edge_cost: Callable):
@@ -290,6 +292,7 @@ class GeometryMotionPlanner:
         self._draw_n = 0
         self.geometries = geometries
         self.voxel_size = voxel_size
+        self._primary_barrier = None
 
     def find_path(
         self,
@@ -344,6 +347,8 @@ class GeometryMotionPlanner:
         stop = np.array(stop)
         bounds = [] if bounds is None else bounds
         if visualizer is not None:
+            if callback is None:
+                callback = visualizer.updatePath
             visualizer.startPath(start, stop, self.voxel_size, bounds)
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
@@ -379,7 +384,7 @@ class GeometryMotionPlanner:
                     return np.inf, obj
             return np.linalg.norm(b - a), None
 
-        path = a_star_ish(start, stop, edge_cost, callback=callback)
+        path, self._primary_barrier = a_star_ish(start, stop, edge_cost, callback=callback)
         profile.mark("A*")
         if path is None:
             profile.finish()
@@ -391,6 +396,9 @@ class GeometryMotionPlanner:
             callback(path, skip=1)
         profile.finish()
         return path[1:]
+
+    def get_primary_barrier(self):
+        return self._primary_barrier
 
 
 @numba.jit(nopython=True)

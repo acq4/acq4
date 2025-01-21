@@ -1,3 +1,7 @@
+import queue
+import time
+from threading import Thread
+
 import numpy as np
 
 import pyqtgraph as pg
@@ -6,7 +10,7 @@ from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.geometry import Plane, Volume
 from acq4.util.threadrun import runInGuiThread
-from coorx import Transform
+from coorx import Transform, SRT3DTransform
 from pyqtgraph import opengl as gl
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 
@@ -38,6 +42,8 @@ class MainWindow(Qt.QMainWindow):
     pathStartSignal = Qt.pyqtSignal(object, object, float, list)
     newObstacleSignal = Qt.pyqtSignal(object, object)
     newDeviceSignal = Qt.pyqtSignal(object)
+    pathUpdateSignal = Qt.pyqtSignal(object, int)
+    focusEvent = Qt.pyqtSignal()
 
     def __init__(self):
         super().__init__(None)
@@ -46,13 +52,21 @@ class MainWindow(Qt.QMainWindow):
 
         self.view = gl.GLViewWidget()
         self.setCentralWidget(self.view)
-        self.view.setCameraPosition(distance=2)
+        self.view.setCameraPosition(distance=0.2)
         grid = gl.GLGridItem()
         grid.scale(1, 1, 1)
         self.view.addItem(grid)
+        axes = gl.GLAxisItem()
+        axes.setSize(0.1, 0.1, 0.1)
+        self.view.addItem(axes)
         self.pathStartSignal.connect(self._startPath)
         self.newObstacleSignal.connect(self._addObstacleVolumeOutline)
         self.newDeviceSignal.connect(self._addDevice)
+        self.pathUpdateSignal.connect(self._updatePath)
+        self.focusEvent.connect(self._focus)
+        self._pathUpdates = queue.Queue()
+        self._pathWatcherThread = Thread(target=self._watchForPathUpdates)
+        self._pathWatcherThread.start()
 
         self._geometries = {}
         self._path: dict[object, GLGraphicsItem] = {}
@@ -62,6 +76,13 @@ class MainWindow(Qt.QMainWindow):
             self._removeDevice(dev)
         self._geometries = {}
         self.removePath()
+
+    def focus(self):
+        self.focusEvent.emit()
+
+    def _focus(self):
+        self.activateWindow()
+        self.raise_()
 
     def addDevice(self, dev: OptomechDevice):
         self.newDeviceSignal.emit(dev)
@@ -93,7 +114,16 @@ class MainWindow(Qt.QMainWindow):
         if self._geometries.get(dev, {}).get("geom") is None:
             return
         geom = self._geometries[dev]["geom"]
-        xform = dev.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
+        pg_xform = pg.SRTTransform3D(dev.globalPhysicalTransform())
+        physical_xform = SRT3DTransform(
+            offset=pg_xform.getTranslation(),
+            scale=pg_xform.getScale(),
+            angle=pg_xform.getRotation()[0],
+            axis=pg_xform.getRotation()[1],
+            from_cs=dev.name(),
+            to_cs="global",
+        )
+        xform = (physical_xform * geom.transform).as_pyqtgraph()
         self._geometries[dev]["mesh"].setTransform(xform)
 
     def handleGeometryChange(self, dev: OptomechDevice):
@@ -136,6 +166,23 @@ class MainWindow(Qt.QMainWindow):
         m.setTransform((to_global * obstacle.transform).as_pyqtgraph())
         self.view.addItem(m)
         self._path[obstacle] = m
+
+    def updatePath(self, path, skip=4):
+        self._pathUpdates.put((path, skip))
+
+    def _watchForPathUpdates(self):
+        n_updates = 0
+        while True:
+            path, skip = self._pathUpdates.get()
+            n_updates += 1
+            if n_updates % skip == 0:
+                self.pathUpdateSignal.emit(path, skip)
+                time.sleep(0.02)
+
+    def _updatePath(self, path, skip):
+        if "path" not in self._path:
+            return
+        self._path["path"].setData(pos=path)
 
     def removePath(self):
         for viz in self._path.values():
