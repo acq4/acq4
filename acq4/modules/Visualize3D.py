@@ -1,37 +1,48 @@
+import numpy as np
+
+import pyqtgraph as pg
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.geometry import Plane, Volume
+from acq4.util.threadrun import runInGuiThread
+from coorx import Transform
 from pyqtgraph import opengl as gl
+from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 
 
 class Visualize3D(Module):
     moduleDisplayName = "3D Visualization"
     moduleCategory = "Utilities"
 
-    _win = None
+    win = None
 
     @classmethod
     def openWindow(cls):
-        if cls._win is None:
-            cls._win = MainWindow()
-        cls._win.clear()
-        cls._win.show()
+        if cls.win is None:
+            cls.win = MainWindow()
+        cls.win.clear()
+        cls.win.show()
 
     def __init__(self, manager, name: str, config: dict):
         super().__init__(manager, name, config)
         self.gridlines = None
         self.truncated_cone = None
-        self.openWindow()
+        runInGuiThread(self.openWindow)
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
-            self._win.addDevice(dev)
+            self.win.addDevice(dev)
 
 
 class MainWindow(Qt.QMainWindow):
+    pathStartSignal = Qt.pyqtSignal(object, object, float, list)
+    newObstacleSignal = Qt.pyqtSignal(object, object)
+    newDeviceSignal = Qt.pyqtSignal(object)
+
     def __init__(self):
         super().__init__(None)
         self.setWindowTitle("3D Visualization with VisPy")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(50, 50, 800, 600)
 
         self.view = gl.GLViewWidget()
         self.setCentralWidget(self.view)
@@ -39,15 +50,23 @@ class MainWindow(Qt.QMainWindow):
         grid = gl.GLGridItem()
         grid.scale(1, 1, 1)
         self.view.addItem(grid)
+        self.pathStartSignal.connect(self._startPath)
+        self.newObstacleSignal.connect(self._addObstacleVolumeOutline)
+        self.newDeviceSignal.connect(self._addDevice)
 
         self._geometries = {}
+        self._path: dict[object, GLGraphicsItem] = {}
 
     def clear(self):
         for dev in self._geometries:
             self._removeDevice(dev)
         self._geometries = {}
+        self.removePath()
 
     def addDevice(self, dev: OptomechDevice):
+        self.newDeviceSignal.emit(dev)
+
+    def _addDevice(self, dev: OptomechDevice):
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
         self._geometries.setdefault(dev, {})
         if (geom := dev.getGeometry()) is None:
@@ -81,3 +100,44 @@ class MainWindow(Qt.QMainWindow):
         self._removeDevice(dev)
         self._geometries[dev] = {}
         self.addDevice(dev)
+
+    def startPath(self, start, stop, voxel_size, bounds):
+        self.pathStartSignal.emit(start, stop, voxel_size, bounds)
+
+    def _startPath(self, start, stop, voxel_size, bounds):
+        self.removePath()
+        path = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
+        self.view.addItem(path)
+        self._path["path"] = path
+        start_target = gl.GLScatterPlotItem(
+            pos=np.array([start]), color=(0, 0, 1, 1), size=voxel_size * 2, pxMode=False
+        )
+        self.view.addItem(start_target)
+        self._path["start target"] = start_target
+
+        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size * 2, pxMode=False)
+        self.view.addItem(dest_target)
+        self._path["dest target"] = dest_target
+
+        for a, b in Plane.wireframe(*bounds):
+            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
+            self.view.addItem(edge)
+            self._path[(tuple(a), tuple(b))] = edge
+
+    def addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
+        self.newObstacleSignal.emit(obstacle, to_global)
+
+    def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
+        verts, faces = pg.isosurface(np.ascontiguousarray(obstacle.volume.T.astype(int)), 1)
+        mesh = gl.MeshData(vertexes=verts, faces=faces)
+        m = gl.GLMeshItem(
+            meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
+        )
+        m.setTransform((to_global * obstacle.transform).as_pyqtgraph())
+        self.view.addItem(m)
+        self._path[obstacle] = m
+
+    def removePath(self):
+        for viz in self._path.values():
+            self.view.removeItem(viz)
+        self._path = {}

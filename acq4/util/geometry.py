@@ -272,9 +272,6 @@ def simplify_path(path, edge_cost: Callable):
 class GeometryMotionPlanner:
     # TODO thread safety on this cache
     _cache = {}
-    _viz = None
-    _path_line = None
-    _displayed_objects = []
 
     @classmethod
     def clear_cache(cls):
@@ -302,7 +299,7 @@ class GeometryMotionPlanner:
         stop,
         bounds=None,
         callback=None,
-        visualize=False,
+        visualizer=None,
     ):
         """
         Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
@@ -331,11 +328,12 @@ class GeometryMotionPlanner:
         stop
             Global coordinates of the final location we want the traveling object's origin to be.
         callback : callable
-            A function to be called at each step of the path planning process to aid in visualization and debugging.
+            A function to be called at each step of the path planning process (mostly to aid in visualization and
+            debugging).
         bounds : Planes
             Planes that define the bounds of the space in which the path is to be found.
-        visualize : bool
-            If True, visualize the path planning process.
+        visualizer : window or None
+            If not None, a window to visualize the path planning process in real time.
 
         Returns
         -------
@@ -345,29 +343,15 @@ class GeometryMotionPlanner:
         start = np.array(start)
         stop = np.array(stop)
         bounds = [] if bounds is None else bounds
-        if visualize:
-            if callback is None:
-                app = Qt.QtWidgets.QApplication.instance()
-
-                def callback(p, skip=4):
-                    self._draw_n += 1
-                    if self._draw_n % skip != 0:
-                        return
-                    # sleep to allow the user to watch
-                    then = time.time()
-                    while time.time() - then < 0.01:
-                        app.processEvents()  # TODO fix this
-                    self._path_line.setData(pos=np.array(p))
-                    app.processEvents()
-
-            runInGuiThread(
-                self.initialize_visualization, traveler, to_global_from_traveler, start, stop, self.voxel_size, bounds
+        if visualizer is not None:
+            visualizer.startPath(start, stop, self.voxel_size, bounds)
+            visualizer.addObstacleVolumeOutline(
+                traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
+
         profile = debug.Profiler()
         obstacles = []
         for obst, to_global_from_obst in self.geometries.items():
-            if visualize:
-                runInGuiThread(self.add_geometry_mesh, obst, to_global_from_obst)
             if obst is traveler:
                 continue
             cache_key = (obst.name, traveler.name)
@@ -378,15 +362,12 @@ class GeometryMotionPlanner:
                 convolved_obst.transform = obst.transform * convolved_obst.transform
                 self._cache[cache_key] = convolved_obst
                 profile.mark(f"cache miss: generated convolved obstacle {obst.name}")
-            obstacles.append((self._cache[cache_key], to_global_from_obst))
-        if visualize:
-            for obst, to_global_from_obst in obstacles:
-                runInGuiThread(self.add_voxels, obst, to_global_from_obst)
-            runInGuiThread(
-                self.add_voxels,
-                traveler.voxel_template(self.voxel_size),
-                to_global_from_traveler * traveler.transform,
-            )
+
+            obst_volume = self._cache[cache_key]
+            obstacles.append((obst_volume, to_global_from_obst))
+            if visualizer is not None:
+                visualizer.addObstacleVolumeOutline(obst_volume, to_global_from_obst)
+
         profile.mark("voxelized all obstacles")
 
         def edge_cost(a, b):
@@ -410,62 +391,6 @@ class GeometryMotionPlanner:
             callback(path, skip=1)
         profile.finish()
         return path[1:]
-
-    @classmethod
-    def initialize_visualization(cls, traveling_object, to_global_from_traveler, start, stop, voxel_size, bounds):
-        if cls._viz is None:
-            cls._viz = gl.GLViewWidget()
-            cls._path_line = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
-            cls._viz.addItem(cls._path_line)
-        else:
-            for disp in cls._displayed_objects:
-                cls._viz.removeItem(disp)
-            cls._displayed_objects = []
-            # cls._viz.clear()
-            cls._viz.close()
-        cls._viz.show()
-        cls._viz.setCameraPosition(distance=20)
-        g = gl.GLGridItem()
-        g.scale(1, 1, 1)
-        cls._viz.addItem(g)
-
-        cls.add_geometry_mesh(traveling_object, to_global_from_traveler)
-
-        start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 1, 1), size=voxel_size, pxMode=False)
-        cls._displayed_objects.append(start_target)
-        cls._viz.addItem(start_target)
-        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size, pxMode=False)
-        cls._displayed_objects.append(dest_target)
-        cls._viz.addItem(dest_target)
-        for a, b in Plane.wireframe(*bounds):
-            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
-            cls._viz.addItem(edge)
-            cls._displayed_objects.append(edge)
-
-        cls._path_line.setData(pos=np.array([start, stop]))
-
-    @classmethod
-    def add_geometry_mesh(cls, geometry: Geometry, to_global: Transform):
-        mesh = gl.MeshData(vertexes=geometry.mesh.vertices, faces=geometry.mesh.faces)
-        if geometry.color is None:
-            color = (1, 0, 0, 1)
-        else:
-            color = np.array(geometry.color)
-        m = gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
-        m.setTransform((to_global * geometry.transform).as_pyqtgraph())
-        cls._displayed_objects.append(m)
-        cls._viz.addItem(m)
-
-    @classmethod
-    def add_voxels(cls, voxels: Volume, to_global: Transform):
-        verts, faces = pg.isosurface(np.ascontiguousarray(voxels.volume.T.astype(int)), 1)
-        mesh = gl.MeshData(vertexes=verts, faces=faces)
-        m = gl.GLMeshItem(
-            meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
-        )
-        m.setTransform((to_global * voxels.transform).as_pyqtgraph())
-        cls._displayed_objects.append(m)
-        cls._viz.addItem(m)
 
 
 @numba.jit(nopython=True)

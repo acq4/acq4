@@ -260,7 +260,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 globalStart,
                 globalStop,
                 self.pip.getBoundaries(),
-                visualize=True,
+                visualizer=getManager().getModule("Visualize3D").win,
             )
             raise HelpfulException("No safe path found; see visualization for details.")
         if len(path) == 0:
