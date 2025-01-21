@@ -149,10 +149,7 @@ class Pipette(Device, OptomechDevice):
 
     def getBoundaries(self) -> List[Plane]:
         return [
-            Plane(
-                self._solveMyGlobalPosition(p.normal) - self._solveMyGlobalPosition(np.zeros(3)),
-                self._solveMyGlobalPosition(p.point),
-            )
+            Plane(p.normal, self._solveMyGlobalPosition(p.point))
             for p in self.parentDevice().getBoundaries()
         ]
 
