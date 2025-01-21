@@ -255,7 +255,7 @@ class SealState(PatchPipetteState):
 
         self._patchrec['attemptedSeal'] = True
 
-        while not self._analysis.success():
+        while True:
             self.checkStop()
             self.processAtLeastOneTestPulse()
 
@@ -263,6 +263,9 @@ class SealState(PatchPipetteState):
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
+
+            if self._analysis.success():
+                break
 
             if config['pressureMode'] == 'auto':
                 dt = ptime.time() - startTime
