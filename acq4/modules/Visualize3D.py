@@ -1,11 +1,7 @@
-import numpy as np
-
-from pyqtgraph import opengl as gl
-
-from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from pyqtgraph import opengl as gl
 
 
 class Visualize3D(Module):
@@ -28,7 +24,7 @@ class Visualize3D(Module):
         self.openWindow()
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
-            self._win.add(dev)
+            self._win.addDevice(dev)
 
 
 class MainWindow(Qt.QMainWindow):
@@ -48,28 +44,40 @@ class MainWindow(Qt.QMainWindow):
 
     def clear(self):
         for dev in self._geometries:
-            self._geometries[dev]["mesh"].parent = None
+            self._removeDevice(dev)
         self._geometries = {}
 
-    def add(self, dev: OptomechDevice):
+    def addDevice(self, dev: OptomechDevice):
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
-        if (geom := dev.getGeometry()) is not None:
-            self._geometries.setdefault(dev, {})["geom"] = geom
-            mesh = geom.glMesh()
-            self.view.addItem(mesh)
-            self._geometries[dev]["mesh"] = mesh
+        self._geometries.setdefault(dev, {})
+        if (geom := dev.getGeometry()) is None:
+            return
+        self._geometries[dev]["geom"] = geom
+        mesh = geom.glMesh()
+        self.view.addItem(mesh)
+        self._geometries[dev]["mesh"] = mesh
 
-            dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
-            self.handleTransformUpdate(dev, dev)
+        dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
+        self.handleTransformUpdate(dev, dev)
 
-    def handleTransformUpdate(self, _, dev: Device):
-        if dev in self._geometries:
-            geom = self._geometries[dev]["geom"]
-            xform = dev.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
-            self._geometries[dev]["mesh"].setTransform(xform)
+    def _removeDevice(self, dev):
+        if dev not in self._geometries:
+            return
+        dev.sigGeometryChanged.disconnect(self.handleGeometryChange)
+        mesh = self._geometries[dev].get("mesh")
+        if mesh is None:
+            return
+        dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
+        self.view.removeItem(mesh)
 
-    def handleGeometryChange(self, dev: Device):
-        if dev in self._geometries:
-            self._geometries[dev]["mesh"].parent = None
-        del self._geometries[dev]
-        self.add(dev)
+    def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
+        if self._geometries.get(dev, {}).get("geom") is None:
+            return
+        geom = self._geometries[dev]["geom"]
+        xform = dev.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
+        self._geometries[dev]["mesh"].setTransform(xform)
+
+    def handleGeometryChange(self, dev: OptomechDevice):
+        self._removeDevice(dev)
+        self._geometries[dev] = {}
+        self.addDevice(dev)

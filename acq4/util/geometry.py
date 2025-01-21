@@ -657,6 +657,7 @@ class Geometry:
         return self._total_mesh
 
     def glMesh(self) -> gl.GLMeshItem:
+        # TODO get children to have separate colors
         mesh = gl.MeshData(vertexes=self.mesh.vertices, faces=self.mesh.faces)
         if self.color is None:
             color = (1, 1, 1, 1)
@@ -734,10 +735,12 @@ class Geometry:
         # TODO wrong structure now
         return []
 
-    def make_box(self, args) -> trimesh.Trimesh:
+    @staticmethod
+    def make_box(args) -> trimesh.Trimesh:
         return trimesh.creation.box(args.pop("size"))
 
-    def make_cone(self, args) -> trimesh.Trimesh:
+    @staticmethod
+    def make_cone(args) -> trimesh.Trimesh:
         points, faces = truncated_cone(
             bottom_radius=args.pop("bottom_radius"),
             top_radius=args.pop("top_radius"),
