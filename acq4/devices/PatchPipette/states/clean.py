@@ -34,7 +34,7 @@ class CleanState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
-        'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]]"},  # TODO
+        'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
         'approachHeight': {'type': 'float', 'default': 5e-3, 'suffix': 'm'},
     }
 
