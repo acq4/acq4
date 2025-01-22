@@ -371,7 +371,7 @@ class Objective(Device, OptomechDevice):
         return pg.SRTTransform3D(super().deviceTransform(subdev))
 
     def physicalTransform(self, subdev=None):
-        return self._scope.physicalTransform(subdev)
+        return pg.SRTTransform3D(dict(pos=self.offset()))
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
