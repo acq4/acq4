@@ -282,7 +282,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
         goal = path.pop()
         path = prepend_path + path + append_path + [(goal[0], speed, False, explanation)]
-        viz.updatePath([p[0] for p in path], skip=1)
+        viz.updatePath([globalStart] + [p[0] for p in path], skip=1)
         return path
 
 
