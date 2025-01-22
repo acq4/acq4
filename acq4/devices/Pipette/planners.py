@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from acq4.util.future import MultiFuture, future_wrap
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
-from ...util.geometry import GeometryMotionPlanner
+from ...util.geometry import GeometryMotionPlanner, Plane
 
 if TYPE_CHECKING:
     from .pipette import Pipette
@@ -247,16 +247,30 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         planner, from_pip_to_global = self._getPlanningContext()
         planner.find_path(self.pip.getGeometry(), from_pip_to_global, (0, 0, 0), (1e-6, 1e-6, 1e-6))
 
+    def _planAroundSurface(self, pos):
+        surface = self.pip.scopeDevice().getSurfaceDepth()
+        if pos[2] >= surface:
+            return pos, []
+        waypoint = self.pip.positionAtDepth(surface, start=pos)
+        return waypoint, [(pos, "slow", False, "avoiding sample tear")]
+
     def safePath(self, globalStart, globalStop, speed, explanation=None):
         self._cachePrimer.wait()
-        planner, from_pip_to_global = self._getPlanningContext()
+
+        boundaries = self.pip.getBoundaries()
+        surface = self.pip.scopeDevice().getSurfaceDepth()
+        boundaries += [Plane((0, 0, 1), (0, 0, surface))]
+        globalStart, prepend_path = self._planAroundSurface(globalStart)
+        globalStop, append_path = self._planAroundSurface(globalStop)
+
         viz = getManager().getModule("Visualize3D").win
+        planner, from_pip_to_global = self._getPlanningContext()
         path = planner.find_path(
             self.pip.getGeometry(),
             from_pip_to_global,
             globalStart,
             globalStop,
-            self.pip.getBoundaries(),
+            boundaries,
             visualizer=viz,
         )
         if path is None:
@@ -264,9 +278,11 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             viz.focus()
             raise HelpfulException(f"No safe path found; '{worst}' was maybe in the way. See visualization for details.")
         if len(path) == 0:
-            return [(globalStop, speed, False, explanation)]
+            path = [(globalStop, speed, False, explanation)]
         path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
-        path[-1] = (path[-1][0], speed, False, explanation)
+        goal = path.pop()
+        path = prepend_path + path + append_path + [(goal[0], speed, False, explanation)]
+        viz.updatePath([p[0] for p in path], skip=1)
         return path
 
 
