@@ -26,7 +26,7 @@ class RecordingChamber(Device, OptomechDevice):
 
     def getGeometry(self):
         if isinstance(self.config.get("geometry"), dict):
-            defaults = {"color": (0.3, 0.3, 0.3, 0.7), "close_bottom": True}
+            defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
             defaults.update(self.config["geometry"])
             self.config["geometry"] = defaults
         return super().getGeometry()
