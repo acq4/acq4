@@ -248,7 +248,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         planner.find_path(self.pip.getGeometry(), from_pip_to_global, (0, 0, 0), (1e-6, 1e-6, 1e-6))
 
     def _planAroundSurface(self, pos):
-        surface = self.pip.scopeDevice().getSurfaceDepth()
+        surface = self.pip.approachDepth()
         if pos[2] >= surface:
             return pos, []
         waypoint = self.pip.positionAtDepth(surface, start=pos)
