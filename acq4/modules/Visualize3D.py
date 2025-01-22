@@ -1,3 +1,4 @@
+import os
 import queue
 import time
 from threading import Thread
@@ -47,8 +48,9 @@ class MainWindow(Qt.QMainWindow):
 
     def __init__(self):
         super().__init__(None)
-        self.setWindowTitle("3D Visualization with VisPy")
+        self.setWindowTitle("3D Visualization of all Optomech Devices")
         self.setGeometry(50, 50, 800, 600)
+        self.setWindowIcon(Qt.QIcon(os.path.join(os.path.dirname(__file__), "icons.svg")))
 
         self.view = gl.GLViewWidget()
         self.setCentralWidget(self.view)
@@ -81,6 +83,7 @@ class MainWindow(Qt.QMainWindow):
         self.focusEvent.emit()
 
     def _focus(self):
+        self.show()
         self.activateWindow()
         self.raise_()
 
@@ -158,7 +161,7 @@ class MainWindow(Qt.QMainWindow):
         self.newObstacleSignal.emit(obstacle, to_global)
 
     def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
-        verts, faces = pg.isosurface(np.ascontiguousarray(obstacle.volume.T.astype(int)), 1)
+        verts, faces = obstacle.surface_mesh
         mesh = gl.MeshData(vertexes=verts, faces=faces)
         m = gl.GLMeshItem(
             meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"

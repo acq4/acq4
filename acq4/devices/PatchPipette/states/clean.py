@@ -51,14 +51,6 @@ class CleanState(PatchPipetteState):
 
         self.setState('cleaning')
 
-        # retract to safe position for visiting cleaning wells
-        startPos = pip.globalPosition()
-        safePos = pip.pathGenerator.safeYZPosition(startPos)
-        path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
-        fut = pip._movePath(path)
-        if fut is not None:
-            self.waitFor(fut, timeout=None)
-
         for stage in ('clean', 'rinse'):
             self.checkStop()
 
@@ -72,17 +64,7 @@ class CleanState(PatchPipetteState):
             if wellPos is None:
                 raise ValueError(f"Device {pip.name()} does not have a stored {stage} position.")
 
-            # lift up, then sideways, then down into well
-            waypoint1 = safePos.copy()
-            waypoint1[2] = wellPos[2] + config['approachHeight']
-            waypoint2 = wellPos.copy()
-            waypoint2[2] = waypoint1[2]
-            path = [
-                (waypoint1, 'fast', False, f"get to {waypoint1[2]} z"),
-                (waypoint2, 'fast', True, f"above the {stage}ing well"),
-                (wellPos, 'fast', False, f"into the {stage}ing well"),
-            ]
-
+            path = pip.pathGenerator.safePath(pip.globalPosition(), wellPos, 'fast')
             self.currentFuture = pip._movePath(path)
 
             # todo: if needed, we can check TP for capacitance changes here

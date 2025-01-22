@@ -261,7 +261,6 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         )
         if path is None:
             worst = planner.get_primary_barrier()
-            viz.show()
             viz.focus()
             raise HelpfulException(f"No safe path found; '{worst}' was maybe in the way. See visualization for details.")
         if len(path) == 0:

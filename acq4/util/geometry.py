@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import time
+from functools import cached_property
 from typing import List, Callable, Optional, Dict, Any, Generator
 from xml.etree import ElementTree as ET
 
@@ -226,7 +227,7 @@ def a_star_ish(
         offender = max(obstacles.items(), key=lambda x: x[1])
         if isinstance(offender[0], Volume):
             return str(offender[0].transform.systems[0])
-        return str(offender[0])
+        return f"Boundary {offender[0]}"
 
     while open_set:
         curr_key = min(open_set, key=lambda x: f_score[x])
@@ -279,7 +280,7 @@ class GeometryMotionPlanner:
     def clear_cache(cls):
         cls._cache = {}
 
-    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 2000 * µm):
+    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 1500 * µm):
         """
         Parameters
         ----------
@@ -481,6 +482,10 @@ class Volume(object):
             np.array(self.volume.shape) - 1,
         )
         return next((True for x, y, z in line_voxels if self.volume[x, y, z]), False)
+
+    @cached_property
+    def surface_mesh(self):
+        return pg.isosurface(np.ascontiguousarray(self.volume.T.astype(int)), 1)
 
 
 class Geometry:
