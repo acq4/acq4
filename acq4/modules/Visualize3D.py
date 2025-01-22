@@ -54,9 +54,9 @@ class MainWindow(Qt.QMainWindow):
 
         self.view = gl.GLViewWidget()
         self.setCentralWidget(self.view)
-        self.view.setCameraPosition(distance=0.2)
+        self.view.setCameraPosition(distance=0.2, azimuth=-90, elevation=30)
         grid = gl.GLGridItem()
-        grid.scale(1, 1, 1)
+        grid.scale(0.001, 0.001, 0.001)
         self.view.addItem(grid)
         axes = gl.GLAxisItem()
         axes.setSize(0.1, 0.1, 0.1)
@@ -113,21 +113,12 @@ class MainWindow(Qt.QMainWindow):
         dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
         self.view.removeItem(mesh)
 
-    def handleTransformUpdate(self, dev: OptomechDevice, _: OptomechDevice):
-        if self._geometries.get(dev, {}).get("geom") is None:
+    def handleTransformUpdate(self, moved_device: OptomechDevice, cause_device: OptomechDevice):
+        geom = self._geometries.get(moved_device, {}).get("geom")
+        if geom is None:
             return
-        geom = self._geometries[dev]["geom"]
-        pg_xform = pg.SRTTransform3D(dev.globalPhysicalTransform())
-        physical_xform = SRT3DTransform(
-            offset=pg_xform.getTranslation(),
-            scale=pg_xform.getScale(),
-            angle=pg_xform.getRotation()[0],
-            axis=pg_xform.getRotation()[1],
-            from_cs=dev.name(),
-            to_cs="global",
-        )
-        xform = (physical_xform * geom.transform).as_pyqtgraph()
-        self._geometries[dev]["mesh"].setTransform(xform)
+        xform = moved_device.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
+        self._geometries[moved_device]["mesh"].setTransform(xform)
 
     def handleGeometryChange(self, dev: OptomechDevice):
         self._removeDevice(dev)
