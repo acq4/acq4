@@ -226,7 +226,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                     scale=pg_xform.getScale(),
                     angle=pg_xform.getRotation()[0],
                     axis=pg_xform.getRotation()[1],
-                    from_cs=dev.name(),
+                    from_cs=dev.geometryCacheKey,
                     to_cs="global",
                 )
                 geometries[geom] = physical_xform
@@ -237,7 +237,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             scale=pg_xform.getScale(),
             angle=pg_xform.getRotation()[0],
             axis=pg_xform.getRotation()[1],
-            from_cs=self.pip.name(),
+            from_cs=self.pip.geometryCacheKey,
             to_cs="global",
         )
         return planner, from_pip_to_global

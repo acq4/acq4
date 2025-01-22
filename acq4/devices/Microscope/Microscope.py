@@ -148,10 +148,13 @@ class Microscope(Device, OptomechDevice):
 
         self.setCurrentSubdevice(self.currentObjective)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
-        if lastObj is not None:
-            lastObj.sigGeometryChanged.emit(lastObj)
-        if self.currentObjective is not None:
-            self.currentObjective.sigGeometryChanged.emit(self.currentObjective)
+        self.sigGeometryChanged.emit(self)
+
+    def getGeometry(self):
+        objective = self.getObjective()
+        if objective is None:
+            return None
+        return objective.getGeometryForMicroscope(name=self.geometryCacheKey)
 
     def getObjective(self) -> "Objective | None":
         """Return the currently active Objective."""
@@ -188,7 +191,7 @@ class Microscope(Device, OptomechDevice):
         return iface
 
     def physicalTransform(self, subdev=None):
-        return self.parentDevice().deviceTransform(subdev)
+        return pg.SRTTransform3D()
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -363,9 +366,10 @@ class Objective(Device, OptomechDevice):
             self.setScale(config['scale'])
 
     def getGeometry(self):
-        if self._scope.currentObjective == self:
-            return super().getGeometry()
         return None
+
+    def getGeometryForMicroscope(self, name):
+        return super().getGeometry(name)
 
     def deviceTransform(self, subdev=None):
         return pg.SRTTransform3D(super().deviceTransform(subdev))

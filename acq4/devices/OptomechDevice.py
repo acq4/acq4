@@ -191,14 +191,22 @@ class OptomechDevice(InterfaceMixin):
         self.addInterface("OptomechDevice")
         dm.declareInterface(name, ["OptomechDevice"], self)
 
-    def getGeometry(self) -> Geometry:
+    def getGeometry(self, name=None) -> Geometry | None:
         if "geometry" in self._config:
+            name = self.geometryCacheKey if name is None else name
             return Geometry(
                 config=self._config["geometry"],
-                name=f"[primary geometry of {self.name()}]",
-                parent_name=self.name(),
+                name=f"[primary geometry of {name}]",
+                parent_name=name,
             )
         return None
+
+    @property
+    def geometryCacheKey(self) -> str:
+        key = self.getDeviceStateKey()
+        if key:
+            return str(key)
+        return self.name()
 
     def name(self):
         return self.__name
@@ -738,7 +746,7 @@ class OptomechDevice(InterfaceMixin):
                 subdevs[dev] = subdev
         return subdevs
 
-    def getDeviceStateKey(self):
+    def getDeviceStateKey(self) -> tuple[str, ...]:
         """
         Return a tuple that uniquely identifies the state of all subdevice selections in the system.
         This may be used as a key for storing/retrieving calibration data.
