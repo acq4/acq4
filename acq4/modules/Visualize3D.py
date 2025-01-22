@@ -134,12 +134,12 @@ class MainWindow(Qt.QMainWindow):
         self.view.addItem(path)
         self._path["path"] = path
         start_target = gl.GLScatterPlotItem(
-            pos=np.array([start]), color=(0, 0, 1, 1), size=voxel_size * 2, pxMode=False
+            pos=np.array([start]), color=(0, 0, 1, 1), size=10, pxMode=True
         )
         self.view.addItem(start_target)
         self._path["start target"] = start_target
 
-        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=voxel_size * 2, pxMode=False)
+        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=10, pxMode=True)
         self.view.addItem(dest_target)
         self._path["dest target"] = dest_target
 
