@@ -257,11 +257,18 @@ def test_path_with_funner_traveler(geometry, viz=None):
     )
     start = Point(np.array([-0.4, -0.4, -1.2]), "global")
     dest = Point(np.array([0.2, 0.2, 3]), "global")
-    planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
-    path = planner.find_path(
-        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, visualizer=viz
-    )
+    to_global_from_geometry = NullTransform(3, from_cs="test", to_cs="global")
+    planner = GeometryMotionPlanner({geometry: to_global_from_geometry}, voxel_size)
+    to_global_from_traveler = TTransform(offset=start, from_cs="traveler", to_cs="global")
+    path = planner.find_path(traveler, to_global_from_traveler, start, dest, visualizer=viz)
     if viz:
+        viz.addGeometry(traveler)
+        viz.setMeshTransform(
+            traveler.name,
+            (to_global_from_traveler * traveler.transform).as_pyqtgraph(),
+        )
+        viz.addGeometry(geometry)
+        viz.setMeshTransform(geometry.name, (to_global_from_geometry * geometry.transform).as_pyqtgraph())
         pg.exec()
     assert path is not None
     assert len(path) >= 2
@@ -362,12 +369,16 @@ def test_no_path_because_of_offset_shadow(geometry, viz=None):
     dest = to_the_side.map(Point(np.array([0.7, 0, -0.7]), "test"))
     start = to_the_side.map(Point(np.array([0.2, 0.2, 5]), "test"))
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
-    path = planner.find_path(point, TTransform(offset=start, from_cs="point", to_cs="global"), start, dest, visualizer=viz)
+    path = planner.find_path(
+        point, TTransform(offset=start, from_cs="point", to_cs="global"), start, dest, visualizer=viz
+    )
     if viz:
         pg.exec()
         viz.show()
     assert path is not None
-    path = planner.find_path(traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, visualizer=viz)
+    path = planner.find_path(
+        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, visualizer=viz
+    )
     if viz:
         pg.exec()
     assert path is None

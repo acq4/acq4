@@ -5,13 +5,12 @@ from threading import Thread
 
 import numpy as np
 
-import pyqtgraph as pg
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.geometry import Plane, Volume
+from acq4.util.geometry import Plane, Volume, Geometry
 from acq4.util.threadrun import runInGuiThread
-from coorx import Transform, SRT3DTransform
+from coorx import Transform, TTransform
 from pyqtgraph import opengl as gl
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 
@@ -92,16 +91,20 @@ class MainWindow(Qt.QMainWindow):
 
     def _addDevice(self, dev: OptomechDevice):
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
-        self._geometries.setdefault(dev, {})
         if (geom := dev.getGeometry()) is None:
             return
-        self._geometries[dev]["geom"] = geom
-        mesh = geom.glMesh()
-        self.view.addItem(mesh)
-        self._geometries[dev]["mesh"] = mesh
-
+        self.addGeometry(geom, dev)
         dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
         self.handleTransformUpdate(dev, dev)
+
+    def addGeometry(self, geom: Geometry, key=None):
+        if key is None:
+            key = geom.name
+        self._geometries.setdefault(key, {})
+        self._geometries[key]["geom"] = geom
+        mesh = geom.glMesh()
+        self.view.addItem(mesh)
+        self._geometries[key]["mesh"] = mesh
 
     def _removeDevice(self, dev):
         if dev not in self._geometries:
@@ -118,7 +121,10 @@ class MainWindow(Qt.QMainWindow):
         if geom is None:
             return
         xform = moved_device.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
-        self._geometries[moved_device]["mesh"].setTransform(xform)
+        self.setMeshTransform(moved_device, xform)
+
+    def setMeshTransform(self, dev, xform):
+        self._geometries[dev]["mesh"].setTransform(xform)
 
     def handleGeometryChange(self, dev: OptomechDevice):
         self._removeDevice(dev)
@@ -133,9 +139,7 @@ class MainWindow(Qt.QMainWindow):
         path = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
         self.view.addItem(path)
         self._path["path"] = path
-        start_target = gl.GLScatterPlotItem(
-            pos=np.array([start]), color=(0, 0, 1, 1), size=10, pxMode=True
-        )
+        start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 1, 1), size=10, pxMode=True)
         self.view.addItem(start_target)
         self._path["start target"] = start_target
 
@@ -157,9 +161,23 @@ class MainWindow(Qt.QMainWindow):
         m = gl.GLMeshItem(
             meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
         )
-        m.setTransform((to_global * obstacle.transform).as_pyqtgraph())
+        cs_name = obstacle.transform.systems[0].name
+        recenter_voxels = TTransform(
+            offset=(0.5, 0.5, 0.5),
+            from_cs=f"[isosurface of {cs_name}]",
+            to_cs=cs_name,
+        )
+        m.setTransform((to_global * obstacle.transform * recenter_voxels).as_pyqtgraph())
         self.view.addItem(m)
         self._path[obstacle] = m
+
+        # vol = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
+        # vol[..., :3] = (30, 10, 10)
+        # vol[..., 3] = obstacle.volume.T * 5
+        # v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
+        # v.setTransform((to_global * obstacle.transform).as_pyqtgraph())
+        # self.view.addItem(v)
+        # self._path[f"voxels of {cs_name}"] = v
 
     def updatePath(self, path, skip=4):
         self._pathUpdates.put((path, skip))
