@@ -191,9 +191,12 @@ class Microscope(Device, OptomechDevice):
         return iface
 
     def physicalTransform(self, subdev=None):
-        if subdev is None:
-            return pg.SRTTransform3D()
-        return subdev.physicalTransform()
+        tr = pg.SRTTransform3D({"pos": pg.SRTTransform3D(self.deviceTransform()).getTranslation()})
+        dev = self.getSubdevice(subdev)
+        if dev is None:
+            return tr
+        else:
+            return tr * dev.physicalTransform()
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -377,7 +380,12 @@ class Objective(Device, OptomechDevice):
         return pg.SRTTransform3D(super().deviceTransform(subdev))
 
     def physicalTransform(self, subdev=None):
-        return pg.SRTTransform3D(dict(pos=self.offset()))
+        tr = pg.SRTTransform3D(dict(pos=self.offset()))
+        dev = self.getSubdevice(subdev)
+        if dev is None:
+            return tr
+        else:
+            return tr * dev.physicalTransform()
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
