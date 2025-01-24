@@ -146,6 +146,8 @@ class VisualizerWindow(Qt.QMainWindow):
         self._path["dest target"] = dest_target
 
         for a, b in Plane.wireframe(*bounds):
+            if np.linalg.norm(a - b) > 0.1:
+                continue  # ignore bounds that are really far away
             edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
             self.view.addItem(edge)
             self._path[(tuple(a), tuple(b))] = edge
