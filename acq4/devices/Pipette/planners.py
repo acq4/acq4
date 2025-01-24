@@ -264,7 +264,6 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         globalStart, prepend_path = self._planAroundSurface(globalStart)
         globalStop, append_path = self._planAroundSurface(globalStop)
 
-        runInGuiThread(getManager().getModule, "Visualize3D")
         viz = getManager().getModule("Visualize3D").window()
         planner, from_pip_to_global = self._getPlanningContext()
         path = planner.find_path(
