@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import contextlib
-
 import json
-import numpy as np
 import weakref
 from typing import List
+
+import numpy as np
 
 import pyqtgraph as pg
 from acq4 import getManager
@@ -695,7 +695,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         mod.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
-        self.depthArrow = pg.ArrowItem(angle=-dev.pitchAngle())
+        self.depthArrow = pg.ArrowItem(angle=180 - dev.yawAngle())
         mod.getDepthView().addItem(self.depthArrow)
 
         # self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
