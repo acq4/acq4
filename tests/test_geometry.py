@@ -5,7 +5,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from acq4.modules.Visualize3D import VisualizerWindow
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line
-from coorx import NullTransform, TTransform, Point, SRT3DTransform
+from coorx import NullTransform, TTransform, Point, SRT3DTransform, Transform
 
 
 @pytest.fixture(autouse=True)
@@ -28,6 +28,16 @@ def cube():
         Plane(np.array([0, 1, 0]), np.array([1, 1, 1])),
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
+
+
+def do_viz(viz, geometries: dict[Geometry, Transform]):
+    if viz is None:
+        return
+    viz.show()
+    for g, to_global in geometries.items():
+        viz.addGeometry(g)
+        viz.setMeshTransform(g.name, (to_global * g.transform).as_pyqtgraph())
+    pg.exec()
 
 
 def test_mesh(geometry):
@@ -186,17 +196,18 @@ def test_cached_convolutions_behave_well(geometry):
 
 def test_find_path(geometry, viz=None):
     voxel_size = 0.1
+    geometry_to_global = NullTransform(3, from_cs=geometry.parent_name, to_cs="global")
     planner = GeometryMotionPlanner(
-        {geometry: NullTransform(3, from_cs=geometry.parent_name, to_cs="global")}, voxel_size
+        {geometry: geometry_to_global}, voxel_size
     )
-    point = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "point_mesh", "point")
+    traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "traveler_mesh", "traveler")
     dest = Point(np.array([0, 0, 3]), "global")
     start = Point(np.array([0, 0, -2]), "global")
+    traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
     path = planner.find_path(
-        point, NullTransform(3, from_cs=point.parent_name, to_cs="global"), start, dest, visualizer=viz
+        traveler, traveler_to_global, start, dest, visualizer=viz
     )
-    if viz:
-        pg.exec()
+    do_viz(viz, {traveler: traveler_to_global, geometry: geometry_to_global})
 
     assert path is not None
     assert len(path) >= 2
@@ -228,18 +239,17 @@ def test_z_and_x_are_not_swapped(viz=None):
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
     traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "traveler_mesh", "traveler")
 
+    traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
     path = planner.find_path(
-        traveler, NullTransform(3, from_cs=traveler.parent_name, to_cs="global"), start, dest, visualizer=viz
+        traveler, traveler_to_global, start, dest, visualizer=viz
     )
-    if viz:
-        pg.exec()
+    do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
     assert path is not None
 
     path = planner.find_path(
         traveler, NullTransform(3, from_cs=traveler.parent_name, to_cs="global"), start[::-1], dest, visualizer=viz
     )
-    if viz:
-        pg.exec()
+    do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
     assert path is None
 
 
@@ -261,15 +271,7 @@ def test_path_with_funner_traveler(geometry, viz=None):
     planner = GeometryMotionPlanner({geometry: to_global_from_geometry}, voxel_size)
     to_global_from_traveler = TTransform(offset=start, from_cs="traveler", to_cs="global")
     path = planner.find_path(traveler, to_global_from_traveler, start, dest, visualizer=viz)
-    if viz:
-        viz.addGeometry(traveler)
-        viz.setMeshTransform(
-            traveler.name,
-            (to_global_from_traveler * traveler.transform).as_pyqtgraph(),
-        )
-        viz.addGeometry(geometry)
-        viz.setMeshTransform(geometry.name, (to_global_from_geometry * geometry.transform).as_pyqtgraph())
-        pg.exec()
+    do_viz(viz, {traveler: to_global_from_traveler, geometry: to_global_from_geometry})
     assert path is not None
     assert len(path) >= 2
     assert not np.all(path[0] == start)
@@ -291,19 +293,20 @@ def test_bounds_prevent_path(geometry, cube, viz=None):
     start = Point(np.array([-0.4, -0.4, -1.2]), "global")
     dest = Point(np.array([0.2, 0.2, 3]), "global")
     planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
+    traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
     path = planner.find_path(
-        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, cube, visualizer=viz
+        traveler, traveler_to_global, start, dest, cube, visualizer=viz
     )
-    if viz:
-        pg.exec()
+    do_viz(viz, {traveler: traveler_to_global})
     assert path is None
 
 
 def test_no_path(viz=None):
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
     voxel_size = 0.1
+    geometry_to_global = NullTransform(3, from_cs=geometry.parent_name, to_cs="global")
     planner = GeometryMotionPlanner(
-        {geometry: NullTransform(3, from_cs=geometry.parent_name, to_cs="global")}, voxel_size
+        {geometry: geometry_to_global}, voxel_size
     )
     traveler = Geometry(
         {"type": "box", "size": [voxel_size, voxel_size, 6 * voxel_size], "transform": {"pos": (0, 0, -0.3)}},
@@ -314,8 +317,7 @@ def test_no_path(viz=None):
     start = from_traveler_to_global.map(Point(np.array([0, 0, 0]), "traveler"))
     dest = Point(np.array([voxel_size, voxel_size, voxel_size]) * 2, "global")  # inside the box
     path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualizer=viz)
-    if viz:
-        pg.exec()
+    do_viz(viz, {geometry: geometry_to_global, traveler: from_traveler_to_global})
     assert path is None
 
 
@@ -369,18 +371,17 @@ def test_no_path_because_of_offset_shadow(geometry, viz=None):
     dest = to_the_side.map(Point(np.array([0.7, 0, -0.7]), "test"))
     start = to_the_side.map(Point(np.array([0.2, 0.2, 5]), "test"))
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
+    point_to_global = TTransform(offset=start, from_cs="point", to_cs="global")
     path = planner.find_path(
-        point, TTransform(offset=start, from_cs="point", to_cs="global"), start, dest, visualizer=viz
+        point, point_to_global, start, dest, visualizer=viz
     )
-    if viz:
-        pg.exec()
-        viz.show()
+    do_viz(viz, {geometry: from_geom_to_global, point: point_to_global})
     assert path is not None
+    traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
     path = planner.find_path(
-        traveler, TTransform(offset=start, from_cs="traveler", to_cs="global"), start, dest, visualizer=viz
+        traveler, traveler_to_global, start, dest, visualizer=viz
     )
-    if viz:
-        pg.exec()
+    do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
     assert path is None
 
 
@@ -481,40 +482,6 @@ def test_wireframe_rhomboid():
 draw_n = 0
 
 
-def visualize():
-    geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "geometry_mesh", "geom")
-    from_geom_to_global = SRT3DTransform(
-        offset=(1, 2, 3),
-        angle=45,
-        axis=(1, 0, 0),
-        from_cs="geom",
-        to_cs="global",
-    )
-
-    voxel_size = 0.1
-
-    traveler = Geometry(
-        {
-            "type": "cylinder",
-            "radius": voxel_size,
-            "height": 40 * voxel_size,
-            "transform": {"angle": 45, "axis": (0, 1, 0)},
-        },
-        "traveler_mesh",
-        "traveler",
-    )
-
-    dest = from_geom_to_global.map(Point(np.array([0.7, -0, -0.7]), "geom"))
-    start = from_geom_to_global.map(Point(np.array([4, -2, 5]), "geom"))
-    from_traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
-
-    planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
-    path = planner.find_path(traveler, from_traveler_to_global, start, dest)
-    print(path)
-
-    pg.exec()
-
-
 if __name__ == "__main__":
     pg.mkQApp()
     visualizer = VisualizerWindow()
@@ -546,13 +513,8 @@ if __name__ == "__main__":
     ]
 
     # test_bounds_prevent_path(geom, bounds, visualizer)
-    # visualizer.show()
     # test_path_with_funner_traveler(geom, visualizer)
-    # visualizer.show()
     # test_single_voxel_voxelization(geom, visualizer)
-    # visualizer.show()
     # test_find_path(geom, visualizer)
-    # visualizer.show()
-    # test_no_path(visualizer)
-    # visualizer.show()
+    test_no_path(visualizer)
     test_no_path_because_of_offset_shadow(geom, visualizer)
