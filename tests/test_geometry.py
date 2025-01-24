@@ -71,7 +71,7 @@ def test_cross_geometry_transform():
     # geom_c's mesh should be rotated and therefore the voxels should be wholly unique
     assert geom_c.voxel_template(0.1).volume.shape != geom_a.voxel_template(0.1).volume.shape
     assert geom_c.voxel_template(0.1).volume.shape != geom_b.voxel_template(0.1).volume.shape
-    # TODO it would be nice to positively assert something about the voxelization
+    # TODO it would be nice to positively assert something about the transformed voxelization
     # TODO would they have about the same volume?
 
 
@@ -215,19 +215,15 @@ def test_find_path(geometry, viz=None):
     assert not np.all(path[0] == dest)
     assert np.all(path[-1] == dest)
     # walk along the path at voxel_size steps and assert that we haven't touched the box
+    last_point = start
+    geometry_vol = geometry.voxel_template(voxel_size)
+    global_to_geom_mesh = geometry.transform.inverse * geometry_to_global.inverse
     for waypoint in path:
         assert not geometry.contains(
             waypoint, padding=voxel_size
         ), f"waypoint {waypoint} is within {voxel_size} of {geometry.mesh.bounds}"
-        # TODO this inifinite loops
-        # step = start
-        # step_size = (voxel_size * (waypoint - start) / np.linalg.norm(waypoint - start))
-        # assert np.isclose(np.linalg.norm(step_size), voxel_size)
-        # assert not np.all(step + step_size == start)
-        # while np.linalg.norm(start - step) < np.linalg.norm(start - waypoint):
-        #     step += step_size
-        #     assert not geometry.contains(step, padding=voxel_size), f"step {step} is within {voxel_size} of {geometry.mesh.bounds}"
-        # start = waypoint
+        assert not geometry_vol.intersects_line(global_to_geom_mesh.map(last_point), global_to_geom_mesh.map(waypoint))
+        last_point = waypoint
 
 
 def test_z_and_x_are_not_swapped(viz=None):

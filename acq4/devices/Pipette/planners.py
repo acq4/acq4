@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
-from coorx import SRT3DTransform
-
 import pyqtgraph as pg
 from acq4.util.future import MultiFuture, future_wrap
+from coorx import SRT3DTransform
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.geometry import GeometryMotionPlanner, Plane
-from ...util.threadrun import runInGuiThread
 
 if TYPE_CHECKING:
     from .pipette import Pipette
@@ -216,7 +214,6 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         for dev in man.listInterfaces("OptomechDevice"):
             dev = man.getDevice(dev)
             # TODO what if one of these devices is actively moving?
-            # TODO the sample surface needs to be included
             if dev == self.pip:
                 continue
             geom = dev.getGeometry()

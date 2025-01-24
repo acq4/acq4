@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import itertools
-import time
 from functools import cached_property
+from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator
-from xml.etree import ElementTree as ET
 
 import numba
 import numpy as np
@@ -13,9 +12,7 @@ from trimesh.voxel import VoxelGrid
 
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from acq4.util import Qt
 from acq4.util.approx import ApproxDict, ApproxSet
-from acq4.util.threadrun import runInGuiThread
 from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
 from pyqtgraph import debug
 from pyqtgraph.units import µm
@@ -61,7 +58,6 @@ def truncated_cone(
     return vertices, np.array(faces)
 
 
-# TODO as an optimization later, we can check for intersections with arbitrary bounding boxes, not just voxels
 @numba.jit(nopython=True)
 def line_intersects_voxel(start: np.ndarray, end: np.ndarray, vox: np.ndarray):
     """
@@ -273,12 +269,13 @@ def simplify_path(path, edge_cost: Callable):
 
 
 class GeometryMotionPlanner:
-    # TODO thread safety on this cache
     _cache = {}
+    _cache_lock = RLock()
 
     @classmethod
     def clear_cache(cls):
-        cls._cache = {}
+        with cls._cache_lock:
+            cls._cache = {}
 
     def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 500 * µm):
         """
@@ -361,15 +358,17 @@ class GeometryMotionPlanner:
             if obst is traveler:
                 continue
             cache_key = (obst.name, traveler.name)
-            if cache_key not in self._cache:
-                convolved_obst = obst.make_convolved_voxels(
-                    traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
-                )
-                convolved_obst.transform = obst.transform * convolved_obst.transform
-                self._cache[cache_key] = convolved_obst
-                profile.mark(f"cache miss: generated convolved obstacle {obst.name}")
+            with self._cache_lock:
+                if cache_key not in self._cache:
+                    convolved_obst = obst.make_convolved_voxels(
+                        traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
+                    )
+                    # TODO is this bad? setting transforms explicitly frequently is...
+                    convolved_obst.transform = obst.transform * convolved_obst.transform
+                    self._cache[cache_key] = convolved_obst
+                    profile.mark(f"cache miss: generated convolved obstacle {obst.name}")
+                obst_volume = self._cache[cache_key]
 
-            obst_volume = self._cache[cache_key]
             obstacles.append((obst_volume, to_global_from_obst))
             if visualizer is not None:
                 visualizer.addObstacleVolumeOutline(obst_volume, to_global_from_obst)
@@ -390,7 +389,6 @@ class GeometryMotionPlanner:
         if path is None:
             profile.finish()
             return None
-        # TODO if path is empty? are we already at our dest?
         path = simplify_path(path, edge_cost)
         profile.mark("simplified path")
         if callback:
@@ -622,56 +620,55 @@ class Geometry:
             from_cs=f"Voxels of {self.transform.systems[0]}",
         )
 
-        # TODO this voxel grid might add a 1-voxel offset that the xform doesn't account for
         return Volume(voxels.encoding.dense.T, from_voxels_to_mesh)
 
-    def _urdf_visuals(self):
-        from pymp import Planner
-        import hppfcl
-
-        urdf: str = self._config
-        srdf = f"{urdf[:-5]}.srdf"
-        end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
-        joints = [j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"]
-        planner = Planner(urdf, joints, end_effector, srdf)
-        objects = []
-        for obj in planner.scene.collision_model.geometryObjects:
-            geom = obj.geometry
-            if isinstance(geom, hppfcl.Cylinder):
-                conf = {
-                    "type": "cylinder",
-                    "radius": geom.radius,
-                    "height": 2.0 * geom.halfLength,
-                    "close_top": True,
-                    "close_bottom": True,
-                }
-            elif isinstance(geom, hppfcl.Cone):
-                conf = {
-                    "type": "cone",
-                    "bottom_radius": geom.radius,
-                    "top_radius": 0,
-                    "height": 2.0 * geom.halfLength,
-                    "close_bottom": True,
-                }
-            elif isinstance(geom, hppfcl.Box):
-                conf = {"type": "box", "size": 2.0 * geom.halfSide}
-            else:
-                raise ValueError(f"Unsupported geometry type: {type(geom)}")
-            xform = np.dot(
-                np.array(planner.scene.model.jointPlacements[obj.parentJoint]),
-                np.array(obj.placement),
-            )
-            conf["transform"] = Qt.QtGui.QMatrix4x4(xform.reshape((-1,)))
-            objects.append({obj.name: conf})
-
-        root = objects.pop(0)
-        last = root
-        while objects:
-            obj = objects.pop(0)
-            list(last.values())[0].setdefault("children", {}).update(obj)
-            last = obj
-        # TODO wrong structure now
-        return []
+    # old code, but we might use urdf again someday
+    # def _urdf_visuals(self):
+    #     from pymp import Planner
+    #     import hppfcl
+    #
+    #     urdf: str = self._config
+    #     srdf = f"{urdf[:-5]}.srdf"
+    #     end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
+    #     joints = [j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"]
+    #     planner = Planner(urdf, joints, end_effector, srdf)
+    #     objects = []
+    #     for obj in planner.scene.collision_model.geometryObjects:
+    #         geom = obj.geometry
+    #         if isinstance(geom, hppfcl.Cylinder):
+    #             conf = {
+    #                 "type": "cylinder",
+    #                 "radius": geom.radius,
+    #                 "height": 2.0 * geom.halfLength,
+    #                 "close_top": True,
+    #                 "close_bottom": True,
+    #             }
+    #         elif isinstance(geom, hppfcl.Cone):
+    #             conf = {
+    #                 "type": "cone",
+    #                 "bottom_radius": geom.radius,
+    #                 "top_radius": 0,
+    #                 "height": 2.0 * geom.halfLength,
+    #                 "close_bottom": True,
+    #             }
+    #         elif isinstance(geom, hppfcl.Box):
+    #             conf = {"type": "box", "size": 2.0 * geom.halfSide}
+    #         else:
+    #             raise ValueError(f"Unsupported geometry type: {type(geom)}")
+    #         xform = np.dot(
+    #             np.array(planner.scene.model.jointPlacements[obj.parentJoint]),
+    #             np.array(obj.placement),
+    #         )
+    #         conf["transform"] = Qt.QtGui.QMatrix4x4(xform.reshape((-1,)))
+    #         objects.append({obj.name: conf})
+    #
+    #     root = objects.pop(0)
+    #     last = root
+    #     while objects:
+    #         obj = objects.pop(0)
+    #         list(last.values())[0].setdefault("children", {}).update(obj)
+    #         last = obj
+    #     return []
 
     @staticmethod
     def make_box(args) -> trimesh.Trimesh:
