@@ -2,12 +2,15 @@ import os
 import queue
 import time
 from threading import Thread
+from typing import Union
 
 import numpy as np
 
+from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.Qt import FlowLayout
 from acq4.util.geometry import Plane, Volume, Geometry
 from acq4.util.threadrun import runInGuiThread
 from coorx import Transform, TTransform
@@ -37,7 +40,7 @@ class Visualize3D(Module):
 
 
 class VisualizerWindow(Qt.QMainWindow):
-    pathStartSignal = Qt.pyqtSignal(object, object, float, list)
+    pathStartSignal = Qt.pyqtSignal(object, object, list)
     newObstacleSignal = Qt.pyqtSignal(object, object)
     newDeviceSignal = Qt.pyqtSignal(object)
     pathUpdateSignal = Qt.pyqtSignal(object, int)
@@ -48,9 +51,12 @@ class VisualizerWindow(Qt.QMainWindow):
         self.setWindowTitle("3D Visualization of all Optomech Devices")
         self.setGeometry(50, 50, 800, 600)
         self.setWindowIcon(Qt.QIcon(os.path.join(os.path.dirname(__file__), "icons.svg")))
+        self.layout = Qt.QGridLayout()
+        self.setCentralWidget(Qt.QWidget())
+        self.centralWidget().setLayout(self.layout)
 
         self.view = gl.GLViewWidget()
-        self.setCentralWidget(self.view)
+        self.layout.addWidget(self.view, 0, 0, 8, 1)
         self.view.setCameraPosition(distance=0.2, azimuth=-90, elevation=30)
         grid = gl.GLGridItem()
         grid.scale(0.001, 0.001, 0.001)
@@ -70,6 +76,16 @@ class VisualizerWindow(Qt.QMainWindow):
         self._geometries = {}
         self._path: dict[object, GLGraphicsItem] = {}
 
+        button_zone = Qt.QWidget()
+        self.button_layout = FlowLayout()
+        button_zone.setLayout(self.button_layout)
+        self.layout.addWidget(button_zone, 9, 0)
+
+        self.pathPlanToggler = Qt.QCheckBox("Show Path Plan")
+        self.pathPlanToggler.setEnabled(False)
+        self.pathPlanToggler.stateChanged.connect(self.togglePathPlan)
+        self.button_layout.addWidget(self.pathPlanToggler)
+
     def clear(self):
         for dev in self._geometries:
             self._removeDevice(dev)
@@ -87,13 +103,50 @@ class VisualizerWindow(Qt.QMainWindow):
     def addDevice(self, dev: OptomechDevice):
         self.newDeviceSignal.emit(dev)
 
-    def _addDevice(self, dev: OptomechDevice):
+    def _addDevice(self, dev: Union[Device, OptomechDevice]):
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
         if (geom := dev.getGeometry()) is None:
             return
         self.addGeometry(geom, dev)
         dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
         self.handleTransformUpdate(dev, dev)
+        display_checkbox = Qt.QCheckBox(dev.name())
+        display_checkbox.setChecked(True)
+        display_checkbox.setObjectName(dev.name())
+        display_checkbox.stateChanged.connect(self.toggleDeviceVisibility)
+        self.button_layout.addWidget(display_checkbox)
+        self._geometries[dev]["display_checkbox"] = display_checkbox
+        if bounds := dev.getBoundaries():
+            self._geometries[dev]["limits"] = {}
+            self.addBounds(bounds, self._geometries[dev]["limits"])
+            wireframe_checkbox = Qt.QCheckBox(f"{dev.name()} limits")
+            wireframe_checkbox.setChecked(False)
+            wireframe_checkbox.setObjectName(dev.name())
+            wireframe_checkbox.stateChanged.connect(self.toggleDeviceLimitsVisibility)
+            self.button_layout.addWidget(wireframe_checkbox)
+            self._geometries[dev]["wireframe_checkbox"] = wireframe_checkbox
+            self.toggleDeviceLimitsVisibility(Qt.QtCore.Qt.Unchecked, dev.name())
+
+    def toggleDeviceVisibility(self, state):
+        dev_name = self.sender().objectName()
+        for key, data in self._geometries.items():
+            if key.name() == dev_name:
+                data["mesh"].setVisible(state == Qt.QtCore.Qt.Checked)
+
+    def addBounds(self, bounds, displayables_container: dict):
+        for a, b in Plane.wireframe(*bounds):
+            if np.linalg.norm(a - b) > 0.1:
+                continue  # ignore bounds that are really far away
+            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
+            self.view.addItem(edge)
+            displayables_container[(tuple(a), tuple(b))] = edge
+
+    def toggleDeviceLimitsVisibility(self, state, dev_name=None):
+        dev_name = dev_name or self.sender().objectName()
+        for key, data in self._geometries.items():
+            if key.name() == dev_name:
+                for edge in data.get("limits", {}).values():
+                    edge.setVisible(state == Qt.QtCore.Qt.Checked)
 
     def addGeometry(self, geom: Geometry, key=None):
         if key is None:
@@ -113,6 +166,16 @@ class VisualizerWindow(Qt.QMainWindow):
             return
         dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
         self.view.removeItem(mesh)
+        for edge in self._geometries[dev].get("limits", {}).values():
+            self.view.removeItem(edge)
+            edge.deleteLater()
+        disp_check = self._geometries[dev]["display_checkbox"]
+        self.button_layout.removeWidget(disp_check)
+        disp_check.deleteLater()
+        if "wireframe_checkbox" in self._geometries[dev]:
+            wf_check = self._geometries[dev]["wireframe_checkbox"]
+            self.button_layout.removeWidget(wf_check)
+            wf_check.deleteLater()
 
     def handleTransformUpdate(self, moved_device: OptomechDevice, cause_device: OptomechDevice):
         geom = self._geometries.get(moved_device, {}).get("geom")
@@ -129,11 +192,13 @@ class VisualizerWindow(Qt.QMainWindow):
         self._geometries[dev] = {}
         self.addDevice(dev)
 
-    def startPath(self, start, stop, voxel_size, bounds):
-        self.pathStartSignal.emit(start, stop, voxel_size, bounds)
+    def startPath(self, start, stop, bounds):
+        self.pathStartSignal.emit(start, stop, bounds)
 
-    def _startPath(self, start, stop, voxel_size, bounds):
+    def _startPath(self, start, stop, bounds):
         self.removePath()
+        self.pathPlanToggler.setEnabled(True)
+        self.pathPlanToggler.setChecked(True)
         path = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
         self.view.addItem(path)
         self._path["path"] = path
@@ -145,12 +210,7 @@ class VisualizerWindow(Qt.QMainWindow):
         self.view.addItem(dest_target)
         self._path["dest target"] = dest_target
 
-        for a, b in Plane.wireframe(*bounds):
-            if np.linalg.norm(a - b) > 0.1:
-                continue  # ignore bounds that are really far away
-            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
-            self.view.addItem(edge)
-            self._path[(tuple(a), tuple(b))] = edge
+        self.addBounds(bounds, self._path)
 
     def addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
         self.newObstacleSignal.emit(obstacle, to_global)
@@ -196,7 +256,13 @@ class VisualizerWindow(Qt.QMainWindow):
             return
         self._path["path"].setData(pos=path)
 
+    def togglePathPlan(self, state):
+        visible = state == Qt.QtCore.Qt.Checked
+        for viz in self._path.values():
+            viz.setVisible(visible)
+
     def removePath(self):
         for viz in self._path.values():
             self.view.removeItem(viz)
         self._path = {}
+        self.pathPlanToggler.setChecked(False)

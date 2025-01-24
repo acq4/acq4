@@ -208,6 +208,9 @@ class OptomechDevice(InterfaceMixin):
             return str(key)
         return self.name()
 
+    def getBoundaries(self):
+        return []
+
     def name(self):
         return self.__name
 

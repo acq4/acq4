@@ -347,7 +347,7 @@ class GeometryMotionPlanner:
         if visualizer is not None:
             if callback is None:
                 callback = visualizer.updatePath
-            visualizer.startPath(start, stop, self.voxel_size, bounds)
+            visualizer.startPath(start, stop, bounds)
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
