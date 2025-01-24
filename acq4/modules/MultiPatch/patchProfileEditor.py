@@ -1,6 +1,9 @@
+import json
 from copy import deepcopy
 import os
 import pyqtgraph as pg
+from acq4.util.debug import logMsg
+from acq4.util.json_encoder import ACQ4JSONEncoder
 from pyqtgraph.parametertree import Parameter
 import acq4.util.Qt as qt
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -48,6 +51,7 @@ class ProfileEditor(qt.QWidget):
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
                         profile_item.applyDefaults({state_name: {param_name: data}})
+        logMsg(f"Pipette profile {profile_name} updated: {json.dumps(changes, cls=ACQ4JSONEncoder)}")
 
     def setTopLevelWindow(self):
         self.raise_()
