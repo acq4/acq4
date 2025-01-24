@@ -24,21 +24,19 @@ class Visualize3D(Module):
     @classmethod
     def openWindow(cls):
         if cls.win is None:
-            cls.win = MainWindow()
-        cls.win.clear()
+            cls.win = VisualizerWindow()
         cls.win.show()
+        cls.win.clear()
 
     def __init__(self, manager, name: str, config: dict):
         super().__init__(manager, name, config)
-        self.gridlines = None
-        self.truncated_cone = None
         runInGuiThread(self.openWindow)
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
             self.win.addDevice(dev)
 
 
-class MainWindow(Qt.QMainWindow):
+class VisualizerWindow(Qt.QMainWindow):
     pathStartSignal = Qt.pyqtSignal(object, object, float, list)
     newObstacleSignal = Qt.pyqtSignal(object, object)
     newDeviceSignal = Qt.pyqtSignal(object)

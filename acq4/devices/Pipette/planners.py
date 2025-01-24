@@ -9,6 +9,7 @@ from acq4.util.future import MultiFuture, future_wrap
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.geometry import GeometryMotionPlanner, Plane
+from ...util.threadrun import runInGuiThread
 
 if TYPE_CHECKING:
     from .pipette import Pipette
@@ -263,7 +264,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         globalStart, prepend_path = self._planAroundSurface(globalStart)
         globalStop, append_path = self._planAroundSurface(globalStop)
 
-        viz = getManager().getModule("Visualize3D").win
+        runInGuiThread(getManager().getModule, "Visualize3D")
+        viz = getManager().getModule("Visualize3D").window()
         planner, from_pip_to_global = self._getPlanningContext()
         path = planner.find_path(
             self.pip.getGeometry(),

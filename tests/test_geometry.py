@@ -3,7 +3,7 @@ import pytest
 
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from acq4.modules.Visualize3D import MainWindow
+from acq4.modules.Visualize3D import VisualizerWindow
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line
 from coorx import NullTransform, TTransform, Point, SRT3DTransform
 
@@ -517,7 +517,7 @@ def visualize():
 
 if __name__ == "__main__":
     pg.mkQApp()
-    visualizer = MainWindow()
+    visualizer = VisualizerWindow()
     visualizer.show()
     # visualize()
     geom = Geometry(
