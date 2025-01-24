@@ -71,7 +71,7 @@ class Manager(Qt.QObject):
         return m
 
     def __init__(self, configFile=None):
-        self.lock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
+        self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
         # self.devices = OrderedDict()  # all currently loaded devices
         self.modules = OrderedDict()  # all currently running modules
         self.devices = OrderedDict()  # all devices loaded via Manager
@@ -401,10 +401,10 @@ class Manager(Qt.QObject):
         return list(self.config.get('configurations', {}).keys())
 
     def loadDefinedConfig(self, name):
-        with self.lock:
-            if name not in self.config['configurations']:
-                raise Exception("Could not find configuration named '%s'" % name)
+        try:
             cfg = self.config['configurations'][name]
+        except KeyError:
+            raise KeyError(f"Could not find configuration named '{name}'")
         self.configure(cfg)
 
     def readConfigFile(self, fileName, missingOk=True):
@@ -426,12 +426,11 @@ class Manager(Qt.QObject):
         return configfile.writeConfigFile(data, fileName)
 
     def appendConfigFile(self, data, fileName):
-        with self.lock:
-            fileName = self.configFileName(fileName)
-            if os.path.exists(fileName):
-                return configfile.appendConfigFile(data, fileName)
-            else:
-                raise Exception("Could not find file %s" % fileName)
+        fileName = self.configFileName(fileName)
+        if os.path.exists(fileName):
+            return configfile.appendConfigFile(data, fileName)
+        else:
+            raise Exception("Could not find file %s" % fileName)
 
     def updateConfig(self, config: dict):
         self.config.update(config)
@@ -509,9 +508,13 @@ class Manager(Qt.QObject):
         ## Find an unused name for this module
         baseName = name
         n = 0
-        while name in self.listInterfaces().get("module", []):
-            name = "%s_%d" % (baseName, n)
-            n += 1
+        with self.moduleLock:
+            while name in self.listInterfaces().get("module", []):
+                name = "%s_%d" % (baseName, n)
+                n += 1
+            if name in self.modules:
+                raise NameError(f"Module name '{name}' is already in use.")
+            self.modules[name] = None  # reserve this spot
 
         if config is None:
             config = {}
@@ -527,37 +530,34 @@ class Manager(Qt.QObject):
         modclass = modules.getModuleClass(moduleClassName)
 
         mod = modclass(self, name, config)
-        with self.lock:
-            self.modules[name] = mod
+        self.modules[name] = mod
 
         self.sigModulesChanged.emit()
         return mod
 
     def listModules(self):
         """List names of currently loaded modules. """
-        with self.lock:
-            return list(self.modules.keys())
+        return list(self.modules.keys())
 
     def getDirOfSelectedFile(self):
         """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
-        with self.lock:
-            try:
-                f = self.getModule("Data Manager").selectedFile()
-                if not isinstance(f, DirHandle):
-                    f = f.parent()
-            except Exception:
-                f = False
-                logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
-                if self.exitOnError:
-                    raise
-            return f
+        try:
+            f = self.getModule("Data Manager").selectedFile()
+            if not isinstance(f, DirHandle):
+                f = f.parent()
+        except Exception:
+            f = False
+            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+            if self.exitOnError:
+                raise
+        return f
 
     def getModule(self, name: str):
         """Return a module"""
-        with self.lock:
+        with self.moduleLock:
             if name not in self.modules:
                 self.loadDefinedModule(name)
-            return self.modules[name]
+        return self.modules[name]
 
     def getCurrentDatabase(self):
         """Return the database currently selected in the Data Manager"""
@@ -565,16 +565,14 @@ class Manager(Qt.QObject):
 
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
-        with self.lock:
-            return self.definedModules.copy()
+        return self.definedModules.copy()
 
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
-        with self.lock:
-            if name not in self.definedModules:
-                print("Module '%s' is not defined. Options are: %s" % (name, str(list(self.definedModules.keys()))))
-                return
-            conf = self.definedModules[name]
+        if name not in self.definedModules:
+            print("Module '%s' is not defined. Options are: %s" % (name, str(list(self.definedModules.keys()))))
+            return
+        conf = self.definedModules[name]
 
         mod = conf['module']
         config = conf.get('config', {})
@@ -590,7 +588,7 @@ class Manager(Qt.QObject):
         print("Loaded module '%s'" % mod.name)
 
     def moduleHasQuit(self, mod):
-        with self.lock:
+        with self.moduleLock:
             if mod.name in self.modules:
                 del self.modules[mod.name]
                 self.interfaceDir.removeObject(mod)
@@ -611,12 +609,9 @@ class Manager(Qt.QObject):
                 printExc()
 
         ## Module should have called moduleHasQuit already, but just in case:
-        with self.lock:
-            if name in self.modules:
-                del self.modules[name]
-            else:
-                return
-        self.sigModulesChanged.emit()
+        mod = self.modules.pop(name, None)
+        if mod is not None:
+            self.sigModulesChanged.emit()
 
     def reloadAll(self):
         """Reload all python code"""
@@ -641,20 +636,17 @@ class Manager(Qt.QObject):
             else:
                 printExc()
 
-        with self.lock:
-            self.shortcuts.append((sh, keys, weakref.ref(win)))
+        self.shortcuts.append((sh, keys, weakref.ref(win)))
 
     def removeWindowShortcut(self, win):
         ## Need to remove shortcuts after window is closed, because the shortcut is hanging on to all the widgets in the window
-        ind = None
+        s = None
         for i, s in enumerate(self.shortcuts):
             if s[2]() == win:
-                ind = i
                 break
 
-        if ind is not None:
-            with self.lock:
-                self.shortcuts.pop(ind)
+        if s is not None:
+            self.shortcuts.remove(s)
 
     def runTask(self, cmd):
         """
@@ -694,11 +686,10 @@ class Manager(Qt.QObject):
         """
         Return a directory handle to the currently-selected directory for data storage.
         """
-        with self.lock:
-            if self.currentDir is None:
-                raise HelpfulException("Storage directory has not been set.",
-                                       docs=["userGuide/modules/DataManager.html#acquired-data-storage"])
-            return self.currentDir
+        if self.currentDir is None:
+            raise HelpfulException("Storage directory has not been set.",
+                                    docs=["userGuide/modules/DataManager.html#acquired-data-storage"])
+        return self.currentDir
 
     def setLogDir(self, d):
         """
@@ -750,25 +741,23 @@ class Manager(Qt.QObject):
         This is the highest-level directory where acquired data may be stored. If 
         the base directory has not been set, return None.
         """
-        with self.lock:
-            return self.baseDir
+        return self.baseDir
 
     def setBaseDir(self, d):
         """
         Set the base directory for data storage. 
         """
-        with self.lock:
-            if isinstance(d, str):
-                dh = self.dirHandle(d, create=False)
-            elif isinstance(d, DirHandle):
-                dh = d
-            else:
-                raise Exception("Invalid argument type: ", type(d), d)
+        if isinstance(d, str):
+            dh = self.dirHandle(d, create=False)
+        elif isinstance(d, DirHandle):
+            dh = d
+        else:
+            raise Exception("Invalid argument type: ", type(d), d)
 
-            changed = False
-            if self.baseDir is not dh:
-                self.baseDir = dh
-                changed = True
+        changed = False
+        if self.baseDir is not dh:
+            self.baseDir = dh
+            changed = True
 
         if changed:
             self.sigBaseDirChanged.emit()
@@ -789,35 +778,30 @@ class Manager(Qt.QObject):
 
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
-        with self.lock:
-            return self.interfaceDir.declareInterface(*args, **kargs)
+        return self.interfaceDir.declareInterface(*args, **kargs)
 
     def removeInterface(self, *args, **kargs):
-        with self.lock:
-            return self.interfaceDir.removeInterface(*args, **kargs)
+        return self.interfaceDir.removeInterface(*args, **kargs)
 
     def listInterfaces(self, *args, **kargs):
-        with self.lock:
-            return self.interfaceDir.listInterfaces(*args, **kargs)
+        return self.interfaceDir.listInterfaces(*args, **kargs)
 
     def getInterface(self, *args, **kargs):
         """Return the object that was previously declared with *name* and interface *type*.
         """
-        with self.lock:
-            return self.interfaceDir.getInterface(*args, **kargs)
+        return self.interfaceDir.getInterface(*args, **kargs)
 
     def suggestedDirFields(self, file):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
-        with self.lock:
-            fields = OrderedDict()
-            if isinstance(file, DirHandle):
-                info = file.info()
-                if 'dirType' in info:
-                    # infoKeys.remove('dirType')
-                    dt = info['dirType']
-                    folderTypesConfig = self._folderTypesConfig()
-                    if dt in folderTypesConfig:
-                        fields = folderTypesConfig[dt]['info']
+        fields = OrderedDict()
+        if isinstance(file, DirHandle):
+            info = file.info()
+            if 'dirType' in info:
+                # infoKeys.remove('dirType')
+                dt = info['dirType']
+                folderTypesConfig = self._folderTypesConfig()
+                if dt in folderTypesConfig:
+                    fields = folderTypesConfig[dt]['info']
 
         if 'notes' not in fields:
             fields['notes'] = 'text', 5
