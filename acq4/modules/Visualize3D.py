@@ -126,6 +126,8 @@ class VisualizerWindow(Qt.QMainWindow):
             self.button_layout.addWidget(wireframe_checkbox)
             self._geometries[dev]["wireframe_checkbox"] = wireframe_checkbox
             self.toggleDeviceLimitsVisibility(Qt.QtCore.Qt.Unchecked, dev.name())
+            if hasattr(dev, "sigCalibrationChanged"):
+                dev.sigCalibrationChanged.connect(self.handleGeometryChange)
 
     def toggleDeviceVisibility(self, state):
         dev_name = self.sender().objectName()
