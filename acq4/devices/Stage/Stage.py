@@ -545,20 +545,16 @@ class Stage(Device, OptomechDevice):
         """Return the boundaries of the stage in global coordinates."""
         if len(self.axes()) != 3:
             raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
-        if None in [m for ax in self.getLimits() for m in ax]:
-            return []
         limits = self.getLimits()  # min, max
-        xform = self._baseTransform * self.axisTransform()
-        xform = np.array(xform.copyDataTo()).reshape(4, 4)
+        if None in [m for ax in limits for m in ax]:
+            return []
+        # TODO do we need to use _baseTransform, too?
+        xform = np.array(self.axisTransform().copyDataTo()).reshape(4, 4)
         xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
-        planes = []
-        for axis, i in itertools.product(range(len(limits)), range(2)):
-            normal = np.zeros(3)
-            normal[axis] = 1 if i == 0 else -1
-            normal = xform.map(normal) - xform.map(np.zeros(3))
-            point = xform.map(np.array([ax[i] for ax in limits]))  # any point on the plane
-            planes.append(Plane(normal, point))
-        return planes
+        corners = [xform.map(np.array([ax[i] for ax in limits])) for i in range(2)]
+        axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
+        normals = [np.cross(axes[0], axes[1]), np.cross(axes[0], axes[2]), np.cross(axes[1], axes[2])]
+        return [Plane(n, c) for n, c in itertools.product(normals, corners)]
 
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")

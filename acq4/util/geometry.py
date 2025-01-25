@@ -802,8 +802,8 @@ class Line:
 class Plane:
     @classmethod
     def wireframe(cls, *planes: "Plane") -> List[tuple[np.ndarray, np.ndarray]]:
-        """Given a set of intersecting planes, assumed to form a closed volume, make a
-        wireframe of that volume. Returns a list of segment endpoints."""
+        """Given a set of intersecting planes, assumed to form a closed volume with side-length greater than 1e-9,
+        make a wireframe of that volume. Returns a list of segment endpoints."""
         lines = []
         segments = ApproxDict()
         for i, plane in enumerate(planes):
@@ -816,7 +816,7 @@ class Plane:
             if a == b or b == c or a == c:
                 continue
             if (start := a.intersecting_point(b)) is not None and (end := a.intersecting_point(c)) is not None:
-                if np.allclose(start, end):
+                if np.allclose(start, end, atol=1e-9):
                     continue
                 start = tuple(start)
                 end = tuple(end)
