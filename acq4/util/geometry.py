@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from collections import deque, Counter
 from functools import cached_property
 from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator
@@ -216,14 +217,14 @@ def a_star_ish(
     came_from = {}
     g_score = {tuple(start): 0}
     f_score = {tuple(start): heuristic(start, finish)}
-    obstacles = {}
+    obstacles = deque(maxlen=10)
     cost = 0
 
     def worst() -> str:
-        offender = max(obstacles.items(), key=lambda x: x[1])
-        if isinstance(offender[0], Volume):
-            return str(offender[0].transform.systems[0])
-        return f"Boundary {offender[0]}"
+        offender = Counter(obstacles).most_common(1)[0]
+        if isinstance(offender, Volume):
+            return str(offender.transform.systems[0])
+        return f"Boundary {offender}"
 
     while open_set:
         curr_key = min(open_set, key=lambda x: f_score[x])
@@ -238,8 +239,7 @@ def a_star_ish(
             neigh_key = tuple(neighbor)
             this_cost, obstacle = edge_cost(current, neighbor)
             if this_cost == np.inf:
-                obstacles.setdefault(obstacle, 0)
-                obstacles[obstacle] += 1
+                obstacles.append(obstacle)
             tentative_g_score = g_score[curr_key] + this_cost
             if neigh_key not in g_score or tentative_g_score < g_score[neigh_key] or np.all(neighbor == finish):
                 came_from[neigh_key] = curr_key

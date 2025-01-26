@@ -218,12 +218,13 @@ class VisualizerWindow(Qt.QMainWindow):
         self.newObstacleSignal.emit(obstacle, to_global)
 
     def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
+        cs_name = obstacle.transform.systems[0].name
+
         verts, faces = obstacle.surface_mesh
         mesh = gl.MeshData(vertexes=verts, faces=faces)
         m = gl.GLMeshItem(
             meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
         )
-        cs_name = obstacle.transform.systems[0].name
         recenter_voxels = TTransform(
             offset=(0.5, 0.5, 0.5),
             from_cs=f"[isosurface of {cs_name}]",
