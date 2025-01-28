@@ -248,9 +248,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
     def _planAroundSurface(self, pos):
         surface = self.pip.approachDepth()
         if pos[2] >= surface:
-            return pos, []
-        waypoint = self.pip.positionAtDepth(surface, start=pos)
-        return waypoint, [(pos, "slow", False, "avoiding sample tear")]
+            return None
+        return self.pip.positionAtDepth(surface, start=pos)
 
     def safePath(self, globalStart, globalStop, speed, explanation=None):
         self._cachePrimer.wait()
@@ -258,8 +257,14 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         boundaries = self.pip.getBoundaries()
         surface = self.pip.scopeDevice().getSurfaceDepth()
         boundaries += [Plane((0, 0, 1), (0, 0, surface))]
-        globalStart, prepend_path = self._planAroundSurface(globalStart)
-        globalStop, append_path = self._planAroundSurface(globalStop)
+        initial_waypoint = self._planAroundSurface(globalStart)
+        if initial_waypoint is not None:
+            prepend_path = [(initial_waypoint, "slow", False, RETRACTION_TO_AVOID_SAMPLE_TEAR)]
+            globalStart = initial_waypoint
+        final_waypoint = self._planAroundSurface(globalStop)
+        if final_waypoint is not None:
+            append_path = [(globalStop, "slow", False, RETRACTION_TO_AVOID_SAMPLE_TEAR)]
+            globalStop = final_waypoint
 
         viz = getManager().getModule("Visualize3D").window()
         planner, from_pip_to_global = self._getPlanningContext()

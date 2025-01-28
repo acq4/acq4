@@ -818,7 +818,7 @@ class Plane:
             if (start := a.intersecting_point(b)) is not None and (end := a.intersecting_point(c)) is not None:
                 if np.allclose(start, end, atol=1e-9):
                     continue
-                start = tuple(start)
+                start = tuple(start)  # tuples so we can key a dict
                 end = tuple(end)
                 if start not in segments.get(end, ApproxSet()):
                     segments.setdefault(start, ApproxSet()).add(end)
