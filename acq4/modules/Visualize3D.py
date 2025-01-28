@@ -43,7 +43,7 @@ class VisualizerWindow(Qt.QMainWindow):
     pathStartSignal = Qt.pyqtSignal(object, object, list)
     newObstacleSignal = Qt.pyqtSignal(object, object)
     newDeviceSignal = Qt.pyqtSignal(object)
-    pathUpdateSignal = Qt.pyqtSignal(object, int)
+    pathUpdateSignal = Qt.pyqtSignal(object)
     focusEvent = Qt.pyqtSignal()
 
     def __init__(self):
@@ -67,7 +67,7 @@ class VisualizerWindow(Qt.QMainWindow):
         self.pathStartSignal.connect(self._startPath)
         self.newObstacleSignal.connect(self._addObstacleVolumeOutline)
         self.newDeviceSignal.connect(self._addDevice)
-        self.pathUpdateSignal.connect(self._updatePath)
+        self.pathUpdateSignal.connect(self._appendPath)
         self.focusEvent.connect(self._focus)
         self._pathUpdates = queue.Queue()
         self._pathWatcherThread = Thread(target=self._watchForPathUpdates)
@@ -201,9 +201,7 @@ class VisualizerWindow(Qt.QMainWindow):
         self.removePath()
         self.pathPlanToggler.setEnabled(True)
         self.pathPlanToggler.setChecked(True)
-        path = gl.GLLinePlotItem(pos=np.array([start, stop]), color=(0.1, 1, 0.7, 1), width=1)
-        self.view.addItem(path)
-        self._path["path"] = path
+        self._appendPath([start, stop])
         start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 1, 1), size=10, pxMode=True)
         self.view.addItem(start_target)
         self._path["start target"] = start_target
@@ -242,7 +240,7 @@ class VisualizerWindow(Qt.QMainWindow):
         # self.view.addItem(v)
         # self._path[f"voxels of {cs_name}"] = v
 
-    def updatePath(self, path, skip=4):
+    def updatePath(self, path, skip=3):
         self._pathUpdates.put((path, skip))
 
     def _watchForPathUpdates(self):
@@ -251,13 +249,18 @@ class VisualizerWindow(Qt.QMainWindow):
             path, skip = self._pathUpdates.get()
             n_updates += 1
             if n_updates % skip == 0:
-                self.pathUpdateSignal.emit(path, skip)
+                self.pathUpdateSignal.emit(path)
                 time.sleep(0.02)
 
-    def _updatePath(self, path, skip):
-        if "path" not in self._path:
-            return
-        self._path["path"].setData(pos=path)
+    def _appendPath(self, path):
+        if "paths" not in self._path:
+            self._path["paths"] = []
+        if len(self._path["paths"]) > 0:
+            self._path["paths"][-1].color = (0.1, 1, 0.7, 0.1)
+            self._path["paths"][-1].paint()
+        path = gl.GLLinePlotItem(pos=np.array(path), color=(0.1, 1, 0.7, 1), width=1)
+        self.view.addItem(path)
+        self._path["paths"].append(path)
 
     def togglePathPlan(self, state):
         visible = state == Qt.QtCore.Qt.Checked
@@ -265,6 +268,8 @@ class VisualizerWindow(Qt.QMainWindow):
             viz.setVisible(visible)
 
     def removePath(self):
+        for path in self._path.pop("paths", []):
+            self.view.removeItem(path)
         for viz in self._path.values():
             self.view.removeItem(viz)
         self._path = {}
