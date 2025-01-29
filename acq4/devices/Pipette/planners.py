@@ -435,19 +435,23 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
     This position is used to recalibrate the pipette immediately before going to approach.
     """
 
-    def _move(self):
+    @future_wrap
+    def _move(self, _future):
         pip = self.pip
         speed = self.speed
-
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
-        path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        path.append((waypoint2, "slow", True, MOVE_TO_DESTINATION))
-        pfut = pip._movePath(path)
-        sfut = scope.setGlobalPosition(waypoint2)
+        move_scope = scope.setGlobalPosition(waypoint2)
 
-        return MultiFuture([pfut, sfut])
+        try:
+            path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
+        except Exception:
+            _future.waitFor(move_scope)
+            path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
+        path.append((waypoint2, "slow", True, MOVE_TO_DESTINATION))
+        _future.waitFor(pip._movePath(path))
+        _future.waitFor(move_scope)
 
     def aboveTargetPath(self):
         """Return the path to the "above target" recalibration position.

@@ -491,6 +491,7 @@ class Volume(object):
     def contains_point(self, point: np.ndarray):
         """Return True if the given point is inside this volume. Point should be in the parent coordinate system of the
         volume"""
+        # TODO turn [::-1] into a part of the transform
         coords = np.floor(self.transform.inverse.map(point)).astype(int)[::-1]
         if np.any(coords < 0) or np.any(coords >= self.volume.shape):
             return False
