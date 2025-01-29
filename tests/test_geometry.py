@@ -1,8 +1,6 @@
 import numpy as np
 import pytest
 
-import pyqtgraph as pg
-import pyqtgraph.opengl as gl
 from acq4.modules.Visualize3D import VisualizerWindow
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line
 from coorx import NullTransform, TTransform, Point, SRT3DTransform, Transform
@@ -31,6 +29,8 @@ def cube():
 
 
 def do_viz(viz, geometries: dict[Geometry, Transform]):
+    import pyqtgraph as pg
+
     if viz is None:
         return
     viz.show()
@@ -111,6 +111,9 @@ def test_single_voxel_voxelization(geometry, visualize=False):
     voxel_size = 1.0
     template = geometry.voxel_template(voxel_size)
     if visualize:
+        import pyqtgraph as pg
+        import pyqtgraph.opengl as gl
+
         w = gl.GLViewWidget()
         w.show()
         w.setCameraPosition(distance=20)
@@ -479,6 +482,9 @@ draw_n = 0
 
 
 if __name__ == "__main__":
+    import pyqtgraph as pg
+    import pyqtgraph.opengl as gl
+
     pg.mkQApp()
     visualizer = VisualizerWindow()
     visualizer.show()
