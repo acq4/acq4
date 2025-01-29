@@ -256,7 +256,7 @@ class VisualizerWindow(Qt.QMainWindow):
         if "paths" not in self._path:
             self._path["paths"] = []
         if len(self._path["paths"]) > 0:
-            self._path["paths"][-1].color = (0.1, 1, 0.7, 0.1)
+            self._path["paths"][-1].color = (0.1, 1, 0.7, 0.02)
             self._path["paths"][-1].paint()
         path = gl.GLLinePlotItem(pos=np.array(path), color=(0.1, 1, 0.7, 1), width=1)
         self.view.addItem(path)

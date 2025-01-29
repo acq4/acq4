@@ -341,8 +341,8 @@ class GeometryMotionPlanner:
         path : list
             List of global positions to get from start to stop
         """
-        start = np.array(start)
-        stop = np.array(stop)
+        start = Point(start, "global")
+        stop = Point(stop, "global")
         bounds = [] if bounds is None else bounds
         if visualizer is not None:
             if callback is None:
@@ -366,7 +366,7 @@ class GeometryMotionPlanner:
                     convolved_obst = obst.make_convolved_voxels(
                         traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
                     )
-                    # TODO is this bad? setting transforms explicitly frequently is...
+                    # TODO is this bad? explicitly setting transforms frequently is...
                     convolved_obst.transform = obst.transform * convolved_obst.transform
                     self._cache[cache_key] = convolved_obst
                     profile.mark(f"cache miss: generated convolved obstacle {obst.name}")
@@ -491,7 +491,7 @@ class Volume(object):
     def contains_point(self, point: np.ndarray):
         """Return True if the given point is inside this volume. Point should be in the parent coordinate system of the
         volume"""
-        coords = np.floor(self.transform.inverse.map(point)).astype(int)
+        coords = np.floor(self.transform.inverse.map(point)).astype(int)[::-1]
         if np.any(coords < 0) or np.any(coords >= self.volume.shape):
             return False
         return self.volume[tuple(coords)]
