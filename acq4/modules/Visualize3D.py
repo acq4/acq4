@@ -41,7 +41,7 @@ class Visualize3D(Module):
 
 class VisualizerWindow(Qt.QMainWindow):
     pathStartSignal = Qt.pyqtSignal(object, object, list)
-    newObstacleSignal = Qt.pyqtSignal(object, object)
+    newObstacleSignal = Qt.pyqtSignal(object, object, object, object)
     newDeviceSignal = Qt.pyqtSignal(object)
     pathUpdateSignal = Qt.pyqtSignal(object)
     focusEvent = Qt.pyqtSignal()
@@ -213,12 +213,11 @@ class VisualizerWindow(Qt.QMainWindow):
         self.addBounds(bounds, self._path, start)
 
     def addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
-        self.newObstacleSignal.emit(obstacle, to_global)
+        self.newObstacleSignal.emit(obstacle, to_global, *obstacle.surface_mesh)
 
-    def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
+    def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform, verts, faces):
         cs_name = obstacle.transform.systems[0].name
 
-        verts, faces = obstacle.surface_mesh
         mesh = gl.MeshData(vertexes=verts, faces=faces)
         m = gl.GLMeshItem(
             meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
