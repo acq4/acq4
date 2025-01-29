@@ -242,11 +242,11 @@ def test_z_and_x_are_not_swapped(viz=None):
     do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
     assert path is not None
 
-    path = planner.find_path(
-        traveler, NullTransform(3, from_cs=traveler.parent_name, to_cs="global"), start[::-1], dest, visualizer=viz
-    )
+    with pytest.raises(ValueError):
+        planner.find_path(
+            traveler, NullTransform(3, from_cs=traveler.parent_name, to_cs="global"), start[::-1], dest, visualizer=viz
+        )
     do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
-    assert path is None
 
 
 def test_path_with_funner_traveler(geometry, viz=None):
@@ -290,11 +290,11 @@ def test_bounds_prevent_path(geometry, cube, viz=None):
     dest = Point(np.array([0.2, 0.2, 3]), "global")
     planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
     traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
-    path = planner.find_path(
-        traveler, traveler_to_global, start, dest, cube, visualizer=viz
-    )
+    with pytest.raises(ValueError):
+        planner.find_path(
+            traveler, traveler_to_global, start, dest, cube, visualizer=viz
+        )
     do_viz(viz, {traveler: traveler_to_global})
-    assert path is None
 
 
 def test_no_path(viz=None):
@@ -312,9 +312,9 @@ def test_no_path(viz=None):
     from_traveler_to_global = TTransform(offset=(0, 2, 3), from_cs="traveler", to_cs="global")
     start = from_traveler_to_global.map(Point(np.array([0, 0, 0]), "traveler"))
     dest = Point(np.array([voxel_size, voxel_size, voxel_size]) * 2, "global")  # inside the box
-    path = planner.find_path(traveler, from_traveler_to_global, start, dest, visualizer=viz)
+    with pytest.raises(ValueError):
+        planner.find_path(traveler, from_traveler_to_global, start, dest, visualizer=viz)
     do_viz(viz, {geometry: geometry_to_global, traveler: from_traveler_to_global})
-    assert path is None
 
 
 def test_no_path_because_of_shadow(geometry):
@@ -339,8 +339,8 @@ def test_no_path_because_of_shadow(geometry):
     path = planner.find_path(point, point_to_global, start, dest)
     assert path is not None
     traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
-    path = planner.find_path(traveler, traveler_to_global, start, dest)
-    assert path is None
+    with pytest.raises(ValueError):
+        planner.find_path(traveler, traveler_to_global, start, dest)
 
 
 def test_no_path_because_of_offset_shadow(geometry, viz=None):
@@ -374,11 +374,11 @@ def test_no_path_because_of_offset_shadow(geometry, viz=None):
     do_viz(viz, {geometry: from_geom_to_global, point: point_to_global})
     assert path is not None
     traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
-    path = planner.find_path(
-        traveler, traveler_to_global, start, dest, visualizer=viz
-    )
+    with pytest.raises(ValueError):
+        planner.find_path(
+            traveler, traveler_to_global, start, dest, visualizer=viz
+        )
     do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
-    assert path is None
 
 
 def assert_all_intersect_at(pt, *lines):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
 import pyqtgraph as pg
-from acq4.util.future import MultiFuture, future_wrap
+from acq4.util.future import future_wrap
 from coorx import SRT3DTransform
 from ... import getManager
 from ...util.HelpfulException import HelpfulException

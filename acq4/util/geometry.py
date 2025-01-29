@@ -196,9 +196,9 @@ def a_star_ish(
     neighbors=None,
     max_cost=4000,
     callback=None,
-) -> tuple[List[np.ndarray] | None, str | None]:
-    """Run the A* algorithm to find the shortest path between *start* and *finish*. Return the path or None and the
-    barrier that prevented the path or None."""
+) -> List[np.ndarray]:
+    """Run the A* algorithm to find the shortest path between *start* and *finish*. Return the path or raise a
+    ValueError."""
     if heuristic is None:
 
         def heuristic(x, y):
@@ -230,12 +230,12 @@ def a_star_ish(
         curr_key = min(open_set, key=lambda x: f_score[x])
         current = open_set.pop(curr_key)
         if np.all(current == finish):
-            return reconstruct_path(came_from, curr_key), None
+            return reconstruct_path(came_from, curr_key)
 
         for neighbor in neighbors(current):
             cost += 1
             if cost > max_cost:
-                return None, worst()
+                raise ValueError(f"Pathfinding exceeded maximum cost of {max_cost}, worst barrier: {worst()}")
             neigh_key = tuple(neighbor)
             this_cost, obstacle = edge_cost(current, neighbor)
             if this_cost == np.inf:
@@ -250,7 +250,7 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
-    return None, worst()
+    raise ValueError(f"Pathfinding failed, worst barrier: {worst()}")
 
 
 def simplify_path(path, edge_cost: Callable):
@@ -391,11 +391,8 @@ class GeometryMotionPlanner:
                     return np.inf, obj
             return np.linalg.norm(b - a), None
 
-        path, self._primary_barrier = a_star_ish(start, stop, edge_cost, callback=callback)
+        path = a_star_ish(start, stop, edge_cost, callback=callback)
         profile.mark("A*")
-        if path is None:
-            profile.finish()
-            return None
         path = simplify_path(path, edge_cost)
         profile.mark("simplified path")
         if callback:
