@@ -348,12 +348,12 @@ class GeometryMotionPlanner:
             if callback is None:
                 callback = visualizer.updatePath
             visualizer.startPath(start, stop, bounds)
-            for b in bounds:
-                if b.line_intersects(start, stop):
-                    raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {b}")
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
+        for b in bounds:
+            if b.line_intersects(start, stop):
+                raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {b}")
 
         profile = debug.Profiler()
         obstacles = []
@@ -852,12 +852,19 @@ class Plane:
         self.name = name
 
     def line_intersects(self, start: np.ndarray, end: np.ndarray) -> bool:
+        if self.contains_point(start) or self.contains_point(end):
+            return False
         diff = end - start
         denom = np.dot(self.normal, diff)
         if denom == 0:
             return False
         t = np.dot(self.normal, self.point - start) / denom
         return 0 <= t <= 1
+
+    def contains_point(self, pt: np.ndarray, tolerance: float = 1e-9) -> bool:
+        # If the dot product is close to zero, the point is on the plane
+        dot_product = np.dot(pt - self.point, self.normal)
+        return abs(dot_product) < tolerance
 
     def intersecting_line(self, other: "Plane") -> Line | None:
         direction = np.cross(self.normal, other.normal)

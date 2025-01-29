@@ -14,10 +14,7 @@ class MockStage(Stage):
         Stage.__init__(self, dm, config, name)
         
         self._lastMove = None
-        self.stageThread = MockStageThread()
-        self.stageThread.positionChanged.connect(self.posChanged)
-        self.stageThread.start()
-        
+
         dm.declareInterface(name, ['stage'], self)
         
         # Global key press handling
@@ -40,6 +37,10 @@ class MockStage(Stage):
             Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
+        self.stageThread = MockStageThread()
+        self.stageThread.positionChanged.connect(self.posChanged)
+        self.stageThread.start()
+        self._move(self.getPosition(), 10000, False)
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -57,7 +58,7 @@ class MockStage(Stage):
 
     def _move(self, pos, speed, linear, **kwds):
         """Called by base stage class when the user requests to move to an
-        posolute or relative position.
+        absolute or relative position.
         """
         with self.lock:
             self._interruptMove()
