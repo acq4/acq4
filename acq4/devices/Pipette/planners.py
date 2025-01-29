@@ -7,6 +7,7 @@ from acq4.util.future import MultiFuture, future_wrap
 from coorx import SRT3DTransform
 from ... import getManager
 from ...util.HelpfulException import HelpfulException
+from ...util.debug import printExc
 from ...util.geometry import GeometryMotionPlanner, Plane
 
 if TYPE_CHECKING:
@@ -242,8 +243,12 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
 
     @future_wrap
     def _primeCaches(self, _future):
-        planner, from_pip_to_global = self._getPlanningContext()
-        planner.find_path(self.pip.getGeometry(), from_pip_to_global, (0, 0, 0), (1e-6, 1e-6, 1e-6))
+        try:
+            planner, from_pip_to_global = self._getPlanningContext()
+            start = dest = self.pip.globalPosition()
+            planner.find_path(self.pip.getGeometry(), from_pip_to_global, start, dest)
+        except RuntimeError:
+            printExc("Blew up while attempting to prime path finding cache")
 
     def _planAroundSurface(self, pos):
         surface = self.pip.approachDepth()
@@ -256,14 +261,16 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
 
         boundaries = self.pip.getBoundaries()
         surface = self.pip.scopeDevice().getSurfaceDepth()
-        boundaries += [Plane((0, 0, 1), (0, 0, surface))]
+        boundaries += [Plane((0, 0, 1), (0, 0, surface), "sample surface")]
+        prepend_path = append_path = []
         initial_waypoint = self._planAroundSurface(globalStart)
         if initial_waypoint is not None:
             prepend_path = [(initial_waypoint, "slow", False, RETRACTION_TO_AVOID_SAMPLE_TEAR)]
             globalStart = initial_waypoint
         final_waypoint = self._planAroundSurface(globalStop)
         if final_waypoint is not None:
-            append_path = [(globalStop, "slow", False, RETRACTION_TO_AVOID_SAMPLE_TEAR)]
+            append_path = [(globalStop, "slow", False, explanation)]
+            explanation = RETRACTION_TO_AVOID_SAMPLE_TEAR
             globalStop = final_waypoint
 
         viz = getManager().getModule("Visualize3D").window()
@@ -279,12 +286,14 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         if path is None:
             worst = planner.get_primary_barrier()
             viz.focus()
-            raise HelpfulException(f"No safe path found; '{worst}' was maybe in the way. See visualization for details.")
+            raise HelpfulException(
+                f"No safe path found; '{worst}' was maybe in the way. See visualization for details."
+            )
         if len(path) == 0:
             path = [(globalStop, speed, False, explanation)]
         path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
         goal = path.pop()
-        path = prepend_path + path + append_path + [(goal[0], speed, False, explanation)]
+        path = prepend_path + path + [(goal[0], speed, False, explanation)] + append_path
         viz.updatePath([globalStart] + [p[0] for p in path], skip=1)
         return path
 

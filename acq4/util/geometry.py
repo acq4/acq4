@@ -348,6 +348,9 @@ class GeometryMotionPlanner:
             if callback is None:
                 callback = visualizer.updatePath
             visualizer.startPath(start, stop, bounds)
+            for b in bounds:
+                if b.line_intersects(start, stop):
+                    raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {b}")
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
@@ -372,6 +375,10 @@ class GeometryMotionPlanner:
             obstacles.append((obst_volume, to_global_from_obst))
             if visualizer is not None:
                 visualizer.addObstacleVolumeOutline(obst_volume, to_global_from_obst)
+            if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
+                raise ValueError(f"Start point {start} is inside obstacle {obst.name}")
+            if obst_volume.contains_point(to_global_from_obst.inverse.map(stop)):
+                raise ValueError(f"Destination point {stop} is inside obstacle {obst.name}")
 
         profile.mark("voxelized all obstacles")
 
@@ -480,6 +487,14 @@ class Volume(object):
             np.array(self.volume.shape) - 1,
         )
         return next((True for x, y, z in line_voxels if self.volume[x, y, z]), False)
+
+    def contains_point(self, point: np.ndarray):
+        """Return True if the given point is inside this volume. Point should be in the parent coordinate system of the
+        volume"""
+        coords = np.floor(self.transform.inverse.map(point)).astype(int)
+        if np.any(coords < 0) or np.any(coords >= self.volume.shape):
+            return False
+        return self.volume[tuple(coords)]
 
     @cached_property
     def surface_mesh(self):
@@ -799,11 +814,20 @@ class Line:
         return str(self)
 
 
+def are_colinear(l1, l2):
+    a, b = l1
+    c, d = l2
+    return np.allclose(np.cross(b - a, d - c), 0, atol=1e-10) and np.allclose(np.cross(a - c, b - c), 0, atol=1e-10)
+
+
 class Plane:
     @classmethod
-    def wireframe(cls, *planes: "Plane") -> List[tuple[np.ndarray, np.ndarray]]:
+    def wireframe(cls, *planes: "Plane", containing: np.ndarray = None) -> List[tuple[np.ndarray, np.ndarray]]:
         """Given a set of intersecting planes, assumed to form a closed volume with side-length greater than 1e-9,
-        make a wireframe of that volume. Returns a list of segment endpoints."""
+        make a wireframe of that volume. Returns a list of segment endpoints. If containing is provided, the
+        wireframe will only describe the innermost containing volume that includes that point.
+        """
+        # TODO handle containing
         lines = []
         segments = ApproxDict()
         for i, plane in enumerate(planes):
@@ -824,9 +848,10 @@ class Plane:
                     segments.setdefault(start, ApproxSet()).add(end)
         return [(np.array(start), np.array(end)) for start, ends in segments.items() for end in ends]
 
-    def __init__(self, normal, point):
+    def __init__(self, normal, point, name=None):
         self.normal = normal / np.linalg.norm(normal)
         self.point = point
+        self.name = name
 
     def line_intersects(self, start: np.ndarray, end: np.ndarray) -> bool:
         diff = end - start
@@ -865,6 +890,8 @@ class Plane:
         return a, b, c, d
 
     def __str__(self):
+        if self.name is not None:
+            return self.name
         a, b, c, d = self.coefficients
         return f"Plane({a}x + {b}y + {c}z + {d} = 0)"
 

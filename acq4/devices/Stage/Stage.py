@@ -551,10 +551,20 @@ class Stage(Device, OptomechDevice):
         # TODO do we need to use _baseTransform, too?
         xform = np.array(self.axisTransform().copyDataTo()).reshape(4, 4)
         xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
-        corners = [xform.map(np.array([ax[i] for ax in limits])) for i in range(2)]
+        corners = {
+            "min": xform.map(np.array([ax[0] for ax in limits])),
+            "max": xform.map(np.array([ax[1] for ax in limits])),
+        }
         axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
-        normals = [np.cross(axes[0], axes[1]), np.cross(axes[0], axes[2]), np.cross(axes[1], axes[2])]
-        return [Plane(n, c) for n, c in itertools.product(normals, corners)]
+        normals = {
+            "z": np.cross(axes[0], axes[1]),
+            "y": np.cross(axes[0], axes[2]),
+            "x": np.cross(axes[1], axes[2]),
+        }
+        return [
+            Plane(normals[n], corners[c], f"{self.name()}'s {c} {n}")
+            for n, c in itertools.product(normals, corners)
+        ]
 
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")

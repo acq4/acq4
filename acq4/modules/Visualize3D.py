@@ -135,8 +135,8 @@ class VisualizerWindow(Qt.QMainWindow):
             if key.name() == dev_name:
                 data["mesh"].setVisible(state == Qt.QtCore.Qt.Checked)
 
-    def addBounds(self, bounds, displayables_container: dict):
-        for a, b in Plane.wireframe(*bounds):
+    def addBounds(self, bounds, displayables_container: dict, containing=None):
+        for a, b in Plane.wireframe(*bounds, containing=containing):
             if np.linalg.norm(a - b) > 0.1:
                 continue  # ignore bounds that are really far away
             edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
@@ -210,7 +210,7 @@ class VisualizerWindow(Qt.QMainWindow):
         self.view.addItem(dest_target)
         self._path["dest target"] = dest_target
 
-        self.addBounds(bounds, self._path)
+        self.addBounds(bounds, self._path, start)
 
     def addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
         self.newObstacleSignal.emit(obstacle, to_global)
