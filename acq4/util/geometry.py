@@ -416,13 +416,13 @@ class GeometryMotionPlanner:
         profile.mark("voxelized all obstacles")
 
         def edge_cost(a: np.ndarray, b: np.ndarray):
-            a = Point(a, start.system)
-            b = Point(b, start.system)
             for bound in bounds:
                 if bound.line_intersects(a, b):
                     return np.inf
-            for obj, to_global in obstacles:
-                if obj.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
+            a = Point(a, start.system)
+            b = Point(b, start.system)
+            for vol, to_global in obstacles:
+                if vol.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
                     return np.inf
             return np.linalg.norm(b - a)
 
