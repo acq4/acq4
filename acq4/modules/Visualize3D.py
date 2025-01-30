@@ -264,7 +264,11 @@ class VisualizerWindow(Qt.QMainWindow):
     def togglePathPlan(self, state):
         visible = state == Qt.QtCore.Qt.Checked
         for viz in self._path.values():
-            viz.setVisible(visible)
+            if isinstance(viz, list):
+                for v in viz:
+                    v.setVisible(visible)
+            else:
+                viz.setVisible(visible)
 
     def removePath(self):
         for path in self._path.pop("paths", []):
