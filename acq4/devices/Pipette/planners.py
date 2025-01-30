@@ -275,20 +275,18 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
 
         viz = getManager().getModule("Visualize3D").window()
         planner, from_pip_to_global = self._getPlanningContext()
-        path = planner.find_path(
-            self.pip.getGeometry(),
-            from_pip_to_global,
-            globalStart,
-            globalStop,
-            boundaries,
-            visualizer=viz,
-        )
-        if path is None:
-            worst = planner.get_primary_barrier()
-            viz.focus()
-            raise HelpfulException(
-                f"No safe path found; '{worst}' was maybe in the way. See visualization for details."
+        try:
+            path = planner.find_path(
+                self.pip.getGeometry(),
+                from_pip_to_global,
+                globalStart,
+                globalStop,
+                boundaries,
+                visualizer=viz,
             )
+        except Exception as e:
+            viz.focus()
+            raise ValueError(f"Move '{explanation}' could not be planned: {e}") from e
         if len(path) == 0:
             path = [(globalStop, speed, False, explanation)]
         path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
