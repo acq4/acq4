@@ -146,7 +146,7 @@ def reconstruct_path(came_from, current):
     return path[::-1]
 
 
-def generate_even_sphere_points(n_points: int, sphere_radius: float, center: np.ndarray):
+def generate_even_sphere_points(n_points: int, sphere_radius: float):
     """Generate points with an even distribution of directions but random lengths."""
     phi = np.pi * (3.0 - np.sqrt(5.0))  # golden angle in radians
 
@@ -163,7 +163,7 @@ def generate_even_sphere_points(n_points: int, sphere_radius: float, center: np.
         directions.append(np.array([x, y, z]))
 
     radii = sphere_radius * np.cbrt(np.random.random(n_points))
-    return np.array(directions) * radii[:, np.newaxis] + center
+    return np.array(directions) * radii[:, np.newaxis]
 
 
 def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_direction: np.ndarray, concentration=1.0):
@@ -248,7 +248,7 @@ def a_star_ish(
         def neighbors(pt):
             nonlocal initial_neighbors
             if initial_neighbors is None:
-                initial_neighbors = generate_even_sphere_points(count, radius, pt)
+                initial_neighbors = generate_even_sphere_points(count, radius)
                 points = initial_neighbors
             else:
                 points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
@@ -324,7 +324,6 @@ class GeometryMotionPlanner:
         self._draw_n = 0
         self.geometries = geometries
         self.voxel_size = voxel_size
-        self._primary_barrier = None
 
     def find_path(
         self,
@@ -435,9 +434,6 @@ class GeometryMotionPlanner:
             callback(path, skip=1)
         profile.finish()
         return path[1:]
-
-    def get_primary_barrier(self):
-        return self._primary_barrier
 
 
 @numba.jit(nopython=True)
