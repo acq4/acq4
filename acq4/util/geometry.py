@@ -212,13 +212,31 @@ def a_star_ish(
     start: np.ndarray,
     finish: np.ndarray,
     edge_cost: Callable,
-    heuristic=None,
-    neighbors=None,
-    max_cost=4000,
-    callback=None,
+    heuristic: Callable = None,
+    neighbors: Callable = None,
+    max_cost: int = 4000,
+    callback: Callable = None,
 ) -> List[np.ndarray]:
-    """Run the A* algorithm to find the shortest path between *start* and *finish*. Return the path or raise a
-    ValueError."""
+    """Find a path between *start* and *finish*. Return the path or raise a ValueError.
+
+    Parameters
+    ----------
+    start
+        Initial position.
+    finish
+        Final position.
+    edge_cost
+        Function that takes two points and returns the cost of moving between them. If the cost is np.inf, the edge is
+        treated as impossible. This function should also return the obstacle that caused the edge to be impassable.
+    heuristic
+        Function that estimates the cost of moving from a point to the finish. Defaults to the Euclidean distance.
+    neighbors
+        Function that returns the neighbors of a point to try building a path to the finish.
+    max_cost
+        Maximum number of iterations before giving up.
+    callback
+        Used for debugging and visualization. Called with the current path at each iteration.
+    """
     if heuristic is None:
 
         def heuristic(x, y):
