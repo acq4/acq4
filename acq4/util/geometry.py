@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import itertools
-from collections import deque, Counter
 from functools import cached_property
 from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator
@@ -180,7 +179,6 @@ def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_dire
     Returns:
     - Array of points (n_points, 3)
     """
-    # Normalize bias direction
     bias_direction = bias_direction / np.linalg.norm(bias_direction)
 
     # Generate points using von Mises-Fisher distribution
@@ -255,7 +253,8 @@ def a_star_ish(
             else:
                 points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
             points += pt
-            return np.vstack((points, finish))
+            yield from points
+            yield finish
 
     open_set = {tuple(start): start}
     came_from = {}
@@ -386,9 +385,9 @@ class GeometryMotionPlanner:
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
-        for b in bounds:
-            if b.line_intersects(start, stop):
-                raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {b}")
+        for plane in bounds:
+            if plane.line_intersects(start.coordinates, stop.coordinates):
+                raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {plane}")
 
         profile = debug.Profiler()
         obstacles = []
@@ -417,7 +416,9 @@ class GeometryMotionPlanner:
 
         profile.mark("voxelized all obstacles")
 
-        def edge_cost(a, b):
+        def edge_cost(a: np.ndarray, b: np.ndarray):
+            a = Point(a, start.system)
+            b = Point(b, start.system)
             for bound in bounds:
                 if bound.line_intersects(a, b):
                     return np.inf
@@ -426,7 +427,7 @@ class GeometryMotionPlanner:
                     return np.inf
             return np.linalg.norm(b - a)
 
-        path = a_star_ish(start, stop, edge_cost, callback=callback)
+        path = a_star_ish(start.coordinates, stop.coordinates, edge_cost, callback=callback)
         profile.mark("A*")
         path = simplify_path(path, edge_cost)
         profile.mark("simplified path")

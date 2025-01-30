@@ -214,9 +214,9 @@ def test_find_path(geometry, viz=None):
 
     assert path is not None
     assert len(path) >= 2
-    assert not np.all(path[0] == start)
-    assert not np.all(path[0] == dest)
-    assert np.all(path[-1] == dest)
+    assert not np.all(path[0] == start.coordinates)
+    assert not np.all(path[0] == dest.coordinates)
+    assert np.all(path[-1] == dest.coordinates)
     # walk along the path at voxel_size steps and assert that we haven't touched the box
     last_point = start
     geometry_vol = geometry.voxel_template(voxel_size)
