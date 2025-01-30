@@ -147,6 +147,26 @@ def reconstruct_path(came_from, current):
     return path[::-1]
 
 
+def generate_even_sphere_points(n_points: int, sphere_radius: float, center: np.ndarray):
+    """Generate points with an even distribution of directions but random lengths."""
+    phi = np.pi * (3.0 - np.sqrt(5.0))  # golden angle in radians
+
+    directions = []
+    for i in range(n_points):
+        y = 1 - (i / float(n_points - 1)) * 2  # y goes from 1 to -1
+        radius = np.sqrt(1 - y * y)  # radius at y
+
+        theta = phi * i  # golden angle increment
+
+        x = np.cos(theta) * radius
+        z = np.sin(theta) * radius
+
+        directions.append(np.array([x, y, z]))
+
+    radii = sphere_radius * np.cbrt(np.random.random(n_points))
+    return np.array(directions) * radii[:, np.newaxis] + center
+
+
 def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_direction: np.ndarray, concentration=1.0):
     """
     Generate random points within a sphere with directional bias.
@@ -207,9 +227,15 @@ def a_star_ish(
     if neighbors is None:
         radius = np.linalg.norm(finish - start) / 10
         count = 10
+        initial_neighbors = None
 
         def neighbors(pt):
-            points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.2)
+            nonlocal initial_neighbors
+            if initial_neighbors is None:
+                initial_neighbors = generate_even_sphere_points(count, radius, pt)
+                points = initial_neighbors
+            else:
+                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
             points += pt
             return np.vstack((points, finish))
 
