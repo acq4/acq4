@@ -227,7 +227,7 @@ def a_star_ish(
         Final position.
     edge_cost
         Function that takes two points and returns the cost of moving between them. If the cost is np.inf, the edge is
-        treated as impossible. This function should also return the obstacle that caused the edge to be impassable.
+        treated as impossible.
     heuristic
         Function that estimates the cost of moving from a point to the finish. Defaults to the Euclidean distance.
     neighbors
@@ -261,14 +261,7 @@ def a_star_ish(
     came_from = {}
     g_score = {tuple(start): 0}
     f_score = {tuple(start): heuristic(start, finish)}
-    obstacles = deque(maxlen=10)
     cost = 0
-
-    def worst() -> str:
-        offender = Counter(obstacles).most_common(1)[0]
-        if isinstance(offender, Volume):
-            return str(offender.transform.systems[0])
-        return f"Boundary {offender}"
 
     while open_set:
         curr_key = min(open_set, key=lambda x: f_score[x])
@@ -279,11 +272,9 @@ def a_star_ish(
         for neighbor in neighbors(current):
             cost += 1
             if cost > max_cost:
-                raise ValueError(f"Pathfinding exceeded maximum cost of {max_cost}, worst barrier: {worst()}")
+                raise ValueError(f"Pathfinding exceeded maximum cost of {max_cost}")
             neigh_key = tuple(neighbor)
-            this_cost, obstacle = edge_cost(current, neighbor)
-            if this_cost == np.inf:
-                obstacles.append(obstacle)
+            this_cost = edge_cost(current, neighbor)
             tentative_g_score = g_score[curr_key] + this_cost
             if neigh_key not in g_score or tentative_g_score < g_score[neigh_key] or np.all(neighbor == finish):
                 came_from[neigh_key] = curr_key
@@ -294,7 +285,7 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
-    raise ValueError(f"Pathfinding failed, worst barrier: {worst()}")
+    raise ValueError("Pathfinding failed.")
 
 
 def simplify_path(path, edge_cost: Callable):
@@ -305,7 +296,7 @@ def simplify_path(path, edge_cost: Callable):
         made_change = False
         ptr = 0
         while ptr < len(path) - 2:
-            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2]))[0] < np.inf:
+            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
                 path.pop(ptr + 1)
                 made_change = True
             ptr += 1
@@ -429,11 +420,11 @@ class GeometryMotionPlanner:
         def edge_cost(a, b):
             for bound in bounds:
                 if bound.line_intersects(a, b):
-                    return np.inf, bound
+                    return np.inf
             for obj, to_global in obstacles:
                 if obj.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
-                    return np.inf, obj
-            return np.linalg.norm(b - a), None
+                    return np.inf
+            return np.linalg.norm(b - a)
 
         path = a_star_ish(start, stop, edge_cost, callback=callback)
         profile.mark("A*")
