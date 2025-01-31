@@ -170,6 +170,9 @@ class SealState(PatchPipetteState):
         Maximum distance (Pascals) from current pressure to scan during automatic pressure control. Default 5kPa.
     pressureScanDuration : float
         Duration (seconds) for each pressure scan during automatic pressure control. Default 5s.
+    pressureScanTrust : float
+        Trust factor for pressure scans. Default 0.25. Resulting pressure is a weighted average of the current pressure
+        and the optimal pressure found during the scan. Should be between 0 and 1.
     """
     stateName = 'seal'
 
@@ -195,6 +198,7 @@ class SealState(PatchPipetteState):
         'pressureScanInterval': {'type': 'float', 'default': 10.0, 'suffix': 's'},
         'pressureScanRadius': {'type': 'float', 'default': 5 * kPa, 'suffix': 'Pa'},
         'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
+        'pressureScanTrust': {'type': 'float', 'default': 0.25},
     }
 
     def __init__(self, dev, config):
@@ -251,7 +255,7 @@ class SealState(PatchPipetteState):
 
         self._patchrec['attemptedSeal'] = True
 
-        while not self._analysis.success():
+        while True:
             self.checkStop()
             self.processAtLeastOneTestPulse()
 
@@ -259,6 +263,9 @@ class SealState(PatchPipetteState):
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
+
+            if self._analysis.success():
+                break
 
             if config['pressureMode'] == 'auto':
                 dt = ptime.time() - startTime
@@ -337,7 +344,9 @@ class SealState(PatchPipetteState):
             resistances.time_slice(turnaround, end),
         )
 
-        return np.clip((best_forwards + best_backwards) / 2, self.config['pressureLimit'], 0)
+        best = (best_forwards + best_backwards) / 2
+        best = self.config['pressureScanTrust'] * best + (1 - self.config['pressureScanTrust']) * self.pressure
+        return np.clip(best, self.config['pressureLimit'], 0)
 
     def _trim_data_caches(self, start):
         pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
