@@ -139,7 +139,7 @@ class VisualizerWindow(Qt.QMainWindow):
         for a, b in Plane.wireframe(*bounds, containing=containing):
             if np.linalg.norm(a - b) > 0.1:
                 continue  # ignore bounds that are really far away
-            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=1)
+            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=4)
             self.view.addItem(edge)
             displayables_container[(tuple(a), tuple(b))] = edge
 
