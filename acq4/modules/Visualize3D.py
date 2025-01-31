@@ -273,7 +273,9 @@ class VisualizerWindow(Qt.QMainWindow):
     def removePath(self):
         for path in self._path.pop("paths", []):
             self.view.removeItem(path)
+            path.deleteLater()
         for viz in self._path.values():
             self.view.removeItem(viz)
+            viz.deleteLater()
         self._path = {}
         self.pathPlanToggler.setChecked(False)
