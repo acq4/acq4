@@ -249,6 +249,7 @@ def a_star_ish(
         def neighbors(pt):
             nonlocal initial_neighbors
             if initial_neighbors is None:
+                # TODO this should always include one legal point! can we just include a small step away from the boundary toward the finish?
                 initial_neighbors = generate_even_sphere_points(2 * count, radius)
                 points = initial_neighbors
             else:
@@ -418,6 +419,7 @@ class GeometryMotionPlanner:
 
         def edge_cost(a: np.ndarray, b: np.ndarray):
             for bound in bounds:
+                # TODO can we give boundaries directionality, and always return inf if the points are on the wrong side?
                 if bound.line_intersects(a, b):
                     return np.inf
             a = Point(a, start.system)
