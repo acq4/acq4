@@ -241,7 +241,8 @@ def a_star_ish(
             return np.linalg.norm(y - x)
 
     if neighbors is None:
-        radius = np.linalg.norm(finish - start) / 10
+        radius = np.linalg.norm(finish - start) / 5
+        radius = max((min(radius, 50e-3)), 100e-6)
         count = 10
         initial_neighbors = None
 

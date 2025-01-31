@@ -283,7 +283,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             raise ValueError(f"Move '{explanation}' could not be planned: {e}") from e
         if len(path) == 0:
             path = [(globalStop, speed, False, explanation)]
-        path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
+        else:
+            path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
         goal = path.pop()
         path = prepend_path + path + [(goal[0], speed, False, explanation)] + append_path
         viz.updatePath([globalStart] + [p[0] for p in path], skip=1)
