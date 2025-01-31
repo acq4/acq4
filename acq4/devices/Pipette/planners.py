@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from ..Stage import Stage
 
 RETRACTION_TO_AVOID_SAMPLE_TEAR = "retracting away from sample"
+WAYPOINT_TO_AVOID_SAMPLE_TEAR = "waypoint to avoid sample tear"
 MOVE_TO_DESTINATION = "final move to destination"
 OBSTACLE_AVOIDANCE = "intermediate waypoint to avoid obstacles"
 APPROACH_WAYPOINT = "approach waypoint"
@@ -257,6 +258,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         surface = self.pip.scopeDevice().getSurfaceDepth()
         boundaries += [Plane((0, 0, 1), (0, 0, surface), "sample surface")]
         prepend_path = append_path = []
+        error_explanation = f"Move '{explanation}' could not be planned:"
         initial_waypoint = self._planAroundSurface(globalStart)
         if initial_waypoint is not None:
             prepend_path = [(initial_waypoint, "slow", False, RETRACTION_TO_AVOID_SAMPLE_TEAR)]
@@ -264,7 +266,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         final_waypoint = self._planAroundSurface(globalStop)
         if final_waypoint is not None:
             append_path = [(globalStop, "slow", False, explanation)]
-            explanation = RETRACTION_TO_AVOID_SAMPLE_TEAR
+            explanation = WAYPOINT_TO_AVOID_SAMPLE_TEAR
             globalStop = final_waypoint
 
         viz = getManager().getModule("Visualize3D").window()
@@ -280,13 +282,14 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             )
         except Exception as e:
             viz.focus()
-            raise ValueError(f"Move '{explanation}' could not be planned: {e}") from e
+            raise ValueError(f"{error_explanation} {e}") from e
         if len(path) == 0:
             path = [(globalStop, speed, False, explanation)]
         else:
             path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
-        goal = path.pop()
-        path = prepend_path + path + [(goal[0], speed, False, explanation)] + append_path
+            goal = path.pop()
+            path += [(goal[0], speed, False, explanation)]
+        path = prepend_path + path + append_path
         viz.updatePath([globalStart] + [p[0] for p in path], skip=1)
         return path
 
