@@ -249,7 +249,7 @@ def a_star_ish(
         def neighbors(pt):
             nonlocal initial_neighbors
             if initial_neighbors is None:
-                initial_neighbors = generate_even_sphere_points(count, radius)
+                initial_neighbors = generate_even_sphere_points(2 * count, radius)
                 points = initial_neighbors
             else:
                 points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
