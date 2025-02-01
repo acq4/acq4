@@ -386,9 +386,11 @@ class GeometryMotionPlanner:
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
-        for plane in bounds:
-            if plane.line_intersects(start.coordinates, stop.coordinates):
-                raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {plane}")
+        # if not point_in_bounds(start.coordinates, bounds):
+        #     raise ValueError(f"Start point {start} is outside of the bounds")
+        in_bounds, bound_plane = point_in_bounds(stop.coordinates, bounds)
+        if not in_bounds:
+            raise ValueError(f"Destination point {stop} is outside of boundary {bound_plane}")
 
         profile = debug.Profiler()
         obstacles = []
@@ -418,10 +420,9 @@ class GeometryMotionPlanner:
         profile.mark("voxelized all obstacles")
 
         def edge_cost(a: np.ndarray, b: np.ndarray):
-            for bound in bounds:
-                # TODO can we give boundaries directionality, and always return inf if the points are on the wrong side?
-                if bound.line_intersects(a, b):
-                    return np.inf
+            if not point_in_bounds(b, bounds)[0]:
+                return np.inf
+            print('here')
             a = Point(a, start.system)
             b = Point(b, start.system)
             for vol, to_global in obstacles:
@@ -437,6 +438,15 @@ class GeometryMotionPlanner:
             callback(path, skip=1)
         profile.finish()
         return path[1:]
+
+
+def point_in_bounds(point, bounds):
+    """Return True if the given point is inside the given bounds.
+    Also return the first plane that the point is outside of, if any."""
+    for plane in bounds:
+        if plane.distance_to_point(point) < 0:
+            return False, plane
+    return True, None
 
 
 @numba.jit(nopython=True)
@@ -900,6 +910,11 @@ class Plane:
         # If the dot product is close to zero, the point is on the plane
         dot_product = np.dot(pt - self.point, self.normal)
         return abs(dot_product) < tolerance
+
+    def distance_to_point(self, pt: np.ndarray) -> bool:
+        """Return the distance from the plane to a point, where positive
+        directions are in the direction of the normal."""
+        return np.dot(self.normal, pt - self.point)
 
     def intersecting_line(self, other: "Plane") -> Line | None:
         direction = np.cross(self.normal, other.normal)

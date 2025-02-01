@@ -91,6 +91,7 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
+        self._boundaries = None
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
@@ -148,10 +149,15 @@ class Pipette(Device, OptomechDevice):
         return super().getGeometry()
 
     def getBoundaries(self) -> List[Plane]:
-        return [
-            Plane(p.normal, self._solveMyGlobalPosition(p.point), p.name)
-            for p in self.parentDevice().getBoundaries()
-        ]
+        if self._boundaries is None:
+            self._boundaries = []
+            for plane in self.parentDevice().getBoundaries():
+                mapped_pt = self._solveMyGlobalPosition(plane.point)
+                mapped_vec = self._solveMyGlobalPosition(plane.point + plane.normal) - mapped_pt
+                new_name = self.name() + " " + plane.name.partition(" ")[2]
+                self._boundaries.append(Plane(mapped_vec, mapped_pt, new_name))
+
+        return self._boundaries
 
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.

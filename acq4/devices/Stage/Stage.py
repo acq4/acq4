@@ -537,7 +537,7 @@ class Stage(Device, OptomechDevice):
             self.sigLimitsChanged.emit(changed)
 
     def getLimits(self) -> List[tuple[float | None, float | None]]:
-        """Return a list the (min, max) position limits for each axis.
+        """Return a list of the (min, max) position limits for each axis.
         """
         return self._limits[:]
 
@@ -558,13 +558,18 @@ class Stage(Device, OptomechDevice):
         axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
         normals = {
             "z": np.cross(axes[0], axes[1]),
-            "y": np.cross(axes[0], axes[2]),
+            "y": np.cross(axes[2], axes[0]),
             "x": np.cross(axes[1], axes[2]),
         }
-        return [
-            Plane(normals[n], corners[c], f"{self.name()}'s {c} {n}")
-            for n, c in itertools.product(normals, corners)
-        ]
+        # flip normals to point inward
+        diagonal = corners["max"] - corners["min"]
+        normals["x"] = normals["x"] * np.sign(np.dot(normals["x"], diagonal))
+        normals["y"] = normals["y"] * np.sign(np.dot(normals["y"], diagonal))
+        normals["z"] = normals["z"] * np.sign(np.dot(normals["z"], diagonal))
+        return (
+            [Plane(normals[n], corners["min"], f"{self.name()}'s min {n}") for n in normals] +
+            [Plane(-normals[n], corners["max"], f"{self.name()}'s max {n}") for n in normals]
+        )
 
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")
