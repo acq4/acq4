@@ -242,15 +242,15 @@ def a_star_ish(
 
     if neighbors is None:
         radius = np.linalg.norm(finish - start) / 5
-        radius = max((min(radius, 50e-3)), 100e-6)
+        radius = max(radius, 100e-6)
         count = 10
         initial_neighbors = None
 
         def neighbors(pt):
             nonlocal initial_neighbors
             if initial_neighbors is None:
-                # TODO this should always include one legal point! can we just include a small step away from the boundary toward the finish?
-                initial_neighbors = generate_even_sphere_points(2 * count, radius)
+                direction = (finish - pt) / np.linalg.norm(finish - pt)
+                initial_neighbors = [pt + direction * 1e-9]
                 points = initial_neighbors
             else:
                 points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
