@@ -250,10 +250,10 @@ def a_star_ish(
             nonlocal initial_neighbors
             if initial_neighbors is None:
                 direction = (finish - pt) / np.linalg.norm(finish - pt)
-                initial_neighbors = [pt + direction * 1e-9]
+                initial_neighbors = [pt + direction * 1e-6]
                 points = initial_neighbors
             else:
-                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
+                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=1)
             points += pt
             yield from points
             yield finish
@@ -286,7 +286,7 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
-    raise ValueError("Pathfinding failed.")
+    raise ValueError("Pathfinding failed; no valid paths found.")
 
 
 def simplify_path(path, edge_cost: Callable):
@@ -388,7 +388,7 @@ class GeometryMotionPlanner:
             )
         for plane in bounds:
             if plane.line_intersects(start.coordinates, stop.coordinates):
-                raise ValueError(f"Path from {start} to {stop} is impossible due to boundary {plane}")
+                raise ValueError(f"Path from {start} to {stop} is impossible due to {plane} boundary")
 
         profile = debug.Profiler()
         obstacles = []
