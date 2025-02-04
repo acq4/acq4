@@ -250,10 +250,10 @@ def a_star_ish(
             nonlocal initial_neighbors
             if initial_neighbors is None:
                 direction = (finish - pt) / np.linalg.norm(finish - pt)
-                initial_neighbors = [pt + direction * 1e-6]
+                initial_neighbors = [pt + direction * 1e-6] + list(generate_even_sphere_points(count, radius))
                 points = initial_neighbors
             else:
-                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=1)
+                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.4)
             points += pt
             yield from points
             yield finish

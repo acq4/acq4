@@ -46,6 +46,17 @@ def test_mesh(geometry):
     assert np.allclose(mesh.bounds, [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
 
 
+def test_line_intersects_voxel():
+    voxel = Volume(np.ones((3, 3, 3), dtype=bool), NullTransform(3))
+    assert voxel.intersects_line(np.array([-1, -1, -1]), np.array([4, 4, 4]))
+    assert voxel.intersects_line(np.array([-1, -1, -1]), np.array([5, 5, 1]))
+    a_bit = np.array([0, 0, 1e-15])
+    assert not voxel.intersects_line(np.array([-1, 1.1, 2]), np.array([1, 1.1, 4]) + a_bit)
+    assert voxel.intersects_line(np.array([-1, 1.1, 2]), np.array([1, 1.1, 4]) - a_bit)
+    assert not voxel.intersects_line(np.array([-1, -1, -1]), np.array([5, 5, 0]))
+    assert not voxel.intersects_line(np.array([-1, -1, -1]), np.array([5, 5, -1]))
+
+
 def test_identity_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
     orig = geometry.voxel_template(0.1)
