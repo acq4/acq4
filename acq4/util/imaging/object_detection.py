@@ -99,17 +99,28 @@ def get_pipette_detection_model():
     global _pipette_detection_model
     if _pipette_detection_model is None:
         import torch, os
-        import acq4.util.pipette_detection.torch_model_04
-        from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
 
-        # initialize model
+        # Model 04
+        # import acq4.util.pipette_detection.torch_model_04
+        # from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
+
+        # Model 05
+        import acq4.util.pipette_detection.torch_model_05
+        from acq4.util.pipette_detection.torch_model_05 import PipetteDetector
+        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_05.__file__)
+        model_file = os.path.join(detector_path, 'torch_models', '05_deeper_training.pth')
+
+        # Model 06
+        # import acq4.util.pipette_detection.torch_model_06
+        # from acq4.util.pipette_detection.torch_model_06 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_06.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '06_resnet50.pth')
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = PipetteDetector()
         model.to(device)
-
-        # load model weights
-        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
-        model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
         model.load_state_dict(torch.load(model_file))
 
         _pipette_detection_model = model

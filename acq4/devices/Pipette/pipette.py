@@ -17,7 +17,7 @@ from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
-from .tracker import PipetteTracker
+from .tracker import ResnetPipetteTracker
 from ..RecordingChamber import RecordingChamber
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -129,7 +129,7 @@ class Pipette(Device, OptomechDevice):
 
         self._updateTransform()
 
-        self.tracker = PipetteTracker(self)
+        self.tracker = ResnetPipetteTracker(self)
         deviceManager.declareInterface(name, ['pipette'], self)
 
         target = self.readConfigFile('target').get('targetGlobalPosition', None)
@@ -578,6 +578,12 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette
         """
         return PipetteRecorder(self)
+    
+    def findNewPipette(self):
+        from acq4.devices.Pipette.calibration import calibratePipette
+        future = calibratePipette(self, self.imagingDevice(), self.scopeDevice())
+        self._last_calibration_future = future  # keep for easy debugging of calibration algorithm
+        return future
 
 
 class PipetteRecorder:
