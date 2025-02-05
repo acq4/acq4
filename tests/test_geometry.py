@@ -259,7 +259,11 @@ def test_find_path(geometry, viz=None):
 def test_grazing_paths(offset, viz=None):
     vx = 1.0
     trav = Geometry({"type": "box", "size": [vx / 2, vx / 2, vx / 2]}, "trav", "trav_mesh")
-    obst = Geometry({"type": "box", "size": [vx, vx, vx]}, "obst", "obst_mesh")
+    obst = Geometry(
+        {"type": "box", "size": [vx * 0.9, vx * 0.9, vx * 0.9], "transform": {"pos": (0.05, 0.05, 0.05)}},
+        "obst",
+        "obst_mesh",
+    )
     trav_to_global = SRT3DTransform(angle=90, axis=(1, 0, 1), offset=offset, from_cs=trav.parent_name, to_cs="global")
     obst_to_global = TTransform(offset=(1, 1, 1.5), from_cs=obst.parent_name, to_cs="global")
     to_obst_parent_from_trav_parent = obst_to_global.inverse * trav_to_global
@@ -575,7 +579,7 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
-    test_grazing_paths(visualizer)
+    test_grazing_paths((0.6, 0.6, 0.6), visualizer)
     # test_bounds_prevent_path(geom, bounds, visualizer)
     # test_path_with_funner_traveler(geom, visualizer)
     # test_single_voxel_voxelization(geom, visualizer)

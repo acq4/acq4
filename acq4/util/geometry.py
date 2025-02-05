@@ -7,6 +7,7 @@ from typing import List, Callable, Optional, Dict, Any, Generator
 
 import numba
 import numpy as np
+import scipy
 import trimesh
 from trimesh.voxel import VoxelGrid
 
@@ -504,7 +505,7 @@ class Volume(object):
         """
         dest = convolve_kernel_onto_volume(self.volume, kernel_array)
         draw_xform = TTransform(
-            offset=-center.round(),
+            offset=-center,
             to_cs=self.transform.systems[0],
             from_cs=f"[convolved {name} in {self.transform.systems[1]}]",
         )
@@ -774,13 +775,16 @@ class Geometry:
         to_self_from_other = self.transform.inverse * to_my_parent_from_other_parent * other.transform
         xformed = other.transformed_to(self.transform, to_self_from_other)
         xformed_voxels = xformed.voxel_template(voxel_size)
+        # extend out the voxels by one in each positive direction, to account for sub-voxel movement
+        xformed_voxels.volume = np.pad(xformed_voxels.volume, 1, mode="constant")[1:, 1:, 1:]
+        xformed_voxels.volume = scipy.ndimage.binary_dilation(xformed_voxels.volume, iterations=1)
         # TODO this is adding a scale=-1, but none of the transforms reflect this
         shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
         other_origin = Point((0, 0, 0), other.parent_name)
         other_origin_in_my_parent = to_my_parent_from_other_parent.map(other_origin)
         other_origin_in_self = self.transform.inverse.map(other_origin_in_my_parent)
         other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self)
-        center = np.array(shadow.T.shape) - other_origin_in_xformed_voxels - (0.5, 0.5, 0.5)
+        center = (np.array(shadow.T.shape) - other_origin_in_xformed_voxels - (0.5, 0.5, 0.5)).round()
         self_voxels = self.voxel_template(voxel_size)
         return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
 
