@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from acq4.modules.Visualize3D import VisualizerWindow
-from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line
+from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line, point_in_bounds
 from coorx import NullTransform, TTransform, Point, SRT3DTransform, Transform
 
 
@@ -371,6 +371,47 @@ def test_bounds_prevent_path(geometry, cube, viz=None):
     do_viz(viz, {traveler: traveler_to_global})
 
 
+@pytest.skip("This scenario is highly unlikely, but we may fix it at some point")
+def test_paths_stay_inside_bounds(geometry, viz=None):
+    voxel_size = 1
+    sqrt3 = 3**0.5
+    sqrt6 = 6**0.5
+    tetrahedron = [
+        Plane(np.array([sqrt3 / 3, 0, -1 / 3]), np.array([0, 0, 10])),
+        Plane(np.array([-sqrt3 / 6, -1 / 2, -1 / 3]), np.array([0, 0, 10])),
+        Plane(np.array([-sqrt3 / 6, 1 / 2, -1 / 3]), np.array([0, 0, 10])),
+        Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
+    ]
+    edges = Plane.wireframe(*tetrahedron)
+    bottom_corners = {tuple(pt) for edge in edges for pt in edge if pt[2] == 0}
+    start = bottom_corners.pop()
+    start = Point(start, "global")
+    stop = np.sum([np.array(c) for c in bottom_corners], axis=0) / 2
+    stop = Point(stop, "global")
+
+    edge_length = 10 * 4 / (6**0.5)
+    transecting_obst = Geometry(
+        {"type": "cylinder", "radius": voxel_size * 0.49, "height": edge_length}, "blocker_mesh", "blocker"
+    )
+    obst_to_global = SRT3DTransform(
+        offset=(0, -edge_length / 2, 0), angle=90, axis=(1, 0, 0), from_cs="blocker", to_cs="global"
+    )
+    trav_to_global = TTransform(offset=start, from_cs="test", to_cs="global")
+    if viz:
+        viz.startPath(start, stop, tetrahedron)
+    planner = GeometryMotionPlanner(
+        {transecting_obst: obst_to_global}, voxel_size
+    )
+    try:
+        for _ in range(1):
+            path = planner.find_path(geometry, trav_to_global, start, stop, tetrahedron, visualizer=viz)
+            for point in path:
+                assert point_in_bounds(point, tetrahedron)
+    finally:
+        if viz:
+            pg.exec()
+
+
 def test_no_path(viz=None):
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
     voxel_size = 0.1
@@ -551,7 +592,7 @@ if __name__ == "__main__":
     import pyqtgraph.opengl as gl
 
     pg.mkQApp()
-    visualizer = VisualizerWindow()
+    visualizer = VisualizerWindow(testing=True)
     visualizer.show()
     # geom = Geometry(
     #     {
@@ -579,7 +620,8 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
-    test_grazing_paths((0.6, 0.6, 0.6), visualizer)
+    test_paths_stay_inside_bounds(geom, visualizer)
+    # test_grazing_paths((0.6, 0.6, 0.6), visualizer)
     # test_bounds_prevent_path(geom, bounds, visualizer)
     # test_path_with_funner_traveler(geom, visualizer)
     # test_single_voxel_voxelization(geom, visualizer)

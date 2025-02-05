@@ -46,8 +46,9 @@ class VisualizerWindow(Qt.QMainWindow):
     pathUpdateSignal = Qt.pyqtSignal(object)
     focusEvent = Qt.pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, testing=False):
         super().__init__(None)
+        self._testing = testing
         self.setWindowTitle("3D Visualization of all Optomech Devices")
         self.setGeometry(50, 50, 800, 600)
         self.setWindowIcon(Qt.QIcon(os.path.join(os.path.dirname(__file__), "icons.svg")))
@@ -137,7 +138,7 @@ class VisualizerWindow(Qt.QMainWindow):
 
     def addBounds(self, bounds, displayables_container: dict, containing=None):
         for a, b in Plane.wireframe(*bounds, containing=containing):
-            if np.linalg.norm(a - b) > 0.1:
+            if not self._testing and np.linalg.norm(a - b) > 0.1:
                 continue  # ignore bounds that are really far away
             edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=4)
             self.view.addItem(edge)
@@ -162,11 +163,13 @@ class VisualizerWindow(Qt.QMainWindow):
     def _removeDevice(self, dev):
         if dev not in self._geometries:
             return
-        dev.sigGeometryChanged.disconnect(self.handleGeometryChange)
+        if not self._testing:
+            dev.sigGeometryChanged.disconnect(self.handleGeometryChange)
         mesh = self._geometries[dev].get("mesh")
         if mesh is None:
             return
-        dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
+        if not self._testing:
+            dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
         self.view.removeItem(mesh)
         for edge in self._geometries[dev].get("limits", {}).values():
             self.view.removeItem(edge)
@@ -247,7 +250,7 @@ class VisualizerWindow(Qt.QMainWindow):
         while True:
             path, skip = self._pathUpdates.get()
             n_updates += 1
-            if n_updates % skip == 0:
+            if self._testing or n_updates % skip == 0:
                 self.pathUpdateSignal.emit(path)
                 time.sleep(0.02)
 
