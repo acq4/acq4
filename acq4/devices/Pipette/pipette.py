@@ -724,6 +724,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.target.sigPositionChangeFinished.connect(self.targetDragged)
 
         self.transformChanged()
+        self.targetChanged(dev, dev.targetPosition())
         self.updateCalibrateAxis()
 
     def setOrientationToggled(self):

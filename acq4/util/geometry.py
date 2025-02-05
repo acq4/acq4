@@ -7,6 +7,7 @@ from typing import List, Callable, Optional, Dict, Any, Generator
 
 import numba
 import numpy as np
+import scipy
 import trimesh
 from trimesh.voxel import VoxelGrid
 
@@ -250,10 +251,10 @@ def a_star_ish(
             nonlocal initial_neighbors
             if initial_neighbors is None:
                 direction = (finish - pt) / np.linalg.norm(finish - pt)
-                initial_neighbors = [pt + direction * 1e-9]
+                initial_neighbors = [pt + direction * 1e-6] + list(generate_even_sphere_points(count, radius))
                 points = initial_neighbors
             else:
-                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.3)
+                points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.4)
             points += pt
             yield from points
             yield finish
@@ -286,7 +287,7 @@ def a_star_ish(
             if callback is not None:
                 callback(reconstruct_path(came_from, neigh_key)[::-1])
 
-    raise ValueError("Pathfinding failed.")
+    raise ValueError("Pathfinding failed; no valid paths found.")
 
 
 def simplify_path(path, edge_cost: Callable):
@@ -386,11 +387,9 @@ class GeometryMotionPlanner:
             visualizer.addObstacleVolumeOutline(
                 traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
             )
-        # if not point_in_bounds(start.coordinates, bounds):
-        #     raise ValueError(f"Start point {start} is outside of the bounds")
-        in_bounds, bound_plane = point_in_bounds(stop.coordinates, bounds)
+        in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
-            raise ValueError(f"Destination point {stop} is outside of boundary {bound_plane}")
+            raise ValueError(f"Path from {start} to {stop} is impossible due to {bound_plane} boundary")
 
         profile = debug.Profiler()
         obstacles = []
@@ -422,7 +421,6 @@ class GeometryMotionPlanner:
         def edge_cost(a: np.ndarray, b: np.ndarray):
             if not point_in_bounds(b, bounds)[0]:
                 return np.inf
-            print('here')
             a = Point(a, start.system)
             b = Point(b, start.system)
             for vol, to_global in obstacles:
@@ -452,7 +450,7 @@ def point_in_bounds(point, bounds):
 @numba.jit(nopython=True)
 def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     # scipy does weird stuff
-    # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
+    # return scipy.signal.convolve(volume.astype(int), kernel.astype(int), mode="full").astype(bool)
     v_shape = volume.shape
     k_shape = kernel.shape
     shape = (v_shape[0] + k_shape[0] - 1, v_shape[1] + k_shape[1] - 1, v_shape[2] + k_shape[2] - 1)
@@ -501,7 +499,7 @@ class Volume(object):
 
     def convolve(self, kernel_array: np.ndarray, center: np.ndarray, name: str) -> Volume:
         """
-        Return a new Volume that contains the convolution of self with *kernel_array*
+        Return a new Volume that contains the convolution of self with *kernel_array*.
 
         Parameters
         ----------
@@ -776,17 +774,24 @@ class Geometry:
     def _default_transform_args(self):
         return dict(from_cs=self.name, to_cs=self.parent_name)
 
-    def make_convolved_voxels(self, other, to_self_from_other, voxel_size):
-        to_self_mesh_from_other_mesh = self.transform.inverse * to_self_from_other * other.transform
-        xformed = other.transformed_to(self.transform, to_self_mesh_from_other_mesh)
+    def make_convolved_voxels(
+        self, other: Geometry, to_my_parent_from_other_parent: Transform, voxel_size: float
+    ) -> Volume:
+        """Return a Volume that represents the accessible space the other geometry could move through without a
+        collision."""
+        to_self_from_other = self.transform.inverse * to_my_parent_from_other_parent * other.transform
+        xformed = other.transformed_to(self.transform, to_self_from_other)
         xformed_voxels = xformed.voxel_template(voxel_size)
+        # extend out the voxels by one in each positive direction, to account for sub-voxel movement
+        xformed_voxels.volume = np.pad(xformed_voxels.volume, 1, mode="constant")[1:, 1:, 1:]
+        xformed_voxels.volume = scipy.ndimage.binary_dilation(xformed_voxels.volume, iterations=1)
         # TODO this is adding a scale=-1, but none of the transforms reflect this
         shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
         other_origin = Point((0, 0, 0), other.parent_name)
-        other_origin_in_self = to_self_from_other.map(other_origin)
-        other_origin_in_self_mesh = self.transform.inverse.map(other_origin_in_self)
-        other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self_mesh)
-        center = np.array(shadow.T.shape) - other_origin_in_xformed_voxels
+        other_origin_in_my_parent = to_my_parent_from_other_parent.map(other_origin)
+        other_origin_in_self = self.transform.inverse.map(other_origin_in_my_parent)
+        other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self)
+        center = (np.array(shadow.T.shape) - other_origin_in_xformed_voxels - (0.5, 0.5, 0.5)).round()
         self_voxels = self.voxel_template(voxel_size)
         return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
 

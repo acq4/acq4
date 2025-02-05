@@ -46,6 +46,35 @@ def test_mesh(geometry):
     assert np.allclose(mesh.bounds, [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
 
 
+@pytest.mark.parametrize(
+    "to_parent",
+    [
+        NullTransform(3),  # passes
+        TTransform(offset=(-3, -3, -3)),  # passes
+        TTransform(offset=(4.5, 4.5, 4.5)),  # fails
+        SRT3DTransform(offset=(8.2, 8.2, -8.2), angle=30, axis=(0, 1, 0)),  # fails
+        SRT3DTransform(offset=(-8.2, 8.2, 8.2), angle=30, axis=(0, 1, 0)),  # fails
+        SRT3DTransform(offset=(-8.2, 8.2, -8.2), scale=(0.1, 0.1, 0.1), angle=30, axis=(0, 1, 0)),  # passes
+    ],
+)
+def test_line_intersects_voxel(to_parent):
+    to_parent.set_systems("global", "parent")
+
+    def point(coords):
+        # points are written relative to the volume origin, so we need to move them, but we need to pretend they were
+        # always in parent
+        return Point(to_parent.map(np.array(coords)), "parent")
+
+    voxel = Volume(np.ones((3, 3, 3), dtype=bool), to_parent)
+    assert voxel.intersects_line(point([-1, -1, -1]), point([4, 4, 4]))
+    assert voxel.intersects_line(point([-1, -1, -1]), point([5, 5, 1]))
+    assert not voxel.intersects_line(point([-1, -1, -1]), point([5, 5, 0]))
+    assert not voxel.intersects_line(point([-1, -1, -1]), point([5, 5, -1]))
+    a_bit = np.array([0, 0, 1e-6])
+    assert not voxel.intersects_line(point([-1, 1.1, 2]), point([1, 1.1, 4] + a_bit))
+    assert voxel.intersects_line(point([-1, 1.1, 2]), point([1, 1.1, 4] - a_bit))
+
+
 def test_identity_convolve(geometry):
     kernel_array = np.ones((1, 1, 1), dtype=bool)
     orig = geometry.voxel_template(0.1)
@@ -200,16 +229,12 @@ def test_cached_convolutions_behave_well(geometry):
 def test_find_path(geometry, viz=None):
     voxel_size = 0.1
     geometry_to_global = NullTransform(3, from_cs=geometry.parent_name, to_cs="global")
-    planner = GeometryMotionPlanner(
-        {geometry: geometry_to_global}, voxel_size
-    )
+    planner = GeometryMotionPlanner({geometry: geometry_to_global}, voxel_size)
     traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "traveler_mesh", "traveler")
     dest = Point(np.array([0, 0, 3]), "global")
     start = Point(np.array([0, 0, -2]), "global")
     traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
-    path = planner.find_path(
-        traveler, traveler_to_global, start, dest, visualizer=viz
-    )
+    path = planner.find_path(traveler, traveler_to_global, start, dest, visualizer=viz)
     do_viz(viz, {traveler: traveler_to_global, geometry: geometry_to_global})
 
     assert path is not None
@@ -230,6 +255,55 @@ def test_find_path(geometry, viz=None):
         last_point = waypoint
 
 
+@pytest.mark.parametrize("offset", [(0, 0, 0), (1, 1, 1), (0.2, 0.2, 0.2), (0.6, 0.6, 0.6)])
+def test_grazing_paths(offset, viz=None):
+    vx = 1.0
+    trav = Geometry({"type": "box", "size": [vx / 2, vx / 2, vx / 2]}, "trav", "trav_mesh")
+    obst = Geometry(
+        {"type": "box", "size": [vx * 0.9, vx * 0.9, vx * 0.9], "transform": {"pos": (0.05, 0.05, 0.05)}},
+        "obst",
+        "obst_mesh",
+    )
+    trav_to_global = SRT3DTransform(angle=90, axis=(1, 0, 1), offset=offset, from_cs=trav.parent_name, to_cs="global")
+    obst_to_global = TTransform(offset=(1, 1, 1.5), from_cs=obst.parent_name, to_cs="global")
+    to_obst_parent_from_trav_parent = obst_to_global.inverse * trav_to_global
+    conv_obst = obst.make_convolved_voxels(trav, to_obst_parent_from_trav_parent, vx)
+    if viz:
+        viz.addGeometry(trav)
+        viz.setMeshTransform(trav.name, trav_to_global.as_pyqtgraph())
+        viz.addGeometry(obst)
+        viz.setMeshTransform(obst.name, obst_to_global.as_pyqtgraph())
+        # viz.startPath(
+        #     Point(np.array([0, 0, 0]), "trav").mapped_to("global"),
+        #     Point(np.array([1.1, 2, 2]), "global"),
+        #     [],
+        # )
+        viz.startPath(
+            Point(np.array(offset), "global"),
+            Point(np.array([2, 0, 2]), "global"),
+            [],
+        )
+        viz.addObstacleVolumeOutline(trav.voxel_template(vx), trav_to_global * trav.transform)
+        # viz.addObstacleVolumeOutline(obst.voxel_template(vx), obst_to_global * obst.transform)
+        viz.addObstacleVolumeOutline(conv_obst, obst_to_global * obst.transform)
+        # to_obst_from_trav = obst.transform.inverse * to_obst_parent_from_trav_parent * trav.transform
+        # xformed = trav.transformed_to(obst.transform, to_obst_from_trav)
+        # xformed_voxels = xformed.voxel_template(vx)
+        # viz.addObstacleVolumeOutline(xformed_voxels, obst_to_global * obst.transform)
+
+        pg.exec()
+
+    assert conv_obst.intersects_line(
+        Point(np.array([0, 0, 0]), "trav").mapped_to("obst"), Point(np.array([1.1, 2, 2]), "global").mapped_to("obst")
+    )
+    assert conv_obst.intersects_line(
+        Point(np.array(offset), "global").mapped_to("obst"), Point(np.array([2, 0, 2]), "global").mapped_to("obst")
+    )
+    for pt in obst.mesh.vertices:
+        pt = Point(pt, "obst_mesh").mapped_to("obst")
+        assert conv_obst.contains_point(pt), f"point {pt} is not in the convolved obstacle"
+
+
 def test_z_and_x_are_not_swapped(viz=None):
     geometry = Geometry({"type": "box", "size": [10.0, 1.0, 1.0]}, "test_mesh", "test")
     voxel_size = 0.1
@@ -240,9 +314,7 @@ def test_z_and_x_are_not_swapped(viz=None):
     traveler = Geometry({"type": "box", "size": [voxel_size, voxel_size, voxel_size]}, "traveler_mesh", "traveler")
 
     traveler_to_global = NullTransform(3, from_cs=traveler.parent_name, to_cs="global")
-    path = planner.find_path(
-        traveler, traveler_to_global, start, dest, visualizer=viz
-    )
+    path = planner.find_path(traveler, traveler_to_global, start, dest, visualizer=viz)
     do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
     assert path is not None
 
@@ -295,9 +367,7 @@ def test_bounds_prevent_path(geometry, cube, viz=None):
     planner = GeometryMotionPlanner({geometry: NullTransform(3, from_cs="test", to_cs="global")}, voxel_size)
     traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
     with pytest.raises(ValueError):
-        planner.find_path(
-            traveler, traveler_to_global, start, dest, cube, visualizer=viz
-        )
+        planner.find_path(traveler, traveler_to_global, start, dest, cube, visualizer=viz)
     do_viz(viz, {traveler: traveler_to_global})
 
 
@@ -305,9 +375,7 @@ def test_no_path(viz=None):
     geometry = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
     voxel_size = 0.1
     geometry_to_global = NullTransform(3, from_cs=geometry.parent_name, to_cs="global")
-    planner = GeometryMotionPlanner(
-        {geometry: geometry_to_global}, voxel_size
-    )
+    planner = GeometryMotionPlanner({geometry: geometry_to_global}, voxel_size)
     traveler = Geometry(
         {"type": "box", "size": [voxel_size, voxel_size, 6 * voxel_size], "transform": {"pos": (0, 0, -0.3)}},
         "traveler_mesh",
@@ -372,16 +440,12 @@ def test_no_path_because_of_offset_shadow(geometry, viz=None):
     start = to_the_side.map(Point(np.array([0.2, 0.2, 5]), "test"))
     planner = GeometryMotionPlanner({geometry: from_geom_to_global}, voxel_size)
     point_to_global = TTransform(offset=start, from_cs="point", to_cs="global")
-    path = planner.find_path(
-        point, point_to_global, start, dest, visualizer=viz
-    )
+    path = planner.find_path(point, point_to_global, start, dest, visualizer=viz)
     do_viz(viz, {geometry: from_geom_to_global, point: point_to_global})
     assert path is not None
     traveler_to_global = TTransform(offset=start, from_cs="traveler", to_cs="global")
     with pytest.raises(ValueError):
-        planner.find_path(
-            traveler, traveler_to_global, start, dest, visualizer=viz
-        )
+        planner.find_path(traveler, traveler_to_global, start, dest, visualizer=viz)
     do_viz(viz, {geometry: from_geom_to_global, traveler: traveler_to_global})
 
 
@@ -515,9 +579,10 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
+    test_grazing_paths((0.6, 0.6, 0.6), visualizer)
     # test_bounds_prevent_path(geom, bounds, visualizer)
     # test_path_with_funner_traveler(geom, visualizer)
     # test_single_voxel_voxelization(geom, visualizer)
-    test_find_path(geom, visualizer)
+    # test_find_path(geom, visualizer)
     # test_no_path(visualizer)
     # test_no_path_because_of_offset_shadow(geom, visualizer)
