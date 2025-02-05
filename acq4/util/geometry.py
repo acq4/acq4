@@ -442,7 +442,7 @@ class GeometryMotionPlanner:
 @numba.jit(nopython=True)
 def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     # scipy does weird stuff
-    # dest = scipy.signal.convolve(self.volume.astype(int), kernel_array.astype(int), mode="valid").astype(bool)
+    # return scipy.signal.convolve(volume.astype(int), kernel.astype(int), mode="full").astype(bool)
     v_shape = volume.shape
     k_shape = kernel.shape
     shape = (v_shape[0] + k_shape[0] - 1, v_shape[1] + k_shape[1] - 1, v_shape[2] + k_shape[2] - 1)
@@ -491,7 +491,7 @@ class Volume(object):
 
     def convolve(self, kernel_array: np.ndarray, center: np.ndarray, name: str) -> Volume:
         """
-        Return a new Volume that contains the convolution of self with *kernel_array*
+        Return a new Volume that contains the convolution of self with *kernel_array*.
 
         Parameters
         ----------
@@ -504,7 +504,7 @@ class Volume(object):
         """
         dest = convolve_kernel_onto_volume(self.volume, kernel_array)
         draw_xform = TTransform(
-            offset=-center,
+            offset=-center.round(),
             to_cs=self.transform.systems[0],
             from_cs=f"[convolved {name} in {self.transform.systems[1]}]",
         )
@@ -766,17 +766,21 @@ class Geometry:
     def _default_transform_args(self):
         return dict(from_cs=self.name, to_cs=self.parent_name)
 
-    def make_convolved_voxels(self, other, to_self_from_other, voxel_size):
-        to_self_mesh_from_other_mesh = self.transform.inverse * to_self_from_other * other.transform
-        xformed = other.transformed_to(self.transform, to_self_mesh_from_other_mesh)
+    def make_convolved_voxels(
+        self, other: Geometry, to_my_parent_from_other_parent: Transform, voxel_size: float
+    ) -> Volume:
+        """Return a Volume that represents the accessible space the other geometry could move through without a
+        collision."""
+        to_self_from_other = self.transform.inverse * to_my_parent_from_other_parent * other.transform
+        xformed = other.transformed_to(self.transform, to_self_from_other)
         xformed_voxels = xformed.voxel_template(voxel_size)
         # TODO this is adding a scale=-1, but none of the transforms reflect this
         shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
         other_origin = Point((0, 0, 0), other.parent_name)
-        other_origin_in_self = to_self_from_other.map(other_origin)
-        other_origin_in_self_mesh = self.transform.inverse.map(other_origin_in_self)
-        other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self_mesh)
-        center = np.array(shadow.T.shape) - other_origin_in_xformed_voxels
+        other_origin_in_my_parent = to_my_parent_from_other_parent.map(other_origin)
+        other_origin_in_self = self.transform.inverse.map(other_origin_in_my_parent)
+        other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self)
+        center = np.array(shadow.T.shape) - other_origin_in_xformed_voxels - (0.5, 0.5, 0.5)
         self_voxels = self.voxel_template(voxel_size)
         return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
 
