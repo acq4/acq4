@@ -54,24 +54,25 @@ def test_mesh(geometry):
         TTransform(offset=(4.5, 4.5, 4.5)),  # fails
         SRT3DTransform(offset=(8.2, 8.2, -8.2), angle=30, axis=(0, 1, 0)),  # fails
         SRT3DTransform(offset=(-8.2, 8.2, 8.2), angle=30, axis=(0, 1, 0)),  # fails
-        SRT3DTransform(offset=(-8.2, 8.2, -8.2), angle=30, axis=(0, 1, 0)),  # passes
+        SRT3DTransform(offset=(-8.2, 8.2, -8.2), scale=(0.1, 0.1, 0.1), angle=30, axis=(0, 1, 0)),  # passes
     ],
 )
 def test_line_intersects_voxel(to_parent):
     to_parent.set_systems("global", "parent")
 
     def point(coords):
-        # points are written relative to the volume origin, but we need to pretend they were always in parent
+        # points are written relative to the volume origin, so we need to move them, but we need to pretend they were
+        # always in parent
         return Point(to_parent.map(np.array(coords)), "parent")
 
     voxel = Volume(np.ones((3, 3, 3), dtype=bool), to_parent)
-    a_bit = point([0, 0, 1e-6])
     assert voxel.intersects_line(point([-1, -1, -1]), point([4, 4, 4]))
     assert voxel.intersects_line(point([-1, -1, -1]), point([5, 5, 1]))
     assert not voxel.intersects_line(point([-1, -1, -1]), point([5, 5, 0]))
     assert not voxel.intersects_line(point([-1, -1, -1]), point([5, 5, -1]))
-    assert not voxel.intersects_line(point([-1, 1.1, 2]), point([1, 1.1, 4]) + a_bit)
-    assert voxel.intersects_line(point([-1, 1.1, 2]), point([1, 1.1, 4]) - a_bit)
+    a_bit = np.array([0, 0, 1e-6])
+    assert not voxel.intersects_line(point([-1, 1.1, 2]), point([1, 1.1, 4] + a_bit))
+    assert voxel.intersects_line(point([-1, 1.1, 2]), point([1, 1.1, 4] - a_bit))
 
 
 def test_identity_convolve(geometry):
@@ -252,6 +253,51 @@ def test_find_path(geometry, viz=None):
         # TODO ugh! this line is intermittently failing....
         # assert not geometry_vol.intersects_line(global_to_geom_mesh.map(last_point), global_to_geom_mesh.map(waypoint)), f"line from {last_point} to {waypoint} intersects {geometry.mesh.bounds}"
         last_point = waypoint
+
+
+def test_grazing_paths(viz=None):
+    vx = 1.0
+    trav = Geometry({"type": "box", "size": [vx / 2, vx / 2, vx / 2]}, "trav", "trav_mesh")
+    obst = Geometry({"type": "box", "size": [vx, vx, vx]}, "obst", "obst_mesh")
+    trav_to_global = SRT3DTransform(angle=90, axis=(1, 0, 1), offset=(0.2, 0.2, 0.2), from_cs=trav.parent_name, to_cs="global")
+    obst_to_global = TTransform(offset=(1, 1, 1.5), from_cs=obst.parent_name, to_cs="global")
+    to_obst_parent_from_trav_parent = obst_to_global.inverse * trav_to_global
+    conv_obst = obst.make_convolved_voxels(trav, to_obst_parent_from_trav_parent, vx)
+    if viz:
+        viz.addGeometry(trav)
+        viz.setMeshTransform(trav.name, trav_to_global.as_pyqtgraph())
+        viz.addGeometry(obst)
+        viz.setMeshTransform(obst.name, obst_to_global.as_pyqtgraph())
+        # viz.startPath(
+        #     Point(np.array([0, 0, 0]), "trav").mapped_to("global"),
+        #     Point(np.array([1.1, 2, 2]), "global"),
+        #     [],
+        # )
+        viz.startPath(
+            Point(np.array([0.2, 0.2, 0.2]), "global"),
+            Point(np.array([2, 0, 2]), "global"),
+            [],
+        )
+        viz.addObstacleVolumeOutline(trav.voxel_template(vx), trav_to_global * trav.transform)
+        # viz.addObstacleVolumeOutline(obst.voxel_template(vx), obst_to_global * obst.transform)
+        viz.addObstacleVolumeOutline(conv_obst, obst_to_global * obst.transform)
+        # to_obst_from_trav = obst.transform.inverse * to_obst_parent_from_trav_parent * trav.transform
+        # xformed = trav.transformed_to(obst.transform, to_obst_from_trav)
+        # xformed_voxels = xformed.voxel_template(vx)
+        # viz.addObstacleVolumeOutline(xformed_voxels, obst_to_global * obst.transform)
+
+        pg.exec()
+
+    assert conv_obst.intersects_line(
+        Point(np.array([0, 0, 0]), "trav").mapped_to("obst"), Point(np.array([1.1, 2, 2]), "global").mapped_to("obst")
+    )
+    assert conv_obst.intersects_line(
+        Point(np.array([0.2, 0.2, 0.2]), "global").mapped_to("obst"), Point(np.array([2, 0, 2]), "global").mapped_to("obst")
+    )
+    breakpoint()
+    for pt in obst.mesh.vertices:
+        pt = Point(pt, "obst_mesh").mapped_to("obst")
+        assert conv_obst.contains_point(pt), f"point {pt} is not in the convolved obstacle"
 
 
 def test_z_and_x_are_not_swapped(viz=None):
@@ -529,9 +575,10 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
+    test_grazing_paths(visualizer)
     # test_bounds_prevent_path(geom, bounds, visualizer)
     # test_path_with_funner_traveler(geom, visualizer)
     # test_single_voxel_voxelization(geom, visualizer)
-    test_find_path(geom, visualizer)
+    # test_find_path(geom, visualizer)
     # test_no_path(visualizer)
     # test_no_path_because_of_offset_shadow(geom, visualizer)
