@@ -255,11 +255,12 @@ def test_find_path(geometry, viz=None):
         last_point = waypoint
 
 
-def test_grazing_paths(viz=None):
+@pytest.mark.parametrize("offset", [(0, 0, 0), (1, 1, 1), (0.2, 0.2, 0.2), (0.6, 0.6, 0.6)])
+def test_grazing_paths(offset, viz=None):
     vx = 1.0
     trav = Geometry({"type": "box", "size": [vx / 2, vx / 2, vx / 2]}, "trav", "trav_mesh")
     obst = Geometry({"type": "box", "size": [vx, vx, vx]}, "obst", "obst_mesh")
-    trav_to_global = SRT3DTransform(angle=90, axis=(1, 0, 1), offset=(0.2, 0.2, 0.2), from_cs=trav.parent_name, to_cs="global")
+    trav_to_global = SRT3DTransform(angle=90, axis=(1, 0, 1), offset=offset, from_cs=trav.parent_name, to_cs="global")
     obst_to_global = TTransform(offset=(1, 1, 1.5), from_cs=obst.parent_name, to_cs="global")
     to_obst_parent_from_trav_parent = obst_to_global.inverse * trav_to_global
     conv_obst = obst.make_convolved_voxels(trav, to_obst_parent_from_trav_parent, vx)
@@ -274,7 +275,7 @@ def test_grazing_paths(viz=None):
         #     [],
         # )
         viz.startPath(
-            Point(np.array([0.2, 0.2, 0.2]), "global"),
+            Point(np.array(offset), "global"),
             Point(np.array([2, 0, 2]), "global"),
             [],
         )
@@ -292,9 +293,8 @@ def test_grazing_paths(viz=None):
         Point(np.array([0, 0, 0]), "trav").mapped_to("obst"), Point(np.array([1.1, 2, 2]), "global").mapped_to("obst")
     )
     assert conv_obst.intersects_line(
-        Point(np.array([0.2, 0.2, 0.2]), "global").mapped_to("obst"), Point(np.array([2, 0, 2]), "global").mapped_to("obst")
+        Point(np.array(offset), "global").mapped_to("obst"), Point(np.array([2, 0, 2]), "global").mapped_to("obst")
     )
-    breakpoint()
     for pt in obst.mesh.vertices:
         pt = Point(pt, "obst_mesh").mapped_to("obst")
         assert conv_obst.contains_point(pt), f"point {pt} is not in the convolved obstacle"
