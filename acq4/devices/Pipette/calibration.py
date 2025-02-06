@@ -9,7 +9,7 @@ from .planners import PipetteMotionPlanner
 
 
 @future_wrap
-def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.8e-3, pipetteCameraDelay=0, _future=None):
+def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.8e-3, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
@@ -38,17 +38,19 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
 
         # record from imager and pipette position while moving pipette across the objecive
         frames, posEvents = watchMovingPipette(pipette, imager, searchPos2, speed=searchSpeed, _future=_future)
+        framesArray = np.stack([f.data() for f in frames])
 
         # analyze frames for center point
         # avg should be mostly flat with a symmetrical bumpy thing in the middle
         avg = np.array([((frame.data() - bgFrame) ** 2).mean() for frame in frames])
+        # avg = ((framesArray - bgFrame[None, ...])**2).mean(axis=1).mean(axis=1)
 
         # Find the center of the bump
         cs = np.cumsum(avg - avg.min())
         centerIndex = np.searchsorted(cs, cs.max() / 2, 'left')
 
         # get time of the frame with the center point
-        centerTime = pipetteCameraDelay + frames[centerIndex].info()['time']
+        centerTime = frames[centerIndex].info()['time']
         # get position of pipette at center time
         centerPipPos = getPipettePositionAtTime(posEvents, centerTime)
 
@@ -59,10 +61,18 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # to see whether we made it back to the desired position (and if not, apply
         # a correction as well as remember the apparent time delay between camera images and
         # position updates)
+        compareFrame = imager.acquireFrames(1).getResult()[0].data().astype(float)
+        comparisonError = ((framesArray.astype(float) - compareFrame[None, ...])**2).sum(axis=1).sum(axis=1)
+        mostSimilarFrame = np.argmin(comparisonError)
+        pipetteCameraDelay = frames[mostSimilarFrame].info()['time'] - frames[centerIndex].info()['time']
+        correctedCenterTime = frames[centerIndex].info()['time'] - pipetteCameraDelay
+        correctedCenterPipPos = getPipettePositionAtTime(posEvents, correctedCenterTime)
+        pipette._moveToGlobal(correctedCenterPipPos, speed='fast').wait()
 
         # record from imager and pipette position while retracting pipette out of frame
         retractPos = centerPipPos - pipVector * 2e-3
         frames2, posEvents2 = watchMovingPipette(pipette, imager, retractPos, speed=searchSpeed, _future=_future)
+        frames2Array = np.stack([f.data() for f in frames2])
 
         # measure image intensity at a line perpendicular to the pipette that crosses the center of the frame        
         profile, interpCoords = interpolate_orthogonal_line(frames2, bgFrame, pipVector)
@@ -70,18 +80,17 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # the point where we transition from drifting to flat should be where the pipette tip crosses
         # the center of the frame
         avg2 = np.abs(profile).mean(axis=1)
-        avg2 -= avg2[-10:].mean()
+        avg2End = avg2[-10:]
+        avg2 -= avg2End.mean()
+        avg2End = avg2[-10:]  # technically not needed
 
-        # first find where we reach 1/3 of max value
-        thirdIndex = np.argwhere(avg2 > avg2.max() / 3).max()
+        # find where we reach 10% of max value
+        profileMin = profile.min(axis=1)
+        profileMin -= profileMin[-10:].mean()
+        threshold = profileMin.min() / 10
+        endIndex = np.argwhere(profileMin > threshold).min()
 
-        # now check each frame one at a time until the value of the frame reaches the 95th percentile of the remaining frames
-        for endIndex in range(thirdIndex, len(avg2)):
-            pct = scipy.stats.percentileofscore(avg2[endIndex + 1:], avg2[endIndex])
-            if pct <= 95:
-                break
-
-        endTime = pipetteCameraDelay + frames2[endIndex].info()['time']
+        endTime = frames2[endIndex].info()['time'] - pipetteCameraDelay
 
         # find pipette position at end time
         endPipPos = getPipettePositionAtTime(posEvents2, endTime)
@@ -115,13 +124,28 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # find tip
         tipImg = zDiff[zIndex]
         smoothTipImg = scipy.ndimage.gaussian_filter(tipImg, 2)
-        tipThreshold = scipy.stats.scoreatpercentile(smoothTipImg, 90)
+        tipThreshold = scipy.stats.scoreatpercentile(smoothTipImg, 98)
         # tipThreshold = 0.5 * (smoothTipImg.max() + smoothTipImg.min())
         tipMask = scipy.ndimage.binary_erosion(smoothTipImg > tipThreshold)
-        tipPixels = np.argwhere(tipMask)
+
+        # find largest object, hope this is the pipette
+        label = scipy.ndimage.label(tipMask)[0]
+        objects = scipy.ndimage.find_objects(label)
+        largest = None
+        for i, obj in enumerate(objects):
+            size = (obj[0].stop - obj[0].start) * (obj[1].stop - obj[1].start)
+            if largest is None or size > largest[0]:
+                largest = (size, i+1)
+
+        # location of all pixels in largest object
+        tipPixels = np.argwhere(label == largest[1])
+
+        # find the pixel that is farthest in the direction the pipette points
         imgVector = frame_pipette_direction(zStack[0], pipVector)[:2]
         tipPixelDistanceAlongPipette = np.dot(tipPixels, imgVector)
         tippestPixel = tipPixels[np.argmax(tipPixelDistanceAlongPipette)]
+
+        # this is our best guess as to the global position of the pipette tip
         globalPos = tipFrame.mapFromFrameToGlobal([tippestPixel[0], tippestPixel[1], 0])
         pipette.resetGlobalPosition(globalPos)
 
@@ -132,7 +156,7 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
 
         # find tip!
-        # cal = pipette.tracker.autoCalibrate()
+        pipette.tracker.autoCalibrate()
 
     finally:
         _future.l = locals().copy()

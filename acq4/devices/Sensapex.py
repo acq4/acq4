@@ -48,6 +48,7 @@ class Sensapex(Stage):
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
+        self._quitRequested = False
 
         Stage.__init__(self, man, config, name)
         # Read position updates on a timer to rate-limit
@@ -133,7 +134,15 @@ class Sensapex(Stage):
         with self.lock:
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
-            pos = self.dev.get_pos(timeout=0)[:3]
+            try:
+                pos = self.dev.get_pos(timeout=0)[:3]
+            except TypeError:
+                # some events requesting position may still be floating around at quit time;
+                # we can ignore these errors here
+                if self._quitRequested:
+                    pos = self._lastPos
+                else:
+                    raise
             self._lastUpdate = ptime.time()
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
@@ -172,6 +181,7 @@ class Sensapex(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
+        self._quitRequested = True
         Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
             UMP.get_ump().poller.stop()
