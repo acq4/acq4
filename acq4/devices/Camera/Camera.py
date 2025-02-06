@@ -1049,7 +1049,7 @@ class FrameAcquisitionFuture(Future):
                         self._taskDone(interrupted=self._frame_count is not None)
                         break
                     if ptime.time() - lastFrameTime > self._timeout:
-                        self._taskDone(interrupted=True, error=TimeoutError("Timed out waiting for frames"))
+                        self._taskDone(interrupted=True, excInfo=(TimeoutError, TimeoutError("Timed out waiting for frames"), None))
                         break
                     continue
                 self._frames.append(frame)

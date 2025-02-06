@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import contextlib
+import time
 from typing import Optional
 
 import numpy as np
-import time
 
-import numpy as np
-
+from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt, ptime
+from acq4.util.HelpfulException import HelpfulException
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from pyqtgraph import debug, SpinBox, FeedbackButton
-from ..Stage import Stage, MoveFuture, StageInterface
-from ...util.future import future_wrap, Future
+from acq4.util.debug import logMsg
+from acq4.util.future import future_wrap, Future, FutureButton
+from pyqtgraph import debug, SpinBox, siFormat
+from pyqtgraph.units import µm
 
 
 class Scientifica(Stage):
@@ -326,32 +326,33 @@ class ScientificaMoveFuture(MoveFuture):
 
 
 class ScientificaGUI(StageInterface):
+    sigBusyMoving = Qt.Signal(object)  # button in use or False
+
     def __init__(self, dev, win):
-        StageInterface.__init__(self, dev, win)
+        super().__init__(dev, win)
+        self.sigBusyMoving.connect(self._setBusy)
         nextRow = self.layout.rowCount()
 
         # Insert Scientifica-specific controls into GUI
         self.zeroBtn = Qt.QPushButton("Zero position")
         self.zeroBtn.setToolTip("Set the current position as the new zero position on all axes.")
-        self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
+        self.zeroBtn.clicked.connect(self.zeroAll)
         self.layout.addWidget(self.zeroBtn, nextRow, 0)
 
-        self.autoZeroBtn = FeedbackButton("Auto-set zero position")
+        self.autoZeroBtn = FutureButton(self.autoZero, "Auto-set zero position", stoppable=True)
         self.autoZeroBtn.setToolTip(
             "Drive to the mechanical limit in each axis and set that as the zero position. Please ensure that the "
             "device is not obstructed before using this feature."
         )
-        self.autoZeroBtn.clicked.connect(self.autoZero)
         self.layout.addWidget(self.autoZeroBtn, nextRow, 1)
-        self._autoZeroFuture = None
         nextRow += 1
+        self.autoXZeroBtn = self.autoYZeroBtn = self.autoZZeroBtn = None
 
         if dev.capabilities()["getPos"][0]:
             self.xZeroBtn = Qt.QPushButton("Zero X")
             self.xZeroBtn.clicked.connect(self.zeroX)
             self.layout.addWidget(self.xZeroBtn, nextRow, 0)
-            self.autoXZeroBtn = FeedbackButton("Auto-set X zero")
-            self.autoXZeroBtn.clicked.connect(self.autoXZero)
+            self.autoXZeroBtn = FutureButton(self.autoXZero, "Auto-set X zero", stoppable=True)
             self.layout.addWidget(self.autoXZeroBtn, nextRow, 1)
             nextRow += 1
 
@@ -359,8 +360,7 @@ class ScientificaGUI(StageInterface):
             self.yZeroBtn = Qt.QPushButton("Zero Y")
             self.yZeroBtn.clicked.connect(self.zeroY)
             self.layout.addWidget(self.yZeroBtn, nextRow, 0)
-            self.autoYZeroBtn = FeedbackButton("Auto-set Y zero")
-            self.autoYZeroBtn.clicked.connect(self.autoYZero)
+            self.autoYZeroBtn = FutureButton(self.autoYZero, "Auto-set Y zero", stoppable=True)
             self.layout.addWidget(self.autoYZeroBtn, nextRow, 1)
             nextRow += 1
 
@@ -368,8 +368,7 @@ class ScientificaGUI(StageInterface):
             self.zZeroBtn = Qt.QPushButton("Zero Z")
             self.zZeroBtn.clicked.connect(self.zeroZ)
             self.layout.addWidget(self.zZeroBtn, nextRow, 0)
-            self.autoZZeroBtn = FeedbackButton("Auto-set Z zero")
-            self.autoZZeroBtn.clicked.connect(self.autoZZero)
+            self.autoZZeroBtn = FutureButton(self.autoZZero, "Auto-set Z zero", stoppable=True)
             self.layout.addWidget(self.autoZZeroBtn, nextRow, 1)
             nextRow += 1
 
@@ -387,6 +386,18 @@ class ScientificaGUI(StageInterface):
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)
 
+    def _setBusy(self, busy_btn: bool | Qt.QPushButton):
+        self.autoZeroBtn.setEnabled(busy_btn == self.autoZeroBtn or not busy_btn)
+        if self.autoXZeroBtn:
+            self.autoXZeroBtn.setEnabled(busy_btn == self.autoXZeroBtn or not busy_btn)
+        if self.autoYZeroBtn:
+            self.autoYZeroBtn.setEnabled(busy_btn == self.autoYZeroBtn or not busy_btn)
+        if self.autoZZeroBtn:
+            self.autoZZeroBtn.setEnabled(busy_btn == self.autoZZeroBtn or not busy_btn)
+
+    def zeroAll(self):
+        self.dev.dev.zeroPosition()
+
     def zeroX(self):
         self.dev.dev.zeroPosition('X')
 
@@ -397,83 +408,68 @@ class ScientificaGUI(StageInterface):
         self.dev.dev.zeroPosition('Z')
 
     def autoZero(self):
-        self._autoZero()
+        self.sigBusyMoving.emit(self.autoZeroBtn)
+        return self._autoZero()
 
     def autoXZero(self):
-        self._autoZero(axis=0)
+        self.sigBusyMoving.emit(self.autoXZeroBtn)
+        return self._autoZero(axis=0)
 
     def autoYZero(self):
-        self._autoZero(axis=1)
+        self.sigBusyMoving.emit(self.autoYZeroBtn)
+        return self._autoZero(axis=1)
 
     def autoZZero(self):
-        self._autoZero(axis=2)
+        self.sigBusyMoving.emit(self.autoZZeroBtn)
+        return self._autoZero(axis=2)
 
     def _autoZero(self, axis: int | None = None):
-        self.autoZeroBtn.processing("Moving...")
-        self.autoXZeroBtn.processing("Moving...")
-        self.autoYZeroBtn.processing("Moving...")
-        self.autoZZeroBtn.processing("Moving...")
-        self._autoZeroFuture = self._doAutoZero(axis)
-        if axis is None:
-            finisher = self.autoZeroFinished
-        else:
-            finisher = getattr(self, f"auto{'XYZ'[axis]}ZeroFinished")
-        self._autoZeroFuture.sigFinished.connect(finisher)
-        if self._autoZeroFuture.isDone():  # in case of instant completion
-            finisher()
+        # confirm with user that movement is safe
+        response = Qt.QMessageBox.question(
+            self,
+            "Caution: check for obstructions",
+            "This will move the stage to its limit. Please ensure such a movement is safe. Ready?",
+            Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
+        )
+        if response != Qt.QMessageBox.Ok:
+            return Future.immediate(
+                error="User requested stop", excInfo=(Future.StopRequested, Future.StopRequested(), None)
+            )
+
+        return self._doAutoZero(axis)
 
     @future_wrap
-    def _doAutoZero(self, axis: int = None, _future: Future = None):
+    def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
             self.dev.setLimits(None, None, None)
             pos = self.dev.globalPosition()
-            far_away = [-1e27, -1e27, 1e27]
+            dest = pos[:]
+            far_away = [-1, -1, 1]  # meters
             if axis is None:
-                pos = far_away
+                dest = far_away
             else:
-                pos[axis] = far_away[axis]
-            print(f"moving to {pos}")
-            self.dev.moveToGlobal(pos, "fast")
+                dest[axis] = far_away[axis]
+            self.dev.moveToGlobal(dest, "fast")
             _future.sleep(1)
             while self.dev.dev.isMoving():
                 _future.sleep(0.1)
             self.dev.stop()
-            self.dev.dev.zeroPosition('XYZ'[axis])
+            before = self.dev.globalPosition()
+            if axis is None:
+                self.dev.dev.zeroPosition()
+            else:
+                self.dev.dev.zeroPosition('XYZ'[axis])
+            self.dev.getPosition(refresh=True)
+            after = self.dev.globalPosition()
+            diff = np.array(after) - np.array(before)
+            logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
+            _future.waitFor(self.dev.moveToGlobal(pos + diff, "fast"))
+            dist = np.linalg.norm(diff)
+            if dist > 50 * µm:
+                raise HelpfulException(
+                    f"Zeroing {self.dev.name()} indicates slippage of {siFormat(dist, suffix='m')}")
         finally:
+            self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
-
-    def autoZeroFinished(self):
-        self._autoZeroFinished()
-
-    def autoXZeroFinished(self):
-        self._autoZeroFinished(0)
-
-    def autoYZeroFinished(self):
-        self._autoZeroFinished(1)
-
-    def autoZZeroFinished(self):
-        self._autoZeroFinished(2)
-
-    def _autoZeroFinished(self, axis=None):
-        self.autoZeroBtn.setEnabled(True)
-        self.autoZeroBtn.reset()
-        self.autoXZeroBtn.setEnabled(True)
-        self.autoXZeroBtn.reset()
-        self.autoYZeroBtn.setEnabled(True)
-        self.autoYZeroBtn.reset()
-        self.autoZZeroBtn.setEnabled(True)
-        self.autoZZeroBtn.reset()
-        if axis is None:
-            btn = self.autoZeroBtn
-        else:
-            btn = getattr(self, f"auto{'XYZ'[axis]}ZeroBtn")
-        try:
-            self._autoZeroFuture.wait()
-        except Exception as e:
-            btn.failure('Error!')
-            raise e
-        else:
-            btn.success("Zero position set")
-        finally:
-            self._autoZeroFuture = None
+            self.sigBusyMoving.emit(False)
