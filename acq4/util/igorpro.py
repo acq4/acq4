@@ -1,52 +1,17 @@
-from __future__ import print_function
+import queue
 import sys
-import win32com.client
+import threading
 import pywintypes
-import pythoncom
 import numpy as np
-import subprocess as sp
+import subprocess
 import concurrent.futures
 import atexit
 import json
 import zmq
 
-
-import os
 from acq4.util.json_encoder import ACQ4JSONEncoder
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+# sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
-
-r"""
-Thanks to: Jason Yamada-Hanff  https://github.com/yamad/igor-mode
-
-Main documentation:  Igor Pro Folder\Miscellaneous\Windows Automation\Automation Server.ihf
-
-
-* Use fprintf to return data:
-   igor('fprintf 0, "%d", 1+3')
-
-* Access waves:
-   df = i.app.DataFolder("root:MIES:ITCDevices:ITC1600:Device0")
-   wave = df.Wave('OscilloscopeData')
-
-   # get data type and array shape
-   typ, rows, cols, layers, chunks = wave.GetDimensions()
-   dtype = dtypes[typ]
-   shape = [rows, cols, layers, chunks]
-   ndim = shape.index(0)
-   shape = shape[:ndim]
-
-   # get [(slope, intercept), ...] scale factors for each axis
-   scaling = [wave.GetScaling(ax) for ax in range(len(shape))]
-
-   np.array(wave.GetNumericWaveData(typ))
-
-* Access global variables:
-   df = i.app.DataFolder("root")
-   var = df.Variable("myvar")
-   var.GetNumericValue()
-   var.GetStringValue()
-"""
 
 dtypes = { 
     0x02: 'float32',
@@ -61,6 +26,12 @@ dtypes = {
     0x00: 'str',
 }
 
+float_types = {
+    "NT_FP32": np.float32,
+    "NT_FP64": np.float64
+}
+
+
 
 class IgorCallError(Exception):
     FAILED = 1
@@ -70,54 +41,16 @@ class IgorCallError(Exception):
         super(IgorCallError, self).__init__(message)
 
 
-class IgorThread(Qt.QThread):
-
-    _newRequest = Qt.Signal(object)
-
-    def __init__(self, useZMQ=False):
-        Qt.QThread.__init__(self)
-        self.moveToThread(self)
-        if useZMQ:
-            self.igor = ZMQIgorBridge()
-        else:
-            self.igor = IgorBridge()
-        self._newRequest.connect(self._processRequest)
-        self.start()
-        atexit.register(self.quit)
-
-    def __call__(self, *args, **kwds):
-        return self._sendRequest('__call__', args, kwds)
-
-    def getWave(self, *args, **kwds):
-        return self._sendRequest('getWave', args, kwds)
-
-    def getVariable(self, *args, **kwds):
-        return self._sendRequest('getVariable', args, kwds)
-
-    def _sendRequest(self, req, args, kwds):
-        if isinstance(self.igor, ZMQIgorBridge):
-            return getattr(self.igor, req)(*args)
-        else:
-            fut = concurrent.futures.Future()
-            self._newRequest.emit((fut, req, args, kwds))
-        return fut
-
-    def _processRequest(self, req):
-        fut, method, args, kwds = req
-        try:
-            result = getattr(self.igor, method)(*args, **kwds)
-            fut.set_result(result)
-        except Exception as exc:
-            fut.set_exception(exc)
-
-    def run(self):
-      pythoncom.CoInitialize()
-      Qt.QThread.run(self)
+zmq_context = zmq.Context()
+def close_context():
+    zmq_context.term()
+atexit.register(close_context)
 
 
-class IgorBridge(object):
-    def __init__(self):
-        self.app = None
+class IgorBridge(Qt.QObject):
+    def __init__(self, req_port=5670, sub_port=5770):
+        self.req_thread = IgorReqThread(address=f"tcp://localhost:{req_port}")
+        self.sub_thread = IgorSubThread(address=f"tcp://localhost:{sub_port}")
 
     def tryReconnect(func):
         def _tryReconnect(self, *args, **kwds):
@@ -138,131 +71,95 @@ class IgorBridge(object):
     def igorProcessExists():
         """Return True if an Igor process is currently running.
         """
-        return 'Igor.exe' in sp.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
-
-    def connect(self):
-        self.app = None
-        # Need to check for running process to avoid starting a new one.
-        if self.igorProcessExists():
-            self.app = win32com.client.gencache.EnsureDispatch("IgorPro.Application")
-        else:
-            raise Exception("No Igor process found.")
-
-    @tryReconnect
-    def __call__(self, cmd, *args, **kwds):
-        """Make an Igor function call.
-        
-        Any keyword arguments are optional parameters.
-        """
-        cmd = self.formatCall(cmd, *args, **kwds)
-        err, errmsg, hist, res = self.app.Execute2(1, 0, cmd, 0, "", "", "")
-        if err != 0:
-            raise RuntimeError("Igor call returned error code %d: %s" % (err, errmsg))
-        return res
-
-    def formatCall(self, cmd, *args, **kwds):
-        for kwd, val in kwds.items():
-            if isinstance(val, int):
-                args.append("{}={:d}".format(kwd, val))
-            elif isinstance(val, float):
-                args.append("{}={:f}".format(kwd, val))
-            else:
-                raise TypeError("Invalid value: {}".format(val))
-        return "{}({})".format(cmd, ", ".join(["{}"]*len(args)).format(*args))
-
-    @tryReconnect
-    def getWave(self, folder, waveName):
-        df = self.app.DataFolder(folder)
-        wave = df.Wave(waveName)
-
-        # get data type and array shape
-        typ, rows, cols, layers, chunks = wave.GetDimensions()
-        dtype = dtypes[typ]
-        shape = [rows, cols, layers, chunks]
-        ndim = shape.index(0)
-        shape = shape[:ndim]
-
-        # get [(slope, intercept), ...] scale factors for each axis
-        # could use this to return a metaarray..
-        scaling = [wave.GetScaling(ax) for ax in range(len(shape))]
-
-        data = np.array(wave.GetNumericWaveData(typ))
-
-        return data, scaling
-
-    @tryReconnect
-    def getVariable(self, folder, varName):
-        df = self.app.DataFolder(folder)
-        var = df.Variable(varName)
-        typ = var.get_DataType()
-        if dtypes[typ] == 'str':
-            return var.GetStringValue()
-        else:
-            r,i = var.getNumericValue()
-            if dtypes[typ] == 'complex':
-                return complex(r, i)
-            else:
-                return r
-
-
-class ZMQIgorBridge(object):
-    """Bridge to Igor via ZMQ DEALER/ROUTER."""
-    _context = zmq.Context()
-
-    _types = {"NT_FP32": np.float32,
-              "NT_FP64": np.float64}
-
-    def __init__(self, host="tcp://localhost", port=5670):
-        super(ZMQIgorBridge, self).__init__()
-        self._unresolvedFutures = {}
-        self._currentMessageID = 0
-        self.address = "{}:{}".format(host, port)
-        self._socket = self._context.socket(zmq.DEALER)
-        self._socket.setsockopt(zmq.IDENTITY, b"igorbridge")
-        self._socket.setsockopt(zmq.SNDTIMEO, 1000)
-        self._socket.setsockopt(zmq.RCVTIMEO, 0)
-        self._socket.connect(self.address)
-        self._pollTimer = Qt.QTimer()
-        self._pollTimer.timeout.connect(self._checkRecv)
-        self._pollTimer.start(100)
+        return 'Igor.exe' in subprocess.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
 
     def __call__(self, cmd, *args):
-        # TODO: Handle optional values whenever they become supported in Igor
-        messageID = self._getMessageID()
-        future = concurrent.futures.Future()
-        call = self.formatCall(cmd, params=args, messageID=messageID)
-        try:
-            self._socket.send_multipart(call)
-            self._unresolvedFutures[messageID] = future
-        except zmq.error.Again:
-            self._unresolvedFutures.pop(messageID)
-            future.set_exception(IgorCallError("Send timed out",
-                IgorCallError.TIMEDOUT))
-        return future
+        return self.req_thread.send(cmd, *args)
+    
+    def quit(self):
+        self.req_thread.stop()
 
-    def _checkRecv(self):
-        try:
-            reply = json.loads(self._socket.recv_multipart()[-1])
-            messageID = reply.get("messageID", None)
-            future = self._unresolvedFutures.get(messageID, None)
-            if future is None:
-                raise RuntimeError("No future found for messageID {}".format(messageID))
+
+class IgorReqThread(threading.Thread):
+    def __init__(self, address):
+        self.address = address
+        self.stop_flag = False
+        self.send_queue = queue.Queue()
+        self.unresolved_futures = {}
+        self.next_result_id = 0
+        super().__init__(target=self._req_loop, daemon=True)
+        self.start()
+        atexit.register(self.stop)
+
+    def send(self, cmd, *args):
+        fut = concurrent.futures.Future()
+        self.send_queue.put((cmd, args, fut))
+        return fut
+
+    def stop(self):
+        self.stop_flag = True
+
+    def _req_loop(self):
+        self.socket = zmq_context.socket(zmq.DEALER)
+        self.socket.setsockopt(zmq.IDENTITY, b"igorbridge")
+        self.socket.setsockopt(zmq.SNDTIMEO, 1000)
+        self.socket.setsockopt(zmq.RCVTIMEO, 100)
+        success = self.socket.connect(self.address)
+        print(f"DEBUG - success: {dir(success.socket)}")
+
+
+        while not self.stop_flag:
+            self._check_send()
+            self._check_recv()
+
+        self.socket.close()
+
+    def _check_send(self):
+        # Send some (but not all) messages waiting in the queue
+        for i in range(10):
+            if not zmq_context.closed:
+                try:
+                    cmd, params, fut = self.send_queue.get(block=False)
+                except queue.Empty:
+                    break
+                try:
+                    msg_id = self.next_result_id
+                    self.next_result_id += 1
+                    self.unresolved_futures[msg_id] = fut
+                    self.socket.send_multipart(self.format_call(cmd, params, msg_id))
+                except zmq.error.Again:
+                    pass
+                except zmq.error.ContextTerminated:
+                    pass
+
+    def _check_recv(self):
+        if not zmq_context.closed:
             try:
-                reply = self.parseReply(reply)
-                future.set_result(reply)
-            except IgorCallError as e:
-                future.set_exception(e)
-        except zmq.error.Again:
-            pass
+                parts = self.socket.recv_multipart()
+                reply = json.loads(parts[1])
+                try:
+                    message_id = int(reply["messageID"])
+                except KeyError:
+                    print(reply)
+                    raise
+                future = self.unresolved_futures.pop(message_id)
+                if future is None:
+                    raise RuntimeError(f"No future found for messageID {message_id}")
+                try:
+                    reply = self.parse_reply(reply)
+                    future.set_result(reply)
+                except IgorCallError as e:
+                    future.set_exception(e)
+            except zmq.error.Again:
+                pass
+            except zmq.error.ContextTerminated:
+                pass
+            except zmq.error.ZMQError:
+                pass
 
-    def _getMessageID(self):
-        mid = self._currentMessageID
-        self._currentMessageID += 1
-        return str(mid)
-
-    def formatCall(self, cmd, params, messageID):
+    def format_call(self, cmd, params, message_id):
         call = {"version": 1,
-                "messageID": messageID,
+                "messageID": str(message_id),
                 "CallFunction": {
                     "name": cmd,
                     "params": params}
@@ -270,7 +167,7 @@ class ZMQIgorBridge(object):
         msg = [b"", json.dumps(call, cls=ACQ4JSONEncoder).encode()]
         return msg
 
-    def parseReply(self, reply):
+    def parse_reply(self, reply):
         err = reply.get("errorCode", {}).get("value", None)
         if err is None:
             raise RuntimeError("Invalid response from Igor")
@@ -282,15 +179,25 @@ class ZMQIgorBridge(object):
             restype = result.get("type", "")
             val = result.get("value", None)
             if (restype == "wave") and (val is not None):
-                return self.parseWave(val)
+                return self.parse_wave(val)
             else:
                 return val
 
-    def parseWave(self, jsonWave):
-        dtype = self._types.get(jsonWave["type"], float)
+    def parse_wave(self, jsonWave):
+        dtype = float_types.get(jsonWave["type"], float)
         shape = jsonWave["dimension"]["size"]
         raw = np.array(jsonWave["data"]["raw"], dtype=dtype)
         return raw.reshape(shape, order="F")
+    
+
+class IgorSubThread:
+    def __init__(self, address):
+        self.address = address
+        self.stop_flag = False
+
+    def stop(self):
+        self.stop_flag = True
+
 
 
 

@@ -227,7 +227,8 @@ class PatchPipetteState(Future):
             error = str(exc)
             excInfo = sys.exc_info()
         finally:
-            disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
+            if self.dev.clampDevice is not None:
+                disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
 
@@ -276,4 +277,4 @@ class SteadyStateAnalysisBase(object):
         ratio = np.log10(avg / prev_avg)
         return avg, ratio
 
-
+import pyqtgraph.configfile

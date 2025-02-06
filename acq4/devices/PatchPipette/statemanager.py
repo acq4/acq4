@@ -88,15 +88,15 @@ class PatchPipetteStateManager(Qt.QObject):
             raise KeyError(f"Unknown patch profile {name}")
         return cls.profiles[name]
 
-    @classmethod
-    def _loadGlobalProfilesOnce(cls):
-        if cls._profilesLoadedFromConfig:
+    @staticmethod
+    def _loadGlobalProfilesOnce():
+        if PatchPipetteStateManager._profilesLoadedFromConfig:
             return
-        cls._profilesLoadedFromConfig = True
+        PatchPipetteStateManager._profilesLoadedFromConfig = True
         man = getManager()
         for k, v in man.config.get('misc', {}).get('patchProfiles', {}).items():
             v = v.copy()
-            cls.addProfile(name=k, config=v)
+            PatchPipetteStateManager.addProfile(name=k, config=v)
 
     @classmethod
     def addProfile(cls, name: str, config: dict, overwrite=False):

@@ -1,4 +1,4 @@
-from .igorpro import IgorThread, IgorCallError
+from .igorpro import IgorBridge, IgorCallError
 from acq4.util import Qt
 
 
@@ -22,23 +22,24 @@ class MIES(Qt.QObject):
     SSRES = 2
 
     @classmethod
-    def getBridge(cls, useZMQ=False):
+    def getBridge(cls):
         """Return a singleton MIESBridge instance.
         """
-        # TODO: Handle switching between ZMQ and ActiveX?
         if cls._bridge is None:
-            cls._bridge = MIES(useZMQ=useZMQ)
+            cls._bridge = MIES()
         return cls._bridge
 
-    def __init__(self, useZMQ=False):
+    def __init__(self):
         super(MIES, self).__init__(parent=None)
-        self.igor = IgorThread(useZMQ)
-        self.usingZMQ = useZMQ
+        self.igor = IgorBridge()
         self.currentData = None
+        self.manual_active = False  # temporary fix for manual mode toggle button, see below
         self._exiting = False
         #self.windowName = 'ITC1600_Dev_0'
-        self.windowName = 'ITC18USB_Dev_0'
+        self._windowName = None
+        self.devices: list[str] = []
         self._sigFutureComplete.connect(self.processUpdate)
+        # self.igor.igor.sig_device_status_changed.connect(self.slot_device_status_changed) # will change for refactor
         self._initTPTime = None
         self._lastTPTime = None
         self._TPTimer = Qt.QTimer()
@@ -48,16 +49,17 @@ class MIES(Qt.QObject):
 
     def start(self):
         self._exiting = False
-        if self.usingZMQ:
-            self.getMIESUpdate()
+        self.getMIESUpdate()
+
+    # @Qt.Slot(str, str)
+    # def slot_device_status_changed(self, device_name: str, device_tp_event):
+    #     self.devices[device_name] = device_tp_event
+    #     # potentionally can do more for this event
 
     def getMIESUpdate(self):
-        if self.usingZMQ:
-            future = self.igor("FFI_ReturnTPValues")
-            future.add_done_callback(self._sigFutureComplete.emit)
-            self._TPTimer.start(5000) # by default recheck after 5 seconds, overridden if we get data
-        else:
-            raise RuntimeError("getMIESUpdate not supported in ActiveX")
+        future = self.igor("FFI_ReturnTPValues")
+        future.add_done_callback(self._sigFutureComplete.emit)
+        self._TPTimer.start(5000) # by default recheck after 5 seconds, overridden if we get data
 
     def processUpdate(self, future):
         if not self._exiting:
@@ -96,29 +98,78 @@ class MIES(Qt.QObject):
 
     def setManualPressure(self, pressure):
         return self.setCtrl("setvar_DataAcq_SSPressure", pressure)
+    
+    def setPressureSource(self, source: str):
+        # if user, check user access & uncheck apply
+        # if atmosphere, uncheck both
+        # if regulator, check apply and uncheck user
+        # button_DataAcq_SSSetPressureMan, check_DataACq_Pressure_User
+
+        # use P_UpdatePressureMode(string device, variable pressureMode, string pressureControlName, variable checkALL)
+        # with constants ...
+            # Constant PRESSURE_METHOD_ATM      = -1
+            # Constant PRESSURE_METHOD_MANUAL   = 4
+        # not sure yet on pressureControlName or checkAll (will check with Tim and update here)
+        if source == "user":
+            self.setCtrl("check_DataACq_Pressure_User", True)
+        elif source == "atmosphere":
+            self.setCtrl("check_DataACq_Pressure_User", False)
+            self.igor("P_UpdatePressureMode", self.getWindowName(), -1, "button_DataAcq_Approach", 0)
+            # if self.manual_active:
+            #     self.setCtrl("button_DataAcq_SSSetPressureMan", False)
+            #     self.manual_active = False
+        elif source == "regulator":
+            self.setCtrl("check_DataACq_Pressure_User", False)
+            self.igor("P_UpdatePressureMode", self.getWindowName(), 4, "button_DataAcq_Approach", 0)
+            # if not self.manual_active:
+            #     self.setCtrl("button_DataAcq_SSSetPressureMan", True)
+            #     self.manual_active = True
+        else:
+            raise ValueError(f"pressure source is not valid: {source}")
 
     def setApproach(self, hs):
-        return self.igor("P_SetPressureMode", self.windowName, hs, PRESSURE_METHOD_APPROACH)
+        windowName = self.getWindowName()
+        return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
 
     def setSeal(self, hs):
-        return self.igor("P_SetPressureMode", self.windowName, hs, PRESSURE_METHOD_SEAL)
+        windowName = self.getWindowName()
+        return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
 
     def autoPipetteOffset(self):
         return self.setCtrl('button_DataAcq_AutoPipOffset_VC')
+    
+    def getLockedDevices(self):
+        res = self.igor("GetListOfLockedDevices").result()
+        return res.split(";")
 
     def setCtrl(self, name, value=None):
         """Set or activate a GUI control in MIES."""
-        name_arg = '"{}"'.format(name)
+        windowName = self.getWindowName()
         if value is None:
-            return self.igor('PGC_SetAndActivateControl', self.windowName, name)
+            return self.igor('PGC_SetAndActivateControl', windowName, name)
         else:
-            return self.igor('PGC_SetAndActivateControlVar', self.windowName, name, value)
+            return self.igor('PGC_SetAndActivateControlVar', windowName, name, value)
+
+    def getWindowName(self, ):
+        if self._windowName is None:
+            devices = self.getLockedDevices()
+            for dev in devices:
+                if dev != "":
+                    print(f"setting windowName: {dev}")
+                    self._windowName = devices[0]
+            # if len(devices) > 0:
+            #     self._windowName = devices[0]
+        if self._windowName is None:
+            print("DEBUG - Raising exception for windowName==None")
+            raise Exception("No device locked in IGOR")
+        return self._windowName
 
     def quit(self):
         self._exiting = True
+        self.igor.quit()
 
 
 if __name__ == "__main__":

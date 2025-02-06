@@ -333,7 +333,7 @@ class ScientificaGUI(StageInterface):
         # Insert Scientifica-specific controls into GUI
         self.zeroBtn = Qt.QPushButton("Zero position")
         self.zeroBtn.setToolTip("Set the current position as the new zero position on all axes.")
-        self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
+        self.zeroBtn.clicked.connect(self.zeroPositionClicked)
         self.layout.addWidget(self.zeroBtn, nextRow, 0)
 
         self.autoZeroBtn = FeedbackButton("Auto-set zero position")
@@ -387,6 +387,9 @@ class ScientificaGUI(StageInterface):
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)
 
+    def zeroPositionClicked(self):
+        self.dev.dev.zeroPosition()
+
     def zeroX(self):
         self.dev.dev.zeroPosition('X')
 
@@ -428,18 +431,17 @@ class ScientificaGUI(StageInterface):
         try:
             self.dev.setLimits(None, None, None)
             pos = self.dev.globalPosition()
-            far_away = [-1e27, -1e27, 1e27]
+            far_away = [-10, -10, 10]
             if axis is None:
                 pos = far_away
             else:
                 pos[axis] = far_away[axis]
-            print(f"moving to {pos}")
             self.dev.moveToGlobal(pos, "fast")
             _future.sleep(1)
             while self.dev.dev.isMoving():
                 _future.sleep(0.1)
             self.dev.stop()
-            self.dev.dev.zeroPosition('XYZ'[axis])
+            self.dev.dev.zeroPosition(None if axis is None else 'XYZ'[axis])
         finally:
             self.dev.setLimits(*self._savedLimits)
 
