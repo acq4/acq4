@@ -371,7 +371,7 @@ def test_bounds_prevent_path(geometry, cube, viz=None):
     do_viz(viz, {traveler: traveler_to_global})
 
 
-@pytest.skip("This scenario is highly unlikely, but we may fix it at some point")
+@pytest.mark.skip("This scenario is highly unlikely, but we may fix it at some point")
 def test_paths_stay_inside_bounds(geometry, viz=None):
     voxel_size = 1
     sqrt3 = 3**0.5
