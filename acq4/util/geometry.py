@@ -389,7 +389,7 @@ class GeometryMotionPlanner:
             )
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
-            raise ValueError(f"Path from {start} to {stop} is impossible due to {bound_plane} boundary")
+            raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
 
         profile = debug.Profiler()
         obstacles = []

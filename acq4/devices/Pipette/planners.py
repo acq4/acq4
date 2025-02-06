@@ -325,8 +325,9 @@ class PipetteMotionPlanner:
         if self.future is not None:
             self.future.stop()
 
-    def _move(self):
-        return self.pip._movePath(self.path())
+    @future_wrap
+    def _move(self, _future):
+        _future.waitFor(self.pip._movePath(self.path()))
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
@@ -375,7 +376,8 @@ class SearchMotionPlanner(PipetteMotionPlanner):
     probability of seeing the tip immediately.
     """
 
-    def _move(self):
+    @future_wrap
+    def _move(self, _future):
         pip = self.pip
         speed = self.speed
         distance = self.kwds.get("distance", 0)
@@ -406,7 +408,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
         path = self.safePath(pip.globalPosition(), globalTarget, speed)
 
-        return pip._movePath(path)
+        _future.waitFor(pip._movePath(path))
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
@@ -480,7 +482,8 @@ class IdleMotionPlanner(PipetteMotionPlanner):
     chamber.
     """
 
-    def _move(self):
+    @future_wrap
+    def _move(self, _future):
         pip = self.pip
         speed = self.speed
 
@@ -502,7 +505,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         ds = pip._opts["idleDistance"]  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
 
-        return pip._moveToGlobal(globalIdlePos, speed)
+        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed))
 
 
 def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
