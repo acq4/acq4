@@ -11,7 +11,7 @@ dependencies:
   - scipy
   - sqlite
   - pyserial
-  - pyqtgraph>=0.12
+  - pyqtgraph>=0.13.4
   - pip:
     - MetaArray
     - pyyaml
