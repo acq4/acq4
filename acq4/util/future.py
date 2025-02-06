@@ -5,7 +5,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Callable, Generic, TypeVar, ParamSpec
+from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 
 from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
@@ -359,7 +359,7 @@ class FutureButton(FeedbackButton):
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
-    def __init__(self, future_producer: Callable[ParamSpec, Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
+    def __init__(self, future_producer: Optional[Callable[ParamSpec, Future]]=None, *args, stoppable: bool = False, success=None, failure=None, processing=None):
         """Create a new FutureButton.
 
         Parameters
@@ -379,13 +379,20 @@ class FutureButton(FeedbackButton):
         """
         super().__init__(*args)
         self._future = None
-        self._futureProducer = future_producer
+        self._future_producer = future_producer
         self._stoppable = stoppable
         self._userRequestedStop = False
         self._success = success
         self._failure = failure
         self._processing = processing
         self.clicked.connect(self._controlTheFuture)
+
+    def setOpts(self, **kwds):
+        allowed_args = ['future_producer', 'stoppable', 'success', 'failure', 'processing']
+        for k,v in kwds.items():
+            if k not in allowed_args:
+                raise NameError(f"Unknown option {k}")
+            setattr(self, '_'+k, v)
 
     def processing(self, message="Processing..", tip="", processEvents=True):
         """Displays specified message on button to let user know the action is in progress. Threadsafe."""
@@ -403,7 +410,7 @@ class FutureButton(FeedbackButton):
     def _controlTheFuture(self):
         if self._future is None:
             self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
-            future = self._future = self._futureProducer()
+            future = self._future = self._future_producer()
             future.sigFinished.connect(self._futureFinished)
             if future.isDone():  # futures may immediately complete before we can connect to the signal
                 self._futureFinished(future)

@@ -180,5 +180,5 @@ else:
             app.exec_()
     else:
         app.exec_()
-        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
         # this avoids otherwise irritating exit crashes.

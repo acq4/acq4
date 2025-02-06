@@ -99,24 +99,36 @@ def get_pipette_detection_model():
     global _pipette_detection_model
     if _pipette_detection_model is None:
         import torch, os
-        import acq4.util.pipette_detection.torch_model_04
-        from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
 
-        # initialize model
+        # Model 04
+        # import acq4.util.pipette_detection.torch_model_04
+        # from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
+
+        # Model 05
+        import acq4.util.pipette_detection.torch_model_05
+        from acq4.util.pipette_detection.torch_model_05 import PipetteDetector
+        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_05.__file__)
+        model_file = os.path.join(detector_path, 'torch_models', '05_deeper_training.pth')
+
+        # Model 06
+        # import acq4.util.pipette_detection.torch_model_06
+        # from acq4.util.pipette_detection.torch_model_06 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_06.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '06_resnet50.pth')
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = PipetteDetector()
         model.to(device)
-
-        # load model weights
-        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
-        model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
         model.load_state_dict(torch.load(model_file))
 
         _pipette_detection_model = model
     return _pipette_detection_model
 
 
-def do_pipette_tip_detection(data: np.ndarray, angle: float):
+analysis_window = None
+def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
     """
     Parameters
     ----------
@@ -128,10 +140,12 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
     from acq4.util.pipette_detection.torch_model_04 import make_image_tensor, pos_normalizer
     from acq4.util.pipette_detection.test_data import make_rotated_crop
 
+    global analysis_window
+
     model = get_pipette_detection_model()
 
     # rotate and crop image
-    margin = (np.array(data.shape) - 400) // 2
+    margin = np.clip((np.array(data.shape) - 400) // 2, 0, None)
     crop = (slice(margin[0], margin[0]+400), slice(margin[1], margin[1]+400))
     rot, tr = make_rotated_crop(data, -angle, crop)
     # convert to 0-255 rgb
@@ -147,6 +161,15 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float):
 
     # unrotate/uncrop prediction
     pos_xy = tr.imap([y, x])
+
+    if show:
+        imv = pg.ImageView()
+        imv.setImage(img.T)
+        pt = pg.TargetItem(pos=(x, y))
+        imv.target = pt
+        imv.view.addItem(pt)
+        imv.show()
+        analysis_window = imv
 
     return pos_xy, z, snr, locals()
 
