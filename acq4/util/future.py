@@ -5,7 +5,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Callable, Generic, TypeVar, ParamSpec
+from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 
 from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
@@ -26,15 +26,18 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by checkStop if stop() has been invoked.
         """
 
+    class Stopped(Exception):
+        """Raised by exceptions that were politely stopped."""
+
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses.
         """
 
     @classmethod
-    def immediate(cls, result=None):
+    def immediate(cls, result=None, error=None, excInfo=None) -> Future:
         """Create a future that is already resolved with the optional result."""
         fut = cls()
-        fut._taskDone(returnValue=result)
+        fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
     def __init__(self):
@@ -66,8 +69,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         try:
             kwds['_future'] = self
             self._taskDone(returnValue=func(*args, **kwds))
-        except Exception as exc:
-            self._taskDone(interrupted=True, error=str(exc), excInfo=sys.exc_info())
+        except Exception:
+            self._taskDone(interrupted=True, excInfo=sys.exc_info())
 
     def propagateStopsInto(self, future: Future):
         """Add a future to the list of futures that will be stopped if this future is stopped.
@@ -184,10 +187,15 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 msg = f"Task {self} did not complete (no error message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
-            if self._excInfo is not None:
+
+            if self._stopRequested:
+                raise self.Stopped(msg)
+            elif self._excInfo is not None:
+                if hasattr(self._excInfo[1], 'add_note'):
+                    self._excInfo[1].add_note(msg)
+                    raise self._excInfo[1]
                 raise RuntimeError(msg) from self._excInfo[1]
-            else:
-                raise RuntimeError(msg)
+            raise RuntimeError(msg)
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early.
@@ -351,7 +359,7 @@ class FutureButton(FeedbackButton):
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
-    def __init__(self, future_producer: Callable[[...], Future], *args, stoppable: bool = False, success=None, failure=None, processing=None):
+    def __init__(self, future_producer: Optional[Callable[ParamSpec, Future]]=None, *args, stoppable: bool = False, success=None, failure=None, processing=None):
         """Create a new FutureButton.
 
         Parameters
@@ -371,13 +379,20 @@ class FutureButton(FeedbackButton):
         """
         super().__init__(*args)
         self._future = None
-        self._futureProducer = future_producer
+        self._future_producer = future_producer
         self._stoppable = stoppable
         self._userRequestedStop = False
         self._success = success
         self._failure = failure
         self._processing = processing
         self.clicked.connect(self._controlTheFuture)
+
+    def setOpts(self, **kwds):
+        allowed_args = ['future_producer', 'stoppable', 'success', 'failure', 'processing']
+        for k,v in kwds.items():
+            if k not in allowed_args:
+                raise NameError(f"Unknown option {k}")
+            setattr(self, '_'+k, v)
 
     def processing(self, message="Processing..", tip="", processEvents=True):
         """Displays specified message on button to let user know the action is in progress. Threadsafe."""
@@ -395,7 +410,7 @@ class FutureButton(FeedbackButton):
     def _controlTheFuture(self):
         if self._future is None:
             self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
-            future = self._future = self._futureProducer()
+            future = self._future = self._future_producer()
             future.sigFinished.connect(self._futureFinished)
             if future.isDone():  # futures may immediately complete before we can connect to the signal
                 self._futureFinished(future)
@@ -409,12 +424,15 @@ class FutureButton(FeedbackButton):
         self.sigFinished.emit(future)
         if not future.wasInterrupted():
             self.success(self._success or "Success")
+        elif self._userRequestedStop:
+            self._userRequestedStop = False
+            self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or 'Failed!')[:40])
-            if self._userRequestedStop:
-                self._userRequestedStop = False
-            else:
+            try:
                 future.wait()  # throw errors
+            except Future.Stopped:
+                self.reset()
 
     def _futureStateChanged(self, future, state):
         self.setText(state, temporary=True)

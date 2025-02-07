@@ -125,7 +125,7 @@ class PatchPipetteState(Future):
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
         except Exception as exc:
-            self._taskDone(interrupted=True, error=str(exc))
+            self._taskDone(interrupted=True, excInfo=sys.exc_info())
             raise
 
     def initializePressure(self):
@@ -209,7 +209,6 @@ class PatchPipetteState(Future):
         This calls the custom run() method for the state subclass and handles the possible
         error / exit / completion states.
         """
-        error = None
         excInfo = None
         interrupted = False
         try:
@@ -217,20 +216,19 @@ class PatchPipetteState(Future):
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
         except self.StopRequested as exc:
-            error = str(exc)
             # state was stopped early by calling stop()
+            # TODO should this pass its excInfo in as normal? the handling thereof has improved since this was written.
             interrupted = True
         except Exception as exc:
             # state aborted due to an error
             interrupted = True
             printExc(f"Error in {self.dev.name()} state {self.stateName}")
-            error = str(exc)
             excInfo = sys.exc_info()
         finally:
             if self.dev.clampDevice is not None:
                 disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
-                self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
+                self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
     def checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.

@@ -29,9 +29,7 @@ class MetaArray(FileType):
         """Write data to fileName.
         Return the file name written (this allows the function to modify the requested file name)
         """
-        ext = cls.extensions[0]
-        if fileName[-len(ext):] != ext:
-            fileName = fileName + ext
+        fileName = cls.addExtension(fileName)
             
         if not isinstance(data, MA):
             data = MA(data)
