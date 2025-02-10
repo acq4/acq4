@@ -100,13 +100,14 @@ class PatchPipetteStateManager(Qt.QObject):
 
     @classmethod
     def addProfile(cls, name: str, config: dict, overwrite=False):
-        assert overwrite or name not in cls.profiles, f"Patch profile {name} already exists"
+        if name in cls.profiles and not overwrite:
+            raise ValueError(f"Patch profile {name} already exists")
         mistakes = []
         for state, state_config in config.items():
             if state == 'copyFrom':
                 if not isinstance(state_config, str):
                     mistakes.append(f"Invalid copyFrom value {state_config!r} in profile {name}")
-                if state_config not in cls.profiles:
+                if state_config and state_config not in cls.profiles:
                     mistakes.append(f"Unknown profile {state_config!r} to copy from in profile {name}")
                 continue
             if state not in cls.stateHandlers:

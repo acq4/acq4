@@ -102,7 +102,6 @@ class MultiPatchWindow(Qt.QWidget):
 
             self.pipCtrls.append(ctrl)
 
-
         # load profile configurations from old location
         for name, profile in module.config.get('patchProfiles', {}).items():
             PatchPipetteStateManager.addProfile(name, profile, overwrite=True)
@@ -210,9 +209,18 @@ class MultiPatchWindow(Qt.QWidget):
         if self._profileEditor is None or not self._profileEditor.isVisible():
             from .patchProfileEditor import ProfileEditor
             self._profileEditor = ProfileEditor()
+            self._profileEditor.sigProfileChanged.connect(self.patchProfilesChanged)
             self._profileEditor.show()
         else:
             self._profileEditor.setTopLevelWindow()
+
+    def patchProfilesChanged(self, profiles):
+        self.recordEvent({
+            "event_time": ptime.time(),
+            "device": None,
+            "event": "global patch profiles changed",
+            "profile": json.dumps(profiles, cls=ACQ4JSONEncoder),
+        })
 
     def setPlotModes(self, modes):
         for ctrl in self.pipCtrls:
@@ -578,6 +586,7 @@ class MultiPatchWindow(Qt.QWidget):
             sdir = man.getCurrentDir()
             self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
+            self.patchProfilesChanged(PatchPipetteStateManager.profiles)
 
     def recordTestPulsesToggled(self, rec):
         files = set()

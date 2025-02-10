@@ -10,6 +10,8 @@ from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
 
 class ProfileEditor(qt.QWidget):
+    sigProfileChanged = qt.pyqtSignal(object)
+
     def __init__(self, parent=None):
         super().__init__()
         self.setWindowTitle('Patch Pipette Profile Editor')
@@ -30,10 +32,10 @@ class ProfileEditor(qt.QWidget):
             (profile_name, state_name, *param_name) = self.param_root.childPath(param)
             # using deepcopy pretends that the profile is immutable, but it is not
             profile = deepcopy(PatchPipetteStateManager.getProfileConfig(profile_name))
-            param_name = param_name[0]
             if state_name == "copyFrom":
                 profile[state_name] = data
             else:
+                param_name = param_name[0]
                 profile.setdefault(state_name, {})
                 profile[state_name][param_name] = data
                 if not param.valueModifiedSinceResetToDefault():
@@ -51,7 +53,8 @@ class ProfileEditor(qt.QWidget):
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
                         profile_item.applyDefaults({state_name: {param_name: data}})
-        logMsg(f"Pipette profile {profile_name} updated: {json.dumps(changes, cls=ACQ4JSONEncoder)}")
+        logMsg(f"Patch profile {profile_name} updated: {json.dumps(PatchPipetteStateManager.profiles, cls=ACQ4JSONEncoder)}")
+        self.sigProfileChanged.emit(PatchPipetteStateManager.profiles)
 
     def setTopLevelWindow(self):
         self.raise_()
