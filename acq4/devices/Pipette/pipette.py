@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import json
 import weakref
@@ -16,9 +18,11 @@ from acq4.util.HelpfulException import HelpfulException
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
-from .planners import defaultMotionPlanners, PipettePathGenerator
+from .planners import GeometryAwarePathGenerator
+from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..RecordingChamber import RecordingChamber
+from ...util.geometry import Plane
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -79,8 +83,7 @@ class Pipette(Device, OptomechDevice):
 
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
-    pathGeneratorClass = PipettePathGenerator
-    defaultGeometryArgs = {'color': (0, 1, 0.2, 1)}
+    pathGeneratorClass = GeometryAwarePathGenerator
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -89,6 +92,7 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
+        self._boundaries = None
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
@@ -137,6 +141,24 @@ class Pipette(Device, OptomechDevice):
             self.setTarget(target)
 
         deviceManager.sigAbortAll.connect(self.stop)
+
+    def getGeometry(self):
+        if isinstance(self.config.get("geometry"), dict):
+            defaults = {'color': (0, 1, 0.2, 1)}
+            defaults.update(self.config["geometry"])
+            self.config["geometry"] = defaults
+        return super().getGeometry()
+
+    def getBoundaries(self) -> List[Plane]:
+        if self._boundaries is None:
+            self._boundaries = []
+            for plane in self.parentDevice().getBoundaries():
+                mapped_pt = self._solveMyGlobalPosition(plane.point)
+                mapped_vec = self._solveMyGlobalPosition(plane.point + plane.normal) - mapped_pt
+                new_name = self.name() + " " + plane.name.partition(" ")[2]
+                self._boundaries.append(Plane(mapped_vec, mapped_pt, new_name))
+
+        return self._boundaries
 
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
@@ -522,6 +544,12 @@ class Pipette(Device, OptomechDevice):
         spos = np.asarray(stage.globalPosition())
         return spos + dif
 
+    def _solveMyGlobalPosition(self, pos):
+        """Return the global position of the pipette tip when the stage is at the given global position.
+        """
+        dif = np.asarray(pos) - np.asarray(self.parentDevice().globalPosition())
+        return np.asarray(self.globalPosition()) + dif
+
     def _moveToLocal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in local coordinates.
         WARNING: This method does _not_ implement any motion planning.
@@ -578,7 +606,7 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette
         """
         return PipetteRecorder(self)
-    
+
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import calibratePipette
         future = calibratePipette(self, self.imagingDevice(), self.scopeDevice())
@@ -703,6 +731,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.target.sigPositionChangeFinished.connect(self.targetDragged)
 
         self.transformChanged()
+        self.targetChanged(dev, dev.targetPosition())
         self.updateCalibrateAxis()
 
     def setOrientationToggled(self):

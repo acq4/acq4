@@ -10,7 +10,7 @@ from typing import Optional
 from acq4.util.Mutex import RecursiveMutex as RLock
 from acq4.util.debug import printExc
 from ..SerialDevice import SerialDevice
-from ...util.typing import Number
+from ...util.acq4_typing import Number
 
 # Data provided by Scientifica
 _device_types = """

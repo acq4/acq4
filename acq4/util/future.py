@@ -128,7 +128,6 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if self._isDone:
             raise ValueError("_taskDone has already been called.")
-        self._isDone = True
         if error is not None:
             # error message may have been set earlier
             self._errorMessage = error
@@ -140,6 +139,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self.setState(state or 'complete')
         if returnValue is not None:
             self._returnVal = returnValue
+        self._isDone = True
         self.finishedEvent.set()
         self.sigFinished.emit(self)
 
