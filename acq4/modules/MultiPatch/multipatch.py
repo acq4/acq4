@@ -586,9 +586,7 @@ class MultiPatchWindow(Qt.QWidget):
             sdir = man.getCurrentDir()
             self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
-            from .patchProfileEditor import ProfileEditor
-
-            profile_data = ProfileEditor.buildPatchProfilesParameters().getValues()
+            profile_data = PatchPipetteStateManager.buildPatchProfilesParameters().getValues()
             self.patchProfilesChanged(profile_data)
 
     def recordTestPulsesToggled(self, rec):

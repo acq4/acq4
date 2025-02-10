@@ -8,6 +8,7 @@ from acq4 import getManager
 from acq4.util import Qt
 from acq4.util.debug import printExc
 from pyqtgraph import disconnect
+from pyqtgraph.parametertree import Parameter
 from . import states
 
 
@@ -87,6 +88,11 @@ class PatchPipetteStateManager(Qt.QObject):
         if name not in cls.profiles:
             raise KeyError(f"Unknown patch profile {name}")
         return cls.profiles[name]
+
+    @staticmethod
+    def buildPatchProfilesParameters():
+        params = [ProfileParameter(profile) for profile in PatchPipetteStateManager.listProfiles()]
+        return Parameter.create(name='profiles', type='group', children=params)
 
     @staticmethod
     def _loadGlobalProfilesOnce():
@@ -269,3 +275,60 @@ class PatchPipetteStateManager(Qt.QObject):
         disconnect(job.sigFinished, self.jobFinished)
         if allowNextState and job.nextState is not None:
             self.requestStateChange(job.nextState)
+
+
+class ProfileParameter(Parameter):
+    def __init__(self, profile):
+        super().__init__(name=profile, type='group', children=[
+            {'name': 'copyFrom', 'type': 'str', 'default': ''},
+        ])
+        config = PatchPipetteStateManager.getProfileConfig(profile)
+        if 'copyFrom' in config:
+            self['copyFrom'] = config['copyFrom']
+        for state in PatchPipetteStateManager.listStates():
+            self.addChild(StateParameter(state, profile))
+
+    def reinitialize(self):
+        for child in self:
+            if isinstance(child, StateParameter):
+                child.reinitialize()
+
+    def applyDefaults(self, defaults):
+        for key, val in defaults.items():
+            self.child(key).applyDefaults(val)
+
+
+class StateParameter(Parameter):
+    def __init__(self, name, profile):
+        super().__init__(name=name, type='group', children=[])
+        self._profile = profile
+        self._state = name
+        profile_config = PatchPipetteStateManager.getProfileConfig(profile)
+        if profile_config.get('copyFrom', None):
+            defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
+        else:
+            defaults = {}
+        stateClass = PatchPipetteStateManager.getStateClass(name)
+        config = PatchPipetteStateManager.getStateConfig(name, profile)
+        for param_config in stateClass.parameterTreeConfig():
+            if param_config['name'] in defaults:
+                param_config['default'] = defaults[param_config['name']]
+            param_config['pinValueToDefault'] = True
+            param = Parameter.create(**param_config)
+            if config.get(param.name()) is not None:
+                param.setValue(config[param.name()])
+            self.addChild(param)
+
+    def reinitialize(self):
+        profile = self._profile
+        name = self._state
+        profile_config = PatchPipetteStateManager.getProfileConfig(profile)
+        if profile_config.get('copyFrom', None):
+            defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
+        else:
+            defaults = PatchPipetteStateManager.getStateConfig(name, None)
+        self.applyDefaults(defaults)
+
+    def applyDefaults(self, defaults):
+        for key, val in defaults.items():
+            self.child(key).setDefault(val, updatePristineValues=True)
