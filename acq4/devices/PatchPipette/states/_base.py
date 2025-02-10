@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import contextlib
-import numpy as np
 import queue
 import sys
 import threading
 from copy import deepcopy
 from typing import Any, Optional
+
+import numpy as np
 
 from acq4.util import Qt
 from acq4.util.debug import printExc
@@ -274,5 +275,3 @@ class SteadyStateAnalysisBase(object):
         avg = prev_avg * (1 - alpha) + value * alpha
         ratio = np.log10(avg / prev_avg)
         return avg, ratio
-
-import pyqtgraph.configfile

@@ -22,10 +22,14 @@ class ProfileEditor(qt.QWidget):
         self.ptree = pg.parametertree.ParameterTree()
         self.layout.addWidget(self.ptree, 0, 0)
 
-        params = [ProfileParameter(profile) for profile in PatchPipetteStateManager.listProfiles()]
-        self.param_root = Parameter.create(name='profiles', type='group', children=params)
+        self.param_root = self.buildPatchProfilesParameters()
         self.ptree.setParameters(self.param_root)
         self.param_root.sigTreeStateChanged.connect(self.paramTreeChanged)
+
+    @staticmethod
+    def buildPatchProfilesParameters():
+        params = [ProfileParameter(profile) for profile in PatchPipetteStateManager.listProfiles()]
+        return Parameter.create(name='profiles', type='group', children=params)
 
     def paramTreeChanged(self, root_param, changes):
         for param, change, data in changes:
@@ -53,8 +57,9 @@ class ProfileEditor(qt.QWidget):
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
                         profile_item.applyDefaults({state_name: {param_name: data}})
-        logMsg(f"Patch profile {profile_name} updated: {json.dumps(PatchPipetteStateManager.profiles, cls=ACQ4JSONEncoder)}")
-        self.sigProfileChanged.emit(PatchPipetteStateManager.profiles)
+        profile_data = self.param_root.getValues()
+        logMsg(f"Patch profile {profile_name} updated: {json.dumps(profile_data, cls=ACQ4JSONEncoder)}")
+        self.sigProfileChanged.emit(profile_data)
 
     def setTopLevelWindow(self):
         self.raise_()
