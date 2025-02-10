@@ -243,6 +243,8 @@ class Scientifica(SerialDevice):
         return types.get(typ, typ)
 
     def hasSeparateZSpeed(self):
+        if self._version < 3:
+            return False
         return self.getType() not in [
             'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
             'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',

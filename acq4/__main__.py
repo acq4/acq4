@@ -39,6 +39,9 @@ from .util import Qt
 
 # Import pyqtgraph, get QApplication instance
 import pyqtgraph as pg
+if "--threadtrace" in sys.argv:
+    sys.argv.pop(sys.argv.index('--threadtrace'))
+    tt = pg.debug.ThreadTrace()
 
 app = pg.mkQApp()
 

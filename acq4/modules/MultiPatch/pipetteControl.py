@@ -40,8 +40,9 @@ class PipetteControl(Qt.QWidget):
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
-            self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
-            self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
+            if self.pip.clampDevice is not None:
+                self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
+                self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
             if self.pip.pressureDevice is not None:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)

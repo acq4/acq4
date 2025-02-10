@@ -7,7 +7,7 @@ class MIESPatchClamp(PatchClamp):
     """
     def __init__(self, manager, config, name):
         self._headstage = config.pop('headstage')
-        self.mies = MIES.getBridge(True)
+        self.mies = MIES.getBridge()
         PatchClamp.__init__(self, manager, config, name)
 
     def autoPipetteOffset(self):
@@ -30,4 +30,10 @@ class MIESPatchClamp(PatchClamp):
         return {'mode': 'ic'}
     
     def getDAQName(self, channel):
+        return None
+    
+    def getParam(self, param):
+        return None
+    
+    def deviceInterface(self, win):
         return None
