@@ -2,36 +2,36 @@ from acq4.util.mies import MIES
 from .patch_clamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
 from .states import MIESPatchPipetteStateManager
-from .testpulse import MIESTestPulseThread
 from ..PatchPipette import PatchPipette
+
+from acq4.util import Qt
 
 
 class MIESPatchPipette(PatchPipette):
     """A single patch pipette channel that uses a running MIES instance to handle
     electrophysiology and pressure control.
     """
-    defaultTestPulseThreadClass = MIESTestPulseThread
     defaultStateManagerClass = MIESPatchPipetteStateManager
 
     def __init__(self, deviceManager, config, name):
-        self.mies = MIES.getBridge(True)
+        self.mies = MIES.getBridge()
         self._headstage = config.pop('headstage')
 
         # create pressure and clamp devices
         clampName = f"{name}_clamp"
-        clamp = MIESPatchClamp(
+        self._mies_clamp = MIESPatchClamp(
             deviceManager, 
             config={'headstage': self._headstage},
             name=clampName)
 
         pressureName = f"{name}_pressure"
-        pressure = MIESPressureControl(
+        self._mies_pressure = MIESPressureControl(
             deviceManager, 
             config={'headstage': self._headstage},
             name=pressureName)
 
         config.update({
-            'clampDevice': clampName,
+            # 'clampDevice': clampName,  # for now, operate without a clamp device
             'pressureDevice': pressureName,
         })
         PatchPipette.__init__(self, deviceManager, config, name)
@@ -50,6 +50,7 @@ class MIESPatchPipette(PatchPipette):
     #     self.sigStateChanged.emit(self)
 
     def setActive(self, active):
+        # raise Exception("stack trace")
         self.mies.setHeadstageActive(self._headstage, active)
         PatchPipette.setActive(self, active)
 

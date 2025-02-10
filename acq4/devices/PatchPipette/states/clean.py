@@ -43,7 +43,7 @@ class CleanState(PatchPipetteState):
         super().__init__(*args, **kwds)
 
     def run(self):
-        self.monitorTestPulse()
+        # self.monitorTestPulse() # check for later to see if needed
 
         config = self.config.copy()
         dev = self.dev

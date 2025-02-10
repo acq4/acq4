@@ -83,7 +83,8 @@ class MultiPatchWindow(Qt.QWidget):
             pip.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
                 pip.sigNewEvent.connect(self.pipetteEvent)
-                pip.clampDevice.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
+                if pip.clampDevice is not None:
+                    pip.clampDevice.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
             ctrl = PipetteControl(pip, self)
             if i > 0:
                 ctrl.hideHeader()
@@ -608,7 +609,8 @@ class MultiPatchWindow(Qt.QWidget):
     def resetHistory(self):
         self.eventHistory = []
         for pip in self.selectedPipettes():
-            pip.clampDevice.resetTestPulseHistory()
+            if pip.clampDevice is not None:
+                pip.clampDevice.resetTestPulseHistory()
 
     def writeRecords(self, recs):
         for rec in recs:
