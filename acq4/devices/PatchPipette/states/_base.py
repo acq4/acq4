@@ -274,5 +274,3 @@ class SteadyStateAnalysisBase(object):
         avg = prev_avg * (1 - alpha) + value * alpha
         ratio = np.log10(avg / prev_avg)
         return avg, ratio
-
-import pyqtgraph.configfile
