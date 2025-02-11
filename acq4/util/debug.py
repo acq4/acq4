@@ -31,7 +31,7 @@ def createLogWindow(manager):
 
 
 def printExc(msg="", indent=4, prefix="|", msgType="error"):
-    """Print an error message followed by an indented exception backtrace
+    """Alert the user to an exception that has occurred, but without letting that exception propagate further.
     (This function is intended to be called within except: blocks)"""
     pgdebug.printExc(msg, indent, prefix)
     try:
