@@ -134,14 +134,14 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 self._errorMessage = error
             self._excInfo = excInfo
             self._wasInterrupted = interrupted
-            if interrupted:
-                self.setState(state or f"interrupted: {error}")
-            else:
-                self.setState(state or "complete")
             if returnValue is not None:
                 self._returnVal = returnValue
-            self.finishedEvent.set()
-            self.sigFinished.emit(self)
+        if interrupted:
+            self.setState(state or f"interrupted: {error}")
+        else:
+            self.setState(state or "complete")
+        self.finishedEvent.set()
+        self.sigFinished.emit(self)
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
