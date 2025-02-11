@@ -297,6 +297,7 @@ class ScientificaMoveFuture(MoveFuture):
         if dif < 1.0:  # reached target
             return 1
         # missed
+        self._errorMsg = f"Stopped before reaching target ({self.targetPos})"
         return -1
 
     def interrupt(self):
