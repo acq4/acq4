@@ -10,8 +10,9 @@ from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
 
-FUTURE_RETVAL_TYPE = TypeVar('FUTURE_RETVAL_TYPE')
-WAITING_RETVAL_TYPE = TypeVar('WAITING_RETVAL_TYPE')
+
+FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
+WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
 
 class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
@@ -19,19 +20,18 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
     The simplest subclasses reimplement percentDone() and call _taskDone() when finished.
     """
+
     sigFinished = Qt.Signal(object)  # self
     sigStateChanged = Qt.Signal(object, object)  # self, state
 
     class StopRequested(Exception):
-        """Raised by checkStop if stop() has been invoked.
-        """
+        """Raised by checkStop if stop() has been invoked."""
 
     class Stopped(Exception):
         """Raised by exceptions that were politely stopped."""
 
     class Timeout(Exception):
-        """Raised by wait() if the timeout period elapses.
-        """
+        """Raised by wait() if the timeout period elapses."""
 
     @classmethod
     def immediate(cls, result=None, error=None, excInfo=None) -> Future:
@@ -42,15 +42,16 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
     def __init__(self):
         Qt.QObject.__init__(self)
-        
+
         self.startTime = ptime.time()
 
         self._isDone = False
+        self._completionLock = threading.Lock()
         self._wasInterrupted = False
         self._errorMessage = None
         self._excInfo = None
         self._stopRequested = False
-        self._state = 'starting'
+        self._state = "starting"
         self._errorMonitorThread = None
         self._executingThread = None
         self._stopsToPropagate = []
@@ -67,14 +68,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
     def executeAndSetReturn(self, func, args, kwds):
         try:
-            kwds['_future'] = self
+            kwds["_future"] = self
             self._taskDone(returnValue=func(*args, **kwds))
         except Exception:
             self._taskDone(interrupted=True, excInfo=sys.exc_info())
 
     def propagateStopsInto(self, future: Future):
-        """Add a future to the list of futures that will be stopped if this future is stopped.
-        """
+        """Add a future to the list of futures that will be stopped if this future is stopped."""
         self._stopsToPropagate.append(future)
 
     def getResult(self, **kwds) -> FUTURE_RETVAL_TYPE:
@@ -124,41 +124,40 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             f.stop(reason=reason)
 
     def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None, returnValue=None):
-        """Called by subclasses when the task is done (regardless of the reason)
-        """
-        if self._isDone:
-            raise ValueError("_taskDone has already been called.")
-        self._isDone = True
-        if error is not None:
-            # error message may have been set earlier
-            self._errorMessage = error
-        self._excInfo = excInfo
-        self._wasInterrupted = interrupted
-        if interrupted:
-            self.setState(state or f'interrupted: {error}')
-        else:
-            self.setState(state or 'complete')
-        if returnValue is not None:
-            self._returnVal = returnValue
-        self.finishedEvent.set()
-        self.sigFinished.emit(self)
+        """Called by subclasses when the task is done (regardless of the reason)"""
+        with self._completionLock:
+            if self._isDone:
+                raise ValueError("_taskDone has already been called.")
+            self._isDone = True
+            if error is not None:
+                # error message may have been set earlier
+                self._errorMessage = error
+            self._excInfo = excInfo
+            self._wasInterrupted = interrupted
+            if interrupted:
+                self.setState(state or f"interrupted: {error}")
+            else:
+                self.setState(state or "complete")
+            if returnValue is not None:
+                self._returnVal = returnValue
+            self.finishedEvent.set()
+            self.sigFinished.emit(self)
 
     def wasInterrupted(self):
-        """Return True if the task was interrupted before completing (due to an error or a stop request).
-        """
+        """Return True if the task was interrupted before completing (due to an error or a stop request)."""
         return self._wasInterrupted
 
     def isDone(self):
-        """Return True if the task has completed successfully or was interrupted.
-        """
-        return self._isDone
+        """Return True if the task has completed successfully or was interrupted."""
+        with self._completionLock:
+            return self._isDone
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,
         or None if there was no failure (or if the reason is unknown).
         """
         return self._errorMessage
-        
+
     def wait(self, timeout=None, updates=False, pollInterval=0.1):
         """Block until the task has completed, has been interrupted, or the
         specified timeout has elapsed.
@@ -172,15 +171,15 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         while True:
             if (timeout is not None) and (ptime.time() > start + timeout):
                 raise self.Timeout("Timeout waiting for task to complete.")
-                
+
             if self.isDone():
                 break
-            
+
             if updates is True:
                 Qt.QTest.qWait(min(1, int(pollInterval * 1000)))
             else:
                 self._wait(pollInterval)
-        
+
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
@@ -191,15 +190,14 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             if self._stopRequested:
                 raise self.Stopped(msg)
             elif self._excInfo is not None:
-                if hasattr(self._excInfo[1], 'add_note'):
+                if hasattr(self._excInfo[1], "add_note"):
                     self._excInfo[1].add_note(msg)
                     raise self._excInfo[1]
                 raise RuntimeError(msg) from self._excInfo[1]
             raise RuntimeError(msg)
 
     def _wait(self, duration):
-        """Default sleep implementation used by wait(); may be overridden to return early.
-        """
+        """Default sleep implementation used by wait(); may be overridden to return early."""
         self.finishedEvent.wait(timeout=duration)
 
     def checkStop(self, delay=0):
@@ -218,22 +216,20 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             now = ptime.time()
             if now > stop:
                 return
-            
-            time.sleep(max(0.0, min(0.1, stop-now)))
+
+            time.sleep(max(0.0, min(0.1, stop - now)))
             if self._stopRequested:
                 raise self.StopRequested()
 
     def sleep(self, duration, interval=0.2):
-        """Sleep for the specified duration (in seconds) while checking for stop requests.
-        """
+        """Sleep for the specified duration (in seconds) while checking for stop requests."""
         start = time.time()
         while time.time() < start + duration:
             self.checkStop()
             time.sleep(interval)
 
     def waitFor(self, future: Future[WAITING_RETVAL_TYPE], timeout=20.0) -> Future[WAITING_RETVAL_TYPE]:
-        """Wait for another future to complete while also checking for stop requests on self.
-        """
+        """Wait for another future to complete while also checking for stop requests on self."""
         start = time.time()
         while True:
             try:
@@ -267,7 +263,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if self._errorMonitorThread is not None:
             return
         originalFrame = sys._getframe().f_back
-        monitorFn = functools.partial(self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame)
+        monitorFn = functools.partial(
+            self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame
+        )
         self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
         self._errorMonitorThread.start()
 
@@ -275,8 +273,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         try:
             self.wait(pollInterval=pollInterval)
         except Exception as exc:
-            if '{stack}' in message:
-                stack = ''.join(traceback.format_stack(originalFrame))
+            if "{stack}" in message:
+                stack = "".join(traceback.format_stack(originalFrame))
             else:
                 stack = None
 
@@ -287,13 +285,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             raise RuntimeError(formattedMsg) from exc
 
 
-WRAPPED_FN_PARAMS = ParamSpec('WRAPPED_FN_PARAMS')
-WRAPPEND_FN_RETVAL_TYPE = TypeVar('WRAPPEND_FN_RETVAL_TYPE')
+WRAPPED_FN_PARAMS = ParamSpec("WRAPPED_FN_PARAMS")
+WRAPPEND_FN_RETVAL_TYPE = TypeVar("WRAPPEND_FN_RETVAL_TYPE")
 
 
 # MC this doesn't handle typing correctly as Future.wrap, but I don't know why...
 def future_wrap(
-        func: Callable[WRAPPED_FN_PARAMS, WRAPPEND_FN_RETVAL_TYPE]
+    func: Callable[WRAPPED_FN_PARAMS, WRAPPEND_FN_RETVAL_TYPE]
 ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPEND_FN_RETVAL_TYPE]]:
     """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
     named "_future" as a keyword argument. This Future can be variously used to checkStop() the
@@ -313,9 +311,9 @@ def future_wrap(
     @functools.wraps(func)
     def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPEND_FN_RETVAL_TYPE]:
         future = Future()
-        if kwds.pop('block', False):
-            kwds['_future'] = future
-            if parent := kwds.pop('checkStopThrough', None):
+        if kwds.pop("block", False):
+            kwds["_future"] = future
+            if parent := kwds.pop("checkStopThrough", None):
                 parent.propagateStopsInto(future)
             future.executeAndSetReturn(func, args, kwds)
             future.wait()
@@ -327,11 +325,22 @@ def future_wrap(
 
 
 class MultiFuture(Future):
-    """Future tracking progress of multiple sub-futures.
-    """
+    """Future tracking progress of multiple sub-futures."""
+
     def __init__(self, futures):
         self.futures = futures
         Future.__init__(self)
+        for fut in futures:
+            fut.sigFinished.connect(self._subFutureFinished)
+            # TODO what if the future is already finished?
+            fut.sigStateChanged.connect(self._subFutureStateChanged)
+
+    def _subFutureFinished(self, future):
+        if all(f.isDone() for f in self.futures):
+            self.sigFinished.emit(self)
+
+    def _subFutureStateChanged(self, future, state):
+        self.sigStateChanged.emit(future, state)  # TODO not self?
 
     def stop(self, reason="task stop requested"):
         for f in self.futures:
@@ -348,18 +357,28 @@ class MultiFuture(Future):
         return all(f.isDone() for f in self.futures)
 
     def errorMessage(self):
-        return "; ".join([f.errorMessage() or '' for f in self.futures])
+        return "; ".join([str(f.errorMessage()) or "" for f in self.futures])
 
     def currentState(self):
-        return "; ".join([f.currentState() or '' for f in self.futures])
+        return "; ".join([str(f.currentState()) or "" for f in self.futures])
 
 
 class FutureButton(FeedbackButton):
     """A button that starts a Future when clicked and displays feedback based on the Future's state."""
+
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
-    def __init__(self, future_producer: Optional[Callable[ParamSpec, Future]]=None, *args, stoppable: bool = False, success=None, failure=None, processing=None):
+    def __init__(
+        self,
+        future_producer: Optional[Callable[ParamSpec, Future]] = None,
+        *args,
+        stoppable: bool = False,
+        success=None,
+        failure=None,
+        processing=None,
+        showStatus: bool = True,
+    ):
         """Create a new FutureButton.
 
         Parameters
@@ -385,14 +404,15 @@ class FutureButton(FeedbackButton):
         self._success = success
         self._failure = failure
         self._processing = processing
+        self._showStatus = showStatus
         self.clicked.connect(self._controlTheFuture)
 
     def setOpts(self, **kwds):
-        allowed_args = ['future_producer', 'stoppable', 'success', 'failure', 'processing']
-        for k,v in kwds.items():
+        allowed_args = ["future_producer", "stoppable", "success", "failure", "processing", "showStatus"]
+        for k, v in kwds.items():
             if k not in allowed_args:
                 raise NameError(f"Unknown option {k}")
-            setattr(self, '_'+k, v)
+            setattr(self, f"_{k}", v)
 
     def processing(self, message="Processing..", tip="", processEvents=True):
         """Displays specified message on button to let user know the action is in progress. Threadsafe."""
@@ -420,6 +440,8 @@ class FutureButton(FeedbackButton):
             self._future.stop(f"User clicked '{self.text()}' button")
 
     def _futureFinished(self, future):
+        if self._future is None:
+            return
         self._future = None
         self.sigFinished.emit(future)
         if not future.wasInterrupted():
@@ -428,12 +450,13 @@ class FutureButton(FeedbackButton):
             self._userRequestedStop = False
             self.reset()
         else:
-            self.failure(self._failure or (future.errorMessage() or 'Failed!')[:40])
+            self.failure(self._failure or (future.errorMessage() or "Failed!")[:40])
             try:
                 future.wait()  # throw errors
             except Future.Stopped:
                 self.reset()
 
     def _futureStateChanged(self, future, state):
-        self.setText(state, temporary=True)
+        if self._showStatus:
+            self.setText(state, temporary=True)
         self.sigStateChanged.emit(future, state)

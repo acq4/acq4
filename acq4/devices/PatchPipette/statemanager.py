@@ -1,7 +1,6 @@
 import queue
-from collections import OrderedDict
-
 import sys
+from collections import OrderedDict
 from typing import Optional
 
 from acq4 import getManager
@@ -49,7 +48,7 @@ class PatchPipetteStateManager(Qt.QObject):
     )
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
-    _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
+    _sigStateChangeRequested = Qt.Signal(object, object, bool)  # state, return queue, managerHandlesErrors
     sigProfileChanged = Qt.Signal(object, object)  # self, profile_name
 
     profiles: dict[str: dict[str: dict[str: object]]] = {}  # {profile_name: {state_name: {config_options}}}
@@ -62,6 +61,7 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
         self._profile = None
+        self._managerHandlesErrors = True
 
         self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
@@ -160,7 +160,7 @@ class PatchPipetteStateManager(Qt.QObject):
         """
         pass
 
-    def requestStateChange(self, state):
+    def requestStateChange(self, state, managerHandlesErrors):
         """Pipette has requested a state change; either accept and configure the new
         state or reject the new state.
 
@@ -172,7 +172,7 @@ class PatchPipetteStateManager(Qt.QObject):
         # from the main thread, then the emit() below will be processed immediately. Otherwise,
         # we wait until the main thread processes the signal and sends back the result.
         returnQueue = queue.Queue()
-        self._sigStateChangeRequested.emit(state, returnQueue)
+        self._sigStateChangeRequested.emit(state, returnQueue, managerHandlesErrors)
         try:
             success, ret = returnQueue.get(timeout=10)
         except queue.Empty as e:
@@ -183,20 +183,21 @@ class PatchPipetteStateManager(Qt.QObject):
         sys.excepthook(*ret)
         raise RuntimeError(f"Error requesting state change to {state!r}; original exception appears above.")
 
-    def _stateChangeRequested(self, state, returnQueue):
+    def _stateChangeRequested(self, state, returnQueue, managerHandlesErrors):
         try:
             if state not in self.stateHandlers:
                 raise ValueError(f"Unknown patch pipette state {state!r}")
-            ret = (True, self.configureState(state))
+            ret = (True, self.configureState(state, managerHandlesErrors))
         except Exception as exc:
             ret = (False, sys.exc_info())
         returnQueue.put(ret)
 
-    def configureState(self, state, *args, **kwds):
+    def configureState(self, state, managerHandlesErrors, *args, **kwds):
         oldJob = self.currentJob
         allowReset = kwds.pop('_allowReset', True)
         self.stopJob(allowNextState=False)
         try:
+            self._managerHandlesErrors = managerHandlesErrors
             stateHandler = self.stateHandlers[state]
 
             # assemble state config from defaults and anything specified in args here
@@ -219,14 +220,14 @@ class PatchPipetteStateManager(Qt.QObject):
             if not allowReset or oldJob is None:
                 raise
             try:
-                self.configureState(oldJob.stateName, _allowReset=False)
+                self.configureState(oldJob.stateName, managerHandlesErrors, _allowReset=False)
             except Exception:
                 printExc("Error occurred while trying to reset state from a previous error:")
             raise
 
     def activeChanged(self, pip, active):
         if active and self.getState() is not None:
-            self.configureState(self.getState().stateName)
+            self.configureState(self.getState().stateName, managerHandlesErrors=False)
         else:
             self.stopJob()
             if self.dev.clampDevice is not None:
@@ -237,9 +238,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def quit(self):
         disconnect(self.dev.sigStateChanged, self.stateChanged)
         disconnect(self.dev.sigActiveChanged, self.activeChanged)
-        self.stopJob()
-
-    ## Background job handling
+        self.stopJob(allowNextState=False)
 
     def stopJob(self, allowNextState=True):
         job = self.currentJob
@@ -252,8 +251,8 @@ class PatchPipetteStateManager(Qt.QObject):
             except job.Timeout:
                 printExc(f"Timed out waiting for job {job} to complete")
             except Exception:
-                # hopefully someone else is watching this future for errors!
-                pass
+                if self._managerHandlesErrors:
+                    printExc(f"{self.dev.name()} failed in state {job.stateName}:")
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
@@ -267,4 +266,4 @@ class PatchPipetteStateManager(Qt.QObject):
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
         if allowNextState and job.nextState is not None:
-            self.requestStateChange(job.nextState)
+            self.requestStateChange(job.nextState, managerHandlesErrors=True)

@@ -75,28 +75,28 @@
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QPushButton" name="homeBtn">
+       <widget class="FutureButton" name="homeBtn">
         <property name="text">
          <string>Home</string>
         </property>
        </widget>
       </item>
       <item row="4" column="1">
-       <widget class="QPushButton" name="nucleusHomeBtn">
+       <widget class="FutureButton" name="nucleusHomeBtn">
         <property name="text">
          <string>Home with Nucleus</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QPushButton" name="coarseSearchBtn">
+       <widget class="FutureButton" name="coarseSearchBtn">
         <property name="text">
          <string>Coarse Search</string>
         </property>
        </widget>
       </item>
       <item row="2" column="0">
-       <widget class="QPushButton" name="aboveTargetBtn">
+       <widget class="FutureButton" name="aboveTargetBtn">
         <property name="text">
          <string>Above target</string>
         </property>
@@ -136,28 +136,28 @@
        </widget>
       </item>
       <item row="2" column="2">
-       <widget class="QPushButton" name="autoCalibrateBtn">
+       <widget class="FutureButton" name="autoCalibrateBtn">
         <property name="text">
          <string>Auto cal.</string>
         </property>
        </widget>
       </item>
       <item row="6" column="2">
-       <widget class="QPushButton" name="cellDetectBtn">
+       <widget class="FutureButton" name="cellDetectBtn">
         <property name="text">
          <string>Cell Detect</string>
         </property>
        </widget>
       </item>
       <item row="6" column="1">
-       <widget class="QPushButton" name="breakInBtn">
+       <widget class="FutureButton" name="breakInBtn">
         <property name="text">
          <string>Break In</string>
         </property>
        </widget>
       </item>
       <item row="3" column="2">
-       <widget class="QPushButton" name="toTargetBtn">
+       <widget class="FutureButton" name="toTargetBtn">
         <property name="text">
          <string>To target</string>
         </property>
@@ -187,7 +187,7 @@
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QPushButton" name="fineSearchBtn">
+       <widget class="FutureButton" name="fineSearchBtn">
         <property name="text">
          <string>Fine Search</string>
         </property>
@@ -204,21 +204,21 @@
        </widget>
       </item>
       <item row="6" column="0">
-       <widget class="QPushButton" name="sealBtn">
+       <widget class="FutureButton" name="sealBtn">
         <property name="text">
          <string>Seal</string>
         </property>
        </widget>
       </item>
       <item row="7" column="0">
-       <widget class="QPushButton" name="reSealBtn">
+       <widget class="FutureButton" name="reSealBtn">
         <property name="text">
          <string>ReSeal</string>
         </property>
        </widget>
       </item>
       <item row="3" column="0">
-       <widget class="QPushButton" name="approachBtn">
+       <widget class="FutureButton" name="approachBtn">
         <property name="text">
          <string>Approach</string>
         </property>
@@ -245,14 +245,14 @@
        </widget>
       </item>
       <item row="7" column="2">
-       <widget class="QPushButton" name="cleanBtn">
+       <widget class="FutureButton" name="cleanBtn">
         <property name="text">
          <string>Clean</string>
         </property>
        </widget>
       </item>
       <item row="7" column="1">
-       <widget class="QPushButton" name="collectBtn">
+       <widget class="FutureButton" name="collectBtn">
         <property name="text">
          <string>Collect</string>
         </property>
@@ -300,6 +300,18 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>FeedbackButton</class>
+   <extends>QPushButton</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>FutureButton</class>
+   <extends>FeedbackButton</extends>
+   <header>acq4.util.future</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
