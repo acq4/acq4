@@ -134,14 +134,14 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 self._errorMessage = error
             self._excInfo = excInfo
             self._wasInterrupted = interrupted
-            if interrupted:
-                self.setState(state or f"interrupted: {error}")
-            else:
-                self.setState(state or "complete")
             if returnValue is not None:
                 self._returnVal = returnValue
-            self.finishedEvent.set()
-            self.sigFinished.emit(self)
+        if interrupted:
+            self.setState(state or f"interrupted: {error}")
+        else:
+            self.setState(state or "complete")
+        self.finishedEvent.set()
+        self.sigFinished.emit(self)
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
@@ -430,7 +430,11 @@ class FutureButton(FeedbackButton):
     def _controlTheFuture(self):
         if self._future is None:
             self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
-            future = self._future = self._future_producer()
+            try:
+                future = self._future = self._future_producer()
+            except Exception:
+                self.failure("Error!")
+                raise
             future.sigFinished.connect(self._futureFinished)
             if future.isDone():  # futures may immediately complete before we can connect to the signal
                 self._futureFinished(future)
