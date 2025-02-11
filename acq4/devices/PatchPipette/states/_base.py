@@ -88,7 +88,6 @@ class PatchPipetteState(Future):
         Future.__init__(self)
 
         self.dev: PatchPipette = dev
-        self._moveFuture = None
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -124,7 +123,7 @@ class PatchPipetteState(Future):
                 self._thread.start()
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-        except Exception as exc:
+        except Exception:
             self._taskDone(interrupted=True, excInfo=sys.exc_info())
             raise
 
@@ -215,11 +214,11 @@ class PatchPipetteState(Future):
             # run must be reimplemented in subclass and call self.checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
-        except self.StopRequested as exc:
+        except self.StopRequested:
             # state was stopped early by calling stop()
             # TODO should this pass its excInfo in as normal? the handling thereof has improved since this was written.
             interrupted = True
-        except Exception as exc:
+        except Exception:
             # state aborted due to an error
             interrupted = True
             printExc(f"Error in {self.dev.name()} state {self.stateName}")
@@ -229,6 +228,11 @@ class PatchPipetteState(Future):
                 disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, excInfo=excInfo)
+
+    def wait(self, *args, **kwargs):
+        """Do not raise exceptions like normal wait(), as this class uses printExc instead."""
+        with contextlib.suppress(Exception):
+            return super().wait(*args, **kwargs)
 
     def checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.
