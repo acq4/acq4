@@ -10,7 +10,6 @@ from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
 
-
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
@@ -183,6 +182,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
+                if self._excInfo is not None:
+                    raise self._excInfo[1]
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
