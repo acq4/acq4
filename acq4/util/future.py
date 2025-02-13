@@ -183,16 +183,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
-                msg = f"Task {self} did not complete (no error message)."
+                msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
 
             if self._stopRequested:
                 raise self.Stopped(msg)
             elif self._excInfo is not None:
-                if hasattr(self._excInfo[1], "add_note"):
-                    self._excInfo[1].add_note(msg)
-                    raise self._excInfo[1]
                 raise RuntimeError(msg) from self._excInfo[1]
             raise RuntimeError(msg)
 
