@@ -1,5 +1,7 @@
+import time
 import serial as s
 import serial.tools.list_ports
+import threading
 
 
 COMMANDS = {
@@ -19,7 +21,8 @@ COMMANDS = {
     }
 
 class ThorlabsDC4100:
-    def __init__(self,port=None,baudrate=115200,timeout=0.5):
+    def __init__(self, port=None, baudrate=115200, timeout=0.5):
+        self.lock = threading.RLock()
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
@@ -31,7 +34,7 @@ class ThorlabsDC4100:
         if self.port is None:
             self.list_devices()
             try:
-                self.port=self.availableDevices[0]
+                self.port = self.availableDevices[0]
                 # print( 'Found Thorlabs DC4100 at port {}'.format(self.port) )
             except:
                 raise Exception("No Thorlabs LED devices detected.")
@@ -52,39 +55,50 @@ class ThorlabsDC4100:
 
     def set_led_channel_state(self, channel, led_on):
         # print('Setting LED channel {} to state {}'.format( channel, state ))
-        self._write_to_LED(COMMANDS["set_led_channel_state"].format(channel, 1 if led_on else 0))
+        return self._send(COMMANDS["set_led_channel_state"].format(channel, 1 if led_on else 0))
 
     def set_brightness(self,channel, brightness):
         if not (0 <= brightness <= 100):
             raise ValueError(f"Brightness must be between 0 and 100 (got {brightness})")
-        self._write_to_LED(COMMANDS["set_brightness"].format(channel,brightness))
+        return self._send(COMMANDS["set_brightness"].format(channel,brightness))
     
     def get_brightness(self,channel):
-        self._write_to_LED(COMMANDS["get_brightness"].format(channel))
-        return float(self._read_from_LED().strip())
+        ret = self._send(COMMANDS["get_brightness"].format(channel))
+        return float(ret)
     
     def get_led_channel_state(self, channel):
-        self._write_to_LED(COMMANDS["return_on_off"].format(channel))
-        return self._read_from_LED().strip() == '1'
+        return self._send(COMMANDS["return_on_off"].format(channel)) == '1'
     
     def get_wavelength(self, channel):
-        self._write_to_LED(COMMANDS["get_wavelength"].format(channel))
-        return float(self._read_from_LED().strip()) * 1e-9
+        ret = self._send(COMMANDS["get_wavelength"].format(channel))
+        return float(ret) * 1e-9
 
     @property
     def serial_number(self):
-        self._write_to_LED(COMMANDS["serial_number"])
-        return self._read_from_LED()
+        return self._send(COMMANDS["serial_number"])
 
     @property
     def firmware(self):
-        self._write_to_LED(COMMANDS["firmware"])
-        return self._read_from_LED()
+        return self._send(COMMANDS["firmware"])
 
     @property
     def manufacturer(self):
-        self._write_to_LED(COMMANDS["manufacturer"])
-        return self._read_from_LED()
+        return self._send(COMMANDS["manufacturer"])
+
+    def _send(self, command, retry=2):
+        with self.lock:
+            while True:
+                self._write_to_LED(command)
+                ret_value = self._read_from_LED().strip()
+                if ret_value.startswith('ERROR '):
+                    if '10:Communication error' in ret_value and retry > 0:
+                        retry -= 1
+                        time.sleep(0.1)
+                        continue
+                    else:
+                        _, _, err = ret_value.partition('ERROR ')
+                        raise Exception(f'DC4100 error: {err}')
+                return ret_value
 
     def _write_to_LED(self, command):
         self.dev.write((command + self.escape).encode())
