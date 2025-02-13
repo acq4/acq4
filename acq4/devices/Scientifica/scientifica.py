@@ -87,7 +87,7 @@ class Scientifica(Stage):
                 self.dev.setParam(param, val)
 
         self.userSpeed = None
-        self.setUserSpeed(config.get("userSpeed", self.dev.getSpeed() * 1e-6))
+        self.setUserSpeed(config.get("userSpeed", self._interpretSpeed('fast')))
 
         self.dev.setPositionCallback(self._stageReportedPositionChange)
 
@@ -368,10 +368,14 @@ class ScientificaGUI(StageInterface):
             diff = np.array(after) - np.array(before)
             logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
             _future.waitFor(self.dev.moveToGlobal(globalStartPos + diff, "fast"))
-            dist = np.linalg.norm(diff)
-            if dist > 50 * µm:
-                raise HelpfulException(
-                    f"Zeroing {self.dev.name()} indicates slippage of {siFormat(dist, suffix='m')}")
+            slippedAxes = np.abs(diff) > 50e-6
+            if np.any(slippedAxes):
+                msg = f"Detected axis slip on {self.dev.name()}:"
+                for ax, slip in enumerate(slippedAxes):
+                    if slip:
+                        axis = 'XYZ'[ax]
+                        msg = msg + f" {axis}={siFormat(diff[ax], suffix='m')}"
+                raise HelpfulException(msg)
         finally:
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)

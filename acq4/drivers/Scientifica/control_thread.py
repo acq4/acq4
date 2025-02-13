@@ -142,7 +142,11 @@ class ScientificaControlThread:
 
     def check_position(self, miss_reason=None, recheck=True):
         # check position and invoke change callback 
-        pos = self.dev.getPos()
+        try:
+            pos = self.dev.getPos()
+        except TimeoutError:
+            # try again later?
+            return
         if self.pos_callback is not None and pos != self.last_pos:
             self.pos_callback(pos)
         self.last_pos = pos
