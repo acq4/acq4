@@ -393,8 +393,9 @@ class GeometryMotionPlanner:
             obst = list(self.geometries.keys())[i]
             if visualizer is not None:
                 visualizer.addObstacleVolumeOutline(obst_volume, to_global_from_obst)
-            if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
-                raise ValueError(f"Start point {start} is inside obstacle {obst.name}")
+            # users will sometimes drive the hardware to where the motion planner would consider things impossible
+            # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
+            #     raise ValueError(f"Start point {start} is inside obstacle {obst.name}")
             if obst_volume.contains_point(to_global_from_obst.inverse.map(stop)):
                 raise ValueError(f"Destination point {stop} is inside obstacle {obst.name}")
 
