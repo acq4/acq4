@@ -240,8 +240,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
     def _primeCaches(self, _future):
         try:
             planner, from_pip_to_global = self._getPlanningContext()
-            start = dest = self.pip.globalPosition()
-            planner.find_path(self.pip.getGeometry(), from_pip_to_global, start, dest)
+            planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global)
+            print(f"cache primed for {self.pip.name()}")
         except RuntimeError:
             printExc("Blew up while attempting to prime path finding cache")
 

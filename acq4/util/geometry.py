@@ -385,23 +385,12 @@ class GeometryMotionPlanner:
             raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
 
         profile = debug.Profiler()
-        obstacles = []
-        for obst, to_global_from_obst in self.geometries.items():
-            if obst is traveler:
-                continue
-            cache_key = (obst.name, traveler.name)
-            with self._cache_lock:
-                if cache_key not in self._cache:
-                    convolved_obst = obst.make_convolved_voxels(
-                        traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
-                    )
-                    # TODO is this bad? explicitly setting transforms frequently is...
-                    convolved_obst.transform = obst.transform * convolved_obst.transform
-                    self._cache[cache_key] = convolved_obst
-                    profile.mark(f"cache miss: generated convolved obstacle {obst.name}")
-                obst_volume = self._cache[cache_key]
+        obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler)
+        profile.mark("made convolved obstacles")
 
-            obstacles.append((obst_volume, to_global_from_obst))
+        for i, _o in enumerate(obstacles):
+            obst_volume, to_global_from_obst = _o
+            obst = list(self.geometries.keys())[i]
             if visualizer is not None:
                 visualizer.addObstacleVolumeOutline(obst_volume, to_global_from_obst)
             if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
@@ -429,6 +418,25 @@ class GeometryMotionPlanner:
             callback(path, skip=1)
         profile.finish()
         return path[1:]
+
+    def make_convolved_obstacles(self, traveler, to_global_from_traveler):
+        obstacles = []
+        for obst, to_global_from_obst in self.geometries.items():
+            if obst is traveler:
+                continue
+            cache_key = (obst.name, traveler.name)
+            with self._cache_lock:
+                if cache_key not in self._cache:
+                    convolved_obst = obst.make_convolved_voxels(
+                        traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
+                    )
+                    # TODO is this bad? explicitly setting transforms frequently is...
+                    convolved_obst.transform = obst.transform * convolved_obst.transform
+                    self._cache[cache_key] = convolved_obst
+                obst_volume = self._cache[cache_key]
+
+            obstacles.append((obst_volume, to_global_from_obst))
+        return obstacles
 
 
 def point_in_bounds(point, bounds):
