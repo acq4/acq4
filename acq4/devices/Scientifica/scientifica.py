@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-import time
 from typing import Optional
 
 import numpy as np
 
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
-from acq4.util import Qt, ptime
+from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-from acq4.util.debug import logMsg, printExc
+from acq4.util.debug import logMsg
 from acq4.util.future import future_wrap, Future, FutureButton
 from pyqtgraph import SpinBox, siFormat
-from pyqtgraph.units import µm
 
 
 class Scientifica(Stage):
@@ -97,11 +93,6 @@ class Scientifica(Stage):
             self.objectiveState = self.dev.getObjective()
             self.dev.setObjectiveCallback(self._stageReportedObjectiveChange)
 
-        # thread for polling position changes
-
-        # self.monitor = MonitorThread(self, self.monitorObj)
-        # self.monitor.start()
-
     def axes(self):
         return "x", "y", "z"
 
@@ -139,7 +130,7 @@ class Scientifica(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / self.monitor.minInterval
+        return 1.0 / self.dev.ctrlThread.poll_interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
