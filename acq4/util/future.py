@@ -137,7 +137,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             if returnValue is not None:
                 self._returnVal = returnValue
         if interrupted:
-            self.setState(state or f"interrupted: {error}")
+            self.setState(state or f"interrupted (error: {error})")
         else:
             self.setState(state or "complete")
         self.finishedEvent.set()  # tell wait() that we're done
