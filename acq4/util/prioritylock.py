@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 
+import queue
 import weakref
 from threading import Lock, Thread, Event
 

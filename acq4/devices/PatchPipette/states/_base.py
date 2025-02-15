@@ -125,7 +125,7 @@ class PatchPipetteState(Future):
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
         except Exception as e:
-            self._taskDone(interrupted=True, excInfo=sys.exc_info(), error=e)
+            self._taskDone(interrupted=True, excInfo=sys.exc_info())
             raise
 
     def initializePressure(self):
@@ -211,19 +211,17 @@ class PatchPipetteState(Future):
         """
         excInfo = None
         interrupted = True
-        error = None
         try:
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
         except Exception as e:
             # state aborted due to an error
             excInfo = sys.exc_info()
-            error = e
         finally:
             if self.dev.clampDevice is not None:
                 disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
-                self._taskDone(interrupted=interrupted, excInfo=excInfo, error=error)
+                self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
     def checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.

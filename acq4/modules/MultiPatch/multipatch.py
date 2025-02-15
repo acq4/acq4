@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -218,7 +219,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     def _setAllSelectedPipettesToState(self, state):
         return MultiFuture([
-            pip.setState(state, managerHandlesErrors=False)
+            pip.setState(state)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
         ])

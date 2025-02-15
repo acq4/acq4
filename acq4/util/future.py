@@ -149,6 +149,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
         return self._wasInterrupted
 
+    def exceptionRaised(self):
+        return self._excInfo[1] if self._excInfo is not None else None
+
     def isDone(self):
         """Return True if the task has completed successfully or was interrupted."""
         with self._completionLock:
@@ -454,12 +457,10 @@ class FutureButton(FeedbackButton):
         elif self._userRequestedStop:
             self._userRequestedStop = False
             self.reset()
+        elif future.wasInterrupted() and isinstance(future.exceptionRaised(), Future.Stopped):
+            self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or "Failed!")[:40])
-            try:
-                future.wait()  # throw errors
-            except Future.Stopped:
-                self.reset()
 
     def _futureStateChanged(self, future, state):
         if self._showStatus:
