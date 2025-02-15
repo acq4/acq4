@@ -171,7 +171,7 @@ class PipetteMotionPlanner:
         self.safePath = self.pip.pathGenerator.safePath
 
     def move(self):
-        """Move the pipette to the requested named position and return a Future 
+        """Move the pipette to the requested named position and return a Future
         """
         if self.future is not None:
             self.stop()
@@ -222,15 +222,15 @@ class HomeMotionPlanner(PipetteMotionPlanner):
 
 
 class SearchMotionPlanner(PipetteMotionPlanner):
-    """Focus the microscope 2mm above the surface, then move the electrode 
-    tip to 500um below the focal point of the microscope. 
+    """Focus the microscope 2mm above the surface, then move the electrode
+    tip to 500um below the focal point of the microscope.
 
     This position is used when searching for new electrodes.
 
     Set *distance* to adjust the search position along the pipette's x-axis. Positive values
     move the tip farther from the microscope center to reduce the probability of collisions.
     Negative values move the pipette past the center of the microscope to improve the
-    probability of seeing the tip immediately. 
+    probability of seeing the tip immediately.
     """
     def _move(self):
         pip = self.pip
@@ -283,7 +283,7 @@ class TargetMotionPlanner(PipetteMotionPlanner):
 
 class AboveTargetMotionPlanner(PipetteMotionPlanner):
     """Move the pipette tip to be centered over the target in x/y, and 100 um above
-    the sample surface in z. 
+    the sample surface in z.
 
     This position is used to recalibrate the pipette immediately before going to approach.
     """
@@ -307,7 +307,7 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         The path has 2 waypoints:
 
         1. 100 um away from the second waypoint, on a diagonal approach. This is meant to normalize the hysteresis
-           at the second waypoint. 
+           at the second waypoint.
         2. This position is centered on the target, a small distance above the sample surface.
         """
         pip = self.pip
@@ -352,7 +352,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         angle = pip.yawRadians()
         ds = pip._opts['idleDistance']  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
-        
+
         return pip._moveToGlobal(globalIdlePos, speed)
 
 

@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -218,7 +219,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     def _setAllSelectedPipettesToState(self, state):
         return MultiFuture([
-            pip.setState(state, managerHandlesErrors=False)
+            pip.setState(state)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
         ])
@@ -228,7 +229,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             speed = self.selectedSpeed(default='fast')
             if isinstance(pip, PatchPipette):
-                futures.append(pip.setState('out', managerHandlesErrors=False))
+                pip.setState('out')
                 pip = pip.pipetteDevice
             futures.append(pip.goHome(speed, raiseErrors=True))
         return MultiFuture(futures)
@@ -250,8 +251,8 @@ class MultiPatchWindow(Qt.QWidget):
         futures = []
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
+            pip.setState('bath')
             futures.append(pip.pipetteDevice.goAboveTarget(speed, raiseErrors=True))
-            futures.append(pip.setState('bath', managerHandlesErrors=False))
         return MultiFuture(futures)
 
     @future_wrap
@@ -286,8 +287,8 @@ class MultiPatchWindow(Qt.QWidget):
         futures = []
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
+                pip.setState('bath')
                 futures.append(pip.pipetteDevice.goApproach(speed, raiseErrors=True))
-                futures.append(pip.setState('bath', managerHandlesErrors=False))
                 pip.clampDevice.autoPipetteOffset()
             else:
                 futures.append(pip.goApproach(speed, raiseErrors=True))
@@ -327,7 +328,7 @@ class MultiPatchWindow(Qt.QWidget):
         futures = []
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
-                futures.append(pip.setState('bath', managerHandlesErrors=False))
+                pip.setState('bath')
                 pip = pip.pipetteDevice
             futures.append(pip.goSearch(speed, distance=distance, raiseErrors=True))
         return MultiFuture(futures)

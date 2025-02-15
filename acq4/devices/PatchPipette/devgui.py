@@ -30,7 +30,7 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.layout.addLayout(self.positionBtnLayout, row, 0)
 
     def doClean(self):
-        return self.dev.setState('clean', managerHandlesErrors=False)
+        return self.dev.setState('clean')
 
     def setPositionClicked(self):
         btn = self.sender()

@@ -207,6 +207,7 @@ class ResealState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._pressureFuture = None
+        self._moveFuture = None
         self._lastResistance = None
         self._firstSuccessTime = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
