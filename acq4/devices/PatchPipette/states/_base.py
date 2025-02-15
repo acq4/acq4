@@ -6,10 +6,10 @@ import queue
 import sys
 import threading
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any, Optional, Iterable
 
 from acq4.util import Qt
-from acq4.util.debug import printExc
+from acq4.util.debug import printExc, logExc
 from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
@@ -33,7 +33,8 @@ class PatchPipetteState(Future):
     # state subclasses must set a string name
     stateName = None
 
-    # State classes may implement a run() method to be called in a background thread
+    # State classes may implement a run() method to be called in a background thread and it should call
+    # self.checkStop() frequently
     run = None
 
     _parameterTreeConfig = {
@@ -88,7 +89,6 @@ class PatchPipetteState(Future):
         Future.__init__(self)
 
         self.dev: PatchPipette = dev
-        self._moveFuture = None
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -124,7 +124,7 @@ class PatchPipetteState(Future):
                 self._thread.start()
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-        except Exception as exc:
+        except Exception as e:
             self._taskDone(interrupted=True, excInfo=sys.exc_info())
             raise
 
@@ -210,19 +210,12 @@ class PatchPipetteState(Future):
         error / exit / completion states.
         """
         excInfo = None
-        interrupted = False
+        interrupted = True
         try:
-            # run must be reimplemented in subclass and call self.checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
-        except self.StopRequested as exc:
-            # state was stopped early by calling stop()
-            # TODO should this pass its excInfo in as normal? the handling thereof has improved since this was written.
-            interrupted = True
-        except Exception as exc:
+        except Exception as e:
             # state aborted due to an error
-            interrupted = True
-            printExc(f"Error in {self.dev.name()} state {self.stateName}")
             excInfo = sys.exc_info()
         finally:
             if self.dev.clampDevice is not None:
@@ -249,12 +242,12 @@ class PatchPipetteState(Future):
 
 class SteadyStateAnalysisBase(object):
     @classmethod
-    def plot_items(cls, *args, **kwargs) -> dict[str, iter[Qt.QGraphicsItem]]:
+    def plot_items(cls, *args, **kwargs) -> dict[str, Iterable[Qt.QGraphicsItem]]:
         """Returns data-independent plot items grouped by plot units."""
         return {}
 
     @classmethod
-    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+    def plots_for_data(cls, data: Iterable[np.void], *args, **kwargs) -> dict[str, Iterable[dict[str, Any]]]:
         """Given a list of datasets and init args, return the plotting arguments grouped by plot units."""
         return {}
 

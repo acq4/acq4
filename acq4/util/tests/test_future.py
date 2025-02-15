@@ -1,3 +1,4 @@
+import contextlib
 import time
 import unittest
 from unittest.mock import MagicMock
@@ -96,6 +97,36 @@ class TestFuture(unittest.TestCase):
         fut = Future()
         with self.assertRaises(Future.Timeout):
             fut.wait(timeout=0.1)
+
+    def test_wrapped_on_error(self):
+        @future_wrap
+        def boom(_future):
+            raise ValueError("error")
+
+        called = False
+
+        def on_error(f):
+            nonlocal called
+            called = True
+        fut = boom(onFutureError=on_error)
+        with contextlib.suppress(ValueError):
+            fut.wait()
+        self.assertTrue(called)
+
+    def test_wrapped_on_no_error(self):
+        @future_wrap
+        def boom(_future):
+            return "success"
+
+        called = False
+
+        def on_error(f):
+            nonlocal called
+            called = True
+        fut = boom(onFutureError=on_error)
+        fut.wait()
+        self.assertFalse(called)
+
 
     def test_future_checkStop(self):
         fut = Future()
