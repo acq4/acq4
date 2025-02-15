@@ -39,12 +39,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
-    def __init__(self):
+    def __init__(self, onError=None):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
 
         self._isDone = False
+        self._onError = onError
         self._completionLock = threading.Lock()
         self._wasInterrupted = False
         self._errorMessage = None
@@ -139,8 +140,10 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self.setState(state or f"interrupted: {error}")
         else:
             self.setState(state or "complete")
-        self.finishedEvent.set()
-        self.sigFinished.emit(self)
+        self.finishedEvent.set()  # tell wait() that we're done
+        self.sigFinished.emit(self)  # tell everyone else that we're done
+        if self._onError is not None and (error or excInfo):
+            self._onError(self)
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
@@ -284,13 +287,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
 
 WRAPPED_FN_PARAMS = ParamSpec("WRAPPED_FN_PARAMS")
-WRAPPEND_FN_RETVAL_TYPE = TypeVar("WRAPPEND_FN_RETVAL_TYPE")
+WRAPPED_FN_RETVAL_TYPE = TypeVar("WRAPPED_FN_RETVAL_TYPE")
 
 
 # MC this doesn't handle typing correctly as Future.wrap, but I don't know why...
 def future_wrap(
-    func: Callable[WRAPPED_FN_PARAMS, WRAPPEND_FN_RETVAL_TYPE]
-) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPEND_FN_RETVAL_TYPE]]:
+    func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE]
+) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
     """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
     named "_future" as a keyword argument. This Future can be variously used to checkStop() the
     function, wait for other futures, and will be returned by the decorated function call. The function
@@ -307,8 +310,8 @@ def future_wrap(
     """
 
     @functools.wraps(func)
-    def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPEND_FN_RETVAL_TYPE]:
-        future = Future()
+    def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
+        future = Future(onError=kwds.pop("onFutureError", None))
         if kwds.pop("block", False):
             kwds["_future"] = future
             if parent := kwds.pop("checkStopThrough", None):
