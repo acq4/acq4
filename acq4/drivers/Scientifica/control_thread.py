@@ -181,7 +181,11 @@ class ScientificaControlThread:
         self.current_move = None
 
     def check_objective(self):
-        obj = self.dev.getObjective()
+        try:
+            obj = self.dev.getObjective()
+        except TimeoutError:
+            # try again later?
+            return
         if self.obj_callback is not None and obj != self.last_obj:
             self.obj_callback(obj)
         self.last_obj = obj
