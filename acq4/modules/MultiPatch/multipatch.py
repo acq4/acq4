@@ -289,7 +289,8 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
                 futures.append(pip.pipetteDevice.goApproach(speed, raiseErrors=True))
-                pip.clampDevice.autoPipetteOffset()
+                if pip.clampDevice is not None:
+                    pip.clampDevice.autoPipetteOffset()
             else:
                 futures.append(pip.goApproach(speed, raiseErrors=True))
         return MultiFuture(futures)
