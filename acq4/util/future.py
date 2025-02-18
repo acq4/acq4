@@ -332,6 +332,16 @@ def future_wrap(
     return wrapper
 
 
+class MultiException(Exception):
+    def __init__(self, message, exceptions):
+        super().__init__(message)
+        self._exceptions = exceptions
+
+    def __str__(self):
+        return f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n" + \
+               "\n".join(f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1))
+
+
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
@@ -360,6 +370,14 @@ class MultiFuture(Future):
 
     def wasInterrupted(self):
         return any(f.wasInterrupted() for f in self.futures)
+
+    def exceptionRaised(self):
+        exceptions = [f.exceptionRaised() for f in self.futures if f.exceptionRaised() is not None]
+        if len(exceptions) == 1:
+            raise exceptions[0]
+        elif exceptions:
+            return MultiException("Multiple futures errored", exceptions)
+        return None
 
     def isDone(self):
         return all(f.isDone() for f in self.futures)
