@@ -149,6 +149,10 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
         return self._wasInterrupted
 
+    def wasStopped(self):
+        """Return True if the task was stopped."""
+        return self._stopRequested
+
     def exceptionRaised(self):
         return self._excInfo[1] if self._excInfo is not None else None
 
@@ -188,16 +192,16 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
-                if self._excInfo is not None:
-                    raise self._excInfo[1]
+                if not self._stopRequested and self.exceptionRaised() is not None:
+                    raise self.exceptionRaised()
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
 
             if self._stopRequested:
                 raise self.Stopped(msg)
-            elif self._excInfo is not None:
-                raise RuntimeError(msg) from self._excInfo[1]
+            elif self.exceptionRaised() is not None:
+                raise RuntimeError(msg) from self.exceptionRaised()
             raise RuntimeError(msg)
 
     def _wait(self, duration):
@@ -457,7 +461,7 @@ class FutureButton(FeedbackButton):
         elif self._userRequestedStop:
             self._userRequestedStop = False
             self.reset()
-        elif future.wasInterrupted() and isinstance(future.exceptionRaised(), Future.Stopped):
+        elif future.wasStopped():
             self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or "Failed!")[:40])
