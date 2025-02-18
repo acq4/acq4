@@ -365,8 +365,8 @@ class ScientificaGUI(StageInterface):
                 for ax, slip in enumerate(slippedAxes):
                     if slip:
                         axis = 'XYZ'[ax]
-                        msg = msg + f" {axis}={siFormat(diff[ax], suffix='m')}"
-                raise HelpfulException(msg)
+                        msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
+                Qt.QMessageBox.warning(self, "Slippage detected", msg, Qt.QMessageBox.Ok)
         finally:
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
