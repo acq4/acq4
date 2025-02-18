@@ -399,12 +399,10 @@ class PlotWidget(Qt.QWidget):
             self._analysisLabel = None
         if self.mode == 'test pulse':
             self.plot.clear()
-            if tp.data:
-                self._plotTestPulse(tp)
+            self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
-            if tp.data:
-                tp.plot(self.plot, label=False)
+            tp.plot(self.plot, label=False)
             self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
         else:
             analysis_by_mode = {

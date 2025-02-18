@@ -158,7 +158,7 @@ class PatchPipetteState(Future):
                 tpParams = {}
         if ic_holding is not None:
             cdev.setHolding(mode="IC", value=ic_holding)
-        if ic_holding is not None:
+        if vc_holding is not None:
             cdev.setHolding(mode="VC", value=vc_holding)
 
         # enable test pulse if config requests it AND the device is "active"
