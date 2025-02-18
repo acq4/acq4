@@ -115,7 +115,7 @@ class MultiPatchWindow(Qt.QWidget):
         for profile in profiles:
             self.ui.profileCombo.addItem(profile)
 
-        common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False)
+        common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False, raiseOnError=False)
 
         self.ui.homeBtn.setOpts(future_producer=self._moveHome, **common_opts)
         self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, **common_opts)

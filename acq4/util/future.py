@@ -338,8 +338,9 @@ class MultiException(Exception):
         self._exceptions = exceptions
 
     def __str__(self):
-        return f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n" + \
-               "\n".join(f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1))
+        return f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n" + "\n".join(
+            f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1)
+        )
 
 
 class MultiFuture(Future):
@@ -402,6 +403,7 @@ class FutureButton(FeedbackButton):
         stoppable: bool = False,
         success=None,
         failure=None,
+        raiseOnError: bool = True,
         processing=None,
         showStatus: bool = True,
     ):
@@ -419,6 +421,8 @@ class FutureButton(FeedbackButton):
             The message to display when the Future completes successfully. If None, the default message is "Success".
         failure : str | None
             The message to display when the Future fails. If None, the default message is the error message from the Future.
+        raiseOnError : bool
+            If True, the Future will raise an exception if the future has one to be raised. Default is True.
         processing : str | None
             The message to display while the Future is in progress. If None, the default message is "Processing...".
         """
@@ -428,13 +432,22 @@ class FutureButton(FeedbackButton):
         self._stoppable = stoppable
         self._userRequestedStop = False
         self._success = success
+        self._raiseOnError = raiseOnError
         self._failure = failure
         self._processing = processing
         self._showStatus = showStatus
         self.clicked.connect(self._controlTheFuture)
 
     def setOpts(self, **kwds):
-        allowed_args = ["future_producer", "stoppable", "success", "failure", "processing", "showStatus"]
+        allowed_args = [
+            "future_producer",
+            "stoppable",
+            "success",
+            "failure",
+            "processing",
+            "showStatus",
+            "raiseOnError",
+        ]
         for k, v in kwds.items():
             if k not in allowed_args:
                 raise NameError(f"Unknown option {k}")
@@ -483,6 +496,8 @@ class FutureButton(FeedbackButton):
             self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or "Failed!")[:40])
+            if self._raiseOnError:
+                future.wait()
 
     def _futureStateChanged(self, future, state):
         if self._showStatus:
