@@ -7,9 +7,9 @@ import numpy as np
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.HelpfulException import HelpfulException
 from acq4.util.debug import logMsg
 from acq4.util.future import future_wrap, Future, FutureButton
+from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SpinBox, siFormat
 
 
@@ -366,7 +366,7 @@ class ScientificaGUI(StageInterface):
                     if slip:
                         axis = 'XYZ'[ax]
                         msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
-                Qt.QMessageBox.warning(self, "Slippage detected", msg, Qt.QMessageBox.Ok)
+                runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
         finally:
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)

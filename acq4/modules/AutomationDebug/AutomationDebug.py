@@ -12,9 +12,9 @@ from acq4.devices.Pipette.calibration import calibratePipette
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.future import Future, future_wrap, FutureButton
+from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
-from pyqtgraph import mkPen, SpinBox
+from pyqtgraph import mkPen
 from pyqtgraph.units import µm
 
 UiTemplate = Qt.importTemplate('.window')
