@@ -344,7 +344,7 @@ class ScientificaGUI(StageInterface):
                 dest = far_away
             else:
                 dest[axis] = far_away[axis]
-            self.dev.move(dest, "fast")
+            self.dev._move(dest, "fast")
             _future.sleep(1)
             while self.dev.dev.isMoving():
                 _future.sleep(0.1)
