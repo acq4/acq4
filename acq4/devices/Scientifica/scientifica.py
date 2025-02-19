@@ -334,6 +334,7 @@ class ScientificaGUI(StageInterface):
     @future_wrap
     def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
+        move_future = None
         try:
             self.dev.setLimits(None, None, None)
             pos = self.dev.getPosition()
@@ -344,7 +345,7 @@ class ScientificaGUI(StageInterface):
                 dest = far_away
             else:
                 dest[axis] = far_away[axis]
-            self.dev._move(dest, "fast", False)
+            self.dev._move(dest, "fast", False)  # this should definitely fail
             _future.sleep(1)
             while self.dev.driver.isMoving():
                 _future.sleep(0.1)
@@ -358,7 +359,7 @@ class ScientificaGUI(StageInterface):
             after = self.dev.globalPosition()
             diff = np.array(after) - np.array(before)
             logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
-            _future.waitFor(self.dev.moveToGlobal(globalStartPos + diff, "fast"))
+            move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast")
             slippedAxes = np.abs(diff) > 50e-6
             if np.any(slippedAxes):
                 msg = f"Detected axis slip on {self.dev.name()}:"
@@ -368,6 +369,8 @@ class ScientificaGUI(StageInterface):
                         msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
                 runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
         finally:
+            if move_future is not None:
+                _future.waitFor(move_future)
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
             self.sigBusyMoving.emit(False)

@@ -279,6 +279,7 @@ class ScientificaRequestFuture:
         with self._cb_lock:
             self._done.set()
             cb = self._callback
+            self._callback = None
         if cb is not None:
             cb(self)
 
