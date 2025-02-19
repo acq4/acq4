@@ -40,7 +40,7 @@ class Scientifica(Stage):
         baudrate = config.pop("baudrate", None)
         ctrl_version = config.pop("version", 2)
         try:
-            self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
+            self.driver = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
         except RuntimeError as err:
             if hasattr(err, "dev_version"):
                 raise RuntimeError(
@@ -51,8 +51,8 @@ class Scientifica(Stage):
                 raise
 
         # Controllers reset their baud to 9600 after power cycle
-        if baudrate is not None and self.dev.getBaudrate() != baudrate:
-            self.dev.setBaudrate(baudrate)
+        if baudrate is not None and self.driver.getBaudrate() != baudrate:
+            self.driver.setBaudrate(baudrate)
 
         self._lastMove: Optional[ScientificaMoveFuture] = None
         man.sigAbortAll.connect(self.abort)
@@ -74,24 +74,24 @@ class Scientifica(Stage):
         for param, val in params.items():
             if param == "currents":
                 assert len(val) == 2
-                self.dev.setCurrents(*val)
+                self.driver.setCurrents(*val)
             elif param == "axisScale":
                 assert len(val) == 3
                 for i, x in enumerate(val):
-                    self.dev.setAxisScale(i, x)
+                    self.driver.setAxisScale(i, x)
             else:
-                self.dev.setParam(param, val)
+                self.driver.setParam(param, val)
 
         self.userSpeed = None
         self.setUserSpeed(config.get("userSpeed", self._interpretSpeed('fast')))
 
-        self.dev.setPositionCallback(self._stageReportedPositionChange)
+        self.driver.setPositionCallback(self._stageReportedPositionChange)
 
         # whether to monitor for changes to a MOC
         self.monitorObj = config.get("monitorObjective", False)
         if self.monitorObj is True:            
-            self.objectiveState = self.dev.getObjective()
-            self.dev.setObjectiveCallback(self._stageReportedObjectiveChange)
+            self.objectiveState = self.driver.getObjective()
+            self.driver.setObjectiveCallback(self._stageReportedObjectiveChange)
 
     def axes(self):
         return "x", "y", "z"
@@ -114,7 +114,7 @@ class Scientifica(Stage):
 
     def abort(self):
         """Stop the manipulator immediately."""
-        self.dev.stop()
+        self.driver.stop()
         if self._lastMove is not None:
             self._lastMove.interrupt()
             self._lastMove = None
@@ -126,16 +126,16 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setDefaultSpeed(v * 1e6)  # requires um/s
+        self.driver.setDefaultSpeed(v * 1e6)  # requires um/s
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / self.dev.ctrlThread.poll_interval
+        return 1.0 / self.driver.ctrlThread.poll_interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = self.dev.getPos()
+            pos = self.driver.getPos()
             changed = pos != self._lastPos
 
         if changed:
@@ -160,7 +160,7 @@ class Scientifica(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
-        self.dev.close()
+        self.driver.close()
         Stage.quit(self)
 
     def _move(self, pos, speed, linear, **kwds):
@@ -178,7 +178,7 @@ class Scientifica(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity."""
         s = [int(1e8 * v) for v in vel]
-        self.dev.send("VJ -%d %d %d" % tuple(s))
+        self.driver.send("VJ -%d %d %d" % tuple(s))
 
     def _objectiveChanged(self, obj):
         self.objectiveState = obj
@@ -200,7 +200,7 @@ class ScientificaMoveFuture(MoveFuture):
     def __init__(self, dev: Scientifica, pos, speed: float):
         super().__init__(dev, pos, speed)
         pos = np.array(pos)
-        self._moveReq = self.dev.dev.moveTo(pos, speed / 1e-6)
+        self._moveReq = self.dev.driver.moveTo(pos, speed / 1e-6)
         self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
@@ -289,16 +289,16 @@ class ScientificaGUI(StageInterface):
             self.autoZZeroBtn.setEnabled(busy_btn == self.autoZZeroBtn or not busy_btn)
 
     def zeroAll(self):
-        self.dev.dev.zeroPosition()
+        self.dev.driver.zeroPosition()
 
     def zeroX(self):
-        self.dev.dev.zeroPosition('X')
+        self.dev.driver.zeroPosition('X')
 
     def zeroY(self):
-        self.dev.dev.zeroPosition('Y')
+        self.dev.driver.zeroPosition('Y')
 
     def zeroZ(self):
-        self.dev.dev.zeroPosition('Z')
+        self.dev.driver.zeroPosition('Z')
 
     def autoZero(self):
         self.sigBusyMoving.emit(self.autoZeroBtn)
@@ -346,14 +346,14 @@ class ScientificaGUI(StageInterface):
                 dest[axis] = far_away[axis]
             self.dev._move(dest, "fast", False)
             _future.sleep(1)
-            while self.dev.dev.isMoving():
+            while self.dev.driver.isMoving():
                 _future.sleep(0.1)
             self.dev.stop()
             before = self.dev.globalPosition()
             if axis is None:
-                self.dev.dev.zeroPosition()
+                self.dev.driver.zeroPosition()
             else:
-                self.dev.dev.zeroPosition('XYZ'[axis])
+                self.dev.driver.zeroPosition('XYZ'[axis])
             self.dev.getPosition(refresh=True)
             after = self.dev.globalPosition()
             diff = np.array(after) - np.array(before)
