@@ -10,10 +10,12 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
+from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from ... import getManager
+from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
 
 
@@ -558,6 +560,33 @@ class Stage(Device, OptomechDevice):
             if limit[1] is not None and x > limit[1]:
                 raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}")
 
+    def checkRangeOfMotion(self, pos, tolerance=500e-6):
+        """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
+        pos = np.array(pos)
+        bad_axes = []
+        for axis in (0, 1, 2):
+            try:
+                bound = pos[:]
+                bound[axis] -= tolerance
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                bound[axis] += 2 * tolerance
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+            except ValueError:
+                bad_axes.append(axis)
+        if bad_axes:
+            axis_names = {0: 'x', 1: 'y', 2: 'z'}
+            axes = ', '.join(axis_names[axis] for axis in bad_axes)
+            pos = self.mapGlobalToDevicePosition(pos)
+            possible_problem = "pipette pull consistency" if self.isManipulator else "hardware reliability"
+            raise HelpfulException(
+                f"The specified position is within ±{siFormat(tolerance, suffix='m')} of the {axes} limit(s) of "
+                f"{self.name()} and may not always be accessible, depending on your {possible_problem}.",
+                reasons=[
+                    f"Manipulator limits: {self.getLimits()}",
+                    f"Position: ({pos[0]:f}, {pos[1]:f}, {pos[2]:f})",
+                ],
+            )
+
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
         """
@@ -580,9 +609,11 @@ class Stage(Device, OptomechDevice):
     def setStoredLocation(self, name: str, pos=None):
         if pos is None:
             pos = self.globalPosition()
+        self.checkLimits(self.mapGlobalToDevicePosition(pos))
         locations = self.readConfigFile('stored_locations')
         locations[name] = list(pos)
         self.writeConfigFile(locations, 'stored_locations')
+        self.checkRangeOfMotion(pos)
 
     def clearStoredLocation(self, name):
         locations = self.readConfigFile('stored_locations')

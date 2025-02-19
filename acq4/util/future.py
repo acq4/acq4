@@ -33,9 +33,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by wait() if the timeout period elapses."""
 
     @classmethod
-    def immediate(cls, result=None, error=None, excInfo=None) -> Future:
+    def immediate(cls, result=None, error=None, excInfo=None, stopped=False) -> Future:
         """Create a future that is already resolved with the optional result."""
         fut = cls()
+        if stopped:
+            fut.stop(reason=error)
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
@@ -149,6 +151,10 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
         return self._wasInterrupted
 
+    def wasStopped(self):
+        """Return True if the task was stopped."""
+        return self._stopRequested
+
     def exceptionRaised(self):
         return self._excInfo[1] if self._excInfo is not None else None
 
@@ -188,16 +194,16 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if self.wasInterrupted():
             err = self.errorMessage()
             if err is None:
-                if self._excInfo is not None:
-                    raise self._excInfo[1]
+                if not self._stopRequested and self.exceptionRaised() is not None:
+                    raise self.exceptionRaised()
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
 
             if self._stopRequested:
                 raise self.Stopped(msg)
-            elif self._excInfo is not None:
-                raise RuntimeError(msg) from self._excInfo[1]
+            elif self.exceptionRaised() is not None:
+                raise RuntimeError(msg) from self.exceptionRaised()
             raise RuntimeError(msg)
 
     def _wait(self, duration):
@@ -328,6 +334,17 @@ def future_wrap(
     return wrapper
 
 
+class MultiException(Exception):
+    def __init__(self, message, exceptions):
+        super().__init__(message)
+        self._exceptions = exceptions
+
+    def __str__(self):
+        return f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n" + "\n".join(
+            f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1)
+        )
+
+
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
@@ -357,6 +374,14 @@ class MultiFuture(Future):
     def wasInterrupted(self):
         return any(f.wasInterrupted() for f in self.futures)
 
+    def exceptionRaised(self):
+        exceptions = [f.exceptionRaised() for f in self.futures if f.exceptionRaised() is not None]
+        if len(exceptions) == 1:
+            raise exceptions[0]
+        elif exceptions:
+            return MultiException("Multiple futures errored", exceptions)
+        return None
+
     def isDone(self):
         return all(f.isDone() for f in self.futures)
 
@@ -380,6 +405,7 @@ class FutureButton(FeedbackButton):
         stoppable: bool = False,
         success=None,
         failure=None,
+        raiseOnError: bool = True,
         processing=None,
         showStatus: bool = True,
     ):
@@ -397,6 +423,8 @@ class FutureButton(FeedbackButton):
             The message to display when the Future completes successfully. If None, the default message is "Success".
         failure : str | None
             The message to display when the Future fails. If None, the default message is the error message from the Future.
+        raiseOnError : bool
+            If True, the Future will raise an exception if the future has one to be raised. Default is True.
         processing : str | None
             The message to display while the Future is in progress. If None, the default message is "Processing...".
         """
@@ -406,13 +434,22 @@ class FutureButton(FeedbackButton):
         self._stoppable = stoppable
         self._userRequestedStop = False
         self._success = success
+        self._raiseOnError = raiseOnError
         self._failure = failure
         self._processing = processing
         self._showStatus = showStatus
         self.clicked.connect(self._controlTheFuture)
 
     def setOpts(self, **kwds):
-        allowed_args = ["future_producer", "stoppable", "success", "failure", "processing", "showStatus"]
+        allowed_args = [
+            "future_producer",
+            "stoppable",
+            "success",
+            "failure",
+            "processing",
+            "showStatus",
+            "raiseOnError",
+        ]
         for k, v in kwds.items():
             if k not in allowed_args:
                 raise NameError(f"Unknown option {k}")
@@ -457,10 +494,12 @@ class FutureButton(FeedbackButton):
         elif self._userRequestedStop:
             self._userRequestedStop = False
             self.reset()
-        elif future.wasInterrupted() and isinstance(future.exceptionRaised(), Future.Stopped):
+        elif future.wasStopped():
             self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or "Failed!")[:40])
+            if self._raiseOnError:
+                future.wait()
 
     def _futureStateChanged(self, future, state):
         if self._showStatus:

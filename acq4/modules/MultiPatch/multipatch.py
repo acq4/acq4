@@ -115,7 +115,7 @@ class MultiPatchWindow(Qt.QWidget):
         for profile in profiles:
             self.ui.profileCombo.addItem(profile)
 
-        common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False)
+        common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False, raiseOnError=False)
 
         self.ui.homeBtn.setOpts(future_producer=self._moveHome, **common_opts)
         self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, **common_opts)
@@ -289,7 +289,8 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
                 futures.append(pip.pipetteDevice.goApproach(speed, raiseErrors=True))
-                pip.clampDevice.autoPipetteOffset()
+                if pip.clampDevice is not None:
+                    pip.clampDevice.autoPipetteOffset()
             else:
                 futures.append(pip.goApproach(speed, raiseErrors=True))
         return MultiFuture(futures)

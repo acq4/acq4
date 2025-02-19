@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from PyQt5.QtWidgets import QApplication
 
-from acq4.util.future import Future, FutureButton
+from acq4.util.future import Future, FutureButton, MultiFuture, MultiException
 from acq4.util.future import future_wrap
 
 app = QApplication([])
@@ -150,6 +150,24 @@ class TestFuture(unittest.TestCase):
         fut.wait()
         self.assertTrue(fut.isDone())
         self.assertEqual(fut.getResult(), "wrapped")
+
+
+class TestMultiFuture(unittest.TestCase):
+    def test_raises_on_one_error(self):
+        f1 = Future.immediate("success")
+        f2 = Future.immediate(excInfo=[ValueError, ValueError("boom"), None])
+        multi = MultiFuture([f1, f2])
+        with self.assertRaises(ValueError):
+            multi.wait()
+
+    def test_raises_on_multiple_errors(self):
+        f1 = Future.immediate("success")
+        f2 = Future.immediate(excInfo=[ValueError, ValueError("boom"), None])
+        f3 = Future.immediate(excInfo=[ValueError, ValueError("pow"), None])
+        multi = MultiFuture([f1, f2, f3])
+        with self.assertRaises(RuntimeError) as cm:
+            multi.wait()
+        self.assertIsInstance(cm.exception.__cause__, MultiException)
 
 
 if __name__ == "__main__":
