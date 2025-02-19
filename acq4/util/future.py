@@ -33,9 +33,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by wait() if the timeout period elapses."""
 
     @classmethod
-    def immediate(cls, result=None, error=None, excInfo=None) -> Future:
+    def immediate(cls, result=None, error=None, excInfo=None, stopped=False) -> Future:
         """Create a future that is already resolved with the optional result."""
         fut = cls()
+        if stopped:
+            fut.stop(reason=error)
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 

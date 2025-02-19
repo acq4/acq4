@@ -325,16 +325,14 @@ class ScientificaGUI(StageInterface):
             Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
         )
         if response != Qt.QMessageBox.Ok:
-            return Future.immediate(
-                error="User requested stop", excInfo=(Future.StopRequested, Future.StopRequested(), None)
-            )
+            self.sigBusyMoving.emit(False)
+            return Future.immediate(error="User requested stop", stopped=True)
 
         return self._doAutoZero(axis)
 
     @future_wrap
     def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
-        move_future = None
         try:
             self.dev.setLimits(None, None, None)
             pos = self.dev.getPosition()
@@ -368,9 +366,8 @@ class ScientificaGUI(StageInterface):
                         axis = 'XYZ'[ax]
                         msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
                 runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
+            _future.waitFor(move_future)
         finally:
-            if move_future is not None:
-                _future.waitFor(move_future)
+            self.sigBusyMoving.emit(False)
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
-            self.sigBusyMoving.emit(False)

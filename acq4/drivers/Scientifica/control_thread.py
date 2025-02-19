@@ -131,7 +131,12 @@ class ScientificaControlThread:
     def _handle_stop(self):
         self.dev.serial.send('STOP')
         if self.current_move is not None:
-            self.check_position(miss_reason='Stopped by request.')
+            while True:
+                self.check_position(miss_reason='Stopped by request.')
+                if self.dev.isMoving():
+                    time.sleep(0.1)
+                else:
+                    break
             self.current_move = None
 
     def _handle_cancel(self, fut):
@@ -144,6 +149,15 @@ class ScientificaControlThread:
         fut.set_result(None)
 
     def check_position(self, miss_reason=None, recheck=True):
+        """Check the current position and move status, and update the current move if necessary.
+
+        Parameters
+        ----------
+        miss_reason : str | None
+            If the current move is not complete, then this is the reason why, and the move will be failed without retry.
+        recheck : bool
+            If True, then check the position again after a short delay to ensure that the device has stopped moving.
+        """
         # check position and invoke change callback 
         try:
             pos = self.dev.getPos()
@@ -172,14 +186,14 @@ class ScientificaControlThread:
             return self.check_position(miss_reason, recheck=False)
 
         self.current_move = None
-        if fut.can_retry:
+        if miss_reason is not None:
+            fut.fail(miss_reason)
+        elif fut.can_retry:
             fut.retry()
-        elif miss_reason is None:
+        else:
             fut.fail(
                 f"Stopped moving before reaching target (target={fut.target_pos} actual={pos} dist={dif:1f}µm)"
             )
-        else:
-            fut.fail(miss_reason)
 
     def check_objective(self):
         try:
@@ -229,7 +243,7 @@ class ScientificaRequestFuture:
 
     @property
     def can_retry(self):
-        return self.kwds.get('retries_allowed', 0) > 0
+        return self.kwds.get('retries_allowed', 0) > 0 and not self.done()
 
     def retry(self):
         if not self.can_retry:
@@ -244,6 +258,7 @@ class ScientificaRequestFuture:
         """
         if self.request != 'move':
             raise TypeError('Can only cancel move requests')
+        self.kwds['retries_allowed'] = 0
         return self.thread.cancel_move(self)
 
     def wait(self, timeout=5.0):
