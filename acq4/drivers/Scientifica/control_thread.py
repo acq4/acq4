@@ -12,6 +12,7 @@ class ScientificaControlThread:
     This thread is used by the main Scientifica class; it has no user-facing API
     other than the ScientificaRequestFuture objects it returns.
     """
+
     def __init__(self, dev):
         self.dev = dev
         self.pos_callback = None
@@ -25,7 +26,7 @@ class ScientificaControlThread:
         self.quit_request = None
         self.current_move = None
         self.request_queue = queue.Queue()
-        
+
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
@@ -51,14 +52,14 @@ class ScientificaControlThread:
         """Stop the device immediately"""
         return self._request('stop')
 
-    def move(self, pos, speed):
+    def move(self, pos, speed, retries_allowed=3):
         """Move the device to *pos* (in um) with *speed* (in um/s)"""
-        return self._request('move', pos=pos, speed=speed)
+        return self._request('move', pos=pos, speed=speed, retries_allowed=retries_allowed)
 
     def quit(self):
         """Quit the control thread"""
         return self._request('quit')
-    
+
     def cancel_move(self, req):
         """Cancel a previously requested move
         
@@ -79,7 +80,7 @@ class ScientificaControlThread:
 
             if req is not None:
                 self._handle_request(req)
-        
+
         self.quit_request.set_result(None)
 
     def _request(self, req, **kwds):
@@ -108,7 +109,7 @@ class ScientificaControlThread:
     def _handle_move(self, fut):
         speed = fut.kwds['speed']
         pos = fut.kwds['pos']
-        if self.current_move is not None:
+        if self.current_move is not None and fut is not self.current_move:
             # don't think this is needed
             # self.dev.serial.send('STOP')
             self.check_position()
@@ -153,30 +154,29 @@ class ScientificaControlThread:
 
         if self.current_move is None:
             return
-        
+
         if self.dev.isMoving():
             return  # still moving, check again later
-        
+
         # stopped; update the current move
         fut = self.current_move
         dif = np.linalg.norm(np.array(pos) - np.array(fut.target_pos))
         if dif < self.move_complete_threshold:  # reached target
             fut.set_result(None)
-            # if recheck is False:
-            #     print("Finished move on second check")
-        else:
-            # we stopped before reaching target
-            if miss_reason is None:
-                # no reason to expect this
-                if recheck:
-                    # Sometimes devices report they are finished moving before they have 
-                    # completely stopped. Wait a moment, then check again to be sure.
-                    time.sleep(0.1)
-                    self.check_position(miss_reason, recheck=False)
-                else:
-                    fut.fail(f"Stopped moving before reaching target (target={fut.target_pos} actual={pos} dist={dif:1f}um)")                
+        elif miss_reason is None:
+            if recheck:
+                # Sometimes devices report they are finished moving before they have 
+                # completely stopped. Wait a moment, then check again to be sure.
+                time.sleep(0.1)
+                self.check_position(miss_reason, recheck=False)
+            elif fut.can_retry:
+                fut.retry()
             else:
-                fut.fail(miss_reason)
+                fut.fail(
+                    f"Stopped moving before reaching target (target={fut.target_pos} actual={pos} dist={dif:1f}um)")
+
+        else:
+            fut.fail(miss_reason)
 
         self.current_move = None
 
@@ -191,10 +191,10 @@ class ScientificaControlThread:
         self.last_obj = obj
 
 
-
 class ScientificaRequestFuture:
     """Represents a future result to be generated following a request to the control thread.
     """
+
     def __init__(self, ctrl_thread, req, kwds):
         self.thread = ctrl_thread
         self.request = req
@@ -222,6 +222,15 @@ class ScientificaRequestFuture:
                 self._callback = cb
         if run_cb:
             cb(self)
+
+    @property
+    def can_retry(self):
+        return self.kwds.get('retries_allowed', 0) > 0
+
+    def retry(self):
+        assert self.can_retry
+        self.kwds['retries_allowed'] -= 1
+        self.thread.request_queue.put(self)
 
     def cancel(self):
         """Cancel the request if it is not already complete.
