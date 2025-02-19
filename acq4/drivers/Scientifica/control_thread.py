@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import queue
 import sys
 import threading
@@ -19,12 +21,12 @@ class ScientificaControlThread:
         self.obj_callback = None
         self.default_speed = dev.getSpeed()
         self.poll_interval = 0.05
-        self.move_complete_threshold = 0.5  # distance in um from target that is considered complete
+        self.move_complete_threshold = 0.5  # distance in µm from target that is considered complete
 
         self.last_pos = None
         self.last_obj = None
-        self.quit_request = None
-        self.current_move = None
+        self.quit_request: ScientificaRequestFuture | None = None
+        self.current_move: ScientificaRequestFuture | None = None
         self.request_queue = queue.Queue()
 
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -53,7 +55,7 @@ class ScientificaControlThread:
         return self._request('stop')
 
     def move(self, pos, speed, retries_allowed=3):
-        """Move the device to *pos* (in um) with *speed* (in um/s)"""
+        """Move the device to *pos* (in µm) with *speed* (in µm/s)"""
         return self._request('move', pos=pos, speed=speed, retries_allowed=retries_allowed)
 
     def quit(self):
@@ -88,7 +90,7 @@ class ScientificaControlThread:
         self.request_queue.put(fut)
         return fut
 
-    def _handle_request(self, fut):
+    def _handle_request(self, fut: ScientificaRequestFuture):
         cmd = fut.request
         try:
             if cmd == 'stop':
@@ -103,8 +105,8 @@ class ScientificaControlThread:
             else:
                 raise ValueError(f'unrecognized request {cmd}')
 
-        except Exception as exc:
-            fut.set_exception(sys.exc_info())
+        except Exception:
+            fut.set_exc_info(sys.exc_info())
 
     def _handle_move(self, fut):
         speed = fut.kwds['speed']
@@ -158,27 +160,26 @@ class ScientificaControlThread:
         if self.dev.isMoving():
             return  # still moving, check again later
 
-        # stopped; update the current move
+        # stopped; one way or another, the current move is done with this attempt
         fut = self.current_move
         dif = np.linalg.norm(np.array(pos) - np.array(fut.target_pos))
         if dif < self.move_complete_threshold:  # reached target
             fut.set_result(None)
-        elif miss_reason is None:
-            if recheck:
-                # Sometimes devices report they are finished moving before they have 
-                # completely stopped. Wait a moment, then check again to be sure.
-                time.sleep(0.1)
-                self.check_position(miss_reason, recheck=False)
-            elif fut.can_retry:
-                fut.retry()
-            else:
-                fut.fail(
-                    f"Stopped moving before reaching target (target={fut.target_pos} actual={pos} dist={dif:1f}um)")
-
-        else:
-            fut.fail(miss_reason)
+        elif recheck:
+            # Sometimes devices report they are finished moving before they have
+            # completely stopped. Wait a moment, then check again to be sure.
+            time.sleep(0.1)
+            return self.check_position(miss_reason, recheck=False)
 
         self.current_move = None
+        if fut.can_retry:
+            fut.retry()
+        elif miss_reason is None:
+            fut.fail(
+                f"Stopped moving before reaching target (target={fut.target_pos} actual={pos} dist={dif:1f}µm)"
+            )
+        else:
+            fut.fail(miss_reason)
 
     def check_objective(self):
         try:
@@ -195,8 +196,11 @@ class ScientificaRequestFuture:
     """Represents a future result to be generated following a request to the control thread.
     """
 
+    class FutureError(Exception):
+        pass
+
     def __init__(self, ctrl_thread, req, kwds):
-        self.thread = ctrl_thread
+        self.thread: ScientificaControlThread = ctrl_thread
         self.request = req
         self.kwds = kwds
         self._callback = None
@@ -228,7 +232,8 @@ class ScientificaRequestFuture:
         return self.kwds.get('retries_allowed', 0) > 0
 
     def retry(self):
-        assert self.can_retry
+        if not self.can_retry:
+            raise ValueError('Request as already been retried the maximum number of times')
         self.kwds['retries_allowed'] -= 1
         self.thread.request_queue.put(self)
 
@@ -239,22 +244,23 @@ class ScientificaRequestFuture:
         """
         if self.request != 'move':
             raise TypeError('Can only cancel move requests')
-        fut = self.thread.cancel_move(self)
-        return fut
+        return self.thread.cancel_move(self)
 
     def wait(self, timeout=5.0):
         """Wait for the request to complete, or for the timeout to elapse.
         
-        If the request succeeds, then its result value is retuened.
+        If the request succeeds, then its result value is returned.
         If the timeout expires, then raise TimeoutError.
         If the request fails, then raise an exception with more information.
         """
         if self._done.wait(timeout=timeout) is False:
             raise TimeoutError(f'Timeout waiting for {self.request} to complete')
         elif self.exc_info is not None:
-            raise Exception(f"An error occurred during the request to {self.request}") from self.exc_info[1]
+            raise self.FutureError(
+                f"An error occurred during the request to {self.request}"
+            ) from self.exc_info[1]
         elif self.error is not None:
-            raise Exception(self.error)
+            raise self.FutureError(self.error)
         return self.result
 
     def set_result(self, result):
@@ -272,9 +278,9 @@ class ScientificaRequestFuture:
     def _finish(self):
         with self._cb_lock:
             self._done.set()
-            run_cb = self._callback is not None
-        if run_cb:
-            self._callback(self)
+            cb = self._callback
+        if cb is not None:
+            cb(self)
 
     @property
     def target_pos(self):
