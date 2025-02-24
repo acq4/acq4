@@ -1,4 +1,5 @@
 import argparse
+import signal
 from pathlib import Path
 from typing import Optional, List
 
@@ -6,12 +7,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from numba import njit
 from tifffile import tifffile
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
+import pyqtgraph as pg
 from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
 from acq4.util.healthy_cell_detector.train import extract_region
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 
 class NeuronDataset(Dataset):
@@ -35,23 +39,104 @@ class NeuronDataset(Dataset):
 
 def detect_and_extract_normalized_neurons(img, model, diameter: int = 35, px: float = 0.32, z: float = 2):
     img = img[..., 0:-2]  # weird the shape or cellpose chokes TODO: figure out how to avoid this
-    img_data = img[:, np.newaxis, :, :]  # add channel dimension, weird the shape
+    img_data = img[:, np.newaxis, :, :]  # add channel dimension
     masks_pred, flows, styles, diams = model.eval(
-        [img_data],
+        [img_data],  # add batch dimension
         diameter=diameter,
-        # niter=2000,
         channel_axis=1,
         z_axis=0,
         stitch_threshold=0.25,
     )
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
     regions = []
-    for cell_num in tqdm(range(1, mask.max() + 1), desc="Extracting regions", leave=False):
-        coords = np.array(np.where(mask == cell_num)).mean(axis=1).astype(int)
-        region = extract_region(img, coords, px, z)
+    for cell_num, z, y, x in tqdm(find_points_in_each_cell(mask), desc="Extracting regions"):
+        center = get_center_fast(mask, cell_num, z, y, x, expected_diameter=diameter)
+        region = extract_region(img, center, px, z)
         regions.append(region)
+    regions = np.array(regions)
 
-    return regions, mask
+    return regions
+
+
+@njit
+def get_center_fast(data, cell_num, seed_z, seed_y, seed_x, expected_diameter=35):
+    # Start with sparse search - step size of 4 in each dimension
+    z_sum, y_sum, x_sum = 0, 0, 0
+    count = 0
+
+    # Now expand around the seed point
+    # Using a set would be nice but numba doesn't support it
+    # So we'll use a 3D boolean array just big enough
+    max_size = int(expected_diameter * 5 / 3)  # A bit larger to be safe
+    visited = np.zeros((max_size, max_size, max_size), dtype=np.bool_)
+    to_check = np.zeros((max_size * max_size * max_size, 3), dtype=np.int32)
+    n_to_check = 1
+    to_check[0] = [seed_z, seed_y, seed_x]
+    if data[seed_z, seed_y, seed_x] != cell_num:
+        raise ValueError("Seed point is not in the cell")
+
+    while n_to_check > 0:
+        z, y, x = to_check[n_to_check - 1]
+        n_to_check -= 1
+
+        if data[z, y, x] == cell_num:
+            z_sum += z
+            y_sum += y
+            x_sum += x
+            count += 1
+
+            # Add neighbors if in bounds and not visited
+            for dz in (-1, 0, 1):
+                nz = z + dz
+                if nz < 0 or nz >= data.shape[0]:
+                    continue
+                for dy in (-1, 0, 1):
+                    ny = y + dy
+                    if ny < 0 or ny >= data.shape[1]:
+                        continue
+                    for dx in (-1, 0, 1):
+                        nx = x + dx
+                        if nx < 0 or nx >= data.shape[2]:
+                            continue
+
+                        # Convert to local coordinates for visited array
+                        local_z = nz - seed_z + max_size // 2
+                        local_y = ny - seed_y + max_size // 2
+                        local_x = nx - seed_x + max_size // 2
+
+                        if (
+                            0 <= local_z < max_size
+                            and 0 <= local_y < max_size
+                            and 0 <= local_x < max_size
+                            and not visited[local_z, local_y, local_x]
+                        ):
+                            visited[local_z, local_y, local_x] = True
+                            to_check[n_to_check] = [nz, ny, nx]
+                            n_to_check += 1
+
+    return np.array([z_sum // count, y_sum // count, x_sum // count])
+
+
+@njit
+def find_points_in_each_cell(mask, max_cells=1000):
+    # Dict-like structure: [cell_num, z, y, x]
+
+    seeds = np.zeros((max_cells, 4), dtype=np.int32)
+    n_seeds = 0
+    found_cells = np.zeros(max_cells, dtype=np.int32)
+
+    xy_step = 15
+    z_step = 3
+    for z in range(0, mask.shape[0], z_step):
+        for y in range(0, mask.shape[1], xy_step):
+            for x in range(0, mask.shape[2], xy_step):
+                val = mask[z, y, x]
+                if val > 0 and found_cells[val] == 0:
+                    n_seeds += 1
+                    seeds[n_seeds - 1] = [val, z, y, x]
+                    found_cells[val] = n_seeds
+
+    return seeds[:n_seeds]  # Return just the filled portion
 
 
 def train_autoencoder(
@@ -87,7 +172,7 @@ def train_autoencoder(
     model = models.Cellpose(gpu=True, model_type="cyto3")
     for path in tqdm(image_paths, desc="Loading images"):
         img = tifffile.imread(str(path))
-        regions, _ = detect_and_extract_normalized_neurons(img, model, px=px, z=z)
+        regions = detect_and_extract_normalized_neurons(img, model, px=px, z=z)
         all_regions.extend(regions)
     print(f"Collected {len(all_regions)} neuron regions for training")
 
@@ -102,7 +187,23 @@ def train_autoencoder(
 
     # Training loop
     best_loss = float("inf")
+    epoch = -1
+
+    def do_save(sig, frame):
+        nonlocal best_loss, epoch
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": best_loss,
+            },
+            save_path,
+        )
+    signal.signal(signal.SIGINT, do_save)
+
     for epoch in tqdm(range(num_epochs), desc="Training"):
+
         model.train()
         total_loss = 0
 
@@ -122,32 +223,39 @@ def train_autoencoder(
         tqdm.write(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
 
         # Save best model
-        if save_path and avg_loss < best_loss:
+        if epoch % 100 == 0 and save_path and avg_loss < best_loss:
             best_loss = avg_loss
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "loss": best_loss,
-                },
-                save_path,
-            )
+            do_save(None, None)
 
     return model
 
 
 def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray], num_examples: int = 5):
     """
-    Visualize original and reconstructed neurons to assess autoencoder quality.
+    Visualize original and reconstructed neurons to assess autoencoder quality using pyqtgraph.
+
+    This version uses pyqtgraph for faster, interactive visualization.
+    You can zoom, pan, and adjust contrast in real-time!
     """
-    import matplotlib.pyplot as plt
+    # Set pyqtgraph to use white background for better contrast
+    pg.setConfigOption('background', 'w')
+    pg.setConfigOption('foreground', 'k')
+
+    # Create the application if it doesn't exist
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication([])
+
+    # Create a colormap that works well for neuroscience data
+    colormap = pg.colormap.get('viridis')
 
     model.eval()
     device = next(model.parameters()).device
+    windows = []  # Keep references to windows to prevent Python garbage collection
 
     with torch.no_grad():
         for i in range(min(num_examples, len(regions))):
+            # Process data
             region = regions[i]
             region_norm = (region - region.min()) / (region.max() - region.min() + 1e-8)
             region_tensor = torch.FloatTensor(region_norm[None, None]).to(device)
@@ -158,19 +266,75 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             # Show middle z-slice of original and reconstruction
             z_mid = region.shape[2] // 2
 
-            plt.figure(figsize=(10, 5))
-            plt.subplot(121)
-            plt.imshow(region_norm[:, :, z_mid])
-            plt.title("Original")
-            plt.axis("off")
+            # Create main window with a whimsical title
+            win = QtWidgets.QMainWindow()
+            win.setWindowTitle(f"Neuron Explorer - Brain Cell #{i + 1}")
+            win.resize(1000, 500)
 
-            plt.subplot(122)
-            plt.imshow(reconstructed[:, :, z_mid])
-            plt.title("Reconstructed")
-            plt.axis("off")
+            # Create central widget and main layout
+            central_widget = QtWidgets.QWidget()
+            win.setCentralWidget(central_widget)
+            main_layout = QtWidgets.QVBoxLayout()
+            central_widget.setLayout(main_layout)
 
-            plt.show()
-    return plt
+            # Create image layout
+            image_layout = QtWidgets.QHBoxLayout()
+
+            # Create original image view with fun label
+            original_label = QtWidgets.QLabel("🧠 Original Neuron")
+            original_label.setAlignment(QtCore.Qt.AlignCenter)
+            original_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+            original_view = pg.ImageView()
+            original_view.setImage(region_norm[:, :, z_mid])
+            original_view.ui.histogram.gradient.setColorMap(colormap)
+
+            # Create reconstruction image view with fun label
+            recon_label = QtWidgets.QLabel("🔄 Reconstructed Neuron")
+            recon_label.setAlignment(QtCore.Qt.AlignCenter)
+            recon_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+            recon_view = pg.ImageView()
+            recon_view.setImage(reconstructed[:, :, z_mid])
+            recon_view.ui.histogram.gradient.setColorMap(colormap)
+
+            # Link the views so they zoom/pan together
+            original_view.view.linkView(original_view.view.XAxis, recon_view.view)
+            original_view.view.linkView(original_view.view.YAxis, recon_view.view)
+
+            # Create left layout
+            left_layout = QtWidgets.QVBoxLayout()
+            left_layout.addWidget(original_label)
+            left_layout.addWidget(original_view)
+
+            # Create right layout
+            right_layout = QtWidgets.QVBoxLayout()
+            right_layout.addWidget(recon_label)
+            right_layout.addWidget(recon_view)
+
+            # Add left and right layouts to image layout
+            image_layout.addLayout(left_layout)
+            image_layout.addLayout(right_layout)
+
+            # Add tip label at bottom
+            tip_label = QtWidgets.QLabel("✨ Tip: Use mouse wheel to zoom, drag to pan! ✨")
+            tip_label.setAlignment(QtCore.Qt.AlignCenter)
+            tip_label.setStyleSheet("color: purple; font-style: italic;")
+
+            # Add layouts to main layout
+            main_layout.addLayout(image_layout)
+            main_layout.addWidget(tip_label)
+
+            # Show window
+            win.show()
+            windows.append(win)  # Keep reference to prevent garbage collection
+
+    # Start Qt event loop if not already running
+    if app is not None and not (hasattr(app, '_in_event_loop') and app._in_event_loop):
+        print("🔬 Interactive neuron visualization running! Close windows to continue...")
+        app.exec_()
+
+    return windows
 
 
 def main():
@@ -184,17 +348,24 @@ def main():
     parser.add_argument("--num-epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Training batch size")
     parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam optimizer learning rate")
+    parser.add_argument("--viz-only", action="store_true", help="Visualize reconstructions only")
     args = parser.parse_args()
 
-    model = train_autoencoder(**vars(args))
+    if args.viz_only:
+        model = NeuronAutoencoder()
+        model.load_state_dict(torch.load(args.save_path)["model_state_dict"])
+    else:
+        del args.viz_only
+        model = train_autoencoder(**vars(args))
 
     # Get some test regions for visualization
-    test_img = np.load(args.image_paths[0])  # Load first image
+    test_img = tifffile.imread(args.image_paths[0])
     cyto3 = models.Cellpose(gpu=True, model_type="cyto3")
-    test_regions, _ = detect_and_extract_normalized_neurons(test_img, cyto3)
+    test_regions = detect_and_extract_normalized_neurons(test_img, cyto3)
 
     return visualize_reconstructions(model, test_regions)
 
 
 if __name__ == "__main__":
+    app = pg.mkQApp()
     win = main()

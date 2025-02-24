@@ -4,12 +4,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from numba import njit
 from scipy import ndimage
+from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import map_coordinates
 from skimage import measure
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score, f1_score
 from torch.utils.data import Dataset
-from scipy.interpolate import RegularGridInterpolator
 
 
 def extract_explicit_cell_features(data: np.ndarray, mask: np.ndarray, cell_num: int) -> dict:
@@ -110,30 +112,9 @@ def train_autoencoder(model, dataloader, num_epochs=50):
             print(f"Epoch {epoch}, Loss: {total_loss/len(dataloader)}")
 
 
-def extract_region(data, center_coords, input_xy_resolution, input_z_resolution):
-    """
-    Extract a normalized chunk of data around specified center coordinates.
-
-    Args:
-        data (np.ndarray): Input 3D array in Z-Y-X order
-        center_coords (tuple): (z, y, x) coordinates in µm
-        input_xy_resolution (float): Input resolution in µm/pixel for X-Y plane
-        input_z_resolution (float): Input resolution in µm/step for Z dimension
-
-    Returns:
-        np.ndarray: Normalized chunk of shape (5, 63, 63)
-    """
-    # Convert physical coordinates to pixel coordinates
-    z_px, y_px, x_px = (
-        center_coords[0] / input_z_resolution,
-        center_coords[1] / input_xy_resolution,
-        center_coords[2] / input_xy_resolution,
-    )
-
+def create_coordinate_grids(input_xy_resolution, input_z_resolution):
+    """Pre-compute the coordinate grids (only needs to be done once)"""
     # Define the output dimensions
-    output_shape = (5, 63, 63)  # Z, Y, X
-
-    # Calculate pixel ranges for output
     z_out = np.linspace(-2, 2, 5)  # 5 z-layers centered at 0
     y_out = np.linspace(-31, 31, 63)  # 63 pixels centered at 0
     x_out = np.linspace(-31, 31, 63)  # 63 pixels centered at 0
@@ -141,44 +122,114 @@ def extract_region(data, center_coords, input_xy_resolution, input_z_resolution)
     # Create meshgrid for output coordinates
     Z_out, Y_out, X_out = np.meshgrid(z_out, y_out, x_out, indexing="ij")
 
-    # Scale output coordinates to input pixel space
-    Z_in = Z_out + z_px
-    Y_in = Y_out + y_px
-    X_in = X_out + x_px
+    # Scale output coordinates to input pixel space (without center offset)
+    Z_scales = Z_out * input_z_resolution
+    Y_scales = Y_out * input_xy_resolution
+    X_scales = X_out * input_xy_resolution
+
+    return Z_scales, Y_scales, X_scales
+
+
+@njit
+def fast_pad(data, pad_width):
+    """Faster padding implementation using Numba"""
+    padded_shape = (
+        data.shape[0] + pad_width[0][0] + pad_width[0][1],
+        data.shape[1] + pad_width[1][0] + pad_width[1][1],
+        data.shape[2] + pad_width[2][0] + pad_width[2][1],
+    )
+    padded_data = np.zeros(padded_shape, dtype=data.dtype)
+
+    # Copy the data into the padded array
+    z_start, y_start, x_start = pad_width[0][0], pad_width[1][0], pad_width[2][0]
+    padded_data[
+    z_start:z_start + data.shape[0],
+    y_start:y_start + data.shape[1],
+    x_start:x_start + data.shape[2]
+    ] = data
+
+    return padded_data
+
+
+def extract_region_optimized(data: np.ndarray, center_coords, Z_scales, Y_scales, X_scales):
+    """
+    Extract a padded, normalized 20µm cube of data around specified center coordinates.
+
+    Args:
+        data (np.ndarray): Input 3D array in Z-Y-X order
+        center_coords (tuple): (z, y, x) coordinates in idx space
+        Z_scales, Y_scales, X_scales: Pre-computed coordinate scaling grids
+
+    Returns:
+        np.ndarray: Normalized chunk of shape (5, 63, 63)
+    """
+    # pixel coordinates
+    z_px, y_px, x_px = center_coords
+
+    # Add center offsets to pre-computed scales
+    Z_in = Z_scales + z_px
+    Y_in = Y_scales + y_px
+    X_in = X_scales + x_px
 
     # Calculate required padding
     z_min, z_max = int(np.floor(Z_in.min())), int(np.ceil(Z_in.max()))
     y_min, y_max = int(np.floor(Y_in.min())), int(np.ceil(Y_in.max()))
     x_min, x_max = int(np.floor(X_in.min())), int(np.ceil(X_in.max()))
 
-    pad_width = [
-        [max(0, -z_min), max(0, z_max - data.shape[0] + 1)],
-        [max(0, -y_min), max(0, y_max - data.shape[1] + 1)],
-        [max(0, -x_min), max(0, x_max - data.shape[2] + 1)],
-    ]
+    # Early return check - if we're fully inside the data, use direct array indexing
+    if (z_min >= 0 and z_max < data.shape[0] and
+            y_min >= 0 and y_max < data.shape[1] and
+            x_min >= 0 and x_max < data.shape[2]):
+        # Use map_coordinates directly on the data without padding
+        coords = np.stack([Z_in.ravel(), Y_in.ravel(), X_in.ravel()], axis=0)
+        result = map_coordinates(data, coords, order=1, mode='constant')
+        return result.reshape((5, 63, 63))
 
-    # Pad data with zeros
-    padded_data = np.pad(data, pad_width, mode="constant", constant_values=0)
-
-    # Adjust coordinates for padded array
-    Z_in_pad = Z_in + pad_width[0][0]  # Shift by padding amount
-    Y_in_pad = Y_in + pad_width[1][0]
-    X_in_pad = X_in + pad_width[2][0]
-
-    # Create interpolator with padded data
-    z_coords = np.arange(padded_data.shape[0])
-    y_coords = np.arange(padded_data.shape[1])
-    x_coords = np.arange(padded_data.shape[2])
-
-    interpolator = RegularGridInterpolator(
-        (z_coords, y_coords, x_coords), padded_data, method="linear", bounds_error=True
+    pad_width = (
+        (max(0, -z_min), max(0, z_max - data.shape[0] + 1)),
+        (max(0, -y_min), max(0, y_max - data.shape[1] + 1)),
+        (max(0, -x_min), max(0, x_max - data.shape[2] + 1)),
     )
 
-    # Prepare points for interpolation
-    points = np.stack([Z_in_pad, Y_in_pad, X_in_pad], axis=-1)
+    # Only pad if necessary
+    if any(p[0] > 0 or p[1] > 0 for p in pad_width):
+        data = fast_pad(data, pad_width)
 
-    # Interpolate
-    return interpolator(points.reshape(-1, 3)).reshape(output_shape)
+        # Adjust coordinates for padded array
+        Z_in_pad = Z_in + pad_width[0][0]
+        Y_in_pad = Y_in + pad_width[1][0]
+        X_in_pad = X_in + pad_width[2][0]
+
+        # Use map_coordinates for faster interpolation
+        coords = np.stack([Z_in_pad.ravel(), Y_in_pad.ravel(), X_in_pad.ravel()], axis=0)
+    else:
+        # Use map_coordinates directly on the data without padding
+        coords = np.stack([Z_in.ravel(), Y_in.ravel(), X_in.ravel()], axis=0)
+    result = map_coordinates(data, coords, order=1, mode='constant')
+    return result.reshape((5, 63, 63))
+
+
+# Example usage with pre-computation
+def setup_extractor(input_xy_resolution, input_z_resolution):
+    """Setup function that returns a faster extraction function"""
+    Z_scales, Y_scales, X_scales = create_coordinate_grids(input_xy_resolution, input_z_resolution)
+
+    def extract_region_fast(data, center_coords):
+        return extract_region_optimized(data, center_coords, Z_scales, Y_scales, X_scales)
+
+    return extract_region_fast
+
+
+region_extractors = {}
+
+
+def extract_region(data, center_coords, input_xy_resolution, input_z_resolution):
+    global region_extractors
+
+    key = (input_xy_resolution, input_z_resolution)
+    if key not in region_extractors:
+        region_extractors[key] = setup_extractor(input_xy_resolution, input_z_resolution)
+    return region_extractors[key](data, center_coords)
 
 
 def match_cells_and_extract_features(raw_data, cellpose_mask, annotation_mask, model, iou_threshold=0.5):
