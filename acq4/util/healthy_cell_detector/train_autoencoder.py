@@ -182,6 +182,8 @@ def train_autoencoder(
 
     # Initialize model and training components
     model = NeuronAutoencoder(latent_dim=32).to(device)
+    if save_path and save_path.exists():
+        model.load_state_dict(torch.load(save_path)["model_state_dict"])
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
 
@@ -200,6 +202,9 @@ def train_autoencoder(
             },
             save_path,
         )
+        print(f"Saved model to {save_path}")
+        if sig:
+            raise KeyboardInterrupt
     signal.signal(signal.SIGINT, do_save)
 
     for epoch in tqdm(range(num_epochs), desc="Training"):
