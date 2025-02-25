@@ -183,7 +183,7 @@ def train_autoencoder(
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     # Initialize model and training components
-    model = NeuronAutoencoder(latent_dim=32).to(device)
+    model = NeuronAutoencoder().to(device)
     if save_path and save_path.exists():
         model.load_state_dict(torch.load(save_path)["model_state_dict"])
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -276,7 +276,7 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             # Show middle z-slice of original and reconstruction
             z_mid = region.shape[0] // 2
 
-            # Create main window with a whimsical title
+            # Create main window
             win = QtWidgets.QMainWindow()
             win.setWindowTitle(f"Neuron Comparer - Brain Cell #{i + 1}")
             win.resize(1000, 500)
@@ -290,7 +290,7 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             # Create image layout
             image_layout = QtWidgets.QHBoxLayout()
 
-            # Create original image view with fun label
+            # Create original image view
             original_label = QtWidgets.QLabel("🧠 Original Neuron")
             original_label.setAlignment(QtCore.Qt.AlignCenter)
             original_label.setStyleSheet("font-weight: bold; font-size: 14px;")
