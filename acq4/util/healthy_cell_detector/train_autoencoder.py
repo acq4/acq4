@@ -37,7 +37,7 @@ class NeuronDataset(Dataset):
         return torch.FloatTensor(region[None])  # Add channel dimension
 
 
-def detect_and_extract_normalized_neurons(img, model, diameter: int = 35, px: float = 0.32, z: float = 2):
+def detect_and_extract_normalized_neurons(img, model, diameter: int = 35, xy_scale: float = 0.32, z_scale: float = 2):
     img = img[..., 0:-2]  # weird the shape or cellpose chokes TODO: figure out how to avoid this
     img_data = img[:, np.newaxis, :, :]  # add channel dimension
     masks_pred, flows, styles, diams = model.eval(
@@ -49,9 +49,9 @@ def detect_and_extract_normalized_neurons(img, model, diameter: int = 35, px: fl
     )
     mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
     regions = []
-    for cell_num, z, y, x in tqdm(find_points_in_each_cell(mask), desc="Extracting regions"):
-        center = get_center_fast(mask, cell_num, z, y, x, expected_diameter=diameter)
-        region = extract_region(img, center, px, z)
+    for cell_num, _z, _y, _x in tqdm(find_points_in_each_cell(mask, mask.max()), desc="Extracting regions"):
+        center = get_center_fast(mask, cell_num, _z, _y, _x, expected_diameter=diameter)
+        region = extract_region(img, center, xy_scale, z_scale)
         regions.append(region)
     regions = np.array(regions)
 
@@ -130,6 +130,8 @@ def find_points_in_each_cell(mask, max_cells=1000):
     for z in range(0, mask.shape[0], z_step):
         for y in range(0, mask.shape[1], xy_step):
             for x in range(0, mask.shape[2], xy_step):
+                if n_seeds >= max_cells:
+                    return seeds
                 val = mask[z, y, x]
                 if val > 0 and found_cells[val] == 0:
                     n_seeds += 1
@@ -172,7 +174,7 @@ def train_autoencoder(
     model = models.Cellpose(gpu=True, model_type="cyto3")
     for path in tqdm(image_paths, desc="Loading images"):
         img = tifffile.imread(str(path))
-        regions = detect_and_extract_normalized_neurons(img, model, px=px, z=z)
+        regions = detect_and_extract_normalized_neurons(img, model, xy_scale=px, z_scale=z)
         all_regions.extend(regions)
     print(f"Collected {len(all_regions)} neuron regions for training")
 
