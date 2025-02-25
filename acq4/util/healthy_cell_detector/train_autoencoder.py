@@ -265,6 +265,7 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
     with torch.no_grad():
         for i in range(min(num_examples, len(regions))):
             # Process data
+            i = np.random.choice(range(regions.shape[0]))
             region = regions[i]
             region_norm = (region - region.min()) / (region.max() - region.min() + 1e-8)
             region_tensor = torch.FloatTensor(region_norm[None, None]).to(device)
@@ -273,11 +274,11 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             reconstructed = reconstructed.cpu().numpy()[0, 0]
 
             # Show middle z-slice of original and reconstruction
-            z_mid = region.shape[2] // 2
+            z_mid = region.shape[0] // 2
 
             # Create main window with a whimsical title
             win = QtWidgets.QMainWindow()
-            win.setWindowTitle(f"Neuron Explorer - Brain Cell #{i + 1}")
+            win.setWindowTitle(f"Neuron Comparer - Brain Cell #{i + 1}")
             win.resize(1000, 500)
 
             # Create central widget and main layout
@@ -295,7 +296,7 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             original_label.setStyleSheet("font-weight: bold; font-size: 14px;")
 
             original_view = pg.ImageView()
-            original_view.setImage(region_norm[:, :, z_mid])
+            original_view.setImage(region_norm[z_mid, :, :])
             original_view.ui.histogram.gradient.setColorMap(colormap)
 
             # Create reconstruction image view with fun label
@@ -304,7 +305,7 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             recon_label.setStyleSheet("font-weight: bold; font-size: 14px;")
 
             recon_view = pg.ImageView()
-            recon_view.setImage(reconstructed[:, :, z_mid])
+            recon_view.setImage(reconstructed[z_mid, :, :])
             recon_view.ui.histogram.gradient.setColorMap(colormap)
 
             # Link the views so they zoom/pan together
