@@ -2,13 +2,14 @@ import torch.nn as nn
 
 
 class NeuronAutoencoder(nn.Module):
-    def __init__(self, latent_dim=32):
+    def __init__(self, latent_dim=64):
         super().__init__()
 
         # Encoder
         # incoming data 1x5x63x63
         self.encoder = nn.Sequential(
             nn.Conv3d(1, 16, kernel_size=3, padding=1),  # 16x5x63x63
+            nn.BatchNorm3d(16),
             nn.ReLU(),
             nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),  # 16x5x31x31
 

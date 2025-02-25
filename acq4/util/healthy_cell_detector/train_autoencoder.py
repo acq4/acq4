@@ -187,6 +187,7 @@ def train_autoencoder(
     if save_path and save_path.exists():
         model.load_state_dict(torch.load(save_path)["model_state_dict"])
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=10, verbose=True)
     criterion = nn.MSELoss()
 
     # Training loop
@@ -227,10 +228,11 @@ def train_autoencoder(
             total_loss += loss.item()
 
         avg_loss = total_loss / len(dataloader)
+        scheduler.step(avg_loss)
         tqdm.write(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
 
         # Save best model
-        if epoch % 100 == 0 and save_path and avg_loss < best_loss:
+        if save_path and avg_loss < best_loss:
             best_loss = avg_loss
             do_save(None, None)
 
