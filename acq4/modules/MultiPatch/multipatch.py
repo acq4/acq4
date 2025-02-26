@@ -231,7 +231,7 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('out')
                 pip = pip.pipetteDevice
-            futures.append(pip.goHome(speed, raiseErrors=True))
+            futures.append(pip.goHome(speed))
         return MultiFuture(futures)
 
     def _nucleusHome(self):
@@ -252,7 +252,7 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             pip.setState('bath')
-            futures.append(pip.pipetteDevice.goAboveTarget(speed, raiseErrors=True))
+            futures.append(pip.pipetteDevice.goAboveTarget(speed))
         return MultiFuture(futures)
 
     @future_wrap
@@ -272,7 +272,7 @@ class MultiPatchWindow(Qt.QWidget):
         return MultiFuture([
             (
                 pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
-            ).goTarget(speed, raiseErrors=True)
+            ).goTarget(speed)
             for pip in self.selectedPipettes()
         ])
 
@@ -288,11 +288,11 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
-                futures.append(pip.pipetteDevice.goApproach(speed, raiseErrors=True))
+                futures.append(pip.pipetteDevice.goApproach(speed))
                 if pip.clampDevice is not None:
                     pip.clampDevice.autoPipetteOffset()
             else:
-                futures.append(pip.goApproach(speed, raiseErrors=True))
+                futures.append(pip.goApproach(speed))
         return MultiFuture(futures)
 
     def _clean(self):
@@ -331,7 +331,7 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
                 pip = pip.pipetteDevice
-            futures.append(pip.goSearch(speed, distance=distance, raiseErrors=True))
+            futures.append(pip.goSearch(speed, distance=distance))
         return MultiFuture(futures)
 
     # def calibrateWithStage(self, pipettes, positions):
