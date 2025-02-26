@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from threading import RLock
 from typing import Optional
 
@@ -7,12 +8,12 @@ import click
 import numpy as np
 import scipy.stats
 import tifffile
-from MetaArray import MetaArray
 from PIL import Image
 
+import pyqtgraph as pg
+from MetaArray import MetaArray
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
-import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
@@ -25,6 +26,7 @@ _yolo: "Optional[YOLO]" = None
 
 def _get_yolo() -> "YOLO":
     from yolo import YOLO  # todo put this someplace
+
     global _yolo
     if _yolo is None:
         _yolo = YOLO()
@@ -43,9 +45,7 @@ def normalize(image: Image, min_in=None, max_in=None):
         # max_in = 65535
     min_out = 0
     max_out = 255  # maxmimum intensity (output)
-    image = (image - np.uint16(min_in)) * (
-            ((max_out - min_out) / (max_in - min_in)) + min_out
-    )
+    image = (image - np.uint16(min_in)) * (((max_out - min_out) / (max_in - min_in)) + min_out)
     # image = (image - np.uint16(min_in)) * (
     #     (max_out / (max_in - min_in))
     # )
@@ -54,7 +54,7 @@ def normalize(image: Image, min_in=None, max_in=None):
     offset_h = int(image.shape[1] * 0.3)
     margin_w = int(image.shape[0] * 0.4)
     margin_h = int(image.shape[1] * 0.4)
-    image = image[offset_w:offset_w + margin_w, offset_h:offset_h + margin_h]
+    image = image[offset_w : offset_w + margin_w, offset_h : offset_h + margin_h]
     return Image.fromarray(image.astype(np.uint8))
 
 
@@ -93,8 +93,9 @@ def detect_pipette_tip(frame: Frame, angle: float, _future: Future) -> tuple[flo
         return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=60)
 
 
-
 _pipette_detection_model = None
+
+
 def get_pipette_detection_model():
     global _pipette_detection_model
     if _pipette_detection_model is None:
@@ -109,8 +110,9 @@ def get_pipette_detection_model():
         # Model 05
         import acq4.util.pipette_detection.torch_model_05
         from acq4.util.pipette_detection.torch_model_05 import PipetteDetector
+
         detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_05.__file__)
-        model_file = os.path.join(detector_path, 'torch_models', '05_deeper_training.pth')
+        model_file = os.path.join(detector_path, "torch_models", "05_deeper_training.pth")
 
         # Model 06
         # import acq4.util.pipette_detection.torch_model_06
@@ -128,6 +130,8 @@ def get_pipette_detection_model():
 
 
 analysis_window = None
+
+
 def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
     """
     Parameters
@@ -135,7 +139,6 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
     data : image data shaped like [cols, rows]
     angle : angle of pipette in degrees, measured wittershins relative to pointing directly rightward
     """
-    import os
     import torch
     from acq4.util.pipette_detection.torch_model_04 import make_image_tensor, pos_normalizer
     from acq4.util.pipette_detection.test_data import make_rotated_crop
@@ -146,7 +149,7 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
 
     # rotate and crop image
     margin = np.clip((np.array(data.shape) - 400) // 2, 0, None)
-    crop = (slice(margin[0], margin[0]+400), slice(margin[1], margin[1]+400))
+    crop = (slice(margin[0], margin[0] + 400), slice(margin[1], margin[1] + 400))
     rot, tr = make_rotated_crop(data, -angle, crop)
     # convert to 0-255 rgb
     img = (rot - rot.min()) / (rot.max() - rot.min()) * 255
@@ -192,10 +195,12 @@ def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future
         return rmt_this.do_neuron_detection(rmt_array.data, transform, model, do_3d, _timeout=60)
 
 
-def do_neuron_detection(data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose", do_3d: bool = False) -> list:
-    if model == 'cellpose':
+def do_neuron_detection(
+    data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose", do_3d: bool = False
+) -> list:
+    if model == "cellpose":
         return _do_neuron_detection_cellpose(data, transform, do_3d)
-    elif model == 'yolo':
+    elif model == "yolo":
         return _do_neuron_detection_yolo(data, transform)
     else:
         raise ValueError(f"Unknown model {model}")
@@ -221,23 +226,12 @@ def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> li
         start = transform.map((start_x, start_y))
         end = transform.map((end_x, end_y))
         return start, end
+
     return [xyxy_to_rect(box) for box in boxes]  # TODO filter by class? score?
 
 
 def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, do_3d: bool = False) -> list:
-    from cellpose import models
-
-    model = models.Cellpose(gpu=True, model_type="cyto3")
-    data = data[:, np.newaxis, :, 0:-2]  # add channel dimension, weird the shape
-    masks_pred, flows, styles, diams = model.eval(
-        [data],
-        diameter=35,
-        # niter=2000,
-        channel_axis=1,
-        z_axis=0 if do_3d else None,
-        stitch_threshold=0.25 if do_3d else 0,
-    )
-    mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
+    mask = get_cellpose_masks(data, do_3d, z_axis=0 if do_3d else None, stitch_threshold=0.25 if do_3d else 0)
 
     def bbox(num) -> tuple[tuple[float, ...], tuple[float, ...]]:
         match = mask == num
@@ -252,6 +246,30 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, d
         boxes.append(bbox(cell_num))
         cell_num += 1
     return boxes
+
+
+def get_cellpose_masks(data, diameter=35, stitch_threshold=0.25, z_axis=0):
+    model = get_cyto3_model()
+    # TODO do this without copying the data
+    if data.shape[-1] == data.shape[-2]:
+        data = data[:, np.newaxis, :, 0:-2]  # add channel dimension, weird the shape
+    else:
+        data = data[:, np.newaxis, :, :]  # add channel dimension
+    masks_pred, flows, styles, diams = model.eval(
+        [data],
+        diameter=diameter,
+        channel_axis=1,
+        z_axis=z_axis,
+        stitch_threshold=stitch_threshold,
+    )
+    return masks_pred[0]
+
+
+@lru_cache(maxsize=1)
+def get_cyto3_model():
+    from cellpose import models
+
+    return models.Cellpose(gpu=True, model_type="cyto3")
 
 
 @click.command()
@@ -293,5 +311,5 @@ def cli(image, model, angle, z, display):
             pg.exec_()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

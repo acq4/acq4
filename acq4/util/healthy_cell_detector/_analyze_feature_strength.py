@@ -2,10 +2,12 @@ import argparse
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
+from skimage import measure
 from tifffile import tifffile
 import pyqtgraph as pg
 
-from acq4.util.healthy_cell_detector.train import extract_explicit_cell_features, find_healthy_overlap
+from acq4.util.healthy_cell_detector.train import find_healthy_overlap
 
 
 def main():
@@ -73,3 +75,48 @@ if __name__ == "__main__":
     pg.mkQApp()
     app = main()
     pg.exec()
+
+
+def extract_explicit_cell_features(data: np.ndarray, mask: np.ndarray, cell_num: int) -> dict:
+    """Extract features relevant for neuron health classification."""
+    cell_mask = mask == cell_num
+    cell_data = data * cell_mask
+
+    # Get region properties
+    props = measure.regionprops(cell_data.astype(int), intensity_image=data)[0]
+
+    return {
+        # Basic morphology
+        "volume": np.sum(cell_mask),
+        "surface_area": np.sum(ndimage.binary_dilation(cell_mask) ^ cell_mask),
+        "sphericity": props.extent,
+        # Shape complexity
+        "aspect_ratio": max(
+            props.major_axis_length / props.minor_axis_length if props.minor_axis_length > 0 else 1.0, 1.0
+        ),
+        # "solidity": props.solidity,  # Area / ConvexHull area
+        # "perimeter_complexity": props.perimeter / np.cbrt(props.area),  # Scale-invariant
+        # Intensity features
+        "mean_intensity": props.mean_intensity,
+        "intensity": props.intensity_image.reshape((-1,))[0],
+        # Boundary features
+        "boundary_contrast": _compute_boundary_contrast(data, cell_mask),
+        "boundary_uniformity": _compute_boundary_uniformity(data, cell_mask),
+    }
+
+
+def _compute_boundary_contrast(data: np.ndarray, mask: np.ndarray) -> float:
+    """Compute average intensity difference across cell boundary."""
+    boundary = ndimage.binary_dilation(mask) ^ mask
+    outer_boundary = ndimage.binary_dilation(boundary) ^ boundary
+
+    boundary_intensity = data[boundary].mean()
+    outer_intensity = data[outer_boundary].mean()
+
+    return abs(boundary_intensity - outer_intensity)
+
+
+def _compute_boundary_uniformity(data: np.ndarray, mask: np.ndarray) -> float:
+    """Compute how uniform the boundary intensity is."""
+    boundary = ndimage.binary_dilation(mask) ^ mask
+    return data[boundary].std()

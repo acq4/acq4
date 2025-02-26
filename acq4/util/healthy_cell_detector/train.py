@@ -1,11 +1,10 @@
 import argparse
 from pathlib import Path
 
+import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from scipy import ndimage
-from skimage import measure
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -13,52 +12,8 @@ from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearc
 from tqdm import tqdm
 
 from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
-from acq4.util.healthy_cell_detector.utils import extract_region
-
-
-def extract_explicit_cell_features(data: np.ndarray, mask: np.ndarray, cell_num: int) -> dict:
-    """Extract features relevant for neuron health classification."""
-    cell_mask = mask == cell_num
-    cell_data = data * cell_mask
-
-    # Get region properties
-    props = measure.regionprops(cell_data.astype(int), intensity_image=data)[0]
-
-    return {
-        # Basic morphology
-        "volume": np.sum(cell_mask),
-        "surface_area": np.sum(ndimage.binary_dilation(cell_mask) ^ cell_mask),
-        "sphericity": props.extent,
-        # Shape complexity
-        "aspect_ratio": max(
-            props.major_axis_length / props.minor_axis_length if props.minor_axis_length > 0 else 1.0, 1.0
-        ),
-        # "solidity": props.solidity,  # Area / ConvexHull area
-        # "perimeter_complexity": props.perimeter / np.cbrt(props.area),  # Scale-invariant
-        # Intensity features
-        "mean_intensity": props.mean_intensity,
-        "intensity": props.intensity_image.reshape((-1,))[0],
-        # Boundary features
-        "boundary_contrast": _compute_boundary_contrast(data, cell_mask),
-        "boundary_uniformity": _compute_boundary_uniformity(data, cell_mask),
-    }
-
-
-def _compute_boundary_contrast(data: np.ndarray, mask: np.ndarray) -> float:
-    """Compute average intensity difference across cell boundary."""
-    boundary = ndimage.binary_dilation(mask) ^ mask
-    outer_boundary = ndimage.binary_dilation(boundary) ^ boundary
-
-    boundary_intensity = data[boundary].mean()
-    outer_intensity = data[outer_boundary].mean()
-
-    return abs(boundary_intensity - outer_intensity)
-
-
-def _compute_boundary_uniformity(data: np.ndarray, mask: np.ndarray) -> float:
-    """Compute how uniform the boundary intensity is."""
-    boundary = ndimage.binary_dilation(mask) ^ mask
-    return data[boundary].std()
+from acq4.util.healthy_cell_detector.utils import extract_region, detect_and_extract_normalized_neurons
+from acq4.util.imaging.object_detection import detect_neurons, get_cellpose_masks
 
 
 def extract_features(regions, autoencoder, device='cuda'):
@@ -133,40 +88,6 @@ def build_classifier():
     )
 
 
-def evaluate_classifier(y_true, y_pred):
-    return {
-        "precision": precision_score(y_true, y_pred),
-        "recall": recall_score(y_true, y_pred),
-        "f1": f1_score(y_true, y_pred),
-    }
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Train a classifier to detect healthy cells.")
-    parser.add_argument("image_paths", type=Path, nargs="+", help="Path to 3D image files")
-    parser.add_argument("output", type=str, help="Output file for model", default="healthy-neuron-classifier.pkl")
-    parser.add_argument("--num-epochs", type=int, default=50, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=32, help="Training batch size")
-    parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam optimizer learning rate")
-    parser.add_argument(
-        "--annotation-suffix",
-        "-a",
-        type=str,
-        help="Each image will have a corresponding annotation file with this suffix",
-        default="_seg.npy",
-    )
-    parser.add_argument("--autoencoder", type=str, help="Path to autoencoder model")
-    args = parser.parse_args()
-    autoencoder = NeuronAutoencoder()
-    autoencoder.load_state_dict(torch.load(args.autoencoder)["model_state_dict"])
-    classifier = build_classifier()
-
-
-if __name__ == "__main__":
-    main()
-
-
-# 5. Train Random Forest classifier
 def train_classifier(features, labels):
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
@@ -231,7 +152,15 @@ def train_classifier(features, labels):
 
     return best_model, X_test, y_test, y_pred, y_pred_prob
 
-# 6. Functions to save and load the classifier
+
+def evaluate_classifier(y_true, y_pred):
+    return {
+        "precision": precision_score(y_true, y_pred),
+        "recall": recall_score(y_true, y_pred),
+        "f1": f1_score(y_true, y_pred),
+    }
+
+
 def save_classifier(classifier, path):
     """
     Save the trained Random Forest classifier to a file
@@ -243,9 +172,9 @@ def save_classifier(classifier, path):
     path : str
         Path where to save the classifier
     """
-    import joblib
     joblib.dump(classifier, path)
     print(f"Classifier saved to {path}")
+
 
 def load_classifier(path):
     """
@@ -261,31 +190,28 @@ def load_classifier(path):
     classifier : RandomForestClassifier
         Loaded classifier
     """
-    import joblib
-    classifier = joblib.load(path)
-    print(f"Classifier loaded from {path}")
-    return classifier
+    return joblib.load(path)
 
-# 7. Main pipeline function
-def healthy_neuron_classification_pipeline(image_paths, labels, diameter, xy_scale, z_scale, autoencoder_path=None, save_path=None):
+
+def healthy_neuron_classification_pipeline(images, labels, diameter, xy_scale, z_scale, autoencoder, save_path):
     """
     End-to-end pipeline for healthy neuron classification
 
     Parameters:
     -----------
-    image_paths : list
-        List of paths to neuron images
+    images : list
+        List of slice images
     labels : numpy.ndarray
-        Binary labels (0: unhealthy, 1: healthy) for each image
+        Masks for known healthy neurons
     diameter : float
         Expected diameter of neurons for cellpose
     xy_scale : float
         Scale factor for xy dimensions
     z_scale : float
         Scale factor for z dimension
-    autoencoder_path : str, optional
-        Path to pretrained autoencoder weights
-    save_path : str, optional
+    autoencoder : Autoencoder
+        Pretrained autoencoder
+    save_path : str
         Path to save the trained classifier
 
     Returns:
@@ -299,32 +225,17 @@ def healthy_neuron_classification_pipeline(image_paths, labels, diameter, xy_sca
     all_masks = []
 
     # Process each image
-    for img_path in tqdm(image_paths, desc="Processing images"):
-        img = np.load(img_path)  # Adjust loading method as needed
-        regions, mask = detect_neurons(img, diameter, xy_scale, z_scale)
+    for img in tqdm(images, desc="Processing images"):
+        mask = get_cellpose_masks(img, diameter, xy_scale, z_scale)
+        regions = detect_and_extract_normalized_neurons(img, autoencoder, diameter, xy_scale, z_scale)
         all_regions.append(regions)
         all_masks.append(mask)
 
     # Combine regions from all images
     regions = np.vstack(all_regions)
 
-    # Load or create autoencoder
-    # Assuming your regions shape is something like (N, D, H, W) for 3D regions
-    region_shape = regions[0].shape
-
-    if autoencoder_path:
-        autoencoder = Autoencoder(region_shape)
-        autoencoder.load_state_dict(torch.load(autoencoder_path))
-    else:
-        # You would normally train the autoencoder here, but you mentioned
-        # you already have one with good reconstruction performance
-        autoencoder = Autoencoder(region_shape)
-        # autoencoder_train(autoencoder, regions) # Implement this function if needed
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    autoencoder = autoencoder.to(device)
-
     # Extract features
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     features = extract_features(regions, autoencoder, device)
 
     # Train classifier
@@ -343,7 +254,7 @@ def healthy_neuron_classification_pipeline(image_paths, labels, diameter, xy_sca
 
     return classifier, evaluation_metrics
 
-# Function to use the trained classifier on new images
+
 def classify_new_images(image_paths, classifier, autoencoder, diameter, xy_scale, z_scale, device='cuda'):
     """
     Use a trained classifier to identify healthy neurons in new images
@@ -403,25 +314,26 @@ def classify_new_images(image_paths, classifier, autoencoder, diameter, xy_scale
 
     return results
 
-# Example usage:
-# image_paths = ['path/to/img1.npy', 'path/to/img2.npy', ...]
-# labels = np.array([0, 1, 1, 0, ...])  # 0: unhealthy, 1: healthy
-# diameter = 30.0
-# xy_scale = 1.0
-# z_scale = 1.0
-# autoencoder_path = 'path/to/pretrained_autoencoder.pth'
-# save_path = 'path/to/save/classifier.joblib'
-#
-# # Train the classifier
-# classifier, metrics = healthy_neuron_classification_pipeline(
-#     image_paths, labels, diameter, xy_scale, z_scale,
-#     autoencoder_path=autoencoder_path, save_path=save_path
-# )
-#
-# # Or load a previously trained classifier
-# classifier = load_classifier('path/to/saved/classifier.joblib')
-#
-# # Use the classifier on new images
-# new_image_paths = ['path/to/new_img1.npy', 'path/to/new_img2.npy', ...]
-# autoencoder = load_your_autoencoder()  # Replace with your autoencoder loading code
-# results = classify_new_images(new_image_paths, classifier, autoencoder, diameter, xy_scale, z_scale)
+
+def main():
+    parser = argparse.ArgumentParser(description="Train a classifier to detect healthy cells.")
+    parser.add_argument("image_paths", type=Path, nargs="+", help="Path to 3D image files")
+    parser.add_argument("output", type=str, help="Output file for model", default="healthy-neuron-classifier.joblib")
+    parser.add_argument(
+        "--annotation-suffix",
+        "-a",
+        type=str,
+        help="Each image will have a corresponding annotation file with this suffix",
+        default="_seg.npy",
+    )
+    parser.add_argument("--autoencoder", type=str, help="Path to autoencoder model")
+    parser.add_argument("--px", type=float, default=0.32, help="Microns per pixel")
+    parser.add_argument("--z", type=float, default=1, help="Microns per z-slice")
+    args = parser.parse_args()
+    autoencoder = NeuronAutoencoder()
+    autoencoder.load_state_dict(torch.load(args.autoencoder)["model_state_dict"])
+    classifier = build_classifier()
+
+
+if __name__ == "__main__":
+    main()

@@ -3,29 +3,22 @@ from numba import njit
 from scipy.ndimage import map_coordinates
 from tqdm import tqdm
 
+from acq4.util.imaging.object_detection import get_cellpose_masks
 
-def detect_and_extract_normalized_neurons(img, model, diameter: int = 35, xy_scale: float = 0.32, z_scale: float = 2):
-    img = img[..., 0:-2]  # weird the shape or cellpose chokes TODO: figure out how to avoid this
-    img_data = img[:, np.newaxis, :, :]  # add channel dimension
-    masks_pred, flows, styles, diams = model.eval(
-        [img_data],  # add batch dimension
-        diameter=diameter,
-        channel_axis=1,
-        z_axis=0,
-        stitch_threshold=0.25,
-    )
-    mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
+
+def detect_and_extract_normalized_neurons(img, diameter: int = 35, xy_scale: float = 0.32, z_scale: float = 2):
+    masks = get_cellpose_masks(img, diameter, xy_scale, z_scale)
     regions = []
-    for cell_num, _z, _y, _x in tqdm(find_points_in_each_cell(mask, mask.max()), desc="Extracting cell regions"):
-        center = get_center_fast(mask, cell_num, _z, _y, _x, expected_diameter=diameter)
-        region = extract_region(img, center, xy_scale, z_scale).astype(np.float32)
+    for cell_num, _z, _y, _x in tqdm(find_points_in_each_cell(masks, masks.max()), desc="Extracting cell regions"):
+        center = get_center_fast(masks, cell_num, _z, _y, _x, expected_diameter=diameter)
+        region = extract_region(img, center, xy_scale, z_scale)
         # Normalize to [0,1] range
         _min = region.min()
         _max = region.max()
         if _min == _max:
-            region = region - _min
+            region = region.astype(np.float32) - _min
         else:
-            region = (region - _min) / (_max - _min)
+            region = (region.astype(np.float32) - _min) / (_max - _min)
         regions.append(region)
     return np.array(regions)
 

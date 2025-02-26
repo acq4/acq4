@@ -52,17 +52,14 @@ def train_autoencoder(
         learning_rate: Learning rate for Adam optimizer
         device: torch device (will detect GPU if None)
     """
-    from cellpose import models
-
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Collect all regions from all images
     all_regions = []
-    model = models.Cellpose(gpu=True, model_type="cyto3")
     for path in tqdm(image_paths, desc="Loading images"):
         img = tifffile.imread(str(path))
-        regions = detect_and_extract_normalized_neurons(img, model, xy_scale=px, z_scale=z)
+        regions = detect_and_extract_normalized_neurons(img, xy_scale=px, z_scale=z)
         all_regions.extend(regions)
     print(f"Collected {len(all_regions)} neuron regions for training")
 
@@ -236,13 +233,11 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
 
 
 def main():
-    from cellpose import models
-
     parser = argparse.ArgumentParser("Train neuron autoencoder")
     parser.add_argument("image_paths", type=Path, nargs="+", help="Path to 3D image files")
     parser.add_argument("save_path", type=Path, help="Path to save trained model")
     parser.add_argument("--px", type=float, default=0.32, help="Microns per pixel")
-    parser.add_argument("--z", type=float, default=2, help="Microns per z-slice")
+    parser.add_argument("--z", type=float, default=1, help="Microns per z-slice")
     parser.add_argument("--num-epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Training batch size")
     parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam optimizer learning rate")
@@ -258,8 +253,7 @@ def main():
 
     # Get some test regions for visualization
     test_img = tifffile.imread(args.image_paths[0])
-    cyto3 = models.Cellpose(gpu=True, model_type="cyto3")
-    test_regions = detect_and_extract_normalized_neurons(test_img, cyto3)
+    test_regions = detect_and_extract_normalized_neurons(test_img, xy_scale=args.px, z_scale=args.z)
 
     return visualize_reconstructions(model, test_regions)
 
