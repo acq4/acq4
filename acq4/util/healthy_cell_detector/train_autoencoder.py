@@ -25,8 +25,7 @@ class NeuronDataset(Dataset):
         return len(self.regions)
 
     def __getitem__(self, idx):
-        region = self.regions[idx]
-        return torch.FloatTensor(region[None])  # Add channel dimension
+        return torch.FloatTensor(self.regions[idx])
 
 
 def train_autoencoder(

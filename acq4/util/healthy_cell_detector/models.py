@@ -100,26 +100,29 @@ class NeuronAutoencoder(nn.Module):
             nn.Sigmoid(),  # Extra conv to fix any remaining dimension issues
         )
 
-    def forward(self, x):
+    def encode(self, x):
+        return self._encode(x)[0]
+
+    def _encode(self, x):
         # Encoder forward pass with saved intermediate outputs
         x1 = self.enc_block1(x)
         p1 = self.pool1(x1)
-
         x2 = self.enc_block2(p1)
         p2 = self.pool2(x2)
-
         x3 = self.enc_block3(p2)
         p3 = self.pool3(x3)
-
         x4 = self.enc_block4(p3)
         p4 = self.pool4(x4)
-
         x5 = self.enc_block5(p4)
         p5 = self.pool5(x5)
 
         # Latent space
         flattened = self.flatten(p5)
         latent = self.fc_encoder(flattened)
+        return latent, x2, x3, x4, x5
+
+    def forward(self, x):
+        latent, x2, x3, x4, x5 = self._encode(x)
 
         # Begin decoder
         dec_latent = self.fc_decoder(latent)

@@ -6,30 +6,26 @@ from tqdm import tqdm
 from acq4.util.imaging.object_detection import get_cellpose_masks
 
 
+def cell_centers(masks, diameter):
+    for cell_num, _z, _y, _x in find_points_in_each_cell(masks, masks.max()):
+        yield get_center_fast(masks, cell_num, _z, _y, _x, expected_diameter=diameter)
+
+
 def detect_and_extract_normalized_neurons(img, diameter: int = 35, xy_scale: float = 0.32, z_scale: float = 2):
-    masks = get_cellpose_masks(img, diameter, xy_scale, z_scale)
     regions = []
-    for cell_num, _z, _y, _x in tqdm(find_points_in_each_cell(masks, masks.max()), desc="Extracting cell regions"):
-        center = get_center_fast(masks, cell_num, _z, _y, _x, expected_diameter=diameter)
+    masks = get_cellpose_masks(img, diameter, xy_scale, z_scale)
+    for center in tqdm(cell_centers(masks, diameter), desc="Extracting cell regions"):
         region = extract_region(img, center, xy_scale, z_scale)
-        # Normalize to [0,1] range
-        _min = region.min()
-        _max = region.max()
-        if _min == _max:
-            region = region.astype(np.float32) - _min
-        else:
-            region = (region.astype(np.float32) - _min) / (_max - _min)
         regions.append(region)
     return np.array(regions)
 
 
 @njit
 def get_center_fast(data, cell_num, seed_z, seed_y, seed_x, expected_diameter=35):
-    # Start with sparse search - step size of 4 in each dimension
     z_sum, y_sum, x_sum = 0, 0, 0
     count = 0
 
-    # Now expand around the seed point
+    # Expand around the seed point
     # Using a set would be nice but numba doesn't support it
     # So we'll use a 3D boolean array just big enough
     max_size = int(expected_diameter * 5 / 3)  # A bit larger to be safe
@@ -168,7 +164,6 @@ def extract_region_optimized(data: np.ndarray, center_coords, Z_scales, Y_scales
     y_min, y_max = int(np.floor(Y_in.min())), int(np.ceil(Y_in.max()))
     x_min, x_max = int(np.floor(X_in.min())), int(np.ceil(X_in.max()))
 
-    # Early return check - if we're fully inside the data, use direct array indexing
     if (
         z_min >= 0
         and z_max < data.shape[0]
@@ -177,33 +172,39 @@ def extract_region_optimized(data: np.ndarray, center_coords, Z_scales, Y_scales
         and x_min >= 0
         and x_max < data.shape[2]
     ):
-        # Use map_coordinates directly on the data without padding
+        # if we're fully inside the data, use direct array indexing
         coords = np.stack([Z_in.ravel(), Y_in.ravel(), X_in.ravel()], axis=0)
-        result = map_coordinates(data, coords, order=1, mode="constant")
-        return result.reshape((5, 63, 63))
-
-    pad_width = (
-        (max(0, -z_min), max(0, z_max - data.shape[0] + 1)),
-        (max(0, -y_min), max(0, y_max - data.shape[1] + 1)),
-        (max(0, -x_min), max(0, x_max - data.shape[2] + 1)),
-    )
-
-    # Only pad if necessary
-    if any(p[0] > 0 or p[1] > 0 for p in pad_width):
-        data = fast_pad(data, pad_width)
-
-        # Adjust coordinates for padded array
-        Z_in_pad = Z_in + pad_width[0][0]
-        Y_in_pad = Y_in + pad_width[1][0]
-        X_in_pad = X_in + pad_width[2][0]
-
-        # Use map_coordinates for faster interpolation
-        coords = np.stack([Z_in_pad.ravel(), Y_in_pad.ravel(), X_in_pad.ravel()], axis=0)
     else:
-        # Use map_coordinates directly on the data without padding
-        coords = np.stack([Z_in.ravel(), Y_in.ravel(), X_in.ravel()], axis=0)
+        pad_width = (
+            (max(0, -z_min), max(0, z_max - data.shape[0] + 1)),
+            (max(0, -y_min), max(0, y_max - data.shape[1] + 1)),
+            (max(0, -x_min), max(0, x_max - data.shape[2] + 1)),
+        )
+
+        # Only pad if necessary
+        if any(p[0] > 0 or p[1] > 0 for p in pad_width):
+            data = fast_pad(data, pad_width)
+
+            # Adjust coordinates for padded array
+            Z_in_pad = Z_in + pad_width[0][0]
+            Y_in_pad = Y_in + pad_width[1][0]
+            X_in_pad = X_in + pad_width[2][0]
+
+            # Use map_coordinates for faster interpolation
+            coords = np.stack([Z_in_pad.ravel(), Y_in_pad.ravel(), X_in_pad.ravel()], axis=0)
+        else:
+            # Use map_coordinates directly on the data without padding
+            coords = np.stack([Z_in.ravel(), Y_in.ravel(), X_in.ravel()], axis=0)
+
     result = map_coordinates(data, coords, order=1, mode="constant")
-    return result.reshape((5, 63, 63))
+    # Normalize to [0,1] range
+    _min = result.min()
+    _max = result.max()
+    if _min == _max:
+        result = result.astype(np.float32) - _min
+    else:
+        result = (result - _min) / (_max - _min)
+    return result.astype(np.float32).reshape((1, 5, 63, 63))  # Add channel dimension
 
 
 def setup_extractor(input_xy_resolution, input_z_resolution):
