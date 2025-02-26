@@ -7,14 +7,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from numba import njit
 from tifffile import tifffile
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 import pyqtgraph as pg
 from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
-from acq4.util.healthy_cell_detector.train import extract_region
+from acq4.util.healthy_cell_detector.utils import detect_and_extract_normalized_neurons
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 
@@ -27,118 +26,7 @@ class NeuronDataset(Dataset):
 
     def __getitem__(self, idx):
         region = self.regions[idx]
-        # Normalize to [0,1] range
-        _min = region.min()
-        _max = region.max()
-        if _min == _max:
-            region = region - _min
-        else:
-            region = (region - _min) / (_max - _min)
         return torch.FloatTensor(region[None])  # Add channel dimension
-
-
-def detect_and_extract_normalized_neurons(img, model, diameter: int = 35, xy_scale: float = 0.32, z_scale: float = 2):
-    img = img[..., 0:-2]  # weird the shape or cellpose chokes TODO: figure out how to avoid this
-    img_data = img[:, np.newaxis, :, :]  # add channel dimension
-    masks_pred, flows, styles, diams = model.eval(
-        [img_data],  # add batch dimension
-        diameter=diameter,
-        channel_axis=1,
-        z_axis=0,
-        stitch_threshold=0.25,
-    )
-    mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
-    regions = []
-    for cell_num, _z, _y, _x in tqdm(find_points_in_each_cell(mask, mask.max()), desc="Extracting regions"):
-        center = get_center_fast(mask, cell_num, _z, _y, _x, expected_diameter=diameter)
-        region = extract_region(img, center, xy_scale, z_scale)
-        regions.append(region)
-    regions = np.array(regions)
-
-    return regions
-
-
-@njit
-def get_center_fast(data, cell_num, seed_z, seed_y, seed_x, expected_diameter=35):
-    # Start with sparse search - step size of 4 in each dimension
-    z_sum, y_sum, x_sum = 0, 0, 0
-    count = 0
-
-    # Now expand around the seed point
-    # Using a set would be nice but numba doesn't support it
-    # So we'll use a 3D boolean array just big enough
-    max_size = int(expected_diameter * 5 / 3)  # A bit larger to be safe
-    visited = np.zeros((max_size, max_size, max_size), dtype=np.bool_)
-    to_check = np.zeros((max_size * max_size * max_size, 3), dtype=np.int32)
-    n_to_check = 1
-    to_check[0] = [seed_z, seed_y, seed_x]
-    if data[seed_z, seed_y, seed_x] != cell_num:
-        raise ValueError("Seed point is not in the cell")
-
-    while n_to_check > 0:
-        z, y, x = to_check[n_to_check - 1]
-        n_to_check -= 1
-
-        if data[z, y, x] == cell_num:
-            z_sum += z
-            y_sum += y
-            x_sum += x
-            count += 1
-
-            # Add neighbors if in bounds and not visited
-            for dz in (-1, 0, 1):
-                nz = z + dz
-                if nz < 0 or nz >= data.shape[0]:
-                    continue
-                for dy in (-1, 0, 1):
-                    ny = y + dy
-                    if ny < 0 or ny >= data.shape[1]:
-                        continue
-                    for dx in (-1, 0, 1):
-                        nx = x + dx
-                        if nx < 0 or nx >= data.shape[2]:
-                            continue
-
-                        # Convert to local coordinates for visited array
-                        local_z = nz - seed_z + max_size // 2
-                        local_y = ny - seed_y + max_size // 2
-                        local_x = nx - seed_x + max_size // 2
-
-                        if (
-                            0 <= local_z < max_size
-                            and 0 <= local_y < max_size
-                            and 0 <= local_x < max_size
-                            and not visited[local_z, local_y, local_x]
-                        ):
-                            visited[local_z, local_y, local_x] = True
-                            to_check[n_to_check] = [nz, ny, nx]
-                            n_to_check += 1
-
-    return np.array([z_sum // count, y_sum // count, x_sum // count])
-
-
-@njit
-def find_points_in_each_cell(mask, max_cells=1000):
-    # Dict-like structure: [cell_num, z, y, x]
-
-    seeds = np.zeros((max_cells, 4), dtype=np.int32)
-    n_seeds = 0
-    found_cells = np.zeros(max_cells, dtype=np.int32)
-
-    xy_step = 15
-    z_step = 3
-    for z in range(0, mask.shape[0], z_step):
-        for y in range(0, mask.shape[1], xy_step):
-            for x in range(0, mask.shape[2], xy_step):
-                if n_seeds >= max_cells:
-                    return seeds
-                val = mask[z, y, x]
-                if val > 0 and found_cells[val] == 0:
-                    n_seeds += 1
-                    seeds[n_seeds - 1] = [val, z, y, x]
-                    found_cells[val] = n_seeds
-
-    return seeds[:n_seeds]  # Return just the filled portion
 
 
 def train_autoencoder(
