@@ -130,6 +130,7 @@ def get_pipette_detection_model():
 
 
 analysis_window = None
+viewer_window = None
 
 
 def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
@@ -302,6 +303,146 @@ def get_cyto3_model():
     return models.Cellpose(gpu=True, model_type="cyto3")
 
 
+class WhimsicalViewer(pg.QtWidgets.QMainWindow):
+    """A whimsical GUI for viewing 3D image stacks with bounding boxes."""
+    
+    def __init__(self, data, neurons, title="Whimsical Cell Viewer"):
+        global viewer_window
+        super().__init__()
+        viewer_window = self
+        
+        self.data = data
+        self.neurons = neurons
+        self.current_z = len(data) // 2 if len(data) > 1 else 0
+        self.max_z = len(data) - 1
+        
+        # Setup UI
+        self.setWindowTitle(title)
+        self.resize(800, 600)
+        
+        # Create central widget and layout
+        central_widget = pg.QtWidgets.QWidget()
+        layout = pg.QtWidgets.QVBoxLayout()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+        
+        # Create image view
+        self.image_view = pg.ImageView()
+        layout.addWidget(self.image_view)
+        
+        # Create controls
+        controls_layout = pg.QtWidgets.QHBoxLayout()
+        layout.addLayout(controls_layout)
+        
+        # Z slider
+        slider_layout = pg.QtWidgets.QHBoxLayout()
+        controls_layout.addLayout(slider_layout)
+        
+        slider_layout.addWidget(pg.QtWidgets.QLabel("Z Layer:"))
+        self.z_slider = pg.QtWidgets.QSlider(pg.QtCore.Qt.Horizontal)
+        self.z_slider.setMinimum(0)
+        self.z_slider.setMaximum(self.max_z)
+        self.z_slider.setValue(self.current_z)
+        self.z_slider.valueChanged.connect(self.update_z)
+        slider_layout.addWidget(self.z_slider)
+        
+        self.z_label = pg.QtWidgets.QLabel(f"{self.current_z}/{self.max_z}")
+        slider_layout.addWidget(self.z_label)
+        
+        # Navigation buttons
+        nav_layout = pg.QtWidgets.QHBoxLayout()
+        controls_layout.addLayout(nav_layout)
+        
+        self.prev_button = pg.QtWidgets.QPushButton("⬅️ Previous")
+        self.prev_button.clicked.connect(self.prev_z)
+        nav_layout.addWidget(self.prev_button)
+        
+        self.next_button = pg.QtWidgets.QPushButton("Next ➡️")
+        self.next_button.clicked.connect(self.next_z)
+        nav_layout.addWidget(self.next_button)
+        
+        # Legend
+        legend_layout = pg.QtWidgets.QHBoxLayout()
+        controls_layout.addLayout(legend_layout)
+        
+        legend_layout.addWidget(pg.QtWidgets.QLabel("Legend:"))
+        
+        above_label = pg.QtWidgets.QLabel("Above")
+        above_label.setStyleSheet("color: blue")
+        legend_layout.addWidget(above_label)
+        
+        current_label = pg.QtWidgets.QLabel("Current")
+        current_label.setStyleSheet("color: green")
+        legend_layout.addWidget(current_label)
+        
+        below_label = pg.QtWidgets.QLabel("Below")
+        below_label.setStyleSheet("color: red")
+        legend_layout.addWidget(below_label)
+        
+        # Initialize display
+        self.roi_items = []
+        self.update_display()
+    
+    def update_z(self, z):
+        self.current_z = z
+        self.z_label.setText(f"{self.current_z}/{self.max_z}")
+        self.update_display()
+    
+    def prev_z(self):
+        if self.current_z > 0:
+            self.current_z -= 1
+            self.z_slider.setValue(self.current_z)
+    
+    def next_z(self):
+        if self.current_z < self.max_z:
+            self.current_z += 1
+            self.z_slider.setValue(self.current_z)
+    
+    def update_display(self):
+        # Update image
+        self.image_view.setImage(self.data[self.current_z], autoLevels=True)
+        
+        # Clear existing ROIs
+        for roi in self.roi_items:
+            self.image_view.removeItem(roi)
+        self.roi_items = []
+        
+        # Add new ROIs with appropriate colors
+        for neuron in self.neurons:
+            start, end = neuron
+            
+            # Determine if the bounding box is above, below, or at the current z-level
+            # This is a simplification - in reality we'd need to check the actual z coordinates
+            # For now, we'll use a random assignment for demonstration
+            z_min, z_max = self._get_z_range(neuron)
+            
+            if self.current_z < z_min:
+                pen = pg.mkPen('b', width=2)  # Blue for above
+            elif self.current_z > z_max:
+                pen = pg.mkPen('r', width=2)  # Red for below
+            else:
+                pen = pg.mkPen('g', width=2)  # Green for current
+            
+            roi = pg.ROI(start[:2], size=end[:2] - start[:2], pen=pen)
+            self.image_view.addItem(roi)
+            self.roi_items.append(roi)
+    
+    def _get_z_range(self, neuron):
+        """Determine the z-range of a neuron bounding box."""
+        start, end = neuron
+        
+        # If we have 3D coordinates
+        if len(start) > 2 and len(end) > 2:
+            return start[2], end[2]
+        
+        # For 2D bounding boxes, we'll estimate a z-range
+        # This is just for demonstration - in a real application,
+        # you'd want to use actual 3D bounding boxes
+        z_span = min(5, self.max_z // 3)
+        center_z = np.random.randint(z_span, self.max_z - z_span)
+        return center_z - z_span, center_z + z_span
+
+
 @click.command()
 @click.argument("image", required=True)
 @click.option(
@@ -326,6 +467,10 @@ def cli(image, model, angle, z, display, classifier, autoencoder):
         image = Image.open(image)
         data = np.array(image)
     print(f"image shape: {data.shape}")
+    
+    # Always create QApplication for GUI
+    pg.mkQApp()
+    
     if model == "pipette":
         # fill in 3 channels
         data = np.stack([data[z], data[z], data[z]], axis=-1)
@@ -335,17 +480,22 @@ def cli(image, model, angle, z, display, classifier, autoencoder):
         # wait for user input
         input("Press Enter to continue...")
     else:
-        if display:
-            pg.mkQApp()
         do_3d = data.ndim == 4 or (data.ndim == 3 and data.shape[-1] > 3)
         neurons = do_neuron_detection(data, null_xform, model, do_3d, classifier, autoencoder)
         print(f"Detected {len(neurons)} neuron(s)")
-        print(neurons)
+        
+        # Prepare data for display
+        if do_3d:
+            # For 3D data, we already have a stack
+            display_data = data
+        else:
+            # For 2D data, create a fake stack with a single layer
+            display_data = data[np.newaxis, ...]
+        
+        # Launch the whimsical viewer
         if display:
-            win = pg.image(data[len(data) // 2][:])
-            for neuron in neurons:
-                start, end = neuron
-                win.addItem(pg.ROI(start, size=end - start, pen=pg.mkPen("r", width=2)))
+            viewer = WhimsicalViewer(display_data, neurons, f"Cell Detector - {model}")
+            viewer.show()
             pg.exec()
 
 
