@@ -211,9 +211,12 @@ def do_neuron_detection(
     do_3d: bool = False,
     classifier: str = None,
     autoencoder: str = None,
+    diameter: int = 35,
+    camera_pixel_size: float = 0.32,
+    z_scale: float = 1,
 ) -> list:
     if model == "healthy-cellpose":
-        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder)
+        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, camera_pixel_size, z_scale)
     elif model == "cellpose":
         return _do_neuron_detection_cellpose(data, transform, do_3d)
     elif model == "yolo":
@@ -222,7 +225,7 @@ def do_neuron_detection(
         raise ValueError(f"Unknown model {model}")
 
 
-def _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter: int = 35, camera_pixel_size: float = 0.32, z_scale: float = 1, n: int = 10):
+def _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, camera_pixel_size, z_scale, n: int = 10):
     from acq4.util.healthy_cell_detector.train import get_health_ordered_cells, load_classifier
     from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
     import torch
@@ -456,7 +459,10 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
 @click.option("--display", is_flag=True, type=bool)
 @click.option("--classifier", default=None, type=str)
 @click.option("--autoencoder", default=None, type=str)
-def cli(image, model, angle, z, display, classifier, autoencoder):
+@click.option("--diameter", default=35, type=int)
+@click.option("--xy-scale", default=0.32, type=float)
+@click.option("--z-scale", default=1, type=float)
+def cli(image, model, angle, z, display, classifier, autoencoder, diameter, xy_scale, z_scale):
     null_xform = SRTTransform3D()
     if image[-3:] == ".ma":
         image = MetaArray(file=image)
@@ -481,7 +487,7 @@ def cli(image, model, angle, z, display, classifier, autoencoder):
         input("Press Enter to continue...")
     else:
         do_3d = data.ndim == 4 or (data.ndim == 3 and data.shape[-1] > 3)
-        neurons = do_neuron_detection(data, null_xform, model, do_3d, classifier, autoencoder)
+        neurons = do_neuron_detection(data, null_xform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale)
         print(f"Detected {len(neurons)} neuron(s)")
         
         # Prepare data for display
