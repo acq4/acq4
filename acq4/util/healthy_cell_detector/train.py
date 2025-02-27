@@ -398,7 +398,7 @@ def get_health_ordered_cells(image, classifier, autoencoder, diameter, xy_scale,
         List of neuron coordinates ordered by health status
     """
     masks = get_cellpose_masks(image, diameter)
-    cells = cell_centers(masks, diameter)
+    cells = np.array(list(cell_centers(masks, diameter)))
     regions = [extract_region(image, center, xy_scale, z_scale) for center in cells]
     features = extract_features(regions, autoencoder, device)
     probabilities = classifier.predict_proba(features)[:, 1]  # Probability of being healthy

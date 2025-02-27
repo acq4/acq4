@@ -178,7 +178,13 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=False):
 
 
 @future_wrap
-def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future: Future = None) -> list:
+def detect_neurons(
+    frames: Frame | list[Frame],
+    model: str = "healthy-cellpose",
+    classifier: str = None,
+    autoencoder: str = None,
+    _future: Future = None,
+) -> list:
     if do_3d := not isinstance(frames, Frame):
         data = np.stack([frame.data() for frame in frames])
         transform = frames[0].globalTransform()
@@ -192,18 +198,42 @@ def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future
         rmt_array = rmt_process.client.transfer(shared_array)
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this.do_neuron_detection(rmt_array.data, transform, model, do_3d, _timeout=60)
+        return rmt_this.do_neuron_detection(
+            rmt_array.data, transform, model, do_3d, classifier, autoencoder, _timeout=60
+        )
 
 
 def do_neuron_detection(
-    data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose", do_3d: bool = False
+    data: np.ndarray,
+    transform: SRTTransform3D,
+    model: str = "healthy-cellpose",
+    do_3d: bool = False,
+    classifier: str = None,
+    autoencoder: str = None,
 ) -> list:
-    if model == "cellpose":
+    if model == "healthy-cellpose":
+        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder)
+    elif model == "cellpose":
         return _do_neuron_detection_cellpose(data, transform, do_3d)
     elif model == "yolo":
         return _do_neuron_detection_yolo(data, transform)
     else:
         raise ValueError(f"Unknown model {model}")
+
+
+def _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter: int = 35, camera_pixel_size: float = 0.32, z_scale: float = 1, n: int = 10):
+    from acq4.util.healthy_cell_detector.train import get_health_ordered_cells, load_classifier
+    from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
+    import torch
+
+    classifier = load_classifier(classifier)
+    autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
+    autoencoder.eval()
+    cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, camera_pixel_size, z_scale)
+    return [
+        (transform.map(center - diameter / 2), transform.map(center + diameter / 2))
+        for center in cells[:n]
+    ]
 
 
 def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:
@@ -274,11 +304,18 @@ def get_cyto3_model():
 
 @click.command()
 @click.argument("image", required=True)
-@click.option("--model", default="cellpose", show_default=True, type=click.Choice(["cellpose", "yolo", "pipette"]))
+@click.option(
+    "--model",
+    default="cellpose",
+    show_default=True,
+    type=click.Choice(["healthy-cellpose", "cellpose", "yolo", "pipette"]),
+)
 @click.option("--angle", default=0, show_default=True, type=float)
 @click.option("--z", default=0, show_default=True, type=int)
 @click.option("--display", is_flag=True, type=bool)
-def cli(image, model, angle, z, display):
+@click.option("--classifier", default=None, type=str)
+@click.option("--autoencoder", default=None, type=str)
+def cli(image, model, angle, z, display, classifier, autoencoder):
     null_xform = SRTTransform3D()
     if image[-3:] == ".ma":
         image = MetaArray(file=image)
@@ -298,17 +335,18 @@ def cli(image, model, angle, z, display):
         # wait for user input
         input("Press Enter to continue...")
     else:
+        if display:
+            pg.mkQApp()
         do_3d = data.ndim == 4 or (data.ndim == 3 and data.shape[-1] > 3)
-        neurons = do_neuron_detection(data, null_xform, model, do_3d)
+        neurons = do_neuron_detection(data, null_xform, model, do_3d, classifier, autoencoder)
         print(f"Detected {len(neurons)} neuron(s)")
         print(neurons)
         if display:
-            pg.mkQApp()
-            pg.image(data[0][:])
+            win = pg.image(data[len(data) // 2][:])
             for neuron in neurons:
                 start, end = neuron
-                pg.plot([start[0], end[0]], [start[1], end[1]], pen="r")
-            pg.exec_()
+                win.addItem(pg.ROI(start, size=end - start, pen=pg.mkPen("r", width=2)))
+            pg.exec()
 
 
 if __name__ == "__main__":

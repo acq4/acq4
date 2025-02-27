@@ -100,6 +100,12 @@ class NeuronAutoencoder(nn.Module):
             nn.Sigmoid(),  # Extra conv to fix any remaining dimension issues
         )
 
+    @classmethod
+    def load(cls, path):
+        model = cls()
+        model.load_state_dict(torch.load(path)["model_state_dict"])
+        return model
+
     def encode(self, x):
         return self._encode(x)[0]
 
