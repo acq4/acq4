@@ -479,7 +479,7 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
             region = extract_region(self.data, center, xy_scale, z_scale)
 
             # Create a viewer for the extracted region
-            viewer = CellRegionViewer(region, f"Cell {index+1} Detail")
+            viewer = CellRegionViewer(region, f"Cell {index+1} Normalized")
             viewer.show()
 
             # Keep a reference to prevent garbage collection
