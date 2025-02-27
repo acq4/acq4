@@ -103,21 +103,33 @@ def find_points_in_each_cell(mask, max_cells=1000):
 
 
 def create_coordinate_grids(input_xy_resolution, input_z_resolution):
-    """Pre-compute the coordinate grids (only needs to be done once)"""
-    # Define the output dimensions
-    z_out = np.linspace(-2, 2, 5)  # 5 z-layers centered at 0
-    y_out = np.linspace(-31, 31, 63)  # 63 pixels centered at 0
-    x_out = np.linspace(-31, 31, 63)  # 63 pixels centered at 0
-
-    # Create meshgrid for output coordinates
+    """
+    Pre-compute the coordinate grids for a 20µm cube.
+    
+    Args:
+        input_xy_resolution: physical size of a pixel in the xy plane (meters)
+        input_z_resolution: physical size of a pixel in the z direction (meters)
+    
+    Returns:
+        Z_scales, Y_scales, X_scales: coordinate grids in pixel space
+    """
+    # Define the physical dimensions (20µm cube = 20e-6 meters)
+    cube_size = 20e-6  # 20 micrometers in meters
+    half_size = cube_size / 2
+    
+    # Calculate how many pixels correspond to the physical dimensions
+    z_half_pixels = half_size / input_z_resolution
+    xy_half_pixels = half_size / input_xy_resolution
+    
+    # Define the output dimensions in physical space
+    z_out = np.linspace(-z_half_pixels, z_half_pixels, 5)  # 5 z-layers across 20µm
+    y_out = np.linspace(-xy_half_pixels, xy_half_pixels, 63)  # 63 pixels across 20µm
+    x_out = np.linspace(-xy_half_pixels, xy_half_pixels, 63)  # 63 pixels across 20µm
+    
+    # Create meshgrid for output coordinates (already in pixel space)
     Z_out, Y_out, X_out = np.meshgrid(z_out, y_out, x_out, indexing="ij")
-
-    # Scale output coordinates to input pixel space (without center offset)
-    Z_scales = Z_out * input_z_resolution
-    Y_scales = Y_out * input_xy_resolution
-    X_scales = X_out * input_xy_resolution
-
-    return Z_scales, Y_scales, X_scales
+    
+    return Z_out, Y_out, X_out
 
 
 @njit
