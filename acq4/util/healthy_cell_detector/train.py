@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
 from acq4.util.healthy_cell_detector.utils import extract_region, detect_and_extract_normalized_neurons, cell_centers
-from acq4.util.imaging.object_detection import detect_neurons, get_cellpose_masks
+from acq4.util.imaging.object_detection import get_cellpose_masks
 
 
 def extract_features(regions, autoencoder, device="cuda"):
@@ -174,23 +174,22 @@ def train_classifier(features, labels):
     print("\nClassification Report with optimized threshold:")
     print(classification_report(y_test, y_pred))
 
-    # Create a model wrapper that includes the optimal threshold
-    class ThresholdClassifier:
-        def __init__(self, base_classifier, threshold):
-            self.base_classifier = base_classifier
-            self.threshold = threshold
-
-        def predict(self, X):
-            probas = self.base_classifier.predict_proba(X)[:, 1]
-            return (probas >= self.threshold).astype(int)
-
-        def predict_proba(self, X):
-            return self.base_classifier.predict_proba(X)
-
-    # Return the wrapped model with optimal threshold
     thresholded_model = ThresholdClassifier(best_model, optimal_threshold)
 
     return thresholded_model, X_test, y_test, y_pred, y_pred_prob
+
+
+class ThresholdClassifier:
+    def __init__(self, base_classifier, threshold):
+        self.base_classifier = base_classifier
+        self.threshold = threshold
+
+    def predict(self, X):
+        probas = self.base_classifier.predict_proba(X)[:, 1]
+        return (probas >= self.threshold).astype(int)
+
+    def predict_proba(self, X):
+        return self.base_classifier.predict_proba(X)
 
 
 def evaluate_classifier(y_true, y_pred):
@@ -372,16 +371,16 @@ def healthy_neuron_classification_pipeline(images, labels, diameter, xy_scale, z
     return classifier, evaluation_metrics
 
 
-def classify_new_images(images, classifier, autoencoder, diameter, xy_scale, z_scale, device="cuda"):
+def get_health_ordered_cells(image, classifier, autoencoder, diameter, xy_scale, z_scale, device="cuda"):
     """
     Use a trained classifier to identify healthy neurons in new images
 
     Parameters:
     -----------
-    image_paths : list
-        List of paths to new neuron images
-    classifier : Classifier object with predict method
-        Trained classifier with threshold adjustment
+    image : numpy.ndarray
+        3D image data
+    classifier : Classifier object with predict_proba method
+        Trained classifier for healthy neuron detection
     autoencoder : Autoencoder
         Trained autoencoder for feature extraction
     diameter : float
@@ -395,41 +394,17 @@ def classify_new_images(images, classifier, autoencoder, diameter, xy_scale, z_s
 
     Returns:
     --------
-    results : list of dicts
-        List of dictionaries containing results for each image
+    results : list of coordinates
+        List of neuron coordinates ordered by health status
     """
-    results = []
+    masks = get_cellpose_masks(image, diameter)
+    cells = cell_centers(masks, diameter)
+    regions = [extract_region(image, center, xy_scale, z_scale) for center in cells]
+    features = extract_features(regions, autoencoder, device)
+    probabilities = classifier.predict_proba(features)[:, 1]  # Probability of being healthy
 
-    for img in tqdm(images, desc="Classifying new images"):
-        regions, mask = detect_neurons(img, diameter, xy_scale, z_scale)
-
-        # Extract features
-        features = extract_features(regions, autoencoder, device)
-
-        # Predict using the classifier (which applies the optimal threshold)
-        predictions = classifier.predict(features)
-        probabilities = classifier.predict_proba(features)[:, 1]  # Probability of being healthy
-
-        # Create a mask of only healthy neurons
-        healthy_mask = np.zeros_like(mask)
-        healthy_indices = [i for i, pred in enumerate(predictions) if pred == 1]
-
-        for i, cell_idx in enumerate(np.unique(mask)[1:]):  # Skip 0 (background)
-            if i in healthy_indices:
-                healthy_mask[mask == cell_idx] = cell_idx
-
-        results.append(
-            {
-                "all_neurons_mask": mask,
-                "healthy_neurons_mask": healthy_mask,
-                "predictions": predictions,
-                "probabilities": probabilities,
-                "num_total": len(predictions),
-                "num_healthy": sum(predictions),
-            }
-        )
-
-    return results
+    # Sort cells by probability of being healthy
+    return cells[np.argsort(-probabilities)]
 
 
 def main():
