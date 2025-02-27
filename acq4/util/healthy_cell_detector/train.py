@@ -10,10 +10,9 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_curve, 
 from sklearn.metrics import precision_score, recall_score, f1_score
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from tifffile import tifffile
-from tqdm import tqdm
 
 from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
-from acq4.util.healthy_cell_detector.utils import extract_region, detect_and_extract_normalized_neurons, cell_centers
+from acq4.util.healthy_cell_detector.utils import extract_region, cell_centers
 from acq4.util.imaging.object_detection import get_cellpose_masks
 
 
@@ -62,56 +61,6 @@ def get_features_and_labels(image_paths, annotation_suffix, autoencoder, diamete
         labels.append(np.zeros(len(unhealthy_features)))
 
     return np.vstack(features), np.hstack(labels)
-
-
-# def match_cells_and_extract_features(raw_data, cellpose_mask, annotation_mask, model, iou_threshold=0.5):
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#     model = model.to(device)
-#     model.eval()
-#
-#     features = []
-#     labels = []
-#
-#     cell_num = 1
-#     while np.any(cellpose_mask == cell_num):
-#         cp_mask = cellpose_mask == cell_num
-#
-#         # Get cell region
-#         coords = np.array(np.where(cp_mask)).mean(axis=1).astype(int)
-#         region = extract_region(raw_data, coords)
-#
-#         # Get features
-#         with torch.no_grad():
-#             region_tensor = torch.FloatTensor(region[None, None]).to(device)
-#             _, latent = model(region_tensor)
-#             features.append(latent.cpu().numpy())
-#
-#         best_iou, healthy_label = find_healthy_overlap(annotation_mask, cp_mask)
-#
-#         if best_iou >= iou_threshold:
-#             labels.append(healthy_label)
-#
-#         cell_num += 1
-#
-#     return np.vstack(features), np.array(labels)
-
-
-def find_healthy_overlap(healthy_masks, region_of_interest):
-    # Find matching annotation if any
-    best_iou = 0
-    is_healthy = False
-    ann_num = 1
-    while np.any(healthy_masks == ann_num):
-        ann_mask = healthy_masks == ann_num
-        intersection = np.sum(region_of_interest & ann_mask)
-        union = np.sum(region_of_interest | ann_mask)
-        iou = intersection / union if union > 0 else 0
-        if iou > best_iou:
-            best_iou = iou
-            is_healthy = True
-        ann_num += 1
-    healthy_label = 1 if is_healthy else 0
-    return best_iou, healthy_label
 
 
 def train_classifier(features, labels):
@@ -307,68 +256,6 @@ def load_classifier(path):
         Loaded classifier
     """
     return joblib.load(path)
-
-
-def healthy_neuron_classification_pipeline(images, labels, diameter, xy_scale, z_scale, autoencoder, save_path):
-    """
-    End-to-end pipeline for healthy neuron classification
-
-    Parameters:
-    -----------
-    images : list
-        List of slice images
-    labels : numpy.ndarray
-        Masks for known healthy neurons
-    diameter : float
-        Expected diameter of neurons for cellpose
-    xy_scale : float
-        Scale factor for xy dimensions
-    z_scale : float
-        Scale factor for z dimension
-    autoencoder : Autoencoder
-        Pretrained autoencoder
-    save_path : str
-        Path to save the trained classifier
-
-    Returns:
-    --------
-    classifier : RandomForestClassifier
-        Trained classifier
-    evaluation_metrics : dict
-        Dictionary containing evaluation metrics
-    """
-    all_regions = []
-    all_masks = []
-
-    # Process each image
-    for img in tqdm(images, desc="Processing images"):
-        mask = get_cellpose_masks(img, diameter)
-        regions = detect_and_extract_normalized_neurons(img, diameter, xy_scale, z_scale)
-        all_regions.append(regions)
-        all_masks.append(mask)
-
-    # Combine regions from all images
-    regions = np.vstack(all_regions)
-
-    # Extract features
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    features = extract_features(regions, autoencoder, device)
-
-    # Train classifier
-    classifier, X_test, y_test, y_pred, y_pred_prob = train_classifier(features, labels)
-
-    # Compute evaluation metrics
-    evaluation_metrics = {
-        "accuracy": (y_pred == y_test).mean(),
-        "confusion_matrix": confusion_matrix(y_test, y_pred),
-        "classification_report": classification_report(y_test, y_pred, output_dict=True),
-    }
-
-    # Save classifier if path is provided
-    if save_path:
-        save_classifier(classifier, save_path)
-
-    return classifier, evaluation_metrics
 
 
 def get_health_ordered_cells(image, classifier, autoencoder, diameter, xy_scale, z_scale, device="cuda"):

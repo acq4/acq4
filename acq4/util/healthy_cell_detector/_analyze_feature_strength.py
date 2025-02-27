@@ -7,8 +7,6 @@ from skimage import measure
 from tifffile import tifffile
 import pyqtgraph as pg
 
-from acq4.util.healthy_cell_detector.train import find_healthy_overlap
-
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze feature strength")
@@ -120,3 +118,21 @@ def _compute_boundary_uniformity(data: np.ndarray, mask: np.ndarray) -> float:
     """Compute how uniform the boundary intensity is."""
     boundary = ndimage.binary_dilation(mask) ^ mask
     return data[boundary].std()
+
+
+def find_healthy_overlap(healthy_masks, region_of_interest):
+    # Find matching annotation if any
+    best_iou = 0
+    is_healthy = False
+    ann_num = 1
+    while np.any(healthy_masks == ann_num):
+        ann_mask = healthy_masks == ann_num
+        intersection = np.sum(region_of_interest & ann_mask)
+        union = np.sum(region_of_interest | ann_mask)
+        iou = intersection / union if union > 0 else 0
+        if iou > best_iou:
+            best_iou = iou
+            is_healthy = True
+        ann_num += 1
+    healthy_label = 1 if is_healthy else 0
+    return best_iou, healthy_label
