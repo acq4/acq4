@@ -184,6 +184,9 @@ def detect_neurons(
     model: str = "healthy-cellpose",
     classifier: str = None,
     autoencoder: str = None,
+    diameter: int = None,
+    xy_scale: float = None,
+    z_scale: float = None,
     _future: Future = None,
 ) -> list:
     if do_3d := not isinstance(frames, Frame):
@@ -200,7 +203,7 @@ def detect_neurons(
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
         return rmt_this.do_neuron_detection(
-            rmt_array.data, transform, model, do_3d, classifier, autoencoder, _timeout=60
+            rmt_array.data, transform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale, _timeout=60
         )
 
 
@@ -212,11 +215,11 @@ def do_neuron_detection(
     classifier: str = None,
     autoencoder: str = None,
     diameter: int = 35,
-    camera_pixel_size: float = 0.32,
+    xy_scale: float = 0.32,
     z_scale: float = 1,
 ) -> list:
     if model == "healthy-cellpose":
-        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, camera_pixel_size, z_scale)
+        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, xy_scale, z_scale)
     elif model == "cellpose":
         return _do_neuron_detection_cellpose(data, transform, do_3d)
     elif model == "yolo":
@@ -225,7 +228,7 @@ def do_neuron_detection(
         raise ValueError(f"Unknown model {model}")
 
 
-def _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, camera_pixel_size, z_scale, n: int = 10):
+def _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n: int = 10):
     from acq4.util.healthy_cell_detector.train import get_health_ordered_cells, load_classifier
     from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
     import torch
@@ -233,7 +236,7 @@ def _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diame
     classifier = load_classifier(classifier)
     autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
     autoencoder.eval()
-    cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, camera_pixel_size, z_scale)
+    cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
     return [
         (transform.map(center - diameter / 2), transform.map(center + diameter / 2))
         for center in cells[:n]
