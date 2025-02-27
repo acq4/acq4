@@ -303,10 +303,10 @@ def get_cyto3_model():
     return models.Cellpose(gpu=True, model_type="cyto3")
 
 
-class WhimsicalViewer(pg.QtWidgets.QMainWindow):
-    """A whimsical GUI for viewing 3D image stacks with bounding boxes."""
+class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
+    """A GUI for viewing 3D image stacks with bounding boxes."""
     
-    def __init__(self, data, neurons, title="Whimsical Cell Viewer"):
+    def __init__(self, data, neurons, title="Cell Viewer"):
         global viewer_window
         super().__init__()
         viewer_window = self
@@ -492,9 +492,9 @@ def cli(image, model, angle, z, display, classifier, autoencoder):
             # For 2D data, create a fake stack with a single layer
             display_data = data[np.newaxis, ...]
         
-        # Launch the whimsical viewer
+        # Launch the viewer
         if display:
-            viewer = WhimsicalViewer(display_data, neurons, f"Cell Detector - {model}")
+            viewer = NeuronBoxViewer(display_data, neurons, f"Cell Detector - {model}")
             viewer.show()
             pg.exec()
 
