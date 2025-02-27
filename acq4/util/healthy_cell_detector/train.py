@@ -48,7 +48,7 @@ def get_features_and_labels(image_paths, annotation_suffix, autoencoder, diamete
         labels.append(np.ones(len(healthy_features)))
 
         # unhealthy cells are those whose centers are not within diameter of a healthy cell
-        masks = get_cellpose_masks(img, diameter, xy_scale, z_scale)
+        masks = get_cellpose_masks(img, diameter)
         any_cells = cell_centers(masks, diameter)
         unhealthy_cells = []
         for cell in any_cells:
@@ -342,7 +342,7 @@ def healthy_neuron_classification_pipeline(images, labels, diameter, xy_scale, z
 
     # Process each image
     for img in tqdm(images, desc="Processing images"):
-        mask = get_cellpose_masks(img, diameter, xy_scale, z_scale)
+        mask = get_cellpose_masks(img, diameter)
         regions = detect_and_extract_normalized_neurons(img, diameter, xy_scale, z_scale)
         all_regions.append(regions)
         all_masks.append(mask)
@@ -420,8 +420,8 @@ def main():
     )
     parser.add_argument("--autoencoder", type=str, help="Path to autoencoder model")
     parser.add_argument("--diameter", type=int, default=35, help="Expected diameter of neurons for cellpose")
-    parser.add_argument("--px", type=float, default=0.32, help="Microns per pixel")
-    parser.add_argument("--z", type=float, default=1, help="Microns per z-slice")
+    parser.add_argument("--px", type=float, default=0.32e-6, help="Meters per pixel")
+    parser.add_argument("--z", type=float, default=1e-6, help="Meters per z-slice")
     parser.add_argument(
         "--target-precision", type=float, default=0.6, help="Target precision for the positive class (healthy cells)"
     )

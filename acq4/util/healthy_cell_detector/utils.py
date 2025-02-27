@@ -11,7 +11,7 @@ def cell_centers(masks, diameter):
         yield get_center_fast(masks, cell_num, _z, _y, _x, expected_diameter=diameter)
 
 
-def detect_and_extract_normalized_neurons(img, diameter: int = 35, xy_scale: float = 0.32, z_scale: float = 2):
+def detect_and_extract_normalized_neurons(img, diameter: int = 35, xy_scale: float = 0.32e-6, z_scale: float = 1e-6):
     regions = []
     masks = get_cellpose_masks(img, diameter, xy_scale, z_scale)
     for center in tqdm(cell_centers(masks, diameter), desc="Extracting cell regions"):

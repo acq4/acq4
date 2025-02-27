@@ -33,8 +33,8 @@ def train_autoencoder(
     save_path: Optional[Path] = None,
     batch_size: int = 32,
     num_epochs: int = 50,
-    px: float = 0.32,
-    z: float = 2,
+    px: float = 0.32e-6,
+    z: float = 1e-6,
     learning_rate: float = 1e-3,
     device: Optional[torch.device] = None,
 ) -> NeuronAutoencoder:
@@ -46,8 +46,8 @@ def train_autoencoder(
         save_path: Where to save the trained model
         batch_size: Training batch size
         num_epochs: Number of training epochs
-        px: Microns per pixel
-        z: Microns per z-slice
+        px: Meters per pixel
+        z: Meters per z-slice
         learning_rate: Learning rate for Adam optimizer
         device: torch device (will detect GPU if None)
     """
@@ -235,8 +235,8 @@ def main():
     parser = argparse.ArgumentParser("Train neuron autoencoder")
     parser.add_argument("image_paths", type=Path, nargs="+", help="Path to 3D image files")
     parser.add_argument("save_path", type=Path, help="Path to save trained model")
-    parser.add_argument("--px", type=float, default=0.32, help="Microns per pixel")
-    parser.add_argument("--z", type=float, default=1, help="Microns per z-slice")
+    parser.add_argument("--px", type=float, default=0.32e-6, help="Meters per pixel")
+    parser.add_argument("--z", type=float, default=1e-6, help="Meters per z-slice")
     parser.add_argument("--num-epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Training batch size")
     parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam optimizer learning rate")
