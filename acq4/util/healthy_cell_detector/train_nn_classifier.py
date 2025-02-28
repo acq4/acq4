@@ -174,10 +174,10 @@ def train_neural_classifier(features, labels, device="cuda", class_weight=None):
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=5, factor=0.5, verbose=True)
 
     # Train the model
-    n_epochs = 100
+    n_epochs = 5000
     best_val_loss = float("inf")
     best_model_state = None
-    patience = 10
+    patience = 30
     counter = 0
 
     print("Training neural network classifier...")
