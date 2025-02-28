@@ -1,4 +1,5 @@
 import argparse
+from functools import lru_cache
 from pathlib import Path
 
 import joblib
@@ -373,6 +374,7 @@ def save_classifier(classifier, path):
     print(f"Neural classifier saved to {path}")
 
 
+@lru_cache(maxsize=1)
 def load_classifier(path, device="cuda"):
     """Load a trained neural classifier from a file"""
     checkpoint = torch.load(path, map_location=device)

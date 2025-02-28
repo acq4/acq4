@@ -100,11 +100,15 @@ class NeuronAutoencoder(nn.Module):
             nn.Sigmoid(),  # Extra conv to fix any remaining dimension issues
         )
 
+    instance_cache = {}
+
     @classmethod
     def load(cls, path):
-        model = cls()
-        model.load_state_dict(torch.load(path)["model_state_dict"])
-        return model
+        if path not in cls.instance_cache:
+            model = cls()
+            model.load_state_dict(torch.load(path)["model_state_dict"])
+            cls.instance_cache[path] = model
+        return cls.instance_cache[path]
 
     def encode(self, x):
         return self._encode(x)[0]
