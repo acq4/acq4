@@ -35,8 +35,8 @@ class MultiPatch(Module):
     moduleCategory = "Acquisition"
 
     def __init__(self, manager, name, config):
-        Module.__init__(self, manager, name, config) 
-        
+        Module.__init__(self, manager, name, config)
+
         self.win = MultiPatchWindow(self)
         self.win.show()
 
@@ -491,12 +491,12 @@ class MultiPatchWindow(Qt.QWidget):
         bl = self.xkdev.getBacklights()
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
-            bl[0, i+4, 0] = 1 if ctrl.active() else 0
-            bl[0, i+4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
-            bl[1, i+4, 1] = 1 if pip in sel else 0
-            bl[1, i+4, 0] = 1 if ctrl.locked() else 0
-            bl[2, i+4, 1] = 1 if pip in sel else 0
-            bl[2, i+4, 0] = 1 if ctrl.selected() else 0
+            bl[0, i + 4, 0] = 1 if ctrl.active() else 0
+            bl[0, i + 4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
+            bl[1, i + 4, 1] = 1 if pip in sel else 0
+            bl[1, i + 4, 0] = 1 if ctrl.locked() else 0
+            bl[2, i + 4, 1] = 1 if pip in sel else 0
+            bl[2, i + 4, 0] = 1 if ctrl.selected() else 0
 
         bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
         bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
@@ -504,7 +504,7 @@ class MultiPatchWindow(Qt.QWidget):
         bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
         bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
         bl[7, 2] = 1 if self.ui.recordBtn.isChecked() else 0
-        
+
         self.xkdev.setBacklights(bl, axis=1)
 
     def xkeysStateChanged(self, dev, changes):

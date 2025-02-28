@@ -1,7 +1,6 @@
 from .igorpro import IgorBridge, IgorCallError
 from acq4.util import Qt
 
-
 # MIES constants, see MIES_Constants.ipf
 PRESSURE_METHOD_APPROACH = 0
 PRESSURE_METHOD_SEAL = 1
@@ -35,7 +34,7 @@ class MIES(Qt.QObject):
         self.currentData = None
         self.manual_active = False  # temporary fix for manual mode toggle button, see below
         self._exiting = False
-        #self.windowName = 'ITC1600_Dev_0'
+        # self.windowName = 'ITC1600_Dev_0'
         self._windowName = None
         self.devices: list[str] = []
         self._sigFutureComplete.connect(self.processUpdate)
@@ -59,13 +58,13 @@ class MIES(Qt.QObject):
     def getMIESUpdate(self):
         future = self.igor("FFI_ReturnTPValues")
         future.add_done_callback(self._sigFutureComplete.emit)
-        self._TPTimer.start(5000) # by default recheck after 5 seconds, overridden if we get data
+        self._TPTimer.start(5000)  # by default recheck after 5 seconds, overridden if we get data
 
     def processUpdate(self, future):
         if not self._exiting:
             try:
                 res = future.result()
-                data = res[...,0] # dimension hack when return value suddenly changed
+                data = res[..., 0]  # dimension hack when return value suddenly changed
                 self.currentData = data
                 self._updateTPTimes(data)
                 self.sigDataReady.emit(data)
@@ -79,10 +78,10 @@ class MIES(Qt.QObject):
         """Update globally tracked initial and end TP times"""
         if self._initTPTime is None:
             try:
-                self._initTPTime = TPArray[0,:][TPArray[0,:] > 0].min()
+                self._initTPTime = TPArray[0, :][TPArray[0, :] > 0].min()
             except ValueError:
                 pass
-        self._lastTPTime = TPArray[0,:].max()
+        self._lastTPTime = TPArray[0, :].max()
 
     def getTPRange(self):
         if self._initTPTime is None:
@@ -98,8 +97,8 @@ class MIES(Qt.QObject):
 
     def setManualPressure(self, pressure):
         return self.setCtrl("setvar_DataAcq_SSPressure", pressure)
-    
-    def setPressureSource(self, source: str):
+
+    def setPressureSource(self, headstage: int, source: str, pressure=None):
         # if user, check user access & uncheck apply
         # if atmosphere, uncheck both
         # if regulator, check apply and uncheck user
@@ -107,20 +106,28 @@ class MIES(Qt.QObject):
 
         # use P_UpdatePressureMode(string device, variable pressureMode, string pressureControlName, variable checkALL)
         # with constants ...
-            # Constant PRESSURE_METHOD_ATM      = -1
-            # Constant PRESSURE_METHOD_MANUAL   = 4
+        # Constant PRESSURE_METHOD_ATM      = -1
+        # Constant PRESSURE_METHOD_MANUAL   = 4
+        PRESSURE_METOD_ATM = -1
+        PRESSURE_METHOD_MANUAL = 4
         # not sure yet on pressureControlName or checkAll (will check with Tim and update here)
+
+        # update user mode check
+        self.setCtrl("check_DataACq_Pressure_User", source == "user")
+
         if source == "user":
-            self.setCtrl("check_DataACq_Pressure_User", True)
-        elif source == "atmosphere":
-            self.setCtrl("check_DataACq_Pressure_User", False)
-            self.igor("P_UpdatePressureMode", self.getWindowName(), -1, "button_DataAcq_Approach", 0)
+            return
+        if source == "atmosphere":
+            self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 0, 0).result()
+            # self.igor('P_MethodAtmospheric', 'ITC18USB_Dev_0', headstage).result()
+            # self.igor("P_UpdatePressureMode", self.getWindowName(), PRESSURE_METOD_ATM, "button_DataAcq_Approach", 0)
             # if self.manual_active:
             #     self.setCtrl("button_DataAcq_SSSetPressureMan", False)
             #     self.manual_active = False
         elif source == "regulator":
-            self.setCtrl("check_DataACq_Pressure_User", False)
-            self.igor("P_UpdatePressureMode", self.getWindowName(), 4, "button_DataAcq_Approach", 0)
+            self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 1, pressure).result()
+            # self.igor('P_ManSetPressure', 'ITC18USB_Dev_0', headstage, 0).result()
+            # self.igor("P_UpdatePressureMode", self.getWindowName(), PRESSURE_METHOD_MANUAL, "button_DataAcq_SSSetPressureMan", 0)
             # if not self.manual_active:
             #     self.setCtrl("button_DataAcq_SSSetPressureMan", True)
             #     self.manual_active = True
@@ -140,7 +147,7 @@ class MIES(Qt.QObject):
 
     def autoPipetteOffset(self):
         return self.setCtrl('button_DataAcq_AutoPipOffset_VC')
-    
+
     def getLockedDevices(self):
         res = self.igor("GetListOfLockedDevices").result()
         return res.split(";")
@@ -177,6 +184,7 @@ if __name__ == "__main__":
     import pyqtgraph as pg
     import sys
 
+
     class W(Qt.QWidget):
         def __init__(self, parent=None):
             super(W, self).__init__(parent=parent)
@@ -190,6 +198,7 @@ if __name__ == "__main__":
 
         def printit(self, data):
             print(data)
+
 
     app = pg.mkQApp()
     w = W()
