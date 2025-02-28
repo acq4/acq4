@@ -27,18 +27,21 @@ class ProfileEditor(qt.QWidget):
         self.param_root.sigTreeStateChanged.connect(self.paramTreeChanged)
 
     def paramTreeChanged(self, root_param, changes):
+        loggable = {}
         for param, change, data in changes:
             (profile_name, state_name, *param_name) = self.param_root.childPath(param)
             # using deepcopy pretends that the profile is immutable, but it is not
             profile = deepcopy(PatchPipetteStateManager.getProfileConfig(profile_name))
             if state_name == "copyFrom":
                 profile[state_name] = data
+                loggable.setdefault(profile_name, {})[state_name] = data
             else:
                 param_name = param_name[0]
                 profile.setdefault(state_name, {})
                 profile[state_name][param_name] = data
                 if not param.valueModifiedSinceResetToDefault():
                     del profile[state_name][param_name]
+                loggable.setdefault(profile_name, {}).setdefault(state_name, {})[param_name] = data
 
             PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
 
@@ -52,9 +55,8 @@ class ProfileEditor(qt.QWidget):
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
                         profile_item.applyDefaults({state_name: {param_name: data}})
-        profile_data = self.param_root.getValues()
-        logMsg(f"Patch profile {profile_name} updated: {json.dumps(profile_data, cls=ACQ4JSONEncoder)}")
-        self.sigProfileChanged.emit(profile_data)
+        logMsg(f"Patch profile {profile_name} updated: {json.dumps(loggable, cls=ACQ4JSONEncoder)}")
+        self.sigProfileChanged.emit(loggable)
 
     def setTopLevelWindow(self):
         self.raise_()
