@@ -172,21 +172,21 @@ def train_neural_classifier(features, labels, device="cuda", class_weight=None):
         criterion = nn.BCELoss()
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=5, factor=0.5, verbose=True)
+    n_epochs = 1000
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=n_epochs // 10, factor=0.5, verbose=True)
 
     # Train the model
-    n_epochs = 5000
     best_val_loss = float("inf")
     best_model_state = None
     patience = 30
     counter = 0
 
     print("Training neural network classifier...")
-    for epoch in range(n_epochs):
+    for epoch in tqdm(range(n_epochs), desc="Training", leave=True):
         model.train()
         train_loss = 0.0
 
-        for inputs, targets in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{n_epochs}"):
+        for inputs, targets in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False):
             inputs, targets = inputs.to(device), targets.to(device)
 
             # Forward pass
