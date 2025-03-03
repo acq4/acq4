@@ -227,7 +227,7 @@ class AutomationDebugWindow(Qt.QWidget):
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
         with self.cameraDevice.ensureRunning():
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        return _future.waitFor(detect_neurons(frame.data(), "cellpose")).getResult()
+        return _future.waitFor(detect_neurons(frame, "cellpose")).getResult()
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
@@ -238,7 +238,6 @@ class AutomationDebugWindow(Qt.QWidget):
         start = depth - 10 * µm
         stop = depth + 10 * µm
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
-        z_stack = np.stack([frame.data() for frame in z_stack])
         self.cameraDevice.setFocusDepth(depth)  # no need to wait
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
         z_scale = 1
