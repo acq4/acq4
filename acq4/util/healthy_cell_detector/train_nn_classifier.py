@@ -433,6 +433,8 @@ def get_health_ordered_cells(
     """
     masks = get_cellpose_masks(image, diameter)
     cells = np.array(list(cell_centers(masks, diameter)))
+    if len(cells) == 0:
+        return []
     regions = [extract_region(image, center, xy_scale, z_scale) for center in cells]
     features = extract_features(regions, autoencoder, device)
     probabilities = classifier.predict_proba(features)[:, 1]  # Probability of being healthy
