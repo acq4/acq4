@@ -269,7 +269,7 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     # Create main window
     main_window = QtWidgets.QMainWindow()
     main_window.setWindowTitle("Z-Stack Neuron Autoencoder Viewer")
-    main_window.resize(1200, 600)
+    main_window.resize(1000, 500)  # Slightly smaller to ensure images fill space
 
     # Create central widget
     central_widget = QtWidgets.QWidget()
@@ -290,10 +290,14 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     # Create rows for original and reconstructed images
     original_row = QtWidgets.QWidget()
     original_layout = QtWidgets.QHBoxLayout()
+    original_layout.setContentsMargins(5, 5, 5, 5)
+    original_layout.setSpacing(5)
     original_row.setLayout(original_layout)
     
     recon_row = QtWidgets.QWidget()
     recon_layout = QtWidgets.QHBoxLayout()
+    recon_layout.setContentsMargins(5, 5, 5, 5)
+    recon_layout.setSpacing(5)
     recon_row.setLayout(recon_layout)
     
     # Add row labels
@@ -407,6 +411,13 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             original_view.getView().setDefaultPadding(0)
             original_view.getView().setAspectLocked(True)
             
+            # Set fixed size to ensure images fill their space
+            original_view.setMinimumSize(120, 120)
+            original_view.setMaximumSize(200, 200)
+            
+            # Adjust view to fill the available space
+            original_view.getView().setRange(QtCore.QRectF(0, 0, region_norm[z].shape[0], region_norm[z].shape[1]), padding=0)
+            
             # Create z-layer label for original
             z_label = QtWidgets.QLabel(f"Z{z}")
             z_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -415,6 +426,8 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             # Create a container for the image and its label
             orig_container = QtWidgets.QWidget()
             orig_container_layout = QtWidgets.QVBoxLayout()
+            orig_container_layout.setContentsMargins(2, 2, 2, 2)
+            orig_container_layout.setSpacing(2)
             orig_container.setLayout(orig_container_layout)
             orig_container_layout.addWidget(z_label)
             orig_container_layout.addWidget(original_view)
@@ -428,6 +441,13 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             recon_view.getView().setDefaultPadding(0)
             recon_view.getView().setAspectLocked(True)
             
+            # Set fixed size to ensure images fill their space
+            recon_view.setMinimumSize(120, 120)
+            recon_view.setMaximumSize(200, 200)
+            
+            # Adjust view to fill the available space
+            recon_view.getView().setRange(QtCore.QRectF(0, 0, reconstructed[z].shape[0], reconstructed[z].shape[1]), padding=0)
+            
             # Create z-layer label for reconstruction
             recon_z_label = QtWidgets.QLabel(f"Z{z}")
             recon_z_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -436,6 +456,8 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             # Create a container for the image and its label
             recon_container = QtWidgets.QWidget()
             recon_container_layout = QtWidgets.QVBoxLayout()
+            recon_container_layout.setContentsMargins(2, 2, 2, 2)
+            recon_container_layout.setSpacing(2)
             recon_container.setLayout(recon_container_layout)
             recon_container_layout.addWidget(recon_z_label)
             recon_container_layout.addWidget(recon_view)
